@@ -921,7 +921,7 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - ROLE_CATALOG_EDIT
       summary: Create Product Master Record
       tags:
       - Products API

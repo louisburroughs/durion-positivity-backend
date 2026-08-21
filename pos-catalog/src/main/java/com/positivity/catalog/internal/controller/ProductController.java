@@ -389,10 +389,10 @@ public class ProductController {
         return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PostMapping
     @Operation(operationId = "createProduct", summary = "Create Product Master Record", description = """
             Creates a product master record with an immutable SKU, status ACTIVE, and uniqueness enforced on \

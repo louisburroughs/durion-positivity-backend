@@ -40,6 +40,16 @@
 --   LOCATION_MANAGER, MANAGER and SHOP_MANAGER — per the product decision on
 --   that issue. Do not widen it: the permission exists specifically to cap
 --   what a service advisor can finalize by naming an absent manager.
+-- * workorder:workorder:delete (#1432) is a hard delete that destroys history,
+--   so it is held by ADMIN and the manager roles only — GENERAL_MANAGER,
+--   LOCATION_MANAGER, MANAGER and SHOP_MANAGER — mirroring the
+--   invoice:finalize:override precedent. Advisors create workorders
+--   (workorder:workorder:create) but cannot destroy them.
+-- * SERVICE_ADVISOR holds the CRM onboarding surface (#1435):
+--   crm:party:view/search/create and crm:person:read/create, so a walk-in
+--   customer can be looked up, duplicate-checked and onboarded at the counter.
+--   Deliberately NOT crm:party:edit/deactivate/merge — corrections and
+--   destructive party operations stay manager-and-above.
 -- * The inventory adjustment roles (#1373) carry the model RoleInitializer's
 --   javadoc documents: INVENTORY_LEAD creates and views adjustment requests;
 --   INVENTORY_MANAGER and INVENTORY_CONTROLLER additionally approve them. The two
@@ -907,6 +917,7 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'security:role:view'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:approve'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:reject'),
+    ('GENERAL_MANAGER', 'workorder:workorder:delete'),
     ('INVENTORY_CONTROLLER', 'catalog:category:view'),
     ('INVENTORY_CONTROLLER', 'catalog:product:view'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:approve'),
@@ -1032,6 +1043,7 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'workorder:workorder:assign-technician'),
     ('LOCATION_MANAGER', 'workorder:workorder:complete'),
     ('LOCATION_MANAGER', 'workorder:workorder:create'),
+    ('LOCATION_MANAGER', 'workorder:workorder:delete'),
     ('LOCATION_MANAGER', 'workorder:workorder:edit'),
     ('LOCATION_MANAGER', 'workorder:workorder:generate_invoice'),
     ('LOCATION_MANAGER', 'workorder:workorder:reopen_completed'),
@@ -1052,6 +1064,7 @@ FROM (VALUES
     ('MANAGER', 'security:role:view'),
     ('MANAGER', 'workorder:timeEntry:approve'),
     ('MANAGER', 'workorder:timeEntry:reject'),
+    ('MANAGER', 'workorder:workorder:delete'),
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:execute'),
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:stream'),
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:read'),
@@ -1060,6 +1073,11 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'appointments:create'),
     ('SERVICE_ADVISOR', 'appointments:reschedule'),
     ('SERVICE_ADVISOR', 'appointments:view'),
+    ('SERVICE_ADVISOR', 'crm:party:create'),
+    ('SERVICE_ADVISOR', 'crm:party:search'),
+    ('SERVICE_ADVISOR', 'crm:party:view'),
+    ('SERVICE_ADVISOR', 'crm:person:create'),
+    ('SERVICE_ADVISOR', 'crm:person:read'),
     ('SERVICE_ADVISOR', 'crm:vehicle:search'),
     ('SERVICE_ADVISOR', 'crm:vehicle:view'),
     ('SERVICE_ADVISOR', 'inventory:availability:read'),
@@ -1117,6 +1135,7 @@ FROM (VALUES
     ('SHOP_MANAGER', 'shop:schedule:edit'),
     ('SHOP_MANAGER', 'shop:schedule:view'),
     ('SHOP_MANAGER', 'shop:technician:view'),
+    ('SHOP_MANAGER', 'workorder:workorder:delete'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:chat:execute'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:chat:stream'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:document:ingest'),

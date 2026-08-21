@@ -43,6 +43,18 @@ class ProductMasterContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
+    @DisplayName("VE-165-003: Create product with only ROLE_CATALOG_VIEW returns 403")
+    void createProduct_withViewRoleOnly_returnsForbidden() throws Exception {
+        mockMvc.perform(withAuth(
+                        post("/v1/products")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(
+                                        validCreatePayload("SKU-165-403", "MPN-165-403"))),
+                        "ROLE_CATALOG_VIEW"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("VE-165-002: Attempt to change SKU returns 400")
     void updateSku_returnsBadRequest() throws Exception {
         UUID productId = createProductAndGetId("SKU-165-IMM", "MPN-165-IMM");

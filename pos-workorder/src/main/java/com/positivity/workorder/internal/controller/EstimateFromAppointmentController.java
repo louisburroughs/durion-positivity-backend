@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,7 +30,10 @@ public class EstimateFromAppointmentController {
 
     @PostMapping("/from-appointment")
     @EmitEvent(id = "WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT", apiVersion = "1")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:estimate:create"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_CREATE + "')")
     @Operation(
             operationId = "createEstimateFromAppointment",
             summary = "Create Draft Estimate From Appointment",
@@ -39,9 +43,9 @@ public class EstimateFromAppointmentController {
                     Use this tool when an appointment arrives and needs an estimate started; do not use \
                     createEstimate, which builds an estimate from scratch without an appointment link or \
                     idempotency guarantee.
-                    Preconditions: none beyond authentication — the appointment id is not verified against the \
-                    scheduling service, and an estimate already linked to the appointmentId short-circuits \
-                    creation.
+                    Preconditions: the caller must hold workorder:estimate:create; the appointment id is not \
+                    verified against the scheduling service, and an estimate already linked to the appointmentId \
+                    short-circuits creation.
                     Required inputs: idempotencyKey, appointmentId, customerId, vehicleId, and locationId (all \
                     UUIDs); requestedServices is an optional list of free-text service descriptions.
                     Emits a WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT event; the call is idempotent on \

@@ -134,6 +134,12 @@ public final class WorkorderPermissions {
     /** Complete workorders. */
     public static final String WORKORDER_COMPLETE = "workorder:workorder:complete";
 
+    /** Create workorders. */
+    public static final String WORKORDER_CREATE = "workorder:workorder:create";
+
+    /** Delete workorders (hard delete of mistakenly created records). */
+    public static final String WORKORDER_DELETE = "workorder:workorder:delete";
+
     /** Generate invoice workorder. */
     public static final String WORKORDER_GENERATE_INVOICE = "workorder:workorder:generate_invoice";
 

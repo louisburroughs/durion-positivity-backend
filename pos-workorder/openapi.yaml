@@ -897,7 +897,7 @@ paths:
 
         Use this tool when opening a workorder directly; do not use promoteEstimate, which is the estimate-side path that promotes an APPROVED estimate into a workorder.
 
-        Preconditions: the referenced estimate must exist; the location falls back to the caller''s primary location when the estimate carries none.
+        Preconditions: the referenced estimate must exist, and the caller must hold workorder:workorder:create; the location falls back to the caller''s primary location when the estimate carries none.
 
         Required inputs: estimateId and customerId (UUIDs); an Idempotency-Key header is recommended — a repeated key returns the originally created workorder instead of a duplicate.
 
@@ -936,12 +936,13 @@ paths:
                 $ref: '#/components/schemas/WorkorderResponse'
           description: Work order created successfully, or existing work order returned if idempotency key was previously processed.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:create
       summary: Create a New Workorder
       tags:
       - Work Order API
       x-required-permissions:
-      - AUTHENTICATED
+      - workorder:workorder:create
   /v1/workorders/changeRequests/{changeId}:
     get:
       description: 'Returns one change request with its status, description, emergency flags, approval details, and item associations.
@@ -1445,7 +1446,7 @@ paths:
 
         Use this tool when an appointment arrives and needs an estimate started; do not use createEstimate, which builds an estimate from scratch without an appointment link or idempotency guarantee.
 
-        Preconditions: none beyond authentication — the appointment id is not verified against the scheduling service, and an estimate already linked to the appointmentId short-circuits creation.
+        Preconditions: the caller must hold workorder:estimate:create; the appointment id is not verified against the scheduling service, and an estimate already linked to the appointmentId short-circuits creation.
 
         Required inputs: idempotencyKey, appointmentId, customerId, vehicleId, and locationId (all UUIDs); requestedServices is an optional list of free-text service descriptions.
 
@@ -1511,7 +1512,7 @@ paths:
       tags:
       - Estimates from Appointments
       x-required-permissions:
-      - AUTHENTICATED
+      - workorder:estimate:create
   /v1/workorders/estimates/location/{locationId}:
     get:
       description: 'Returns all estimates recorded against one location, unpaginated and in every status.
@@ -3104,7 +3105,7 @@ paths:
 
         Use this tool only to remove mistakenly created workorders; do not use completeWorkorder or reopenWorkorder, which drive the normal lifecycle without destroying history.
 
-        Preconditions: none are enforced — deletion is idempotent and deleting an unknown id is a silent no-op.
+        Preconditions: the caller must hold workorder:workorder:delete; deletion is idempotent and deleting an unknown id is a silent no-op.
 
         Required inputs: workorderId (UUID) as a path parameter; there is no request body.
 
@@ -3125,16 +3126,15 @@ paths:
           type: string
       responses:
         '204':
-          description: Work order deleted successfully.
-        '404':
-          description: Work order not found.
+          description: Work order deleted whether or not it previously existed.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:delete
       summary: Delete a Workorder
       tags:
       - Work Order API
       x-required-permissions:
-      - AUTHENTICATED
+      - workorder:workorder:delete
     get:
       description: 'Returns the raw workorder record — status, customer, vehicle, estimate linkage, approval and completion fields — for one workorder id.
 
@@ -5438,12 +5438,13 @@ paths:
                 type: array
           description: Snapshot history returned successfully.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:view
       summary: Get Workorder Snapshot History
       tags:
       - Work Order API
       x-required-permissions:
-      - AUTHENTICATED
+      - workorder:workorder:view
   /v1/workorders/{workorderId}/start:
     post:
       description: 'Transitions the workorder to WORK_IN_PROGRESS, stamps workStartedAt, assigns a new operational context version, and locks the context against further overrides.
@@ -5799,12 +5800,13 @@ paths:
                 type: array
           description: Transition history returned successfully.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - workorder:workorder:view
       summary: Get Workorder Transition History
       tags:
       - Work Order API
       x-required-permissions:
-      - AUTHENTICATED
+      - workorder:workorder:view
 components:
   schemas:
     AddBreakSegmentRequest:
