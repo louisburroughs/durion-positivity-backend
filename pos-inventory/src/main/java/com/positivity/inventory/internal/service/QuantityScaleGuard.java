@@ -47,6 +47,7 @@ public class QuantityScaleGuard {
      *     omitted the field — is rejected here rather than at the first arithmetic on it
      * @throws FractionalQuantityNotAllowedException when the quantity carries more decimal places
      *     than the product declares
+     * @throws IllegalArgumentException when {@code quantity} is {@code null}
      */
     public @NonNull BigDecimal requirePostable(
             @Nullable UUID productId,
