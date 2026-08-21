@@ -11,6 +11,7 @@ import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1
 import com.positivity.securityservice.BaseIntegrationTest;
 import com.positivity.securityservice.internal.entity.ExtCustomerPersonIdentity;
 import com.positivity.securityservice.internal.entity.ExtPersonReplica;
+import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.ExtCustomerPersonIdentityRepository;
 import com.positivity.securityservice.internal.repository.ExtPersonReplicaRepository;
@@ -69,6 +70,17 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
         userRepository.deleteAll();
         extPersonReplicaRepository.deleteAll();
         extCustomerPersonIdentityRepository.deleteAll();
+        // The test profile runs H2 with Flyway disabled, so the migration-seeded
+        // SELF_SERVICE_CUSTOMER role (V8 / R__seed_reference_security.sql) never lands here, and
+        // since #1440 no runtime code creates roles. Provision the one role this flow assigns.
+        if (roleRepository.findByName("SELF_SERVICE_CUSTOMER").isEmpty()) {
+            Role customerRole = new Role();
+            customerRole.setName("SELF_SERVICE_CUSTOMER");
+            customerRole.setDescription("Low-privilege self-registration role for external customer access");
+            customerRole.setCreatedBy("test");
+            customerRole.setCreatedAt(Instant.now());
+            roleRepository.save(customerRole);
+        }
         assertThat(roleRepository.findByName("SELF_SERVICE_CUSTOMER")).isPresent();
     }
 
