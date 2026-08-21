@@ -154,8 +154,9 @@ public class WorkorderController {
                     CRM references and generating a workorder number.
                     Use this tool when opening a workorder directly; do not use promoteEstimate, which is the \
                     estimate-side path that promotes an APPROVED estimate into a workorder.
-                    Preconditions: the referenced estimate must exist; the location falls back to the caller's \
-                    primary location when the estimate carries none.
+                    Preconditions: the referenced estimate must exist, and the caller must hold \
+                    workorder:workorder:create; the location falls back to the caller's primary location when \
+                    the estimate carries none.
                     Required inputs: estimateId and customerId (UUIDs); an Idempotency-Key header is recommended \
                     — a repeated key returns the originally created workorder instead of a duplicate.
                     Emits a WORKORDER_CREATE event and marks the workorder fact changed for downstream \
@@ -179,8 +180,10 @@ public class WorkorderController {
                                                     """)))
     @PostMapping
     @EmitEvent(id = "WORKORDER_CREATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:create"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_CREATE + "')")
     public ResponseEntity<WorkorderResponse> createWorkorder(
             @Parameter(description = "Work order creation request") @Valid @RequestBody CreateWorkorderRequest request,
             @Parameter(
@@ -199,8 +202,8 @@ public class WorkorderController {
                     Deletes a workorder row by id, a hard delete with no status guard or soft-delete fallback.
                     Use this tool only to remove mistakenly created workorders; do not use completeWorkorder or \
                     reopenWorkorder, which drive the normal lifecycle without destroying history.
-                    Preconditions: none are enforced — deletion is idempotent and deleting an unknown id is a \
-                    silent no-op.
+                    Preconditions: the caller must hold workorder:workorder:delete; deletion is idempotent and \
+                    deleting an unknown id is a silent no-op.
                     Required inputs: workorderId (UUID) as a path parameter; there is no request body.
                     Emits a WORKORDER_DELETE event.
                     Returns 204 regardless of whether the workorder previously existed.
@@ -209,8 +212,10 @@ public class WorkorderController {
     @ApiResponse(responseCode = "404", description = "Work order not found.")
     @DeleteMapping("/{workorderId}")
     @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:delete"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_DELETE + "')")
     public ResponseEntity<Void> deleteWorkorder(
             @Parameter(description = "ID of the work order to delete", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -231,8 +236,10 @@ public class WorkorderController {
                     """)
     @ApiResponse(responseCode = "200", description = "Transition history returned successfully.")
     @GetMapping("/{workorderId}/transitions")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:view"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public ResponseEntity<List<WorkorderStateTransitionResponse>> getTransitionHistory(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -255,8 +262,10 @@ public class WorkorderController {
                     """)
     @ApiResponse(responseCode = "200", description = "Snapshot history returned successfully.")
     @GetMapping("/{workorderId}/snapshots")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:view"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public ResponseEntity<List<WorkorderSnapshotResponse>> getSnapshotHistory(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
