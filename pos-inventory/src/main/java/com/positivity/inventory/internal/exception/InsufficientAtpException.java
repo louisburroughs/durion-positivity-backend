@@ -29,10 +29,15 @@ public class InsufficientAtpException extends RuntimeException {
     public InsufficientAtpException(UUID allocationId, BigDecimal requiredQuantity, BigDecimal availableAtp) {
         super(String.format(
                 "INSUFFICIENT_ATP: allocationId=%s requiredQuantity=%s availableAtp=%s",
-                allocationId, requiredQuantity.toPlainString(), availableAtp.toPlainString()));
+                allocationId, plain(requiredQuantity), plain(availableAtp)));
         this.allocationId = allocationId;
         this.requiredQuantity = requiredQuantity;
         this.availableAtp = availableAtp;
+    }
+
+    // Building the error message must never itself throw and mask the shortage being reported.
+    private static String plain(BigDecimal value) {
+        return value == null ? "unknown" : value.toPlainString();
     }
 
     public String getErrorCode() {
