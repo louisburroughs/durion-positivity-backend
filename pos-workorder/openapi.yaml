@@ -3126,9 +3126,7 @@ paths:
           type: string
       responses:
         '204':
-          description: Work order deleted successfully.
-        '404':
-          description: Work order not found.
+          description: Work order deleted whether or not it previously existed.
       security:
       - bearerAuth:
         - workorder:workorder:delete

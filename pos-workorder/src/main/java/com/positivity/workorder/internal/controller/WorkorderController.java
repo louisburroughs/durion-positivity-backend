@@ -208,8 +208,7 @@ public class WorkorderController {
                     Emits a WORKORDER_DELETE event.
                     Returns 204 regardless of whether the workorder previously existed.
                     """)
-    @ApiResponse(responseCode = "204", description = "Work order deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(responseCode = "204", description = "Work order deleted whether or not it previously existed.")
     @DeleteMapping("/{workorderId}")
     @EmitEvent(id = "WORKORDER_DELETE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
