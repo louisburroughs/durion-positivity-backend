@@ -26,8 +26,29 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO roles (id, name, description, created_at, created_by)
 VALUES ('f4b32a5f-edf2-2b8c-33e0-67f79bf423d2'::uuid, 'DISPATCHER', 'Canonical persona: Dispatcher', NOW(), 'seed-generator')
 ON CONFLICT (name) DO NOTHING;
+-- GENERAL_MANAGER, INVENTORY_CONTROLLER, INVENTORY_LEAD, INVENTORY_MANAGER and MANAGER
+-- were created at startup by pos-security-service's RoleInitializer (generated ids)
+-- until #1440 moved baseline role creation into SQL; LOCATION_MANAGER below predates
+-- that and has always been seeded here. The five migrated ids are UUIDv5 of
+-- "durion-positivity://roles/<NAME>" so a regenerated seed reproduces them; databases
+-- populated before #1440 keep their original generated ids (ON CONFLICT DO NOTHING).
+INSERT INTO roles (id, name, description, created_at, created_by)
+VALUES ('6eb78aab-29c8-5dfe-9a59-3175c4d13777'::uuid, 'GENERAL_MANAGER', 'General manager with broad organizational access', NOW(), 'seed-generator')
+ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (id, name, description, created_at, created_by)
+VALUES ('69f7dd14-74ed-5c7d-888e-a814dc5786bf'::uuid, 'INVENTORY_CONTROLLER', 'Inventory controller with global adjustment approval authority', NOW(), 'seed-generator')
+ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (id, name, description, created_at, created_by)
+VALUES ('1320fc87-5bec-5584-8d56-3494d66e8fd9'::uuid, 'INVENTORY_LEAD', 'Inventory lead with permission to create adjustment requests', NOW(), 'seed-generator')
+ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (id, name, description, created_at, created_by)
+VALUES ('e718a0e7-d769-555c-88f6-963f210721fd'::uuid, 'INVENTORY_MANAGER', 'Inventory manager with permission to create and approve adjustments', NOW(), 'seed-generator')
+ON CONFLICT (name) DO NOTHING;
 INSERT INTO roles (id, name, description, created_at, created_by)
 VALUES ('783422f6-84ab-f590-5d51-4fa87b06d679'::uuid, 'LOCATION_MANAGER', 'Canonical persona: Location Manager', NOW(), 'seed-generator')
+ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (id, name, description, created_at, created_by)
+VALUES ('7c3b5311-503a-5fe1-b8cc-82b66dbaa40d'::uuid, 'MANAGER', 'Department or location manager', NOW(), 'seed-generator')
 ON CONFLICT (name) DO NOTHING;
 INSERT INTO roles (id, name, description, created_at, created_by)
 VALUES ('0490173a-29a1-eea7-8141-da5c60fcaa94'::uuid, 'SELF_SERVICE_CUSTOMER', 'SELF_SERVICE_CUSTOMER seeded role', NOW(), 'seed-generator')

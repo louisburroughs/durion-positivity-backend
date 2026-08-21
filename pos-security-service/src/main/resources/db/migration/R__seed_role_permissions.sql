@@ -50,8 +50,19 @@
 --   customer can be looked up, duplicate-checked and onboarded at the counter.
 --   Deliberately NOT crm:party:edit/deactivate/merge — corrections and
 --   destructive party operations stay manager-and-above.
--- * The inventory adjustment roles (#1373) carry the model RoleInitializer's
---   javadoc documents: INVENTORY_LEAD creates and views adjustment requests;
+-- * INVENTORY_LEAD is the parts-receiving persona (#1439): it holds the
+--   receiving surface (ASN, receiving sessions, goods receipts, cross-dock
+--   issue, putaway, shortages, on-hand visibility) plus purchase-order
+--   create/view. The elevated escape hatches stay out: goods_receipt:override
+--   and the putaway capacity/compatibility overrides are not granted here.
+-- * order:purchase_order:approve and :transmit (#1438) are held by ADMIN and
+--   the PO-approver personas LOCATION_MANAGER and INVENTORY_MANAGER only.
+--   Note the legacy inventory:purchase_order:* family remains seeded
+--   (ADMIN-only) although no controller enforces it — pos-order enforces
+--   order:purchase_order:*; retiring the legacy family needs a versioned
+--   migration and is tracked on #1438.
+-- * The inventory adjustment roles (#1373) carry the documented model:
+--   INVENTORY_LEAD creates and views adjustment requests;
 --   INVENTORY_MANAGER and INVENTORY_CONTROLLER additionally approve them. The two
 --   approver roles hold an identical permission set on purpose — location versus
 --   global reach is a property of role_assignments.scope_type, not of
@@ -83,25 +94,17 @@
 SET TIME ZONE 'UTC';
 
 -- ---------------------------------------------------------------------------
--- 1. Ensure the roles this baseline grants to exist.
+-- 1. Role creation.
 --
--- RoleInitializer creates these from Java, but it is an @PostConstruct bean and
--- therefore runs AFTER Flyway. On a fresh database they are absent while this
--- migration executes, so granting to them by name would resolve nothing and trip
--- the assertion in section 4. Creating them here makes the ordering deterministic
--- instead of dependent on bean lifecycle. Descriptions match RoleInitializer so
--- the two agree whichever runs first.
+-- Roles are created by SQL migrations only (#1440): every role this baseline
+-- grants to is inserted with a pinned UUID by R__seed_reference_security.sql,
+-- which Flyway runs before this file (repeatables run in filename order), or by
+-- a versioned migration (V3). No runtime code creates roles any more — the
+-- retired RoleInitializer bean ran @PostConstruct, i.e. AFTER Flyway, which is
+-- why this section used to re-create its roles defensively. Granting to a role
+-- no migration creates still aborts the migration via the assertion in
+-- section 4.
 -- ---------------------------------------------------------------------------
-INSERT INTO roles (id, name, description, created_at, created_by)
-SELECT gen_random_uuid(), r.name, r.description, NOW(), 'system'
-FROM (VALUES
-    ('GENERAL_MANAGER', 'General manager with broad organizational access'),
-    ('INVENTORY_CONTROLLER', 'Inventory controller with global adjustment approval authority'),
-    ('INVENTORY_LEAD', 'Inventory lead with permission to create adjustment requests'),
-    ('INVENTORY_MANAGER', 'Inventory manager with permission to create and approve adjustments'),
-    ('MANAGER', 'Department or location manager')
-) AS r(name, description)
-ON CONFLICT (name) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- 2. Ensure a permissions row exists for every permission this baseline grants.
@@ -316,6 +319,11 @@ FROM (VALUES
     ('order:price_override:approve', 'order', 'price_override', 'approve', 114),
     ('order:price_override:reject', 'order', 'price_override', 'reject', 115),
     ('order:price_override:view', 'order', 'price_override', 'view', 112),
+    ('order:purchase_order:approve', 'order', 'purchase_order', 'approve', 456),
+    ('order:purchase_order:availability_view', 'order', 'purchase_order', 'availability_view', 460),
+    ('order:purchase_order:create', 'order', 'purchase_order', 'create', 457),
+    ('order:purchase_order:transmit', 'order', 'purchase_order', 'transmit', 459),
+    ('order:purchase_order:view', 'order', 'purchase_order', 'view', 458),
     ('people-contact:person:create', 'people-contact', 'person', 'create', 352),
     ('people-contact:person:delete', 'people-contact', 'person', 'delete', 354),
     ('people-contact:person:edit', 'people-contact', 'person', 'edit', 353),
@@ -729,6 +737,11 @@ FROM (VALUES
     ('ADMIN', 'order:price_override:approve'),
     ('ADMIN', 'order:price_override:reject'),
     ('ADMIN', 'order:price_override:view'),
+    ('ADMIN', 'order:purchase_order:approve'),
+    ('ADMIN', 'order:purchase_order:availability_view'),
+    ('ADMIN', 'order:purchase_order:create'),
+    ('ADMIN', 'order:purchase_order:transmit'),
+    ('ADMIN', 'order:purchase_order:view'),
     ('ADMIN', 'people-contact:person:create'),
     ('ADMIN', 'people-contact:person:delete'),
     ('ADMIN', 'people-contact:person:edit'),
@@ -935,11 +948,30 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'catalog:product:view'),
     ('INVENTORY_LEAD', 'inventory:adjustment:create'),
     ('INVENTORY_LEAD', 'inventory:adjustment:view'),
+    ('INVENTORY_LEAD', 'inventory:asn:create'),
+    ('INVENTORY_LEAD', 'inventory:asn:view'),
+    ('INVENTORY_LEAD', 'inventory:goods_receipt:create'),
+    ('INVENTORY_LEAD', 'inventory:goods_receipt:view'),
+    ('INVENTORY_LEAD', 'inventory:issue:parts'),
+    ('INVENTORY_LEAD', 'inventory:on_hand:search'),
+    ('INVENTORY_LEAD', 'inventory:on_hand:view'),
+    ('INVENTORY_LEAD', 'inventory:putaway:claim'),
+    ('INVENTORY_LEAD', 'inventory:putaway:execute'),
+    ('INVENTORY_LEAD', 'inventory:putaway:generate'),
+    ('INVENTORY_LEAD', 'inventory:putaway:view'),
+    ('INVENTORY_LEAD', 'inventory:receiving:complete'),
+    ('INVENTORY_LEAD', 'inventory:receiving:create'),
+    ('INVENTORY_LEAD', 'inventory:receiving:view'),
+    ('INVENTORY_LEAD', 'inventory:shortage:resolve'),
+    ('INVENTORY_LEAD', 'inventory:shortage:view'),
     ('INVENTORY_LEAD', 'mcp:chat:execute'),
     ('INVENTORY_LEAD', 'mcp:chat:stream'),
     ('INVENTORY_LEAD', 'nlti:request:read'),
     ('INVENTORY_LEAD', 'nlti:request:submit'),
     ('INVENTORY_LEAD', 'order:order:view'),
+    ('INVENTORY_LEAD', 'order:purchase_order:availability_view'),
+    ('INVENTORY_LEAD', 'order:purchase_order:create'),
+    ('INVENTORY_LEAD', 'order:purchase_order:view'),
     ('INVENTORY_LEAD', 'pricing:price_book:view'),
     ('INVENTORY_LEAD', 'pricing:rule:view'),
     ('INVENTORY_MANAGER', 'catalog:category:view'),
@@ -952,6 +984,10 @@ FROM (VALUES
     ('INVENTORY_MANAGER', 'nlti:request:read'),
     ('INVENTORY_MANAGER', 'nlti:request:submit'),
     ('INVENTORY_MANAGER', 'order:order:view'),
+    ('INVENTORY_MANAGER', 'order:purchase_order:approve'),
+    ('INVENTORY_MANAGER', 'order:purchase_order:availability_view'),
+    ('INVENTORY_MANAGER', 'order:purchase_order:transmit'),
+    ('INVENTORY_MANAGER', 'order:purchase_order:view'),
     ('INVENTORY_MANAGER', 'pricing:price_book:view'),
     ('INVENTORY_MANAGER', 'pricing:rule:view'),
     ('LOCATION_MANAGER', 'appointments:cancel'),
@@ -974,6 +1010,10 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'nlti:request:read'),
     ('LOCATION_MANAGER', 'nlti:request:submit'),
     ('LOCATION_MANAGER', 'order:order:view'),
+    ('LOCATION_MANAGER', 'order:purchase_order:approve'),
+    ('LOCATION_MANAGER', 'order:purchase_order:availability_view'),
+    ('LOCATION_MANAGER', 'order:purchase_order:transmit'),
+    ('LOCATION_MANAGER', 'order:purchase_order:view'),
     ('LOCATION_MANAGER', 'people:availability:view'),
     ('LOCATION_MANAGER', 'people:timeAdjustment:approve'),
     ('LOCATION_MANAGER', 'people:timeAdjustment:create'),
@@ -1433,6 +1473,11 @@ BEGIN
         ('order:price_override:approve'),
         ('order:price_override:reject'),
         ('order:price_override:view'),
+        ('order:purchase_order:approve'),
+        ('order:purchase_order:availability_view'),
+        ('order:purchase_order:create'),
+        ('order:purchase_order:transmit'),
+        ('order:purchase_order:view'),
         ('people-contact:person:create'),
         ('people-contact:person:delete'),
         ('people-contact:person:edit'),

@@ -95,8 +95,8 @@ class RolePermissionBaselineTest {
     private static final Set<String> DELETED_CANDIDATE_ROLES = Set.of("SECURITY_ADMIN", "READ_ONLY_SCHEDULER");
 
     /**
-     * Roles that may create an inventory adjustment (#1373), matching the model
-     * {@code RoleInitializer}'s javadoc documents.
+     * Roles that may create an inventory adjustment (#1373), matching the model the
+     * seed's policy header documents.
      */
     private static final Set<String> ADJUSTMENT_CREATORS =
             Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_LEAD", "INVENTORY_MANAGER");
@@ -390,9 +390,10 @@ class RolePermissionBaselineTest {
         assertThat(creatable).as("no role-creating migration found").isNotEmpty();
         assertThat(seededGrants.keySet())
                 .as("granting to a role no migration creates aborts startup: the JOIN resolves "
-                        + "nothing and the seed's own assertion raises. RoleInitializer runs "
-                        + "@PostConstruct, i.e. after Flyway, so roles it creates do not count "
-                        + "unless this seed creates them too.")
+                        + "nothing and the seed's own assertion raises. Since #1440 every role "
+                        + "this baseline grants to must be created by a SQL migration — roles "
+                        + "created at runtime through the role-management API exist after "
+                        + "Flyway and cannot be a grant target here.")
                 .isSubsetOf(creatable);
     }
 
