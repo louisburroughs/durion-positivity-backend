@@ -390,9 +390,10 @@ class RolePermissionBaselineTest {
         assertThat(creatable).as("no role-creating migration found").isNotEmpty();
         assertThat(seededGrants.keySet())
                 .as("granting to a role no migration creates aborts startup: the JOIN resolves "
-                        + "nothing and the seed's own assertion raises. Since #1440 SQL "
-                        + "migrations are the only thing that creates roles — runtime code "
-                        + "must never be the source of a role this baseline grants to.")
+                        + "nothing and the seed's own assertion raises. Since #1440 every role "
+                        + "this baseline grants to must be created by a SQL migration — roles "
+                        + "created at runtime through the role-management API exist after "
+                        + "Flyway and cannot be a grant target here.")
                 .isSubsetOf(creatable);
     }
 

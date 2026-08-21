@@ -65,12 +65,13 @@ build. It also asserts that every role the seed grants to is created by a migrat
 a role that does not exist yet aborts startup, because the join resolves nothing and the seed's
 own assertion raises.
 
-Since #1440, SQL migrations are the only source of role creation:
-`R__seed_reference_security.sql` inserts every baseline role with a pinned UUID (repeatables run
+Since #1440, SQL migrations are the only source of the *baseline* roles this seed grants to:
+`R__seed_reference_security.sql` inserts every one of them with a pinned UUID (repeatables run
 in filename order, so it runs before the grants seed). The retired `RoleInitializer` bean used to
 create the manager and inventory roles from Java at `@PostConstruct` — *after* Flyway — which
 forced the grants seed to re-create them defensively; both the bean and that defensive block are
-gone.
+gone. Operators can still create additional roles at runtime through the role-management API;
+those start with no grants and are outside this baseline.
 
 ### Role policy
 

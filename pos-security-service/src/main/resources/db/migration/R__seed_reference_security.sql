@@ -26,8 +26,10 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO roles (id, name, description, created_at, created_by)
 VALUES ('f4b32a5f-edf2-2b8c-33e0-67f79bf423d2'::uuid, 'DISPATCHER', 'Canonical persona: Dispatcher', NOW(), 'seed-generator')
 ON CONFLICT (name) DO NOTHING;
--- The five roles below were created at startup by pos-security-service's RoleInitializer
--- (generated ids) until #1440 moved role creation into SQL. Their ids are UUIDv5 of
+-- GENERAL_MANAGER, INVENTORY_CONTROLLER, INVENTORY_LEAD, INVENTORY_MANAGER and MANAGER
+-- were created at startup by pos-security-service's RoleInitializer (generated ids)
+-- until #1440 moved baseline role creation into SQL; LOCATION_MANAGER below predates
+-- that and has always been seeded here. The five migrated ids are UUIDv5 of
 -- "durion-positivity://roles/<NAME>" so a regenerated seed reproduces them; databases
 -- populated before #1440 keep their original generated ids (ON CONFLICT DO NOTHING).
 INSERT INTO roles (id, name, description, created_at, created_by)
