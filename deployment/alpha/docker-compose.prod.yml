@@ -105,6 +105,12 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-catalog:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # pos-inventory validates products and UoMs against ext_product /
+    # ext_product_uom, which only this service's events populate. With the flag
+    # off nothing is written to its outbox at all, so those replicas stay empty
+    # and inventory rejects every product it is asked about.
+    environment:
+      POS_CATALOG_KAFKA_ENABLED: "true"
 
   pos-customer:
     image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
@@ -145,6 +151,13 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # pos-people validates staffing-assignment locations against ext_location,
+    # and pos-inventory against ext_storage_location / ext_location_parent.
+    # Same gating as pos-catalog above: flag off means no outbox rows, so those
+    # replicas are empty and every location lookup reports 'not found or
+    # inactive'.
+    environment:
+      POS_LOCATION_KAFKA_ENABLED: "true"
 
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
