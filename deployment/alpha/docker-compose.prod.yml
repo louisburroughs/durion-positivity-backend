@@ -162,16 +162,27 @@ services:
     # the ext_people_contact_person replica). StaffingAssignmentServiceImpl
     # validates against that replica, so creating a staffing assignment fails
     # with "Person not found" for a personId the service itself just reported.
+    # The consumer half: the base compose defaults
+    # SPRING_KAFKA_LISTENER_AUTO_STARTUP to false, which registers every
+    # @KafkaListener but starts none of them. pos-people needs its
+    # PeopleContactEventsListener running to populate the
+    # ext_people_contact_person replica that staffing assignments validate
+    # against.
     environment:
       POS_PEOPLE_KAFKA_ENABLED: "true"
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "true"
 
   pos-people-contact:
     image: ${ECR_REGISTRY}/durion/pos-people-contact:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
     # #838 second deploy: broker verified healthy, flag flipped on.
+    # Listener auto-startup for the same reason as pos-people above: without it
+    # the people-contact.commands.v1 consumer never starts, so the person upsert
+    # commands pos-people publishes are never acted on.
     environment:
       POS_PEOPLE_CONTACT_KAFKA_ENABLED: "true"
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "true"
 
   pos-price:
     image: ${ECR_REGISTRY}/durion/pos-price:${BACKEND_TAG}
