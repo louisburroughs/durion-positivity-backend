@@ -802,8 +802,10 @@ public class EstimateServiceImpl implements EstimateService {
         estimate.setTotal(total);
         estimate.setTaxPending(taxPending);
 
-        // Check if total changed (financially significant)
-        boolean totalChanged = (oldTotal == null && total != null) || (oldTotal != null && !oldTotal.equals(total));
+        // Check if total changed (financially significant). compareTo, not equals: BigDecimal
+        // equality is scale-sensitive, and 100 vs 100.00 is not a financial change.
+        boolean totalChanged = (oldTotal == null) != (total == null)
+                || (oldTotal != null && total != null && oldTotal.compareTo(total) != 0);
 
         if (totalChanged) {
             // Increment version on financial changes
