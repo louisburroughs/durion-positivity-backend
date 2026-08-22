@@ -2,7 +2,7 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Data;
 import lombok.Getter;
@@ -28,9 +28,9 @@ public class Category {
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    private Instant createdAt;
 
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    private Instant updatedAt;
 }
