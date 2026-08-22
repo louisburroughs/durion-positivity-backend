@@ -1,6 +1,20 @@
 spring:
   application:
     name: supplier
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    # Explicit String (de)serializers (#1450): spring-kafka 4.1 defaults to ByteArraySerializer,
+    # and SupplierOutboxPublisher sends String key/payload through KafkaTemplate — the same
+    # SerializationException #1449 fixed on six other services. No global consumer group-id:
+    # each @KafkaListener sets its own from pos.supplier.kafka.*-consumer-group.
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     # Deployment wiring points at the per-service pos_supplier_db (docker-compose / env).
     url: ${SPRING_DATASOURCE_URL:}
@@ -241,6 +255,11 @@ pos:
       # events, and they drain once this is enabled. It also gates the catalog product-code
       # consumer, so a deployment with Kafka off cannot match PRICAT lines at all — by design: an
       # empty replica is reported as unavailable rather than as a catalog full of misses.
+      #
+      # Deployment status (#1450): pos-supplier is deliberately NOT in
+      # deployment/alpha/docker-compose.prod.yml. When it is added there, set
+      # SUPPLIER_KAFKA_ENABLED=true and KAFKA_BOOTSTRAP_SERVERS together and verify the outbox
+      # drains (supplier_event_outbox.published_at set, attempts not climbing).
       enabled: ${SUPPLIER_KAFKA_ENABLED:false}
       catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
