@@ -887,7 +887,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-      start_period: 300s
+      # Longer than the stack-wide 300s: on alpha this service boots alongside a
+      # batch of other JVMs and its startup (Flyway + RAG/embedding wiring) has
+      # been observed to clear /actuator/health only after the ~400s unhealthy
+      # cutoff (run 32534445483). Probe successes during start_period still flip
+      # it healthy immediately, so a fast boot loses nothing.
+      start_period: 600s
 
   # pos-order:
   #   build:
