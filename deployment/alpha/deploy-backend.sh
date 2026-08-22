@@ -152,6 +152,7 @@ DOMAIN_SERVICES=(
   pos-invoice
   pos-location
   pos-mcp-server
+  pos-order
   pos-people
   pos-people-contact
   pos-price
