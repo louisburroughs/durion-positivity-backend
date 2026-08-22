@@ -259,7 +259,7 @@ pos:
       # Deployment status (#1450): pos-supplier is deliberately NOT in
       # deployment/alpha/docker-compose.prod.yml. When it is added there, set
       # SUPPLIER_KAFKA_ENABLED=true and KAFKA_BOOTSTRAP_SERVERS together and verify the outbox
-      # drains (supplier_outbox_event.published_at set, attempts not climbing).
+      # drains (supplier_event_outbox.published_at set, attempts not climbing).
       enabled: ${SUPPLIER_KAFKA_ENABLED:false}
       catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
