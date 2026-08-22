@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CatalogServiceImpl implements CatalogService {
@@ -51,26 +52,36 @@ public class CatalogServiceImpl implements CatalogService {
         this.catalogRepository = catalogRepository;
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public Optional<ProductDto> getProductById(UUID productId) {
         return productRepository.findById(productId).map(this::toProductDto);
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<ProductDto> getProductsByName(String name) {
         return productRepository.findByName(name).stream()
                 .map(this::toProductDto)
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public Optional<ServiceDto> getServiceById(UUID serviceId) {
         return serviceRepository.findById(serviceId).map(this::toServiceDto);
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<ServiceDto> getServicesByName(String name) {
         return serviceRepository.findByName(name).stream()
                 .map(this::toServiceDto)
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<ServiceDto> searchServices(String q, int limit) {
         if (q == null || q.isBlank()) {
             return Collections.emptyList();
@@ -82,26 +93,35 @@ public class CatalogServiceImpl implements CatalogService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public Optional<NonInventoryProductDto> getNonInventoryProductById(UUID productId) {
         return nonInventoryProductRepository.findById(productId).map(this::toNonInventoryProductDto);
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<NonInventoryProductDto> getNonInventoryProductsByName(String name) {
         return nonInventoryProductRepository.findByName(name).stream()
                 .map(this::toNonInventoryProductDto)
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public Optional<CatalogDto> getCatalogById(UUID catalogId) {
         return catalogRepository.findById(catalogId).map(this::toCatalogDto);
     }
 
+    @Override
+    @Transactional(readOnly = true)
     public List<CatalogDto> getCatalogsByName(String name) {
         return catalogRepository.findByNameContainingIgnoreCase(name).stream()
                 .map(this::toCatalogDto)
                 .toList();
     }
 
+    @Override
     public CatalogItemResponseDto addCatalogItem(String type, CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {
             case PRODUCT -> toCatalogItemResponse(PRODUCT, productRepository.save(toProductEntity(request)));
@@ -112,6 +132,7 @@ public class CatalogServiceImpl implements CatalogService {
         };
     }
 
+    @Override
     public Optional<CatalogItemResponseDto> updateCatalogItem(
             String type, UUID catalogId, CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {
@@ -137,6 +158,7 @@ public class CatalogServiceImpl implements CatalogService {
         };
     }
 
+    @Override
     public boolean deleteCatalogItem(String type, UUID catalogId) {
         return switch (normalizeType(type)) {
             case PRODUCT -> deleteProduct(catalogId);
@@ -146,10 +168,12 @@ public class CatalogServiceImpl implements CatalogService {
         };
     }
 
+    @Override
     public CatalogDto addCatalog(CatalogDto request) {
         return toCatalogDto(catalogRepository.save(toCatalogEntity(request)));
     }
 
+    @Override
     public Optional<CatalogDto> updateCatalog(UUID catalogId, CatalogDto request) {
         return catalogRepository.findById(catalogId).map(existing -> {
             CatalogEntity updated = toCatalogEntity(request);
@@ -158,6 +182,7 @@ public class CatalogServiceImpl implements CatalogService {
         });
     }
 
+    @Override
     public boolean deleteCatalog(UUID catalogId) {
         if (!catalogRepository.existsById(catalogId)) {
             return false;
