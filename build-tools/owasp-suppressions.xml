@@ -54,10 +54,14 @@
         client release on Maven Central, so no upgrade exists that would clear the CPE match.
         Actual remediation is server-side: run the pgvector database extension at >= 0.8.6
         (tracked as an infrastructure task, not a build dependency).
+
+        Pinned to version 0.1.6 (same convention as the Tomcat suppression below) so that a
+        future client upgrade forces this suppression to be re-evaluated rather than silently
+        carrying over.
     -->
     <suppress>
         <notes>CPE false positive: CVE targets the pgvector PostgreSQL C extension (fixed 0.8.6), not the Java JDBC client; no newer client release exists.</notes>
-        <gav regex="true">^com\.pgvector:pgvector:.*$</gav>
+        <gav regex="true">^com\.pgvector:pgvector:0\.1\.6$</gav>
         <cve>CVE-2026-18022</cve>
     </suppress>
 
@@ -65,11 +69,12 @@
         Same CVE, second match path: in pos-coverage-aggregate the Archive Analyzer scans the
         repackaged Spring Boot jars and finds pgvector nested under BOOT-INF/lib without GAV
         evidence (CPE match only), so the same finding resurfaces there.  Match those
-        occurrences by file name.  Remove together with the rule above.
+        occurrences by file name, pinned to 0.1.6 like the rule above.  Remove together with
+        the rule above.
     -->
     <suppress>
         <notes>Nested-jar duplicate of the pgvector CVE-2026-18022 suppression above (no GAV evidence inside boot jars).</notes>
-        <filePath regex="true">.*[\\/]pgvector[^\\/]*\.jar$</filePath>
+        <filePath regex="true">.*[\\/]pgvector-0\.1\.6\.jar$</filePath>
         <cve>CVE-2026-18022</cve>
     </suppress>
 
