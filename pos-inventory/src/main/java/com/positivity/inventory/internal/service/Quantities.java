@@ -22,7 +22,11 @@ final class Quantities {
 
     /** The value, or {@code ZERO} when absent. An absent quantity has always meant none. */
     static @NonNull BigDecimal nz(@Nullable BigDecimal value) {
-        return Objects.requireNonNullElse(value, BigDecimal.ZERO);
+        // requireNonNull is here for the analyzers, not the runtime: SonarCloud's dataflow
+        // engine treats a static-field read (BigDecimal.ZERO) as possibly null, and its Java
+        // analyzer treats requireNonNullElse the same way — this is the one shape both prove
+        // non-null.
+        return value != null ? value : Objects.requireNonNull(BigDecimal.ZERO);
     }
 
     /** {@code a > b} by value, ignoring scale. */

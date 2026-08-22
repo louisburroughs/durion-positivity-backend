@@ -151,12 +151,16 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                 destinationLocationId, ON_HAND_EVENT_TYPES));
         BigDecimal maxCapacity = BigDecimal.valueOf(getMaxCapacity(destinationLocationId, locationValidation));
 
-        if (!Quantities.isPositive(maxCapacity)) {
+        // Direct signum/compareTo rather than the Quantities helpers: every value here is
+        // provably non-null (nz above, BigDecimal.valueOf, add), and mixing the null-tolerant
+        // helpers with the direct dereferences below reads as inconsistent null handling — to
+        // SonarCloud's dataflow engine and to a human alike.
+        if (maxCapacity.signum() <= 0) {
             throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
         }
 
         BigDecimal projectedCapacity = currentCapacity.add(BigDecimal.valueOf(quantity));
-        if (Quantities.lt(projectedCapacity, maxCapacity)) {
+        if (projectedCapacity.compareTo(maxCapacity) < 0) {
             addCapacityNearLimitWarning(result, projectedCapacity, maxCapacity);
             return result;
         }

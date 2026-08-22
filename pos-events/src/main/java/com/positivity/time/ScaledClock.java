@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A clock whose returned Instant advances faster than real time.
@@ -27,7 +28,7 @@ public final class ScaledClock extends Clock {
     private final double scale;
     private final boolean converge;
 
-    private volatile boolean converged;
+    private final AtomicBoolean converged = new AtomicBoolean(false);
 
     /**
      * Creates a clock that accelerates without bound and never converges on wall time.
@@ -88,14 +89,14 @@ public final class ScaledClock extends Clock {
         if (!converge) {
             return false;
         }
-        if (converged) {
+        if (converged.get()) {
             return true;
         }
         Instant now = baseClock.instant();
         if (!scaledInstant(now).isBefore(now)) {
-            converged = true;
+            converged.set(true);
         }
-        return converged;
+        return converged.get();
     }
 
     @Override
@@ -108,7 +109,7 @@ public final class ScaledClock extends Clock {
         ScaledClock copy = new ScaledClock(baseClock, zone, realStart, virtualStart, scale, converge);
         // Carry the latch: without it a backward step of the base clock could make the copy
         // recompute the accelerated formula and report virtual time below wall time again.
-        copy.converged = this.converged;
+        copy.converged.set(this.converged.get());
         return copy;
     }
 
@@ -119,13 +120,13 @@ public final class ScaledClock extends Clock {
         if (!converge) {
             return scaledInstant(now);
         }
-        if (converged) {
+        if (converged.get()) {
             return now;
         }
 
         Instant scaled = scaledInstant(now);
         if (!scaled.isBefore(now)) {
-            converged = true;
+            converged.set(true);
             return now;
         }
         return scaled;

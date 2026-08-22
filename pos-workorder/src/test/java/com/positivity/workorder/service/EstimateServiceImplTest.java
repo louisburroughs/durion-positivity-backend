@@ -344,6 +344,38 @@ class EstimateServiceImplTest {
     }
 
     @Test
+    void updateEstimateFinancials_scaleOnlyTotalRestatement_isNotARevision() {
+        // 100 vs 100.00 is the same amount at a different scale — e.g. the value read back from
+        // a numeric column. It must not bump the version or publish EstimateRevisedEvent.
+        estimate.setTotal(new BigDecimal("100"));
+        estimate.setVersion(3);
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
+        when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
+
+        estimateService.updateEstimateFinancials(
+                ESTIMATE_ID, new BigDecimal("90.00"), new BigDecimal("10.00"), new BigDecimal("100.00"), "testuser");
+
+        assertEquals(3, estimate.getVersion());
+        org.mockito.Mockito.verify(workOrderRepository, org.mockito.Mockito.never())
+                .findAllByEstimate_Id(any(UUID.class));
+    }
+
+    @Test
+    void updateEstimateFinancials_totalValueChange_bumpsVersionAndPublishesRevision() {
+        estimate.setTotal(new BigDecimal("100.00"));
+        estimate.setVersion(3);
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
+        when(estimateRepository.save(any(Estimate.class))).thenAnswer(i -> i.getArgument(0));
+        when(workOrderRepository.findAllByEstimate_Id(ESTIMATE_ID)).thenReturn(List.of());
+
+        estimateService.updateEstimateFinancials(
+                ESTIMATE_ID, new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("110.00"), "testuser");
+
+        assertEquals(4, estimate.getVersion());
+        org.mockito.Mockito.verify(workOrderRepository).findAllByEstimate_Id(ESTIMATE_ID);
+    }
+
+    @Test
     void deleteEstimateItem_valid_deletesItem() {
         EstimateItem item =
                 EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
