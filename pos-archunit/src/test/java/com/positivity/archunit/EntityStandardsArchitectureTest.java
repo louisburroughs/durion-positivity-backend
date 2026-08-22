@@ -3,6 +3,7 @@ package com.positivity.archunit;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
@@ -51,6 +52,7 @@ class EntityStandardsArchitectureTest {
     private static final String UUIDV7_ID_ANNOTATION = "com.positivity.shared.id.UUIDv7Id";
     private static final String UUIDV7_GENERATOR = "com.positivity.shared.id.UUIDv7Generator";
     private static final String ASSIGNED_IDENTIFIER_ANNOTATION = "com.positivity.shared.id.AssignedIdentifier";
+    private static final String LOB_ANNOTATION = "jakarta.persistence.Lob";
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
             new DescribedPredicate<>("call UUID.randomUUID()") {
@@ -144,6 +146,27 @@ class EntityStandardsArchitectureTest {
             .beAnnotatedWith(LAST_MODIFIED_DATE_ANNOTATION)
             .allowEmptyShould(true)
             .because("ADR-0024 requires updatedAt to be populated via @LastModifiedDate");
+
+    /**
+     * On Postgres, {@code @Lob} on a {@code String} does not mean "unbounded text" — it stores a
+     * large-object OID whose bytes live in {@code pg_largeobject}. Hibernate then reads the value
+     * during entity hydration through the LOB API, which requires an ambient transaction, so any
+     * load of the entity in auto-commit mode fails — and rewriting or deleting the row leaks the
+     * object, since large objects are never unlinked automatically (#1461). Long text belongs in a
+     * plain {@code text} column: {@code @Column(columnDefinition = "TEXT")}. This rule is
+     * fleet-wide, not limited to ENFORCED_ENTITY_PACKAGES, because the failure mode is identical
+     * everywhere.
+     */
+    @ArchTest
+    static final ArchRule string_fields_should_not_be_lob = noFields()
+            .that()
+            .haveRawType(String.class)
+            .should()
+            .beAnnotatedWith(LOB_ANNOTATION)
+            .allowEmptyShould(true)
+            .because("@Lob on String maps to a Postgres large object (oid): reads fail outside a transaction"
+                    + " and updates/deletes leak pg_largeobject storage (#1461);"
+                    + " use @Column(columnDefinition = \"TEXT\") instead");
 
     @ArchTest
     static final ArchRule entities_with_audit_fields_should_declare_entity_listeners = classes()
