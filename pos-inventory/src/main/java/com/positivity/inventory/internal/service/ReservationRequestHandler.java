@@ -103,7 +103,11 @@ public class ReservationRequestHandler implements ReservationRequestService {
         BigDecimal atp = availableToPromise(stockItemId, locationId);
         Instant now = Instant.now(clock);
 
-        if (Quantities.gte(atp, requiredQuantityBase)) {
+        // Direct compareTo rather than Quantities.gte: both values are provably non-null
+        // (requirePostable throws on null, availableToPromise defaults to ZERO), and routing
+        // them through the null-tolerant helper here while dereferencing them below reads as
+        // inconsistent null handling — to SonarCloud's dataflow engine and to a human alike.
+        if (atp.compareTo(requiredQuantityBase) >= 0) {
             log.info(
                     "Reservation {} covered: demandLine={} sku={} qty={} atp={}",
                     reservation.getReservationId(),
@@ -128,7 +132,7 @@ public class ReservationRequestHandler implements ReservationRequestService {
         // someone else's deficit. Decimal since ADR-0055 (#1414) — a shortfall on a divisible
         // product is itself divisible, and the old (int) cast would have floored it toward zero,
         // quietly backordering less than is actually missing.
-        BigDecimal quantityShort = Quantities.min(requiredQuantityBase, requiredQuantityBase.subtract(atp));
+        BigDecimal quantityShort = requiredQuantityBase.min(requiredQuantityBase.subtract(atp));
         markBackordered(reservation.getReservationId());
         BackorderResponse backorder = workorderLineId != null
                 ? backorderService.createBackorder(workorderLineId, stockItemId.toString(), quantityShort, locationId)
