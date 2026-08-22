@@ -163,8 +163,9 @@ DOMAIN_SERVICES=(
 
 DOMAIN_BATCH_SIZE=6
 # Upper bound per tier/batch: worst-case healthcheck window plus slack. The
-# widest window is pos-mcp-server's (600s start_period + 20x5s retries = 700s).
-WAIT_TIMEOUT=780
+# widest window is pos-mcp-server's: 600s start_period + 20 retries, each up
+# to interval (5s) + probe timeout (3s) = 760s.
+WAIT_TIMEOUT=840
 
 BACKEND_SERVICES=(
   "${CORE_SERVICES[@]}"
