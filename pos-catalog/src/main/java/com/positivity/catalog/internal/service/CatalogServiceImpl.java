@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CatalogServiceImpl implements CatalogService {
@@ -51,26 +52,31 @@ public class CatalogServiceImpl implements CatalogService {
         this.catalogRepository = catalogRepository;
     }
 
+    @Transactional(readOnly = true)
     public Optional<ProductDto> getProductById(UUID productId) {
         return productRepository.findById(productId).map(this::toProductDto);
     }
 
+    @Transactional(readOnly = true)
     public List<ProductDto> getProductsByName(String name) {
         return productRepository.findByName(name).stream()
                 .map(this::toProductDto)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public Optional<ServiceDto> getServiceById(UUID serviceId) {
         return serviceRepository.findById(serviceId).map(this::toServiceDto);
     }
 
+    @Transactional(readOnly = true)
     public List<ServiceDto> getServicesByName(String name) {
         return serviceRepository.findByName(name).stream()
                 .map(this::toServiceDto)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<ServiceDto> searchServices(String q, int limit) {
         if (q == null || q.isBlank()) {
             return Collections.emptyList();
@@ -82,20 +88,24 @@ public class CatalogServiceImpl implements CatalogService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public Optional<NonInventoryProductDto> getNonInventoryProductById(UUID productId) {
         return nonInventoryProductRepository.findById(productId).map(this::toNonInventoryProductDto);
     }
 
+    @Transactional(readOnly = true)
     public List<NonInventoryProductDto> getNonInventoryProductsByName(String name) {
         return nonInventoryProductRepository.findByName(name).stream()
                 .map(this::toNonInventoryProductDto)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public Optional<CatalogDto> getCatalogById(UUID catalogId) {
         return catalogRepository.findById(catalogId).map(this::toCatalogDto);
     }
 
+    @Transactional(readOnly = true)
     public List<CatalogDto> getCatalogsByName(String name) {
         return catalogRepository.findByNameContainingIgnoreCase(name).stream()
                 .map(this::toCatalogDto)
