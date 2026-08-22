@@ -164,6 +164,16 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  pos-order:
+    image: ${ECR_REGISTRY}/durion/pos-order:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # First deployment of this service (#1461 follow-up / SDK Suite D). Kafka on from
+    # the start: pos-inventory builds its ext_purchase_order replicas from
+    # order.events.v1, so receiving against a PO is impossible with the flag off.
+    environment:
+      POS_ORDER_KAFKA_ENABLED: "true"
+
   pos-people:
     image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
     restart: unless-stopped
