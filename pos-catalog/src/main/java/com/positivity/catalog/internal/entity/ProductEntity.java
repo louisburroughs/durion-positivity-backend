@@ -137,7 +137,7 @@ public class ProductEntity implements CatalogItem {
     @Schema(description = "UPC code for product", example = "0123456789012")
     private String upc;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     @Schema(description = "Arbitrary key-value product attributes stored as JSON")
     private String attributes;
 
@@ -172,7 +172,7 @@ public class ProductEntity implements CatalogItem {
     @Schema(description = "Warranty information for the product", example = "2 years parts and labor")
     private String warranty;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     @Schema(
             description = "Detailed specifications of the product",
             example = "{\"weight\": \"5kg\", \"length\": \"30cm\"}")
