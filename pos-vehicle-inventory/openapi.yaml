@@ -78,6 +78,57 @@ paths:
       - Vehicle Registry API
       x-required-permissions:
       - AUTHENTICATED
+  /v1/vehicle-registry/facts/replay:
+    post:
+      description: 'Re-publishes vehicle.vehicle.updated facts for one bounded page of vehicles so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
+
+        Use this tool to fill a consumer''s replica after publication was enabled on an environment that already held vehicles, or after a consumer outage longer than broker retention; do not use the outbox replay for that, which re-queues only rows already written and therefore cannot reach vehicles whose facts were never produced.
+
+        Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and reach nobody; replayed facts are indistinguishable from live ones, so consumers apply them through their normal path and their stale guard prevents an older fact regressing newer state.
+
+        Required inputs: none; afterVehicleId resumes a previous page, updatedSince restricts to vehicles changed at or after an instant, and limit bounds the page at 1000.
+
+        Emits a VEHICLE_FACT_REPLAY event and queues one vehicle fact per vehicle in the page; no vehicle state changes.
+
+        Returns 200 with complete=true and a null cursor once the last vehicle is reached, and 400 when a parameter is malformed.
+
+        '
+      operationId: replayVehicleFacts
+      parameters:
+      - description: Resume after this vehicle id.
+        in: query
+        name: afterVehicleId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Only vehicles updated at or after this instant.
+        in: query
+        name: updatedSince
+        required: false
+        schema:
+          format: date-time
+          type: string
+      - description: Page size, 1-1000.
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 500
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleFactReplayResultDto'
+          description: What this page emitted and where to resume.
+      security:
+      - bearerAuth: []
+      summary: Re-emit Vehicle Facts for Replica Consumers
+      tags:
+      - Vehicle Registry API
   /v1/vehicle-registry/vin/{vin}:
     get:
       description: 'Returns a single vehicle registry record by VIN, normalizing the supplied value by trimming, uppercasing and stripping separators before the lookup.
@@ -1462,6 +1513,32 @@ components:
       - updatedAt
       - vehicleId
       - version
+      type: object
+    VehicleFactReplayResultDto:
+      description: Outcome of one page of a vehicle-fact replay.
+      properties:
+        complete:
+          description: True when no further pages remain for this filter.
+          example: false
+          type: boolean
+        emitted:
+          description: Facts published by this call.
+          example: 500
+          format: int32
+          type: integer
+        nextAfterId:
+          description: Cursor for the next page; null when the last vehicle was reached.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        startedAt:
+          description: When this page began.
+          format: date-time
+          type: string
+        updatedSince:
+          description: The updatedSince filter this page ran under, echoed back.
+          format: date-time
+          type: string
       type: object
     VehicleLegacyRequest:
       description: Legacy request payload for creating or updating a vehicle

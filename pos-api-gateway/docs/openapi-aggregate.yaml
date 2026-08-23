@@ -1373,6 +1373,8 @@ paths:
     $ref: ../../pos-vehicle-fitment/openapi.yaml#/paths/~1v1~1vehicle-fitment~1vehicle-types~1{makeId}
   /v1/vehicle-registry:
     $ref: ../../pos-vehicle-inventory/openapi.yaml#/paths/~1v1~1vehicle-registry
+  /v1/vehicle-registry/facts/replay:
+    $ref: ../../pos-vehicle-inventory/openapi.yaml#/paths/~1v1~1vehicle-registry~1facts~1replay
   /v1/vehicle-registry/vin/{vin}:
     $ref: ../../pos-vehicle-inventory/openapi.yaml#/paths/~1v1~1vehicle-registry~1vin~1{vin}
   /v1/vehicle-registry/{vehicleId}:
