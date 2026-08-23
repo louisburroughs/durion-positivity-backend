@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -74,9 +75,7 @@ public class CustomerController {
             @Parameter(description = "Case-insensitive email filter for typeahead search", example = "jdoe@acme.com")
                     @RequestParam(required = false)
                     String email,
-            @Parameter(description = "Pagination parameters (page, size, sort)")
-                    @PageableDefault(size = 20, sort = "customerNumber")
-                    Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20, sort = "customerNumber") Pageable pageable) {
         CustomerService service = COMMERCIAL.equalsIgnoreCase(customerType) ? commercialService : personService;
 
         boolean searching = (name != null && !name.isBlank()) || (email != null && !email.isBlank());

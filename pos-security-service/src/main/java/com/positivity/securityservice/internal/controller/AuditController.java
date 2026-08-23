@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -200,7 +201,7 @@ public class AuditController {
                             example = "11111111-1111-1111-1111-111111111111")
                     @RequestParam(required = false)
                     List<String> locationIds,
-            @Parameter(hidden = true) Pageable pageable) {
+            @ParameterObject Pageable pageable) {
 
         AuditEventSearchFilter filter = AuditEventSearchFilter.builder()
                 .fromDate(fromDate)

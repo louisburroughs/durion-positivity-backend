@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -106,7 +107,7 @@ public class ReplenishmentController {
             @io.swagger.v3.oas.annotations.Parameter(description = "Location identifier")
                     @RequestParam(required = false)
                     UUID locationId,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(replenishmentService.getReplenishmentPolicies(locationId, pageable));
     }
 

@@ -18,6 +18,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -80,8 +81,7 @@ public class InvoiceSearchController {
                     @RequestParam(required = false)
                     @Nullable
                     String q,
-            @Parameter(schema = @Schema(implementation = Pageable.class))
-                    @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC)
+            @ParameterObject @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC)
                     Pageable pageable) {
         return invoiceSearchService.search(q == null ? "" : q.trim(), capPageSize(pageable));
     }

@@ -28,6 +28,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -184,7 +185,8 @@ public class ClaimController {
             @Parameter(description = "Exact claim code, e.g. WC-2026-000123") @RequestParam(required = false)
                     String claimCode,
             @Parameter(description = "Filter by location id") @RequestParam(required = false) UUID locationId,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
+                    Pageable pageable) {
         return ResponseEntity.ok(claimService.search(customerId, vehicleId, status, claimCode, locationId, pageable));
     }
 

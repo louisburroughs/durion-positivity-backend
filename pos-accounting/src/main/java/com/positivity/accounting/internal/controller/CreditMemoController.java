@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -254,7 +255,7 @@ public class CreditMemoController {
             @Parameter(description = "Filter by status (DRAFT, POSTED, APPLIED, VOIDED)")
                     @RequestParam(required = false)
                     CreditMemoStatus status,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
 
         log.debug(
                 "Listing Credit Memos: customerId={}, invoiceId={}, status={}, page={}",

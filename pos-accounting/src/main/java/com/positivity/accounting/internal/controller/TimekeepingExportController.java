@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -134,7 +135,8 @@ public class TimekeepingExportController {
     @ApiResponse(responseCode = "200", description = "Export history returned")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     public ResponseEntity<Page<ExportJobResponse>> listExportHistory(
-            @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC)
+                    Pageable pageable) {
         Page<ExportJobResponse> history = timekeepingExportService.listExportHistory(pageable);
         return ResponseEntity.ok(history);
     }

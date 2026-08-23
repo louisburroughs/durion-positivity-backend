@@ -676,11 +676,86 @@ paths:
         '
       operationId: searchShopAudit
       parameters:
-      - in: query
-        name: filter
-        required: true
+      - description: Workorder UUID to filter by - one word per workspace naming policy
+        example: 01960003-0000-7000-8000-000000000001
+        in: query
+        name: workorderId
+        required: false
         schema:
-          $ref: '#/components/schemas/ShopAuditFilter'
+          description: Workorder UUID to filter by - one word per workspace naming policy
+          example: 01960003-0000-7000-8000-000000000001
+          type: string
+      - description: Appointment UUID to filter by
+        example: 01960003-0000-7000-8000-000000000002
+        in: query
+        name: appointmentId
+        required: false
+        schema:
+          description: Appointment UUID to filter by
+          example: 01960003-0000-7000-8000-000000000002
+          type: string
+      - description: Mechanic user ID to filter by
+        example: 01960003-0000-7000-8000-000000000010
+        in: query
+        name: mechanicId
+        required: false
+        schema:
+          description: Mechanic user ID to filter by
+          example: 01960003-0000-7000-8000-000000000010
+          type: string
+      - description: Actor user ID to filter by
+        example: 01960003-0000-7000-8000-000000000020
+        in: query
+        name: actorUserId
+        required: false
+        schema:
+          description: Actor user ID to filter by
+          example: 01960003-0000-7000-8000-000000000020
+          type: string
+      - description: Specific audit event type to filter by
+        example: SCHEDULE_UPDATED
+        in: query
+        name: eventType
+        required: false
+        schema:
+          description: Specific audit event type to filter by
+          enum:
+          - SCHEDULE_CREATED
+          - SCHEDULE_UPDATED
+          - SCHEDULE_CANCELLED
+          - ASSIGNMENT_CREATED
+          - ASSIGNMENT_REMOVED
+          example: SCHEDULE_UPDATED
+          type: string
+      - description: Location ID to filter by
+        example: 01960003-0000-7000-8000-000000000003
+        in: query
+        name: locationId
+        required: false
+        schema:
+          description: Location ID to filter by
+          example: 01960003-0000-7000-8000-000000000003
+          type: string
+      - description: Inclusive start timestamp for date-time range filter
+        example: 2026-01-01 00:00:00+00:00
+        in: query
+        name: fromDateTime
+        required: false
+        schema:
+          description: Inclusive start timestamp for date-time range filter
+          example: 2026-01-01 00:00:00+00:00
+          format: date-time
+          type: string
+      - description: Inclusive end timestamp for date-time range filter
+        example: 2026-12-31 23:59:59+00:00
+        in: query
+        name: toDateTime
+        required: false
+        schema:
+          description: Inclusive end timestamp for date-time range filter
+          example: 2026-12-31 23:59:59+00:00
+          format: date-time
+          type: string
       responses:
         '200':
           content:
@@ -1456,50 +1531,6 @@ components:
       - id
       - recordedAt
       - retentionYears
-      type: object
-    ShopAuditFilter:
-      description: Filter criteria for querying the shop audit trail. At least one field must be non-null.
-      properties:
-        actorUserId:
-          description: Actor user ID to filter by
-          example: 01960003-0000-7000-8000-000000000020
-          type: string
-        appointmentId:
-          description: Appointment UUID to filter by
-          example: 01960003-0000-7000-8000-000000000002
-          type: string
-        eventType:
-          description: Specific audit event type to filter by
-          enum:
-          - SCHEDULE_CREATED
-          - SCHEDULE_UPDATED
-          - SCHEDULE_CANCELLED
-          - ASSIGNMENT_CREATED
-          - ASSIGNMENT_REMOVED
-          example: SCHEDULE_UPDATED
-          type: string
-        fromDateTime:
-          description: Inclusive start timestamp for date-time range filter
-          example: 2026-01-01 00:00:00+00:00
-          format: date-time
-          type: string
-        locationId:
-          description: Location ID to filter by
-          example: 01960003-0000-7000-8000-000000000003
-          type: string
-        mechanicId:
-          description: Mechanic user ID to filter by
-          example: 01960003-0000-7000-8000-000000000010
-          type: string
-        toDateTime:
-          description: Inclusive end timestamp for date-time range filter
-          example: 2026-12-31 23:59:59+00:00
-          format: date-time
-          type: string
-        workorderId:
-          description: Workorder UUID to filter by - one word per workspace naming policy
-          example: 01960003-0000-7000-8000-000000000001
-          type: string
       type: object
   securitySchemes:
     bearerAuth:

@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -90,7 +91,7 @@ public class CustomerCreditController {
             @Parameter(description = "Filter by customer") @RequestParam(required = false) UUID customerId,
             @Parameter(description = "Filter by consumption state") @RequestParam(required = false)
                     CustomerCreditStatus status,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(customerCreditService.listCredits(customerId, status, pageable));
     }
 
