@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 class GlobalApiExceptionHandlerTest {
@@ -172,6 +174,41 @@ class GlobalApiExceptionHandlerTest {
     }
 
     @Test
+    void responseStatusAnnotatedExceptionKeepsItsStatusInsteadOfCollapsingTo500() throws Exception {
+        mockMvc.perform(get("/test/not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Requested resource was not found"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void responseStatusAnnotatedExceptionUsesItsReasonWhenDeclared() throws Exception {
+        mockMvc.perform(get("/test/conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value("Resource already exists"));
+    }
+
+    @Test
+    void responseStatusIsResolvedThroughTheCauseChain() throws Exception {
+        mockMvc.perform(get("/test/wrapped-not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    void responseStatusAnnotatedBodyDoesNotEchoTheExceptionMessage() throws Exception {
+        String body = mockMvc.perform(get("/test/not-found"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body).doesNotContain("bay 00000000-0000-0000-0000-000000000001");
+    }
+
+    @Test
     void springSecurityExceptionsAreRethrownForTheSecurityFilterChain() {
         assertThatThrownBy(() -> mockMvc.perform(get("/test/denied")))
                 .isInstanceOf(jakarta.servlet.ServletException.class)
@@ -183,6 +220,16 @@ class GlobalApiExceptionHandlerTest {
     }
 
     record ValidatedRequest(@NotBlank String name) {}
+
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    static class DomainNotFoundException extends RuntimeException {
+        DomainNotFoundException(String message) {
+            super(message);
+        }
+    }
+
+    @ResponseStatus(value = HttpStatus.CONFLICT, reason = "Resource already exists")
+    static class DomainConflictException extends RuntimeException {}
 
     enum TrackingLevel {
         NONE,
@@ -254,6 +301,21 @@ class GlobalApiExceptionHandlerTest {
         @GetMapping("/test/typed/{count}")
         String typed(@org.springframework.web.bind.annotation.PathVariable int count) {
             return Integer.toString(count);
+        }
+
+        @GetMapping("/test/not-found")
+        String notFound() {
+            throw new DomainNotFoundException("bay 00000000-0000-0000-0000-000000000001");
+        }
+
+        @GetMapping("/test/conflict")
+        String conflict() {
+            throw new DomainConflictException();
+        }
+
+        @GetMapping("/test/wrapped-not-found")
+        String wrappedNotFound() {
+            throw new IllegalStateException("wrapper", new DomainNotFoundException("bay"));
         }
 
         @GetMapping("/test/denied")
