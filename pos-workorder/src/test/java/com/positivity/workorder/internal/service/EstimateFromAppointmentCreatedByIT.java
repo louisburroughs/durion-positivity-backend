@@ -53,8 +53,20 @@ class EstimateFromAppointmentCreatedByIT {
                 .as("created_by_id is NOT NULL; the bridge has to supply it like every other create path")
                 .isNotNull();
 
-        // The endpoint is idempotent on the appointment, not on the key.
-        CreateEstimateFromAppointmentResponse replay = estimateService.createEstimateFromAppointment(request);
+        // Idempotent on the appointment, not on the key: the service looks the
+        // estimate up by appointmentId. Replaying with the same key would pass
+        // either way, so the replay deliberately carries a different one.
+        CreateEstimateFromAppointmentRequest replayRequest = new CreateEstimateFromAppointmentRequest();
+        replayRequest.setIdempotencyKey(UUID.randomUUID());
+        replayRequest.setAppointmentId(appointmentId);
+        replayRequest.setCustomerId(UUID.randomUUID());
+        replayRequest.setVehicleId(UUID.randomUUID());
+        replayRequest.setLocationId(UUID.randomUUID());
+        assertThat(replayRequest.getIdempotencyKey())
+                .as("the replay must not reuse the first key, or it proves nothing about the appointment")
+                .isNotEqualTo(request.getIdempotencyKey());
+
+        CreateEstimateFromAppointmentResponse replay = estimateService.createEstimateFromAppointment(replayRequest);
         assertThat(replay.isCreated()).isFalse();
         assertThat(replay.getEstimateId()).isEqualTo(first.getEstimateId());
     }
