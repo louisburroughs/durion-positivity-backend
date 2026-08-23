@@ -44,6 +44,33 @@ cd durion-positivity-backend
 ./mvnw -e -U -DskipTests=false -DfailIfNoTests=false clean package
 ```
 
+### Alpha deployment paths (#1457)
+
+Two workflows deliver changes to the alpha EC2 box; which one runs depends on what changed:
+
+- **Code changes** — `build-push-ecr.yml` (auto after a green `Backend CI/CD` main run, or
+  manual dispatch with `deploy_alpha`). Builds/promotes images, uploads the compose files to S3,
+  pulls them onto the box over SSM, and runs `deploy-backend.sh <sha>` (full deploy:
+  retag + pull + `--force-recreate`).
+- **Config-only changes** to `deployment/alpha/docker-compose.prod.yml`,
+  `deployment/alpha/deploy-backend.sh`, `postgres/init-databases.sql`, or `observability/**` —
+  `sync-alpha-config.yml` (auto on merge to `main` touching those paths, or manual dispatch).
+  Uploads the committed files, pulls them onto the box, and runs
+  `deploy-backend.sh --config-only`, which **recreates** exactly the containers whose merged
+  compose config changed, force-recreates the observability containers (their bind-mounted
+  configs are invisible to compose's config hash), re-provisions Kafka topics, and reconciles
+  databases. Recreation matters: a plain `docker restart` keeps the old environment, so new
+  `environment:` values would never apply.
+- The root `docker-compose.yml` rides **both** paths: the sync workflow delivers and applies
+  it, but it also remains a full-rebuild trigger in `build-push-ecr.yml` because it carries
+  `build:` contexts — expect both workflows to run on a root-compose change (they converge on
+  the committed state).
+
+Both paths pass the committed files' sha256 digests (`PROD_OVERRIDE_SHA256`,
+`BASE_COMPOSE_SHA256`) into `deploy-backend.sh`, which refuses to compose against an on-box file
+that does not match — a stale override is a loud failure, not a silent no-op. `--config-only`
+also refuses to run on a box that has never had a full deploy (no `BACKEND_TAG` in `.env`).
+
 ### Health and Readiness Checks
 
 ```bash
@@ -449,12 +476,29 @@ consumers record their eventIds and skip them.
 Producers write events to their `event_outbox` table in the business transaction; a scheduled
 publisher drains to Kafka (at-least-once). Operational signals:
 
-- Metrics: `workorder.outbox.published`, `workorder.outbox.publish.failures` (counter deltas);
-  a growing gap means the drain is failing.
+- Metrics (per module, whenever its Kafka flag is on): `<domain>.outbox.published` /
+  `<domain>.outbox.publish.failures` counters, plus `<domain>.outbox.pending` and
+  `<domain>.outbox.oldest.age.seconds` gauges (`OutboxHealthContributor`, shared in `pos-events`;
+  registered by each module's `OutboxHealthConfig` — #1458; this includes `pos-supplier`, whose
+  outbox lives in `supplier_event_outbox` rather than `event_outbox`). A growing
+  published/failures gap or a growing oldest-age means the drain is failing.
+- Health: `/actuator/health` carries an `outbox` component with `drainState`
+  (`drained` / `draining` / `stalled-never-attempted` / `stalled-retrying`), the head row's age,
+  and `attempts`. `last_error` text is deliberately **not** exposed there — some profiles serve
+  health details anonymously (`show-details: always`), and raw broker/serializer errors don't
+  belong on an unauthenticated endpoint; read it with the outbox SQL below.
+  The component is **always UP by design** — a stalled drain stales downstream replicas but does not stop
+  the service, and a DOWN here would restart-loop containers via the compose healthcheck. Alert
+  on the gauges, read the details when diagnosing. Note there is deliberately **no broker-ping
+  health indicator**: Spring Boot ships none, and the two failure modes a ping would miss
+  (publisher not scheduled at all, poison row retrying forever) are exactly the ones
+  `drainState` distinguishes; broker/consumer state is `kafka-exporter`'s job.
 - `SELECT count(*) FROM event_outbox WHERE published_at IS NULL` — sustained growth means the
   broker is unreachable or the publisher is stopped; check `attempts`/`last_error` on stuck rows.
 - The publisher halts its batch at the first failure to preserve order — one poisoned/oversized
-  record blocks the drain; inspect the oldest unpublished row first.
+  record blocks the drain; inspect the oldest unpublished row first
+  (`stalled-never-attempted` with `attempts = 0` means the publisher is not running at all —
+  check the module's Kafka flag actually reached the container, see #1456/#1457).
 
 ### Dashboards and alerts (#838)
 
@@ -467,7 +511,8 @@ Provisioned alert thresholds (dashboard-only delivery in alpha):
 
 | Signal | Warn | Critical |
 |---|---|---|
-| Oldest unpublished outbox row | > 5 min | > 15 min |
+| Oldest unpublished outbox row (every outbox service, per `service` label — #1458) | > 5 min | > 15 min |
+| Unpublished outbox backlog (every outbox service) | > 1000 rows for 10 min | — |
 | Consumer group lag | > 100 records for 5 min | — |
 | DLQ message | any | — |
 | `replica_drift_total` | any increase | — |

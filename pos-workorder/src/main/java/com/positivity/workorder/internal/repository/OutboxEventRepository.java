@@ -21,8 +21,14 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     long countByPublishedAtIsNull();
 
     /** Oldest unpublished row (drain head) — drives the {@code workorder.outbox.oldest.age} gauge. */
-    @NonNull
-    Optional<OutboxEvent> findFirstByPublishedAtIsNullOrderByIdAsc();
+    Optional<DrainHeadView> findFirstByPublishedAtIsNullOrderByIdAsc();
+
+    /** Closed projection for the drain head so health polls never hydrate the payload column. */
+    interface DrainHeadView {
+        Instant getCreatedAt();
+
+        int getAttempts();
+    }
 
     /**
      * Purge published rows older than the retention cutoff (issue #838: 90 days). Unpublished rows

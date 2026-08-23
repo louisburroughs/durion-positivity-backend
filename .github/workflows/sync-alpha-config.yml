@@ -1,0 +1,117 @@
+name: Sync Alpha Config
+
+# Config-only delivery path for the alpha stack's non-image inputs (#1457). Before this
+# workflow, the only thing that shipped deployment/alpha/docker-compose.prod.yml to the
+# box was a full build-push-ecr run, so a merged two-line env change was silently inert
+# until the next image build. This workflow uploads the committed compose files, deploy
+# script, postgres init SQL, and observability tree to S3, pulls them onto the alpha host
+# over SSM, and runs deploy-backend.sh --config-only, which recreates exactly the
+# containers whose merged compose config changed (recreation, not restart, because a
+# restarted container keeps its old environment), force-recreates the observability
+# containers whose bind-mounted configs were refreshed, re-provisions Kafka topics, and
+# reconciles databases.
+#
+# Note the root docker-compose.yml ALSO stays a full-rebuild trigger in build-push-ecr
+# (it carries build contexts), so a root-compose change runs both workflows; both apply
+# the same committed state and the checksum guard in deploy-backend.sh fails either path
+# loudly if the on-box file is ever stale.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - deployment/alpha/docker-compose.prod.yml
+      - deployment/alpha/deploy-backend.sh
+      - postgres/init-databases.sql
+      - observability/**
+  workflow_dispatch:
+
+# Shared with the deploy-alpha job in build-push-ecr.yml: exactly one workflow touches
+# the alpha host's config + compose state at a time, so a full deploy and a config sync
+# can never interleave their S3 pulls and compose applies. Queue rather than cancel —
+# two merged config changes must both reach the box in order.
+concurrency:
+  group: alpha-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  sync:
+    name: Sync compose config to alpha
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload config files to S3
+        run: |
+          aws s3 cp docker-compose.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
+          aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
+          aws s3 cp deployment/alpha/deploy-backend.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh
+          aws s3 cp postgres/init-databases.sql s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql
+          # Same single-object packaging as build-push-ecr (#863): the host pull only
+          # needs s3:GetObject (EC2-SSM-Role lacks s3:ListBucket).
+          tar czf observability.tgz observability
+          aws s3 cp observability.tgz s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz
+
+      - name: Compute committed checksums
+        id: sums
+        run: |
+          echo "prod=$(sha256sum deployment/alpha/docker-compose.prod.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "base=$(sha256sum docker-compose.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Pull config files on alpha host
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","rm -rf /opt/durion/alpha/backend/observability","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
+
+      - name: Apply config on alpha host (recreate changed containers)
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "{\"commands\":[\"PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh --config-only\"]}" \
+            --timeout-seconds 2700 \
+            --query "Command.CommandId" --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+          STATUS=Pending
+          for i in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text)
+            echo "[$i/180] Status: $STATUS"
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "[StandardOutputContent,StandardErrorContent]" \
+            --output text
+          # A loop that ends while the command is still Pending/InProgress must not
+          # report a successful sync — only a terminal Success counts.
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "SSM command finished with status ${STATUS}" >&2
+            exit 1
+          fi

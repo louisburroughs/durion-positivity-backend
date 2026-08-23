@@ -97,7 +97,11 @@ jobs:
 
           CHANGED_FILES="$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)"
 
-          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|postgres/.*|deployment/alpha/docker-compose\.prod\.yml|\.github/workflows/build-push-ecr\.yml)$'; then
+          # deployment/alpha/docker-compose.prod.yml is deliberately NOT in this list:
+          # the override never affects image contents, and config-only changes to it
+          # ship through the sync-alpha-config workflow (#1457) instead of forcing a
+          # 24-image rebuild. docker-compose.yml stays because it carries build contexts.
+          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|postgres/.*|\.github/workflows/build-push-ecr\.yml)$'; then
             SERVICES_JSON="${ALL_SERVICES_JSON}"
             MODULES_CSV="$(jq -r 'join(",")' <<< "${SERVICES_JSON}")"
             echo "services=${SERVICES_JSON}" >> "$GITHUB_OUTPUT"
@@ -362,6 +366,12 @@ jobs:
     name: Deploy Backend to Alpha
     needs: [push-images, deployment-summary]
     runs-on: ubuntu-latest
+    # Shared with sync-alpha-config.yml (#1457): exactly one workflow touches the alpha
+    # host's config + compose state at a time, so a full deploy and a config-only sync
+    # can never interleave their S3 pulls and compose applies.
+    concurrency:
+      group: alpha-deploy
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -406,6 +416,14 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
 
+      - name: Compute committed config checksums
+        id: sums
+        # deploy-backend.sh verifies these against the on-box files (#1457), so a deploy
+        # can never silently run against a stale compose override.
+        run: |
+          echo "prod=$(sha256sum deployment/alpha/docker-compose.prod.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "base=$(sha256sum docker-compose.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
       - name: Deploy backend services on alpha host
         env:
           SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
@@ -413,24 +431,19 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"
+          STATUS=Pending
           for i in $(seq 1 180); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
               --query "Status" --output text)
             echo "[$i/180] Status: $STATUS"
-            if [[ "$STATUS" == "Success" ]]; then break; fi
-            if [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-              aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
-                --query "[StandardOutputContent,StandardErrorContent]" \
-                --output text
-              exit 1
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              break
             fi
             sleep 15
           done
@@ -439,6 +452,12 @@ jobs:
             --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --query "[StandardOutputContent,StandardErrorContent]" \
             --output text
+          # A loop that ends while the command is still Pending/InProgress must not
+          # report a successful deploy — only a terminal Success counts (#1468 review).
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "SSM command finished with status ${STATUS}" >&2
+            exit 1
+          fi
 
       - name: Dump Docker logs on deploy failure
         if: failure()

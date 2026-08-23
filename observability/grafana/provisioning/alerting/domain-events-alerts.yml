@@ -8,6 +8,11 @@ groups:
     folder: Durion POS
     interval: 1m
     rules:
+      # The __name__ regex matches every service's outbox gauges (#1458):
+      # <domain>_outbox_oldest_age_seconds / <domain>_outbox_pending, registered by
+      # OutboxHealthContributor (pos-events) in each module with a Kafka outbox.
+      # `by (service)` keeps one alert instance per service, so the notification
+      # names the stalled drain instead of hiding it behind a fleet-wide max.
       - uid: outbox-oldest-warn
         title: Outbox drain lagging (oldest unpublished > 5m)
         condition: C
@@ -15,13 +20,13 @@ groups:
         noDataState: OK
         execErrState: Error
         annotations:
-          summary: Oldest unpublished event_outbox row is older than 5 minutes — drain is slow or stuck.
+          summary: "Oldest unpublished event_outbox row on {{ $labels.service }} is older than 5 minutes — drain is slow or stuck."
         data:
           - refId: A
             relativeTimeRange: { from: 300, to: 0 }
             datasourceUid: prometheus
             model:
-              expr: max(workorder_outbox_oldest_age_seconds)
+              expr: max by (service) ({__name__=~".+_outbox_oldest_age_seconds"})
               instant: true
               refId: A
           - refId: C
@@ -39,13 +44,13 @@ groups:
         noDataState: OK
         execErrState: Error
         annotations:
-          summary: Oldest unpublished event_outbox row is older than 15 minutes — inspect attempts/last_error on the head row.
+          summary: "Oldest unpublished event_outbox row on {{ $labels.service }} is older than 15 minutes — check the service's /actuator/health outbox details (drainState, headAttempts, headLastError)."
         data:
           - refId: A
             relativeTimeRange: { from: 300, to: 0 }
             datasourceUid: prometheus
             model:
-              expr: max(workorder_outbox_oldest_age_seconds)
+              expr: max by (service) ({__name__=~".+_outbox_oldest_age_seconds"})
               instant: true
               refId: A
           - refId: C
@@ -56,6 +61,30 @@ groups:
               expression: A
               conditions:
                 - evaluator: { type: gt, params: [900] }
+      - uid: outbox-depth-warn
+        title: Outbox backlog growing (> 1000 unpublished rows for 10m)
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "{{ $labels.service }} has over 1000 unpublished event_outbox rows — the drain is falling behind sustained write volume even if the head keeps moving."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              expr: max by (service) ({__name__=~".+_outbox_pending"})
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1000] }
       - uid: consumer-lag-warn
         title: Kafka consumer lag > 100 for 5m
         condition: C
