@@ -2240,7 +2240,9 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_PROMOTE event.
 
-        Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the existing workorder), 404 when the estimate does not exist, 409 when promotion validation fails, and 400 on invalid arguments.
+        Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the existing workorder), 404 when the estimate does not exist, 409 when a promotion precondition or the customer''s requirements verdict refuses it, and 503 when that verdict has not replicated yet — a retryable condition, and the only one worth retrying.
+
+        Every non-2xx answer carries the ApiError envelope with a machine-readable code and the correlation id that also appears in the server log line.
 
         '
       operationId: promoteEstimate
@@ -2267,24 +2269,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkorderResponse'
           description: Workorder created successfully from estimate
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkorderResponse'
-          description: Validation error - estimate not in correct state
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
-          description: Estimate not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND)
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
-          description: Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired
+                $ref: '#/components/schemas/ApiError'
+          description: 'A promotion precondition refused the request. The envelope''s code names which: ALREADY_PROMOTED, APPROVAL_EXPIRED, APPROVAL_INVALID, APPROVAL_NOT_FOUND, NO_APPROVED_ITEMS, INVALID_STATE, CUSTOMER_REQUIREMENTS_NOT_MET, or CUSTOMER_APPROVAL_INVALID. None of these is resolved by retrying.'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: CUSTOMER_REQUIREMENTS_UNAVAILABLE - the customer's requirements verdict has not replicated from pos-customer yet. The request is well-formed; retry after the Retry-After interval.
       security:
       - bearerAuth:
         - workorder:estimate:promote
@@ -4778,7 +4780,9 @@ paths:
 
         Use this tool for the pick list summary; use getPickTasks instead for the individual pick lines that guide execution.
 
-        Preconditions: a pick list replica must already exist for the workorder, replicated from pos-inventory facts.
+        The full sequence for a workorder''s parts is promoteEstimate, which creates the workorder and asks pos-inventory to reserve each part line and generate this list, then getPickTasks, then resolvePickScan with confirmPickLine (or completePickTask), then consumeWorkorderPickedItems, which moves stock and raises the part line''s quantityConsumed - and a part the site cannot cover is answered with a backorder id on that part line rather than a pick task.
+
+        Preconditions: a pick list replica must already exist for the workorder, replicated from pos-inventory facts; a promotion-generated list arrives in DRAFT and is pickable as-is, while releasing it marks it READY_TO_PICK for the floor.
 
         Required inputs: workorderId (UUID) as a path parameter.
 
@@ -4830,13 +4834,13 @@ paths:
 
         Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and getPickedItems for what has already been picked.
 
-        Preconditions: a pick list replica must already exist for the workorder.
+        Preconditions: none - promoting an estimate generates the pick list for the workorder''s part lines, so tasks normally appear without any further call.
 
         Required inputs: workorderId (UUID) as a path parameter.
 
         No events are emitted and no state changes; this is a read-only replica projection.
 
-        Returns 404 when no pick list exists for the workorder.
+        Returns 200 with an empty array when the workorder has no pick list - a labour-only job, or one whose generated list has not replicated yet - so "nothing to pick" never has to be handled as an error, and 403 when the caller lacks inventory:pick_list:view.
 
         '
       operationId: getPickTasks
@@ -4857,19 +4861,13 @@ paths:
                 items:
                   $ref: '#/components/schemas/WorkorderPickTaskResponse'
                 type: array
-          description: Pick tasks retrieved successfully
+          description: Pick tasks retrieved successfully; empty when the workorder has no pick list
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Workorder not found
       security:
       - bearerAuth:
         - inventory:pick_list:view
@@ -9167,6 +9165,11 @@ components:
     WorkorderPartResponse:
       description: Workorder part line item with usage totals
       properties:
+        backorderId:
+          description: Backorder opened for this line's shortfall, when owned stock at the servicing site could not cover it. Present means the job is waiting on this part; query it through listBackorders (filter workorderLineId) for the SKU, location and quantity short. Cleared once the shortfall is covered.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+          format: uuid
+          type: string
         description:
           description: Part description
           example: Brake Rotor - Front
@@ -9209,6 +9212,11 @@ components:
           description: Quantity returned to inventory
           example: 0.5
           type: number
+        reservationId:
+          description: Reservation pos-inventory holds for this line, once the reservation request has been answered
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+          format: uuid
+          type: string
         status:
           description: Part line status
           enum:

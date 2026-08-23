@@ -4716,13 +4716,15 @@ paths:
 
         Use this tool to start a line-by-line receiving workflow before recording actual quantities with receiveItemsIntoStaging; do not use createGoodsReceipt, which posts stock against a purchase order in one call without a session.
 
-        Preconditions: the source document must resolve to at least one receivable line and must not already be fully received; the document type is detected from the id prefix, ASN when the id starts with ASN and PO otherwise.
+        Preconditions: the source document must be a purchase order that pos-order can resolve, with at least one line still open. The document type is detected from the id prefix - ASN when the id starts with ASN, PO otherwise - and only PO is supported; a receiving session cannot be created against an ASN, because no service owns ASN lines.
+
+        Each line''s expected quantity is the purchase order line''s open quantity, so a partially received order never re-expects what has already arrived.
 
         Required inputs: sourceDocumentId (non-blank string); entryMethod is optional and defaults to MANUAL, with SCAN the other accepted value.
 
         Emits an INVENTORY_RECEIVING_SESSION_CREATE event; no stock is posted, the session only stages expected quantities until items are received.
 
-        Returns 404 when the source document yields no receiving lines, and 400 when the source document has already been fully received or entryMethod is not a known value.
+        Returns 404 when pos-order has no such purchase order, 400 when it is already fully received or entryMethod is not a known value, 422 when the source document type is not a purchase order, and 503 when pos-order could not be reached - which is retryable, and distinct from the document not existing.
 
         '
       operationId: createReceivingSession
@@ -4763,7 +4765,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Source document not found
+          description: No such purchase order in pos-order, or it has no line still open
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: UNSUPPORTED_SOURCE_DOCUMENT_TYPE - receiving sessions are supported for purchase orders only
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: SOURCE_DOCUMENT_SERVICE_UNAVAILABLE - pos-order could not be reached; retryable
       security:
       - bearerAuth:
         - inventory:receiving:create
