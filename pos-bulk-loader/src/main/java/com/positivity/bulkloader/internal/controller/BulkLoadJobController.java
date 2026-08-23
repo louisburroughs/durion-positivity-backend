@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -121,7 +122,7 @@ public class BulkLoadJobController {
                     error responses.
                     """)
     @ApiResponse(responseCode = "200", description = "Jobs listed")
-    public ResponseEntity<Page<BulkLoadJobResponse>> listJobs(@NonNull Pageable pageable) {
+    public ResponseEntity<Page<BulkLoadJobResponse>> listJobs(@ParameterObject @NonNull Pageable pageable) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(bulkLoadJobService.listJobsForOperator(operatorId, pageable));
     }

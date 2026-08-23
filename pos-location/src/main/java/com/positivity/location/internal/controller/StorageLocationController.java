@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -125,7 +126,7 @@ public class StorageLocationController {
             @PathVariable UUID siteId,
             @RequestParam(required = false) StorageLocationType type,
             @RequestParam(required = false) StorageLocationStatus status,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return storageLocationService.listStorageLocations(siteId, type, status, pageable);
     }
 

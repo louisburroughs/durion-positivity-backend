@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -187,7 +188,7 @@ public class PurchaseOrderController {
             description = "User lacks required purchase order view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<PurchaseOrderResponse>> listPurchaseOrders(
-            @ModelAttribute ListPurchaseOrdersRequest filter, Pageable pageable) {
+            @ParameterObject @ModelAttribute ListPurchaseOrdersRequest filter, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(purchaseOrderService.listPurchaseOrders(filter, pageable));
     }
 

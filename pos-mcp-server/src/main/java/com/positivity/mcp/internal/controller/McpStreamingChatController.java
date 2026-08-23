@@ -6,14 +6,12 @@ import com.positivity.mcp.internal.service.CurrentUserContextResolver;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -69,10 +67,15 @@ public class McpStreamingChatController {
                         content =
                                 @Content(
                                         mediaType = MediaType.TEXT_EVENT_STREAM_VALUE,
-                                        array =
-                                                @ArraySchema(
-                                                        schema =
-                                                                @Schema(implementation = ServerSentEventString.class))))
+                                        schema =
+                                                @Schema(
+                                                        type = "string",
+                                                        format = "binary",
+                                                        description =
+                                                                "Raw text/event-stream body to be read incrementally;"
+                                                                        + " each event has event type chat and a"
+                                                                        + " single response token as its data"
+                                                                        + " payload")))
             })
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
@@ -122,35 +125,4 @@ public class McpStreamingChatController {
             @NotBlank
             @NonNull
             String message) {}
-
-    @Schema(name = "ServerSentEventString", description = "A Server-Sent Event carrying a string data payload")
-    public record ServerSentEventString(
-            @Schema(description = "Event identifier", example = "1", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            @Nullable
-            String id,
-
-            @Schema(description = "Event name", example = "chat", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            @Nullable
-            String event,
-
-            @Schema(
-                    description = "String data payload of the event, typically a response token",
-                    example = "Hi",
-                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            @Nullable
-            String data,
-
-            @Schema(
-                    description = "Reconnection time in milliseconds the client should wait before retrying",
-                    example = "3000",
-                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            @Nullable
-            Long retry,
-
-            @Schema(
-                    description = "Comment line carried by the event",
-                    example = "keep-alive",
-                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            @Nullable
-            String comment) {}
 }

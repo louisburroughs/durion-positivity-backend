@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -123,7 +124,7 @@ public class LocationController {
                     @RequestParam(required = false)
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
                     Instant sinceUpdatedAt,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return locationRosterService.getRoster(status, sinceUpdatedAt, pageable);
     }
 

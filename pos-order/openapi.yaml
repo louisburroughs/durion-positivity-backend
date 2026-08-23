@@ -1037,16 +1037,75 @@ paths:
         '
       operationId: listPurchaseOrders
       parameters:
-      - in: query
-        name: filter
-        required: true
+      - description: Filter to purchase orders placed with this vendor
+        example: 01960003-0000-7000-8000-000000000001
+        in: query
+        name: vendorId
+        required: false
         schema:
-          $ref: '#/components/schemas/ListPurchaseOrdersRequest'
-      - in: query
-        name: pageable
-        required: true
+          description: Filter to purchase orders placed with this vendor
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+      - description: Filter to purchase orders in this lifecycle status
+        example: APPROVED
+        in: query
+        name: status
+        required: false
         schema:
-          $ref: '#/components/schemas/Pageable'
+          description: Filter to purchase orders in this lifecycle status
+          enum:
+          - DRAFT
+          - APPROVED
+          - PARTIALLY_RECEIVED
+          - FULLY_RECEIVED
+          - CLOSED
+          - CANCELLED
+          example: APPROVED
+          type: string
+      - description: Filter to purchase orders denominated in this ISO 4217 currency code
+        example: USD
+        in: query
+        name: currency
+        required: false
+        schema:
+          description: Filter to purchase orders denominated in this ISO 4217 currency code
+          example: USD
+          type: string
+      - description: Filter to purchase orders shipping to this location
+        example: 01960003-0000-7000-8000-000000000002
+        in: query
+        name: locationId
+        required: false
+        schema:
+          description: Filter to purchase orders shipping to this location
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -2768,35 +2827,6 @@ components:
       - sourceId
       - sourceType
       type: object
-    ListPurchaseOrdersRequest:
-      description: Optional filter criteria for listing purchase orders
-      properties:
-        currency:
-          description: Filter to purchase orders denominated in this ISO 4217 currency code
-          example: USD
-          type: string
-        locationId:
-          description: Filter to purchase orders shipping to this location
-          example: 01960003-0000-7000-8000-000000000002
-          format: uuid
-          type: string
-        status:
-          description: Filter to purchase orders in this lifecycle status
-          enum:
-          - DRAFT
-          - APPROVED
-          - PARTIALLY_RECEIVED
-          - FULLY_RECEIVED
-          - CLOSED
-          - CANCELLED
-          example: APPROVED
-          type: string
-        vendorId:
-          description: Filter to purchase orders placed with this vendor
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-      type: object
     OpenSessionRequest:
       description: Request payload for opening a register session
       properties:
@@ -2879,21 +2909,6 @@ components:
         totalPages:
           format: int32
           type: integer
-      type: object
-    Pageable:
-      properties:
-        page:
-          format: int32
-          minimum: 0
-          type: integer
-        size:
-          format: int32
-          minimum: 1
-          type: integer
-        sort:
-          items:
-            type: string
-          type: array
       type: object
     PageableObject:
       properties:

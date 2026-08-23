@@ -25,6 +25,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -285,7 +286,7 @@ public class PermissionController {
             @Parameter(description = "Optional domain filter", required = false, example = "catalog")
                     @RequestParam(required = false)
                     String domain,
-            @Parameter(hidden = true) Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         Page<PermissionDto> permissions = permissionService.listPermissions(domain, pageable);
         return ResponseEntity.ok(permissions);
     }

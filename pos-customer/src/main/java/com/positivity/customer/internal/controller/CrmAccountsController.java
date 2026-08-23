@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -297,11 +298,7 @@ public class CrmAccountsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_BROWSE", apiVersion = "1")
     public ResponseEntity<SearchPartiesResponse> browseParties(
-            @Parameter(
-                            description = "Pagination parameters (page, size, sort). The service uses legalName,asc "
-                                    + "by default and appends partyId,asc as a stable tie-breaker whenever the "
-                                    + "requested sort list does not explicitly include partyId; legalName sorting "
-                                    + "is case-insensitive.")
+            @ParameterObject
                     @PageableDefault(
                             size = 20,
                             sort = {"legalName", "partyId"})

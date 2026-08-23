@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -67,7 +68,8 @@ public class InventoryReferenceDataController {
             description = "User lacks required location view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<LocationDto>> listLocations(
-            @RequestParam(required = false) UUID siteId, @PageableDefault(size = 20) Pageable pageable) {
+            @RequestParam(required = false) UUID siteId,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(inventoryReferenceDataService.listLocations(siteId, pageable));
     }
 
@@ -103,7 +105,8 @@ public class InventoryReferenceDataController {
             description = "User lacks required location view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<StorageLocationDto>> listStorageLocations(
-            @RequestParam(required = false) UUID locationId, @PageableDefault(size = 20) Pageable pageable) {
+            @RequestParam(required = false) UUID locationId,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(inventoryReferenceDataService.listStorageLocations(locationId, pageable));
     }
 
@@ -139,7 +142,8 @@ public class InventoryReferenceDataController {
             description = "User lacks required location view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<LocationZoneDto>> listLocationZones(
-            @RequestParam(required = false) UUID locationId, @PageableDefault(size = 20) Pageable pageable) {
+            @RequestParam(required = false) UUID locationId,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(inventoryReferenceDataService.listLocationZones(locationId, pageable));
     }
 

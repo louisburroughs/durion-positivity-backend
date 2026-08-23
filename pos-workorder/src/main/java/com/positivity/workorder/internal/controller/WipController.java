@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -73,7 +74,7 @@ public class WipController {
                             schema = @Schema(type = "boolean", defaultValue = "false"))
                     @RequestParam(defaultValue = "false")
                     boolean multiLocation,
-            @PageableDefault(size = 25) Pageable pageable,
+            @ParameterObject @PageableDefault(size = 25) Pageable pageable,
             Authentication authentication) {
 
         if (multiLocation

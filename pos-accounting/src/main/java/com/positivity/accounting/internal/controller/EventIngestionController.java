@@ -26,6 +26,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -104,7 +105,8 @@ public class EventIngestionController {
             @Parameter(description = "Filter by domain key") @RequestParam(required = false) String domainKeyId,
             @Parameter(description = "Filter by invoice UUID") @RequestParam(required = false) UUID invoiceId,
             @Parameter(description = "Filter by processing status") @RequestParam(required = false) String status,
-            @PageableDefault(size = 20, sort = "receivedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20, sort = "receivedAt", direction = Sort.Direction.DESC)
+                    Pageable pageable) {
 
         AccountingEventStatus parsedStatus = null;
         if (status != null) {

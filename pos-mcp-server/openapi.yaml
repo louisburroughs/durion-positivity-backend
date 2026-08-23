@@ -300,9 +300,9 @@ paths:
           content:
             text/event-stream:
               schema:
-                items:
-                  $ref: '#/components/schemas/ServerSentEventString'
-                type: array
+                description: Raw text/event-stream body to be read incrementally; each event has event type chat and a single response token as its data payload
+                format: binary
+                type: string
           description: Stream of SSE chat tokens
       security:
       - bearerAuth:
@@ -1350,31 +1350,6 @@ components:
           $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
-      type: object
-    ServerSentEventString:
-      description: A Server-Sent Event carrying a string data payload
-      properties:
-        comment:
-          description: Comment line carried by the event
-          example: keep-alive
-          type: string
-        data:
-          description: String data payload of the event, typically a response token
-          example: Hi
-          type: string
-        event:
-          description: Event name
-          example: chat
-          type: string
-        id:
-          description: Event identifier
-          example: '1'
-          type: string
-        retry:
-          description: Reconnection time in milliseconds the client should wait before retrying
-          example: 3000
-          format: int64
-          type: integer
       type: object
     SortObject:
       properties:

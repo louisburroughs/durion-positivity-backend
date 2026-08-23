@@ -6,12 +6,12 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -60,8 +60,7 @@ public class EstimateSearchController {
                     UUID customerId,
             @Parameter(description = "Filter by vehicle UUID (optional)") @RequestParam(required = false) @Nullable
                     UUID vehicleId,
-            @Parameter(schema = @Schema(implementation = Pageable.class)) @PageableDefault(size = 25)
-                    Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 25) Pageable pageable) {
         if (q != null && !q.isBlank()) {
             return estimateService.findEstimatesByQuery(q.trim(), pageable);
         }

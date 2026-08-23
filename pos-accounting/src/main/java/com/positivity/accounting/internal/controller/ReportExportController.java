@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -232,7 +233,8 @@ public class ReportExportController {
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing accounting:report:export")
     public ResponseEntity<Page<ReportExportResponse>> getExportHistory(
-            @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @ParameterObject @PageableDefault(size = 20, sort = "requestedAt", direction = Sort.Direction.DESC)
+                    Pageable pageable) {
 
         Page<ReportExportResponse> page = reportExportService.getExportHistory(pageable);
         return ResponseEntity.ok(page);

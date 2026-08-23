@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -73,7 +74,7 @@ public class ShopAuditController {
             responseCode = "403",
             description = "Insufficient authority",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public @NonNull List<ShopAuditEntryResponse> searchAudit(@ModelAttribute ShopAuditFilter filter) {
+    public @NonNull List<ShopAuditEntryResponse> searchAudit(@ParameterObject @ModelAttribute ShopAuditFilter filter) {
         return shopAuditService.search(filter);
     }
 
