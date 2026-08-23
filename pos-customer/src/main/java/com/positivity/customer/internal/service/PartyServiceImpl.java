@@ -79,6 +79,9 @@ public class PartyServiceImpl implements PartyService {
 
     private final Clock clock;
 
+    /** Largest sequence value that still renders as 8 base-36 characters. */
+    private static final long MAX_CUSTOMER_NUMBER_SEQUENCE = 2_821_109_907_455L;
+
     private final CommercialPartyRepository partyRepository;
     private final PersonPartyRepository personPartyRepository;
     private final PartyRelationshipRepository partyRelationshipRepository;
@@ -197,8 +200,28 @@ public class PartyServiceImpl implements PartyService {
         return party;
     }
 
+    /**
+     * A unique commercial customer number of the documented form CUST-XXXXXXXX.
+     *
+     * <p>This used to be the first 8 hex characters of a fresh UUIDv7. Those characters are the top
+     * 32 bits of the id's millisecond timestamp, so every id minted within the same ~65 second
+     * window produced the same customer number - and customer_number is UNIQUE. Exactly one
+     * commercial account could be created per window; every other attempt died on the constraint
+     * and surfaced as a 500.
+     *
+     * <p>The value now comes from a sequence, rendered base-36 into the same 8 characters, which is
+     * how pos-order numbers purchase orders. The sequence is monotonic, so no two calls can agree
+     * however close together they arrive.
+     */
     private String generateCustomerNumber() {
-        return "CUST-" + UUIDv7Generator.generate().toString().substring(0, 8).toUpperCase(Locale.US);
+        long sequence = partyRepository.getNextCustomerNumberSequence();
+        if (sequence < 1L || sequence > MAX_CUSTOMER_NUMBER_SEQUENCE) {
+            throw new IllegalStateException("Customer number sequence is out of range for 8-character codes");
+        }
+        return "CUST-"
+                + String.format(Locale.ROOT, "%8s", Long.toString(sequence, 36))
+                        .replace(' ', '0')
+                        .toUpperCase(Locale.ROOT);
     }
 
     @Override

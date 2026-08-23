@@ -24,4 +24,16 @@ public interface CommercialPartyRepository extends JpaRepository<CommercialParty
      */
     @Query("SELECT p FROM CommercialParty p WHERE :vin MEMBER OF p.vehicleVins")
     List<CommercialParty> findByVehicleVin(@Param("vin") String vin);
+
+    /**
+     * Next value of the commercial customer-number sequence.
+     *
+     * <p>Customer numbers come from a sequence rather than from an id, because the id they used to
+     * be derived from repeats: the first 8 hex characters of a UUIDv7 are the top 32 bits of its
+     * millisecond timestamp, identical for every id minted within roughly 65 seconds.
+     *
+     * @return next sequence value for commercial customer number generation
+     */
+    @Query(value = "SELECT nextval('commercial_party_customer_number_seq')", nativeQuery = true)
+    long getNextCustomerNumberSequence();
 }

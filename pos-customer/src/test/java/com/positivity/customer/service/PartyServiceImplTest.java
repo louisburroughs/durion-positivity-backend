@@ -385,6 +385,8 @@ class PartyServiceImplTest {
         saved.setLegalName("Acme Legal");
         saved.setCreatedAt(Instant.now(TEST_CLOCK));
         when(partyRepository.save(any(CommercialParty.class))).thenReturn(saved);
+        // Customer numbers come from a sequence rather than from a truncated id.
+        when(partyRepository.getNextCustomerNumberSequence()).thenReturn(42L);
 
         var response = service.createCommercialAccount(request);
 
@@ -395,7 +397,7 @@ class PartyServiceImplTest {
         ArgumentCaptor<CommercialParty> partyCaptor = ArgumentCaptor.forClass(CommercialParty.class);
         verify(partyRepository).save(partyCaptor.capture());
         assertThat(partyCaptor.getValue().getPartyType()).isEqualTo(PartyType.COMMERCIAL);
-        assertThat(partyCaptor.getValue().getCustomerNumber()).startsWith("CUST-");
+        assertThat(partyCaptor.getValue().getCustomerNumber()).isEqualTo("CUST-00000016");
         assertThat(partyCaptor.getValue().getExternalIdentifiers()).containsEntry("erp", "A-100");
     }
 
