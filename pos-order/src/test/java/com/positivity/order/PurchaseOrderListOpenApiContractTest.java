@@ -19,8 +19,8 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Spring binds flat query parameters (vendorId=, page=, size=), so the OpenAPI spec must
  * declare them flat as well. Without {@code @ParameterObject} springdoc renders the
  * {@code @ModelAttribute} filter and {@code Pageable} as object-typed parameters, and generated
- * clients then send {@code filter[vendorId]=..&pageable[size]=..} — which Spring silently ignores,
- * serving default paging with no filter applied.
+ * clients then send {@code filter[vendorId]=..} and {@code pageable[size]=..} — which Spring
+ * silently ignores, serving default paging with no filter applied.
  */
 class PurchaseOrderListOpenApiContractTest extends BaseContractIntegrationTest {
 
