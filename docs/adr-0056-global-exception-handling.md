@@ -2,9 +2,9 @@
 
 **Status:** PROPOSED **Date:** 2026-08-23 **Deciders:** Architecture, Backend Lead, API Lead **Affected Issues:** durion-positivity-backend#1471
 
-> **Canonical home:** `durion/docs/adr/0056-global-exception-handling.adr.md`. This copy lives in
-> durion-positivity-backend because it was authored alongside the implementing change; move it into the
-> durion ADR directory (with the `.adr.md` suffix) on acceptance.
+> **Canonical home:** `durion/docs/adr/0056-platform-global-exception-handling.adr.md`, proposed in
+> louisburroughs/durion#403. This copy lives in durion-positivity-backend because it was authored
+> alongside the implementing change, mirroring the existing local copies of ADR-0042/0044.
 
 ---
 
