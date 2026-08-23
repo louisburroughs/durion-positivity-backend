@@ -6,6 +6,13 @@
 
 **Date:** 2026-08-23
 
+> **Status: executed.** The recommendation below has been implemented:
+> `docs/adr-0056-global-exception-handling.md` (draft ADR, pending relocation to durion/docs/adr and
+> sign-off), the `pos-web-common` module (auto-configured `GlobalApiExceptionHandler` +
+> SQLSTATE-based `DataIntegrityViolationException` mapping), pos-security-common re-export,
+> direct dependencies for pos-event-receiver and the vehicle-reference services, and the
+> `GlobalExceptionHandlerEnforcementTest` build gate in pos-archunit.
+
 ---
 
 ## Relevant ADRs

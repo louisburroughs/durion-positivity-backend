@@ -29,6 +29,13 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- Shared Web MVC Concerns (Global Exception Handling) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-web-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- Shared Event Library -->
             <dependency>
                 <groupId>com.positivity</groupId>

@@ -77,6 +77,11 @@
 			</dependency>
 			<dependency>
 				<groupId>com.positivity</groupId>
+				<artifactId>pos-web-common</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.positivity</groupId>
 				<artifactId>pos-tax-common</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -248,6 +253,7 @@
 		<module>pos-dependencies</module>
 		<module>pos-shared-dtos</module>
 		<module>pos-domain-events</module>
+		<module>pos-web-common</module>
 		<module>pos-security-common</module>
 		<module>pos-tax-common</module>
 		<module>pos-archunit</module>

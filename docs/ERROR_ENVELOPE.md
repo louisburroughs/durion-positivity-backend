@@ -142,6 +142,27 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 
 ---
 
+## Platform Fallback Codes (pos-web-common)
+
+Emitted by the shared `GlobalApiExceptionHandler` (auto-configured from `pos-web-common`, see
+`docs/adr-0056-global-exception-handling.md`) when no service-specific advice mapped the exception.
+Any service may therefore return these in addition to its module codes below.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `DUPLICATE_RESOURCE` | 409 | Unique-constraint violation (SQLSTATE 23505); message names the constraint |
+| `REFERENCE_CONFLICT` | 409 | Foreign-key constraint violation |
+| `DATA_INTEGRITY_VIOLATION` | 409 | Other database integrity violation |
+| `MISSING_REQUIRED_VALUE` | 422 | Not-null violation on a client-supplied column; message names the column |
+| `CONSTRAINT_VIOLATION` | 422 | Check-constraint violation; message names the constraint |
+| `VALIDATION_ERROR` | 400 | Bean-validation failure (with `fieldErrors`) or malformed request |
+| `NOT_FOUND` | 404 | No endpoint for the requested path |
+| `METHOD_NOT_ALLOWED` | 405 | HTTP method not supported for this path |
+| `NOT_ACCEPTABLE` / `PAYLOAD_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE` / `REQUEST_REJECTED` | 406/413/415/other 4xx | Framework-rejected request |
+| `INTERNAL_ERROR` | 500 | Unhandled exception, or a not-null violation on a server-populated audit column; stack trace logged at ERROR against the `correlationId` |
+
+---
+
 ## Common Error Codes by Module
 
 ### pos-order
