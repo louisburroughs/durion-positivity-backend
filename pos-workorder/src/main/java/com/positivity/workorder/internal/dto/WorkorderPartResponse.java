@@ -71,6 +71,24 @@ public class WorkorderPartResponse {
     @Schema(description = "Quantity returned to inventory", example = "0.50", requiredMode = NOT_REQUIRED)
     private BigDecimal quantityReturned;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(
+            description = "Reservation pos-inventory holds for this line, once the reservation request has been"
+                    + " answered",
+            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01",
+            requiredMode = NOT_REQUIRED)
+    private UUID reservationId;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(
+            description = "Backorder opened for this line's shortfall, when owned stock at the servicing site could"
+                    + " not cover it. Present means the job is waiting on this part; query it through"
+                    + " listBackorders (filter workorderLineId) for the SKU, location and quantity short. Cleared"
+                    + " once the shortfall is covered.",
+            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02",
+            requiredMode = NOT_REQUIRED)
+    private UUID backorderId;
+
     @Schema(
             description = "Total part cost (authorized quantity * unit price)",
             example = "130.00",

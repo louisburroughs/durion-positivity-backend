@@ -171,6 +171,8 @@ class WorkorderCompletionTest {
                 workorderPartRepository,
                 extCustomerPartyReplicaRepository,
                 org.mockito.Mockito.mock(com.positivity.workorder.internal.service.WorkorderFactPublisher.class),
+                org.mockito.Mockito.mock(
+                        com.positivity.workorder.internal.service.PromotedWorkorderDemandPublisher.class),
                 stateMachine,
                 workorderLaborEntryRepository,
                 applicationEventPublisher,

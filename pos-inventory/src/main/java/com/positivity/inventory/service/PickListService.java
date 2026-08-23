@@ -20,6 +20,12 @@ public interface PickListService {
     @NonNull
     List<PickListResponse> getPickListsForWorkorder(@NonNull UUID workorderId);
 
+    /**
+     * Whether the workorder already has a pick list (#1479). Guards generation so a redelivered
+     * or repeated generate request does not leave a second list behind for the same job.
+     */
+    boolean hasPickList(@NonNull UUID workorderId);
+
     @NonNull
     PickListResponse updatePickListStatus(@NonNull UUID pickListId, @NonNull PickListStatus status);
 

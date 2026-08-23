@@ -194,6 +194,10 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .quantityIssued(part.getQuantityIssued())
                 .quantityConsumed(part.getQuantityConsumed())
                 .quantityReturned(part.getQuantityReturned())
+                // #1481: the shortage signal, reachable from the workorder id rather than only from
+                // a SKU the caller would have to know to ask about.
+                .reservationId(part.getReservationId())
+                .backorderId(part.getBackorderId())
                 .photoEvidenceUrl(part.getPhotoEvidenceUrl());
 
         if (includeFinancials) {

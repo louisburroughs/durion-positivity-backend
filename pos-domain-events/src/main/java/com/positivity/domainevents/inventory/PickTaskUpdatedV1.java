@@ -12,6 +12,12 @@ import org.jspecify.annotations.Nullable;
  * business transaction. Consumers (pos-workorder) keep an {@code ext_pick_task} replica serving
  * scan resolution and pick-progress reads.
  *
+ * <p><b>Schema v2 (issue #1479):</b> adds the additive nullable {@code workorderLineId} — the
+ * demand line the task fulfils. Without it a consumer holds pick tasks it cannot map back to the
+ * workorder part they were generated from, which is why consuming a picked part never moved
+ * {@code workorder_part.quantityConsumed}. Events emitted under schema v1 deserialize with the
+ * field absent, and a task generated from a source that has no demand line still carries null.
+ *
  * @param pickTaskId pick task identifier (aggregate id of the fact)
  * @param pickListId owning pick list
  * @param workorderId workorder the owning pick list serves
@@ -21,6 +27,8 @@ import org.jspecify.annotations.Nullable;
  * @param quantityPicked quantity picked so far
  * @param status pick task status name (PENDING, PICKED, ...)
  * @param sortOrder pick route ordering
+ * @param workorderLineId demand line the task fulfils (pos-workorder {@code workorder_part.id});
+ *     {@code null} on a v1 event or a task with no demand line
  */
 public record PickTaskUpdatedV1(
         @NonNull UUID pickTaskId,
@@ -31,10 +39,11 @@ public record PickTaskUpdatedV1(
         int quantityRequired,
         int quantityPicked,
         @NonNull String status,
-        int sortOrder) {
+        int sortOrder,
+        @Nullable UUID workorderLineId) {
 
     public static final String EVENT_TYPE = "inventory.pick-task.updated";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     public PickTaskUpdatedV1 {
         if (pickTaskId == null) {

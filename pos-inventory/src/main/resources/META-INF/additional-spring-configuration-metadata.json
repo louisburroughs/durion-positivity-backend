@@ -1,11 +1,6 @@
 {
   "properties": [
     {
-      "name": "pos.inventory.receiving.source-document-service",
-      "type": "java.lang.String",
-      "description": "Source document provider identifier used by receiving workflows."
-    },
-    {
       "name": "pos.inventory.receiving.site-id",
       "type": "java.lang.String",
       "description": "Default receiving site id used when source documents omit a site."
@@ -45,23 +40,6 @@
       "type": "java.lang.String",
       "description": "Base URL for external inventory availability checks.",
       "defaultValue": "http://localhost:8086"
-    },
-    {
-      "name": "pos.inventory.receiving.stub.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Enable receiving source-document stub client.",
-      "defaultValue": false
-    },
-    {
-      "name": "pos.inventory.receiving.stub.base-url",
-      "type": "java.lang.String",
-      "description": "Base URL for receiving source-document stub API.",
-      "defaultValue": "http://localhost:8080"
-    },
-    {
-      "name": "pos.inventory.receiving.stub.path",
-      "type": "java.lang.String",
-      "description": "Path for receiving source-document stub endpoint."
     },
     {
       "name": "pos.location.service-id",

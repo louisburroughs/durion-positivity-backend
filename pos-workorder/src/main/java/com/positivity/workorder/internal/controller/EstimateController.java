@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
 import com.positivity.workorder.internal.dto.ApproveEstimateRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateRequest;
@@ -12,6 +13,8 @@ import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.EstimateNotFoundException;
+import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.EstimateService;
@@ -509,17 +512,35 @@ public class EstimateController {
                     retries onto the originally created workorder.
                     Emits a WORKORDER_ESTIMATE_PROMOTE event.
                     Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the \
-                    existing workorder), 404 when the estimate does not exist, 409 when promotion validation \
-                    fails, and 400 on invalid arguments.
+                    existing workorder), 404 when the estimate does not exist, 409 when a promotion \
+                    precondition or the customer's requirements verdict refuses it, and 503 when that verdict \
+                    has not replicated yet — a retryable condition, and the only one worth retrying.
+                    Every non-2xx answer carries the ApiError envelope with a machine-readable code and the \
+                    correlation id that also appears in the server log line.
                     """)
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Workorder created successfully from estimate"),
-                @ApiResponse(responseCode = "400", description = "Validation error - estimate not in correct state"),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found (ESTIMATE_NOT_FOUND)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "409",
-                        description = "Estimate already promoted (ALREADY_PROMOTED) or approval invalid/expired")
+                        description = """
+                                A promotion precondition refused the request. The envelope's code names \
+                                which: ALREADY_PROMOTED, APPROVAL_EXPIRED, APPROVAL_INVALID, \
+                                APPROVAL_NOT_FOUND, NO_APPROVED_ITEMS, INVALID_STATE, \
+                                CUSTOMER_REQUIREMENTS_NOT_MET, or CUSTOMER_APPROVAL_INVALID. None of these \
+                                is resolved by retrying.""",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "503",
+                        description = """
+                                CUSTOMER_REQUIREMENTS_UNAVAILABLE - the customer's requirements verdict has \
+                                not replicated from pos-customer yet. The request is well-formed; retry \
+                                after the Retry-After interval.""",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/{estimateId}/promote")
     @EmitEvent(id = "WORKORDER_ESTIMATE_PROMOTE", apiVersion = "1")
@@ -560,6 +581,11 @@ public class EstimateController {
             return ResponseEntity.ok(response);
 
         } catch (PromotionValidationException e) {
+            // The one case that is not an error: a replay of a promotion that already happened is
+            // answered with the workorder it produced. Every other promotion failure — including an
+            // ALREADY_PROMOTED whose workorder cannot be loaded — is rethrown so GlobalExceptionHandler
+            // answers it with the canonical ApiError envelope (#1477). Catching it here to build a
+            // bodiless status is what left callers unable to tell a wrong id from a stale replica.
             ResponseEntity<WorkorderResponse> alreadyPromotedResponse = handleAlreadyPromoted(estimateId, e);
             if (alreadyPromotedResponse != null) {
                 return alreadyPromotedResponse;
@@ -570,19 +596,11 @@ public class EstimateController {
                     estimateId,
                     e.getErrorCode(),
                     e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw e;
 
         } catch (EntityNotFoundException _) {
             log.warn("Estimate {} not found", estimateId);
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid argument promoting estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-
-        } catch (Exception e) {
-            log.error("Unexpected error promoting estimate {}", estimateId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new EstimateNotFoundException(estimateId);
         }
     }
 
@@ -607,7 +625,7 @@ public class EstimateController {
                     "Existing workorder(mask) {} not found for idempotency key(mask) {} - data inconsistency",
                     maskForLog(workorderId),
                     maskForLog(idempotencyKey));
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            throw new PromotionIdempotencyInconsistencyException(workorderId);
         });
     }
 
@@ -652,12 +670,15 @@ public class EstimateController {
         log.info("Estimate {} already promoted to workorder {} (idempotent retry)", estimateId, existingWorkorderId);
         return loadWorkorderResponse(existingWorkorderId, () -> {
             log.error("Existing workorder {} not found after ALREADY_PROMOTED validation", existingWorkorderId);
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            // Null hands the exception back to the caller, which rethrows it: the advice answers
+            // ALREADY_PROMOTED with its code and the unresolvable workorder id as referenceId,
+            // rather than a 409 that says nothing (#1477).
+            return null;
         });
     }
 
-    private ResponseEntity<WorkorderResponse> loadWorkorderResponse(
-            UUID workorderId, Supplier<ResponseEntity<WorkorderResponse>> fallback) {
+    private @Nullable ResponseEntity<WorkorderResponse> loadWorkorderResponse(
+            UUID workorderId, Supplier<@Nullable ResponseEntity<WorkorderResponse>> fallback) {
         return workorderService
                 .getWorkorderById(workorderId)
                 .map(WorkorderResponse::fromEntity)

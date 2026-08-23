@@ -147,6 +147,10 @@ class PartQuantityStrandingRegressionTest {
 
     private PartQuantityDivisibilityService divisibility;
     private WorkorderServiceImpl workorderService;
+
+    @Mock
+    private PromotedWorkorderDemandPublisher promotedWorkorderDemandPublisher;
+
     private WorkorderPartUsageServiceImpl partUsageService;
 
     @BeforeEach
@@ -165,6 +169,7 @@ class PartQuantityStrandingRegressionTest {
                 workorderPartRepository,
                 extCustomerPartyReplicaRepository,
                 workorderFactPublisher,
+                promotedWorkorderDemandPublisher,
                 workorderStateMachine,
                 workorderLaborEntryRepository,
                 applicationEventPublisher,

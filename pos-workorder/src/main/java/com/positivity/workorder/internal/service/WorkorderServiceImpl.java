@@ -22,6 +22,9 @@ import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
+import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -74,6 +77,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final WorkorderPartRepository workorderPartRepository;
     private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
     private final WorkorderFactPublisher workorderFactPublisher;
+    private final PromotedWorkorderDemandPublisher promotedWorkorderDemandPublisher;
     private final WorkorderStateMachine stateMachine;
     private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -102,9 +106,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private Workorder doCreateWorkorder(UUID estimateId, UUID customerId) {
         Estimate estimate = estimateId != null
-                ? estimateRepository
-                        .findById(estimateId)
-                        .orElseThrow(() -> new IllegalArgumentException("Estimate not found: " + estimateId))
+                ? estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId))
                 : null;
 
         if (customerId == null && estimate != null) {
@@ -252,10 +254,10 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     private Workorder createWorkorderInternal(Workorder workorder) {
-        // Check customer requirements from pos-customer
-        if (!checkCustomerRequirements(workorder.getCustomerId())) {
-            throw new IllegalArgumentException("Customer requirements not met");
-        }
+        // Check customer requirements from pos-customer. requireCustomerRequirementsMet reports
+        // the two failing cases separately (#1477): a verdict that has not replicated yet is
+        // retryable, a verdict that says "not met" is not.
+        requireCustomerRequirementsMet(workorder.getCustomerId());
 
         // If estimateId is provided, validate promotion preconditions
         if (workorder.getEstimateId() != null) {
@@ -272,7 +274,11 @@ public class WorkorderServiceImpl implements WorkorderService {
         // approval (status APPROVED with an approvedAt timestamp), as stamped by
         // approveWorkorder() - this is an internal Workorder state check.
         if (workorder.getApprovalId() != null && !isCustomerApproved(workorder)) {
-            throw new IllegalArgumentException("Customer approval not found or not valid");
+            throw new CustomerApprovalInvalidException(
+                    "Workorder " + workorder.getId() + " carries approval " + workorder.getApprovalId()
+                            + " but its status is " + workorder.getStatus() + " with approvedAt "
+                            + workorder.getApprovedAt(),
+                    workorder.getId());
         }
 
         // Save the workorder first to get the persisted entity
@@ -452,13 +458,17 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Persist all part items
         if (!partItems.isEmpty()) {
-            workorderPartRepository.saveAll(partItems);
+            List<WorkorderPart> savedParts = workorderPartRepository.saveAll(partItems);
             workorderFactPublisher.markChanged(workorder.getId());
             log.info("Persisted {} part items for workorder {}", partItems.size(), workorder.getId());
             partItems.forEach(item -> log.debug(
                     "Created workorder part item with ID {}: from estimate item {}",
                     item.getId(),
                     item.getOriginEstimateItemId()));
+            // #1479/#1481: reserve against each part line and generate the pick list, so a promoted
+            // workorder's parts can actually be picked and a part with no stock raises a backorder
+            // instead of leaving the job sitting there with nothing to tell anyone.
+            promotedWorkorderDemandPublisher.registerPartsDemand(workorder, savedParts);
         }
 
         log.info(
@@ -476,14 +486,28 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     /**
      * Owner-computed requirements verdict from the ext_customer_party replica (ADR-0044 §6,
-     * #891). Fail-closed like the retired CustomerValidationClient: an unknown customer (no
-     * replica row yet) is treated as requirements not met.
+     * #891). Still fail-closed like the retired CustomerValidationClient — a customer with no
+     * replica row does not get a workorder — but the two ways of failing are now distinct
+     * exceptions rather than one message (#1477): a missing row means the verdict has not
+     * replicated yet and the same call succeeds shortly, while a row saying "not met" is
+     * permanent.
      */
-    private boolean checkCustomerRequirements(UUID customerId) {
-        return extCustomerPartyReplicaRepository
+    private void requireCustomerRequirementsMet(UUID customerId) {
+        Boolean verdict = extCustomerPartyReplicaRepository
                 .findById(customerId)
                 .map(com.positivity.workorder.internal.entity.ExtCustomerPartyReplica::isRequirementsMet)
-                .orElse(false);
+                .orElse(null);
+        if (verdict == null) {
+            // No replica row yet. The verdict is owned by pos-customer and arrives asynchronously,
+            // so a customer created moments ago has none — the promotion that fails here succeeds
+            // once the projection catches up. Still fail-closed, but as a named retryable
+            // condition rather than as the same error a permanently ineligible customer gets
+            // (#1477).
+            throw CustomerRequirementsNotMetException.verdictUnavailable(customerId);
+        }
+        if (!verdict) {
+            throw CustomerRequirementsNotMetException.requirementsNotMet(customerId);
+        }
     }
 
     private boolean isCustomerApproved(Workorder workorder) {

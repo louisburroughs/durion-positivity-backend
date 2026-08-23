@@ -229,11 +229,55 @@ public class InventoryEventsListener {
         part.setQuantityIssued(reversed.signum() < 0 ? BigDecimal.ZERO : reversed);
         part.setBackorderId(outcome.backorderId());
         workorderPartRepository.save(part);
-        log.warn(
-                "Reversed issue of {} on workorder part {}: pos-inventory could not cover it (backorder {})",
-                outcome.requiredQuantity(),
-                part.getId(),
-                outcome.backorderId());
+        if (issued.signum() > 0) {
+            log.warn(
+                    "Reversed issue of {} on workorder part {}: pos-inventory could not cover it (backorder {})",
+                    outcome.requiredQuantity(),
+                    part.getId(),
+                    outcome.backorderId());
+        } else {
+            // Nothing was issued to reverse: the demand was registered at promotion (#1481) and the
+            // site cannot cover it. The backorder stamped above is the workorder's shortage signal.
+            log.warn(
+                    "Workorder part {} is short {}: pos-inventory opened backorder {}",
+                    part.getId(),
+                    outcome.requiredQuantity(),
+                    outcome.backorderId());
+        }
+    }
+
+    /**
+     * Rolls a consumed pick quantity onto the workorder part the task was generated for (#1479).
+     *
+     * <p>Before the pick task carried its demand line there was no way to do this, so a part
+     * picked and consumed through the pick flow left {@code workorder_part.quantity_consumed} at
+     * zero while the workorder completed. The part-issue path maintains the same field for parts
+     * issued at the counter; this is the pick flow's equivalent.
+     *
+     * <p>A task with no demand line, or one naming a line this module does not hold, is skipped:
+     * the pick task's own consumed quantity is still correct, and inventing a part line to charge
+     * would be worse than recording nothing.
+     *
+     * <p>Pick consumption counts in whole units, so what lands here is whole units — what actually
+     * came off the shelf, which is the honest figure even where the line's authorized quantity is
+     * divisible.
+     */
+    private void applyConsumptionToPartLine(ExtPickTaskReplica task, int consumed) {
+        if (task.getWorkorderLineId() == null || consumed <= 0) {
+            return;
+        }
+        WorkorderPart part =
+                workorderPartRepository.findById(task.getWorkorderLineId()).orElse(null);
+        if (part == null) {
+            log.debug(
+                    "Pick task {} names workorder line {} which this module does not hold",
+                    task.getPickTaskId(),
+                    task.getWorkorderLineId());
+            return;
+        }
+        BigDecimal current = part.getQuantityConsumed() == null ? BigDecimal.ZERO : part.getQuantityConsumed();
+        part.setQuantityConsumed(current.add(BigDecimal.valueOf(consumed)));
+        workorderPartRepository.save(part);
     }
 
     private void applyPickListUpdated(JsonNode envelope) {
@@ -267,10 +311,15 @@ public class InventoryEventsListener {
         }
         // quantityConsumed is owned by consumption facts, not the task snapshot — preserve it.
         int quantityConsumed = existing == null ? 0 : existing.getQuantityConsumed();
+        // Same for a demand line already known: a v1 fact carries none, and taking its null would
+        // drop the link a later consumption fact needs.
+        UUID workorderLineId = existing == null ? null : existing.getWorkorderLineId();
         pickTaskReplicaRepository.save(ExtPickTaskReplica.builder()
                 .pickTaskId(payload.pickTaskId())
                 .pickListId(payload.pickListId())
                 .workorderId(payload.workorderId())
+                // Schema v2 (#1479); absent on a v1 fact, which keeps the replica's null.
+                .workorderLineId(payload.workorderLineId() != null ? payload.workorderLineId() : workorderLineId)
                 .skuId(payload.skuId())
                 .locationId(payload.locationId())
                 .quantityRequired(payload.quantityRequired())
@@ -298,9 +347,11 @@ public class InventoryEventsListener {
                         line.pickTaskId());
                 continue;
             }
-            task.setQuantityConsumed(task.getQuantityConsumed() + Math.max(0, line.quantity()));
+            int consumed = Math.max(0, line.quantity());
+            task.setQuantityConsumed(task.getQuantityConsumed() + consumed);
             task.setUpdatedAt(Instant.now(clock));
             pickTaskReplicaRepository.save(task);
+            applyConsumptionToPartLine(task, consumed);
         }
         log.info(
                 "Applied consumption fact {} for workorder {} ({} items)",

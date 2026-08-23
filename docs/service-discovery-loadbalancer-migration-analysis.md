@@ -379,7 +379,6 @@ Files include:
 - `ExternalAvailabilityClientImpl`
 - `ProductSubstituteClientImpl`
 - `SiteDefaultsClient`
-- `SourceDocumentStubClient`
 - `StorageLocationValidationClient`
 - `WorkorderValidationClient`
 - event/permission registration

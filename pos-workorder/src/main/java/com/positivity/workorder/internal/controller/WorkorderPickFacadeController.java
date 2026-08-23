@@ -53,8 +53,15 @@ public class WorkorderPickFacadeController {
                     can be staged and fulfilled.
                     Use this tool for the pick list summary; use getPickTasks instead for the individual pick lines that \
                     guide execution.
+                    The full sequence for a workorder's parts is promoteEstimate, which creates the workorder \
+                    and asks pos-inventory to reserve each part line and generate this list, then getPickTasks, \
+                    then resolvePickScan with confirmPickLine (or completePickTask), then \
+                    consumeWorkorderPickedItems, which moves stock and raises the part line's quantityConsumed \
+                    - and a part the site cannot cover is answered with a backorder id on that part line \
+                    rather than a pick task.
                     Preconditions: a pick list replica must already exist for the workorder, replicated from \
-                    pos-inventory facts.
+                    pos-inventory facts; a promotion-generated list arrives in DRAFT and is pickable as-is, \
+                    while releasing it marks it READY_TO_PICK for the floor.
                     Required inputs: workorderId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only replica projection.
                     Returns 404 when no pick list exists for the workorder.
@@ -91,14 +98,17 @@ public class WorkorderPickFacadeController {
                     SKU, location, required and picked quantities, and status.
                     Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and \
                     getPickedItems for what has already been picked.
-                    Preconditions: a pick list replica must already exist for the workorder.
+                    Preconditions: none - promoting an estimate generates the pick list for the workorder's \
+                    part lines, so tasks normally appear without any further call.
                     Required inputs: workorderId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only replica projection.
-                    Returns 404 when no pick list exists for the workorder.
+                    Returns 200 with an empty array when the workorder has no pick list - a labour-only job, \
+                    or one whose generated list has not replicated yet - so "nothing to pick" never has to be \
+                    handled as an error, and 403 when the caller lacks inventory:pick_list:view.
                     """)
     @ApiResponse(
             responseCode = "200",
-            description = "Pick tasks retrieved successfully",
+            description = "Pick tasks retrieved successfully; empty when the workorder has no pick list",
             content =
                     @Content(
                             mediaType = "application/json",
@@ -106,10 +116,6 @@ public class WorkorderPickFacadeController {
     @ApiResponse(
             responseCode = "403",
             description = "Forbidden",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Workorder not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<WorkorderPickTaskResponse>> getPickTasks(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
