@@ -1518,12 +1518,19 @@ public class EstimateServiceImpl implements EstimateService {
                     .build();
         }
 
+        // created_by_id is NOT NULL. Every other create path sets it from the
+        // security context; this one did not, so the insert died on the
+        // constraint and the endpoint answered 500 for every caller.
+        String createdBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+
         Estimate estimate = Estimate.builder()
                 .status(EstimateStatus.DRAFT)
                 .customerId(request.getCustomerId())
                 .vehicleId(request.getVehicleId())
                 .locationId(request.getLocationId())
                 .appointmentId(request.getAppointmentId())
+                .createdById(createdBy)
+                .createdByUserId(createdBy)
                 .build();
 
         Estimate saved = estimateRepository.save(estimate);
