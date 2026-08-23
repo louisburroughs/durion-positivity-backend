@@ -3,9 +3,14 @@ package com.positivity.workorder.internal.config;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
+import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
+import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
+import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
@@ -36,6 +41,13 @@ public class GlobalExceptionHandler {
 
     private final Clock clock;
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+
+    /**
+     * How long a caller should wait before retrying a promotion blocked by a
+     * customer-requirements verdict that has not replicated yet (#1477). Short: the
+     * projection lag this covers is sub-second in practice.
+     */
+    private static final int REQUIREMENTS_RETRY_AFTER_SECONDS = 2;
 
     public GlobalExceptionHandler(ObjectProvider<Clock> clockProvider) {
         this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
@@ -109,6 +121,120 @@ public class GlobalExceptionHandler {
             UomConversionUndefinedException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY, UomConversionUndefinedException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * No estimate for the requested id (#1477). Promotion used to answer this with a bodiless
+     * {@code 400} shared with two other conditions; it is a {@code 404} with a code of its own.
+     */
+    @ExceptionHandler(EstimateNotFoundException.class)
+    public ResponseEntity<ApiError> handleEstimateNotFound(EstimateNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, EstimateNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * The customer's requirements verdict blocked workorder creation (#1477).
+     *
+     * <p>Split by whether retrying can help, because that is the distinction the empty {@code 400}
+     * destroyed. A verdict that has not replicated yet is {@code 503} with {@code Retry-After} —
+     * the request is fine and the same call succeeds shortly. A verdict that is known and negative
+     * is {@code 409}: a conflict with the customer's state that no retry resolves.
+     */
+    @ExceptionHandler(CustomerRequirementsNotMetException.class)
+    public ResponseEntity<ApiError> handleCustomerRequirementsNotMet(
+            CustomerRequirementsNotMetException ex, HttpServletRequest request) {
+        HttpStatus status = ex.isRetryable() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.CONFLICT;
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                ex.getErrorCode(),
+                ex.getMessage(),
+                status.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getCustomerId() == null ? null : ex.getCustomerId().toString(),
+                ex.getNextAction(),
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        if (ex.isRetryable()) {
+            headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(REQUIREMENTS_RETRY_AFTER_SECONDS));
+        }
+        return new ResponseEntity<>(body, headers, status);
+    }
+
+    /**
+     * A workorder claims an approval its own state does not back (#1477): a conflict with that
+     * state, never a malformed request.
+     */
+    @ExceptionHandler(CustomerApprovalInvalidException.class)
+    public ResponseEntity<ApiError> handleCustomerApprovalInvalid(
+            CustomerApprovalInvalidException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                CustomerApprovalInvalidException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getWorkorderId() == null ? null : ex.getWorkorderId().toString(),
+                CustomerApprovalInvalidException.NEXT_ACTION,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * A promotion precondition failed (#1477). The structured {@code PromotionErrorCode} becomes
+     * the envelope's {@code code}, so a caller sees which precondition failed instead of a bare
+     * {@code 409}. {@code ESTIMATE_NOT_FOUND} keeps a {@code 404}; an {@code ALREADY_PROMOTED}
+     * that carries its existing workorder is answered with that workorder by the promote endpoint
+     * itself and only reaches here when the workorder cannot be loaded.
+     */
+    @ExceptionHandler(PromotionValidationException.class)
+    public ResponseEntity<ApiError> handlePromotionValidation(
+            PromotionValidationException ex, HttpServletRequest request) {
+        HttpStatus status = ex.getErrorCode() == PromotionValidationException.PromotionErrorCode.ESTIMATE_NOT_FOUND
+                ? HttpStatus.NOT_FOUND
+                : HttpStatus.CONFLICT;
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                ex.getErrorCode().name(),
+                ex.getMessage(),
+                status.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getExistingWorkorderId() == null
+                        ? null
+                        : ex.getExistingWorkorderId().toString(),
+                null,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, status);
+    }
+
+    /**
+     * A recorded idempotency key that resolves to no workorder (#1477). A server defect, so it
+     * stays a {@code 500} — but enveloped and correlated, rather than the bodiless status the
+     * promote endpoint used to build for it.
+     */
+    @ExceptionHandler(PromotionIdempotencyInconsistencyException.class)
+    public ResponseEntity<ApiError> handlePromotionIdempotencyInconsistency(
+            PromotionIdempotencyInconsistencyException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                PromotionIdempotencyInconsistencyException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getWorkorderId().toString(),
+                null,
+                PromotionIdempotencyInconsistencyException.SUPPORT_ACTION);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler(IllegalStateException.class)

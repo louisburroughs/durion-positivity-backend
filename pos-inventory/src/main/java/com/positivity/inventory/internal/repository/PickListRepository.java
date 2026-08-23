@@ -11,5 +11,7 @@ public interface PickListRepository extends JpaRepository<PickListEntity, UUID> 
 
     List<PickListEntity> findByWorkorderId(UUID workorderId);
 
+    boolean existsByWorkorderId(UUID workorderId);
+
     Optional<PickListEntity> findByWorkorderIdAndStatus(UUID workorderId, PickListStatus status);
 }

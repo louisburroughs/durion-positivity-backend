@@ -9,7 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.SourceDocumentStubClient;
+import com.positivity.inventory.internal.client.SourceDocumentClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -89,7 +89,7 @@ class ReceivingServiceImplTest {
     private LedgerPostingService ledgerPostingService;
 
     @Mock
-    private SourceDocumentStubClient sourceDocumentStubClient;
+    private SourceDocumentClient sourceDocumentClient;
 
     @Mock
     private SiteDefaultsService siteDefaultsService;
@@ -173,6 +173,9 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentNotFound() {
+        when(sourceDocumentClient.fetchDocument(any(), any()))
+                .thenThrow(new SourceDocumentNotFoundException("No purchase order PO-999 in pos-order"));
+
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-999", "MANUAL");
 
         assertThrows(
@@ -182,11 +185,8 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentAlreadyReceived() {
-        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument =
-                new SourceDocumentStubClient.SourceDocumentLinesResponse();
-        sourceDocument.setAlreadyReceived(true);
-        sourceDocument.setLines(List.of());
-        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
+        when(sourceDocumentClient.fetchDocument(any(), any()))
+                .thenReturn(new SourceDocumentClient.SourceDocument("PO-456", "RECEIVED", true, List.of()));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-456", "MANUAL");
 
@@ -489,10 +489,8 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentWithNoLines_throwsNotFound() {
-        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument =
-                new SourceDocumentStubClient.SourceDocumentLinesResponse();
-        sourceDocument.setLines(List.of());
-        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
+        when(sourceDocumentClient.fetchDocument(any(), any()))
+                .thenReturn(new SourceDocumentClient.SourceDocument("PO-123", "APPROVED", false, List.of()));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
@@ -503,14 +501,9 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentLineWithoutProduct_throwsIllegalState() {
-        SourceDocumentStubClient.SourceDocumentLineDto invalidLine =
-                new SourceDocumentStubClient.SourceDocumentLineDto();
-        invalidLine.setProductId(" ");
-        invalidLine.setExpectedQuantity(new BigDecimal("5"));
-        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument =
-                new SourceDocumentStubClient.SourceDocumentLinesResponse();
-        sourceDocument.setLines(List.of(invalidLine));
-        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
+        when(sourceDocumentClient.fetchDocument(any(), any()))
+                .thenReturn(new SourceDocumentClient.SourceDocument(
+                        "PO-123", "APPROVED", false, List.of(sourceLine(" ", "5"))));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
@@ -1321,18 +1314,19 @@ class ReceivingServiceImplTest {
     }
 
     private void stubSourceDocumentLines() {
-        SourceDocumentStubClient.SourceDocumentLineDto line1 = new SourceDocumentStubClient.SourceDocumentLineDto();
-        line1.setProductId("PROD-001");
-        line1.setExpectedQuantity(new BigDecimal("5"));
+        when(sourceDocumentClient.fetchDocument(any(), any()))
+                .thenReturn(new SourceDocumentClient.SourceDocument(
+                        "PO-123",
+                        "APPROVED",
+                        false,
+                        List.of(sourceLine("PROD-001", "5"), sourceLine("PROD-002", "10"))));
+    }
 
-        SourceDocumentStubClient.SourceDocumentLineDto line2 = new SourceDocumentStubClient.SourceDocumentLineDto();
-        line2.setProductId("PROD-002");
-        line2.setExpectedQuantity(new BigDecimal("10"));
-
-        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument =
-                new SourceDocumentStubClient.SourceDocumentLinesResponse();
-        sourceDocument.setLines(List.of(line1, line2));
-        when(sourceDocumentStubClient.fetchDocument(any(), any(), any())).thenReturn(sourceDocument);
+    private static SourceDocumentClient.SourceDocumentLine sourceLine(String productId, String expectedQuantity) {
+        SourceDocumentClient.SourceDocumentLine line = new SourceDocumentClient.SourceDocumentLine();
+        line.setProductId(productId);
+        line.setExpectedQuantity(new BigDecimal(expectedQuantity));
+        return line;
     }
 
     private void authenticateAs(String username, String... authorities) {

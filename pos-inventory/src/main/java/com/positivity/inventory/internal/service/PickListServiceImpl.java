@@ -103,6 +103,11 @@ public class PickListServiceImpl implements PickListService {
     }
 
     @Override
+    public boolean hasPickList(@NonNull UUID workorderId) {
+        return pickListRepository.existsByWorkorderId(workorderId);
+    }
+
+    @Override
     public @NonNull PickListResponse updatePickListStatus(@NonNull UUID pickListId, @NonNull PickListStatus status) {
         PickListEntity pickList = pickListRepository
                 .findById(pickListId)

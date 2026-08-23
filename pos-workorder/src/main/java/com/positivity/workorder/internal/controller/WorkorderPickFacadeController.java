@@ -53,6 +53,14 @@ public class WorkorderPickFacadeController {
                     can be staged and fulfilled.
                     Use this tool for the pick list summary; use getPickTasks instead for the individual pick lines that \
                     guide execution.
+                    The full sequence for a workorder's parts: promoteEstimate creates the workorder and asks \
+                    pos-inventory to reserve each part line and generate this pick list; getPickTasks returns \
+                    the resulting tasks; resolvePickScan then confirmPickLine (or completePickTask) records \
+                    what was picked; consumeWorkorderPickedItems consumes the picked tasks, which moves stock \
+                    and raises the part line's quantityConsumed. A part the site cannot cover is answered with \
+                    a backorder id on the workorder's part line instead of a pick task.
+                    The generated list arrives in DRAFT and can be picked as-is; releasing it \
+                    (POST /v1/inventory/pick-lists/{id}/release) marks it READY_TO_PICK for the floor.
                     Preconditions: a pick list replica must already exist for the workorder, replicated from \
                     pos-inventory facts.
                     Required inputs: workorderId (UUID) as a path parameter.
@@ -91,14 +99,18 @@ public class WorkorderPickFacadeController {
                     SKU, location, required and picked quantities, and status.
                     Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and \
                     getPickedItems for what has already been picked.
-                    Preconditions: a pick list replica must already exist for the workorder.
+                    Preconditions: none. A workorder with no pick list - a labour-only job, or a promoted job \
+                    whose list has not been generated yet - answers 200 with an empty array rather than 404, so \
+                    "nothing to pick" never has to be handled as an error.
+                    Promoting an estimate generates the pick list for the workorder's part lines, so tasks \
+                    normally appear without any further call; use getWorkorderPickList when you need to know \
+                    whether a list exists at all.
                     Required inputs: workorderId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only replica projection.
-                    Returns 404 when no pick list exists for the workorder.
                     """)
     @ApiResponse(
             responseCode = "200",
-            description = "Pick tasks retrieved successfully",
+            description = "Pick tasks retrieved successfully; empty when the workorder has no pick list",
             content =
                     @Content(
                             mediaType = "application/json",
@@ -106,10 +118,6 @@ public class WorkorderPickFacadeController {
     @ApiResponse(
             responseCode = "403",
             description = "Forbidden",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Workorder not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<WorkorderPickTaskResponse>> getPickTasks(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")

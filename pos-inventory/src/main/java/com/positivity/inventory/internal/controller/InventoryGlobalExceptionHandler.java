@@ -46,10 +46,12 @@ import com.positivity.inventory.internal.exception.ShortageResolutionException;
 import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
+import com.positivity.inventory.internal.exception.SourceDocumentServiceUnavailableException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
 import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
+import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
@@ -286,6 +288,27 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler({SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class})
     public ResponseEntity<ApiError> handleReceivingNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    /**
+     * The service owning a source document could not be reached (#1480): the document's existence
+     * is unknown, so this is a retryable 503, never the 404 that says it does not exist.
+     */
+    @ExceptionHandler(SourceDocumentServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleSourceDocumentServiceUnavailable(
+            SourceDocumentServiceUnavailableException ex) {
+        return build(
+                HttpStatus.SERVICE_UNAVAILABLE, SourceDocumentServiceUnavailableException.ERROR_CODE, ex.getMessage());
+    }
+
+    /**
+     * A source document type receiving cannot resolve (#1480). 422: the request is well-formed,
+     * the type simply has no owning service — saying so beats a 404 that reads as "no such PO".
+     */
+    @ExceptionHandler(UnsupportedSourceDocumentTypeException.class)
+    public ResponseEntity<ApiError> handleUnsupportedSourceDocumentType(UnsupportedSourceDocumentTypeException ex) {
+        return build(
+                HttpStatus.UNPROCESSABLE_ENTITY, UnsupportedSourceDocumentTypeException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(SourceDocumentAlreadyReceivedException.class)

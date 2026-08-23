@@ -2,13 +2,16 @@ package com.positivity.inventory.internal.config;
 
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
+import com.positivity.inventory.internal.dto.picklist.GeneratePickListRequest;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.inventory.service.OutboxReplayService;
+import com.positivity.inventory.service.PickListGenerationService;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.inventory.service.ReservationRequestService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +49,10 @@ import tools.jackson.databind.ObjectMapper;
  * replaces {@code InventoryPickClient.consumePickedItems}); same idempotency, the
  * {@code inventory.consumption.recorded} fact carries the result.</li>
  * <li>{@code inventory.pick-list.release-requested} — async pick-list release (#901).</li>
+ * <li>{@code inventory.pick-list.generate-requested} — generate a workorder's pick list and its
+ * tasks (#1479). Issued by pos-workorder when an estimate is promoted, so a promoted workorder's
+ * part lines are pickable without a second call; the resulting pick-list/pick-task facts populate
+ * the requester's replicas.</li>
  * <li>{@code inventory.reservation.request-requested} — the ATP-gate commitment point for
  * pos-order (checkout) and pos-workorder (part-issue), CAP #1315. Delegates to
  * {@code ReservationRequestService}; the resulting {@code inventory.reservation.outcome.recorded}
@@ -67,6 +74,9 @@ public class InventoryCommandListener {
 
     /** Canonical dotted name normalized: inventory.pick-list.release-requested. */
     private static final String COMMAND_PICK_LIST_RELEASE_REQUESTED = "INVENTORY_PICK_LIST_RELEASE_REQUESTED";
+
+    /** Canonical dotted name normalized: inventory.pick-list.generate-requested (#1479). */
+    private static final String COMMAND_PICK_LIST_GENERATE_REQUESTED = "INVENTORY_PICK_LIST_GENERATE_REQUESTED";
 
     /** Canonical dotted name normalized: inventory.pick-task.confirm-requested. */
     private static final String COMMAND_PICK_TASK_CONFIRM_REQUESTED = "INVENTORY_PICK_TASK_CONFIRM_REQUESTED";
@@ -90,6 +100,7 @@ public class InventoryCommandListener {
     private final ObjectMapper objectMapper;
     private final OutboxReplayService outboxReplayService;
     private final PickListService pickListService;
+    private final PickListGenerationService pickListGenerationService;
     private final ConsumptionService consumptionService;
     private final ReservationRequestService reservationRequestHandler;
     private final ProcessedEventRepository processedEventRepository;
@@ -116,6 +127,10 @@ public class InventoryCommandListener {
             }
             if (COMMAND_PICK_LIST_RELEASE_REQUESTED.equals(commandType)) {
                 handleDeduplicated(root, this::handlePickListReleaseRequested);
+                return;
+            }
+            if (COMMAND_PICK_LIST_GENERATE_REQUESTED.equals(commandType)) {
+                handleDeduplicated(root, this::handlePickListGenerateRequested);
                 return;
             }
             if (COMMAND_PICK_TASK_CONFIRM_REQUESTED.equals(commandType)) {
@@ -207,6 +222,66 @@ public class InventoryCommandListener {
         }
         var response = pickListService.releasePickList(pickListId);
         log.info("Pick list release command processed pickListId={} status={}", pickListId, response.getStatus());
+    }
+
+    /**
+     * Generates a workorder's pick list and one task per demand line (#1479).
+     *
+     * <p>Idempotent twice over: the command-id dedupe above stops a redelivery, and a workorder
+     * that already has a pick list is left alone — a second promotion attempt must not leave two
+     * lists behind for the same job, since {@code getPickTasks} resolves a workorder's
+     * <em>primary</em> list.
+     *
+     * <p>Pick tasks count in whole units. A demand line whose quantity is divisible (ADR-0055,
+     * #1414) is staged as the next whole unit up: picking is a physical movement off a shelf, and
+     * staging less than the job needs is the one outcome that cannot be corrected at the bench.
+     * What was actually used is recorded separately by consumption, which stays decimal.
+     */
+    private void handlePickListGenerateRequested(@NonNull JsonNode payload) {
+        UUID workorderId = parseUuid(payload, "workorderId");
+        if (workorderId == null) {
+            log.warn("Ignoring pick-list generate command with missing workorderId: {}", payload);
+            return;
+        }
+        if (pickListService.hasPickList(workorderId)) {
+            log.info("Workorder {} already has a pick list; skipping generation", workorderId);
+            return;
+        }
+
+        List<GeneratePickListRequest.PickLineItem> lineItems = new ArrayList<>();
+        for (JsonNode line : payload.path("lineItems")) {
+            UUID workorderLineId = parseUuid(line, "workorderLineId");
+            String sku = line.path("sku").stringValue(null);
+            BigDecimal quantity = line.path("quantity").decimalValue(BigDecimal.ZERO);
+            if (workorderLineId == null || sku == null || sku.isBlank() || quantity.signum() <= 0) {
+                log.warn("Skipping pick-list generate line with missing/invalid fields: {}", line);
+                continue;
+            }
+            lineItems.add(new GeneratePickListRequest.PickLineItem(
+                    workorderLineId, parseUuid(line, "reservationId"), sku, wholeUnits(quantity)));
+        }
+        if (lineItems.isEmpty()) {
+            log.info("Pick-list generate command for workorder {} carried no usable lines", workorderId);
+            return;
+        }
+
+        GeneratePickListRequest request = new GeneratePickListRequest();
+        request.setWorkorderId(workorderId);
+        request.setScheduledStartAt(parseInstant(payload, "scheduledStartAt"));
+        request.setBasePriority(Math.max(0, payload.path("basePriority").intValue(0)));
+        request.setLineItems(lineItems);
+
+        var response = pickListGenerationService.generatePickList(request);
+        log.info(
+                "Pick list generate command processed workorderId={} pickListId={} tasks={}",
+                workorderId,
+                response.getPickListId(),
+                lineItems.size());
+    }
+
+    /** Rounds a demand quantity up to whole pickable units; see {@link #handlePickListGenerateRequested}. */
+    private static int wholeUnits(@NonNull BigDecimal quantity) {
+        return quantity.setScale(0, RoundingMode.CEILING).intValueExact();
     }
 
     private void handlePickTaskConfirmRequested(@NonNull JsonNode payload) {

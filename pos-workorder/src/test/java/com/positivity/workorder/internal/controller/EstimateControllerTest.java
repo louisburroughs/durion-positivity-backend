@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +19,9 @@ import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.EstimateNotFoundException;
+import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.service.EstimateService;
 import com.positivity.workorder.service.IdempotencyService;
@@ -462,10 +467,9 @@ class EstimateControllerTest {
                     .thenReturn(Optional.of(WORKORDER_ID));
             when(workorderService.getWorkorderById(WORKORDER_ID)).thenReturn(Optional.empty());
 
-            assertThat(controller
-                            .promoteEstimateToWorkorder(ESTIMATE_ID, IDEMPOTENCY_KEY)
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            // #1477: an enveloped 500 from the advice, not a bodiless one built here.
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, IDEMPOTENCY_KEY))
+                    .isInstanceOf(PromotionIdempotencyInconsistencyException.class);
         }
 
         @Test
@@ -527,43 +531,63 @@ class EstimateControllerTest {
         }
 
         @Test
-        void fallsBackToAConflictWhenTheAlreadyPromotedWorkorderCannotBeLoaded() {
-            when(workorderService.createWorkorder(ESTIMATE_ID, null))
-                    .thenThrow(new PromotionValidationException(
-                            PromotionValidationException.PromotionErrorCode.ALREADY_PROMOTED,
-                            "already promoted",
-                            WORKORDER_ID));
+        void rethrowsAnAlreadyPromotedWhoseWorkorderCannotBeLoaded() {
+            PromotionValidationException unresolvable = new PromotionValidationException(
+                    PromotionValidationException.PromotionErrorCode.ALREADY_PROMOTED, "already promoted", WORKORDER_ID);
+            when(workorderService.createWorkorder(ESTIMATE_ID, null)).thenThrow(unresolvable);
             when(workorderService.getWorkorderById(WORKORDER_ID)).thenReturn(Optional.empty());
 
-            assertThat(controller.promoteEstimateToWorkorder(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1477: rethrown so the advice answers with ALREADY_PROMOTED and the unresolvable
+            // workorder id, instead of a 409 that carries neither.
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .isSameAs(unresolvable);
         }
 
         @Test
-        void reportsAConflictForAnyOtherPromotionValidationFailure() {
-            when(workorderService.createWorkorder(ESTIMATE_ID, null))
-                    .thenThrow(new PromotionValidationException(
-                            PromotionValidationException.PromotionErrorCode.APPROVAL_EXPIRED, "approval expired"));
+        void rethrowsAnyOtherPromotionValidationFailureForTheAdviceToEnvelope() {
+            PromotionValidationException expired = new PromotionValidationException(
+                    PromotionValidationException.PromotionErrorCode.APPROVAL_EXPIRED, "approval expired");
+            when(workorderService.createWorkorder(ESTIMATE_ID, null)).thenThrow(expired);
 
-            assertThat(controller.promoteEstimateToWorkorder(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .isSameAs(expired);
         }
 
+        /**
+         * #1477: every failing promotion leaves the endpoint as a typed exception the advice
+         * envelopes, rather than as a bodiless status built here. The three conditions that used to
+         * share an empty 400 are three distinct types now.
+         */
         @Test
-        void mapsMissingEstimatesAndBadArgumentsOntoTheirOwnStatuses() {
+        void surfacesEachFailureAsItsOwnTypedException() {
             doThrow(new EntityNotFoundException("gone")).when(workorderService).createWorkorder(ESTIMATE_ID, null);
-            assertThat(controller.promoteEstimateToWorkorder(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalArgumentException("bad estimate"))
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(workorderService)
                     .createWorkorder(ESTIMATE_ID, null);
-            assertThat(controller.promoteEstimateToWorkorder(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .isInstanceOf(EstimateNotFoundException.class);
+
+            doThrow(CustomerRequirementsNotMetException.verdictUnavailable(CUSTOMER_ID))
+                    .when(workorderService)
+                    .createWorkorder(ESTIMATE_ID, null);
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .isInstanceOf(CustomerRequirementsNotMetException.class)
+                    .asInstanceOf(type(CustomerRequirementsNotMetException.class))
+                    .returns(true, CustomerRequirementsNotMetException::isRetryable);
+
+            doThrow(CustomerRequirementsNotMetException.requirementsNotMet(CUSTOMER_ID))
+                    .when(workorderService)
+                    .createWorkorder(ESTIMATE_ID, null);
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .asInstanceOf(type(CustomerRequirementsNotMetException.class))
+                    .returns(false, CustomerRequirementsNotMetException::isRetryable);
 
             doThrow(new RuntimeException("boom")).when(workorderService).createWorkorder(ESTIMATE_ID, null);
-            assertThat(controller.promoteEstimateToWorkorder(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
+                    .isInstanceOf(RuntimeException.class);
         }
     }
 

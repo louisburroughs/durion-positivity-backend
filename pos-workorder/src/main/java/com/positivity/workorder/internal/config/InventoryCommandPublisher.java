@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.config;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +39,7 @@ public class InventoryCommandPublisher {
     public static final String CONFIRM_COMMAND_TYPE = "inventory.pick-task.confirm-requested";
     public static final String CONSUME_COMMAND_TYPE = "inventory.items.consume-requested";
     public static final String RESERVATION_REQUEST_COMMAND_TYPE = "inventory.reservation.request-requested";
+    public static final String PICK_LIST_GENERATE_COMMAND_TYPE = "inventory.pick-list.generate-requested";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -115,6 +117,37 @@ public class InventoryCommandPublisher {
                 workorderLineId, stockItemId, requiredQuantity, locationId, normalizedUomCode);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, workorderLineId.toString(), payload);
         log.info("Queued reservation request command {} for workorder line {}", commandId, workorderLineId);
+    }
+
+    /**
+     * Ask pos-inventory to generate the workorder's pick list and its tasks (#1479).
+     *
+     * <p>Issued at promotion, alongside the per-line reservation requests: promoting an estimate
+     * used to produce a workorder with part lines and nothing else, so {@code getPickTasks}
+     * answered 404 indefinitely and a part on a workorder could never be picked or consumed
+     * through the documented flow.
+     *
+     * <p>The command id is derived from the workorder alone, so a re-promotion or a redelivery
+     * collapses to one command under pos-inventory's dedupe rather than leaving a second pick list
+     * behind for the same job.
+     */
+    public void requestPickListGeneration(
+            @NonNull UUID workorderId,
+            @Nullable Instant scheduledStartAt,
+            int basePriority,
+            @NonNull List<PickLine> lineItems) {
+        if (lineItems.isEmpty()) {
+            return;
+        }
+        UUID commandId = deterministicCommandId(PICK_LIST_GENERATE_COMMAND_TYPE, workorderId.toString());
+        PickListGeneratePayload payload =
+                new PickListGeneratePayload(workorderId, scheduledStartAt, basePriority, lineItems);
+        send(PICK_LIST_GENERATE_COMMAND_TYPE, commandId, workorderId.toString(), payload);
+        log.info(
+                "Queued pick-list generate command {} for workorder {} ({} lines)",
+                commandId,
+                workorderId,
+                lineItems.size());
     }
 
     private void send(@NonNull String commandType, @NonNull UUID commandId, @NonNull String key, Object payload) {
@@ -197,4 +230,21 @@ public class InventoryCommandPublisher {
             @NonNull UUID workorderId,
             @Nullable UUID pickListId,
             @NonNull List<ConsumeLine> items) {}
+
+    /**
+     * One line of a pick-list generate request; matches pos-inventory's
+     * {@code GeneratePickListRequest.PickLineItem}. The quantity stays decimal on the wire
+     * (ADR-0055, #1414) — pos-inventory decides how it becomes whole pickable units.
+     */
+    public record PickLine(
+            @NonNull UUID workorderLineId,
+            @NonNull String sku,
+            @NonNull BigDecimal quantity) {}
+
+    /** Matches the fields pos-inventory's {@code handlePickListGenerateRequested} reads. */
+    record PickListGeneratePayload(
+            @NonNull UUID workorderId,
+            @Nullable Instant scheduledStartAt,
+            int basePriority,
+            @NonNull List<PickLine> lineItems) {}
 }

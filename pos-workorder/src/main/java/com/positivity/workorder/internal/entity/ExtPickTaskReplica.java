@@ -39,6 +39,14 @@ public class ExtPickTaskReplica {
     @Column(name = "workorder_id")
     private UUID workorderId;
 
+    /**
+     * The workorder part this task fulfils (#1479). Null on rows replicated before schema v2 of
+     * {@code inventory.pick-task.updated}, and on tasks generated from a source with no demand
+     * line.
+     */
+    @Column(name = "workorder_line_id")
+    private UUID workorderLineId;
+
     @Column(name = "sku_id")
     private UUID skuId;
 

@@ -369,7 +369,11 @@ public class InventoryFactPublisher {
                                 task.getQuantityRequired(),
                                 task.getQuantityPicked(),
                                 task.getStatus().name(),
-                                task.getSortOrder()));
+                                task.getSortOrder(),
+                                // Schema v2 (#1479): the demand line this task fulfils, so a
+                                // consumer can map a consumed pick back to the workorder part it
+                                // came from.
+                                task.getWorkorderLineId()));
             } catch (Exception e) {
                 log.warn("Skipping pick-task fact for {}: {}", pickTaskId, e.getMessage());
             }

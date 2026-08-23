@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository
 import com.positivity.workorder.service.WorkorderPickFacadeService;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -60,13 +61,27 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
         return mapPickList(resolvePrimaryPickList(workorderId));
     }
 
+    /**
+     * The workorder's pick tasks, or an empty list when it has no pick list (#1479).
+     *
+     * <p>404 was the wrong answer here. "This workorder has nothing to pick" is a perfectly normal
+     * state — a labour-only job has no parts, and a promoted job's list exists only once
+     * pos-inventory's generate command has been applied — and answering it as an error forced
+     * every caller to treat a missing list as a failure. The seeder swallowed the 404 and skipped
+     * picking entirely as a result, which is why simulated jobs never moved stock.
+     *
+     * <p>The pick-list header endpoint keeps its 404: asked for a specific resource, it either
+     * exists or it does not.
+     */
     @Override
     @NonNull
     public List<WorkorderPickTaskResponse> getPickTasksForWorkorder(@NonNull UUID workorderId) {
-        ExtPickListReplica pickList = resolvePrimaryPickList(workorderId);
-        return pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(pickList.getPickListId()).stream()
-                .map(task -> mapPickTask(task, task.getStatus()))
-                .toList();
+        return findPrimaryPickList(workorderId)
+                .map(pickList ->
+                        pickTaskReplicaRepository.findByPickListIdOrderBySortOrderAsc(pickList.getPickListId()).stream()
+                                .map(task -> mapPickTask(task, task.getStatus()))
+                                .toList())
+                .orElseGet(List::of);
     }
 
     @Override
@@ -240,12 +255,16 @@ public class WorkorderPickFacadeServiceImpl implements WorkorderPickFacadeServic
 
     @NonNull
     private ExtPickListReplica resolvePrimaryPickList(@NonNull UUID workorderId) {
-        List<ExtPickListReplica> pickLists =
-                pickListReplicaRepository.findByWorkorderIdOrderByPickListIdAsc(workorderId);
-        if (pickLists.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No pick list found for workorder " + workorderId);
-        }
-        return pickLists.getFirst();
+        return findPrimaryPickList(workorderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "No pick list found for workorder " + workorderId));
+    }
+
+    /** The workorder's primary pick list, if it has one; see {@link #getPickTasksForWorkorder}. */
+    @NonNull
+    private Optional<ExtPickListReplica> findPrimaryPickList(@NonNull UUID workorderId) {
+        return pickListReplicaRepository.findByWorkorderIdOrderByPickListIdAsc(workorderId).stream()
+                .findFirst();
     }
 
     @NonNull

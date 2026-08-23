@@ -298,4 +298,91 @@ class InventoryEventsListenerTest {
                         covered,
                         covered ? "null" : "\"" + BACKORDER_ID + "\"");
     }
+
+    private String pickTaskEventV2(String eventId, long version) {
+        return """
+                {"eventId":"%s","eventType":"inventory.pick-task.updated","schemaVersion":2,
+                 "aggregateId":"%s","aggregateVersion":%d,
+                 "payload":{"pickTaskId":"%s","pickListId":"%s","workorderId":"%s","skuId":"%s",
+                            "locationId":"%s","quantityRequired":3,"quantityPicked":2,
+                            "status":"PICKED","sortOrder":1,"workorderLineId":"%s"}}
+                """.formatted(
+                eventId, PICK_TASK_ID, version, PICK_TASK_ID, PICK_LIST_ID, WORKORDER_ID, SKU_ID, LOCATION_ID, PART_ID);
+    }
+
+    /** #1479: the demand line is what lets a consumed pick find the part it came from. */
+    @Test
+    @DisplayName("a v2 pick-task fact carries its demand line onto the replica")
+    void pickTaskReplicaKeepsTheDemandLine() {
+        when(processedEvents.existsById("e-v2")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID)).thenReturn(Optional.empty());
+
+        listener.onInventoryEvent(pickTaskEventV2("e-v2", 1));
+
+        ArgumentCaptor<ExtPickTaskReplica> saved = ArgumentCaptor.forClass(ExtPickTaskReplica.class);
+        verify(pickTasks).save(saved.capture());
+        assertThat(saved.getValue().getWorkorderLineId()).isEqualTo(PART_ID);
+    }
+
+    /** A v1 fact carries no demand line; taking its null would drop a link already known. */
+    @Test
+    @DisplayName("a v1 pick-task fact does not erase a demand line already replicated")
+    void pickTaskReplicaPreservesTheDemandLineAcrossV1Facts() {
+        when(processedEvents.existsById("e-v1")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID))
+                .thenReturn(Optional.of(ExtPickTaskReplica.builder()
+                        .pickTaskId(PICK_TASK_ID)
+                        .workorderLineId(PART_ID)
+                        .aggregateVersion(1)
+                        .build()));
+
+        listener.onInventoryEvent(pickTaskEvent("e-v1", 2));
+
+        ArgumentCaptor<ExtPickTaskReplica> saved = ArgumentCaptor.forClass(ExtPickTaskReplica.class);
+        verify(pickTasks).save(saved.capture());
+        assertThat(saved.getValue().getWorkorderLineId()).isEqualTo(PART_ID);
+    }
+
+    /**
+     * #1479: a part picked and consumed through the pick flow used to leave
+     * {@code workorder_part.quantity_consumed} at zero while the workorder completed.
+     */
+    @Test
+    @DisplayName("consuming a pick task charges the workorder part it fulfils")
+    void consumptionMovesTheWorkorderPartConsumedQuantity() {
+        when(processedEvents.existsById("e-consume")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID))
+                .thenReturn(Optional.of(ExtPickTaskReplica.builder()
+                        .pickTaskId(PICK_TASK_ID)
+                        .workorderLineId(PART_ID)
+                        .quantityConsumed(0)
+                        .build()));
+        com.positivity.workorder.internal.entity.WorkorderPart part =
+                com.positivity.workorder.internal.entity.WorkorderPart.builder()
+                        .quantityConsumed(new java.math.BigDecimal("1"))
+                        .build();
+        part.setId(PART_ID);
+        when(workorderParts.findById(PART_ID)).thenReturn(Optional.of(part));
+
+        listener.onInventoryEvent(consumptionEvent("e-consume", 2));
+
+        verify(workorderParts).save(part);
+        assertThat(part.getQuantityConsumed()).isEqualByComparingTo("3");
+    }
+
+    /** A task with no demand line still records its own consumed quantity, and charges nothing. */
+    @Test
+    @DisplayName("a pick task with no demand line charges no part line")
+    void consumptionWithoutADemandLineChargesNothing() {
+        when(processedEvents.existsById("e-consume-orphan")).thenReturn(false);
+        when(pickTasks.findById(PICK_TASK_ID))
+                .thenReturn(Optional.of(ExtPickTaskReplica.builder()
+                        .pickTaskId(PICK_TASK_ID)
+                        .quantityConsumed(0)
+                        .build()));
+
+        listener.onInventoryEvent(consumptionEvent("e-consume-orphan", 2));
+
+        verify(workorderParts, never()).save(any());
+    }
 }

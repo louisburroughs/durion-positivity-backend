@@ -278,13 +278,29 @@ class WorkorderPickFacadeServiceImplTest {
 
     // ─── reads ───────────────────────────────────────────────────────────────
 
+    /**
+     * #1479: "this workorder has nothing to pick" is a normal state — a labour-only job, or a
+     * promoted job whose generated list has not replicated yet — and answering it as an error made
+     * every caller treat it as a failure. The seeder swallowed the 404 and skipped picking
+     * entirely, which is why simulated jobs never moved stock.
+     */
     @Test
-    @DisplayName("a workorder with no pick list is a 404 on the task read")
-    void noPickListIsNotFound() {
+    @DisplayName("a workorder with no pick list has an empty task list, not a 404")
+    void noPickListMeansNoTasks() {
         when(pickListReplicaRepository.findByWorkorderIdOrderByPickListIdAsc(WORKORDER_ID))
                 .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.getPickTasksForWorkorder(WORKORDER_ID))
+        assertThat(service.getPickTasksForWorkorder(WORKORDER_ID)).isEmpty();
+    }
+
+    /** The header read stays a 404: asked for one resource, it either exists or it does not. */
+    @Test
+    @DisplayName("but the pick list header read is still a 404")
+    void noPickListHeaderIsNotFound() {
+        when(pickListReplicaRepository.findByWorkorderIdOrderByPickListIdAsc(WORKORDER_ID))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.getPickListForWorkorder(WORKORDER_ID))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);

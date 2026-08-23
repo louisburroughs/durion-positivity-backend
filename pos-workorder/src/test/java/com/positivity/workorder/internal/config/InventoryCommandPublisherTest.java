@@ -99,4 +99,43 @@ class InventoryCommandPublisherTest {
         assertThat(command.path("commandId").stringValue(null)).isEqualTo(expected.toString());
         assertThat(command.path("payload").path("uomCode").stringValue(null)).isEqualTo("QT");
     }
+
+    private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
+
+    /**
+     * #1479: promotion asks pos-inventory for the workorder's pick list. Keyed on the workorder
+     * alone so a re-promotion or a redelivery collapses to one command rather than leaving a
+     * second list behind for the same job.
+     */
+    @Test
+    @DisplayName("a pick-list generate command is keyed on the workorder and carries its demand lines")
+    void pickListGenerateCarriesItsLinesAndIsKeyedOnTheWorkorder() {
+        publisher.requestPickListGeneration(
+                WORKORDER_ID,
+                null,
+                0,
+                java.util.List.of(new InventoryCommandPublisher.PickLine(
+                        WORKORDER_LINE_ID, STOCK_ITEM_ID.toString(), new BigDecimal("2.5"))));
+
+        JsonNode command = sentCommand();
+        assertThat(command.path("commandType").stringValue())
+                .isEqualTo(InventoryCommandPublisher.PICK_LIST_GENERATE_COMMAND_TYPE);
+        assertThat(command.path("commandId").stringValue())
+                .isEqualTo(UUID.nameUUIDFromBytes(
+                                (InventoryCommandPublisher.PICK_LIST_GENERATE_COMMAND_TYPE + ":" + WORKORDER_ID)
+                                        .getBytes(StandardCharsets.UTF_8))
+                        .toString());
+        JsonNode line = command.path("payload").path("lineItems").get(0);
+        assertThat(line.path("workorderLineId").stringValue()).isEqualTo(WORKORDER_LINE_ID.toString());
+        assertThat(line.path("sku").stringValue()).isEqualTo(STOCK_ITEM_ID.toString());
+        assertThat(line.path("quantity").decimalValue()).isEqualByComparingTo("2.5");
+    }
+
+    @Test
+    @DisplayName("a generate request with no lines sends nothing")
+    void pickListGenerateWithNoLinesSendsNothing() {
+        publisher.requestPickListGeneration(WORKORDER_ID, null, 0, java.util.List.of());
+
+        verify(kafkaTemplate, org.mockito.Mockito.never()).send(anyString(), anyString(), anyString());
+    }
 }

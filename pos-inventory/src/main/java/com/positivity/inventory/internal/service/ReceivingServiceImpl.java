@@ -1,6 +1,6 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.SourceDocumentStubClient;
+import com.positivity.inventory.internal.client.SourceDocumentClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -63,15 +63,12 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
-    private final SourceDocumentStubClient sourceDocumentStubClient;
+    private final SourceDocumentClient sourceDocumentClient;
     private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationService workorderValidationService;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
     private final QuantityScaleGuard quantityScaleGuard;
-
-    @Value("${pos.inventory.receiving.source-document-service:}")
-    private String configuredSourceDocumentService;
 
     @Value("${pos.inventory.receiving.site-id:}")
     private String configuredSiteId;
@@ -640,14 +637,17 @@ public class ReceivingServiceImpl implements ReceivingService {
 
     private List<ReceivingLine> buildLinesFromDocument(
             String sourceDocumentId, SourceDocumentType sourceDocumentType, ReceivingSession session) {
-        List<SourceDocumentLineStub> sourceLines = fetchSourceDocumentLines(sourceDocumentId, sourceDocumentType);
+        List<SourceDocumentClient.SourceDocumentLine> sourceLines =
+                fetchSourceDocumentLines(sourceDocumentId, sourceDocumentType);
         List<ReceivingLine> lines = new ArrayList<>(sourceLines.size());
 
-        for (SourceDocumentLineStub sourceLine : sourceLines) {
+        for (SourceDocumentClient.SourceDocumentLine sourceLine : sourceLines) {
+            // expectedQuantity is the base still-open quantity; the document unit and quantity are
+            // recorded per receive, from the receive request (odoo-parity B2, #1034).
             lines.add(ReceivingLine.builder()
                     .session(session)
-                    .productId(sourceLine.productId())
-                    .expectedQuantity(sourceLine.expectedQuantity())
+                    .productId(sourceLine.getProductId())
+                    .expectedQuantity(sourceLine.getExpectedQuantity())
                     .receivedQuantity(BigDecimal.ZERO)
                     .status(ReceivingLineStatus.EXPECTED)
                     .build());
@@ -657,63 +657,46 @@ public class ReceivingServiceImpl implements ReceivingService {
         return lines;
     }
 
-    private List<SourceDocumentLineStub> fetchSourceDocumentLines(
+    /**
+     * Resolves the source document's still-expected lines from the service that owns it (#1480).
+     * No stub, and no config flag whose default answers 404: an unresolvable document, an
+     * unreachable owner and a fully received document are three distinct answers now.
+     */
+    private List<SourceDocumentClient.SourceDocumentLine> fetchSourceDocumentLines(
             String sourceDocumentId, SourceDocumentType sourceDocumentType) {
-        String sourceService = resolveSourceDocumentService(sourceDocumentType);
+        log.info("Resolving source document {} {} from its owning service", sourceDocumentType, sourceDocumentId);
 
-        log.info(
-                "Stubbed source-document lookup via service {} for {} {}",
-                sourceService,
-                sourceDocumentType,
-                sourceDocumentId);
-
-        SourceDocumentStubClient.SourceDocumentLinesResponse sourceDocument =
-                sourceDocumentStubClient.fetchDocument(sourceService, sourceDocumentType, sourceDocumentId);
-        if (sourceDocument != null && sourceDocument.indicatesAlreadyReceived()) {
+        SourceDocumentClient.SourceDocument sourceDocument =
+                sourceDocumentClient.fetchDocument(sourceDocumentType, sourceDocumentId);
+        if (sourceDocument.alreadyReceived()) {
             throw new SourceDocumentAlreadyReceivedException(sourceDocumentId + " has already been fully received");
         }
-
-        List<SourceDocumentStubClient.SourceDocumentLineDto> stubLines =
-                sourceDocument != null ? sourceDocument.getLines() : null;
-
-        if (stubLines == null || stubLines.isEmpty()) {
-            throw new SourceDocumentNotFoundException("No receiving lines returned for " + sourceDocumentType + " "
-                    + sourceDocumentId + " from service " + sourceService);
+        if (sourceDocument.lines().isEmpty()) {
+            throw new SourceDocumentNotFoundException(
+                    "No receiving lines on " + sourceDocumentType + " " + sourceDocumentId);
         }
 
-        List<SourceDocumentLineStub> lines = new ArrayList<>(stubLines.size());
-        for (int i = 0; i < stubLines.size(); i++) {
-            lines.add(mapStubLine(stubLines.get(i), sourceDocumentId, i + 1));
+        List<SourceDocumentClient.SourceDocumentLine> lines = sourceDocument.lines();
+        for (int i = 0; i < lines.size(); i++) {
+            requireUsableLine(lines.get(i), sourceDocumentId, i + 1);
         }
         return lines;
     }
 
-    private SourceDocumentLineStub mapStubLine(
-            SourceDocumentStubClient.SourceDocumentLineDto stubLine, String sourceDocumentId, int lineNumber) {
-        String productId = stubLine != null ? stubLine.getProductId() : null;
+    private void requireUsableLine(
+            SourceDocumentClient.SourceDocumentLine line, String sourceDocumentId, int lineNumber) {
+        String productId = line.getProductId();
         if (productId == null || productId.isBlank()) {
             throw new IllegalStateException("Invalid source document line " + lineNumber + " for " + sourceDocumentId
                     + ": productId is required");
         }
 
-        // stubLine is guaranteed non-null here: the productId guard above throws when it is null (java:S2583).
-        BigDecimal expectedQuantity = stubLine.getExpectedQuantity();
+        BigDecimal expectedQuantity = line.getExpectedQuantity();
         if (expectedQuantity == null || expectedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("Invalid source document line " + lineNumber + " for " + sourceDocumentId
                     + ": expectedQuantity must be greater than 0");
         }
-
-        return new SourceDocumentLineStub(productId, expectedQuantity);
     }
-
-    private String resolveSourceDocumentService(SourceDocumentType sourceDocumentType) {
-        if (configuredSourceDocumentService != null && !configuredSourceDocumentService.isBlank()) {
-            return configuredSourceDocumentService;
-        }
-        return sourceDocumentType == SourceDocumentType.ASN ? "pos-shipments" : "pos-order";
-    }
-
-    private record SourceDocumentLineStub(String productId, BigDecimal expectedQuantity) {}
 
     private ReceivingSessionResponse mapToResponse(ReceivingSession session) {
         List<ReceivingLineResponse> lineResponses =

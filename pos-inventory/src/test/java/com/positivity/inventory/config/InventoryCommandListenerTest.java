@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.inventory.internal.config.InventoryCommandListener;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
+import com.positivity.inventory.internal.dto.picklist.GeneratePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
@@ -23,6 +24,7 @@ import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.inventory.service.OutboxReplayService;
+import com.positivity.inventory.service.PickListGenerationService;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.inventory.service.ReservationRequestService;
 import java.math.BigDecimal;
@@ -51,6 +53,7 @@ class InventoryCommandListenerTest {
 
     private final OutboxReplayService replayService = mock(OutboxReplayService.class);
     private final PickListService pickListService = mock(PickListService.class);
+    private final PickListGenerationService pickListGenerationService = mock(PickListGenerationService.class);
     private final ConsumptionService consumptionService = mock(ConsumptionService.class);
     private final ReservationRequestService reservationRequestHandler = mock(ReservationRequestService.class);
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
@@ -64,6 +67,7 @@ class InventoryCommandListenerTest {
                 new ObjectMapper(),
                 replayService,
                 pickListService,
+                pickListGenerationService,
                 consumptionService,
                 reservationRequestHandler,
                 processedEvents);
@@ -261,5 +265,76 @@ class InventoryCommandListenerTest {
                 """.formatted(since));
 
         verify(replayService).replaySince(eq(since.minusSeconds(1)));
+    }
+
+    private static final UUID WORKORDER_LINE_ID = UUID.fromString("00000000-0000-0000-0000-000000000006");
+
+    private String generateCommand(String commandId, String quantity) {
+        return """
+                {"commandType":"inventory.pick-list.generate-requested","commandId":"%s",
+                 "payload":{"workorderId":"%s","basePriority":0,
+                            "lineItems":[{"workorderLineId":"%s","sku":"%s","quantity":%s}]}}
+                """.formatted(commandId, WORKORDER_ID, WORKORDER_LINE_ID, SKU_ID, quantity);
+    }
+
+    /**
+     * #1479: promotion's generate command is what makes a promoted workorder's parts pickable at
+     * all — before it, getPickTasks answered 404 indefinitely.
+     */
+    @Test
+    @DisplayName("a generate command builds the workorder's pick list from its demand lines")
+    void generateRequestedBuildsThePickList() {
+        when(pickListGenerationService.generatePickList(any())).thenReturn(pickListResponse());
+
+        listener.onCommand(generateCommand("cmd-generate-1", "3"));
+
+        ArgumentCaptor<GeneratePickListRequest> captured = ArgumentCaptor.forClass(GeneratePickListRequest.class);
+        verify(pickListGenerationService).generatePickList(captured.capture());
+        assertThat(captured.getValue().getWorkorderId()).isEqualTo(WORKORDER_ID);
+        assertThat(captured.getValue().getLineItems()).hasSize(1);
+        GeneratePickListRequest.PickLineItem line =
+                captured.getValue().getLineItems().getFirst();
+        assertThat(line.getWorkorderLineId()).isEqualTo(WORKORDER_LINE_ID);
+        assertThat(line.getSku()).isEqualTo(SKU_ID.toString());
+        assertThat(line.getQuantity()).isEqualTo(3);
+    }
+
+    /** A divisible demand stages the next whole unit up; picking cannot take half a unit off a shelf. */
+    @Test
+    @DisplayName("a fractional demand quantity stages the next whole unit up")
+    void fractionalDemandStagesWholeUnits() {
+        when(pickListGenerationService.generatePickList(any())).thenReturn(pickListResponse());
+
+        listener.onCommand(generateCommand("cmd-generate-2", "1.4"));
+
+        ArgumentCaptor<GeneratePickListRequest> captured = ArgumentCaptor.forClass(GeneratePickListRequest.class);
+        verify(pickListGenerationService).generatePickList(captured.capture());
+        assertThat(captured.getValue().getLineItems().getFirst().getQuantity()).isEqualTo(2);
+    }
+
+    /** A re-promotion must not leave a second list behind: getPickTasks resolves the primary one. */
+    @Test
+    @DisplayName("a workorder that already has a pick list is left alone")
+    void existingPickListIsNotRegenerated() {
+        when(pickListService.hasPickList(WORKORDER_ID)).thenReturn(true);
+
+        listener.onCommand(generateCommand("cmd-generate-3", "3"));
+
+        verify(pickListGenerationService, never()).generatePickList(any());
+    }
+
+    @Test
+    @DisplayName("a generate command with no usable line generates nothing")
+    void generateWithNoUsableLineDoesNothing() {
+        listener.onCommand("""
+                {"commandType":"inventory.pick-list.generate-requested","commandId":"cmd-generate-4",
+                 "payload":{"workorderId":"%s","lineItems":[{"sku":"","quantity":0}]}}
+                """.formatted(WORKORDER_ID));
+
+        verify(pickListGenerationService, never()).generatePickList(any());
+    }
+
+    private static PickListResponse pickListResponse() {
+        return new PickListResponse(PICK_LIST_ID, WORKORDER_ID, PickListStatus.DRAFT, 0, null, null, null);
     }
 }
