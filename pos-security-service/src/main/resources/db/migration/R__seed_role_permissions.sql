@@ -45,11 +45,13 @@
 --   LOCATION_MANAGER, MANAGER and SHOP_MANAGER — mirroring the
 --   invoice:finalize:override precedent. Advisors create workorders
 --   (workorder:workorder:create) but cannot destroy them.
--- * SERVICE_ADVISOR holds the CRM onboarding surface (#1435):
---   crm:party:view/search/create and crm:person:read/create, so a walk-in
---   customer can be looked up, duplicate-checked and onboarded at the counter.
---   Deliberately NOT crm:party:edit/deactivate/merge — corrections and
---   destructive party operations stay manager-and-above.
+-- * SERVICE_ADVISOR holds the CRM onboarding surface (#1435, #1437):
+--   crm:party:view/search/create, crm:person:read/create and
+--   crm:vehicle:create (alongside its existing crm:vehicle:search/view), so a
+--   walk-in customer can be looked up, duplicate-checked, onboarded and have
+--   their vehicle registered at the counter. Deliberately NOT
+--   crm:party:edit/deactivate/merge — corrections and destructive party
+--   operations stay manager-and-above.
 -- * INVENTORY_LEAD is the parts-receiving persona (#1439): it holds the
 --   receiving surface (ASN, receiving sessions, goods receipts, cross-dock
 --   issue, putaway, shortages, on-hand visibility) plus purchase-order
@@ -1118,6 +1120,7 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'crm:party:view'),
     ('SERVICE_ADVISOR', 'crm:person:create'),
     ('SERVICE_ADVISOR', 'crm:person:read'),
+    ('SERVICE_ADVISOR', 'crm:vehicle:create'),
     ('SERVICE_ADVISOR', 'crm:vehicle:search'),
     ('SERVICE_ADVISOR', 'crm:vehicle:view'),
     ('SERVICE_ADVISOR', 'inventory:availability:read'),
