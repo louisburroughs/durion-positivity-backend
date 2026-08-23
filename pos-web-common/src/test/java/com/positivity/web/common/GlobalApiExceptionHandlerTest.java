@@ -128,6 +128,34 @@ class GlobalApiExceptionHandlerTest {
     }
 
     @Test
+    void malformedRequestBodyReturns400NotAnEnveloped500() throws Exception {
+        mockMvc.perform(post("/test/validated")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Malformed request body"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void invalidEnumValueInBodyReturns400() throws Exception {
+        mockMvc.perform(post("/test/enum")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"level\":\"NOT_A_LEVEL\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void parameterTypeMismatchReturns400() throws Exception {
+        mockMvc.perform(get("/test/typed/not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Invalid parameter value"));
+    }
+
+    @Test
     void frameworkErrorResponseExceptionKeepsItsStatusInsteadOfCollapsingTo500() throws Exception {
         mockMvc.perform(post("/test/boom"))
                 .andExpect(status().isMethodNotAllowed())
@@ -148,6 +176,13 @@ class GlobalApiExceptionHandlerTest {
     }
 
     record ValidatedRequest(@NotBlank String name) {}
+
+    enum TrackingLevel {
+        NONE,
+        SERIAL
+    }
+
+    record EnumRequest(TrackingLevel level) {}
 
     @RestController
     static class ThrowingController {
@@ -202,6 +237,16 @@ class GlobalApiExceptionHandlerTest {
         @PostMapping("/test/validated")
         String validated(@jakarta.validation.Valid @RequestBody ValidatedRequest request) {
             return request.name();
+        }
+
+        @PostMapping("/test/enum")
+        String enumBody(@RequestBody EnumRequest request) {
+            return request.level().name();
+        }
+
+        @GetMapping("/test/typed/{count}")
+        String typed(@org.springframework.web.bind.annotation.PathVariable int count) {
+            return Integer.toString(count);
         }
 
         @GetMapping("/test/denied")

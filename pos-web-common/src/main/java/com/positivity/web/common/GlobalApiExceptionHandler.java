@@ -12,12 +12,15 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.ConversionNotSupportedException;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -180,6 +183,48 @@ public class GlobalApiExceptionHandler {
                         Instant.now(clock).toString(),
                         correlationId,
                         fieldErrors));
+    }
+
+    /**
+     * Unreadable request bodies (malformed JSON, invalid enum values). Unlike most Spring MVC
+     * web exceptions this type does not implement {@link ErrorResponse}, so without this
+     * handler the catch-all below would turn a client's 400 into a 500.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleMessageNotReadable(
+            @NonNull HttpMessageNotReadableException ex,
+            @Nullable HttpServletRequest request,
+            @NonNull HttpServletResponse response) {
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+        log.warn(
+                "Unreadable request body on {} [correlationId={}]: {}",
+                request != null ? request.getRequestURI() : "",
+                correlationId,
+                ex.getMessage());
+        return envelope(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Malformed request body", correlationId);
+    }
+
+    /**
+     * Parameter/path-variable conversion failures. {@link ConversionNotSupportedException}
+     * means a missing server-side converter, so it stays a 500 via the catch-all; every other
+     * type mismatch is the client's 400. Neither implements {@link ErrorResponse} on all
+     * supported Spring lines, hence the explicit handler.
+     */
+    @ExceptionHandler(TypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(
+            @NonNull TypeMismatchException ex,
+            @Nullable HttpServletRequest request,
+            @NonNull HttpServletResponse response) {
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+        String path = request != null ? request.getRequestURI() : "";
+        if (ex instanceof ConversionNotSupportedException) {
+            log.error("No converter for parameter on {} [correlationId={}]", path, correlationId, ex);
+            return internalError(correlationId);
+        }
+        log.warn("Parameter type mismatch on {} [correlationId={}]: {}", path, correlationId, ex.getMessage());
+        return envelope(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid parameter value", correlationId);
     }
 
     /**
