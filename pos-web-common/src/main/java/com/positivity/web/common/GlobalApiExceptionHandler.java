@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.core.Ordered;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
@@ -47,6 +49,9 @@ public class GlobalApiExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalApiExceptionHandler.class);
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
+
+    /** Bound on the cause-chain walk in {@link #findResponseStatus}, in case of a cyclic chain. */
+    private static final int MAX_CAUSE_DEPTH = 10;
 
     /**
      * Spring Security exceptions must reach the security filter chain's entry point /
@@ -234,8 +239,8 @@ public class GlobalApiExceptionHandler {
      * The catch-all ADR-0017 implies and issue #1471 makes explicit: whatever reaches here
      * leaves with the envelope and a correlation id, and the stack trace is logged at ERROR
      * against that id. Spring Security exceptions are rethrown so the filter chain renders
-     * its 401/403; framework {@link ErrorResponse} exceptions keep their own status instead
-     * of collapsing to 500.
+     * its 401/403; framework {@link ErrorResponse} exceptions and domain exceptions carrying
+     * {@link ResponseStatus @ResponseStatus} keep their own status instead of collapsing to 500.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnhandled(
@@ -261,8 +266,51 @@ public class GlobalApiExceptionHandler {
             }
         }
 
+        ResponseStatus annotated = findResponseStatus(ex);
+        if (annotated != null) {
+            HttpStatusCode status = annotated.code();
+            String message = annotated.reason().isBlank() ? declaredErrorMessage(status) : annotated.reason();
+            if (status.is5xxServerError()) {
+                log.error(
+                        "{} on {} [correlationId={}]: status={}",
+                        ex.getClass().getSimpleName(),
+                        path,
+                        correlationId,
+                        status.value(),
+                        ex);
+            } else {
+                log.warn(
+                        "{} on {} [correlationId={}]: status={}",
+                        ex.getClass().getSimpleName(),
+                        path,
+                        correlationId,
+                        status.value());
+            }
+            return envelope(status, frameworkErrorCode(status), message, correlationId);
+        }
+
         log.error("Unhandled exception on {} [correlationId={}]", path, correlationId, ex);
         return internalError(correlationId);
+    }
+
+    /**
+     * Mirrors {@code ResponseStatusExceptionResolver}: the status a domain exception declares
+     * via {@link ResponseStatus @ResponseStatus}, on the exception itself or anywhere in its
+     * cause chain. Without this lookup the catch-all above would pre-empt that resolver — it
+     * runs first — and collapse every annotated 404/409 to a 500 (issue #1471 regression).
+     */
+    @Nullable
+    private static ResponseStatus findResponseStatus(Throwable ex) {
+        Throwable current = ex;
+        for (int depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+            ResponseStatus status =
+                    AnnotatedElementUtils.findMergedAnnotation(current.getClass(), ResponseStatus.class);
+            if (status != null) {
+                return status;
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return null;
     }
 
     private ResponseEntity<ApiError> internalError(String correlationId) {
@@ -285,12 +333,35 @@ public class GlobalApiExceptionHandler {
     private static String frameworkErrorCode(HttpStatusCode status) {
         return switch (status.value()) {
             case 400 -> "VALIDATION_ERROR";
+            case 401 -> "UNAUTHORIZED";
+            case 403 -> "FORBIDDEN";
             case 404 -> "NOT_FOUND";
             case 405 -> "METHOD_NOT_ALLOWED";
             case 406 -> "NOT_ACCEPTABLE";
+            case 409 -> "CONFLICT";
             case 413 -> "PAYLOAD_TOO_LARGE";
             case 415 -> "UNSUPPORTED_MEDIA_TYPE";
+            case 422 -> "UNPROCESSABLE_CONTENT";
+            case 500 -> "INTERNAL_ERROR";
             default -> "REQUEST_REJECTED";
+        };
+    }
+
+    /**
+     * Messages for exceptions that declare a status but no {@code reason}. Generic for the
+     * same reason as {@link #frameworkErrorMessage}: the exception's own message routinely
+     * embeds the identifier or value the client sent, and this envelope must not reflect it
+     * (SonarCloud S5131). The correlation id ties the response to the logged exception.
+     */
+    private static String declaredErrorMessage(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 400 -> "Request was rejected";
+            case 401 -> "Authentication is required";
+            case 403 -> "Access is denied";
+            case 404 -> "Requested resource was not found";
+            case 409 -> "Request conflicts with the current state of the resource";
+            case 422 -> "Request could not be processed";
+            default -> status.is5xxServerError() ? "Unexpected error occurred" : "Request rejected";
         };
     }
 
