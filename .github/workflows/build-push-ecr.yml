@@ -97,7 +97,11 @@ jobs:
 
           CHANGED_FILES="$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)"
 
-          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|postgres/.*|deployment/alpha/docker-compose\.prod\.yml|\.github/workflows/build-push-ecr\.yml)$'; then
+          # deployment/alpha/docker-compose.prod.yml is deliberately NOT in this list:
+          # the override never affects image contents, and config-only changes to it
+          # ship through the sync-alpha-config workflow (#1457) instead of forcing a
+          # 24-image rebuild. docker-compose.yml stays because it carries build contexts.
+          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|docker-compose\.yml|postgres/.*|\.github/workflows/build-push-ecr\.yml)$'; then
             SERVICES_JSON="${ALL_SERVICES_JSON}"
             MODULES_CSV="$(jq -r 'join(",")' <<< "${SERVICES_JSON}")"
             echo "services=${SERVICES_JSON}" >> "$GITHUB_OUTPUT"
@@ -406,6 +410,14 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
 
+      - name: Compute committed config checksums
+        id: sums
+        # deploy-backend.sh verifies these against the on-box files (#1457), so a deploy
+        # can never silently run against a stale compose override.
+        run: |
+          echo "prod=$(sha256sum deployment/alpha/docker-compose.prod.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "base=$(sha256sum docker-compose.yml | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
       - name: Deploy backend services on alpha host
         env:
           SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
@@ -413,7 +425,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"

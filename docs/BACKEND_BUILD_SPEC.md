@@ -352,6 +352,12 @@ Target end-state for `main`:
 The `sha-<short>` image-tagging scheme, per-service `scope=` BuildKit caches, and the alpha
 deploy flow are unchanged.
 
+Config-only alpha changes (compose files, `deploy-backend.sh`) do not go through this pipeline
+at all: `sync-alpha-config.yml` ships them directly to the box and applies them with
+`deploy-backend.sh --config-only` (#1457). Correspondingly,
+`deployment/alpha/docker-compose.prod.yml` is not in `build-push-ecr.yml`'s full-rebuild
+trigger list — it never affects image contents.
+
 ### 4.7 Local developer commands (unchanged semantics, documented defaults)
 
 ```bash

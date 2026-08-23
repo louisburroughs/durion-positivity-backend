@@ -44,6 +44,26 @@ cd durion-positivity-backend
 ./mvnw -e -U -DskipTests=false -DfailIfNoTests=false clean package
 ```
 
+### Alpha deployment paths (#1457)
+
+Two workflows deliver changes to the alpha EC2 box; which one runs depends on what changed:
+
+- **Code changes** — `build-push-ecr.yml` (auto after a green `Backend CI/CD` main run, or
+  manual dispatch with `deploy_alpha`). Builds/promotes images, uploads the compose files to S3,
+  pulls them onto the box over SSM, and runs `deploy-backend.sh <sha>` (full deploy:
+  retag + pull + `--force-recreate`).
+- **Config-only changes** to `docker-compose.yml`, `deployment/alpha/docker-compose.prod.yml`,
+  or `deployment/alpha/deploy-backend.sh` — `sync-alpha-config.yml` (auto on merge to `main`
+  touching those paths, or manual dispatch). Uploads the committed files, pulls them onto the
+  box, and runs `deploy-backend.sh --config-only`, which **recreates** exactly the containers
+  whose merged compose config changed. Recreation matters: a plain `docker restart` keeps the
+  old environment, so new `environment:` values would never apply.
+
+Both paths pass the committed files' sha256 digests (`PROD_OVERRIDE_SHA256`,
+`BASE_COMPOSE_SHA256`) into `deploy-backend.sh`, which refuses to compose against an on-box file
+that does not match — a stale override is a loud failure, not a silent no-op. `--config-only`
+also refuses to run on a box that has never had a full deploy (no `BACKEND_TAG` in `.env`).
+
 ### Health and Readiness Checks
 
 ```bash
@@ -449,12 +469,26 @@ consumers record their eventIds and skip them.
 Producers write events to their `event_outbox` table in the business transaction; a scheduled
 publisher drains to Kafka (at-least-once). Operational signals:
 
-- Metrics: `workorder.outbox.published`, `workorder.outbox.publish.failures` (counter deltas);
-  a growing gap means the drain is failing.
+- Metrics (per module, whenever its Kafka flag is on): `<domain>.outbox.published` /
+  `<domain>.outbox.publish.failures` counters, plus `<domain>.outbox.pending` and
+  `<domain>.outbox.oldest.age.seconds` gauges (`OutboxHealthContributor`, shared in `pos-events`;
+  registered by each module's `OutboxHealthConfig` — #1458). A growing published/failures gap or
+  a growing oldest-age means the drain is failing.
+- Health: `/actuator/health` carries an `outbox` component with `drainState`
+  (`drained` / `draining` / `stalled-never-attempted` / `stalled-retrying`), the head row's age,
+  `attempts`, and truncated `last_error` (details visible under `show-details: when-authorized`).
+  It is **always UP by design** — a stalled drain stales downstream replicas but does not stop
+  the service, and a DOWN here would restart-loop containers via the compose healthcheck. Alert
+  on the gauges, read the details when diagnosing. Note there is deliberately **no broker-ping
+  health indicator**: Spring Boot ships none, and the two failure modes a ping would miss
+  (publisher not scheduled at all, poison row retrying forever) are exactly the ones
+  `drainState` distinguishes; broker/consumer state is `kafka-exporter`'s job.
 - `SELECT count(*) FROM event_outbox WHERE published_at IS NULL` — sustained growth means the
   broker is unreachable or the publisher is stopped; check `attempts`/`last_error` on stuck rows.
 - The publisher halts its batch at the first failure to preserve order — one poisoned/oversized
-  record blocks the drain; inspect the oldest unpublished row first.
+  record blocks the drain; inspect the oldest unpublished row first
+  (`stalled-never-attempted` with `attempts = 0` means the publisher is not running at all —
+  check the module's Kafka flag actually reached the container, see #1456/#1457).
 
 ### Dashboards and alerts (#838)
 
@@ -467,7 +501,8 @@ Provisioned alert thresholds (dashboard-only delivery in alpha):
 
 | Signal | Warn | Critical |
 |---|---|---|
-| Oldest unpublished outbox row | > 5 min | > 15 min |
+| Oldest unpublished outbox row (every outbox service, per `service` label — #1458) | > 5 min | > 15 min |
+| Unpublished outbox backlog (every outbox service) | > 1000 rows for 10 min | — |
 | Consumer group lag | > 100 records for 5 min | — |
 | DLQ message | any | — |
 | `replica_drift_total` | any increase | — |

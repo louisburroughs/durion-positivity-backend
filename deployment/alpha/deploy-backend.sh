@@ -1,8 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GITHUB_SHA="${1:?GITHUB_SHA argument required}"
-IMAGE_TAG="sha-${GITHUB_SHA::7}"
+# Usage:
+#   deploy-backend.sh <GITHUB_SHA>     full deploy: retag, pull, force-recreate the stack
+#   deploy-backend.sh --config-only    apply the on-box compose files to the running stack
+#
+# --config-only (#1457) is the delivery path for compose-file changes that need no image
+# build: sync-alpha-config pulls the committed files from S3 and runs this mode, and
+# `docker compose up -d` WITHOUT --force-recreate then recreates exactly the containers
+# whose merged config changed (a plain restart would not pick up new environment values)
+# while leaving the rest untouched. Image tags, database reconciliation, and the
+# observability secret render are full-deploy concerns and are skipped.
+MODE="full"
+if [[ "${1:-}" == "--config-only" ]]; then
+  MODE="config-only"
+  shift
+fi
+
+if [[ "${MODE}" == "full" ]]; then
+  GITHUB_SHA="${1:?GITHUB_SHA argument required}"
+  IMAGE_TAG="sha-${GITHUB_SHA::7}"
+fi
 
 ALPHA_ROOT="${ALPHA_ROOT:-/opt/durion/alpha}"
 BACKEND_DIR="${BACKEND_DIR:-${ALPHA_ROOT}/backend}"
@@ -13,6 +31,41 @@ DOCKER_PRUNE_STATE_FILE="${DOCKER_PRUNE_STATE_FILE:-${ALPHA_ROOT}/.last-docker-p
 
 env_single_quote() {
   printf "'%s'" "${1//\'/\'\"\'\"\'}"
+}
+
+# Drift guard (#1457): the box only ever receives compose files through an S3 pull, and a
+# deploy that runs against yesterday's file is a silent no-op for config changes. Callers
+# that know the committed digests (both deploy workflows compute them from the checkout)
+# pass PROD_OVERRIDE_SHA256 / BASE_COMPOSE_SHA256; a mismatch stops the deploy loudly
+# instead of applying stale config. Unset digests skip the check, so manual on-box runs
+# still work.
+verify_checksum() {
+  local label="$1" file="$2" expected="$3"
+  if [[ -z "${expected}" ]]; then
+    return 0
+  fi
+  local actual
+  actual="$(sha256sum "${file}" | awk '{print $1}')"
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "ERROR: on-box ${label} (${file}) does not match the committed version." >&2
+    echo "  expected sha256: ${expected}" >&2
+    echo "  on-box   sha256: ${actual}" >&2
+    echo "The file is stale — the S3 pull did not happen or was raced. Re-run the" >&2
+    echo "sync-alpha-config workflow (or the build-push-ecr deploy) so the pull and this" >&2
+    echo "script run as one unit." >&2
+    exit 1
+  fi
+  echo "${label} matches committed sha256 ${expected}"
+}
+
+require_env_entry() {
+  local key="$1"
+  if ! grep -q "^${key}=" "${ENV_FILE}"; then
+    echo "ERROR: ${key} missing from ${ENV_FILE} — the stack has never been fully deployed" >&2
+    echo "on this box. Config-only sync can only update a running stack; run the" >&2
+    echo "build-push-ecr deploy first." >&2
+    exit 1
+  fi
 }
 
 should_run_docker_prune() {
@@ -174,37 +227,48 @@ BACKEND_SERVICES=(
   "${DOMAIN_SERVICES[@]}"
 )
 
-if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
-  sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=${IMAGE_TAG}/" "${ENV_FILE}"
+verify_checksum "prod override" "${PROD_OVERRIDE}" "${PROD_OVERRIDE_SHA256:-}"
+verify_checksum "base compose" "${BACKEND_DIR}/docker-compose.yml" "${BASE_COMPOSE_SHA256:-}"
+
+if [[ "${MODE}" == "config-only" ]]; then
+  # The compose interpolation still needs these; a full deploy wrote them to the env
+  # file, and config-only never changes them.
+  require_env_entry BACKEND_TAG
+  require_env_entry ECR_REGISTRY
+  require_env_entry SECURITY_SEED_ADMIN_PASSWORD_HASH
 else
-  printf '\nBACKEND_TAG=%s\n' "${IMAGE_TAG}" >> "${ENV_FILE}"
-fi
+  if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
+    sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=${IMAGE_TAG}/" "${ENV_FILE}"
+  else
+    printf '\nBACKEND_TAG=%s\n' "${IMAGE_TAG}" >> "${ENV_FILE}"
+  fi
 
-if [[ -z "${SECURITY_SEED_ADMIN_PASSWORD_HASH:-}" ]]; then
-  echo "SECURITY_SEED_ADMIN_PASSWORD_HASH is required."
-  exit 1
-fi
-if [[ ! "${SECURITY_SEED_ADMIN_PASSWORD_HASH}" =~ ^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$ ]]; then
-  echo "SECURITY_SEED_ADMIN_PASSWORD_HASH must be a valid BCrypt hash (expected prefix \$2a\$, \$2b\$, or \$2y\$)." >&2
-  exit 1
-fi
+  if [[ -z "${SECURITY_SEED_ADMIN_PASSWORD_HASH:-}" ]]; then
+    echo "SECURITY_SEED_ADMIN_PASSWORD_HASH is required."
+    exit 1
+  fi
+  if [[ ! "${SECURITY_SEED_ADMIN_PASSWORD_HASH}" =~ ^\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}$ ]]; then
+    echo "SECURITY_SEED_ADMIN_PASSWORD_HASH must be a valid BCrypt hash (expected prefix \$2a\$, \$2b\$, or \$2y\$)." >&2
+    exit 1
+  fi
 
-QUOTED_SECURITY_SEED_ADMIN_PASSWORD_HASH="$(env_single_quote "${SECURITY_SEED_ADMIN_PASSWORD_HASH}")"
-if grep -q '^SECURITY_SEED_ADMIN_PASSWORD_HASH=' "${ENV_FILE}"; then
-  sed -i "s|^SECURITY_SEED_ADMIN_PASSWORD_HASH=.*|SECURITY_SEED_ADMIN_PASSWORD_HASH=${QUOTED_SECURITY_SEED_ADMIN_PASSWORD_HASH}|" "${ENV_FILE}"
-else
-  printf 'SECURITY_SEED_ADMIN_PASSWORD_HASH=%s\n' "${QUOTED_SECURITY_SEED_ADMIN_PASSWORD_HASH}" >> "${ENV_FILE}"
-fi
+  QUOTED_SECURITY_SEED_ADMIN_PASSWORD_HASH="$(env_single_quote "${SECURITY_SEED_ADMIN_PASSWORD_HASH}")"
+  if grep -q '^SECURITY_SEED_ADMIN_PASSWORD_HASH=' "${ENV_FILE}"; then
+    sed -i "s|^SECURITY_SEED_ADMIN_PASSWORD_HASH=.*|SECURITY_SEED_ADMIN_PASSWORD_HASH=${QUOTED_SECURITY_SEED_ADMIN_PASSWORD_HASH}|" "${ENV_FILE}"
+  else
+    printf 'SECURITY_SEED_ADMIN_PASSWORD_HASH=%s\n' "${QUOTED_SECURITY_SEED_ADMIN_PASSWORD_HASH}" >> "${ENV_FILE}"
+  fi
 
-ECR_REGISTRY="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com"
-if grep -q '^ECR_REGISTRY=' "${ENV_FILE}"; then
-  sed -i "s|^ECR_REGISTRY=.*|ECR_REGISTRY=${ECR_REGISTRY}|" "${ENV_FILE}"
-else
-  printf 'ECR_REGISTRY=%s\n' "${ECR_REGISTRY}" >> "${ENV_FILE}"
-fi
+  ECR_REGISTRY="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com"
+  if grep -q '^ECR_REGISTRY=' "${ENV_FILE}"; then
+    sed -i "s|^ECR_REGISTRY=.*|ECR_REGISTRY=${ECR_REGISTRY}|" "${ENV_FILE}"
+  else
+    printf 'ECR_REGISTRY=%s\n' "${ECR_REGISTRY}" >> "${ENV_FILE}"
+  fi
 
-aws ecr get-login-password --region us-east-1 \
-  | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+  aws ecr get-login-password --region us-east-1 \
+    | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+fi
 
 cd "${BACKEND_DIR}"
 
@@ -213,6 +277,40 @@ COMPOSE_ARGS=(
   -f "${PROD_OVERRIDE}"
   --env-file "${ENV_FILE}"
 )
+
+# Config-only sync (#1457): no pulls, no --force-recreate — compose's config-hash diff
+# recreates exactly the containers whose merged config changed and leaves the rest
+# running. The full deploy's tier order is kept so a sweeping change (e.g. to the shared
+# logging anchor, which touches every service) still starts JVMs in gated batches
+# instead of all at once.
+if [[ "${MODE}" == "config-only" ]]; then
+  echo "Config-only sync: recreating only containers whose compose config changed."
+
+  echo "Applying config to postgres"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" postgres
+
+  echo "Applying config to observability services: ${OBSERVABILITY_SERVICES[*]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d "${OBSERVABILITY_SERVICES[@]}"
+
+  echo "Applying config to Kafka broker and exporter"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" kafka
+  docker compose "${COMPOSE_ARGS[@]}" up -d kafka-exporter
+
+  echo "Applying config to core services: ${CORE_SERVICES[*]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
+
+  echo "Applying config to platform services: ${PLATFORM_SERVICES[*]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
+
+  for ((i = 0; i < ${#DOMAIN_SERVICES[@]}; i += DOMAIN_BATCH_SIZE)); do
+    BATCH=("${DOMAIN_SERVICES[@]:i:DOMAIN_BATCH_SIZE}")
+    echo "Applying config to domain services (batch $((i / DOMAIN_BATCH_SIZE + 1))): ${BATCH[*]}"
+    docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${BATCH[@]}"
+  done
+
+  docker compose "${COMPOSE_ARGS[@]}" ps
+  exit 0
+fi
 
 DESIRED_POSTGRES_IMAGE="$(
   docker compose "${COMPOSE_ARGS[@]}" config \
