@@ -50,7 +50,8 @@ class CommercialCustomerNumberIT {
             CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
             request.setLegalName("Back to back " + i);
             request.setDisplayName("Back to back " + i);
-            request.setPartyType("PERSON");
+            // COMMERCIAL is the path under test, and the service's own default.
+            request.setPartyType("COMMERCIAL");
 
             // Before the fix this threw on the second iteration: same customer number, unique
             // constraint. The loop is what the old code could not survive.
@@ -61,5 +62,14 @@ class CommercialCustomerNumberIT {
                 .as("every account must carry its own customer number")
                 .doesNotHaveDuplicates()
                 .allSatisfy(number -> assertThat(number).matches("CUST-[0-9A-Z]{8}"));
+
+        // The sequence starts beyond anything the old scheme could render, so a generated
+        // number can never equal a historical one. 'FFFFFFFF' read as base-36 is the largest
+        // value 8 hex characters can reach.
+        long largestHistoricalValue = Long.parseLong("FFFFFFFF", 36);
+        assertThat(customerNumbers)
+                .as("generated numbers must sit above every value the UUID-derived scheme could produce")
+                .allSatisfy(number -> assertThat(Long.parseLong(number.substring("CUST-".length()), 36))
+                        .isGreaterThan(largestHistoricalValue));
     }
 }
