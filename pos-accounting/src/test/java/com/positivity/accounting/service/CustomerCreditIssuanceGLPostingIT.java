@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import com.positivity.accounting.internal.service.OutboxProcessor;
 import com.positivity.accounting.internal.service.PaymentApplicationServiceImpl;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -41,6 +42,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
@@ -126,6 +128,15 @@ class CustomerCreditIssuanceGLPostingIT {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    /**
+     * The real bean's 5-second poll would dispatch PENDING outbox rows concurrently with the
+     * deterministic {@link #drainOutbox()} calls and the {@code @AfterEach} cleanup, leaking
+     * another test's GL postings into this one's account sums. Mocking it keeps every dispatch
+     * on the test thread.
+     */
+    @MockitoBean
+    private OutboxProcessor outboxProcessor;
 
     @AfterEach
     void cleanUp() {
