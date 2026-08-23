@@ -21,10 +21,13 @@ public class JpaAuditingConfig {
 
     /**
      * Supplies {@code @CreatedBy} / {@code @LastModifiedBy}. Auditing was enabled here without one,
-     * so those fields stayed null and every insert into a table with a NOT NULL {@code created_by}
-     * - purchase_order, sales_order, return_order - failed on the constraint. The "system" fallback
-     * matches pos-inventory and pos-customer: an event-driven or scheduled write has no
-     * authenticated principal but still has to name an author.
+     * so those fields stayed null and every insert of an audited entity failed on its NOT NULL
+     * {@code created_by}: {@link com.positivity.order.internal.entity.PurchaseOrderEntity} and
+     * {@link com.positivity.order.internal.entity.PriceOverride} are the two that depend on
+     * auditing. SalesOrder and ReturnOrder carry the same NOT NULL column but populate it in their
+     * services, which is why they kept working. The "system" fallback matches pos-inventory and
+     * pos-customer: an event-driven or scheduled write has no authenticated principal but still
+     * has to name an author.
      */
     @Bean
     AuditorAware<String> auditorAware() {

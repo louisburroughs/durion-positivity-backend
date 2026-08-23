@@ -72,11 +72,15 @@ class PurchaseOrderAuditingIT {
         UUID created =
                 purchaseOrderService.createPurchaseOrder(request, "actor-1").getPurchaseOrderId();
 
+        // The exact value, not merely non-null: this test has no authenticated principal, so
+        // auditing is the only thing that can produce "system". A non-null assertion would still
+        // pass if someone set createdBy on the builder or gave the column a default, which is
+        // precisely the shape of the bug it exists to catch.
         assertThat(purchaseOrderRepository.findById(created))
                 .as("the order must persist rather than fail the created_by NOT NULL constraint")
                 .get()
                 .extracting(po -> po.getCreatedBy())
-                .as("auditing must supply createdBy; nothing in the create path sets it by hand")
-                .isNotNull();
+                .as("AuditorAware must supply createdBy, falling back to \"system\" with no principal")
+                .isEqualTo("system");
     }
 }
