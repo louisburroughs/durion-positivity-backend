@@ -197,11 +197,12 @@ public class GlobalApiExceptionHandler {
             @NonNull HttpServletResponse response) {
         String correlationId = resolveCorrelationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
-        log.warn(
-                "Unreadable request body on {} [correlationId={}]: {}",
+        // Deliberately not logging ex.getMessage(): parser messages echo user-supplied body
+        // content, and a routine client 400 is DEBUG-level noise. The correlation id is enough.
+        log.debug(
+                "Unreadable request body on {} [correlationId={}]",
                 request != null ? request.getRequestURI() : "",
-                correlationId,
-                ex.getMessage());
+                correlationId);
         return envelope(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Malformed request body", correlationId);
     }
 
@@ -223,7 +224,9 @@ public class GlobalApiExceptionHandler {
             log.error("No converter for parameter on {} [correlationId={}]", path, correlationId, ex);
             return internalError(correlationId);
         }
-        log.warn("Parameter type mismatch on {} [correlationId={}]: {}", path, correlationId, ex.getMessage());
+        // Same reasoning as handleMessageNotReadable: the exception message echoes the
+        // user-supplied value, and a client 400 is DEBUG-level noise.
+        log.debug("Parameter type mismatch on {} [correlationId={}]", path, correlationId);
         return envelope(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid parameter value", correlationId);
     }
 
@@ -309,7 +312,7 @@ public class GlobalApiExceptionHandler {
         if (correlationId == null || correlationId.isBlank()) {
             return UUIDv7Generator.generate().toString();
         }
-        return correlationId;
+        return correlationId.trim();
     }
 
     private static String withIdentifier(String message, @Nullable String identifier) {

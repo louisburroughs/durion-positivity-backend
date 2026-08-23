@@ -67,6 +67,13 @@ class GlobalApiExceptionHandlerTest {
     }
 
     @Test
+    void clientCorrelationIdIsTrimmedBeforeEchoing() throws Exception {
+        mockMvc.perform(get("/test/boom").header("X-Correlation-Id", "  corr-123  "))
+                .andExpect(header().string("X-Correlation-Id", "corr-123"))
+                .andExpect(jsonPath("$.correlationId").value("corr-123"));
+    }
+
+    @Test
     void uniqueConstraintViolationReturns409NamingTheConstraint() throws Exception {
         mockMvc.perform(get("/test/duplicate"))
                 .andExpect(status().isConflict())
