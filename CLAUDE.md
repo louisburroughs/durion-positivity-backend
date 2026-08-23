@@ -95,7 +95,8 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
 |---|---|
 | `pos-events` | `@EmitEvent` AOP annotation + event publishing to `pos-event-receiver` |
 | `pos-shared-dtos` | Shared request/response/error DTOs (`ApiError`, etc.) |
-| `pos-security-common` | Shared security utilities |
+| `pos-web-common` | Auto-configured global exception handler (`ApiError` envelope + correlation id fallback) |
+| `pos-security-common` | Shared security utilities (re-exports `pos-web-common`) |
 | `pos-tax-common` | Shared tax DTOs/enums |
 | `pos-bulk-ingest-lib` / `pos-document-helper` | Bulk import / document generation helpers |
 | `pos-dependencies` | Internal BOM for internal artifact versions |

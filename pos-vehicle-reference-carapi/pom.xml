@@ -69,6 +69,12 @@
             <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Shared global exception handling: ApiError envelope + correlation id (issue #1471) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-web-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>

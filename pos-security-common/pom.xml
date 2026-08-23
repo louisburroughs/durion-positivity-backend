@@ -24,6 +24,15 @@
     <packaging>jar</packaging>
 
     <dependencies>
+        <!-- Shared web MVC concerns (issue #1471): deliberately a compile dependency so every
+             service that uses gateway security transitively gets the auto-configured
+             GlobalApiExceptionHandler (ApiError envelope + correlation id on unmapped exceptions). -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-web-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

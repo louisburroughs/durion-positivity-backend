@@ -91,6 +91,12 @@
             <artifactId>pos-shared-dtos</artifactId>
         </dependency>
 
+        <!-- Shared global exception handling: ApiError envelope + correlation id (issue #1471) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-web-common</artifactId>
+        </dependency>
+
 
 
         <!-- OpenAPI/Swagger documentation -->
