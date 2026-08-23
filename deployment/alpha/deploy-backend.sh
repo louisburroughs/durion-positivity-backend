@@ -156,6 +156,40 @@ reconcile_databases() {
   done
 }
 
+# Inject the real Prometheus scrape secret into the deployed prometheus.yml (#863).
+# The committed file ships the local-dev default so `docker-compose up` works
+# out of the box; here we swap it for the real secret from the alpha env so
+# Prometheus authenticates against the pos-* /actuator/prometheus endpoints.
+# Prometheus static config cannot read env vars, hence the in-place render. Runs
+# in both deploy modes: config-only re-ships the observability tree, so the
+# placeholder must be re-rendered every time the files are refreshed.
+render_prometheus_secret() {
+  local prom_config="${BACKEND_DIR}/observability/prometheus.yml"
+  local scrape_pw
+  scrape_pw="$(grep -E '^POS_SECURITY_METRICS_SCRAPE_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2-)"
+  if [[ -n "${scrape_pw}" && -f "${prom_config}" ]]; then
+    echo "Injecting Prometheus scrape secret into ${prom_config}"
+    python3 - "${prom_config}" "${scrape_pw}" <<'PY'
+import sys
+path, secret = sys.argv[1], sys.argv[2]
+# Strip one layer of surrounding quotes from the env value, if present.
+if len(secret) >= 2 and secret[0] == secret[-1] and secret[0] in ("'", '"'):
+    secret = secret[1:-1]
+# The placeholder sits inside a YAML single-quoted scalar (password: '...'),
+# so escape any single quote by doubling it — otherwise a secret containing '
+# would break the YAML and crash Prometheus.
+secret_yaml = secret.replace("'", "''")
+with open(path) as fh:
+    content = fh.read()
+content = content.replace("durion-local-prom-scrape-password", secret_yaml)
+with open(path, "w") as fh:
+    fh.write(content)
+PY
+  else
+    echo "Warning: POS_SECURITY_METRICS_SCRAPE_PASSWORD not set or ${prom_config} missing; Prometheus scrapes will use the committed default and likely 401." >&2
+  fi
+}
+
 OBSERVABILITY_SERVICES=(
   jaeger
   prometheus
@@ -278,23 +312,35 @@ COMPOSE_ARGS=(
   --env-file "${ENV_FILE}"
 )
 
-# Config-only sync (#1457): no pulls, no --force-recreate — compose's config-hash diff
-# recreates exactly the containers whose merged config changed and leaves the rest
-# running. The full deploy's tier order is kept so a sweeping change (e.g. to the shared
-# logging anchor, which touches every service) still starts JVMs in gated batches
-# instead of all at once.
+# Config-only sync (#1457): no image pulls, no --force-recreate for the JVM services —
+# compose's config-hash diff recreates exactly the containers whose merged config changed
+# and leaves the rest running. The full deploy's tier order is kept so a sweeping change
+# (e.g. to the shared logging anchor, which touches every service) still starts JVMs in
+# gated batches instead of all at once. Observability containers ARE force-recreated
+# (mirroring the full deploy): their configs are bind-mounted files this sync just
+# refreshed, which compose's config hash cannot see. kafka-topic-init and database
+# reconciliation also run, so topic-definition and init-databases.sql changes —
+# config-only changes too — take effect.
 if [[ "${MODE}" == "config-only" ]]; then
   echo "Config-only sync: recreating only containers whose compose config changed."
 
   echo "Applying config to postgres"
   docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" postgres
 
+  render_prometheus_secret
+
   echo "Applying config to observability services: ${OBSERVABILITY_SERVICES[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d "${OBSERVABILITY_SERVICES[@]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${OBSERVABILITY_SERVICES[@]}"
 
   echo "Applying config to Kafka broker and exporter"
   docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" kafka
+
+  echo "Provisioning Kafka topics"
+  docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
+
   docker compose "${COMPOSE_ARGS[@]}" up -d kafka-exporter
+
+  reconcile_databases
 
   echo "Applying config to core services: ${CORE_SERVICES[*]}"
   docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
@@ -328,34 +374,7 @@ if [[ -n "${DESIRED_POSTGRES_IMAGE}" && "${CURRENT_POSTGRES_IMAGE}" != "${DESIRE
   docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate postgres
 fi
 
-# Inject the real Prometheus scrape secret into the deployed prometheus.yml (#863).
-# The committed file ships the local-dev default so `docker-compose up` works
-# out of the box; here we swap it for the real secret from the alpha env so
-# Prometheus authenticates against the pos-* /actuator/prometheus endpoints.
-# Prometheus static config cannot read env vars, hence the in-place render.
-PROM_CONFIG="${BACKEND_DIR}/observability/prometheus.yml"
-SCRAPE_PW="$(grep -E '^POS_SECURITY_METRICS_SCRAPE_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2-)"
-if [[ -n "${SCRAPE_PW}" && -f "${PROM_CONFIG}" ]]; then
-  echo "Injecting Prometheus scrape secret into ${PROM_CONFIG}"
-  python3 - "${PROM_CONFIG}" "${SCRAPE_PW}" <<'PY'
-import sys
-path, secret = sys.argv[1], sys.argv[2]
-# Strip one layer of surrounding quotes from the env value, if present.
-if len(secret) >= 2 and secret[0] == secret[-1] and secret[0] in ("'", '"'):
-    secret = secret[1:-1]
-# The placeholder sits inside a YAML single-quoted scalar (password: '...'),
-# so escape any single quote by doubling it — otherwise a secret containing '
-# would break the YAML and crash Prometheus.
-secret_yaml = secret.replace("'", "''")
-with open(path) as fh:
-    content = fh.read()
-content = content.replace("durion-local-prom-scrape-password", secret_yaml)
-with open(path, "w") as fh:
-    fh.write(content)
-PY
-else
-  echo "Warning: POS_SECURITY_METRICS_SCRAPE_PASSWORD not set or ${PROM_CONFIG} missing; Prometheus scrapes will use the committed default and likely 401." >&2
-fi
+render_prometheus_secret
 
 echo "Pulling observability services: ${OBSERVABILITY_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${OBSERVABILITY_SERVICES[@]}"

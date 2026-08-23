@@ -366,6 +366,12 @@ jobs:
     name: Deploy Backend to Alpha
     needs: [push-images, deployment-summary]
     runs-on: ubuntu-latest
+    # Shared with sync-alpha-config.yml (#1457): exactly one workflow touches the alpha
+    # host's config + compose state at a time, so a full deploy and a config-only sync
+    # can never interleave their S3 pulls and compose applies.
+    concurrency:
+      group: alpha-deploy
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -429,20 +435,15 @@ jobs:
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"
+          STATUS=Pending
           for i in $(seq 1 180); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
               --query "Status" --output text)
             echo "[$i/180] Status: $STATUS"
-            if [[ "$STATUS" == "Success" ]]; then break; fi
-            if [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-              aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
-                --query "[StandardOutputContent,StandardErrorContent]" \
-                --output text
-              exit 1
+            if [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              break
             fi
             sleep 15
           done
@@ -451,6 +452,12 @@ jobs:
             --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --query "[StandardOutputContent,StandardErrorContent]" \
             --output text
+          # A loop that ends while the command is still Pending/InProgress must not
+          # report a successful deploy — only a terminal Success counts (#1468 review).
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "SSM command finished with status ${STATUS}" >&2
+            exit 1
+          fi
 
       - name: Dump Docker logs on deploy failure
         if: failure()

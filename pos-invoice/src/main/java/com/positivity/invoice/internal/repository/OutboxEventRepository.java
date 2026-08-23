@@ -17,7 +17,14 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
      * Oldest unpublished row (drain head) — drives the {@code invoice.outbox.oldest.age.seconds} gauge
      * and the always-UP {@code outbox} health details (#1458).
      */
-    Optional<OutboxEvent> findFirstByPublishedAtIsNullOrderByIdAsc();
+    Optional<DrainHeadView> findFirstByPublishedAtIsNullOrderByIdAsc();
+
+    /** Closed projection for the drain head so health polls never hydrate the payload column. */
+    interface DrainHeadView {
+        Instant getCreatedAt();
+
+        int getAttempts();
+    }
 
     /** Oldest unpublished rows first — UUIDv7 ids are time-ordered, preserving publish order. */
     @NonNull

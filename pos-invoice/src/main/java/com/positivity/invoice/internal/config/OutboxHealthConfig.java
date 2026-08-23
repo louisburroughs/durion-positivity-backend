@@ -39,7 +39,6 @@ public class OutboxHealthConfig {
                 outboxEventRepository::countByPublishedAtIsNull,
                 () -> outboxEventRepository
                         .findFirstByPublishedAtIsNullOrderByIdAsc()
-                        .map(event -> new OutboxHealthContributor.DrainHead(
-                                event.getCreatedAt(), event.getAttempts(), event.getLastError())));
+                        .map(head -> new OutboxHealthContributor.DrainHead(head.getCreatedAt(), head.getAttempts())));
     }
 }

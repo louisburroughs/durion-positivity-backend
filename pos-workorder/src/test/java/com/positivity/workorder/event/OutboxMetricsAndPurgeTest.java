@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.config.OutboxHealthConfig;
 import com.positivity.workorder.internal.config.OutboxPurgeJob;
-import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -37,10 +36,9 @@ class OutboxMetricsAndPurgeTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(registry);
         when(repository.countByPublishedAtIsNull()).thenReturn(7L);
-        when(repository.findFirstByPublishedAtIsNullOrderByIdAsc())
-                .thenReturn(Optional.of(OutboxEvent.builder()
-                        .createdAt(Instant.parse("2026-07-08T11:55:00Z"))
-                        .build()));
+        OutboxEventRepository.DrainHeadView head = mock(OutboxEventRepository.DrainHeadView.class);
+        when(head.getCreatedAt()).thenReturn(Instant.parse("2026-07-08T11:55:00Z"));
+        when(repository.findFirstByPublishedAtIsNullOrderByIdAsc()).thenReturn(Optional.of(head));
 
         // The Grafana domain-events alerts fire on these exact series names; the shared
         // contributor (#1458) must keep them identical to the retired OutboxMetrics.

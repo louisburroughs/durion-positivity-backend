@@ -52,12 +52,19 @@ Two workflows deliver changes to the alpha EC2 box; which one runs depends on wh
   manual dispatch with `deploy_alpha`). Builds/promotes images, uploads the compose files to S3,
   pulls them onto the box over SSM, and runs `deploy-backend.sh <sha>` (full deploy:
   retag + pull + `--force-recreate`).
-- **Config-only changes** to `docker-compose.yml`, `deployment/alpha/docker-compose.prod.yml`,
-  or `deployment/alpha/deploy-backend.sh` — `sync-alpha-config.yml` (auto on merge to `main`
-  touching those paths, or manual dispatch). Uploads the committed files, pulls them onto the
-  box, and runs `deploy-backend.sh --config-only`, which **recreates** exactly the containers
-  whose merged compose config changed. Recreation matters: a plain `docker restart` keeps the
-  old environment, so new `environment:` values would never apply.
+- **Config-only changes** to `deployment/alpha/docker-compose.prod.yml`,
+  `deployment/alpha/deploy-backend.sh`, `postgres/init-databases.sql`, or `observability/**` —
+  `sync-alpha-config.yml` (auto on merge to `main` touching those paths, or manual dispatch).
+  Uploads the committed files, pulls them onto the box, and runs
+  `deploy-backend.sh --config-only`, which **recreates** exactly the containers whose merged
+  compose config changed, force-recreates the observability containers (their bind-mounted
+  configs are invisible to compose's config hash), re-provisions Kafka topics, and reconciles
+  databases. Recreation matters: a plain `docker restart` keeps the old environment, so new
+  `environment:` values would never apply.
+- The root `docker-compose.yml` rides **both** paths: the sync workflow delivers and applies
+  it, but it also remains a full-rebuild trigger in `build-push-ecr.yml` because it carries
+  `build:` contexts — expect both workflows to run on a root-compose change (they converge on
+  the committed state).
 
 Both paths pass the committed files' sha256 digests (`PROD_OVERRIDE_SHA256`,
 `BASE_COMPOSE_SHA256`) into `deploy-backend.sh`, which refuses to compose against an on-box file
@@ -472,12 +479,15 @@ publisher drains to Kafka (at-least-once). Operational signals:
 - Metrics (per module, whenever its Kafka flag is on): `<domain>.outbox.published` /
   `<domain>.outbox.publish.failures` counters, plus `<domain>.outbox.pending` and
   `<domain>.outbox.oldest.age.seconds` gauges (`OutboxHealthContributor`, shared in `pos-events`;
-  registered by each module's `OutboxHealthConfig` — #1458). A growing published/failures gap or
-  a growing oldest-age means the drain is failing.
+  registered by each module's `OutboxHealthConfig` — #1458; this includes `pos-supplier`, whose
+  outbox lives in `supplier_event_outbox` rather than `event_outbox`). A growing
+  published/failures gap or a growing oldest-age means the drain is failing.
 - Health: `/actuator/health` carries an `outbox` component with `drainState`
   (`drained` / `draining` / `stalled-never-attempted` / `stalled-retrying`), the head row's age,
-  `attempts`, and truncated `last_error` (details visible under `show-details: when-authorized`).
-  It is **always UP by design** — a stalled drain stales downstream replicas but does not stop
+  and `attempts`. `last_error` text is deliberately **not** exposed there — some profiles serve
+  health details anonymously (`show-details: always`), and raw broker/serializer errors don't
+  belong on an unauthenticated endpoint; read it with the outbox SQL below.
+  The component is **always UP by design** — a stalled drain stales downstream replicas but does not stop
   the service, and a DOWN here would restart-loop containers via the compose healthcheck. Alert
   on the gauges, read the details when diagnosing. Note there is deliberately **no broker-ping
   health indicator**: Spring Boot ships none, and the two failure modes a ping would miss

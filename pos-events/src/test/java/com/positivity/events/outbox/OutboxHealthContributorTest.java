@@ -36,7 +36,7 @@ class OutboxHealthContributorTest {
     void gaugesReportBacklogAndHeadAge() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         pending.set(7L);
-        head.set(Optional.of(new DrainHead(NOW.minusSeconds(300), 2, null)));
+        head.set(Optional.of(new DrainHead(NOW.minusSeconds(300), 2)));
 
         contributor(registry);
 
@@ -78,7 +78,7 @@ class OutboxHealthContributorTest {
     @Test
     @DisplayName("Head younger than the threshold reports draining")
     void drainingState() {
-        head.set(Optional.of(new DrainHead(NOW.minusSeconds(60), 1, "transient broker timeout")));
+        head.set(Optional.of(new DrainHead(NOW.minusSeconds(60), 1)));
 
         Health health = contributor(null).health();
 
@@ -86,28 +86,24 @@ class OutboxHealthContributorTest {
         assertThat(health.getDetails())
                 .containsEntry("drainState", "draining")
                 .containsEntry("oldestAgeSeconds", 60L)
-                .containsEntry("headAttempts", 1)
-                .containsEntry("headLastError", "transient broker timeout");
+                .containsEntry("headAttempts", 1);
     }
 
     @Test
     @DisplayName("Old head with zero attempts reports stalled-never-attempted (publisher not running)")
     void stalledNeverAttempted() {
-        head.set(Optional.of(new DrainHead(NOW.minus(Duration.ofMinutes(20)), 0, null)));
+        head.set(Optional.of(new DrainHead(NOW.minus(Duration.ofMinutes(20)), 0)));
 
         Health health = contributor(null).health();
 
         assertThat(health.getStatus()).isEqualTo(Status.UP);
-        assertThat(health.getDetails())
-                .containsEntry("drainState", "stalled-never-attempted")
-                .doesNotContainKey("headLastError");
+        assertThat(health.getDetails()).containsEntry("drainState", "stalled-never-attempted");
     }
 
     @Test
-    @DisplayName("Old head with recorded attempts reports stalled-retrying and truncates the error")
-    void stalledRetryingTruncatesError() {
-        String longError = "x".repeat(1000);
-        head.set(Optional.of(new DrainHead(NOW.minus(Duration.ofMinutes(20)), 17_000, longError)));
+    @DisplayName("Old head with recorded attempts reports stalled-retrying, without leaking error text")
+    void stalledRetryingExposesNoErrorText() {
+        head.set(Optional.of(new DrainHead(NOW.minus(Duration.ofMinutes(20)), 17_000)));
 
         Health health = contributor(null).health();
 
@@ -115,15 +111,15 @@ class OutboxHealthContributorTest {
         assertThat(health.getDetails())
                 .containsEntry("drainState", "stalled-retrying")
                 .containsEntry("headAttempts", 17_000);
-        assertThat(health.getDetails().get("headLastError"))
-                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.STRING)
-                .hasSize(OutboxHealthContributor.LAST_ERROR_DETAIL_MAX_CHARS);
+        // last_error stays in the database: some profiles serve health details anonymously,
+        // so raw broker/serializer error text must never appear here.
+        assertThat(health.getDetails()).doesNotContainKey("headLastError");
     }
 
     @Test
     @DisplayName("Writer clock ahead of ours floors the age at zero instead of going negative")
     void futureHeadFloorsAtZero() {
-        head.set(Optional.of(new DrainHead(NOW.plusSeconds(30), 0, null)));
+        head.set(Optional.of(new DrainHead(NOW.plusSeconds(30), 0)));
 
         Health health = contributor(null).health();
 

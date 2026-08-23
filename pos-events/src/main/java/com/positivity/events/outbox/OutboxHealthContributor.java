@@ -50,8 +50,8 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  *       the publisher is not running at all (the #1456 failure shape, invisible to any broker
  *       check).
  *   <li>{@code stalled-retrying} — head older than the threshold with recorded attempts: the
- *       publisher runs but the head row keeps failing; {@code headLastError} carries the reason
- *       (the ~17k-retry serializer failure shape).
+ *       publisher runs but the head row keeps failing (the ~17k-retry serializer failure shape);
+ *       read {@code last_error} on the head row for the reason.
  * </ul>
  *
  * <h2>No row count in {@code health()}</h2>
@@ -68,17 +68,15 @@ public final class OutboxHealthContributor implements HealthIndicator {
     static final String STATUS_POLICY = "always UP: a stalled outbox stales downstream replicas but"
             + " does not stop this service serving; alert on the *.outbox.oldest.age.seconds gauge.";
 
-    static final int LAST_ERROR_DETAIL_MAX_CHARS = 240;
-
     /**
      * The drain head — the oldest unpublished outbox row, whose age and retry history summarize
      * the whole drain (the publisher stops each batch at the first failure, so one stuck row is
-     * always the head).
+     * always the head). Deliberately excludes {@code last_error}: some services serve
+     * {@code /actuator/health} details anonymously ({@code show-details: always} profiles), and
+     * raw broker/serializer error text does not belong on an unauthenticated endpoint. The
+     * runbook's outbox SQL is the place to read {@code attempts}/{@code last_error} in full.
      */
-    public record DrainHead(
-            @NonNull Instant createdAt,
-            int attempts,
-            @Nullable String lastError) {}
+    public record DrainHead(@NonNull Instant createdAt, int attempts) {}
 
     private final Clock clock;
     private final Duration lagThreshold;
@@ -167,14 +165,6 @@ public final class OutboxHealthContributor implements HealthIndicator {
         details.put("oldestCreatedAt", head.createdAt().toString());
         details.put("oldestAgeSeconds", headAge.toSeconds());
         details.put("headAttempts", head.attempts());
-        if (head.lastError() != null) {
-            String lastError = head.lastError();
-            details.put(
-                    "headLastError",
-                    lastError.length() > LAST_ERROR_DETAIL_MAX_CHARS
-                            ? lastError.substring(0, LAST_ERROR_DETAIL_MAX_CHARS)
-                            : lastError);
-        }
         String drainState;
         if (headAge.compareTo(lagThreshold) <= 0) {
             drainState = "draining";

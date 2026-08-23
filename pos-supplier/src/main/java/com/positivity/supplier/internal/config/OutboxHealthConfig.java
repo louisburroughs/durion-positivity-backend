@@ -1,7 +1,7 @@
-package com.positivity.order.internal.config;
+package com.positivity.supplier.internal.config;
 
 import com.positivity.events.outbox.OutboxHealthContributor;
-import com.positivity.order.internal.repository.OutboxEventRepository;
+import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -12,9 +12,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Registers the shared outbox drain health surface (#1458): an always-UP {@code outbox}
- * contributor in {@code /actuator/health} plus the {@code order.outbox.pending} and
- * {@code order.outbox.oldest.age.seconds} gauges that the domain-events Grafana alerts fire on.
+ * Registers the shared outbox drain health surface (#1458) for this module's
+ * {@code supplier_event_outbox} (the one outbox that does not use the standard
+ * {@code event_outbox} shape): an always-UP {@code outbox} contributor in
+ * {@code /actuator/health} plus the {@code supplier.outbox.pending} and
+ * {@code supplier.outbox.oldest.age.seconds} gauges that the domain-events Grafana alerts fire on.
  *
  * <p>Gated on this module's own Kafka flag: a service with eventing deliberately off has no drain
  * to report and gains no health surface — and because the contributor never reports DOWN, enabling
@@ -22,17 +24,17 @@ import org.springframework.context.annotation.Configuration;
  * always-UP rationale and the drain-state semantics.
  */
 @Configuration
-@ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "pos.supplier.kafka", name = "enabled", havingValue = "true")
 public class OutboxHealthConfig {
 
     @Bean
     public OutboxHealthContributor outboxHealthContributor(
-            OutboxEventRepository outboxEventRepository,
+            SupplierOutboxEventRepository outboxEventRepository,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry,
             @Value("${pos.events.outbox.lag-threshold:PT5M}") Duration lagThreshold) {
         return new OutboxHealthContributor(
-                "order.outbox",
+                "supplier.outbox",
                 clock,
                 lagThreshold,
                 meterRegistry.getIfAvailable(),
