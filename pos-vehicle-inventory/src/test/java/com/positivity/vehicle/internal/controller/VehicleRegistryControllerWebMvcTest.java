@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
+import com.positivity.vehicle.service.VehicleFactReplayService;
 import com.positivity.vehicle.service.VehicleService;
 import jakarta.persistence.EntityNotFoundException;
 import java.net.URI;
@@ -71,6 +72,9 @@ class VehicleRegistryControllerWebMvcTest {
 
     @MockitoBean
     VehicleService vehicleService;
+
+    @MockitoBean
+    VehicleFactReplayService vehicleFactReplayService;
 
     private static VehicleResponse vehicle() {
         return VehicleResponse.builder()

@@ -231,6 +231,14 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-vehicle-inventory:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # This service owns the vehicle aggregate and is the only publisher of
+    # vehicle.vehicle.updated on vehicle.events.v1. With the flag off nothing is
+    # written to its outbox, so every ext_vehicle replica downstream stays empty:
+    # pos-shop-manager rejects appointments with VEHICLE_NOT_FOUND, and
+    # pos-customer's own vehicle reads return an empty list for a vehicle that
+    # exists.
+    environment:
+      POS_VEHICLE_INVENTORY_KAFKA_ENABLED: "true"
 
   pos-warranty:
     image: ${ECR_REGISTRY}/durion/pos-warranty:${BACKEND_TAG}

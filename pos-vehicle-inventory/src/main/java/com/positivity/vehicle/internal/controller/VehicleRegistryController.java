@@ -4,17 +4,21 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.vehicle.internal.dto.VehicleFactReplayResultDto;
+import com.positivity.vehicle.service.VehicleFactReplayService;
 import com.positivity.vehicle.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,6 +32,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -67,6 +72,7 @@ public class VehicleRegistryController {
             """;
 
     private final VehicleService vehicleService;
+    private final VehicleFactReplayService vehicleFactReplayService;
 
     @Operation(operationId = "createVehicle", summary = "Create vehicle", description = """
                     Creates an active vehicle registry record after validating and normalizing the VIN, which must \
@@ -222,5 +228,48 @@ public class VehicleRegistryController {
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId) {
         vehicleService.deleteVehicle(vehicleId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN"})
+    @PostMapping("/facts/replay")
+    @EmitEvent(id = "VEHICLE_FACT_REPLAY", apiVersion = "1")
+    @Operation(
+            operationId = "replayVehicleFacts",
+            summary = "Re-emit Vehicle Facts for Replica Consumers",
+            description = """
+                    Re-publishes vehicle.vehicle.updated facts for one bounded page of vehicles so that \
+                    event-fed replicas in other modules can be seeded or repaired, returning what it emitted \
+                    and a cursor for the next page.
+                    Use this tool to fill a consumer's replica after publication was enabled on an environment \
+                    that already held vehicles, or after a consumer outage longer than broker retention; do not \
+                    use the outbox replay for that, which re-queues only rows already written and therefore \
+                    cannot reach vehicles whose facts were never produced.
+                    Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and reach \
+                    nobody; replayed facts are indistinguishable from live ones, so consumers apply them through \
+                    their normal path and their stale guard prevents an older fact regressing newer state.
+                    Required inputs: none; afterVehicleId resumes a previous page, updatedSince restricts to \
+                    vehicles changed at or after an instant, and limit bounds the page at 1000.
+                    Emits a VEHICLE_FACT_REPLAY event and queues one vehicle fact per vehicle in the page; no \
+                    vehicle state changes.
+                    Returns 200 with complete=true and a null cursor once the last vehicle is reached, and 400 \
+                    when a parameter is malformed.
+                    """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "What this page emitted and where to resume.",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = VehicleFactReplayResultDto.class)))
+    public ResponseEntity<VehicleFactReplayResultDto> replayVehicleFacts(
+            @Parameter(description = "Resume after this vehicle id.") @RequestParam(required = false)
+                    UUID afterVehicleId,
+            @Parameter(description = "Only vehicles updated at or after this instant.") @RequestParam(required = false)
+                    Instant updatedSince,
+            @Parameter(description = "Page size, 1-1000.") @RequestParam(defaultValue = "500") int limit) {
+        return ResponseEntity.ok(vehicleFactReplayService.replayPage(afterVehicleId, updatedSince, limit));
     }
 }
