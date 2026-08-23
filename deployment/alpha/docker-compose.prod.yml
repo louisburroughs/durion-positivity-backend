@@ -210,6 +210,12 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-shop-manager:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # Appointments validate crmCustomerId against ext_customer_party, which only
+    # customer.events.v1 fills. With the flag off that replica stays empty, so
+    # every appointment for a customer created after deployment is rejected with
+    # CUSTOMER_NOT_FOUND however long the caller waits.
+    environment:
+      POS_SHOP_MANAGER_KAFKA_ENABLED: "true"
 
   pos-tax:
     image: ${ECR_REGISTRY}/durion/pos-tax:${BACKEND_TAG}
