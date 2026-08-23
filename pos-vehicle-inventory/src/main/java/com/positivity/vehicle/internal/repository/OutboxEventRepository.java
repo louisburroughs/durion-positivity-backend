@@ -3,6 +3,7 @@ package com.positivity.vehicle.internal.repository;
 import com.positivity.vehicle.internal.entity.OutboxEvent;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
+
+    /** Unpublished backlog depth — drives the {@code vehicle.outbox.pending} gauge (#1458). */
+    long countByPublishedAtIsNull();
+
+    /**
+     * Oldest unpublished row (drain head) — drives the {@code vehicle.outbox.oldest.age.seconds} gauge
+     * and the always-UP {@code outbox} health details (#1458).
+     */
+    Optional<OutboxEvent> findFirstByPublishedAtIsNullOrderByIdAsc();
 
     /** Oldest unpublished rows first — UUIDv7 ids are time-ordered, preserving publish order. */
     @NonNull

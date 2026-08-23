@@ -6,13 +6,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.workorder.internal.config.OutboxMetrics;
+import com.positivity.workorder.internal.config.OutboxHealthConfig;
 import com.positivity.workorder.internal.config.OutboxPurgeJob;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -31,7 +32,7 @@ class OutboxMetricsAndPurgeTest {
     private final ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
 
     @Test
-    @DisplayName("Gauges report pending count and oldest unpublished age (0 when drained)")
+    @DisplayName("Gauges keep their established names and report pending count and oldest age (0 when drained)")
     void gaugesReportBacklogAndHeadAge() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(registry);
@@ -41,7 +42,9 @@ class OutboxMetricsAndPurgeTest {
                         .createdAt(Instant.parse("2026-07-08T11:55:00Z"))
                         .build()));
 
-        new OutboxMetrics(repository, TEST_CLOCK, provider);
+        // The Grafana domain-events alerts fire on these exact series names; the shared
+        // contributor (#1458) must keep them identical to the retired OutboxMetrics.
+        new OutboxHealthConfig().outboxHealthContributor(repository, TEST_CLOCK, provider, Duration.ofMinutes(5));
 
         assertThat(registry.get("workorder.outbox.pending").gauge().value()).isEqualTo(7.0);
         assertThat(registry.get("workorder.outbox.oldest.age.seconds").gauge().value())

@@ -65,6 +65,22 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
+        <!-- Health contributor API for OutboxHealthContributor (#1458). Optional: it only
+             matters to consumers that expose actuator health, and every pos-* service
+             already ships spring-boot-health via spring-boot-starter-actuator. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-health</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Micrometer gauges for the outbox drain (#1458); optional for the same reason. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
