@@ -42,12 +42,6 @@
       "defaultValue": "http://localhost:8086"
     },
     {
-      "name": "pos.order.service-id",
-      "type": "java.lang.String",
-      "description": "Eureka service-id for the pos-order service, which owns purchase orders used as receiving source documents.",
-      "defaultValue": "order"
-    },
-    {
       "name": "pos.location.service-id",
       "type": "java.lang.String",
       "description": "Eureka service-id for the pos-location service.",

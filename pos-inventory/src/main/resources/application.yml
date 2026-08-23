@@ -85,11 +85,13 @@ pos:
       staging-location-id: ${POS_INVENTORY_RECEIVING_STAGING_LOCATION_ID:00000000-0000-0000-0000-000000000002}
       # Virtual location used for cross-dock receive+issue balancing.
       cross-dock-location-id: ${POS_INVENTORY_RECEIVING_CROSS_DOCK_LOCATION_ID:00000000-0000-0000-0000-000000000003}
-      # Source-document lines are read from the owning service directly (#1480):
-      #   PO -> pos-order, GET /v1/orders/purchase-orders/{poId}, via the load-balanced
-      #         RestClient at pos.order.service-id.
-      # There is no stub and no enablement flag: the previous stub.enabled default of false
-      # returned no lines, which made every receiving-session creation answer 404.
+      # Source-document lines come from the purchase-order projection fed by
+      # order.events.v1 (ext_purchase_order / ext_purchase_order_line) - the same
+      # replica the goods-receipt path already resolves POs against (#1480).
+      # There is no stub, no enablement flag, and no synchronous call to pos-order:
+      # the previous stub.enabled default of false returned no lines, which made every
+      # receiving-session creation answer 404, and a sync domain->domain client is
+      # forbidden by ADR-0044's domain wall.
     kafka:
       # Location replica feed + reconciliation (ADR-0044 §6, #892). Off until the broker is
       # provisioned; flip POS_INVENTORY_KAFKA_ENABLED per environment.
@@ -176,9 +178,5 @@ pos:
         batch-size: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE:200}
         interval-ms: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_INTERVAL_MS:300000}
         initial-delay-ms: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_INITIAL_DELAY_MS:60000}
-  order:
-    # Eureka service id of pos-order, which owns the purchase orders receiving sessions
-    # are created against (#1480).
-    service-id: ${POS_ORDER_SERVICE_ID:order}
   workorder:
     service-id: ${POS_WORKORDER_SERVICE_ID:workorder}

@@ -53,24 +53,24 @@ public class ReceivingController {
             summary = "Create Receiving Session",
             description = """
                     Creates an OPEN receiving session against a source document, pre-populating one EXPECTED line \
-                    per source-document line fetched from the owning service.
+                    per still-open line of the purchase order it names.
                     Use this tool to start a line-by-line receiving workflow before recording actual quantities \
                     with receiveItemsIntoStaging; do not use createGoodsReceipt, which posts stock against a \
                     purchase order in one call without a session.
-                    Preconditions: the source document must be a purchase order that pos-order can resolve, with \
-                    at least one line still open. The document type is detected from the id prefix - ASN when the \
+                    Preconditions: sourceDocumentId must be the UUID of an APPROVED or PARTIALLY_RECEIVED \
+                    purchase order with at least one line still open, resolved from this service's \
+                    purchase-order projection. The document type is detected from the id prefix - ASN when the \
                     id starts with ASN, PO otherwise - and only PO is supported; a receiving session cannot be \
                     created against an ASN, because no service owns ASN lines.
-                    Each line's expected quantity is the purchase order line's open quantity, so a partially \
-                    received order never re-expects what has already arrived.
+                    Each line's expected quantity is the order line's open quantity, so a partially received \
+                    order never re-expects what has already arrived.
                     Required inputs: sourceDocumentId (non-blank string); entryMethod is optional and defaults to \
                     MANUAL, with SCAN the other accepted value.
                     Emits an INVENTORY_RECEIVING_SESSION_CREATE event; no stock is posted, the session only stages \
                     expected quantities until items are received.
-                    Returns 404 when pos-order has no such purchase order, 400 when it is already fully received \
-                    or entryMethod is not a known value, 422 when the source document type is not a purchase \
-                    order, and 503 when pos-order could not be reached - which is retryable, and distinct from \
-                    the document not existing.
+                    Returns 404 when no such purchase order has been projected, 400 when it is already fully \
+                    received, is not in a receivable status, or entryMethod is not a known value, and 422 when \
+                    the source document type is not a purchase order.
                     """,
             tags = {"Receiving"})
     @ApiResponse(
@@ -90,16 +90,12 @@ public class ReceivingController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "No such purchase order in pos-order, or it has no line still open",
+            description = "No such purchase order has been projected into pos-inventory",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description =
                     "UNSUPPORTED_SOURCE_DOCUMENT_TYPE - receiving sessions are supported for purchase orders" + " only",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "503",
-            description = "SOURCE_DOCUMENT_SERVICE_UNAVAILABLE - pos-order could not be reached; retryable",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReceivingSessionResponse> createReceivingSession(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

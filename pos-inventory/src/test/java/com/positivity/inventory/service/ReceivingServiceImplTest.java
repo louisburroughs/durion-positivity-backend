@@ -9,7 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.SourceDocumentClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -39,6 +38,7 @@ import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
 import com.positivity.inventory.internal.service.SiteDefaultsService;
+import com.positivity.inventory.internal.service.SourceDocumentResolver;
 import com.positivity.inventory.internal.service.UomConversionService;
 import com.positivity.inventory.internal.service.UomConversionServiceImpl;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
@@ -89,7 +89,7 @@ class ReceivingServiceImplTest {
     private LedgerPostingService ledgerPostingService;
 
     @Mock
-    private SourceDocumentClient sourceDocumentClient;
+    private SourceDocumentResolver sourceDocumentResolver;
 
     @Mock
     private SiteDefaultsService siteDefaultsService;
@@ -173,7 +173,7 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentNotFound() {
-        when(sourceDocumentClient.fetchDocument(any(), any()))
+        when(sourceDocumentResolver.resolve(any(), any()))
                 .thenThrow(new SourceDocumentNotFoundException("No purchase order PO-999 in pos-order"));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-999", "MANUAL");
@@ -185,8 +185,8 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentAlreadyReceived() {
-        when(sourceDocumentClient.fetchDocument(any(), any()))
-                .thenReturn(new SourceDocumentClient.SourceDocument("PO-456", "RECEIVED", true, List.of()));
+        when(sourceDocumentResolver.resolve(any(), any()))
+                .thenThrow(new SourceDocumentAlreadyReceivedException("PO-456 has already been fully received"));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-456", "MANUAL");
 
@@ -489,8 +489,8 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentWithNoLines_throwsNotFound() {
-        when(sourceDocumentClient.fetchDocument(any(), any()))
-                .thenReturn(new SourceDocumentClient.SourceDocument("PO-123", "APPROVED", false, List.of()));
+        when(sourceDocumentResolver.resolve(any(), any()))
+                .thenThrow(new SourceDocumentNotFoundException("No purchase order PO-123 has been projected"));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
@@ -501,9 +501,9 @@ class ReceivingServiceImplTest {
 
     @Test
     void createReceivingSession_sourceDocumentLineWithoutProduct_throwsIllegalState() {
-        when(sourceDocumentClient.fetchDocument(any(), any()))
-                .thenReturn(new SourceDocumentClient.SourceDocument(
-                        "PO-123", "APPROVED", false, List.of(sourceLine(" ", "5"))));
+        when(sourceDocumentResolver.resolve(any(), any()))
+                .thenReturn(
+                        new SourceDocumentResolver.SourceDocument("PO-123", "APPROVED", List.of(sourceLine(" ", "5"))));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
@@ -1314,16 +1314,13 @@ class ReceivingServiceImplTest {
     }
 
     private void stubSourceDocumentLines() {
-        when(sourceDocumentClient.fetchDocument(any(), any()))
-                .thenReturn(new SourceDocumentClient.SourceDocument(
-                        "PO-123",
-                        "APPROVED",
-                        false,
-                        List.of(sourceLine("PROD-001", "5"), sourceLine("PROD-002", "10"))));
+        when(sourceDocumentResolver.resolve(any(), any()))
+                .thenReturn(new SourceDocumentResolver.SourceDocument(
+                        "PO-123", "APPROVED", List.of(sourceLine("PROD-001", "5"), sourceLine("PROD-002", "10"))));
     }
 
-    private static SourceDocumentClient.SourceDocumentLine sourceLine(String productId, String expectedQuantity) {
-        SourceDocumentClient.SourceDocumentLine line = new SourceDocumentClient.SourceDocumentLine();
+    private static SourceDocumentResolver.SourceDocumentLine sourceLine(String productId, String expectedQuantity) {
+        SourceDocumentResolver.SourceDocumentLine line = new SourceDocumentResolver.SourceDocumentLine();
         line.setProductId(productId);
         line.setExpectedQuantity(new BigDecimal(expectedQuantity));
         return line;

@@ -1,6 +1,5 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.client.SourceDocumentClient;
 import com.positivity.inventory.internal.dto.receiving.CreateReceivingSessionRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockRequest;
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
@@ -21,8 +20,6 @@ import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
-import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
-import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
@@ -63,7 +60,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
-    private final SourceDocumentClient sourceDocumentClient;
+    private final SourceDocumentResolver sourceDocumentResolver;
     private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationService workorderValidationService;
     private final DocumentQuantityConverter documentQuantityConverter;
@@ -637,11 +634,11 @@ public class ReceivingServiceImpl implements ReceivingService {
 
     private List<ReceivingLine> buildLinesFromDocument(
             String sourceDocumentId, SourceDocumentType sourceDocumentType, ReceivingSession session) {
-        List<SourceDocumentClient.SourceDocumentLine> sourceLines =
+        List<SourceDocumentResolver.SourceDocumentLine> sourceLines =
                 fetchSourceDocumentLines(sourceDocumentId, sourceDocumentType);
         List<ReceivingLine> lines = new ArrayList<>(sourceLines.size());
 
-        for (SourceDocumentClient.SourceDocumentLine sourceLine : sourceLines) {
+        for (SourceDocumentResolver.SourceDocumentLine sourceLine : sourceLines) {
             // expectedQuantity is the base still-open quantity; the document unit and quantity are
             // recorded per receive, from the receive request (odoo-parity B2, #1034).
             lines.add(ReceivingLine.builder()
@@ -658,25 +655,22 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     /**
-     * Resolves the source document's still-expected lines from the service that owns it (#1480).
-     * No stub, and no config flag whose default answers 404: an unresolvable document, an
-     * unreachable owner and a fully received document are three distinct answers now.
+     * Resolves the source document's still-expected lines from the projected purchase order
+     * (#1480). No stub, and no config flag whose default answers 404 — and no synchronous call to
+     * pos-order either, which ADR-0044's domain wall forbids and which the projection makes
+     * unnecessary.
      */
-    private List<SourceDocumentClient.SourceDocumentLine> fetchSourceDocumentLines(
+    private List<SourceDocumentResolver.SourceDocumentLine> fetchSourceDocumentLines(
             String sourceDocumentId, SourceDocumentType sourceDocumentType) {
-        log.info("Resolving source document {} {} from its owning service", sourceDocumentType, sourceDocumentId);
+        log.info(
+                "Resolving source document {} {} from the purchase-order projection",
+                sourceDocumentType,
+                sourceDocumentId);
 
-        SourceDocumentClient.SourceDocument sourceDocument =
-                sourceDocumentClient.fetchDocument(sourceDocumentType, sourceDocumentId);
-        if (sourceDocument.alreadyReceived()) {
-            throw new SourceDocumentAlreadyReceivedException(sourceDocumentId + " has already been fully received");
-        }
-        if (sourceDocument.lines().isEmpty()) {
-            throw new SourceDocumentNotFoundException(
-                    "No receiving lines on " + sourceDocumentType + " " + sourceDocumentId);
-        }
+        SourceDocumentResolver.SourceDocument sourceDocument =
+                sourceDocumentResolver.resolve(sourceDocumentType, sourceDocumentId);
 
-        List<SourceDocumentClient.SourceDocumentLine> lines = sourceDocument.lines();
+        List<SourceDocumentResolver.SourceDocumentLine> lines = sourceDocument.lines();
         for (int i = 0; i < lines.size(); i++) {
             requireUsableLine(lines.get(i), sourceDocumentId, i + 1);
         }
@@ -684,7 +678,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void requireUsableLine(
-            SourceDocumentClient.SourceDocumentLine line, String sourceDocumentId, int lineNumber) {
+            SourceDocumentResolver.SourceDocumentLine line, String sourceDocumentId, int lineNumber) {
         String productId = line.getProductId();
         if (productId == null || productId.isBlank()) {
             throw new IllegalStateException("Invalid source document line " + lineNumber + " for " + sourceDocumentId
