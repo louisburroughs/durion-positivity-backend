@@ -175,26 +175,12 @@ public class EdiwheelC11OrderStatusCodec implements SupplierAdapterCodec {
 
         String orderErrorCode = matched.error == null ? null : C1Values.trimToNull(matched.error.errorCode);
         String orderErrorText = matched.error == null ? null : C1Values.trimToNull(matched.error.errorText);
-        boolean rejected = orderErrorCode != null && !NON_ERROR_CODES.contains(orderErrorCode);
 
         List<SupplierOrderStatusResult.Line> lines = new ArrayList<>();
         for (OrderStatusC11Wire.StatusOrderLine wireLine : matched.orderLines) {
             if (wireLine != null) {
                 lines.add(toLine(wireLine, unmapped));
             }
-        }
-
-        SupplierOrderStatusResult.Status status;
-        if (rejected) {
-            status = SupplierOrderStatusResult.Status.REJECTED;
-        } else if (hasAnyConfirmedSchedule(lines)) {
-            status = SupplierOrderStatusResult.Status.CONFIRMED;
-        } else {
-            // The vendor holds the order but has scheduled nothing against it yet. Distinct from
-            // CONFIRMED on purpose: for reconciliation both mean "the vendor has it, do not
-            // re-send", but for a purchase-order timeline they are "accepted" and "acknowledged",
-            // and only one of them justifies telling receiving something is coming.
-            status = SupplierOrderStatusResult.Status.IN_PROGRESS;
         }
 
         if (C1Values.isUnreadableDate(matched.orderDate)) {
@@ -204,7 +190,7 @@ public class EdiwheelC11OrderStatusCodec implements SupplierAdapterCodec {
         return new Decoded(
                 new SupplierOrderStatusResult(
                         documentId,
-                        status,
+                        deriveStatus(orderErrorCode, lines),
                         matched.supplierOrderNumber == null
                                 ? null
                                 : C1Values.trimToNull(matched.supplierOrderNumber.documentId),
@@ -213,6 +199,24 @@ public class EdiwheelC11OrderStatusCodec implements SupplierAdapterCodec {
                         C1Values.date(matched.orderDate),
                         lines),
                 List.copyOf(unmapped));
+    }
+
+    /**
+     * What the vendor's answer means for the order as a whole.
+     *
+     * <p>IN_PROGRESS is distinct from CONFIRMED on purpose: the vendor holds the order but has
+     * scheduled nothing against it yet. For reconciliation both mean "the vendor has it, do not
+     * re-send", but for a purchase-order timeline they are "accepted" and "acknowledged", and only
+     * one of them justifies telling receiving something is coming.
+     */
+    private static SupplierOrderStatusResult.Status deriveStatus(
+            @Nullable String orderErrorCode, List<SupplierOrderStatusResult.Line> lines) {
+        if (orderErrorCode != null && !NON_ERROR_CODES.contains(orderErrorCode)) {
+            return SupplierOrderStatusResult.Status.REJECTED;
+        }
+        return hasAnyConfirmedSchedule(lines)
+                ? SupplierOrderStatusResult.Status.CONFIRMED
+                : SupplierOrderStatusResult.Status.IN_PROGRESS;
     }
 
     /**
@@ -254,21 +258,8 @@ public class EdiwheelC11OrderStatusCodec implements SupplierAdapterCodec {
         OrderC1Wire.ArticleIdentification identity = article == null ? null : article.articleIdentification;
         OrderC1Wire.ErrorBlock error = article == null ? null : article.error;
 
-        List<SupplierDeliverySchedule> schedules = new ArrayList<>();
-        if (article != null) {
-            for (OrderStatusC11Wire.StatusSchedule schedule : article.scheduleDetails) {
-                if (schedule != null) {
-                    schedules.add(toSchedule(schedule, unmapped));
-                }
-            }
-            if (C1Values.isUnreadableDate(article.requestedDeliveryDate)) {
-                unmapped.add("OrderedArticle/RequestedDeliveryDate");
-            }
-            if (C1Values.isUnreadableQuantity(article.orderedQuantity)) {
-                unmapped.add("OrderedArticle/OrderedQuantity");
-            }
-        }
-
+        // A vendor may acknowledge a line without repeating the article: the line id is still the
+        // reconciliation key, so everything article-derived degrades to null rather than failing.
         return new SupplierOrderStatusResult.Line(
                 C1Values.trimToNull(wireLine.lineId),
                 C1Values.trimToNull(wireLine.customerLineItemNumber),
@@ -280,9 +271,30 @@ public class EdiwheelC11OrderStatusCodec implements SupplierAdapterCodec {
                         : C1Values.trimToNull(article.articleDescription.articleDescriptionText),
                 article == null ? null : C1Values.quantity(article.orderedQuantity),
                 article == null ? null : C1Values.date(article.requestedDeliveryDate),
-                schedules,
+                toSchedules(article, unmapped),
                 error == null ? null : C1Values.trimToNull(error.errorCode),
                 error == null ? null : C1Values.trimToNull(error.errorText));
+    }
+
+    /** The article's delivery schedules, recording its unreadable date and quantity on the way. */
+    private static List<SupplierDeliverySchedule> toSchedules(
+            OrderStatusC11Wire.@Nullable StatusOrderedArticle article, List<String> unmapped) {
+        if (article == null) {
+            return List.of();
+        }
+        List<SupplierDeliverySchedule> schedules = new ArrayList<>();
+        for (OrderStatusC11Wire.StatusSchedule schedule : article.scheduleDetails) {
+            if (schedule != null) {
+                schedules.add(toSchedule(schedule, unmapped));
+            }
+        }
+        if (C1Values.isUnreadableDate(article.requestedDeliveryDate)) {
+            unmapped.add("OrderedArticle/RequestedDeliveryDate");
+        }
+        if (C1Values.isUnreadableQuantity(article.orderedQuantity)) {
+            unmapped.add("OrderedArticle/OrderedQuantity");
+        }
+        return schedules;
     }
 
     private static SupplierDeliverySchedule toSchedule(
