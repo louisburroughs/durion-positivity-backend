@@ -379,7 +379,7 @@ Root `pom.xml` checks each module against `<jacoco.line.min>` / `<jacoco.branch.
 - Refuses to score coverage produced with ITs. Failsafe inherits the JaCoCo agent through `@{argLine}` and appends to the same `jacoco.exec`, so an IT-inclusive run yields floors the gate can never reproduce. `--allow-its` overrides, at the cost of that guarantee.
 - Modules with no `jacoco.csv` are listed and skipped, not failed — only a build that ran tests produces one.
 - Runs nightly in the `Full Coverage SonarCloud Analysis` job, right after the ratchet itself.
-- Fix any finding with `update-coverage-floors.sh --apply`.
+- Fix any finding with `./scripts/update-coverage-floors.sh --apply`.
 
 ---
 
