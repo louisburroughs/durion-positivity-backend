@@ -894,6 +894,44 @@ jobs:
           echo "Coverage ratchet failed for $MODULES module(s) ($VIOLATIONS violation(s)); see the job summary."
           exit 1
 
+      - name: Enforce coverage floor drift
+        # The ratchet step above only catches a module falling BELOW its floor.
+        # Nothing caught a floor that had fallen behind the module, and floors
+        # were hand-edited, so §6.2's "raise a module's floor when its coverage
+        # rises" was advice with no enforcement. Measured at the time this step
+        # was added, the reactor's floors permitted ~3,400 covered lines and ~970
+        # covered branches to disappear — about four points of overall coverage —
+        # without one build turning red.
+        #
+        # This runs on the same `verify -DskipITs` output the ratchet reads, and
+        # for the same reason: floors derived from any other measurement describe
+        # coverage the gate cannot reproduce (§6.1). It reads each module's OWN
+        # target/site/jacoco/jacoco.csv, never the aggregate, because that is what
+        # jacoco:check evaluates.
+        #
+        # Fix a failure with `scripts/update-coverage-floors.sh --apply` after a
+        # local -DskipITs build, then commit the poms.
+        if: always()
+        run: |
+          set -o pipefail
+          if scripts/check-coverage-floor-drift.sh 2>&1 | tee "$RUNNER_TEMP/floor-drift.log"; then
+            exit 0
+          fi
+          {
+            echo "## Coverage floor drift"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/floor-drift.log"
+            echo '```'
+            echo
+            echo "Re-derive the floors after a -DskipITs build:"
+            echo '```'
+            echo "./mvnw -pl pos-coverage-aggregate -am verify -DskipITs -Darchunit.skipTests=true -T 1C"
+            echo "scripts/update-coverage-floors.sh --apply"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Upload aggregate JaCoCo coverage report
         if: always()
         uses: actions/upload-artifact@v6
