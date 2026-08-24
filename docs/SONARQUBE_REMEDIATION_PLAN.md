@@ -1,7 +1,7 @@
 # SonarQube Remediation Plan
 
-Status: Phases 1, 2, 3.1 and 3.4 implemented. Phases 3.2, 3.3, 3.5 and 3.6 not
-started.
+Status: Phases 1, 2, 3.1, 3.2, 3.3 and 3.4 implemented. Phases 3.5 (`S1192`,
+148 findings) and 3.6 (`S3776`, 62 findings) not started.
 The `new_reliability_rating` fix is in, so the next analysis should return the
 quality gate to green — confirm against §7 before treating §1's table as stale.
 Date: 2026-08-24
@@ -299,31 +299,45 @@ No code change is proposed for these 25. Removing the callee's `@Transactional`
 is not available either: in every case above the callee is a public API method
 that external callers reach through the proxy, where the annotation is load-bearing.
 
-### 3.2 `java:S1948` (1 issue)
+### 3.2 `java:S1948` (1 issue) — DONE
 
 `pos-shop-manager/…/internal/exception/SchedulingConflictException.java:11` —
-`SchedulingConflictException extends RuntimeException` (hence `Serializable`)
-but holds a non-serializable `ConflictResponse conflictResponse`.
+`SchedulingConflictException extends RuntimeException` (hence `Serializable`) but
+held a non-serializable `ConflictResponse conflictResponse`.
 
-Fix: make `ConflictResponse` implement `Serializable`, or mark the field
-`transient` and have `getConflictResponse()` cope with a null after
-deserialisation. Prefer the former — the exception is mapped to an HTTP 409
-body (`docs/ERROR_ENVELOPE.md`), so losing the payload on deserialisation would
-silently degrade the response. Confirm the exception is never actually
-serialised across a boundary first; if it never is, `transient` is the smaller
-change.
+The plan called for confirming first whether the exception is ever serialized
+across a boundary, and preferring `Serializable` over `transient` if the payload
+matters. It is never serialized — it is thrown by `ConflictDetectionServiceImpl`
+and handled in-process, mapped to an HTTP 409 body. By the letter of the rule that
+makes `transient` the smaller change, but `transient` would leave
+`getConflictResponse()` able to return null after a deserialization that never
+happens: a footgun guarding a case that does not exist.
 
-### 3.3 `java:S3252` (4 issues)
+So: `ConflictResponse` and its two nested types, `Conflict` and
+`SuggestedAlternative`, now implement `Serializable` with explicit
+`serialVersionUID`. They hold only `String`, `Instant` and `List` of each other,
+so nothing else was needed, the accessor stays total, and the 409 payload would
+survive a round trip if one ever occurred.
 
-Mechanical.
+### 3.3 `java:S3252` (4 issues) — DONE
 
-- `pos-customer/…/internal/service/PartyServiceImpl.java:721,733,735` — access
-  `PARTY_ID` via `AbstractParty_` rather than a subclass metamodel.
+Mechanical, and both cases were static members reached through a subtype rather
+than their declaring class.
+
+- `pos-customer/…/internal/service/PartyServiceImpl.java:721,733,735` —
+  `PARTY_ID` is declared on `AbstractParty_`, not on the `CommercialParty_`
+  metamodel the code went through. Now `AbstractParty_.PARTY_ID`. The
+  neighbouring `LEGAL_NAME` uses are untouched: that constant really is declared
+  on `CommercialParty_`, which is why Sonar flagged three of the five references
+  in that method and not the other two.
 - `pos-security-service/…/internal/config/HttpToHttpsRedirectConfig.java:46` —
-  access `DEFAULT_PROTOCOL` via `TomcatWebServerFactory`.
+  `DEFAULT_PROTOCOL` is declared on `TomcatWebServerFactory` in Spring Boot 4, and
+  was reached through `TomcatServletWebServerFactory`. Now references the
+  declaring class; the `TomcatServletWebServerFactory` import stays, since
+  `@ConditionalOnClass` and the customizer's type parameter still need it.
 
-No behaviour change, no tests needed beyond the existing suite. Good
-first commit of Phase 3 if a warm-up is wanted.
+Verified: `pos-customer` 660, `pos-security-service` 488, `pos-shop-manager` 229
+tests green with Spotless, Checkstyle and SpotBugs enabled.
 
 ### 3.4 `java:S1186` — empty methods (15 issues) — DONE
 
@@ -466,7 +480,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 1 | Reliability `S2637` | 2 | 0.5 h | **Red → Green** | done |
 | 2 | BLOCKER `S2699` | 1 | 0.2 h | none | done |
 | 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | done: 9 fixed, 25 no-action |
-| 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | not started |
+| 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
 | 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |

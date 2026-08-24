@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
+import org.springframework.boot.tomcat.TomcatWebServerFactory;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -43,7 +44,7 @@ public class HttpToHttpsRedirectConfig {
                 return;
             }
 
-            Connector connector = new Connector(TomcatServletWebServerFactory.DEFAULT_PROTOCOL);
+            Connector connector = new Connector(TomcatWebServerFactory.DEFAULT_PROTOCOL);
             connector.setScheme("http");
             connector.setPort(httpPort);
             connector.setSecure(false);
