@@ -56,10 +56,13 @@ Both issues are the same rule and the same code shape: an
 `Optional…​.orElse(null)` chain where SonarJava's dataflow concludes a `null`
 reaches a parameter it considers `@NonNull`.
 
-| # | Module | Location | Rule |
-| - | ------ | -------- | ---- |
-| 1.1 | `pos-supplier` | `pos-supplier/src/main/java/com/positivity/supplier/internal/config/SupplierYamlBootstrap.java:158` | `java:S2637` |
-| 1.2 | `pos-location` | `pos-location/src/main/java/com/positivity/location/internal/service/PeopleContactEventsListener.java:128` | `java:S2637` |
+Line numbers below are where SonarCloud reported each finding, i.e. against the
+pre-fix tree; the fixes have since shifted them.
+
+| # | Module | Location as analysed | Rule |
+| - | ------ | -------------------- | ---- |
+| 1.1 | `pos-supplier` | `pos-supplier/…/internal/config/SupplierYamlBootstrap.java:158` | `java:S2637` |
+| 1.2 | `pos-location` | `pos-location/…/internal/service/PeopleContactEventsListener.java:128` | `java:S2637` |
 
 ### 1.1 `SupplierYamlBootstrap` — retry backoff
 
@@ -71,8 +74,8 @@ profile.setRetryBackoff(Optional.ofNullable(retry)
 ```
 
 The surrounding `else` branch already writes `profile.setRetryBackoff(null)`
-unconditionally (line 163), so a null backoff is a legitimate, intended state —
-this is about *how* the null is produced, not *whether* null is allowed.
+unconditionally, so a null backoff is a legitimate, intended state — this is
+about *how* the null is produced, not *whether* null is allowed.
 
 Fix applied — drop the `Optional` round-trip for a plain null-guard, which is
 both shorter and removes the flagged call entirely:
@@ -82,8 +85,8 @@ String backoffSpec = retry == null ? null : retry.backoff();
 profile.setRetryBackoff(backoffSpec == null ? null : parseBackoff(backoffSpec));
 ```
 
-`parseBackoff` is declared `parseBackoff(@NonNull String backoff)`
-(`SupplierYamlBootstrap.java:485`), and the guard now makes that contract
+`SupplierYamlBootstrap#parseBackoff` is declared
+`parseBackoff(@NonNull String backoff)`, and the guard now makes that contract
 locally obvious instead of relying on `Optional.map`'s null-swallowing.
 
 ### 1.2 `PeopleContactEventsListener` — primary email lookup
@@ -117,7 +120,7 @@ private static String primaryEmailOf(List<PersonUpdatedV1.ContactPointV1> contac
 }
 ```
 
-Note `PeopleContactEventsListener.java:120` performs the same
+Note that the `existing` lookup a few lines above performs the same
 `repository.findById(...).orElse(null)` and is *not* flagged, because that
 `Optional`'s type argument carries no non-null annotation. Do not "fix" it.
 
@@ -139,8 +142,8 @@ Note `PeopleContactEventsListener.java:120` performs the same
 
 ## 3. Phase 2 — The single BLOCKER (1 issue, ~10 min) — DONE
 
-| Module | Location | Rule |
-| ------ | -------- | ---- |
+| Module | Location as analysed | Rule |
+| ------ | -------------------- | ---- |
 | `pos-workorder` | `…/internal/service/PromotedWorkorderDemandPublisherTest.java:145` | `java:S2699` |
 
 ```java
@@ -414,4 +417,6 @@ curl -s "https://sonarcloud.io/api/issues/search?componentKeys=louisburroughs_du
 
 Regenerate `sonarqube-remediation-inventory.csv` from the second and third
 calls after each phase lands, and update the Status line at the top of this
-document.
+document. Every `file.java:NN` coordinate in this plan and in the CSV is the
+location SonarCloud reported at the analysis named above; fixing a file shifts
+the lines below it, so re-derive rather than trusting a stale number.
