@@ -1,7 +1,6 @@
 # SonarQube Remediation Plan
 
-Status: Phases 1, 2 and 3.1 implemented. All 34 `S6809` sites are classified —
-9 were real and are fixed, 25 need no change (see §4.1). Phases 3.2–3.6 not
+Status: Phases 1, 2, 3.1 and 3.4 implemented. Phases 3.2, 3.3, 3.5 and 3.6 not
 started.
 The `new_reliability_rating` fix is in, so the next analysis should return the
 quality gate to green — confirm against §7 before treating §1's table as stale.
@@ -326,30 +325,61 @@ Mechanical.
 No behaviour change, no tests needed beyond the existing suite. Good
 first commit of Phase 3 if a warm-up is wanted.
 
-### 3.4 `java:S1186` — empty methods (15 issues)
+### 3.4 `java:S1186` — empty methods (15 issues) — DONE
 
-These split into three genuinely different situations; **one of them may be a
-real defect**, so do not batch-fix.
+The investigation this section called for changed the conclusion, in both directions.
 
-1. **`@PrePersist void ensureId() {}` — investigate before touching.**
-   `pos-people/…/entity/WorkSession.java:64`,
-   `WorkSessionBreak.java:59`, `TimeEntryException.java:169,175`. An empty JPA
-   lifecycle callback named `ensureId` strongly suggests the UUID v7 id
-   assignment was moved out (see `docs/UUID_V7_MIGRATION.md`) and the hook was
-   emptied rather than deleted. Confirm ids are assigned elsewhere for these
-   entities; then delete the dead callback. If ids are *not* assigned
-   elsewhere, this is a latent persistence bug and is the highest-value item in
-   Phase 3.
-2. **Explicit no-arg constructors on DTOs** —
-   `pos-customer/…/dto/snapshot/{CrmSnapshotDTO,ContactSummary,BillingRuleRef}.java`,
-   `pos-workorder/…/dto/BillingRulesDTO.java` (6 sites). Required by Jackson.
-   Fix by documenting intent in the body, e.g.
-   `/* Required by Jackson for deserialisation. */`, which satisfies S1186.
-3. **Test fixture stubs** —
-   `pos-security-common/src/test/java/…/RequiredPermissionsOpenApiAutoConfigurationTest.java:21,24,27,30,32`.
-   These are deliberately empty `@PreAuthorize`-annotated methods whose *bodies
-   are irrelevant*; the annotation is the fixture. Same fix as (2): a one-line
-   comment in each body.
+**1. `@PrePersist ensureId() {}` — dead, as suspected (4 sites → 2).** `WorkSession:64` and
+`WorkSessionBreak:59` each carried an empty `@PrePersist` callback named `ensureId`. Ids are
+assigned by `@GeneratedValue @UUIDv7Id` on the `@Id` field, nothing calls `ensureId`, and JPA
+invoked it on every insert to do nothing. Leftover from the UUID v7 migration
+(`docs/UUID_V7_MIGRATION.md`); both deleted.
+
+**2. `TimeEntryException:169,175` — a real defect, but not the one expected.** These are not
+lifecycle callbacks at all; they are *setters with empty bodies* —
+`public void setCreatedAt(Instant createdAt) {}` — accepting an argument and discarding it.
+
+The worry was auditing: the entity is `@EntityListeners(AuditingEntityListener.class)` with
+`@CreatedDate`/`@LastModifiedDate`, and both columns are nullable in
+`V1__baseline_people_schema.sql`, so silently unstamped rows would never have failed anything.
+**That worry is wrong, and it was worth testing rather than asserting.**
+`TimeEntryExceptionAuditingTest#persistedExceptionCarriesAuditTimestamps` passes against the
+*pre-fix* entity: Spring Data's accessor reaches those fields directly rather than through their
+setters, so stamping was always correct. The test is kept to record it, and to catch a future
+change that made stamping depend on the setters.
+
+What the empty bodies really were is a trap. No production code called either setter, so nothing
+was broken; anything that started to would have silently got nothing. Both now assign, and
+`settersAssign` is the assertion that fails against the pre-fix entity.
+
+Adding that test required `spring-boot-starter-data-jpa-test` in `pos-people`, which had JPA
+entities and repositories but no persistence-slice coverage. It runs on H2 with Flyway disabled and
+the schema generated from the entities — the module's documented default footing, because its
+baseline uses Postgres-only SQL (`SPLIT_PART`) that H2 cannot execute. `FlywayMigrationIT` covers
+the migrations themselves against real Postgres.
+
+**3. Redundant explicit no-arg constructors (6 sites) — deleted, not documented.**
+`pos-customer/…/dto/snapshot/{BillingRuleRef,ContactSummary,CrmSnapshotDTO}.java` and
+`pos-workorder/…/dto/BillingRulesDTO.java`.
+
+The first attempt documented these as Jackson-required. That was wrong on every
+count, and review caught it: none of the six classes declares any other
+constructor, and none carries a Jackson annotation. A `public Foo() {}` in a
+class with no other constructors is exactly the constructor Java generates
+implicitly, with the same access modifier — so these were not
+undocumented-but-necessary, they were redundant.
+
+Deleted. That removes the finding at its root rather than annotating it, and is
+behaviour-neutral: the implicit default constructor is identical, so reflective
+construction and `new Foo()` are unaffected.
+
+**4. Test fixture stubs (5 sites).**
+`pos-security-common/…/RequiredPermissionsOpenApiAutoConfigurationTest.java:21,24,27,30,32` —
+deliberately empty methods whose `@PreAuthorize` annotation *is* the fixture, plus one deliberately
+unannotated. Same treatment.
+
+Verified: `pos-people` 103, `pos-customer` 660, `pos-workorder` 940, `pos-security-common` 312
+tests green with Spotless, Checkstyle and SpotBugs enabled.
 
 ### 3.5 `java:S1192` — duplicated string literals (148 issues, 21 h)
 
@@ -436,7 +466,8 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 1 | Reliability `S2637` | 2 | 0.5 h | **Red → Green** | done |
 | 2 | BLOCKER `S2699` | 1 | 0.2 h | none | done |
 | 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | done: 9 fixed, 25 no-action |
-| 3.2–3.4 | `S1948`, `S3252`, `S1186` | 20 | 2.0 h | none | not started |
+| 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | not started |
+| 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
 | 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |
 | | **Total** | **267** | **≈38 h** | | |

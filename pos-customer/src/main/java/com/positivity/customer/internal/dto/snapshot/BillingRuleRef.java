@@ -98,8 +98,6 @@ public class BillingRuleRef {
     @Nullable
     private Map<String, Object> extensions;
 
-    public BillingRuleRef() {}
-
     public boolean isPoRequired() {
         return poRequired;
     }

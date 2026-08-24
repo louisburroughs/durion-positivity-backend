@@ -89,8 +89,6 @@ public class CrmSnapshotDTO {
         @Nullable
         private Integer year;
 
-        public VehicleSummary() {}
-
         @Nullable
         public String getVehicleId() {
             return vehicleId;
@@ -169,8 +167,6 @@ public class CrmSnapshotDTO {
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String invoiceDeliveryMethod;
-
-        public BillingPreferences() {}
 
         public boolean isMarketingOptOut() {
             return marketingOptOut;

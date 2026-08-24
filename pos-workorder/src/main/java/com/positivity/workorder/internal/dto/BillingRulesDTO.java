@@ -78,7 +78,6 @@ public class BillingRulesDTO {
     // populated from the request body and their required-ness is enforced by the jakarta
     // @NotBlank/@NotNull validation on each field, not by this constructor.
     @SuppressWarnings("java:S2637")
-    public BillingRulesDTO() {}
 
     // Getters and Setters
 

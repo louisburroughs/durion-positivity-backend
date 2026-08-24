@@ -47,8 +47,6 @@ public class ContactSummary {
     @Nullable
     private ContactPreferences preferences;
 
-    public ContactSummary() {}
-
     @Nullable
     public String getContactId() {
         return contactId;
@@ -224,8 +222,6 @@ public class ContactSummary {
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String preferredLanguage;
-
-        public ContactPreferences() {}
 
         public boolean isEmailOptIn() {
             return emailOptIn;

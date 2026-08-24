@@ -6,7 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -59,7 +58,4 @@ public class WorkSession {
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
-
-    @PrePersist
-    void ensureId() {}
 }

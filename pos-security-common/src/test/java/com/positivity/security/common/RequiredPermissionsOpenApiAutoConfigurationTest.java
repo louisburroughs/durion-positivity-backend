@@ -18,18 +18,33 @@ class RequiredPermissionsOpenApiAutoConfigurationTest {
     /** No class-level @PreAuthorize, so each method is evaluated in isolation. */
     static class Controller {
         @PreAuthorize("hasAuthority('order:order:discount')")
-        public void withAuthority() {}
+        public void withAuthority() {
+            // Intentionally empty: the @PreAuthorize expression above is the fixture, and the
+            // customizer under test reads the annotation, never the body.
+        }
 
         @PreAuthorize("isAuthenticated()")
-        public void authenticatedOnly() {}
+        public void authenticatedOnly() {
+            // Intentionally empty: the @PreAuthorize expression above is the fixture, and the
+            // customizer under test reads the annotation, never the body.
+        }
 
         @PreAuthorize("hasAnyAuthority('order:order:view', 'order:order:edit')")
-        public void anyAuthority() {}
+        public void anyAuthority() {
+            // Intentionally empty: the @PreAuthorize expression above is the fixture, and the
+            // customizer under test reads the annotation, never the body.
+        }
 
         @PreAuthorize("hasRole('ADMIN')")
-        public void roleOnly() {}
+        public void roleOnly() {
+            // Intentionally empty: the @PreAuthorize expression above is the fixture, and the
+            // customizer under test reads the annotation, never the body.
+        }
 
-        public void noAnnotation() {}
+        public void noAnnotation() {
+            // Intentionally empty, and deliberately unannotated: the absence of @PreAuthorize is
+            // what this fixture contributes.
+        }
     }
 
     @SuppressWarnings("unchecked")
