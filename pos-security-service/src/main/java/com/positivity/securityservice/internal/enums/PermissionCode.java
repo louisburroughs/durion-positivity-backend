@@ -621,13 +621,17 @@ public enum PermissionCode {
     // ── Inventory (new) ────────────────────────────────────────────────────────
     INVENTORY__ADJUSTMENT__OVERRIDE(468, "inventory:adjustment:override"),
     // ── Inventory (new) ────────────────────────────────────────────────────────
-    INVENTORY__CYCLE_COUNT_TOLERANCE__MANAGE(469, "inventory:cycle_count_tolerance:manage");
+    INVENTORY__CYCLE_COUNT_TOLERANCE__MANAGE(469, "inventory:cycle_count_tolerance:manage"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    // Cross-location availability: the per-location breakdown, split from the
+    // scope-limited read at bit 311 (ADR-0057, #1494).
+    INVENTORY__AVAILABILITY__SEARCH(470, "inventory:availability:search");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 58;
+    public static final int CATALOG_VERSION = 59;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

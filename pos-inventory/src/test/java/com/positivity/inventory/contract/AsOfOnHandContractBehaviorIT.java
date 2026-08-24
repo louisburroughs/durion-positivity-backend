@@ -52,7 +52,11 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
     private MockHttpServletRequestBuilder withOnHandOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder
                 .header("X-User", "contract-test-user")
-                .header("X-Authorities", "inventory:on_hand:view,inventory:on_hand:search");
+                .header(
+                        "X-Authorities",
+                        // ADR-0057 (#1494): the availability reads moved off the on-hand codes.
+                        "inventory:on_hand:view,inventory:on_hand:search,"
+                                + "inventory:availability:read,inventory:availability:search");
     }
 
     @Test
