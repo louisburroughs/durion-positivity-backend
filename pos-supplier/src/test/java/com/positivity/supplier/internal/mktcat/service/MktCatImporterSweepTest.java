@@ -98,11 +98,12 @@ class MktCatImporterSweepTest {
                 profileResolver,
                 adapterRegistry,
                 baseClient,
-                variantRepository,
                 imageFetcher,
-                outboxEventWriter,
-                JsonMapper.builder().build(),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                new MktCatVariantStager(
+                        variantRepository,
+                        outboxEventWriter,
+                        JsonMapper.builder().build(),
+                        Clock.fixed(NOW, ZoneOffset.UTC)));
 
         when(profileResolver.resolveBinding(any(), any())).thenReturn(binding());
         when(adapterRegistry.resolve(any(), any(), any())).thenReturn(new AdapterResolution.Resolved(codec));

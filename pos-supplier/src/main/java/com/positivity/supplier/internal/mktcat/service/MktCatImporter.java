@@ -1,11 +1,7 @@
 package com.positivity.supplier.internal.mktcat.service;
 
-import com.positivity.domainevents.DomainEventEnvelope;
-import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
-import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.adapter.ediwheelc12.EdiwheelC12MktCatCodec;
 import com.positivity.supplier.internal.adapter.ediwheelc12.MktCatDecodeException;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
@@ -15,23 +11,17 @@ import com.positivity.supplier.internal.domain.model.MarketingVariant;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
-import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
 import com.positivity.supplier.internal.exception.MktCatImportException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.registry.SupplierCodecs;
-import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
-import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.spi.SupplierCatalogPort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,8 +29,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Ingests MKCAT marketing enrichment and publishes what changed (CAP-324 #1230, #1257).
@@ -71,19 +59,14 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class MktCatImporter implements SupplierCatalogPort {
 
-    private static final String SOURCE = "pos-supplier";
-
     /** Field separator for hashing. A control character, so it cannot occur in vendor text. */
     private static final char FIELD_SEPARATOR = '\u001f';
 
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
     private final SupplierBaseClient baseClient;
-    private final SupplierMktCatVariantRepository variantRepository;
     private final MktCatImageFetcher imageFetcher;
-    private final SupplierOutboxEventWriter outboxEventWriter;
-    private final ObjectMapper objectMapper;
-    private final Clock clock;
+    private final MktCatVariantStager variantStager;
 
     /**
      * Ingests the catalogue's full variant list.
@@ -149,7 +132,7 @@ public class MktCatImporter implements SupplierCatalogPort {
                         text.languageCode(), text.name(), text.description(), text.footNotes()))
                 .toList();
 
-        return stageAndPublish(
+        return variantStager.stageAndPublish(
                 vendorProfileId, supplierRef, variant, texts, storedImages, hashOf(variant, storedImages));
     }
 
@@ -169,87 +152,6 @@ public class MktCatImporter implements SupplierCatalogPort {
         String images = bodyOrNull(exchange(binding, codec.buildVariantImagesRequest(variantId)));
         String languages = bodyOrNull(exchange(binding, codec.buildVariantLanguageDataRequest(variantId)));
         return codec.decodeVariant(variantId, detail, images, languages);
-    }
-
-    /**
-     * Stages the variant and publishes it when its content changed.
-     *
-     * <p>Both in one transaction, through the outbox: a variant recorded as published that was never
-     * emitted would be skipped on every later run, because its hash now matches (ADR-0044 section 4).
-     */
-    @Transactional
-    public boolean stageAndPublish(
-            @NonNull UUID vendorProfileId,
-            @NonNull SupplierRef supplierRef,
-            @NonNull MarketingVariant variant,
-            @NonNull List<SupplierCatalogEnrichmentText> texts,
-            @NonNull List<SupplierCatalogEnrichmentImage> images,
-            @NonNull String contentHash) {
-        Instant now = Instant.now(clock);
-        Optional<SupplierMktCatVariantEntity> existing =
-                variantRepository.findByVendorProfileIdAndVendorVariantId(vendorProfileId, variant.vendorVariantId());
-
-        if (existing.isPresent() && contentHash.equals(existing.get().getContentHash())) {
-            // Seen, not changed. Recorded so an operator can tell "the catalogue stopped sending
-            // this" from "the catalogue keeps sending it unchanged" -- which look identical if only
-            // changes are timestamped.
-            SupplierMktCatVariantEntity row = existing.get();
-            row.setLastSeenAt(now);
-            variantRepository.save(row);
-            return false;
-        }
-
-        SupplierMktCatVariantEntity row = existing.orElseGet(() -> SupplierMktCatVariantEntity.builder()
-                .vendorProfileId(vendorProfileId)
-                .vendorVariantId(variant.vendorVariantId())
-                .firstSeenAt(now)
-                .build());
-
-        row.setSupplierRef(supplierRef.value());
-        row.setBrand(variant.brand());
-        row.setTreadDesign(variant.treadDesign());
-        row.setTreadDesign2(variant.treadDesign2());
-        row.setProductName(variant.productName());
-        row.setVehicleType(variant.vehicleType());
-        row.setSeasonality(variant.seasonality());
-        row.setContentHash(contentHash);
-        row.setTextsJson(objectMapper.writeValueAsString(texts));
-        row.setImagesJson(objectMapper.writeValueAsString(images));
-        row.setHasUnresolvedImages(images.stream().anyMatch(SupplierCatalogEnrichmentImage::unresolved));
-        row.setLastSeenAt(now);
-        row.setLastPublishedAt(now);
-        SupplierMktCatVariantEntity saved = variantRepository.save(row);
-
-        outboxEventWriter.publish(
-                DomainTopics.events("supplier"),
-                new DomainEventEnvelope<>(
-                        UUIDv7Generator.generate(),
-                        SupplierCatalogUpdatedV1.EVENT_TYPE,
-                        SupplierCatalogUpdatedV1.SCHEMA_VERSION,
-                        // Keyed on the staged row, so every enrichment for one variant lands on one
-                        // partition in order: a stale republication overtaking a newer one would put
-                        // withdrawn marketing copy back on a product.
-                        saved.getSupplierMktCatVariantId(),
-                        0L,
-                        now,
-                        SOURCE,
-                        null,
-                        SOURCE,
-                        new SupplierCatalogUpdatedV1(
-                                vendorProfileId,
-                                supplierRef.value(),
-                                variant.vendorVariantId(),
-                                variant.brand(),
-                                variant.treadDesign(),
-                                variant.treadDesign2(),
-                                variant.productName(),
-                                variant.vehicleType(),
-                                variant.seasonality(),
-                                contentHash,
-                                texts,
-                                images,
-                                now)));
-        return true;
     }
 
     /**

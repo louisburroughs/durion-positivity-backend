@@ -9,14 +9,11 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
-import com.positivity.supplier.internal.client.SupplierBaseClient;
 import com.positivity.supplier.internal.domain.model.MarketingVariant;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
-import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
-import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -42,44 +39,25 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("MktCatImporter — published when it changes, not when it arrives (#1230)")
-class MktCatImporterTest {
+@DisplayName("MktCatVariantStager — published when it changes, not when it arrives (#1230)")
+class MktCatVariantStagerTest {
 
     private static final Instant NOW = Instant.parse("2026-08-16T10:00:00Z");
     private static final UUID PROFILE_ID = UUID.fromString("019200aa-0000-7000-8000-0000000000b1");
     private static final SupplierRef SUPPLIER = new SupplierRef("ediwheel-net");
 
     @Mock
-    private SupplierProfileResolver profileResolver;
-
-    @Mock
-    private AdapterRegistry adapterRegistry;
-
-    @Mock
-    private SupplierBaseClient baseClient;
-
-    @Mock
     private SupplierMktCatVariantRepository variantRepository;
-
-    @Mock
-    private MktCatImageFetcher imageFetcher;
 
     @Mock
     private SupplierOutboxEventWriter outboxEventWriter;
 
-    private MktCatImporter importer;
+    private MktCatVariantStager stager;
 
     @BeforeEach
     void setUp() {
-        importer = new MktCatImporter(
-                profileResolver,
-                adapterRegistry,
-                baseClient,
-                variantRepository,
-                imageFetcher,
-                outboxEventWriter,
-                JsonMapper.builder().build(),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        stager = new MktCatVariantStager(
+                variantRepository, outboxEventWriter, JsonMapper.builder().build(), Clock.fixed(NOW, ZoneOffset.UTC));
         when(variantRepository.save(any())).thenAnswer(invocation -> {
             SupplierMktCatVariantEntity row = invocation.getArgument(0);
             if (row.getSupplierMktCatVariantId() == null) {
@@ -95,7 +73,7 @@ class MktCatImporterTest {
         when(variantRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
                 .thenReturn(Optional.empty());
 
-        boolean published = importer.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-1");
+        boolean published = stager.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-1");
 
         assertThat(published).isTrue();
         verify(outboxEventWriter).publish(any(), any());
@@ -110,7 +88,7 @@ class MktCatImporterTest {
         when(variantRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
                 .thenReturn(Optional.of(existing));
 
-        boolean published = importer.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-1");
+        boolean published = stager.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-1");
 
         assertThat(published).isFalse();
         verify(outboxEventWriter, never()).publish(any(), any());
@@ -126,7 +104,7 @@ class MktCatImporterTest {
         when(variantRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
                 .thenReturn(Optional.of(existing));
 
-        boolean published = importer.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-2");
+        boolean published = stager.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), List.of(), "hash-2");
 
         assertThat(published).isTrue();
         assertThat(existing.getContentHash()).isEqualTo("hash-2");
@@ -142,7 +120,7 @@ class MktCatImporterTest {
         List<SupplierCatalogEnrichmentImage> images =
                 List.of(SupplierCatalogEnrichmentImage.unresolved("TREAD", "https://cdn.example.com/x.jpg"));
 
-        importer.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), images, "hash-1");
+        stager.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), images, "hash-1");
 
         // A column rather than something derived from JSON at query time: the retry runner selects
         // on it, and a scan that parsed JSON per row would be the query that degrades as the
@@ -160,7 +138,7 @@ class MktCatImporterTest {
 
         // Dropping the record would discard the marketing copy that did arrive because a picture
         // did not.
-        boolean published = importer.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), images, "hash-1");
+        boolean published = stager.stageAndPublish(PROFILE_ID, SUPPLIER, variant(), texts(), images, "hash-1");
 
         assertThat(published).isTrue();
         SupplierCatalogUpdatedV1 payload = new SupplierCatalogUpdatedV1(
