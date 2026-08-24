@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -181,16 +182,7 @@ public class AsnServiceImpl implements AsnService {
                             "Asn", request.getAsnId().toString()));
         }
 
-        UUID poId = asn != null
-                ? (asn.getPurchaseOrderId() != null
-                        ? asn.getPurchaseOrderId()
-                        : asn.getLines().stream()
-                                .map(AsnLineEntity::getPurchaseOrderId)
-                                .filter(java.util.Objects::nonNull)
-                                .findFirst()
-                                .orElse(request.getPoId()))
-                : request.getPoId();
-
+        UUID poId = resolvePurchaseOrderId(asn, request);
         ExtPurchaseOrderReplica purchaseOrder = requireApprovedPurchaseOrder(poId);
 
         // odoo-parity B2 (#1034): convert optional document-UoM quantities to base BEFORE the
@@ -204,12 +196,74 @@ public class AsnServiceImpl implements AsnService {
         long receiptTotalMinor = computedLines.stream()
                 .mapToLong(ReceiptLineComputation::lineAccruedMinor)
                 .sum();
+        guardOverReceipt(receiptTotalMinor, purchaseOrder);
+
+        GoodsReceiptEntity persistedReceipt =
+                persistReceipt(request, purchaseOrder, asn, computedLines, receiptTotalMinor);
+
+        publishReceiptCreated(persistedReceipt, poId, computedLines, actorId);
+        postLedgerEntries(request, computedLines, persistedReceipt, actorId);
+
+        // Receiving states what arrived; pos-order decides what that means for the order's
+        // outstanding quantities and status (CAP-320 #1334). Writing the order here is what made
+        // two modules writers of one aggregate, and is exactly what this split removes.
+        goodsReceiptFactPublisher.publish(
+                persistedReceipt,
+                computedLines.stream()
+                        .map(computed -> new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                                computed.poLine() == null
+                                        ? null
+                                        : computed.poLine().getLineId(),
+                                computed.request().getSku(),
+                                computed.baseQuantity(),
+                                computed.lineAccruedMinor()))
+                        .toList());
+
+        if (asn != null) {
+            applyReceiptToAsn(asn, computedLines);
+            asnRepository.save(asn);
+        }
+
+        publishReceiptCompleted(persistedReceipt, poId, receiptTotalMinor, actorId);
+        return toGoodsReceiptResponse(persistedReceipt);
+    }
+
+    /**
+     * The purchase order this receipt belongs to.
+     *
+     * <p>An ASN names it directly when it can; otherwise the first of its lines that names one
+     * wins, and a receipt with no ASN falls back to what the request supplied.
+     */
+    private UUID resolvePurchaseOrderId(
+            @Nullable AdvanceShippingNoticeEntity asn, @NonNull CreateGoodsReceiptRequest request) {
+        if (asn == null) {
+            return request.getPoId();
+        }
+        if (asn.getPurchaseOrderId() != null) {
+            return asn.getPurchaseOrderId();
+        }
+        return asn.getLines().stream()
+                .map(AsnLineEntity::getPurchaseOrderId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(request.getPoId());
+    }
+
+    /** Receiving more value than the order still has open needs an explicit override authority. */
+    private void guardOverReceipt(long receiptTotalMinor, @NonNull ExtPurchaseOrderReplica purchaseOrder) {
         long currentOpenBalance = safeLong(purchaseOrder.getOpenBalanceMinor());
         if (receiptTotalMinor > currentOpenBalance
                 && !SecurityContextHelper.hasAuthority("inventory:goods_receipt:override")) {
             throw new OverReceiptNotPermittedException("OVER_RECEIPT_NOT_PERMITTED");
         }
+    }
 
+    private GoodsReceiptEntity persistReceipt(
+            @NonNull CreateGoodsReceiptRequest request,
+            @NonNull ExtPurchaseOrderReplica purchaseOrder,
+            @Nullable AdvanceShippingNoticeEntity asn,
+            @NonNull List<ReceiptLineComputation> computedLines,
+            long receiptTotalMinor) {
         GoodsReceiptEntity receiptEntity = GoodsReceiptEntity.builder()
                 .receiptNumber(generateReceiptNumber())
                 .purchaseOrderId(purchaseOrder.getPurchaseOrderId())
@@ -222,7 +276,7 @@ public class AsnServiceImpl implements AsnService {
         for (ReceiptLineComputation computed : computedLines) {
             CreateGoodsReceiptLineRequest line = computed.request();
             DocumentQuantityConverter.DocumentConversion conversion = computed.conversion();
-            GoodsReceiptLineEntity receiptLine = GoodsReceiptLineEntity.builder()
+            lineEntities.add(GoodsReceiptLineEntity.builder()
                     .goodsReceipt(receiptEntity)
                     .poLineId(
                             computed.poLine() == null ? null : computed.poLine().getLineId())
@@ -234,13 +288,50 @@ public class AsnServiceImpl implements AsnService {
                     .documentUom(conversion == null ? null : conversion.documentUom())
                     .documentQuantity(conversion == null ? null : conversion.documentQuantity())
                     .conversionFactor(conversion == null ? null : conversion.conversionFactor())
-                    .build();
-            lineEntities.add(receiptLine);
+                    .build());
         }
-
         receiptEntity.setLines(lineEntities);
-        GoodsReceiptEntity persistedReceipt = goodsReceiptRepository.save(receiptEntity);
+        return goodsReceiptRepository.save(receiptEntity);
+    }
 
+    /** Posts one base-UoM ledger row per received line and marks it for fact publication. */
+    private void postLedgerEntries(
+            @NonNull CreateGoodsReceiptRequest request,
+            @NonNull List<ReceiptLineComputation> computedLines,
+            @NonNull GoodsReceiptEntity persistedReceipt,
+            @NonNull String actorId) {
+        for (ReceiptLineComputation computed : computedLines) {
+            // Ledger rows stay base-UoM only (spec B2): the converted base quantity posts here.
+            // lotId is null for untracked products (E1 zero-change guarantee).
+            InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
+                    .stockItemId(computed.request().getSku())
+                    .locationId(request.getLocationId())
+                    .toLocationId(request.getLocationId())
+                    .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
+                    .changeInQuantity(computed.baseQuantity())
+                    .quantityAfter(calculateQuantityAfter(
+                            computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
+                    .lotId(computed.lotId())
+                    // odoo-parity E4 (#1050): the funnel enumerates these serials for SERIAL-tracked
+                    // products (422 SERIAL_COUNT_MISMATCH if the count != received qty); ignored otherwise.
+                    .serialNumbers(
+                            computed.request().getSerialNumbers() == null
+                                    ? java.util.List.of()
+                                    : computed.request().getSerialNumbers())
+                    .transactionUserId(actorId)
+                    .sourceTransactionId(persistedReceipt.getReceiptId().toString())
+                    .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
+                    .build();
+            ledgerPostingService.post(entry);
+            inventoryFactPublisher.markEntry(entry);
+        }
+    }
+
+    private void publishReceiptCreated(
+            @NonNull GoodsReceiptEntity persistedReceipt,
+            @NonNull UUID poId,
+            @NonNull List<ReceiptLineComputation> computedLines,
+            @NonNull String actorId) {
         eventPublisher.publishEvent(Map.of(
                 "type",
                 "ReceiptCreated",
@@ -270,53 +361,13 @@ public class AsnServiceImpl implements AsnService {
                 actorId,
                 OCCURRED_AT,
                 Instant.now(clock).toString()));
+    }
 
-        for (ReceiptLineComputation computed : computedLines) {
-            // Ledger rows stay base-UoM only (spec B2): the converted base quantity posts here.
-            // lotId is null for untracked products (E1 zero-change guarantee).
-            InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
-                    .stockItemId(computed.request().getSku())
-                    .locationId(request.getLocationId())
-                    .toLocationId(request.getLocationId())
-                    .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                    .changeInQuantity(computed.baseQuantity())
-                    .quantityAfter(calculateQuantityAfter(
-                            computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
-                    .lotId(computed.lotId())
-                    // odoo-parity E4 (#1050): the funnel enumerates these serials for SERIAL-tracked
-                    // products (422 SERIAL_COUNT_MISMATCH if the count != received qty); ignored otherwise.
-                    .serialNumbers(
-                            computed.request().getSerialNumbers() == null
-                                    ? java.util.List.of()
-                                    : computed.request().getSerialNumbers())
-                    .transactionUserId(actorId)
-                    .sourceTransactionId(persistedReceipt.getReceiptId().toString())
-                    .notes("Goods receipt " + persistedReceipt.getReceiptNumber())
-                    .build();
-            ledgerPostingService.post(entry);
-            inventoryFactPublisher.markEntry(entry);
-        }
-
-        // Receiving states what arrived; pos-order decides what that means for the order's
-        // outstanding quantities and status (CAP-320 #1334). Writing the order here is what made
-        // two modules writers of one aggregate, and is exactly what this split removes.
-        goodsReceiptFactPublisher.publish(
-                persistedReceipt,
-                computedLines.stream()
-                        .map(computed -> new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
-                                computed.poLine() == null
-                                        ? null
-                                        : computed.poLine().getLineId(),
-                                computed.request().getSku(),
-                                computed.baseQuantity(),
-                                computed.lineAccruedMinor()))
-                        .toList());
-
-        if (asn != null) {
-            applyReceiptToAsn(asn, computedLines);
-            asnRepository.save(asn);
-        }
-
+    private void publishReceiptCompleted(
+            @NonNull GoodsReceiptEntity persistedReceipt,
+            @NonNull UUID poId,
+            long receiptTotalMinor,
+            @NonNull String actorId) {
         eventPublisher.publishEvent(Map.of(
                 "type",
                 "ReceiptCompleted",
@@ -336,8 +387,6 @@ public class AsnServiceImpl implements AsnService {
                 actorId,
                 OCCURRED_AT,
                 Instant.now(clock).toString()));
-
-        return toGoodsReceiptResponse(persistedReceipt);
     }
 
     @Override

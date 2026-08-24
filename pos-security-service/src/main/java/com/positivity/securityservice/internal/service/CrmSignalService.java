@@ -43,7 +43,54 @@ public class CrmSignalService {
             @NonNull String normalizedFirstName,
             @NonNull String normalizedLastName) {
 
-        Map<UUID, ExtPersonReplica> candidates = new HashMap<>();
+        Candidates candidates =
+                gatherCandidates(normalizedEmail, normalizedPhone, normalizedFirstName, normalizedLastName);
+        List<UUID> candidateIds = List.copyOf(candidates.byPersonId().keySet());
+        StandingTally standings = tallyStandings(candidateIds);
+
+        boolean exactEmailMatch = !candidates.emailMatches().isEmpty();
+        boolean exactPhoneMatch = !candidates.phoneMatches().isEmpty();
+        boolean exactNameMatch = !candidates.nameMatches().isEmpty();
+
+        // An email hit alone is enough; phone and name are only conclusive together; and a person
+        // who is both an individual customer and a commercial contact always warrants a look.
+        boolean reviewRequired = !candidateIds.isEmpty()
+                && (exactEmailMatch || (exactPhoneMatch && exactNameMatch) || standings.shared() > 0);
+
+        return CrmMatchSummaryDto.builder()
+                .candidateCount(candidateIds.size())
+                .anyMatches(!candidateIds.isEmpty())
+                .individualCustomerCandidateCount(standings.individual())
+                .commercialContactCandidateCount(standings.commercial())
+                .sharedIdentityCandidateCount(standings.shared())
+                .exactEmailMatch(exactEmailMatch)
+                .exactPhoneMatch(exactPhoneMatch)
+                .exactNameMatch(exactNameMatch)
+                .reviewRequired(reviewRequired)
+                .build();
+    }
+
+    /**
+     * Everyone the three signals turned up, and which signal turned each of them up.
+     *
+     * <p>One person can appear under several signals; {@code byPersonId} deduplicates them while the
+     * three sets keep which signals fired, because the verdict depends on the combination.
+     */
+    private record Candidates(
+            Map<UUID, ExtPersonReplica> byPersonId,
+            Set<UUID> emailMatches,
+            Set<UUID> phoneMatches,
+            Set<UUID> nameMatches) {}
+
+    /** How many candidates hold each customer standing. */
+    private record StandingTally(int individual, int commercial, int shared) {}
+
+    private Candidates gatherCandidates(
+            @NonNull String normalizedEmail,
+            @Nullable String normalizedPhone,
+            @NonNull String normalizedFirstName,
+            @NonNull String normalizedLastName) {
+        Map<UUID, ExtPersonReplica> byPersonId = new HashMap<>();
         Set<UUID> emailMatches = new LinkedHashSet<>();
         Set<UUID> phoneMatches = new LinkedHashSet<>();
         Set<UUID> nameMatches = new LinkedHashSet<>();
@@ -51,67 +98,54 @@ public class CrmSignalService {
         String email = normalizedEmail.toLowerCase(Locale.ROOT);
         for (ExtPersonReplica person :
                 extPersonReplicaRepository.findByPrimaryEmailIgnoreCaseOrSecondaryEmailIgnoreCase(email, email)) {
-            candidates.put(person.getPersonId(), person);
+            byPersonId.put(person.getPersonId(), person);
             emailMatches.add(person.getPersonId());
         }
         if (normalizedPhone != null && !normalizedPhone.isBlank()) {
             for (ExtPersonReplica person :
                     extPersonReplicaRepository.findByPrimaryPhoneOrSecondaryPhone(normalizedPhone, normalizedPhone)) {
-                candidates.put(person.getPersonId(), person);
+                byPersonId.put(person.getPersonId(), person);
                 phoneMatches.add(person.getPersonId());
             }
         }
+        // Surname is the indexed query; the given name is filtered in memory, so a shared surname
+        // does not become a match on its own.
         for (ExtPersonReplica person : extPersonReplicaRepository.findByLastNameIgnoreCase(normalizedLastName)) {
             if (equalsIgnoreCase(person.getFirstName(), normalizedFirstName)) {
-                candidates.put(person.getPersonId(), person);
+                byPersonId.put(person.getPersonId(), person);
                 nameMatches.add(person.getPersonId());
             }
         }
+        return new Candidates(byPersonId, emailMatches, phoneMatches, nameMatches);
+    }
 
+    private StandingTally tallyStandings(@NonNull List<UUID> candidateIds) {
+        if (candidateIds.isEmpty()) {
+            return new StandingTally(0, 0, 0);
+        }
         Map<UUID, ExtCustomerPersonIdentity> standings = new HashMap<>();
-        if (!candidates.isEmpty()) {
-            for (ExtCustomerPersonIdentity identity :
-                    extCustomerPersonIdentityRepository.findAllById(candidates.keySet())) {
-                standings.put(identity.getPersonId(), identity);
-            }
+        for (ExtCustomerPersonIdentity identity : extCustomerPersonIdentityRepository.findAllById(candidateIds)) {
+            standings.put(identity.getPersonId(), identity);
         }
 
-        List<UUID> candidateIds = List.copyOf(candidates.keySet());
-        int individualCustomerCandidateCount = 0;
-        int commercialContactCandidateCount = 0;
-        int sharedIdentityCandidateCount = 0;
+        int individual = 0;
+        int commercial = 0;
+        int shared = 0;
         for (UUID personId : candidateIds) {
             ExtCustomerPersonIdentity standing = standings.get(personId);
-            boolean individual = standing != null && standing.isIndividualCustomer();
-            boolean commercial = standing != null && standing.isCommercialContact();
-            if (individual) {
-                individualCustomerCandidateCount++;
+            boolean isIndividual = standing != null && standing.isIndividualCustomer();
+            boolean isCommercial = standing != null && standing.isCommercialContact();
+            if (isIndividual) {
+                individual++;
             }
-            if (commercial) {
-                commercialContactCandidateCount++;
+            if (isCommercial) {
+                commercial++;
             }
-            if (individual && commercial) {
-                sharedIdentityCandidateCount++;
+            if (isIndividual && isCommercial) {
+                shared++;
             }
         }
-
-        boolean exactEmailMatch = !emailMatches.isEmpty();
-        boolean exactPhoneMatch = !phoneMatches.isEmpty();
-        boolean exactNameMatch = !nameMatches.isEmpty();
-        boolean reviewRequired = !candidateIds.isEmpty()
-                && (exactEmailMatch || (exactPhoneMatch && exactNameMatch) || sharedIdentityCandidateCount > 0);
-
-        return CrmMatchSummaryDto.builder()
-                .candidateCount(candidateIds.size())
-                .anyMatches(!candidateIds.isEmpty())
-                .individualCustomerCandidateCount(individualCustomerCandidateCount)
-                .commercialContactCandidateCount(commercialContactCandidateCount)
-                .sharedIdentityCandidateCount(sharedIdentityCandidateCount)
-                .exactEmailMatch(exactEmailMatch)
-                .exactPhoneMatch(exactPhoneMatch)
-                .exactNameMatch(exactNameMatch)
-                .reviewRequired(reviewRequired)
-                .build();
+        return new StandingTally(individual, commercial, shared);
     }
 
     private static boolean equalsIgnoreCase(@Nullable String value, @NonNull String expected) {
