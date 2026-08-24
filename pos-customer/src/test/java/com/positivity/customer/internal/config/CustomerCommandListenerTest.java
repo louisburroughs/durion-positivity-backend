@@ -145,4 +145,34 @@ class CustomerCommandListenerTest {
         assertThatExceptionOfType(QueryTimeoutException.class)
                 .isThrownBy(() -> listener.onCommand(replayCommand("2026-07-13T10:00:00Z", "2026-07-13T11:00:00Z")));
     }
+
+    @Test
+    @DisplayName("A segment that cannot be resolved is dropped, not retried")
+    void dropsUnresolvableSegmentCommand() {
+        // Load-bearing for CustomerCommandHandlers declaring no transaction of its own. The handler
+        // delegates to the already-transactional resolveAndPublish; wrapping that in an outer
+        // transaction would let a participating rollback surface as UnexpectedRollbackException at
+        // commit, after this catch has already run — turning the documented drop into a redelivery
+        // loop over a command redelivery cannot repair.
+        when(segmentService.resolveAndPublish(any(), any())).thenThrow(new IllegalStateException("bad predicate"));
+
+        assertThatCode(() -> listener.onCommand(segmentResolveCommand())).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("A transient DB error resolving a segment still rethrows for container retry/DLQ")
+    void rethrowsTransientSegmentErrors() {
+        when(segmentService.resolveAndPublish(any(), any())).thenThrow(new QueryTimeoutException("db timeout"));
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onCommand(segmentResolveCommand()));
+    }
+
+    private static String segmentResolveCommand() {
+        return """
+                {"commandType":"customer.segment.resolve-requested",
+                 "payload":{"requestId":"019200aa-0000-7000-8000-0000000000d1",
+                            "segmentId":"019200aa-0000-7000-8000-0000000000d2"}}
+                """;
+    }
 }

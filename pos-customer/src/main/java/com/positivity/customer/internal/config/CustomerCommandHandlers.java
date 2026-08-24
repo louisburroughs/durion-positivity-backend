@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -23,11 +22,23 @@ import tools.jackson.databind.JsonNode;
  *
  * Both methods used to sit on the listener and be called on {@code this} from its
  * {@code @KafkaListener} method, which is not transactional. Spring's transaction advice is
- * proxy-based, so those self-calls bypassed it and the {@code @Transactional} annotations below were
- * never applied — which is precisely what {@link #handleSegmentResolveRequested}'s note requires:
- * the reply fact must be written to the outbox atomically with the read that produced it, or a
- * requester can be told about a resolution that was never recorded. Living in a separate bean means
- * the calls cross the proxy and each command is handled as one unit.
+ * proxy-based, so those self-calls bypassed it and the {@code @Transactional} annotations they used
+ * to carry were never applied. Living in a separate bean means the dispatch crosses the proxy.
+ *
+ * <h2>Why neither method declares {@code @Transactional} itself</h2>
+ *
+ * Both delegate to a service method that is already {@code @Transactional} —
+ * {@code SegmentServiceImpl.resolveAndPublish} and {@code SuppressionServiceImpl.add} — so the unit
+ * these handlers need is the one those boundaries already provide, including
+ * {@code resolveAndPublish} writing its reply fact to the outbox atomically with the read that
+ * produced it.
+ *
+ * <p>Adding an outer transaction would not merely be redundant, it would be wrong. A participating
+ * inner transaction that rolls back marks the shared transaction rollback-only, so the outer commit
+ * throws {@link org.springframework.transaction.UnexpectedRollbackException} — escaping past
+ * {@link #handleSegmentResolveRequested}'s catch, which exists precisely so a malformed or unknown
+ * request is dropped rather than retried. The catch runs before the commit and cannot see it. So
+ * the boundary stays where the work is, and these methods stay plain dispatch.
  *
  * <p>The listener's third branch, {@code handleOutboxReplayRequested}, deliberately stays where it
  * is: it declares no transaction and needs none, since it only queues existing outbox rows for
@@ -44,12 +55,12 @@ public class CustomerCommandHandlers {
     /**
      * Resolve a segment and reply with {@code customer.segment.resolved}.
      *
-     * <p>Runs in its own transaction so the reply fact is written to the outbox atomically with
-     * the read that produced it. A malformed or unknown request is dropped rather than retried:
-     * neither can be fixed by redelivery, and a requester waiting on a reply will time out and
-     * ask again.
+     * <p>{@code resolveAndPublish} is transactional, so the reply fact is written to the outbox
+     * atomically with the read that produced it. A malformed or unknown request is dropped rather
+     * than retried: neither can be fixed by redelivery, and a requester waiting on a reply will
+     * time out and ask again. See the class note on why this method adds no transaction of its own —
+     * one would turn that drop into a thrown {@code UnexpectedRollbackException}.
      */
-    @Transactional
     public void handleSegmentResolveRequested(JsonNode root) {
         JsonNode payload = root.path("payload");
         UUID requestId = uuidOrNull(payload, "requestId");
@@ -78,8 +89,10 @@ public class CustomerCommandHandlers {
      * <p>The raw address exists only inside this command; {@link SuppressionService#add} stores
      * a normalized hash plus a masked hint. Malformed commands are dropped, not retried:
      * redelivery cannot repair a missing address or an unknown enum value.
+     *
+     * <p>{@code SuppressionServiceImpl.add} is transactional; see the class note on why this method
+     * adds no transaction of its own.
      */
-    @Transactional
     public void handleSuppressionAddRequested(JsonNode root) {
         JsonNode payload = root.path("payload");
         String address = payload.path("address").stringValue(null);

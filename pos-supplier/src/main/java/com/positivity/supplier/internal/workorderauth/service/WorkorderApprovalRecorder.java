@@ -23,6 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
  * re-read detached and the attempt counter's read and write were not one unit. Living in a separate
  * bean means the calls cross the proxy and the boundaries are real.
  *
+ * <p>Each write re-reads its row by id inside its own transaction and works on that, never on the
+ * detached instance the tick handed over — saving that would merge a stale snapshot over a newer
+ * row, and would resurrect the row outright if it had since been deleted.
+ *
  * <h2>One transaction per row, not one per tick</h2>
  *
  * Deliberately per-attempt rather than around the whole batch. One vendor refusing must not roll back
@@ -61,7 +65,12 @@ public class WorkorderApprovalRecorder {
     public void markApproved(@NonNull SupplierWorkorderAuthorizationEntity row) {
         SupplierWorkorderAuthorizationEntity managed = authorizationRepository
                 .findById(row.getSupplierWorkorderAuthorizationId())
-                .orElse(row);
+                .orElse(null);
+        if (managed == null) {
+            // Gone since the tick's query. Merging the detached snapshot back would resurrect a
+            // deleted authorization, so there is nothing to record.
+            return;
+        }
         managed.setApprovalStatus(WorkorderApprovalStatus.APPROVED);
         managed.setApprovedAt(Instant.now(clock));
         managed.setApprovalAttempts(managed.getApprovalAttempts() + 1);
@@ -75,7 +84,12 @@ public class WorkorderApprovalRecorder {
     public void recordAttempt(@NonNull SupplierWorkorderAuthorizationEntity row, @NonNull String reason) {
         SupplierWorkorderAuthorizationEntity managed = authorizationRepository
                 .findById(row.getSupplierWorkorderAuthorizationId())
-                .orElse(row);
+                .orElse(null);
+        if (managed == null) {
+            // Gone since the tick's query. Merging the detached snapshot back would resurrect a
+            // deleted authorization, so there is nothing to record.
+            return;
+        }
         int attempts = managed.getApprovalAttempts() + 1;
         managed.setApprovalAttempts(attempts);
         if (attempts >= maxAttempts) {
@@ -95,7 +109,12 @@ public class WorkorderApprovalRecorder {
     public void park(@NonNull SupplierWorkorderAuthorizationEntity row, @NonNull String reason) {
         SupplierWorkorderAuthorizationEntity managed = authorizationRepository
                 .findById(row.getSupplierWorkorderAuthorizationId())
-                .orElse(row);
+                .orElse(null);
+        if (managed == null) {
+            // Gone since the tick's query. Merging the detached snapshot back would resurrect a
+            // deleted authorization, so there is nothing to record.
+            return;
+        }
         managed.setApprovalStatus(WorkorderApprovalStatus.MANUAL_REVIEW);
         managed.setReviewReason(truncate(reason));
         authorizationRepository.save(managed);
