@@ -67,6 +67,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class EventIngestionServiceImpl implements EventIngestionService {
+    private static final String EVENT_NOT_FOUND_PREFIX = "Event not found: ";
+
     private final Clock clock;
 
     private static final String EVENT_SPACE = "Event ";
@@ -205,7 +207,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public AccountingEventResponse getEventById(@NonNull UUID eventId) {
         AccountingEvent event = accountingEventRepository
                 .findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
+                .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
         return AccountingEventMapper.toEventResponse(event);
     }
 
@@ -217,7 +219,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public AccountingEventResponse retryEventProcessing(UUID eventId) {
         AccountingEvent accountingEvent = accountingEventRepository
                 .findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
+                .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
         log.info("Retrying event {}", eventId);
 
         accountingEvent.setStatus(AccountingEventStatus.RECEIVED);
@@ -259,7 +261,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // Load the accounting event
         AccountingEvent event = accountingEventRepository
                 .findById(eventId)
-                .orElseThrow(() -> new EventNotFoundException("Event not found: " + eventId));
+                .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
 
         // BR-3: Idempotency check - reject if already PROCESSED
         if (event.getStatus() == AccountingEventStatus.PROCESSED) {

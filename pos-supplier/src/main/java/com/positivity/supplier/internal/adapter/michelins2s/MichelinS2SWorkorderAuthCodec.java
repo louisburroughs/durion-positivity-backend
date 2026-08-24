@@ -51,6 +51,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @RequiredArgsConstructor
 public class MichelinS2SWorkorderAuthCodec implements SupplierAdapterCodec {
+    private static final String APPLICATION_JSON = "application/json";
 
     /**
      * Vendor words that mean the fleet said yes.
@@ -131,8 +132,8 @@ public class MichelinS2SWorkorderAuthCodec implements SupplierAdapterCodec {
                 "/api/v1/workOrders",
                 partnerQuery(partnerId),
                 objectMapper.writeValueAsString(body),
-                "application/json",
-                "application/json",
+                APPLICATION_JSON,
+                APPLICATION_JSON,
                 false,
                 apiVersionHeader(apiMajorVersion));
     }
@@ -153,8 +154,8 @@ public class MichelinS2SWorkorderAuthCodec implements SupplierAdapterCodec {
                 "/api/v1/workOrders/" + encodePathSegment(vendorAuthorizationId) + "/approve",
                 partnerQuery(partnerId),
                 "{}",
-                "application/json",
-                "application/json",
+                APPLICATION_JSON,
+                APPLICATION_JSON,
                 true,
                 apiVersionHeader(apiMajorVersion));
     }
@@ -162,7 +163,7 @@ public class MichelinS2SWorkorderAuthCodec implements SupplierAdapterCodec {
     /** Builds a re-read of an accepted-but-undecided authorization, from the 202's {@code Location}. */
     @NonNull
     public SupplierRequestSpec buildPollRequest(@NonNull String pollPath, @NonNull String partnerId) {
-        return new SupplierRequestSpec("GET", pollPath, partnerQuery(partnerId), null, null, "application/json", true);
+        return new SupplierRequestSpec("GET", pollPath, partnerQuery(partnerId), null, null, APPLICATION_JSON, true);
     }
 
     /** Builds the vehicle lookup. */
@@ -174,7 +175,7 @@ public class MichelinS2SWorkorderAuthCodec implements SupplierAdapterCodec {
                 partnerQuery(partnerId),
                 null,
                 null,
-                "application/json",
+                APPLICATION_JSON,
                 true);
     }
 
@@ -182,14 +183,14 @@ public class MichelinS2SWorkorderAuthCodec implements SupplierAdapterCodec {
     @NonNull
     public SupplierRequestSpec buildContractLookup(@NonNull String partnerId) {
         return new SupplierRequestSpec(
-                "GET", "/api/v1/contracts", partnerQuery(partnerId), null, null, "application/json", true);
+                "GET", "/api/v1/contracts", partnerQuery(partnerId), null, null, APPLICATION_JSON, true);
     }
 
     /** Builds the policy lookup. */
     @NonNull
     public SupplierRequestSpec buildPolicyLookup(@NonNull String partnerId) {
         return new SupplierRequestSpec(
-                "GET", "/api/v1/policies", partnerQuery(partnerId), null, null, "application/json", true);
+                "GET", "/api/v1/policies", partnerQuery(partnerId), null, null, APPLICATION_JSON, true);
     }
 
     /**

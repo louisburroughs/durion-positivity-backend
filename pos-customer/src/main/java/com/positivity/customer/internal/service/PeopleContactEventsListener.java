@@ -38,6 +38,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
 public class PeopleContactEventsListener {
+    private static final String PAYLOAD = "payload";
+
+    private static final String AGGREGATE_VERSION = "aggregateVersion";
 
     static final String OWNER = "people-contact";
 
@@ -69,7 +72,7 @@ public class PeopleContactEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description("Replica event payloads rejected due to Jackson databind failures"
                                 + " (e.g. omitted primitive fields)")
-                        .tag("owner", "people-contact")
+                        .tag("owner", OWNER)
                         .tag("entity", "people-contact-events")
                         .register(registry);
     }
@@ -126,8 +129,8 @@ public class PeopleContactEventsListener {
     }
 
     private void applyPersonUpdated(JsonNode envelope) {
-        PersonUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        PersonUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PersonUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtPersonReplica existing =
                 extPersonReplicaRepository.findById(payload.personId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
@@ -171,15 +174,15 @@ public class PeopleContactEventsListener {
     }
 
     private void applyPersonDeleted(JsonNode envelope) {
-        PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonDeletedV1.class);
+        PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PersonDeletedV1.class);
         extPersonReplicaRepository.deleteById(payload.personId());
         log.info("Deleted ext_people_contact_person personId={}", payload.personId());
     }
 
     private void applyOrganizationAddressUpdated(JsonNode envelope) {
         OrganizationAddressUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), OrganizationAddressUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), OrganizationAddressUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtOrganizationPostalAddress existing = extOrganizationPostalAddressRepository
                 .findById(payload.organizationId())
                 .orElse(null);
@@ -213,8 +216,8 @@ public class PeopleContactEventsListener {
      */
     private void applyOrganizationAddressRemoved(JsonNode envelope) {
         OrganizationAddressRemovedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), OrganizationAddressRemovedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), OrganizationAddressRemovedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtOrganizationPostalAddress existing = extOrganizationPostalAddressRepository
                 .findById(payload.organizationId())
                 .orElse(null);

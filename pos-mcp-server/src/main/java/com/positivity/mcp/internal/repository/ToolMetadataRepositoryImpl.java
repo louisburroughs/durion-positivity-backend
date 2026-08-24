@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @Profile({"!test", "openapi"})
 public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
+    private static final String VARCHAR = "varchar";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -55,7 +56,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         return jdbcTemplate.query(
                 sql,
                 ps -> {
-                    ps.setArray(1, ps.getConnection().createArrayOf("varchar", permissionCodes.toArray()));
+                    ps.setArray(1, ps.getConnection().createArrayOf(VARCHAR, permissionCodes.toArray()));
                     ps.setString(2, workflowState);
                 },
                 this::mapRow);
@@ -118,7 +119,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 sql,
                 ps -> {
                     ps.setString(1, workflowState);
-                    ps.setArray(2, ps.getConnection().createArrayOf("varchar", permissionCodes.toArray()));
+                    ps.setArray(2, ps.getConnection().createArrayOf(VARCHAR, permissionCodes.toArray()));
                     ps.setObject(3, toVectorPGobject(embedding));
                     ps.setInt(4, limit);
                 },
@@ -151,7 +152,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 sql,
                 ps -> {
                     ps.setString(1, workflowState);
-                    ps.setArray(2, ps.getConnection().createArrayOf("varchar", permissionCodes.toArray()));
+                    ps.setArray(2, ps.getConnection().createArrayOf(VARCHAR, permissionCodes.toArray()));
                     ps.setObject(3, toVectorPGobject(embedding));
                     ps.setInt(4, limit);
                 },
@@ -210,7 +211,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         Object[] keptArray = keptNames.toArray();
         List<UUID> orphanIds = jdbcTemplate.query(
                 "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name <> ALL(?)",
-                ps -> ps.setArray(1, ps.getConnection().createArrayOf("varchar", keptArray)),
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf(VARCHAR, keptArray)),
                 (rs, rowNum) -> rs.getObject("id", UUID.class));
         if (orphanIds.isEmpty()) {
             return 0;

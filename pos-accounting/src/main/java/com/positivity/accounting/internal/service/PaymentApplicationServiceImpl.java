@@ -60,6 +60,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Transactional
 public class PaymentApplicationServiceImpl implements com.positivity.accounting.service.PaymentApplicationService {
+    private static final String PAYMENT_APPLICATION_NOT_FOUND_PREFIX = "Payment application not found: ";
+
     private static final String PAYMENT_NOT_FOUND = "Payment not found: ";
 
     private final Clock clock;
@@ -405,7 +407,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         PaymentApplication original = paymentApplicationRepository
                 .findById(paymentApplicationId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Payment application not found: " + paymentApplicationId));
+                        HttpStatus.NOT_FOUND, PAYMENT_APPLICATION_NOT_FOUND_PREFIX + paymentApplicationId));
 
         // Block single-application reversal of a multi-application apply request (finding 3): the C1
         // cash-receipt JE and C2 reversing entry are both keyed per applicationRequestId, so reversing
@@ -445,7 +447,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         PaymentApplication original = paymentApplicationRepository
                 .findById(paymentApplicationId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Payment application not found: " + paymentApplicationId));
+                        HttpStatus.NOT_FOUND, PAYMENT_APPLICATION_NOT_FOUND_PREFIX + paymentApplicationId));
 
         // 3. Create reversal record
         PaymentApplicationReversal reversal = new PaymentApplicationReversal();
@@ -543,7 +545,7 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
         return paymentApplicationRepository
                 .findById(paymentApplicationId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Payment application not found: " + paymentApplicationId));
+                        HttpStatus.NOT_FOUND, PAYMENT_APPLICATION_NOT_FOUND_PREFIX + paymentApplicationId));
     }
 
     /**

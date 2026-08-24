@@ -38,7 +38,14 @@ public class LocationInventoryRollupServiceImpl implements LocationInventoryRoll
      * (ADR-0016). Kept in sync via the CAP-214 contract guide.
      */
     private static final Set<String> VALID_PARENT_TYPES = Set.of(
-            "HOME_OFFICE", "HEADQUARTERS", "REGION", "DISTRICT", "PHYSICAL", "ORGANIZATIONAL", "FINANCIAL", "SHIPPING");
+            "HOME_OFFICE",
+            "HEADQUARTERS",
+            "REGION",
+            "DISTRICT",
+            DEFAULT_PARENT_TYPE,
+            "ORGANIZATIONAL",
+            "FINANCIAL",
+            "SHIPPING");
 
     private final StorageLocationTopologyService topologyService;
     private final SiteInventoryRollupService siteInventoryRollupService;

@@ -75,7 +75,7 @@ public class InvoiceEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "invoice")
+                        .tag("owner", OWNER)
                         .tag("entity", "invoice-events")
                         .register(registry);
     }

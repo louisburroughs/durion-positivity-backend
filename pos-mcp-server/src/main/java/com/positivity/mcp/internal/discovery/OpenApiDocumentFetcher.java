@@ -30,6 +30,7 @@ import reactor.util.retry.Retry;
 
 @Component
 public class OpenApiDocumentFetcher {
+    private static final String AGGREGATE = "aggregate";
 
     private static final Logger log = LoggerFactory.getLogger(OpenApiDocumentFetcher.class);
     private static final String GATEWAY_SERVICE_ID = "pos-api-gateway";
@@ -164,7 +165,7 @@ public class OpenApiDocumentFetcher {
                         specUri,
                         elapsedMs(fetchStartNanos),
                         raw.length()))
-                .map(raw -> deserialize("aggregate", raw))
+                .map(raw -> deserialize(AGGREGATE, raw))
                 .flatMap(result -> {
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
@@ -178,7 +179,7 @@ public class OpenApiDocumentFetcher {
                                 specUri);
                         return aggregateViaSwaggerConfig(specUri, baseUri);
                     }
-                    return Mono.just(new DiscoveredOpenApi("aggregate", baseUri, openAPI));
+                    return Mono.just(new DiscoveredOpenApi(AGGREGATE, baseUri, openAPI));
                 })
                 .onErrorResume(ex -> {
                     log.warn("Could not fetch aggregate OpenAPI from {}: {}", specUri, ex.getMessage());
@@ -223,7 +224,7 @@ public class OpenApiDocumentFetcher {
                                         docs.size(),
                                         swaggerConfigUri,
                                         mergedPaths.size());
-                                return new DiscoveredOpenApi("aggregate", baseUri, merged);
+                                return new DiscoveredOpenApi(AGGREGATE, baseUri, merged);
                             });
                 })
                 .onErrorResume(ex -> {

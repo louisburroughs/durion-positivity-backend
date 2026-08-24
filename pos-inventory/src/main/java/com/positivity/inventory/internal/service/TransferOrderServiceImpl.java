@@ -101,6 +101,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class TransferOrderServiceImpl implements TransferOrderService {
+    private static final String SOURCE = "source";
+
+    private static final String DESTINATION = "destination";
 
     private static final String ELIGIBLE_STATUS = "ACTIVE";
 
@@ -142,11 +145,11 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             throw new IllegalArgumentException("Source and destination must be different sites; intra-site bin moves"
                     + " use POST /v1/inventory/stock-movements");
         }
-        requireEligibleSite(request.getSourceLocationId(), "source");
-        requireEligibleSite(request.getDestinationLocationId(), "destination");
-        requireStorageLocationUnderSite(request.getSourceStorageLocationId(), request.getSourceLocationId(), "source");
+        requireEligibleSite(request.getSourceLocationId(), SOURCE);
+        requireEligibleSite(request.getDestinationLocationId(), DESTINATION);
+        requireStorageLocationUnderSite(request.getSourceStorageLocationId(), request.getSourceLocationId(), SOURCE);
         requireStorageLocationUnderSite(
-                request.getDestinationStorageLocationId(), request.getDestinationLocationId(), "destination");
+                request.getDestinationStorageLocationId(), request.getDestinationLocationId(), DESTINATION);
 
         TransferOrder order = TransferOrder.builder()
                 .sourceLocationId(request.getSourceLocationId())
@@ -249,8 +252,8 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         TransferOrder order = load(transferOrderId);
         requireDispatchableStatus(order);
         // Spec C5: both endpoints of the movement re-validated at posting time.
-        requireEligibleSite(order.getSourceLocationId(), "source");
-        requireEligibleSite(order.getDestinationLocationId(), "destination");
+        requireEligibleSite(order.getSourceLocationId(), SOURCE);
+        requireEligibleSite(order.getDestinationLocationId(), DESTINATION);
 
         Map<UUID, TransferQuantityLineRequest> explicit = explicitLines(request.getLines(), order);
         UUID sourcePosting = sourcePostingLocation(order);
@@ -318,7 +321,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             throw new IllegalStateException("Cannot receive transfer order in status: " + order.getStatus());
         }
         // Spec C5: the receiving end re-validated at posting time.
-        requireEligibleSite(order.getDestinationLocationId(), "destination");
+        requireEligibleSite(order.getDestinationLocationId(), DESTINATION);
 
         Map<UUID, TransferQuantityLineRequest> explicit = explicitLines(request.getLines(), order);
         UUID sourcePosting = sourcePostingLocation(order);
@@ -393,7 +396,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         // nothing anywhere — deliberately no eligibility check, so a transfer toward a
         // since-deactivated destination can still be resolved as a loss.
         if (request.getDisposition() == TransferShortCloseDisposition.RETURNED_TO_SOURCE) {
-            requireEligibleSite(order.getSourceLocationId(), "source");
+            requireEligibleSite(order.getSourceLocationId(), SOURCE);
         }
 
         UUID sourcePosting = sourcePostingLocation(order);

@@ -19,6 +19,10 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Service
 public class VehicleReferenceService {
+    private static final String RESULTS = "Results";
+
+    private static final String JSON_FORMAT_QUERY = "?format=json";
+
     private final Clock clock;
 
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
@@ -42,7 +46,7 @@ public class VehicleReferenceService {
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleVariableRepository.deleteAll();
             for (JsonNode node : results) {
                 VehicleVariable variable = new VehicleVariable();
@@ -62,11 +66,11 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + JSON_FORMAT_QUERY;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleVariableValueRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleVariableValue value = new VehicleVariableValue();
@@ -91,7 +95,7 @@ public class VehicleReferenceService {
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             manufacturerRepository.deleteAll();
             for (JsonNode node : results) {
                 Manufacturer m = new Manufacturer();
@@ -116,11 +120,11 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + JSON_FORMAT_QUERY;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             makeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Make make = new Make();
@@ -146,11 +150,11 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + JSON_FORMAT_QUERY;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             modelRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 Model model = new Model();
@@ -176,11 +180,11 @@ public class VehicleReferenceService {
         if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
-        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
+        String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + JSON_FORMAT_QUERY;
         String response = restClient.get().uri(url).retrieve().body(String.class);
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode results = root.get("Results");
+            JsonNode results = root.get(RESULTS);
             vehicleTypeRepository.deleteAll(cached);
             for (JsonNode node : results) {
                 VehicleType vt = new VehicleType();

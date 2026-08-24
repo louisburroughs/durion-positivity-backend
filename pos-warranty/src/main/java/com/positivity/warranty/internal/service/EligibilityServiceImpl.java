@@ -55,6 +55,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class EligibilityServiceImpl implements EligibilityService {
+    private static final String POLICY_MATCH = "policyMatch";
 
     static final String CLAIM_NOT_FOUND_CODE = "WARRANTY_CLAIM_NOT_FOUND";
 
@@ -103,7 +104,7 @@ public class EligibilityServiceImpl implements EligibilityService {
             if (candidates.isEmpty()) {
                 // Missing product facts (catalog unreachable) mean we cannot prove no policy
                 // applies — indeterminate rather than a hard fail.
-                reasons.add(reason("policyMatch", required, "none found", facts.incomplete() ? null : Boolean.FALSE));
+                reasons.add(reason(POLICY_MATCH, required, "none found", facts.incomplete() ? null : Boolean.FALSE));
             } else {
                 int topRank = specificityRank(candidates.get(0).getAppliesToType());
                 List<WarrantyPolicy> winners = candidates.stream()
@@ -115,7 +116,7 @@ public class EligibilityServiceImpl implements EligibilityService {
                     // the wrong policy, so the match is indeterminate rather than a silent
                     // specificity downgrade.
                     reasons.add(reason(
-                            "policyMatch",
+                            POLICY_MATCH,
                             required,
                             "product facts unavailable (pos-catalog unreachable); a more specific"
                                     + " policy may govern",
@@ -124,7 +125,7 @@ public class EligibilityServiceImpl implements EligibilityService {
                     // Specificity tie: no policy governs until a human resolves the ambiguity —
                     // never adjudicate terms or freeze amounts from an arbitrary tie-break.
                     reasons.add(reason(
-                            "policyMatch",
+                            POLICY_MATCH,
                             required,
                             "ambiguous — multiple policies tie at the same specificity: "
                                     + winners.stream()
@@ -134,7 +135,7 @@ public class EligibilityServiceImpl implements EligibilityService {
                 } else {
                     policy = winners.get(0);
                     reasons.add(reason(
-                            "policyMatch", required, policy.getName() + " (" + policy.getId() + ")", Boolean.TRUE));
+                            POLICY_MATCH, required, policy.getName() + " (" + policy.getId() + ")", Boolean.TRUE));
                     checkTerms(claim, policy, saleDate, reasons);
                 }
             }

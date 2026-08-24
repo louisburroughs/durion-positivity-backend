@@ -35,6 +35,9 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class OrderDomainEventPublisher {
+    private static final String SYSTEM_ACTOR = "system";
+
+    private static final String ORDER_DOMAIN = "order";
 
     private static final String SOURCE_SERVICE = "pos-order";
     private static final String CURRENCY = "USD";
@@ -193,7 +196,7 @@ public class OrderDomainEventPublisher {
                 returnOrder.getReturnedAt() != null ? returnOrder.getReturnedAt() : Instant.now(clock));
         long aggregateVersion = returnOrder.getVersion() == null ? 0L : returnOrder.getVersion();
         writer.publish(
-                DomainTopics.events("order"),
+                DomainTopics.events(ORDER_DOMAIN),
                 DomainEventEnvelope.of(
                         OrderReturnedV1.EVENT_TYPE,
                         OrderReturnedV1.SCHEMA_VERSION,
@@ -201,7 +204,7 @@ public class OrderDomainEventPublisher {
                         aggregateVersion,
                         SOURCE_SERVICE,
                         null,
-                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR),
                         payload,
                         clock));
         log.debug("Queued order.order.returned returnOrderId={}", returnOrder.getReturnOrderId());
@@ -219,7 +222,7 @@ public class OrderDomainEventPublisher {
         }
         long aggregateVersion = session.getVersion() == null ? 0L : session.getVersion();
         writer.publish(
-                DomainTopics.events("order"),
+                DomainTopics.events(ORDER_DOMAIN),
                 DomainEventEnvelope.of(
                         RegisterSessionClosedV1.EVENT_TYPE,
                         RegisterSessionClosedV1.SCHEMA_VERSION,
@@ -227,7 +230,7 @@ public class OrderDomainEventPublisher {
                         aggregateVersion,
                         SOURCE_SERVICE,
                         null,
-                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR),
                         payload,
                         clock));
         log.debug("Queued order.session.closed sessionId={}", session.getSessionId());
@@ -236,7 +239,7 @@ public class OrderDomainEventPublisher {
     private void publish(
             OutboxEventWriter writer, String eventType, int schemaVersion, SalesOrder order, Object payload) {
         writer.publish(
-                DomainTopics.events("order"),
+                DomainTopics.events(ORDER_DOMAIN),
                 DomainEventEnvelope.of(
                         eventType,
                         schemaVersion,
@@ -244,7 +247,7 @@ public class OrderDomainEventPublisher {
                         aggregateVersion(order),
                         SOURCE_SERVICE,
                         null,
-                        SecurityContextHelper.getCurrentUsernameOrDefault("system"),
+                        SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR),
                         payload,
                         clock));
     }

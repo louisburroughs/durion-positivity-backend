@@ -19,6 +19,13 @@ import lombok.NoArgsConstructor;
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CrmPermissionRegistry {
+    private static final String MEDIUM_RISK = "MEDIUM";
+
+    private static final String ISSUE_169 = "Issue #169";
+
+    private static final String ISSUE_1137 = "Issue #1137";
+
+    private static final String ISSUE_1136 = "Issue #1136";
 
     // ==================== PERMISSION DEFINITIONS ====================
 
@@ -150,8 +157,8 @@ public class CrmPermissionRegistry {
                 // Party Management (6 permissions)
                 permission(PARTY_VIEW, "View party (person/organization) records and details", "LOW"),
                 permission(PARTY_SEARCH, "Search parties by name, email, phone, tax ID", "LOW"),
-                permission(PARTY_CREATE, "Create new commercial account (party)", "MEDIUM", "Issue #176"),
-                permission(PARTY_EDIT, "Edit party master data (name, tax ID, identifiers)", "MEDIUM"),
+                permission(PARTY_CREATE, "Create new commercial account (party)", MEDIUM_RISK, "Issue #176"),
+                permission(PARTY_EDIT, "Edit party master data (name, tax ID, identifiers)", MEDIUM_RISK),
                 permission(PARTY_DEACTIVATE, "Deactivate a party record (soft delete)", "HIGH"),
                 permission(PARTY_MERGE, "Merge two party records into one survivor", "CRITICAL", "Issue #173"),
                 permission(
@@ -161,24 +168,24 @@ public class CrmPermissionRegistry {
 
                 // Contact Management (8 permissions)
                 permission(CONTACT_VIEW, "View contact points (email, phone) for a party", "LOW"),
-                permission(CONTACT_CREATE, "Add new contact point (email/phone) to a party", "MEDIUM"),
-                permission(CONTACT_EDIT, "Edit contact point details (phone normalization, primary flag)", "MEDIUM"),
-                permission(CONTACT_DELETE, "Remove contact point from a party", "MEDIUM"),
+                permission(CONTACT_CREATE, "Add new contact point (email/phone) to a party", MEDIUM_RISK),
+                permission(CONTACT_EDIT, "Edit contact point details (phone normalization, primary flag)", MEDIUM_RISK),
+                permission(CONTACT_DELETE, "Remove contact point from a party", MEDIUM_RISK),
 
                 // Contact Roles (3 permissions)
                 permission(CONTACT_ROLE_VIEW, "View assigned roles for contacts on an account", "LOW", "Issue #172"),
                 permission(
                         CONTACT_ROLE_ASSIGN,
                         "Assign roles (BILLING, APPROVER, DRIVER) to contacts",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #172"),
-                permission(CONTACT_ROLE_REVOKE, "Revoke a role assignment from a contact", "MEDIUM"),
+                permission(CONTACT_ROLE_REVOKE, "Revoke a role assignment from a contact", MEDIUM_RISK),
 
                 // Contact Preferences (2 permissions)
                 permission(
                         CONTACT_PREFERENCE_VIEW,
                         "View communication preferences and consent flags for a party",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #171"),
                 permission(
                         CONTACT_PREFERENCE_EDIT,
@@ -187,20 +194,21 @@ public class CrmPermissionRegistry {
                         "Issue #171"),
 
                 // Vehicle Management (3 permissions; registry writes live in pos-vehicle-inventory)
-                permission(VEHICLE_VIEW, "View vehicle records (VIN, unit #, description, plate)", "LOW", "Issue #169"),
-                permission(VEHICLE_SEARCH, "Search vehicles by VIN, unit #, or plate", "LOW", "Issue #169"),
-                permission(VEHICLE_CREATE, "Associate a vehicle VIN with a party", "MEDIUM", "Issue #169"),
+                permission(VEHICLE_VIEW, "View vehicle records (VIN, unit #, description, plate)", "LOW", ISSUE_169),
+                permission(VEHICLE_SEARCH, "Search vehicles by VIN, unit #, or plate", "LOW", ISSUE_169),
+                permission(VEHICLE_CREATE, "Associate a vehicle VIN with a party", MEDIUM_RISK, ISSUE_169),
 
                 // Vehicle-Party Association (3 permissions)
                 permission(
                         VEHICLE_PARTY_ASSOC_CREATE,
                         "Associate party (owner/driver/lessee) to vehicle with effective dating",
-                        "MEDIUM"),
+                        MEDIUM_RISK),
                 permission(
                         VEHICLE_PARTY_ASSOC_VIEW,
                         "View party associations for a vehicle (current and historical)",
                         "LOW"),
-                permission(VEHICLE_PARTY_ASSOC_EDIT, "Adjust effective dates for party-vehicle associations", "MEDIUM"),
+                permission(
+                        VEHICLE_PARTY_ASSOC_EDIT, "Adjust effective dates for party-vehicle associations", MEDIUM_RISK),
 
                 // Vehicle Preferences (2 permissions)
                 permission(
@@ -210,31 +218,31 @@ public class CrmPermissionRegistry {
                 permission(
                         VEHICLE_PREFERENCE_EDIT,
                         "Update vehicle care preferences with audit history and optimistic locking",
-                        "MEDIUM"),
+                        MEDIUM_RISK),
 
                 // Party Tags (3 permissions, Story #1136)
-                permission(TAG_VIEW, "View the CRM tag catalog and tags attached to parties", "LOW", "Issue #1136"),
-                permission(TAG_MANAGE, "Create, edit, retire, or delete CRM tags", "MEDIUM", "Issue #1136"),
-                permission(TAG_ASSIGN, "Attach or detach tags on a party", "MEDIUM", "Issue #1136"),
+                permission(TAG_VIEW, "View the CRM tag catalog and tags attached to parties", "LOW", ISSUE_1136),
+                permission(TAG_MANAGE, "Create, edit, retire, or delete CRM tags", MEDIUM_RISK, ISSUE_1136),
+                permission(TAG_ASSIGN, "Attach or detach tags on a party", MEDIUM_RISK, ISSUE_1136),
 
                 // Segments (3 permissions, Story #1137)
-                permission(SEGMENT_VIEW, "View saved audience segments and their definitions", "LOW", "Issue #1137"),
+                permission(SEGMENT_VIEW, "View saved audience segments and their definitions", "LOW", ISSUE_1137),
                 permission(
                         SEGMENT_MANAGE,
                         "Create, edit, or delete audience segments and their membership",
-                        "MEDIUM",
-                        "Issue #1137"),
+                        MEDIUM_RISK,
+                        ISSUE_1137),
                 permission(
                         SEGMENT_RESOLVE,
                         "Resolve a segment to its matching parties (returns counts and a masked sample)",
                         "HIGH",
-                        "Issue #1137"),
+                        ISSUE_1137),
 
                 // Marketing Consent (2 permissions, Stories #1138/#1139)
                 permission(
                         CONSENT_VIEW,
                         "View per-channel marketing consent and the consent-change audit trail",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1138"),
                 permission(
                         CONSENT_MANAGE,
@@ -243,7 +251,7 @@ public class CrmPermissionRegistry {
                         "Issue #1138"),
 
                 // Suppression (2 permissions, Story #1140)
-                permission(SUPPRESSION_VIEW, "View the marketing suppression list", "MEDIUM", "Issue #1140"),
+                permission(SUPPRESSION_VIEW, "View the marketing suppression list", MEDIUM_RISK, "Issue #1140"),
                 permission(
                         SUPPRESSION_MANAGE,
                         "Add or remove hard address-level suppression entries",
@@ -254,12 +262,12 @@ public class CrmPermissionRegistry {
                 permission(
                         INTERACTION_VIEW,
                         "View a party's interaction and touch history (campaign sends, calls, notes)",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1141"),
                 permission(
                         INTERACTION_MANAGE,
                         "Record a CSR-initiated interaction on a party's timeline",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1141"),
 
                 // Follow-up Tasks (2 permissions, Story #1153)
@@ -267,7 +275,7 @@ public class CrmPermissionRegistry {
                 permission(
                         FOLLOWUP_MANAGE,
                         "Raise, assign, complete, or dismiss follow-up tasks",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1153"),
 
                 // Inquiries (2 permissions, Story #1154)
@@ -275,15 +283,15 @@ public class CrmPermissionRegistry {
                 permission(
                         INQUIRY_MANAGE,
                         "Capture, assign, triage, and convert inbound inquiries into parties",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1154"),
 
                 // Integration Monitoring (3 permissions, read-only)
                 permission(
                         PROCESSING_LOG_VIEW,
                         "View ingestion event processing outcomes (success/failure/retry state)",
-                        "MEDIUM"),
-                permission(SUSPENSE_VIEW, "View quarantined/unprocessable events requiring triage", "MEDIUM"),
+                        MEDIUM_RISK),
+                permission(SUSPENSE_VIEW, "View quarantined/unprocessable events requiring triage", MEDIUM_RISK),
                 permission(
                         INTEGRATION_AUDIT,
                         "View audit/attempt history for ingestion records and retry outcomes",
@@ -296,13 +304,13 @@ public class CrmPermissionRegistry {
                 // PermissionRegistration, which POSTs permissions.yaml — this payload builder has no
                 // callers. See the class javadoc.
                 permission(PERSON_READ, "View person records and their party linkage", "LOW"),
-                permission(PERSON_CREATE, "Create a person record", "MEDIUM"),
+                permission(PERSON_CREATE, "Create a person record", MEDIUM_RISK),
                 permission(RELATIONSHIP_READ, "View relationships between parties", "LOW"),
-                permission(RELATIONSHIP_CREATE, "Create a relationship between two parties", "MEDIUM"),
-                permission(RELATIONSHIP_UPDATE, "Change an existing party relationship", "MEDIUM"),
+                permission(RELATIONSHIP_CREATE, "Create a relationship between two parties", MEDIUM_RISK),
+                permission(RELATIONSHIP_UPDATE, "Change an existing party relationship", MEDIUM_RISK),
                 permission(RELATIONSHIP_DELETE, "Remove a relationship between two parties", "HIGH"),
                 permission(PROMOTION_REDEMPTION_VIEW, "View recorded promotion redemptions", "LOW"),
-                permission(PROMOTION_REDEMPTION_RECORD, "Record that a customer redeemed a promotion", "MEDIUM"));
+                permission(PROMOTION_REDEMPTION_RECORD, "Record that a customer redeemed a promotion", MEDIUM_RISK));
     }
 
     /**

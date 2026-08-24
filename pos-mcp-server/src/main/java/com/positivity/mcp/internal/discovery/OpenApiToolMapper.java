@@ -30,6 +30,7 @@ import org.springframework.util.StringUtils;
 
 @Component
 public class OpenApiToolMapper {
+    private static final String STRING_TYPE = "string";
 
     private static final String OBJECT = "object";
     private static final String DESCRIPTION = "description";
@@ -188,7 +189,7 @@ public class OpenApiToolMapper {
                     "type",
                     parameter.getSchema() != null && parameter.getSchema().getType() != null
                             ? parameter.getSchema().getType()
-                            : "string");
+                            : STRING_TYPE);
             entry.put("required", Boolean.TRUE.equals(parameter.getRequired()));
             query.add(entry);
         }
@@ -308,12 +309,13 @@ public class OpenApiToolMapper {
                 "httpMethod",
                 Map.of(
                         "type",
-                        "string",
+                        STRING_TYPE,
                         "const",
                         method.name(),
                         DESCRIPTION,
                         "HTTP method for the underlying API call"));
-        properties.put("path", Map.of("type", "string", "const", path, DESCRIPTION, "Path template for the API call"));
+        properties.put(
+                "path", Map.of("type", STRING_TYPE, "const", path, DESCRIPTION, "Path template for the API call"));
         properties.put("pathParams", Map.of("type", OBJECT, DESCRIPTION, "Path parameters keyed by template name"));
         properties.put("queryParams", Map.of("type", OBJECT, DESCRIPTION, "Query string parameters"));
         properties.put("headers", Map.of("type", OBJECT, DESCRIPTION, "Additional HTTP headers to include"));

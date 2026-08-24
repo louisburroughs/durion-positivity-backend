@@ -40,6 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class InvoiceServiceImpl implements InvoiceService {
+    private static final String INVOICE_ID_REQUIRED = "invoiceId is required";
+
     private final Clock clock;
 
     private final InvoiceRepository invoiceRepository;
@@ -163,7 +165,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         Invoice saved = invoiceRepository.save(invoice);
         // Rebuild the persisted breakdown wholesale, then publish it (freeze-after-finalize:
         // reachable only while DRAFT, enforced by validateDraftState above and recalculateTotals).
-        taxBreakdownWriter.replace(Objects.requireNonNull(saved.getId(), "invoiceId is required"), taxResponse);
+        taxBreakdownWriter.replace(Objects.requireNonNull(saved.getId(), INVOICE_ID_REQUIRED), taxResponse);
         invoiceEventPublisher.publishInvoiceUpdated(saved);
         InvoiceDetailsResponse response = toDetailsResponse(saved);
         response.setWorkorderNumber(resolveWorkorderNumber(saved.getWorkorderId()));
@@ -216,7 +218,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
         // Persist the per-line jurisdiction breakdown once the id is assigned, before the event
         // is built (the publisher reads these rows to populate taxBreakdown[]).
-        taxBreakdownWriter.replace(Objects.requireNonNull(saved.getId(), "invoiceId is required"), taxResponse);
+        taxBreakdownWriter.replace(Objects.requireNonNull(saved.getId(), INVOICE_ID_REQUIRED), taxResponse);
         invoiceEventPublisher.publishInvoiceUpdated(saved);
         return toGenerationResponse(saved);
     }
@@ -224,7 +226,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private void validateDraftState(@NonNull Invoice invoice) {
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
             throw new InvalidInvoiceStateException(
-                    Objects.requireNonNull(invoice.getId(), "invoiceId is required"),
+                    Objects.requireNonNull(invoice.getId(), INVOICE_ID_REQUIRED),
                     invoice.getStatus(),
                     InvoiceStatus.DRAFT);
         }
@@ -282,7 +284,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private void assertRepricingAllowed(@NonNull Invoice invoice) {
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
             throw new InvalidInvoiceStateException(
-                    Objects.requireNonNull(invoice.getId(), "invoiceId is required"),
+                    Objects.requireNonNull(invoice.getId(), INVOICE_ID_REQUIRED),
                     invoice.getStatus(),
                     InvoiceStatus.DRAFT);
         }

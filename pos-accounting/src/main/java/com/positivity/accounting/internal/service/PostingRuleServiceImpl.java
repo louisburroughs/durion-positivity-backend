@@ -41,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class PostingRuleServiceImpl implements PostingRuleService {
+    private static final String UPDATED_AT = "updatedAt";
+
     private static final String VERSION_NOT_FOUND = "Version not found: ";
 
     /**
@@ -48,15 +50,24 @@ public class PostingRuleServiceImpl implements PostingRuleService {
      * (see PostingRuleSetResponse) while the entity property is {@code updatedAt}.
      */
     private static final Map<String, String> SORTABLE_PROPERTIES = Map.of(
-            "createdAt", "createdAt",
-            "modifiedAt", "updatedAt",
-            "updatedAt", "updatedAt",
-            "name", "name",
-            "eventType", "eventType",
-            "description", "description",
-            "createdBy", "createdBy",
-            "modifiedBy", "modifiedBy",
-            "postingRuleSetId", "postingRuleSetId");
+            "createdAt",
+            "createdAt",
+            "modifiedAt",
+            UPDATED_AT,
+            UPDATED_AT,
+            UPDATED_AT,
+            "name",
+            "name",
+            "eventType",
+            "eventType",
+            "description",
+            "description",
+            "createdBy",
+            "createdBy",
+            "modifiedBy",
+            "modifiedBy",
+            "postingRuleSetId",
+            "postingRuleSetId");
 
     private final Clock clock;
 

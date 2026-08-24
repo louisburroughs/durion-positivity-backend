@@ -52,6 +52,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminService {
+    private static final String REQUEST_REQUIRED = "request must not be null";
+
+    private static final String NOT_ON_VENDOR_PROFILE = " does not exist on vendor profile ";
 
     private final SupplierProfileRepository profileRepository;
     private final SupplierAuthConfigRepository authConfigRepository;
@@ -82,7 +85,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @Override
     @NonNull
     public VendorProfileView createProfile(@NonNull VendorProfileRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         requireSupplierRefFree(request.supplierRef(), null);
         SupplierProfileEntity profile = new SupplierProfileEntity();
         applyProfile(profile, request);
@@ -93,7 +96,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @Override
     @NonNull
     public VendorProfileView updateProfile(@NonNull UUID vendorProfileId, @NonNull VendorProfileRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         SupplierProfileEntity profile = loadAdminManagedProfile(vendorProfileId);
         requireSupplierRefFree(request.supplierRef(), vendorProfileId);
         applyProfile(profile, request);
@@ -141,7 +144,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @Override
     @NonNull
     public AuthConfigView createAuthConfig(@NonNull UUID vendorProfileId, @NonNull AuthConfigRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         loadAdminManagedProfile(vendorProfileId);
         AuthReferenceRules.validate(request, secretSchemeRegistry.supportedSchemes());
         if (authConfigRepository
@@ -161,7 +164,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @NonNull
     public AuthConfigView updateAuthConfig(
             @NonNull UUID vendorProfileId, @NonNull UUID authConfigId, @NonNull AuthConfigRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         loadAdminManagedProfile(vendorProfileId);
         AuthReferenceRules.validate(request, secretSchemeRegistry.supportedSchemes());
         SupplierAuthConfigEntity authConfig = loadAuthConfig(vendorProfileId, authConfigId);
@@ -221,7 +224,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @NonNull
     public CommercialAccountView createAccount(
             @NonNull UUID vendorProfileId, @NonNull CommercialAccountRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         loadAdminManagedProfile(vendorProfileId);
         requireAccountSlotFree(vendorProfileId, request, null);
         SupplierAccountEntity account = new SupplierAccountEntity();
@@ -234,7 +237,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @NonNull
     public CommercialAccountView updateAccount(
             @NonNull UUID vendorProfileId, @NonNull UUID accountId, @NonNull CommercialAccountRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         loadAdminManagedProfile(vendorProfileId);
         SupplierAccountEntity account = loadAccount(vendorProfileId, accountId);
         requireAccountSlotFree(vendorProfileId, request, accountId);
@@ -263,7 +266,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @Override
     @NonNull
     public EndpointBindingView createBinding(@NonNull UUID vendorProfileId, @NonNull EndpointBindingRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         loadAdminManagedProfile(vendorProfileId);
         SupplierCapability capability = parseCapability(request.capability());
         ProtocolFamily family = parseProtocolFamily(request.protocolFamily());
@@ -286,7 +289,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @NonNull
     public EndpointBindingView updateBinding(
             @NonNull UUID vendorProfileId, @NonNull UUID bindingId, @NonNull EndpointBindingRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(request, REQUEST_REQUIRED);
         loadAdminManagedProfile(vendorProfileId);
         SupplierCapability capability = parseCapability(request.capability());
         ProtocolFamily family = parseProtocolFamily(request.protocolFamily());
@@ -364,7 +367,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 .findByIdAndVendorProfileId(authConfigId, vendorProfileId)
                 .orElseThrow(() -> new SupplierNotFoundException(
                         SupplierNotFoundException.AUTH_CONFIG_NOT_FOUND,
-                        "Auth config " + authConfigId + " does not exist on vendor profile " + vendorProfileId));
+                        "Auth config " + authConfigId + NOT_ON_VENDOR_PROFILE + vendorProfileId));
     }
 
     @NonNull
@@ -374,7 +377,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 .findByIdAndVendorProfileId(accountId, vendorProfileId)
                 .orElseThrow(() -> new SupplierNotFoundException(
                         SupplierNotFoundException.ACCOUNT_NOT_FOUND,
-                        "Commercial account " + accountId + " does not exist on vendor profile " + vendorProfileId));
+                        "Commercial account " + accountId + NOT_ON_VENDOR_PROFILE + vendorProfileId));
     }
 
     @NonNull
@@ -384,7 +387,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 .findByIdAndVendorProfileId(bindingId, vendorProfileId)
                 .orElseThrow(() -> new SupplierNotFoundException(
                         SupplierNotFoundException.BINDING_NOT_FOUND,
-                        "Endpoint binding " + bindingId + " does not exist on vendor profile " + vendorProfileId));
+                        "Endpoint binding " + bindingId + NOT_ON_VENDOR_PROFILE + vendorProfileId));
     }
 
     /**

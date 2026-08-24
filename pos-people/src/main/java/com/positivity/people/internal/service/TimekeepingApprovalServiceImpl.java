@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Service
 public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalService {
+    private static final String TIME_PERIOD_NOT_FOUND_PREFIX = "TimePeriod not found: ";
 
     private final TimekeepingEntryRepository timekeepingEntryRepository;
     private final TimePeriodRepository timePeriodRepository;
@@ -70,7 +71,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
     public List<TimekeepingEntryDto> listTimekeepingEntries(UUID personId, UUID timePeriodId) {
         TimePeriod period = timePeriodRepository
                 .findById(timePeriodId)
-                .orElseThrow(() -> new EntityNotFoundException("TimePeriod not found: " + timePeriodId));
+                .orElseThrow(() -> new EntityNotFoundException(TIME_PERIOD_NOT_FOUND_PREFIX + timePeriodId));
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> entries =
@@ -85,7 +86,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
     public TimePeriodApprovalDto getTimePeriodApproval(UUID personId, UUID timePeriodId) {
         TimePeriod period = timePeriodRepository
                 .findById(timePeriodId)
-                .orElseThrow(() -> new EntityNotFoundException("TimePeriod not found: " + timePeriodId));
+                .orElseThrow(() -> new EntityNotFoundException(TIME_PERIOD_NOT_FOUND_PREFIX + timePeriodId));
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> entries =
@@ -126,7 +127,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
     public TimePeriodDecisionResponse approvePeriod(UUID timePeriodId, UUID personId) {
         TimePeriod period = timePeriodRepository
                 .findById(timePeriodId)
-                .orElseThrow(() -> new EntityNotFoundException("TimePeriod not found: " + timePeriodId));
+                .orElseThrow(() -> new EntityNotFoundException(TIME_PERIOD_NOT_FOUND_PREFIX + timePeriodId));
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> pending =
@@ -152,7 +153,7 @@ public class TimekeepingApprovalServiceImpl implements TimekeepingApprovalServic
     public TimePeriodDecisionResponse rejectPeriod(UUID timePeriodId, UUID personId, String reason) {
         TimePeriod period = timePeriodRepository
                 .findById(timePeriodId)
-                .orElseThrow(() -> new EntityNotFoundException("TimePeriod not found: " + timePeriodId));
+                .orElseThrow(() -> new EntityNotFoundException(TIME_PERIOD_NOT_FOUND_PREFIX + timePeriodId));
         Instant start = toInstant(period.getStartDate());
         Instant end = toInstantEndOfDay(period.getEndDate());
         List<TimekeepingEntry> pending =

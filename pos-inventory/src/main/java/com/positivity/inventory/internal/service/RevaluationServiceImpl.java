@@ -49,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class RevaluationServiceImpl implements RevaluationService {
+    private static final String REVALUATION = "Revaluation";
 
     /** Money scale for the value delta. */
     private static final int VALUE_SCALE = 4;
@@ -122,7 +123,7 @@ public class RevaluationServiceImpl implements RevaluationService {
         String actor = currentActor();
         RevaluationRecord record = revaluationRepository
                 .findById(revaluationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Revaluation", revaluationId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(REVALUATION, revaluationId.toString()));
 
         if (record.getStatus() != RevaluationStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Cannot approve revaluation in status: " + record.getStatus());
@@ -143,7 +144,7 @@ public class RevaluationServiceImpl implements RevaluationService {
         String actor = currentActor();
         RevaluationRecord record = revaluationRepository
                 .findById(revaluationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Revaluation", revaluationId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(REVALUATION, revaluationId.toString()));
 
         if (record.getStatus() != RevaluationStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Cannot reject revaluation in status: " + record.getStatus());
@@ -163,7 +164,7 @@ public class RevaluationServiceImpl implements RevaluationService {
     public @NonNull RevaluationResponse getRevaluation(@NonNull UUID revaluationId) {
         return toResponse(revaluationRepository
                 .findById(revaluationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Revaluation", revaluationId.toString())));
+                .orElseThrow(() -> new ResourceNotFoundException(REVALUATION, revaluationId.toString())));
     }
 
     @Override

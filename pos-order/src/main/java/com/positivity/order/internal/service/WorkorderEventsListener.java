@@ -41,6 +41,13 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class WorkorderEventsListener {
+    private static final String UNIT_PRICE = "unitPrice";
+
+    private static final String QUANTITY = "quantity";
+
+    private static final String LINE_TOTAL = "lineTotal";
+
+    private static final String DESCRIPTION = "description";
 
     static final String OWNER = "workorder";
 
@@ -129,10 +136,10 @@ public class WorkorderEventsListener {
                     .workorderId(workorderId)
                     .lineKind(ExtWorkorderLine.LineKind.PART)
                     .productId(uuid(part, "productEntityId"))
-                    .description(part.path("description").stringValue(null))
-                    .quantity(decimal(part, "quantity"))
-                    .unitPrice(decimal(part, "unitPrice"))
-                    .lineTotal(decimal(part, "lineTotal"))
+                    .description(part.path(DESCRIPTION).stringValue(null))
+                    .quantity(decimal(part, QUANTITY))
+                    .unitPrice(decimal(part, UNIT_PRICE))
+                    .lineTotal(decimal(part, LINE_TOTAL))
                     .declined(bool(part, "declined"))
                     .returnable(bool(part, "returnable"))
                     .build());
@@ -142,10 +149,10 @@ public class WorkorderEventsListener {
                     .lineId(UUID.fromString(service.path("workorderLineId").stringValue(null)))
                     .workorderId(workorderId)
                     .lineKind(ExtWorkorderLine.LineKind.SERVICE)
-                    .description(service.path("description").stringValue(null))
-                    .quantity(decimal(service, "quantity"))
-                    .unitPrice(decimal(service, "unitPrice"))
-                    .lineTotal(decimal(service, "lineTotal"))
+                    .description(service.path(DESCRIPTION).stringValue(null))
+                    .quantity(decimal(service, QUANTITY))
+                    .unitPrice(decimal(service, UNIT_PRICE))
+                    .lineTotal(decimal(service, LINE_TOTAL))
                     .declined(bool(service, "declined"))
                     .build());
         }
@@ -178,10 +185,10 @@ public class WorkorderEventsListener {
                     .itemId(UUID.fromString(item.path("estimateItemId").stringValue(null)))
                     .estimateId(estimateId)
                     .itemType(item.path("itemType").stringValue(null))
-                    .description(item.path("description").stringValue(null))
-                    .quantity(decimal(item, "quantity"))
-                    .unitPrice(decimal(item, "unitPrice"))
-                    .lineTotal(decimal(item, "lineTotal"))
+                    .description(item.path(DESCRIPTION).stringValue(null))
+                    .quantity(decimal(item, QUANTITY))
+                    .unitPrice(decimal(item, UNIT_PRICE))
+                    .lineTotal(decimal(item, LINE_TOTAL))
                     .productId(uuid(item, "productId"))
                     .serviceId(uuid(item, "serviceId"))
                     .approvalStatus(item.path("approvalStatus").stringValue(null))

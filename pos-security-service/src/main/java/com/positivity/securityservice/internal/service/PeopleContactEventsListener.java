@@ -43,6 +43,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnProperty(prefix = "pos.security-service.kafka", name = "enabled", havingValue = "true")
 public class PeopleContactEventsListener {
+    private static final String PAYLOAD = "payload";
 
     static final String OWNER = "people-contact";
 
@@ -71,7 +72,7 @@ public class PeopleContactEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "people-contact")
+                        .tag("owner", OWNER)
                         .tag("entity", "people-contact-events")
                         .register(registry);
     }
@@ -132,7 +133,7 @@ public class PeopleContactEventsListener {
 
     private void applyLinkUpdated(JsonNode envelope) {
         UserPersonLinkUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), UserPersonLinkUpdatedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), UserPersonLinkUpdatedV1.class);
         Optional<User> user = userRepository.findByUsername(payload.username());
         if (user.isEmpty()) {
             // Links can exist for people-module usernames that have no security account (or the
@@ -156,7 +157,7 @@ public class PeopleContactEventsListener {
 
     private void applyLinkRemoved(JsonNode envelope) {
         UserPersonLinkRemovedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), UserPersonLinkRemovedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), UserPersonLinkRemovedV1.class);
         userRepository.findByUsername(payload.username()).ifPresent(user -> {
             // Guard on the removed link's personId so a stale removal (redelivered after a new
             // link was applied) cannot clear the newer projection.
@@ -169,7 +170,7 @@ public class PeopleContactEventsListener {
     }
 
     private void applyPersonUpdated(JsonNode envelope) {
-        PersonUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonUpdatedV1.class);
+        PersonUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PersonUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtPersonReplica existing =
                 extPersonReplicaRepository.findById(payload.personId()).orElse(null);
@@ -194,7 +195,7 @@ public class PeopleContactEventsListener {
     }
 
     private void applyPersonDeleted(JsonNode envelope) {
-        PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonDeletedV1.class);
+        PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PersonDeletedV1.class);
         extPersonReplicaRepository.deleteById(payload.personId());
     }
 

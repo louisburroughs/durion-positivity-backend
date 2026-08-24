@@ -35,6 +35,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  */
 @RestControllerAdvice(basePackages = "com.positivity.supplier.internal.controller")
 public class SupplierExceptionHandler {
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
     private static final Logger log = LoggerFactory.getLogger(SupplierExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
@@ -228,7 +229,7 @@ public class SupplierExceptionHandler {
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
                 ApiError.withFieldErrors(
-                        "VALIDATION_ERROR",
+                        VALIDATION_ERROR,
                         "Request validation failed",
                         HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
@@ -241,7 +242,7 @@ public class SupplierExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(
             ConstraintViolationException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
@@ -277,7 +278,7 @@ public class SupplierExceptionHandler {
         for (Throwable cause = ex.getCause(); cause != null; cause = cause.getCause()) {
             if (cause instanceof IllegalArgumentException || cause instanceof NullPointerException) {
                 String message = cause.getMessage() == null ? "Request validation failed" : cause.getMessage();
-                return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request);
+                return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, message, request);
             }
         }
         return build(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "Request body could not be parsed", request);
@@ -285,7 +286,7 @@ public class SupplierExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
     /** {@code @PreAuthorize} denials must not fall into the 500 catch-all below. */

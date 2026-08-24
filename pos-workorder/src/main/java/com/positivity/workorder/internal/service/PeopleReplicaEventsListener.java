@@ -40,6 +40,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class PeopleReplicaEventsListener {
+    private static final String PAYLOAD = "payload";
+
+    private static final String AGGREGATE_VERSION = "aggregateVersion";
 
     static final String OWNER_PEOPLE_CONTACT = "people-contact";
     static final String OWNER_PEOPLE = "people";
@@ -154,8 +157,8 @@ public class PeopleReplicaEventsListener {
     }
 
     private void applyPersonUpdated(JsonNode envelope) {
-        PersonUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        PersonUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PersonUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtPersonReplica existing =
                 extPersonReplicaRepository.findById(payload.personId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
@@ -171,14 +174,14 @@ public class PeopleReplicaEventsListener {
     }
 
     private void applyPersonDeleted(JsonNode envelope) {
-        PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonDeletedV1.class);
+        PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PersonDeletedV1.class);
         extPersonReplicaRepository.deleteById(payload.personId());
     }
 
     private void applyLinkUpdated(JsonNode envelope) {
         UserPersonLinkUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), UserPersonLinkUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), UserPersonLinkUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtUserLinkReplica existing =
                 extUserLinkReplicaRepository.findById(payload.linkId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
@@ -196,14 +199,14 @@ public class PeopleReplicaEventsListener {
 
     private void applyLinkRemoved(JsonNode envelope) {
         UserPersonLinkRemovedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), UserPersonLinkRemovedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), UserPersonLinkRemovedV1.class);
         extUserLinkReplicaRepository.deleteById(payload.linkId());
     }
 
     private void applyAssignmentUpdated(JsonNode envelope) {
         StaffingAssignmentUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), StaffingAssignmentUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), StaffingAssignmentUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtStaffingAssignmentReplica existing = extStaffingAssignmentReplicaRepository
                 .findById(payload.assignmentId())
                 .orElse(null);

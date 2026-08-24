@@ -8,6 +8,7 @@ import java.util.UUID;
  * other guided-422 exceptions.
  */
 public class PurchaseSuggestionConversionException extends RuntimeException {
+    private static final String SUGGESTION_PREFIX = "Suggestion ";
 
     private final String errorCode;
 
@@ -24,7 +25,7 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
     public static PurchaseSuggestionConversionException notAccepted(UUID suggestionId, String status) {
         return new PurchaseSuggestionConversionException(
                 "PURCHASE_SUGGESTION_NOT_ACCEPTED",
-                "Suggestion " + suggestionId + " is " + status + "; only ACCEPTED suggestions can be converted");
+                SUGGESTION_PREFIX + suggestionId + " is " + status + "; only ACCEPTED suggestions can be converted");
     }
 
     /** The listed suggestions do not all share one vendor (one convert = one single-vendor PO). */
@@ -39,7 +40,7 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
     public static PurchaseSuggestionConversionException missingVendor(UUID suggestionId) {
         return new PurchaseSuggestionConversionException(
                 "PURCHASE_SUGGESTION_MISSING_VENDOR",
-                "Suggestion " + suggestionId + " has no selected vendor (no usable vendor feed data); create the"
+                SUGGESTION_PREFIX + suggestionId + " has no selected vendor (no usable vendor feed data); create the"
                         + " purchase order manually");
     }
 
@@ -47,7 +48,7 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
     public static PurchaseSuggestionConversionException missingUnitCost(UUID suggestionId) {
         return new PurchaseSuggestionConversionException(
                 "PURCHASE_SUGGESTION_MISSING_UNIT_COST",
-                "Suggestion " + suggestionId + " carries no vendor feed price; purchase order lines require a"
+                SUGGESTION_PREFIX + suggestionId + " carries no vendor feed price; purchase order lines require a"
                         + " unit cost — create the purchase order manually");
     }
 

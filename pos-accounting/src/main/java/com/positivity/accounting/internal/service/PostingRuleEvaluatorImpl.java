@@ -101,6 +101,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
+    private static final String FAILURE_STEP = "failureStep";
+
     private final Clock clock;
 
     private final PostingRuleVersionRepository versionRepository;
@@ -158,7 +160,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                         JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping);
 
                         if (!isBalanced(journalEntry)) {
-                            evaluationDetails.put("failureStep", "balanceValidation");
+                            evaluationDetails.put(FAILURE_STEP, "balanceValidation");
                             evaluationDetails.put("debitTotal", calculateDebitTotal(journalEntry));
                             evaluationDetails.put("creditTotal", calculateCreditTotal(journalEntry));
                             return PostingResult.failure(
@@ -187,7 +189,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                         event.getEventType(),
                         event.getTransactionDate(),
                         defaultGLMappingProperties.isEnabled() ? "" : " (default mappings disabled)");
-                evaluationDetails.put("failureStep", "loadRuleVersion");
+                evaluationDetails.put(FAILURE_STEP, "loadRuleVersion");
                 return PostingResult.failure(PostingFailureReason.NO_RULE_VERSION, msg, evaluationDetails);
             }
 
@@ -197,7 +199,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             // 2. Evaluate mapping keys: parse rulesDefinition and resolve GL accounts
             MappingEvaluation mappingEval = evaluateMappingKeys(event, ruleVersion);
             if (!mappingEval.isSuccess()) {
-                evaluationDetails.put("failureStep", "evaluateMappingKeys");
+                evaluationDetails.put(FAILURE_STEP, "evaluateMappingKeys");
                 evaluationDetails.put("keysEvaluated", mappingEval.getKeysEvaluated());
                 return PostingResult.failure(
                         PostingFailureReason.UNMAPPED_EVENT_TYPE,
@@ -213,7 +215,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
             // 4. Validate balance
             if (!isBalanced(journalEntry)) {
-                evaluationDetails.put("failureStep", "balanceValidation");
+                evaluationDetails.put(FAILURE_STEP, "balanceValidation");
                 evaluationDetails.put("debitTotal", calculateDebitTotal(journalEntry));
                 evaluationDetails.put("creditTotal", calculateCreditTotal(journalEntry));
                 return PostingResult.failure(

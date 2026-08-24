@@ -22,6 +22,7 @@ import java.util.Map;
  * source classification carry a {@code null} cost type.
  */
 public final class LaborOverheadTaxonomy {
+    private static final String MAINTENANCE = "Maintenance";
 
     /** Synthetic codes for the section/grand total rows (the source form has no numeric code for these). */
     public static final String TOTAL_LABOR = "TOTAL_LABOR";
@@ -201,7 +202,7 @@ public final class LaborOverheadTaxonomy {
                         + " building-financing interest; land depreciation."));
         lines.add(leaf(
                 "2.1.2",
-                "Maintenance",
+                MAINTENANCE,
                 "2.1",
                 3,
                 CostType.FIXED,
@@ -241,7 +242,7 @@ public final class LaborOverheadTaxonomy {
                         + "warehousing vehicles; vehicle insurance (use 2.7.3); forklifts (use 2.11.5).",
                 List.of("2.4.1", "2.4.2", "2.4.3", "2.4.4", "2.4.5")));
         lines.add(leaf("2.4.1", "Gas & Oil", "2.4", 3, null, false, "Fuel/oil for plant vehicles."));
-        lines.add(leaf("2.4.2", "Maintenance", "2.4", 3, null, false, "Maintenance for plant vehicles."));
+        lines.add(leaf("2.4.2", MAINTENANCE, "2.4", 3, null, false, "Maintenance for plant vehicles."));
         lines.add(leaf("2.4.3", "Taxes", "2.4", 3, null, false, "Taxes on plant vehicles."));
         lines.add(leaf(
                 "2.4.4", "Depreciation", "2.4", 3, null, false, "Depreciation of plant vehicles (standard methods)."));
@@ -342,7 +343,7 @@ public final class LaborOverheadTaxonomy {
                 List.of("2.11.1", "2.11.2", "2.11.3", "2.11.4", "2.11.5", "2.11.6")));
         lines.add(leaf(
                 "2.11.1",
-                "Maintenance",
+                MAINTENANCE,
                 "2.11",
                 3,
                 CostType.FIXED_IF_LOW_VOLUME,

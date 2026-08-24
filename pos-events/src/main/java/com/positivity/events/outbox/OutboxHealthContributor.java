@@ -63,6 +63,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
  */
 @Slf4j
 public final class OutboxHealthContributor implements HealthIndicator {
+    private static final String DRAIN_STATE = "drainState";
 
     /** Made legible in the payload so nobody "fixes" this into a DOWN. */
     static final String STATUS_POLICY = "always UP: a stalled outbox stales downstream replicas but"
@@ -148,13 +149,13 @@ public final class OutboxHealthContributor implements HealthIndicator {
         try {
             Optional<DrainHead> head = drainHead.get();
             if (head.isEmpty()) {
-                details.put("drainState", "drained");
+                details.put(DRAIN_STATE, "drained");
             } else {
                 describeHead(head.get(), details);
             }
         } catch (Exception e) {
             log.warn("Unable to read outbox drain head for health details", e);
-            details.put("drainState", "unknown");
+            details.put(DRAIN_STATE, "unknown");
             details.put("error", e.getClass().getSimpleName());
         }
         return Health.up().withDetails(details).build();
@@ -173,7 +174,7 @@ public final class OutboxHealthContributor implements HealthIndicator {
         } else {
             drainState = "stalled-retrying";
         }
-        details.put("drainState", drainState);
+        details.put(DRAIN_STATE, drainState);
     }
 
     /**

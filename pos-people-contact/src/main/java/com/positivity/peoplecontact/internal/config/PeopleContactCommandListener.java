@@ -38,6 +38,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.people-contact.kafka", name = "enabled", havingValue = "true")
 public class PeopleContactCommandListener {
+    private static final String EVENT_ID = "eventId";
 
     private static final String PAYLOAD = "payload";
 
@@ -120,7 +121,7 @@ public class PeopleContactCommandListener {
      * eventId via {@code processed_events} before applying (ADR-0044 §4).
      */
     private void handlePersonUpsertRequested(@NonNull JsonNode root) {
-        String eventId = root.path("eventId").stringValue(null);
+        String eventId = root.path(EVENT_ID).stringValue(null);
         if (eventId == null || eventId.isBlank()) {
             log.warn("Ignoring person upsert command without eventId: {}", root);
             return;
@@ -151,7 +152,7 @@ public class PeopleContactCommandListener {
      * reconciliation surfaces the unmatched projection.
      */
     private void handleLinkCreateRequested(@NonNull JsonNode root) {
-        String eventId = root.path("eventId").stringValue(null);
+        String eventId = root.path(EVENT_ID).stringValue(null);
         if (eventId == null || eventId.isBlank() || processedEventRepository.existsById(eventId)) {
             return;
         }
@@ -170,7 +171,7 @@ public class PeopleContactCommandListener {
     }
 
     private void handleLinkRemoveRequested(@NonNull JsonNode root) {
-        String eventId = root.path("eventId").stringValue(null);
+        String eventId = root.path(EVENT_ID).stringValue(null);
         if (eventId == null || eventId.isBlank() || processedEventRepository.existsById(eventId)) {
             return;
         }

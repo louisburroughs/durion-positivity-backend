@@ -1,5 +1,6 @@
 package com.positivity.warranty.internal.client;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.warranty.internal.exception.WarrantyIntegrationException;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -56,8 +57,8 @@ public class InvoiceClientImpl implements InvoiceClient {
             InvoiceDetailsWire response = restClient
                     .get()
                     .uri(basePath + "/{invoiceId}", invoiceId)
-                    .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
                     .retrieve()
                     .body(InvoiceDetailsWire.class);
             if (response == null) {
@@ -104,8 +105,8 @@ public class InvoiceClientImpl implements InvoiceClient {
             response = restClient
                     .get()
                     .uri(basePath + "/{invoiceId}", invoiceId)
-                    .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
                     .retrieve()
                     .body(InvoiceDetailsWire.class);
         } catch (RestClientResponseException ex) {
@@ -141,8 +142,8 @@ public class InvoiceClientImpl implements InvoiceClient {
             List<RefundEntry> refunds = restClient
                     .get()
                     .uri(basePath + "/{invoiceId}/refunds", invoiceId)
-                    .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<RefundEntry>>() {});
             return Optional.of(refunds != null ? refunds : List.of());
@@ -177,8 +178,8 @@ public class InvoiceClientImpl implements InvoiceClient {
             response = restClient
                     .post()
                     .uri(basePath + "/{invoiceId}/adjustments", invoiceId)
-                    .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
                     .body(body)
                     .retrieve()
                     .body(InvoiceDetailsWire.class);
@@ -224,8 +225,8 @@ public class InvoiceClientImpl implements InvoiceClient {
             response = restClient
                     .post()
                     .uri(basePath + "/{invoiceId}/payments/{paymentId}/refunds", invoiceId, paymentId)
-                    .header("X-User", SERVICE_USER)
-                    .header("X-Authorities", REFUND_AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, REFUND_AUTHORITIES)
                     .body(body)
                     .retrieve()
                     .body(RefundResponseWire.class);

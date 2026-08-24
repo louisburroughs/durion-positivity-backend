@@ -71,6 +71,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 public class SupplierYamlBootstrap implements ApplicationRunner {
+    private static final String PROFILE_PREFIX = "profile '";
 
     /** Audit actor of YAML reconciliation writes (ADR-0050 §6). */
     public static final String BOOTSTRAP_ACTOR = "system:yaml-bootstrap";
@@ -298,7 +299,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 throw invalid("supplier.profiles key '" + spec.key() + "' appears more than once");
             }
             if (spec.displayName() == null || spec.displayName().isBlank()) {
-                throw invalid("profile '" + spec.key() + "': displayName must not be blank");
+                throw invalid(PROFILE_PREFIX + spec.key() + "': displayName must not be blank");
             }
             validateProtocolDefaults(spec);
             Set<String> authNames = validateAuthSpecs(spec);
@@ -314,15 +315,15 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         Integer connect = spec.protocolDefaults().connectTimeoutMs();
         Integer read = spec.protocolDefaults().readTimeoutMs();
         if (connect != null && connect <= 0) {
-            throw invalid("profile '" + spec.key() + "': protocolDefaults.connectTimeoutMs must be > 0");
+            throw invalid(PROFILE_PREFIX + spec.key() + "': protocolDefaults.connectTimeoutMs must be > 0");
         }
         if (read != null && read <= 0) {
-            throw invalid("profile '" + spec.key() + "': protocolDefaults.readTimeoutMs must be > 0");
+            throw invalid(PROFILE_PREFIX + spec.key() + "': protocolDefaults.readTimeoutMs must be > 0");
         }
         var retry = spec.protocolDefaults().retry();
         if (retry != null) {
             if (retry.maxAttempts() != null && retry.maxAttempts() < 0) {
-                throw invalid("profile '" + spec.key() + "': protocolDefaults.retry.maxAttempts must be >= 0");
+                throw invalid(PROFILE_PREFIX + spec.key() + "': protocolDefaults.retry.maxAttempts must be >= 0");
             }
             if (retry.backoff() != null) {
                 parseBackoffOrInvalid(spec.key(), retry.backoff());
@@ -336,16 +337,16 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         List<AuthSpec> authSpecs = spec.auth() == null ? List.of() : spec.auth();
         for (AuthSpec authSpec : authSpecs) {
             if (authSpec.name() == null || authSpec.name().isBlank()) {
-                throw invalid("profile '" + spec.key() + "': auth[].name must not be blank");
+                throw invalid(PROFILE_PREFIX + spec.key() + "': auth[].name must not be blank");
             }
             if (!authNames.add(authSpec.name())) {
-                throw invalid("profile '" + spec.key() + "': auth config name '" + authSpec.name()
+                throw invalid(PROFILE_PREFIX + spec.key() + "': auth config name '" + authSpec.name()
                         + "' appears more than once");
             }
             SupplierAuthType type = parseEnumOrInvalid(
                     SupplierAuthType::valueOf,
                     authSpec.type(),
-                    "profile '" + spec.key() + "', auth '" + authSpec.name() + "': type '" + authSpec.type()
+                    PROFILE_PREFIX + spec.key() + "', auth '" + authSpec.name() + "': type '" + authSpec.type()
                             + "' is not a canonical auth type");
             try {
                 // Reuses the admin-side rules: required refs present, scheme:key shape in a
@@ -366,7 +367,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                                 authSpec.bearerTokenRef()),
                         secretSchemeRegistry.supportedSchemes());
             } catch (SupplierValidationException ex) {
-                throw invalid("profile '" + spec.key() + "', auth '" + authSpec.name() + "': " + ex.getMessage());
+                throw invalid(PROFILE_PREFIX + spec.key() + "', auth '" + authSpec.name() + "': " + ex.getMessage());
             }
         }
         return authNames;
@@ -379,21 +380,21 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         var billing = spec.accounts().billing();
         if (billing != null
                 && (billing.accountNumber() == null || billing.accountNumber().isBlank())) {
-            throw invalid("profile '" + spec.key() + "': accounts.billing.accountNumber must not be blank");
+            throw invalid(PROFILE_PREFIX + spec.key() + "': accounts.billing.accountNumber must not be blank");
         }
         Set<UUID> locations = new HashSet<>();
         List<Delivery> deliveries =
                 spec.accounts().delivery() == null ? List.of() : spec.accounts().delivery();
         for (Delivery delivery : deliveries) {
             if (delivery.locationId() == null) {
-                throw invalid("profile '" + spec.key() + "': accounts.delivery[].locationId is required");
+                throw invalid(PROFILE_PREFIX + spec.key() + "': accounts.delivery[].locationId is required");
             }
             if (delivery.accountNumber() == null || delivery.accountNumber().isBlank()) {
-                throw invalid("profile '" + spec.key() + "': accounts.delivery[].accountNumber must not be blank"
+                throw invalid(PROFILE_PREFIX + spec.key() + "': accounts.delivery[].accountNumber must not be blank"
                         + " (location " + delivery.locationId() + ")");
             }
             if (!locations.add(delivery.locationId())) {
-                throw invalid("profile '" + spec.key() + "': location " + delivery.locationId()
+                throw invalid(PROFILE_PREFIX + spec.key() + "': location " + delivery.locationId()
                         + " has more than one delivery account (one per location, ADR-0050 §5)");
             }
         }
@@ -405,11 +406,11 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
         Set<String> capabilities = new HashSet<>();
         for (BindingSpec binding : bindingSpecs) {
-            String where = "profile '" + spec.key() + "', binding '" + binding.capability() + "': ";
+            String where = PROFILE_PREFIX + spec.key() + "', binding '" + binding.capability() + "': ";
             parseEnumOrInvalid(
                     SupplierCapability::valueOf,
                     binding.capability(),
-                    "profile '" + spec.key() + "': binding capability '" + binding.capability()
+                    PROFILE_PREFIX + spec.key() + "': binding capability '" + binding.capability()
                             + "' is not a canonical capability key");
             if (!capabilities.add(binding.capability())) {
                 throw invalid(where + "capability bound more than once (at most one binding per capability,"
@@ -487,7 +488,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         parseEnumOrInvalid(
                 RetryBackoff::valueOf,
                 backoff,
-                "profile '" + profileKey + "': protocolDefaults.retry.backoff '" + backoff
+                PROFILE_PREFIX + profileKey + "': protocolDefaults.retry.backoff '" + backoff
                         + "' is not FIXED or EXPONENTIAL");
     }
 

@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class InventoryLotServiceImpl implements InventoryLotService {
+    private static final String INVENTORY_LOT = "InventoryLot";
 
     private final InventoryLotRepository lotRepository;
     private final InventoryStockSummaryRepository summaryRepository;
@@ -60,7 +61,7 @@ public class InventoryLotServiceImpl implements InventoryLotService {
     public @NonNull LotDetailResponse getLot(@NonNull UUID lotId) {
         InventoryLot lot = lotRepository
                 .findById(lotId)
-                .orElseThrow(() -> new ResourceNotFoundException("InventoryLot", lotId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_LOT, lotId.toString()));
         List<LotDetailResponse.LotLocationOnHand> locations = summaryRepository.findByLotId(lotId).stream()
                 .sorted(Comparator.comparing(row ->
                         row.getLocationId() == null ? "" : row.getLocationId().toString()))
@@ -84,7 +85,7 @@ public class InventoryLotServiceImpl implements InventoryLotService {
         }
         InventoryLot lot = lotRepository
                 .findById(lotId)
-                .orElseThrow(() -> new ResourceNotFoundException("InventoryLot", lotId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_LOT, lotId.toString()));
         if (lot.getStatus() == InventoryLotStatus.CONSUMED) {
             throw new IllegalArgumentException(
                     "lot " + lotId + " is CONSUMED (holds no stock); its status is reconciler-owned");
@@ -104,7 +105,7 @@ public class InventoryLotServiceImpl implements InventoryLotService {
     public @NonNull LotResponse updateExpiration(@NonNull UUID lotId, @NonNull LotExpirationUpdateRequest request) {
         InventoryLot lot = lotRepository
                 .findById(lotId)
-                .orElseThrow(() -> new ResourceNotFoundException("InventoryLot", lotId.toString()));
+                .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_LOT, lotId.toString()));
         lot.setExpirationDate(request.getExpirationDate());
         lot.setAlertDate(request.getAlertDate());
         // Re-dating resets the emit-once bookkeeping so the daily scan can alert the new dates.

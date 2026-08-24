@@ -60,6 +60,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ReturnOrderServiceImpl implements ReturnOrderService {
+    private static final String SYSTEM_ACTOR = "system";
 
     /** Returns in these states do not reserve quantity against the cap. */
     static final List<ReturnOrderStatus> CAP_EXCLUDED_STATUSES =
@@ -108,7 +109,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
             soldLines.put(line.getOrderLineId(), line);
         }
 
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         ReturnOrder returnOrder = ReturnOrder.builder()
                 .originalOrderId(original.getOrderId())
                 .originalOrderNumber(original.getOrderNumber())
@@ -252,7 +253,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         returnOrder.setStatus(ReturnOrderStatus.RETURN_REQUESTED);
         returnOrder.setApprovedByUserId(reviewerUserId);
         returnOrder.setApprovedAt(clock.instant());
-        returnOrder.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        returnOrder.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
         return toSummary(returnOrderRepository.save(returnOrder));
     }
 
@@ -266,7 +267,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         }
         returnOrder.setStatus(ReturnOrderStatus.REJECTED);
         returnOrder.setRejectionReason(reason);
-        returnOrder.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        returnOrder.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
         return toSummary(returnOrderRepository.save(returnOrder));
     }
 
@@ -306,7 +307,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
      * call).
      */
     private ReturnOrderSummary runSaga(ReturnOrder returnOrder) {
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         issueRefund(returnOrder, actor);
 
         returnOrder.setStatus(ReturnOrderStatus.REFUND_ISSUED);

@@ -48,6 +48,11 @@ import tools.jackson.databind.ObjectMapper;
  * matching the existing empty-definition publish guard.
  */
 public final class PostingRuleDefinitionValidator {
+    private static final String FACTOR_PERCENT = "factorPercent";
+
+    private static final String CONDITIONS_PREFIX = "conditions[";
+
+    private static final String FACTOR_PERCENT_SUFFIX = ".factorPercent";
 
     /** Maximum decimal places allowed for {@code factorPercent}. */
     static final int MAX_FACTOR_SCALE = 4;
@@ -106,10 +111,10 @@ public final class PostingRuleDefinitionValidator {
 
         for (int i = 0; i < linesNode.size(); i++) {
             JsonNode lineNode = linesNode.get(i);
-            String lineField = "conditions[" + conditionIndex + "].lines[" + i + "]";
+            String lineField = CONDITIONS_PREFIX + conditionIndex + "].lines[" + i + "]";
 
             String splitGroup = textOrNull(lineNode, "splitGroup");
-            boolean hasFactor = lineNode.has("factorPercent");
+            boolean hasFactor = lineNode.has(FACTOR_PERCENT);
 
             if (splitGroup == null && !hasFactor) {
                 continue; // plain line — untouched by E1
@@ -122,7 +127,7 @@ public final class PostingRuleDefinitionValidator {
 
             if (splitGroup == null) {
                 violations.add(new RuleViolation(
-                        lineField + ".factorPercent",
+                        lineField + FACTOR_PERCENT_SUFFIX,
                         "factorPercent requires a splitGroup — a line cannot declare a split factor "
                                 + "outside a split group"));
                 continue;
@@ -130,27 +135,27 @@ public final class PostingRuleDefinitionValidator {
 
             if (!hasFactor) {
                 violations.add(new RuleViolation(
-                        lineField + ".factorPercent",
+                        lineField + FACTOR_PERCENT_SUFFIX,
                         "line in split group '" + splitGroup + "' must declare a factorPercent"));
                 groups.computeIfAbsent(splitGroup, g -> new ArrayList<>())
                         .add(new SplitLine(i, lineField, null, textOrNull(lineNode, "amountField"), sideOf(lineNode)));
                 continue;
             }
 
-            BigDecimal factor = parseFactor(lineNode.get("factorPercent"));
+            BigDecimal factor = parseFactor(lineNode.get(FACTOR_PERCENT));
             if (factor == null) {
                 violations.add(new RuleViolation(
-                        lineField + ".factorPercent", "factorPercent must be a decimal number between 0 and 100"));
+                        lineField + FACTOR_PERCENT_SUFFIX, "factorPercent must be a decimal number between 0 and 100"));
             } else if (factor.compareTo(BigDecimal.ZERO) < 0 || factor.compareTo(ONE_HUNDRED) > 0) {
                 violations.add(new RuleViolation(
-                        lineField + ".factorPercent",
+                        lineField + FACTOR_PERCENT_SUFFIX,
                         "factorPercent must be between 0 and 100 (was " + factor.toPlainString() + ")"));
                 factor = null;
             } else if (factor.stripTrailingZeros().scale() > MAX_FACTOR_SCALE) {
                 violations.add(new RuleViolation(
-                        lineField + ".factorPercent",
+                        lineField + FACTOR_PERCENT_SUFFIX,
                         "factorPercent supports at most " + MAX_FACTOR_SCALE + " decimal places (was "
-                                + lineNode.get("factorPercent").asString() + ")"));
+                                + lineNode.get(FACTOR_PERCENT).asString() + ")"));
                 factor = null;
             }
 
@@ -165,7 +170,7 @@ public final class PostingRuleDefinitionValidator {
 
     private static void validateGroup(
             String groupName, List<SplitLine> members, int conditionIndex, List<RuleViolation> violations) {
-        String groupField = "conditions[" + conditionIndex + "].splitGroup[" + groupName + "]";
+        String groupField = CONDITIONS_PREFIX + conditionIndex + "].splitGroup[" + groupName + "]";
 
         // Shared, non-blank amountField
         String firstAmountField = null;
@@ -220,7 +225,7 @@ public final class PostingRuleDefinitionValidator {
      */
     private static void validateConditionPredicate(
             @Nullable JsonNode conditionNode, int conditionIndex, List<RuleViolation> violations) {
-        String conditionField = "conditions[" + conditionIndex + "].condition";
+        String conditionField = CONDITIONS_PREFIX + conditionIndex + "].condition";
 
         if (conditionNode == null || conditionNode.isNull()) {
             return; // absent condition → catch-all

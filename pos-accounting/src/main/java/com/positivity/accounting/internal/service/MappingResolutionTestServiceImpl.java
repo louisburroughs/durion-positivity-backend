@@ -56,6 +56,7 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @RequiredArgsConstructor
 public class MappingResolutionTestServiceImpl implements MappingResolutionTestService {
+    private static final String PAYLOAD_PATH_PREFIX = "payload.";
 
     /**
      * Placeholder organization used only to satisfy the evaluator's
@@ -378,7 +379,7 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
         if (clause.lhs() instanceof PredicateParser.EventTypeRef) {
             lhs = "eventType";
         } else if (clause.lhs() instanceof PredicateParser.PayloadPath path) {
-            lhs = "payload." + String.join(".", path.segments());
+            lhs = PAYLOAD_PATH_PREFIX + String.join(".", path.segments());
         } else {
             lhs = "?";
         }
@@ -418,8 +419,9 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
 
     @Nullable
     private Object navigatePayload(String amountField, @Nullable Map<String, Object> payload) {
-        String fieldPath =
-                amountField.startsWith("payload.") ? amountField.substring("payload.".length()) : amountField;
+        String fieldPath = amountField.startsWith(PAYLOAD_PATH_PREFIX)
+                ? amountField.substring(PAYLOAD_PATH_PREFIX.length())
+                : amountField;
         Object current = payload;
         for (String part : fieldPath.split("\\.")) {
             if (current instanceof Map<?, ?> map) {

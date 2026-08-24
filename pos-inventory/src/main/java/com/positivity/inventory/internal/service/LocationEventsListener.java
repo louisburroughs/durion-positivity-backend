@@ -48,6 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
 public class LocationEventsListener {
+    private static final String PAYLOAD = "payload";
 
     static final String OWNER = "location";
     private static final String STATUS_DELETED = "DELETED";
@@ -80,7 +81,7 @@ public class LocationEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "location")
+                        .tag("owner", OWNER)
                         .tag("entity", "location-events")
                         .register(registry);
     }
@@ -134,7 +135,7 @@ public class LocationEventsListener {
     }
 
     private void applyLocationUpdated(JsonNode envelope) {
-        LocationUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LocationUpdatedV1.class);
+        LocationUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), LocationUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         LocationRefEntity ref =
                 locationRefRepository.findByLocationId(payload.locationId()).orElse(null);
@@ -188,7 +189,7 @@ public class LocationEventsListener {
     }
 
     private void applyLocationDeleted(JsonNode envelope) {
-        LocationDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LocationDeletedV1.class);
+        LocationDeletedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), LocationDeletedV1.class);
         locationRefRepository.findByLocationId(payload.locationId()).ifPresent(ref -> {
             ref.setActive(false);
             ref.setStatus(STATUS_DELETED);
@@ -201,7 +202,7 @@ public class LocationEventsListener {
 
     private void applyStorageLocationUpdated(JsonNode envelope) {
         StorageLocationUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), StorageLocationUpdatedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), StorageLocationUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtStorageLocationReplica existing = extStorageLocationReplicaRepository
                 .findById(payload.storageLocationId())

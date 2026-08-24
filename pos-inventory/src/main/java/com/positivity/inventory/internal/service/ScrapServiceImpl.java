@@ -64,6 +64,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor(onConstructor_ = @Autowired)
 @Slf4j
 public class ScrapServiceImpl implements ScrapService {
+    private static final String CREATED_AT = "createdAt";
 
     /** Permission required to post a scrap that drives on-hand negative. */
     static final String NEGATIVE_STOCK_OVERRIDE_PERMISSION = "inventory:adjustment:override";
@@ -233,12 +234,12 @@ public class ScrapServiceImpl implements ScrapService {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("locationId"), locationId));
         }
         if (createdFrom != null) {
-            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), createdFrom));
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get(CREATED_AT), createdFrom));
         }
         if (createdTo != null) {
-            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), createdTo));
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get(CREATED_AT), createdTo));
         }
-        return scrapRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+        return scrapRepository.findAll(spec, Sort.by(Sort.Direction.DESC, CREATED_AT)).stream()
                 .map(this::toResponse)
                 .toList();
     }

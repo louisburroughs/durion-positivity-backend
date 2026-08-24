@@ -61,7 +61,7 @@ public class VehicleEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "vehicle")
+                        .tag("owner", OWNER)
                         .tag("entity", "vehicle-events")
                         .register(registry);
     }

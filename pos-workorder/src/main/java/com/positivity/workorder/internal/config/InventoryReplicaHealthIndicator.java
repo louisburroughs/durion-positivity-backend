@@ -59,6 +59,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class InventoryReplicaHealthIndicator implements HealthIndicator {
+    private static final String REPLICA_STATE = "replicaState";
 
     private static final Logger log = LoggerFactory.getLogger(InventoryReplicaHealthIndicator.class);
 
@@ -111,17 +112,17 @@ public class InventoryReplicaHealthIndicator implements HealthIndicator {
         try {
             Optional<Instant> newest = availabilityRepository.findNewestUpdatedAt();
             if (newest.isEmpty()) {
-                details.put("replicaState", "never-fed");
+                details.put(REPLICA_STATE, "never-fed");
                 details.put("newestFactAt", null);
             } else {
                 Duration age = age(newest.get());
                 details.put("newestFactAt", newest.get().toString());
                 details.put("ageSeconds", age.toSeconds());
-                details.put("replicaState", age.compareTo(stalenessThreshold) > 0 ? "stale" : "fresh");
+                details.put(REPLICA_STATE, age.compareTo(stalenessThreshold) > 0 ? "stale" : "fresh");
             }
         } catch (Exception e) {
             log.warn("Unable to read availability replica staleness", e);
-            details.put("replicaState", "unknown");
+            details.put(REPLICA_STATE, "unknown");
             details.put("error", e.getClass().getSimpleName());
         }
         return Health.up().withDetails(details).build();
