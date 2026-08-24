@@ -271,48 +271,63 @@ public class TestModeTaxCalculator {
      */
     @NonNull
     private ResolvedRates resolveRates(@NonNull TaxCalculationRequest request, @NonNull LocalDate transactionDate) {
-        List<TaxProperties.JurisdictionRule> rules = properties.getTestMode().getJurisdictions();
         TaxProperties.JurisdictionRule best = null;
-        int bestSpecificity = -1;
-        LocalDate bestFrom = null;
-        for (TaxProperties.JurisdictionRule rule : rules) {
-            if (rule.getRates() == null || rule.getRates().isEmpty()) {
-                continue;
-            }
-            LocalDate from = rule.getEffectiveFrom();
-            if (from != null && from.isAfter(transactionDate)) {
-                continue;
-            }
-            if (!matches(rule.getMatch(), request)) {
-                continue;
-            }
-            int specificity = specificity(rule.getMatch());
-            // Prefer the most-recently-effective rule; break ties by most-specific match,
-            // then by configured order (first wins, so require strict improvement).
-            boolean better;
-            if (best == null) {
-                better = true;
-            } else if (!nullSafeEquals(from, bestFrom)) {
-                better = isAfter(from, bestFrom);
-            } else {
-                better = specificity > bestSpecificity;
-            }
-            if (better) {
+        for (TaxProperties.JurisdictionRule rule : properties.getTestMode().getJurisdictions()) {
+            if (isCandidate(rule, request, transactionDate) && beats(rule, best)) {
                 best = rule;
-                bestSpecificity = specificity;
-                bestFrom = from;
             }
         }
         if (best != null) {
-            Set<String> exemptCategories = new LinkedHashSet<>();
-            for (String category : best.getExemptCategories()) {
-                if (category != null && !category.isBlank()) {
-                    exemptCategories.add(category.toUpperCase(Locale.ROOT));
-                }
-            }
-            return new ResolvedRates(best.getRates(), exemptCategories);
+            return new ResolvedRates(best.getRates(), normalizedExemptCategories(best));
         }
         return new ResolvedRates(resolveEffectiveRates(transactionDate), Set.of());
+    }
+
+    /**
+     * Whether a rule is in the running at all: it must have rates to charge, be effective on the
+     * transaction date, and match the destination address.
+     */
+    private boolean isCandidate(
+            TaxProperties.@NonNull JurisdictionRule rule,
+            @NonNull TaxCalculationRequest request,
+            @NonNull LocalDate transactionDate) {
+        if (rule.getRates() == null || rule.getRates().isEmpty()) {
+            return false;
+        }
+        LocalDate from = rule.getEffectiveFrom();
+        if (from != null && from.isAfter(transactionDate)) {
+            return false;
+        }
+        return matches(rule.getMatch(), request);
+    }
+
+    /**
+     * The precedence order between two candidate rules: most-recently-effective first, then
+     * most-specific match, then configured order — "first wins", so a later rule must strictly
+     * improve on the incumbent to displace it.
+     */
+    private boolean beats(
+            TaxProperties.@NonNull JurisdictionRule challenger, TaxProperties.@Nullable JurisdictionRule incumbent) {
+        if (incumbent == null) {
+            return true;
+        }
+        LocalDate challengerFrom = challenger.getEffectiveFrom();
+        LocalDate incumbentFrom = incumbent.getEffectiveFrom();
+        if (!nullSafeEquals(challengerFrom, incumbentFrom)) {
+            return isAfter(challengerFrom, incumbentFrom);
+        }
+        return specificity(challenger.getMatch()) > specificity(incumbent.getMatch());
+    }
+
+    /** The winning rule's exempt categories, upper-cased, with null and blank entries dropped. */
+    private static Set<String> normalizedExemptCategories(TaxProperties.@NonNull JurisdictionRule rule) {
+        Set<String> exemptCategories = new LinkedHashSet<>();
+        for (String category : rule.getExemptCategories()) {
+            if (category != null && !category.isBlank()) {
+                exemptCategories.add(category.toUpperCase(Locale.ROOT));
+            }
+        }
+        return exemptCategories;
     }
 
     /**
