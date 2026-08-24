@@ -159,6 +159,16 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
 
     // ========== PROMOTION VALIDATION FAILURE TESTS ==========
 
+    /**
+     * #1477: an unknown estimate is a 404 carrying {@code ESTIMATE_NOT_FOUND} and a correlation id.
+     *
+     * <p>This asserted 400 before, which was the implementation showing through rather than the
+     * contract: the endpoint's OpenAPI has always documented 404 for a missing estimate, and the
+     * 400 only happened because the service threw {@code IllegalArgumentException} — the same
+     * bodiless 400 that a stale customer replica and an unbacked approval also produced, which is
+     * exactly what #1477 was filed about. The code and correlation id are asserted here too,
+     * because a status alone is what left callers unable to tell those three cases apart.
+     */
     @Test
     @DisplayName("PR-005: Reject promotion - estimate not found")
     void testPromoteEstimate_NotFound() {
@@ -168,7 +178,9 @@ class EstimatePromotionContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/promote", nonExistentId)
                 .then()
-                .statusCode(400)
+                .statusCode(404)
+                .body("code", equalTo("ESTIMATE_NOT_FOUND"))
+                .body("correlationId", notNullValue())
                 .log()
                 .ifValidationFails();
     }
