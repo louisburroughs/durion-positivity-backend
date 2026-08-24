@@ -22,6 +22,7 @@ import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.dto.snapshot.ContactSummary;
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.dto.snapshot.SnapshotMetadata;
+import com.positivity.customer.internal.entity.AbstractParty_;
 import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.CommercialParty_;
@@ -717,8 +718,7 @@ public class PartyServiceImpl implements PartyService {
     private Sort normalizeBrowseSort(@NonNull Sort requestedSort) {
         if (requestedSort.isUnsorted()) {
             return Sort.by(
-                    Sort.Order.asc(CommercialParty_.LEGAL_NAME).ignoreCase(),
-                    Sort.Order.asc(CommercialParty_.PARTY_ID));
+                    Sort.Order.asc(CommercialParty_.LEGAL_NAME).ignoreCase(), Sort.Order.asc(AbstractParty_.PARTY_ID));
         }
 
         List<Sort.Order> orders = new ArrayList<>();
@@ -729,10 +729,9 @@ public class PartyServiceImpl implements PartyService {
                 orders.add(order);
             }
         });
-        boolean hasPartyIdSort =
-                orders.stream().anyMatch(order -> CommercialParty_.PARTY_ID.equals(order.getProperty()));
+        boolean hasPartyIdSort = orders.stream().anyMatch(order -> AbstractParty_.PARTY_ID.equals(order.getProperty()));
         if (!hasPartyIdSort) {
-            orders.add(Sort.Order.asc(CommercialParty_.PARTY_ID));
+            orders.add(Sort.Order.asc(AbstractParty_.PARTY_ID));
         }
         return Sort.by(orders);
     }

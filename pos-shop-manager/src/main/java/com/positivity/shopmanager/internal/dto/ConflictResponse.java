@@ -4,6 +4,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.io.Serial;
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 
@@ -14,7 +16,10 @@ import java.util.List;
  * timestamp.
  */
 @Schema(description = "Error envelope returned when an appointment scheduling conflict is detected (HTTP 409)")
-public class ConflictResponse {
+public class ConflictResponse implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     @Schema(description = "Machine-readable error code", example = "SCHEDULING_CONFLICT", requiredMode = REQUIRED)
     private String errorCode; // Always "SCHEDULING_CONFLICT"
@@ -123,7 +128,10 @@ public class ConflictResponse {
      * SOFT conflicts can be overridden with permission and reason.
      */
     @Schema(description = "A single detected scheduling conflict")
-    public static class Conflict {
+    public static class Conflict implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Schema(description = "Conflict severity (HARD or SOFT)", example = "SOFT", requiredMode = REQUIRED)
         private String severity; // HARD | SOFT (enum)
@@ -208,7 +216,10 @@ public class ConflictResponse {
      * Provided as a convenience; client can ignore and choose own time.
      */
     @Schema(description = "A suggested alternative appointment slot that avoids detected conflicts")
-    public static class SuggestedAlternative {
+    public static class SuggestedAlternative implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
 
         @Schema(
                 description = "Suggested start time (ISO-8601 with offset)",
