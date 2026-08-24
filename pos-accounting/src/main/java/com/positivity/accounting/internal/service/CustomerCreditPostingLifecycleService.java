@@ -12,15 +12,20 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Write-back of the GL posting lifecycle onto a customer-credit draw-down (issue #992).
+ * Write-back of the GL posting lifecycle onto a customer-credit draw-down
+ * (issue #992).
  *
- * <p>Exists so the posting handler never touches a repository directly — repositories are
- * service-layer-only by the module's ArchUnit rule. Runs with MANDATORY propagation so the
- * link is written in the handler's own transaction, alongside the journal entry and the
+ * <p>
+ * Exists so the posting handler never touches a repository directly —
+ * repositories are
+ * service-layer-only by the module's ArchUnit rule. Runs with MANDATORY
+ * propagation so the
+ * link is written in the handler's own transaction, alongside the journal entry
+ * and the
  * idempotency key: all three land together or none do.
  */
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
 public class CustomerCreditPostingLifecycleService {
 
@@ -28,7 +33,8 @@ public class CustomerCreditPostingLifecycleService {
     private final CustomerCreditTransactionRepository creditTransactionRepository;
 
     /**
-     * Record the relieving journal entry on its draw-down row, so the subledger points at the
+     * Record the relieving journal entry on its draw-down row, so the subledger
+     * points at the
      * entry that discharged it.
      *
      * @param creditTransactionId the draw-down that was posted
