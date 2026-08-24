@@ -514,11 +514,6 @@ public class ClaimServiceImpl implements ClaimService {
      * DENY → DENIED). An {@code amountApproved} differing from the computed amount requires an
      * {@code overrideReason}, audited as a claim note.
      *
-     * @return whether any line's approved amount overrode the computed amount
-     */
-    /**
-     * Applies the adjudicator's per-line decisions, defaulting the lines they did not mention.
-     *
      * @return whether any line's approved amount overrode the computed one, which the caller uses
      *     to decide whether the decision needs an override reason recorded against the claim
      */
