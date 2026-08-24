@@ -61,7 +61,7 @@ public class WarrantyEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "warranty")
+                        .tag("owner", OWNER)
                         .tag("entity", "warranty-events")
                         .register(registry);
     }

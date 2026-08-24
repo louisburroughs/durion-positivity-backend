@@ -67,7 +67,7 @@ public class WorkorderEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "workorder")
+                        .tag("owner", OWNER)
                         .tag("entity", "workorder-events")
                         .register(registry);
     }

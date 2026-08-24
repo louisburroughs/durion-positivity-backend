@@ -296,7 +296,7 @@ public class SupplierPriceCatalogEventsListener {
                 "applied " + tracker.getChunksApplied() + " of " + expected + " chunks");
 
         outboxEventWriter.publish(
-                DomainTopics.commands("supplier"),
+                DomainTopics.commands(OWNER),
                 new DomainEventEnvelope<>(
                         UUIDv7Generator.generate(),
                         SupplierPriceCatalogRepublishRequestedV1.EVENT_TYPE,

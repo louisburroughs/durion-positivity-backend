@@ -80,7 +80,7 @@ public class LocationEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "location")
+                        .tag("owner", OWNER)
                         .tag("entity", "location-events")
                         .register(registry);
     }
