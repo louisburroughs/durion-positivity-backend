@@ -39,8 +39,8 @@ import org.springframework.test.web.servlet.MockMvc;
  *       {@code inventory:availability:search} and {@code :read} alone is not enough.</li>
  *   <li>{@code inventory:on_hand:*} no longer reaches any availability endpoint. On-hand reads the
  *       stock record; availability reads the projection net of prior commitments. Neither family
- *       implies the other, and a permission that grants nothing it is named for is exactly the hole
- *       #1494 documented.</li>
+ *       implies the other. The hole #1494 documented was the converse: a permission named for
+ *       reading availability that granted no access to it.</li>
  * </ol>
  */
 @WebMvcTest(InventoryAvailabilityController.class)
