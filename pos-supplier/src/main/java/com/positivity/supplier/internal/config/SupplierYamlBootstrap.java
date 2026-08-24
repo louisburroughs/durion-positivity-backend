@@ -30,7 +30,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -152,10 +151,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setReadTimeoutMs(spec.protocolDefaults().readTimeoutMs());
             var retry = spec.protocolDefaults().retry();
             profile.setRetryMaxAttempts(retry == null ? null : retry.maxAttempts());
-            profile.setRetryBackoff(Optional.ofNullable(retry)
-                    .map(retrySpec -> retrySpec.backoff())
-                    .map(SupplierYamlBootstrap::parseBackoff)
-                    .orElse(null));
+            String backoffSpec = retry == null ? null : retry.backoff();
+            profile.setRetryBackoff(backoffSpec == null ? null : parseBackoff(backoffSpec));
         } else {
             profile.setConnectTimeoutMs(null);
             profile.setReadTimeoutMs(null);

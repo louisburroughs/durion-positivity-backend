@@ -1,6 +1,8 @@
 # SonarQube Remediation Plan
 
-Status: proposed — no code changes made yet.
+Status: Phases 1 and 2 implemented (see §2 and §3); Phase 3 not started.
+The `new_reliability_rating` fix is in, so the next analysis should return the
+quality gate to green — confirm against §7 before treating §1's table as stale.
 Date: 2026-08-24
 Source: SonarCloud project `louisburroughs_durion-positivity-backend`
 (organisation `louisburroughs`, EU region), analysis `0.1.71f8f99-SNAPSHOT`
@@ -48,7 +50,7 @@ equally, fixing anything in this plan improves both numbers at once.
 Sonar's own remediation-effort estimate for the 267 in-scope issues is
 **≈38 hours**, distributed very unevenly — see the phase tables.
 
-## 2. Phase 1 — Reliability (2 issues, ~30 min, turns the gate green)
+## 2. Phase 1 — Reliability (2 issues, ~30 min, turns the gate green) — DONE
 
 Both issues are the same rule and the same code shape: an
 `Optional…​.orElse(null)` chain where SonarJava's dataflow concludes a `null`
@@ -72,7 +74,7 @@ The surrounding `else` branch already writes `profile.setRetryBackoff(null)`
 unconditionally (line 163), so a null backoff is a legitimate, intended state —
 this is about *how* the null is produced, not *whether* null is allowed.
 
-Proposed fix — drop the `Optional` round-trip for a plain null-guard, which is
+Fix applied — drop the `Optional` round-trip for a plain null-guard, which is
 both shorter and removes the flagged call entirely:
 
 ```java
@@ -100,8 +102,8 @@ element type is non-null and `orElse(null)` contradicts it — while the
 destination, `ExtPersonReplica.primaryEmail`, is genuinely nullable (a person
 may have no primary email).
 
-Proposed fix — a small private helper with an explicit `@Nullable` return,
-which states the nullability at the boundary where it actually changes:
+Fix applied — a small private helper with an explicit `@Nullable` return, which
+states the nullability at the boundary where it actually changes:
 
 ```java
 @Nullable
@@ -121,18 +123,21 @@ Note `PeopleContactEventsListener.java:120` performs the same
 
 ### Phase 1 exit criteria
 
-- `./mvnw -pl pos-supplier,pos-location -am -Dtest='SupplierYamlBootstrap*,PeopleContactEvents*' test` green.
-- `./mvnw spotless:apply` run and `git status` checked (Spotless also formats
-  test sources in the modules passed to it).
-- Next SonarCloud analysis reports `new_reliability_rating = 1` and the quality
-  gate flips to **Green**.
+- [x] Neither module had a test pinning the null path, so both were added — they
+      are the evidence that these refactors are behaviour-preserving rather than
+      bug fixes:
+      `SupplierYamlBootstrapTest#absentRetryBlockAndAbsentBackoffLeaveRetryColumnsNull`
+      (absent `retry` block, and `maxAttempts` with no `backoff`) and
+      `PeopleContactEventsListenerTest#personWithoutPrimaryEmailStoresNullPrimaryEmail`
+      (a non-primary email plus a primary phone must not be promoted to
+      `primaryEmail`).
+- [x] `./mvnw -pl pos-supplier,pos-location,pos-workorder -DskipTests=false test`
+      green across all three modules, with Spotless, Checkstyle and SpotBugs
+      enabled (no `-Dskip` flags).
+- [ ] Next SonarCloud analysis reports `new_reliability_rating = 1` and the
+      quality gate flips to **Green**.
 
-Behaviour must be unchanged in both cases — these are refactors, not bug fixes.
-If either module lacks a test that pins the null path (no retry block
-configured; a person with no primary email), add one as part of this phase; it
-is the only evidence that the refactor was behaviour-preserving.
-
-## 3. Phase 2 — The single BLOCKER (1 issue, ~10 min)
+## 3. Phase 2 — The single BLOCKER (1 issue, ~10 min) — DONE
 
 | Module | Location | Rule |
 | ------ | -------- | ---- |
@@ -149,7 +154,7 @@ void missingPublisherIsANoOp() {
 ```
 
 The test asserts nothing; it only proves no exception was thrown. Its stated
-intent — "a no-op" — is testable directly. Proposed fix: assert both halves of
+intent — "a no-op" — is testable directly. Fix applied: assert both halves of
 the claim.
 
 ```java
@@ -351,19 +356,19 @@ This is the only bucket that changes real control flow, so it is scheduled
 
 ## 5. Sequencing and PR strategy
 
-| Phase | Content | Issues | Effort | Gate impact |
-| ----- | ------- | -----: | -----: | ----------- |
-| 1 | Reliability `S2637` | 2 | 0.5 h | **Red → Green** |
-| 2 | BLOCKER `S2699` | 1 | 0.2 h | none |
-| 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) |
-| 3.2–3.4 | `S1948`, `S3252`, `S1186` | 20 | 2.0 h | none |
-| 3.5 | `S1192` literals | 148 | 21.0 h | none |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none |
-| | **Total** | **267** | **≈38 h** | |
+| Phase | Content | Issues | Effort | Gate impact | Status |
+| ----- | ------- | -----: | -----: | ----------- | ------ |
+| 1 | Reliability `S2637` | 2 | 0.5 h | **Red → Green** | done |
+| 2 | BLOCKER `S2699` | 1 | 0.2 h | none | done |
+| 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | not started |
+| 3.2–3.4 | `S1948`, `S3252`, `S1186` | 20 | 2.0 h | none | not started |
+| 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |
+| | **Total** | **267** | **≈38 h** | | |
 
-- Phases 1 and 2 ship as **one small PR** — 3 issues, ~40 minutes, and it is
-  the only change in this plan that moves the quality gate. Land it before
-  anything else so subsequent PRs are analysed against a green baseline.
+- Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in
+  this plan that moves the quality gate. Landing it first means subsequent PRs
+  are analysed against a green baseline.
 - Phase 3.1 ships **one PR per module** (9 modules, 22 files) with the
   1/2/3 classification in each description.
 - Phases 3.2–3.4 can share a single PR (mechanical, 20 issues) *except* the

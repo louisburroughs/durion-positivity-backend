@@ -1,12 +1,14 @@
 package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
@@ -145,7 +147,10 @@ class PromotedWorkorderDemandPublisherTest {
     void missingPublisherIsANoOp() {
         when(publisherProvider.getIfAvailable()).thenReturn(null);
 
-        demandPublisher.registerPartsDemand(workorder(), List.of(part(PART_ID, PRODUCT_ID, "2", "EA")));
+        assertThatCode(() ->
+                        demandPublisher.registerPartsDemand(workorder(), List.of(part(PART_ID, PRODUCT_ID, "2", "EA"))))
+                .doesNotThrowAnyException();
+        verifyNoInteractions(publisher);
     }
 
     private static Workorder workorder() {
