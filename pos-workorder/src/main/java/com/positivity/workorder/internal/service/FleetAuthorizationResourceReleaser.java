@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code this} from its {@code @Scheduled} tick, which is not transactional. Spring's transaction
  * advice is proxy-based, so that self-call bypassed it and the method's own comment — "re-read the
  * guard inside the transaction" — described a transaction that did not exist. Living in a separate
- * bean means the call crosses the proxy and the guard, the assignment release and the
+ * bean means the call crosses the proxy and the re-read, the guard, the assignment release and the
  * {@code resourcesReleasedAt} stamp are one unit.
  *
  * <h2>What the missing boundary cost</h2>
@@ -64,24 +64,33 @@ public class FleetAuthorizationResourceReleaser {
 
     @Transactional
     public void releaseOne(@NonNull WorkorderFleetAuthorization authorization) {
-        // Re-read the guard inside the transaction: the status may have changed between the query
-        // above and this write, and releasing a resource for a now-granted authorization would be
-        // wrong rather than merely late.
-        if (!BLOCKING_STATUSES.contains(authorization.getStatus()) || authorization.getResourcesReleasedAt() != null) {
+        // Re-read inside the transaction and evaluate the guard against *that* row, not against the
+        // instance the runner's query produced. That instance is detached and was read before this
+        // transaction began, so its status is a snapshot: checking it would let a resource be
+        // released for an authorization granted in the meantime, which is wrong rather than merely
+        // late. Saving it would be worse still — a merge of the stale snapshot over the newer row.
+        WorkorderFleetAuthorization managed = authorizationRepository
+                .findById(authorization.getWorkorderFleetAuthorizationId())
+                .orElse(null);
+        if (managed == null) {
+            // Deleted between the sweep's query and now. Nothing to release and nothing to record.
+            return;
+        }
+        if (!BLOCKING_STATUSES.contains(managed.getStatus()) || managed.getResourcesReleasedAt() != null) {
             return;
         }
 
         technicianAssignmentService.releaseAssignment(
-                authorization.getWorkorderId(),
+                managed.getWorkorderId(),
                 RELEASED_BY,
                 "fleet payment authorization has been unresolved for over " + releaseAfter);
 
-        authorization.setResourcesReleasedAt(Instant.now(clock));
-        authorizationRepository.save(authorization);
+        managed.setResourcesReleasedAt(Instant.now(clock));
+        authorizationRepository.save(managed);
         log.info(
                 "Released held resources for workorder {}: fleet authorization has been {} since {}",
-                authorization.getWorkorderId(),
-                authorization.getStatus(),
-                authorization.getFirstBlockedAt());
+                managed.getWorkorderId(),
+                managed.getStatus(),
+                managed.getFirstBlockedAt());
     }
 }

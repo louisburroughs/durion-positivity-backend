@@ -140,7 +140,12 @@ Note that the `existing` lookup a few lines above performs the same
       green across all three modules, with Spotless, Checkstyle and SpotBugs
       enabled (no `-Dskip` flags).
 - [ ] Next SonarCloud analysis reports `new_reliability_rating = 1` and the
-      quality gate flips to **Green**.
+      quality gate flips to **Green**. Note this does **not** happen on merge:
+      per `.github/workflows/ci.yml` (`code-quality-full`), the only job that
+      publishes a branch-level analysis runs on `schedule` (nightly, 06:00 UTC)
+      or `workflow_dispatch`. Until one of those runs, the project gate keeps
+      reporting the last nightly value, which predates the fix. The PR-mode scan
+      on #1487 reported zero reliability issues before it merged.
 
 ## 3. Phase 2 — The single BLOCKER (1 issue, ~10 min) — DONE
 
@@ -472,8 +477,10 @@ movement — `./mvnw -pl pos-archunit -am -Dtest=ArchitectureTests test`.
 
 ## 7. Re-measuring
 
-SonarCloud analysis runs on pull requests and on the full-coverage job
-(`.github/workflows/ci.yml`). To re-derive the tables above from the live
+SonarCloud analysis runs on pull requests (`code-quality`, PR-scoped) and on the
+full-coverage job (`code-quality-full`), which is the only one that publishes a
+branch-level analysis and runs **only** nightly at 06:00 UTC or via
+`workflow_dispatch` — merging to `main` does not refresh the project gate. To re-derive the tables above from the live
 project without a token (the project is public):
 
 ```bash

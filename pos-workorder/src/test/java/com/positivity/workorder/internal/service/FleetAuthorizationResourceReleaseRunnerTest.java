@@ -15,7 +15,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,13 +68,26 @@ class FleetAuthorizationResourceReleaseRunnerTest {
         runner = new FleetAuthorizationResourceReleaseRunner(
                 authorizationRepository, releaser, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofHours(4), 50);
         when(authorizationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // The release re-reads by id inside its own transaction, so the mock has to answer that
+        // read. Tests that care about the gap between the sweep's query and the write override this
+        // to hand back a different row than the one the query produced.
+        when(authorizationRepository.findById(any()))
+                .thenAnswer(inv -> Optional.ofNullable(managedRows.get((UUID) inv.getArgument(0))));
+    }
+
+    /** What {@code findById} sees, keyed by authorization id — i.e. the current state of the table. */
+    private final Map<UUID, WorkorderFleetAuthorization> managedRows = new HashMap<>();
+
+    private WorkorderFleetAuthorization inTable(WorkorderFleetAuthorization row) {
+        managedRows.put(row.getWorkorderFleetAuthorizationId(), row);
+        return row;
     }
 
     @Test
     @DisplayName("an overdue blocked authorization releases its assignment and is marked released")
     void overdueBlockedAuthorizationIsReleased() {
         WorkorderFleetAuthorization authorization =
-                row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5)));
+                inTable(row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5))));
         when(authorizationRepository.findDueForResourceRelease(any(), any(), any()))
                 .thenReturn(List.of(authorization));
 
@@ -84,25 +100,29 @@ class FleetAuthorizationResourceReleaseRunnerTest {
     @Test
     @DisplayName("an authorization granted between the query and the write is not released")
     void grantedBetweenQueryAndWriteIsNotReleased() {
-        // The query result is stale by the time the write runs. Re-checking inside the write is
-        // what stops a resource being pulled from a job that is now cleared to start.
-        WorkorderFleetAuthorization authorization =
-                row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5)));
+        // Two instances on purpose. `stale` is what the sweep's query produced, before this
+        // transaction began; `current` is the row as it now stands in the table. Mutating a single
+        // shared instance would prove nothing — it passes whether or not the write re-reads, which
+        // is how this test previously gave cover to a guard that only ever saw the snapshot.
+        WorkorderFleetAuthorization stale = row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5)));
+        WorkorderFleetAuthorization current =
+                inTable(row(FleetAuthorizationStatus.GRANTED, NOW.minus(Duration.ofHours(5))));
         when(authorizationRepository.findDueForResourceRelease(any(), any(), any()))
-                .thenReturn(List.of(authorization));
-        authorization.setStatus(FleetAuthorizationStatus.GRANTED);
+                .thenReturn(List.of(stale));
 
         runner.releaseOverdue();
 
         verify(technicianAssignmentService, never()).releaseAssignment(any(), any(), any());
-        assertThat(authorization.getResourcesReleasedAt()).isNull();
+        assertThat(current.getResourcesReleasedAt()).isNull();
+        // And the stale snapshot must not have been merged back over the granted row.
+        verify(authorizationRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("an authorization already released is not released again")
     void alreadyReleasedIsNotReleasedAgain() {
         WorkorderFleetAuthorization authorization =
-                row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5)));
+                inTable(row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5))));
         authorization.setResourcesReleasedAt(NOW.minus(Duration.ofMinutes(30)));
         when(authorizationRepository.findDueForResourceRelease(any(), any(), any()))
                 .thenReturn(List.of(authorization));
@@ -115,9 +135,12 @@ class FleetAuthorizationResourceReleaseRunnerTest {
     @Test
     @DisplayName("one failing release does not stop the rest of the batch")
     void oneFailureDoesNotStopTheBatch() {
-        WorkorderFleetAuthorization first = row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5)));
+        WorkorderFleetAuthorization first =
+                inTable(row(FleetAuthorizationStatus.PENDING, NOW.minus(Duration.ofHours(5))));
         WorkorderFleetAuthorization second = row(FleetAuthorizationStatus.REFUSED, NOW.minus(Duration.ofHours(6)));
+        second.setWorkorderFleetAuthorizationId(UUID.fromString("019200aa-0000-7000-8000-0000000000a2"));
         second.setWorkorderId(UUID.fromString("019200aa-0000-7000-8000-0000000000c2"));
+        inTable(second);
         when(authorizationRepository.findDueForResourceRelease(any(), any(), any()))
                 .thenReturn(List.of(first, second));
         when(technicianAssignmentService.releaseAssignment(eq(WORKORDER_ID), any(), any()))
