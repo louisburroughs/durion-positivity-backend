@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.service.ProductFactReplayService;
 import java.time.Clock;
@@ -63,6 +64,14 @@ public class ProductFactReplayServiceImpl implements ProductFactReplayService {
     @Transactional
     public ProductFactReplayResultDto replayPage(
             @Nullable UUID afterProductId, @Nullable Instant updatedSince, int limit) {
+        // Refused rather than reported as a successful no-op: with publication disabled the
+        // publisher is silent, and counting the rows this read as facts it emitted would tell an
+        // operator a replica was seeded when the outbox never saw a row. Added alongside the same
+        // guard on the service replay (#1306); the two are run back to back and lied alike.
+        if (!catalogFactPublisher.publicationEnabled()) {
+            throw new CatalogBusinessRuleException(
+                    "Fact publication is disabled (pos.catalog.kafka.enabled=false); a replay would emit nothing");
+        }
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         Instant startedAt = Instant.now(clock);
 

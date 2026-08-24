@@ -37,6 +37,75 @@ tags:
 - description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read-only.
   name: Tread Design Enrichment
 paths:
+  /v1/catalog-items/services/facts/replay:
+    post:
+      description: 'Re-publishes catalog.service.updated facts for one bounded page of services so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
+
+        Use this tool to fill a consumer''s replica after a first deployment or a consumer outage longer than broker retention — pos-marketing resolves a campaign catalogFocusRef of the form service:<name> against such a replica; do not use it to fix one service, which republishes itself on its next ordinary update, and use replayProductFacts for the product half of the same replica.
+
+        Preconditions: Kafka publication must be enabled — a replay with it off is refused rather than reported as a successful no-op; replayed facts are indistinguishable from live ones, so consumers apply them through their normal path and their stale guard prevents an older fact regressing newer state. A deleted service leaves no row to replay, so its tombstone exists only in the live stream.
+
+        Required inputs: none; afterServiceId resumes a previous page, updatedSince restricts to services changed at or after an instant, and limit bounds the page at 1000.
+
+        Emits a CATALOG_SERVICE_FACT_REPLAY event and queues one service fact per service in the page; no catalog state changes.
+
+        Returns 200 with complete=true and a null cursor once the end of the service catalog is reached, 400 when limit is out of range or a parameter is malformed, and 409 when fact publication is disabled.
+
+        '
+      operationId: replayServiceFacts
+      parameters:
+      - description: Resume cursor from a previous call; omit to start at the beginning.
+        in: query
+        name: afterServiceId
+        required: false
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      - description: Restrict to services changed at or after this instant; omit to replay all.
+        in: query
+        name: updatedSince
+        required: false
+        schema:
+          example: 2026-08-01 00:00:00+00:00
+          format: date-time
+          type: string
+      - description: Maximum facts to emit in this call (1–1000).
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 500
+          example: 500
+          maximum: 1000
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceFactReplayResultDto'
+          description: What this page emitted and where to resume.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A parameter is malformed or the limit is out of range.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Fact publication is disabled, so a replay would emit nothing.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+      summary: Re-emit Service Facts for Replica Consumers
+      tags:
+      - Catalog Items API
   /v1/catalog-items/{type}:
     post:
       description: 'Creates a catalog item of the given type: a product, a service, or a non-inventory product.
@@ -110,7 +179,7 @@ paths:
 
         Required inputs: type (product, service or noninventory, case-insensitive) and catalogId (UUID) as path parameters; there is no request body.
 
-        Emits a CATALOG_ITEM_DELETE event; catalogs that referenced the item are not rewritten by this call.
+        Emits a CATALOG_ITEM_DELETE event, and for a product or a service queues a catalog fact marking it inactive so event-fed replicas in other modules stop resolving it; catalogs that referenced the item are not rewritten by this call.
 
         Returns 204 when the item is removed, 404 when no item of that type exists for the supplied id, and 400 when the type is not one of the three supported values.
 
@@ -993,13 +1062,13 @@ paths:
 
         Use this tool to fill a consumer''s replica after a first deployment or a consumer outage longer than broker retention; do not use it to fix one product, which republishes itself on its next ordinary update.
 
-        Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and reach nobody; replayed facts are indistinguishable from live ones, so consumers apply them through their normal path and their stale guard prevents an older fact regressing newer state.
+        Preconditions: Kafka publication must be enabled — a replay with it off is refused rather than reported as a successful no-op; replayed facts are indistinguishable from live ones, so consumers apply them through their normal path and their stale guard prevents an older fact regressing newer state.
 
         Required inputs: none; afterProductId resumes a previous page, updatedSince restricts to products changed at or after an instant, and limit bounds the page at 1000.
 
         Emits a CATALOG_PRODUCT_FACT_REPLAY event and queues one product fact per product in the page; no catalog state changes.
 
-        Returns 200 with complete=true and a null cursor once the catalog end is reached, and 400 when limit is out of range or a parameter is malformed.
+        Returns 200 with complete=true and a null cursor once the catalog end is reached, 400 when limit is out of range or a parameter is malformed, and 409 when fact publication is disabled.
 
         '
       operationId: replayProductFacts
@@ -1043,6 +1112,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: A parameter is malformed or the limit is out of range.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Fact publication is disabled, so a replay would emit nothing.
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -5838,6 +5913,32 @@ components:
           type: string
         shortDescription:
           description: Short service description
+          type: string
+      type: object
+    ServiceFactReplayResultDto:
+      description: Outcome of one page of a service-fact replay.
+      properties:
+        complete:
+          description: True when no further pages remain for this filter.
+          example: false
+          type: boolean
+        emitted:
+          description: Facts published by this call.
+          example: 120
+          format: int32
+          type: integer
+        nextAfterId:
+          description: Cursor for the next page; null when the end of the service catalog was reached.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        startedAt:
+          description: When this page began.
+          format: date-time
+          type: string
+        updatedSince:
+          description: The updatedSince filter this page ran under, echoed back.
+          format: date-time
           type: string
       type: object
     SortObject:

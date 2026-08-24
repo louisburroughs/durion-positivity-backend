@@ -42,6 +42,12 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.approval(
                                 "CATALOG_PRODUCT_FACT_REPLAY", "Re-emit product facts for event-fed replica consumers")
                         .build(),
+                // Replica seeding / repair for service facts (#1306), same approval-grade budget as
+                // CATALOG_PRODUCT_FACT_REPLAY: one call queues up to a thousand facts, so a write
+                // threshold would alert on every healthy replay.
+                EventTypeRegistration.approval(
+                                "CATALOG_SERVICE_FACT_REPLAY", "Re-emit service facts for event-fed replica consumers")
+                        .build(),
                 // Supplier price entries applied from PRICAT imports (ADR-0053, #1308)
                 EventTypeRegistration.fastRead(
                                 "CATALOG_SUPPLIER_PRICE_LATEST",

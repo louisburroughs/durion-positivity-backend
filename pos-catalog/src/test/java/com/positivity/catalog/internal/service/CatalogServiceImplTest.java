@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.repository.CatalogRepository;
@@ -33,6 +34,9 @@ class CatalogServiceImplTest {
 
     @Mock
     private CatalogRepository catalogRepository;
+
+    @Mock
+    private CatalogFactPublisher catalogFactPublisher;
 
     @InjectMocks
     private CatalogServiceImpl catalogService;

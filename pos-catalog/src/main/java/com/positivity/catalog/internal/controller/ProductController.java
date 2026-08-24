@@ -586,15 +586,16 @@ public class ProductController {
             Use this tool to fill a consumer's replica after a first deployment or a consumer outage \
             longer than broker retention; do not use it to fix one product, which republishes itself on \
             its next ordinary update.
-            Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and \
-            reach nobody; replayed facts are indistinguishable from live ones, so consumers apply them \
-            through their normal path and their stale guard prevents an older fact regressing newer state.
+            Preconditions: Kafka publication must be enabled — a replay with it off is refused rather \
+            than reported as a successful no-op; replayed facts are indistinguishable from live ones, so \
+            consumers apply them through their normal path and their stale guard prevents an older fact \
+            regressing newer state.
             Required inputs: none; afterProductId resumes a previous page, updatedSince restricts to \
             products changed at or after an instant, and limit bounds the page at 1000.
             Emits a CATALOG_PRODUCT_FACT_REPLAY event and queues one product fact per product in the \
             page; no catalog state changes.
-            Returns 200 with complete=true and a null cursor once the catalog end is reached, and 400 \
-            when limit is out of range or a parameter is malformed.
+            Returns 200 with complete=true and a null cursor once the catalog end is reached, 400 when \
+            limit is out of range or a parameter is malformed, and 409 when fact publication is disabled.
             """)
     @ApiResponse(
             responseCode = "200",
@@ -606,6 +607,10 @@ public class ProductController {
     @ApiResponse(
             responseCode = "400",
             description = "A parameter is malformed or the limit is out of range.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Fact publication is disabled, so a replay would emit nothing.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ProductFactReplayResultDto> replayProductFacts(
             @Parameter(

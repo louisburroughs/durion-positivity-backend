@@ -253,6 +253,8 @@ paths:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1tus
   /v1/tus/{uploadId}:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1tus~1{uploadId}
+  /v1/catalog-items/services/facts/replay:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1services~1facts~1replay
   /v1/catalog-items/{type}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1{type}
   /v1/catalog-items/{type}/{catalogId}:

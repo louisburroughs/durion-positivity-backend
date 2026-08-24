@@ -78,6 +78,11 @@ pos:
       # redemption facts — all owned by pos-customer (ADR-0044 R3).
       customer-events-topic: ${POS_MARKETING_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       customer-events-consumer-group: ${POS_MARKETING_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-marketing-customer-events}
+      # Product and service facts owned by pos-catalog, replicated into ext_catalog so a
+      # campaign's catalogFocusRef can be resolved before it is scheduled (#1306). ADR-0044 R1
+      # permits no synchronous read into the catalog domain.
+      catalog-events-topic: ${POS_MARKETING_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_MARKETING_CATALOG_EVENTS_CONSUMER_GROUP:pos-marketing-catalog-events}
       # Delivery/bounce/complaint/open/click reports from the shared platform sender
       # (FI-2, docs/PLATFORM_SENDER_CONTRACT.md).
       sender-outcomes-topic: ${POS_MARKETING_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}

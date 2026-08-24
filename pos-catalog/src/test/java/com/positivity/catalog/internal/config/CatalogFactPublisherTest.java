@@ -12,11 +12,13 @@ import com.positivity.catalog.internal.entity.ProductStatus;
 import com.positivity.catalog.internal.entity.ProductTrackingLevel;
 import com.positivity.catalog.internal.entity.ProductUomEntity;
 import com.positivity.catalog.internal.entity.ProductUomType;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.SubstitutionGroupEntity;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -27,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,10 +41,15 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Contract test for the {@code catalog.product.updated} payload shape (#1023, Story X1).
+ * Contract tests for the payload shapes this module publishes.
  *
- * <p>Proves that schema version 2 is additive: every version-1 field keeps its name and position in
- * the serialized JSON, and the new UoM / tracking-level / substitution fields appear alongside them.
+ * <p>For {@code catalog.product.updated} (#1023, Story X1): schema version 2 is additive — every
+ * version-1 field keeps its name and position in the serialized JSON, and the new UoM /
+ * tracking-level / substitution fields appear alongside them.
+ *
+ * <p>For {@code catalog.service.updated} (#1306): the fact carries what a consumer needs to resolve
+ * a {@code service:} reference by id or by name, and a deletion is announced as a tombstone whose
+ * version outranks the upsert it supersedes.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CatalogFactPublisher product contract payload")
@@ -166,6 +174,86 @@ class CatalogFactPublisherTest {
         assertThat(payload.path("uomConversions").isNull()).isTrue();
         assertThat(payload.path("substitutionGroupId").isNull()).isTrue();
         assertThat(payload.path("substitutionProductIds").isNull()).isTrue();
+    }
+
+    @Nested
+    @DisplayName("catalog.service.updated (#1306)")
+    class ServiceFact {
+
+        @Test
+        @DisplayName("carries the id and the name, the two ways a reference gets written")
+        void upsertCarriesTheResolvableIdentifiers() {
+            ServiceEntity entity = serviceEntity();
+
+            publisher.publishServiceUpdated(entity);
+
+            DomainEventEnvelope<?> envelope = capturedServiceEnvelope();
+            assertThat(envelope.eventType()).isEqualTo("catalog.service.updated");
+            assertThat(envelope.schemaVersion()).isEqualTo(1);
+            assertThat(envelope.aggregateId()).isEqualTo(entity.getId());
+            assertThat(envelope.aggregateVersion())
+                    .isEqualTo(entity.getUpdatedAt().toEpochMilli());
+
+            JsonNode payload = objectMapper
+                    .readTree(objectMapper.writeValueAsString(envelope))
+                    .path("payload");
+            assertThat(payload.path("serviceId").stringValue(null))
+                    .isEqualTo(entity.getId().toString());
+            assertThat(payload.path("name").stringValue(null)).isEqualTo("Wheel alignment");
+            assertThat(payload.path("shortDescription").stringValue(null)).isEqualTo("Four wheel");
+            assertThat(payload.path("longDescription").stringValue(null)).isEqualTo("Four wheel alignment");
+            assertThat(payload.path("active").booleanValue()).isTrue();
+            assertThat(payload.path("createdAt").isNull()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a deletion is announced as an inactive fact, keeping the removed name")
+        void deletionPublishesATombstone() {
+            ServiceEntity entity = serviceEntity();
+
+            publisher.publishServiceRemoved(entity);
+
+            JsonNode payload = objectMapper
+                    .readTree(objectMapper.writeValueAsString(capturedServiceEnvelope()))
+                    .path("payload");
+            assertThat(payload.path("active").booleanValue()).isFalse();
+            assertThat(payload.path("name").stringValue(null)).isEqualTo("Wheel alignment");
+            // The row is gone, so there is no row timestamp left to report.
+            assertThat(payload.path("updatedAt").isNull()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the tombstone outranks the upsert it supersedes, even within one millisecond")
+        void tombstoneVersionOutranksTheLastUpdate() {
+            ServiceEntity entity = serviceEntity();
+            // A service created and deleted inside the same millisecond as the fixed clock: the
+            // delete time alone would tie, and a consumer's stale guard would keep resolving it.
+            entity.setUpdatedAt(NOW);
+
+            publisher.publishServiceRemoved(entity);
+
+            assertThat(capturedServiceEnvelope().aggregateVersion()).isEqualTo(NOW.toEpochMilli() + 1);
+        }
+
+        private DomainEventEnvelope<?> capturedServiceEnvelope() {
+            @SuppressWarnings("rawtypes")
+            ArgumentCaptor<DomainEventEnvelope> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+            verify(outboxEventWriter).publish(eq("catalog.events.v1"), captor.capture());
+            DomainEventEnvelope<?> envelope = captor.getValue();
+            assertThat(envelope.payload()).isInstanceOf(CatalogServiceUpdatedV1.class);
+            return envelope;
+        }
+
+        private ServiceEntity serviceEntity() {
+            ServiceEntity entity = new ServiceEntity();
+            entity.setId(UUID.fromString("00000000-0000-0000-0000-0000000005a1"));
+            entity.setName("Wheel alignment");
+            entity.setShortDescription("Four wheel");
+            entity.setLongDescription("Four wheel alignment");
+            entity.setCreatedAt(NOW.minusSeconds(7200));
+            entity.setUpdatedAt(NOW.minusSeconds(60));
+            return entity;
+        }
     }
 
     private DomainEventEnvelope<?> capturedEnvelope() {

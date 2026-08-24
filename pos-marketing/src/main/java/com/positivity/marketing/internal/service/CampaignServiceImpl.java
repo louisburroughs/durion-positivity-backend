@@ -189,8 +189,9 @@ public class CampaignServiceImpl implements CampaignService {
      *
      * <p>The segment is checked against the {@code ext_segment} replica; the promotion offer and
      * catalog reference are checked by {@link CampaignReferenceValidator}, which reads pricing
-     * directly because a campaign advertising an offer that stopped running is a mistake nobody
-     * can recall once it has been sent.
+     * directly and the catalog through its {@code ext_catalog} replica — a campaign advertising an
+     * offer that stopped running, or a service that does not exist, is a mistake nobody can recall
+     * once it has been sent.
      */
     private List<String> readinessProblems(Campaign campaign) {
         List<String> problems = new ArrayList<>();
