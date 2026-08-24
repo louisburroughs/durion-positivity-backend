@@ -391,47 +391,21 @@ public final class PredicateParser {
             if (Character.isWhitespace(c)) {
                 i++;
             } else if (isIdentifierStart(c)) {
-                int start = i;
-                while (i < length && isIdentifierPart(input.charAt(i))) {
-                    i++;
-                }
-                tokens.add(new Token(TokenType.IDENT, input.substring(start, i), start));
+                i = lexIdentifier(input, i, tokens);
             } else if (c == '.') {
                 tokens.add(new Token(TokenType.DOT, ".", i));
                 i++;
             } else if (c == '\'') {
-                int start = i;
-                int end = input.indexOf('\'', i + 1);
-                if (end < 0) {
-                    throw new ParseException("unterminated string literal", start);
-                }
-                tokens.add(new Token(TokenType.STRING, input.substring(i + 1, end), start));
-                i = end + 1;
+                i = lexString(input, i, tokens);
             } else if (Character.isDigit(c)
                     || ((c == '+' || c == '-') && i + 1 < length && Character.isDigit(input.charAt(i + 1)))) {
                 i = lexNumber(input, i, tokens);
             } else if (c == '=' || c == '!') {
-                if (i + 1 < length && input.charAt(i + 1) == '=') {
-                    tokens.add(new Token(TokenType.OP, input.substring(i, i + 2), i));
-                    i += 2;
-                } else {
-                    throw new ParseException("unsupported operator '" + c + "' (did you mean '" + c + "='?)", i);
-                }
+                i = lexEqualityOperator(input, i, tokens);
             } else if (c == '>' || c == '<') {
-                if (i + 1 < length && input.charAt(i + 1) == '=') {
-                    tokens.add(new Token(TokenType.OP, input.substring(i, i + 2), i));
-                    i += 2;
-                } else {
-                    tokens.add(new Token(TokenType.OP, String.valueOf(c), i));
-                    i++;
-                }
+                i = lexOrderingOperator(input, i, tokens);
             } else if (c == '&') {
-                if (i + 1 < length && input.charAt(i + 1) == '&') {
-                    tokens.add(new Token(TokenType.AND, "&&", i));
-                    i += 2;
-                } else {
-                    throw new ParseException("single '&' is not a valid operator (did you mean '&&'?)", i);
-                }
+                i = lexAnd(input, i, tokens);
             } else {
                 throw new ParseException("unexpected character '" + c + "'", i);
             }
@@ -439,6 +413,62 @@ public final class PredicateParser {
 
         tokens.add(new Token(TokenType.EOF, "", length));
         return tokens;
+    }
+
+    /** Lexes an identifier: {@code identifierStart identifierPart*}. */
+    private static int lexIdentifier(String input, int start, List<Token> tokens) {
+        int i = start;
+        while (i < input.length() && isIdentifierPart(input.charAt(i))) {
+            i++;
+        }
+        tokens.add(new Token(TokenType.IDENT, input.substring(start, i), start));
+        return i;
+    }
+
+    /** Lexes a single-quoted string literal. The quotes are stripped; there are no escapes. */
+    private static int lexString(String input, int start, List<Token> tokens) {
+        int end = input.indexOf('\'', start + 1);
+        if (end < 0) {
+            throw new ParseException("unterminated string literal", start);
+        }
+        tokens.add(new Token(TokenType.STRING, input.substring(start + 1, end), start));
+        return end + 1;
+    }
+
+    /**
+     * Lexes {@code ==} or {@code !=}.
+     *
+     * <p>A bare {@code =} or {@code !} is rejected rather than assumed: a rule author writing
+     * {@code x = 1} means equality, and silently accepting it would let two spellings of the same
+     * operator diverge.
+     */
+    private static int lexEqualityOperator(String input, int start, List<Token> tokens) {
+        char c = input.charAt(start);
+        if (start + 1 < input.length() && input.charAt(start + 1) == '=') {
+            tokens.add(new Token(TokenType.OP, input.substring(start, start + 2), start));
+            return start + 2;
+        }
+        throw new ParseException("unsupported operator '" + c + "' (did you mean '" + c + "='?)", start);
+    }
+
+    /** Lexes {@code >}, {@code <}, {@code >=} or {@code <=}, preferring the two-character form. */
+    private static int lexOrderingOperator(String input, int start, List<Token> tokens) {
+        char c = input.charAt(start);
+        if (start + 1 < input.length() && input.charAt(start + 1) == '=') {
+            tokens.add(new Token(TokenType.OP, input.substring(start, start + 2), start));
+            return start + 2;
+        }
+        tokens.add(new Token(TokenType.OP, String.valueOf(c), start));
+        return start + 1;
+    }
+
+    /** Lexes {@code &&}. A single {@code &} is an error, not a synonym. */
+    private static int lexAnd(String input, int start, List<Token> tokens) {
+        if (start + 1 < input.length() && input.charAt(start + 1) == '&') {
+            tokens.add(new Token(TokenType.AND, "&&", start));
+            return start + 2;
+        }
+        throw new ParseException("single '&' is not a valid operator (did you mean '&&'?)", start);
     }
 
     /** Lexes {@code ['+'|'-'] digits ['.' digits]} starting at {@code start}. */

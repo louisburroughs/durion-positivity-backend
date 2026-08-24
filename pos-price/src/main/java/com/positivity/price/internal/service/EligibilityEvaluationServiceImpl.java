@@ -127,6 +127,14 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
         return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
     }
 
+    /**
+     * Dispatches one rule to the handler for its condition type.
+     *
+     * <p>The switch is exhaustive over {@link ConditionType} rather than an {@code if/else} chain
+     * with a fall-through. For every condition type that exists today the outcome is identical, but
+     * adding a new one now fails to compile instead of silently returning ELIGIBLE — which is the
+     * safe direction for a rule engine whose job is to withhold discounts.
+     */
     @NonNull
     private EligibilityDecision evaluateSingleRule(
             @NonNull PromotionEligibilityRule rule,
@@ -142,81 +150,118 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
             return new EligibilityDecision(false, EligibilityReasonCode.EVALUATION_ERROR);
         }
 
-        if (conditionType == ConditionType.ACCOUNT_ID_LIST || conditionType == ConditionType.ACCOUNT_FLEET_SIZE) {
-            if (accountId == null) {
-                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_ACCOUNT_CONTEXT);
-            }
-            Optional<AccountContext> accountContext = accountDataProvider.getAccountContext(accountId);
-            if (accountContext.isEmpty()) {
-                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_ACCOUNT_CONTEXT);
-            }
+        return switch (conditionType) {
+            case ACCOUNT_ID_LIST, ACCOUNT_FLEET_SIZE -> evaluateAccountRule(conditionType, operator, value, accountId);
+            case VEHICLE_TAG -> evaluateVehicleTagRule(operator, value, vehicleId);
+            case AUDIENCE_TYPE -> evaluateAudienceTypeRule(operator, value, audienceType);
+            case CAMPAIGN_CODE -> evaluateCampaignCodeRule(operator, value, campaignCode);
+        };
+    }
 
-            if (conditionType == ConditionType.ACCOUNT_ID_LIST) {
-                List<String> accountIds =
-                        Arrays.stream(value.split(",")).map(String::trim).toList();
-                boolean inList = accountIds.contains(accountId.toString());
-                if (operator == RuleOperator.IN && !inList) {
-                    return new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_NOT_IN_LIST);
-                }
-                if (operator == RuleOperator.NOT_IN && inList) {
-                    return new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_IN_EXCLUSION_LIST);
-                }
-            } else {
-                int threshold;
-                try {
-                    threshold = Integer.parseInt(value.trim());
-                } catch (NumberFormatException ex) {
-                    return new EligibilityDecision(false, EligibilityReasonCode.EVALUATION_ERROR);
-                }
-                if (operator == RuleOperator.GREATER_THAN_OR_EQUAL_TO
-                        && accountContext.get().fleetSize() < threshold) {
-                    return new EligibilityDecision(false, EligibilityReasonCode.FLEET_SIZE_TOO_SMALL);
-                }
-            }
-        } else if (conditionType == ConditionType.VEHICLE_TAG) {
-            if (vehicleId == null) {
-                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_VEHICLE_CONTEXT);
-            }
-            Optional<VehicleContext> vehicleContext = vehicleDataProvider.getVehicleContext(vehicleId);
-            if (vehicleContext.isEmpty()) {
-                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_VEHICLE_CONTEXT);
-            }
-
-            boolean tagPresent = vehicleContext.get().tags().contains(value);
-            if (operator == RuleOperator.EQUALS && !tagPresent) {
-                return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_NOT_PRESENT);
-            }
-            if (operator == RuleOperator.NOT_IN && tagPresent) {
-                return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_EXCLUDED);
-            }
-        } else if (conditionType == ConditionType.AUDIENCE_TYPE) {
-            if (audienceType == null || audienceType.isBlank()) {
-                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_AUDIENCE_CONTEXT);
-            }
-            // Audience types are enum-like names (COMMERCIAL, INDIVIDUAL); compare
-            // case-insensitively so client casing does not affect the outcome.
-            boolean matches = value.trim().equalsIgnoreCase(audienceType.trim());
-            if (operator == RuleOperator.EQUALS && !matches) {
-                return new EligibilityDecision(false, EligibilityReasonCode.AUDIENCE_TYPE_NOT_MATCHED);
-            }
-            if (operator == RuleOperator.NOT_IN && matches) {
-                return new EligibilityDecision(false, EligibilityReasonCode.AUDIENCE_TYPE_EXCLUDED);
-            }
-        } else if (conditionType == ConditionType.CAMPAIGN_CODE) {
-            if (campaignCode == null || campaignCode.isBlank()) {
-                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_CAMPAIGN_CONTEXT);
-            }
-            List<String> campaignCodes =
-                    Arrays.stream(value.split(",")).map(String::trim).toList();
-            boolean inList = campaignCodes.contains(campaignCode.trim());
-            if ((operator == RuleOperator.EQUALS || operator == RuleOperator.IN) && !inList) {
-                return new EligibilityDecision(false, EligibilityReasonCode.CAMPAIGN_CODE_NOT_MATCHED);
-            }
-            if (operator == RuleOperator.NOT_IN && inList) {
-                return new EligibilityDecision(false, EligibilityReasonCode.CAMPAIGN_CODE_EXCLUDED);
-            }
+    /** Both account-scoped condition types need the same context lookup before they diverge. */
+    @NonNull
+    private EligibilityDecision evaluateAccountRule(
+            @NonNull ConditionType conditionType,
+            @NonNull RuleOperator operator,
+            @NonNull String value,
+            @Nullable UUID accountId) {
+        if (accountId == null) {
+            return new EligibilityDecision(false, EligibilityReasonCode.MISSING_ACCOUNT_CONTEXT);
+        }
+        Optional<AccountContext> accountContext = accountDataProvider.getAccountContext(accountId);
+        if (accountContext.isEmpty()) {
+            return new EligibilityDecision(false, EligibilityReasonCode.MISSING_ACCOUNT_CONTEXT);
         }
 
+        return conditionType == ConditionType.ACCOUNT_ID_LIST
+                ? evaluateAccountIdList(operator, value, accountId)
+                : evaluateFleetSize(operator, value, accountContext.get());
+    }
+
+    @NonNull
+    private EligibilityDecision evaluateAccountIdList(
+            @NonNull RuleOperator operator, @NonNull String value, @NonNull UUID accountId) {
+        List<String> accountIds =
+                Arrays.stream(value.split(",")).map(String::trim).toList();
+        boolean inList = accountIds.contains(accountId.toString());
+        if (operator == RuleOperator.IN && !inList) {
+            return new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_NOT_IN_LIST);
+        }
+        if (operator == RuleOperator.NOT_IN && inList) {
+            return new EligibilityDecision(false, EligibilityReasonCode.ACCOUNT_IN_EXCLUSION_LIST);
+        }
+        return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @NonNull
+    private EligibilityDecision evaluateFleetSize(
+            @NonNull RuleOperator operator, @NonNull String value, @NonNull AccountContext accountContext) {
+        int threshold;
+        try {
+            threshold = Integer.parseInt(value.trim());
+        } catch (NumberFormatException ex) {
+            return new EligibilityDecision(false, EligibilityReasonCode.EVALUATION_ERROR);
+        }
+        if (operator == RuleOperator.GREATER_THAN_OR_EQUAL_TO && accountContext.fleetSize() < threshold) {
+            return new EligibilityDecision(false, EligibilityReasonCode.FLEET_SIZE_TOO_SMALL);
+        }
+        return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @NonNull
+    private EligibilityDecision evaluateVehicleTagRule(
+            @NonNull RuleOperator operator, @NonNull String value, @Nullable UUID vehicleId) {
+        if (vehicleId == null) {
+            return new EligibilityDecision(false, EligibilityReasonCode.MISSING_VEHICLE_CONTEXT);
+        }
+        Optional<VehicleContext> vehicleContext = vehicleDataProvider.getVehicleContext(vehicleId);
+        if (vehicleContext.isEmpty()) {
+            return new EligibilityDecision(false, EligibilityReasonCode.MISSING_VEHICLE_CONTEXT);
+        }
+
+        boolean tagPresent = vehicleContext.get().tags().contains(value);
+        if (operator == RuleOperator.EQUALS && !tagPresent) {
+            return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_NOT_PRESENT);
+        }
+        if (operator == RuleOperator.NOT_IN && tagPresent) {
+            return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_EXCLUDED);
+        }
+        return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @NonNull
+    private EligibilityDecision evaluateAudienceTypeRule(
+            @NonNull RuleOperator operator, @NonNull String value, @Nullable String audienceType) {
+        if (audienceType == null || audienceType.isBlank()) {
+            return new EligibilityDecision(false, EligibilityReasonCode.MISSING_AUDIENCE_CONTEXT);
+        }
+        // Audience types are enum-like names (COMMERCIAL, INDIVIDUAL); compare
+        // case-insensitively so client casing does not affect the outcome.
+        boolean matches = value.trim().equalsIgnoreCase(audienceType.trim());
+        if (operator == RuleOperator.EQUALS && !matches) {
+            return new EligibilityDecision(false, EligibilityReasonCode.AUDIENCE_TYPE_NOT_MATCHED);
+        }
+        if (operator == RuleOperator.NOT_IN && matches) {
+            return new EligibilityDecision(false, EligibilityReasonCode.AUDIENCE_TYPE_EXCLUDED);
+        }
+        return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @NonNull
+    private EligibilityDecision evaluateCampaignCodeRule(
+            @NonNull RuleOperator operator, @NonNull String value, @Nullable String campaignCode) {
+        if (campaignCode == null || campaignCode.isBlank()) {
+            return new EligibilityDecision(false, EligibilityReasonCode.MISSING_CAMPAIGN_CONTEXT);
+        }
+        List<String> campaignCodes =
+                Arrays.stream(value.split(",")).map(String::trim).toList();
+        boolean inList = campaignCodes.contains(campaignCode.trim());
+        if ((operator == RuleOperator.EQUALS || operator == RuleOperator.IN) && !inList) {
+            return new EligibilityDecision(false, EligibilityReasonCode.CAMPAIGN_CODE_NOT_MATCHED);
+        }
+        if (operator == RuleOperator.NOT_IN && inList) {
+            return new EligibilityDecision(false, EligibilityReasonCode.CAMPAIGN_CODE_EXCLUDED);
+        }
         return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
     }
 

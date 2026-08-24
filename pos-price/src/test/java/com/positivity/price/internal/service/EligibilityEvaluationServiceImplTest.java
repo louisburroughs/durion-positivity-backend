@@ -442,6 +442,221 @@ class EligibilityEvaluationServiceImplTest {
                 .hasMessageContaining(ruleId.toString());
     }
 
+    // ── Branch-coverage characterisation (Phase 3.6) ────────────────────────────────
+    //
+    // Written against evaluateSingleRule BEFORE it was split into per-condition handlers,
+    // and covering the branches JaCoCo reported unexercised (79.4% branch on that method).
+    // The cluster that mattered: NOT_IN — the exclusion operator — was barely covered on any
+    // condition type, and those are exactly the rules that DENY a promotion. A defect there
+    // grants a discount that should have been refused, which is the expensive direction.
+
+    @Test
+    void givenAccountIdListNotIn_andAccountInList_whenEvaluate_thenExcluded() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        UUID accountId = UUID.fromString("00000000-0000-0000-0000-0000000000a2");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.ACCOUNT_ID_LIST, RuleOperator.NOT_IN, accountId.toString())));
+        when(accountProvider.getAccountContext(any())).thenReturn(Optional.of(new AccountContext(accountId, 5)));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, accountId, null, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.ACCOUNT_IN_EXCLUSION_LIST);
+    }
+
+    @Test
+    void givenFleetSizeRule_andFleetBelowThreshold_whenEvaluate_thenTooSmall() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        UUID accountId = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(
+                        List.of(rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "10")));
+        when(accountProvider.getAccountContext(any())).thenReturn(Optional.of(new AccountContext(accountId, 4)));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, accountId, null, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.FLEET_SIZE_TOO_SMALL);
+    }
+
+    @Test
+    void givenVehicleTagRule_andNoVehicleId_whenEvaluate_thenMissingVehicleContext() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "FLEET")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_VEHICLE_CONTEXT);
+    }
+
+    @Test
+    void givenVehicleTagRule_andUnknownVehicle_whenEvaluate_thenMissingVehicleContext() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000c3");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-0000000000c4");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.VEHICLE_TAG, RuleOperator.EQUALS, "FLEET")));
+        when(vehicleProvider.getVehicleContext(any())).thenReturn(Optional.empty());
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, vehicleId, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_VEHICLE_CONTEXT);
+    }
+
+    @Test
+    void givenVehicleTagNotIn_andTagPresent_whenEvaluate_thenExcluded() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000c5");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-0000000000c6");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.VEHICLE_TAG, RuleOperator.NOT_IN, "SALVAGE")));
+        when(vehicleProvider.getVehicleContext(any()))
+                .thenReturn(Optional.of(new VehicleContext(vehicleId, List.of("SALVAGE"))));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, vehicleId, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.VEHICLE_TAG_EXCLUDED);
+    }
+
+    @Test
+    void givenAudienceTypeRule_andBlankAudience_whenEvaluate_thenMissingAudienceContext() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.AUDIENCE_TYPE, RuleOperator.EQUALS, "COMMERCIAL")));
+
+        // Blank, not null: the guard is `audienceType == null || audienceType.isBlank()`, and only
+        // the null half was reached before.
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, "   ", null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_AUDIENCE_CONTEXT);
+    }
+
+    @Test
+    void givenAudienceTypeNotIn_andAudienceMatches_whenEvaluate_thenExcluded() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.AUDIENCE_TYPE, RuleOperator.NOT_IN, "COMMERCIAL")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, "commercial", null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.AUDIENCE_TYPE_EXCLUDED);
+    }
+
+    @Test
+    void givenCampaignCodeRule_andBlankCampaignCode_whenEvaluate_thenMissingCampaignContext() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.CAMPAIGN_CODE, RuleOperator.IN, "SPRING,SUMMER")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, null, "  ");
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_CAMPAIGN_CONTEXT);
+    }
+
+    @Test
+    void givenCampaignCodeIn_andCodeInList_whenEvaluate_thenEligible() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.CAMPAIGN_CODE, RuleOperator.IN, "SPRING, SUMMER")));
+
+        // Also pins that both the rule list and the supplied code are trimmed before comparison.
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, null, " SUMMER ");
+
+        assertThat(decision.isEligible()).isTrue();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @Test
+    void givenCampaignCodeNotIn_andCodeInList_whenEvaluate_thenExcluded() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000e3");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.CAMPAIGN_CODE, RuleOperator.NOT_IN, "BLOCKED")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, null, "BLOCKED");
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.CAMPAIGN_CODE_EXCLUDED);
+    }
+
+    @Test
+    void givenFleetSizeRule_andUnsupportedOperator_whenEvaluate_thenEvaluationError() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+        UUID accountId = UUID.fromString("00000000-0000-0000-0000-0000000000f2");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.IN, "10")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, accountId, null, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
+    }
+
+    @Test
+    void givenVehicleTagRule_andUnsupportedOperator_whenEvaluate_thenEvaluationError() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000f3");
+        UUID vehicleId = UUID.fromString("00000000-0000-0000-0000-0000000000f4");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.VEHICLE_TAG, RuleOperator.IN, "FLEET")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, vehicleId, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
+    }
+
+    @Test
+    void givenFleetSizeRule_andNonNumericThreshold_whenEvaluate_thenEvaluationError() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
+        UUID accountId = UUID.fromString("00000000-0000-0000-0000-0000000000b4");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(
+                        rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "not-a-number")));
+        when(accountProvider.getAccountContext(any())).thenReturn(Optional.of(new AccountContext(accountId, 9)));
+
+        // A malformed rule must refuse the promotion rather than throw out of the evaluator.
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, accountId, null, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
+    }
+
+    @Test
+    void givenFleetSizeRule_andFleetMeetsThreshold_whenEvaluate_thenEligible() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000b5");
+        UUID accountId = UUID.fromString("00000000-0000-0000-0000-0000000000b6");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(
+                        List.of(rule(ConditionType.ACCOUNT_FLEET_SIZE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "10")));
+        when(accountProvider.getAccountContext(any())).thenReturn(Optional.of(new AccountContext(accountId, 10)));
+
+        // Boundary: the threshold is inclusive, so exactly-at-threshold must pass.
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, accountId, null, null, null);
+
+        assertThat(decision.isEligible()).isTrue();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @Test
+    void givenCampaignCodeEquals_andCodeNotInList_whenEvaluate_thenNotMatched() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        when(ruleRepo.findByPromotion_PromotionOfferId(any()))
+                .thenReturn(List.of(rule(ConditionType.CAMPAIGN_CODE, RuleOperator.EQUALS, "SPRING")));
+
+        EligibilityDecision decision = service().evaluateEligibility(promotionId, null, null, null, "AUTUMN");
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.CAMPAIGN_CODE_NOT_MATCHED);
+    }
+
+    private EligibilityEvaluationServiceImpl service() {
+        return new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+    }
+
     private PromotionEligibilityRule rule(ConditionType conditionType, RuleOperator operator, String value) {
         PromotionEligibilityRule rule = new PromotionEligibilityRule();
         rule.setConditionType(conditionType);

@@ -76,77 +76,114 @@ public class EligibilityServiceImpl implements EligibilityService {
                         CLAIM_NOT_FOUND_CODE, "Warranty claim '" + claimId + "' was not found"));
 
         List<Map<String, Object>> reasons = new ArrayList<>();
+        LocalDate saleDate = claim.getOriginSaleDate();
 
-        // --- Origin verification (PRD §6 step 2: "origin verified?")
-        // -----------------------
+        verifyOrigin(claim, reasons);
+        WarrantyPolicy policy = matchPolicy(claim, saleDate, reasons);
+        selectCoverage(claim, policy);
+        Proration proration = prorateLines(claim, policy, saleDate, reasons);
+
+        EligibilityResult result = overallResult(reasons);
+
+        Map<String, Object> suggested = new LinkedHashMap<>();
+        suggested.put("eligible", result == EligibilityResult.ELIGIBLE);
+        suggested.put("policyId", policy != null ? policy.getId().toString() : null);
+        suggested.put("providerId", policy != null ? policy.getProviderId().toString() : null);
+        suggested.put("settlementType", suggestedSettlementType(policy));
+        // Never suggest a definite $0 when a line's credit is unknowable.
+        suggested.put("totalRequested", proration.anyAmountUnknown() ? null : proration.totalRequested());
+        suggested.put("perLine", proration.perLine());
+
+        claim.setEligibilityResult(result);
+        claim.setEligibilityReasons(reasons);
+        claim.setSuggestedOutcome(suggested);
+        claimRepository.save(claim);
+
+        return new EligibilityEvaluation(result, reasons, suggested);
+    }
+
+    /** What the per-line proration pass produced (PRD §6 table). */
+    private record Proration(BigDecimal totalRequested, boolean anyAmountUnknown, List<Map<String, Object>> perLine) {}
+
+    /** Origin verification (PRD §6 step 2: "origin verified?"). */
+    private void verifyOrigin(WarrantyClaim claim, List<Map<String, Object>> reasons) {
         boolean originUnverified = Boolean.TRUE.equals(claim.getOriginUnverified());
         reasons.add(reason(
                 "originVerified",
                 "original sale located and verified",
                 !originUnverified,
                 originUnverified ? null : Boolean.TRUE));
+    }
 
-        // --- Candidate policy matching (PRD §6 step 1)
-        // --------------------------------------
-        LocalDate saleDate = claim.getOriginSaleDate();
+    /**
+     * Candidate policy matching (PRD §6 step 1).
+     *
+     * @return the single governing policy, or {@code null} when none matched, several tied, or the
+     *     match could not be decided — every one of which is a reason appended to {@code reasons}
+     */
+    private @Nullable WarrantyPolicy matchPolicy(
+            WarrantyClaim claim, @Nullable LocalDate saleDate, List<Map<String, Object>> reasons) {
         ProductFacts facts = resolveProductFacts(claim);
-        WarrantyPolicy policy = null;
         if (saleDate == null) {
             reasons.add(reason("originSaleDate", "known original sale date", null, null));
-        } else {
-            CoverageType coverageType =
-                    CoverageType.valueOf(claim.getClaimType().name());
-            List<WarrantyPolicy> effective = policyRepository.findEffectiveOn(saleDate).stream()
-                    .filter(p -> p.getCoverageType() == coverageType)
-                    .toList();
-            List<WarrantyPolicy> candidates = findCandidatePolicies(effective, facts);
-            String required = "a policy in effect on " + saleDate + " matching the claimed products";
-            if (candidates.isEmpty()) {
-                // Missing product facts (catalog unreachable) mean we cannot prove no policy
-                // applies — indeterminate rather than a hard fail.
-                reasons.add(reason(POLICY_MATCH, required, "none found", facts.incomplete() ? null : Boolean.FALSE));
-            } else {
-                int topRank = specificityRank(candidates.get(0).getAppliesToType());
-                List<WarrantyPolicy> winners = candidates.stream()
-                        .filter(p -> specificityRank(p.getAppliesToType()) == topRank)
-                        .toList();
-                if (facts.incomplete() && moreSpecificScopeUnevaluated(effective, facts, topRank)) {
-                    // A MANUFACTURER/CATEGORY policy more specific than the winner could not be
-                    // evaluated because catalog facts are unavailable — the broader winner may be
-                    // the wrong policy, so the match is indeterminate rather than a silent
-                    // specificity downgrade.
-                    reasons.add(reason(
-                            POLICY_MATCH,
-                            required,
-                            "product facts unavailable (pos-catalog unreachable); a more specific"
-                                    + " policy may govern",
-                            null));
-                } else if (winners.size() > 1) {
-                    // Specificity tie: no policy governs until a human resolves the ambiguity —
-                    // never adjudicate terms or freeze amounts from an arbitrary tie-break.
-                    reasons.add(reason(
-                            POLICY_MATCH,
-                            required,
-                            "ambiguous — multiple policies tie at the same specificity: "
-                                    + winners.stream()
-                                            .map(WarrantyPolicy::getName)
-                                            .toList(),
-                            null));
-                } else {
-                    policy = winners.get(0);
-                    reasons.add(reason(
-                            POLICY_MATCH, required, policy.getName() + " (" + policy.getId() + ")", Boolean.TRUE));
-                    checkTerms(claim, policy, saleDate, reasons);
-                }
-            }
+            return null;
         }
 
-        // Select coverage onto the claim only when a single policy wins (PRD §6 /
-        // contract);
-        // otherwise clear any coverage a previous evaluation selected so a re-run after
-        // intake
-        // edits (e.g. claimType change) or a registration lapse never leaves stale
-        // policy/provider/registration pointers behind.
+        CoverageType coverageType = CoverageType.valueOf(claim.getClaimType().name());
+        List<WarrantyPolicy> effective = policyRepository.findEffectiveOn(saleDate).stream()
+                .filter(p -> p.getCoverageType() == coverageType)
+                .toList();
+        List<WarrantyPolicy> candidates = findCandidatePolicies(effective, facts);
+        String required = "a policy in effect on " + saleDate + " matching the claimed products";
+        if (candidates.isEmpty()) {
+            // Missing product facts (catalog unreachable) mean we cannot prove no policy
+            // applies — indeterminate rather than a hard fail.
+            reasons.add(reason(POLICY_MATCH, required, "none found", facts.incomplete() ? null : Boolean.FALSE));
+            return null;
+        }
+
+        int topRank = specificityRank(candidates.get(0).getAppliesToType());
+        List<WarrantyPolicy> winners = candidates.stream()
+                .filter(p -> specificityRank(p.getAppliesToType()) == topRank)
+                .toList();
+        if (facts.incomplete() && moreSpecificScopeUnevaluated(effective, facts, topRank)) {
+            // A MANUFACTURER/CATEGORY policy more specific than the winner could not be
+            // evaluated because catalog facts are unavailable — the broader winner may be
+            // the wrong policy, so the match is indeterminate rather than a silent
+            // specificity downgrade.
+            reasons.add(reason(
+                    POLICY_MATCH,
+                    required,
+                    "product facts unavailable (pos-catalog unreachable); a more specific" + " policy may govern",
+                    null));
+            return null;
+        }
+        if (winners.size() > 1) {
+            // Specificity tie: no policy governs until a human resolves the ambiguity —
+            // never adjudicate terms or freeze amounts from an arbitrary tie-break.
+            reasons.add(reason(
+                    POLICY_MATCH,
+                    required,
+                    "ambiguous — multiple policies tie at the same specificity: "
+                            + winners.stream().map(WarrantyPolicy::getName).toList(),
+                    null));
+            return null;
+        }
+
+        WarrantyPolicy policy = winners.get(0);
+        reasons.add(reason(POLICY_MATCH, required, policy.getName() + " (" + policy.getId() + ")", Boolean.TRUE));
+        checkTerms(claim, policy, saleDate, reasons);
+        return policy;
+    }
+
+    /**
+     * Selects coverage onto the claim only when a single policy wins (PRD §6 / contract).
+     *
+     * <p>Otherwise it clears any coverage a previous evaluation selected, so a re-run after intake
+     * edits (e.g. a claimType change) or a registration lapse never leaves stale
+     * policy/provider/registration pointers behind.
+     */
+    private void selectCoverage(WarrantyClaim claim, @Nullable WarrantyPolicy policy) {
         if (policy != null) {
             claim.setPolicyId(policy.getId());
             claim.setProviderId(policy.getProviderId());
@@ -155,9 +192,14 @@ public class EligibilityServiceImpl implements EligibilityService {
             claim.setProviderId(null);
             claim.setRegistrationId(null);
         }
+    }
 
-        // --- Per-line proration (PRD §6 table)
-        // -----------------------------------------------
+    /** Per-line proration (PRD §6 table). */
+    private Proration prorateLines(
+            WarrantyClaim claim,
+            @Nullable WarrantyPolicy policy,
+            @Nullable LocalDate saleDate,
+            List<Map<String, Object>> reasons) {
         Long monthsElapsed = saleDate != null ? ChronoUnit.MONTHS.between(saleDate, referenceDate(claim)) : null;
         // Sale-time odometer is not captured anywhere upstream today, so the delta is
         // unknown.
@@ -204,26 +246,7 @@ public class EligibilityServiceImpl implements EligibilityService {
             lineEntry.put("amountRequested", amount);
             perLine.add(lineEntry);
         }
-
-        // --- Overall result
-        // --------------------------------------------------------------------
-        EligibilityResult result = overallResult(reasons);
-
-        Map<String, Object> suggested = new LinkedHashMap<>();
-        suggested.put("eligible", result == EligibilityResult.ELIGIBLE);
-        suggested.put("policyId", policy != null ? policy.getId().toString() : null);
-        suggested.put("providerId", policy != null ? policy.getProviderId().toString() : null);
-        suggested.put("settlementType", suggestedSettlementType(policy));
-        // Never suggest a definite $0 when a line's credit is unknowable.
-        suggested.put("totalRequested", anyAmountUnknown ? null : totalRequested);
-        suggested.put("perLine", perLine);
-
-        claim.setEligibilityResult(result);
-        claim.setEligibilityReasons(reasons);
-        claim.setSuggestedOutcome(suggested);
-        claimRepository.save(claim);
-
-        return new EligibilityEvaluation(result, reasons, suggested);
+        return new Proration(totalRequested, anyAmountUnknown, perLine);
     }
 
     // -----------------------------------------------------------------------------------------

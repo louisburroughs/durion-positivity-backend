@@ -268,41 +268,52 @@ public class AvalaraTaxProvider implements TaxProviderClient {
         BigDecimal subtotal = round(sumLineSubtotals(request));
         BigDecimal totalTax = round(tx.totalTax() != null ? tx.totalTax() : BigDecimal.ZERO);
 
-        Map<String, BigDecimal> requestSubtotals = new LinkedHashMap<>();
         Map<String, TaxLineItem> requestLines = new LinkedHashMap<>();
+        Map<String, BigDecimal> requestSubtotals = new LinkedHashMap<>();
         for (TaxLineItem item : request.getLineItems()) {
             requestSubtotals.put(item.getLineItemId(), round(item.getSubtotal()));
             requestLines.put(item.getLineItemId(), item);
         }
 
-        // Per-line tax breakdown + jurisdiction aggregation from AvaTax lines[].details[].
-        List<LineItemTax> lineItemTaxes = new ArrayList<>();
-        List<BigDecimal> rawLineTaxes = new ArrayList<>();
         Map<String, JurisdictionAccumulator> jurisdictionByCode = new LinkedHashMap<>();
+        List<BigDecimal> rawLineTaxes = new ArrayList<>();
+        List<LineItemTax> lineItemTaxes =
+                mapLineItemTaxes(tx, requestSubtotals, requestLines, jurisdictionByCode, rawLineTaxes);
 
+        reconcileLineTaxesToTotal(lineItemTaxes, rawLineTaxes, totalTax);
+        List<TaxJurisdiction> jurisdictions = aggregateJurisdictions(request, jurisdictionByCode, totalTax);
+
+        return TaxCalculationResponse.builder()
+                .subtotal(subtotal)
+                .totalTax(totalTax)
+                .total(subtotal.add(totalTax))
+                .effectiveTaxRate(effectiveRate(request, tx, totalTax))
+                .jurisdictions(jurisdictions)
+                .lineItemTaxes(lineItemTaxes)
+                .testMode(false)
+                .calculatedAt(clock.instant())
+                .referenceId(request.getReferenceId())
+                .referenceType(request.getReferenceType())
+                .externalTransactionId(externalId(tx))
+                .calculationType(calculationType)
+                .build();
+    }
+
+    /** Per-line tax breakdown from AvaTax {@code lines[].details[]}, accumulating jurisdictions as it goes. */
+    @NonNull
+    private List<LineItemTax> mapLineItemTaxes(
+            @NonNull TransactionModel tx,
+            @NonNull Map<String, BigDecimal> requestSubtotals,
+            @NonNull Map<String, TaxLineItem> requestLines,
+            @NonNull Map<String, JurisdictionAccumulator> jurisdictionByCode,
+            @NonNull List<BigDecimal> rawLineTaxes) {
+        List<LineItemTax> lineItemTaxes = new ArrayList<>();
         List<TransactionLineModel> avaLines = tx.lines() != null ? tx.lines() : List.of();
         for (TransactionLineModel avaLine : avaLines) {
             BigDecimal lineTax = avaLine.tax() != null ? avaLine.tax() : BigDecimal.ZERO;
             rawLineTaxes.add(lineTax);
 
-            List<JurisdictionTax> lineJurisdictions = new ArrayList<>();
-            List<TransactionLineDetailModel> details = avaLine.details() != null ? avaLine.details() : List.of();
-            for (TransactionLineDetailModel detail : details) {
-                BigDecimal rate = detail.rate() != null ? detail.rate() : BigDecimal.ZERO;
-                BigDecimal amount = detail.tax() != null ? detail.tax() : BigDecimal.ZERO;
-                TaxJurisdictionType type = mapJurisdictionType(detail.jurisdictionType());
-                String code = detail.jurisCode() != null ? detail.jurisCode() : type.code();
-                lineJurisdictions.add(JurisdictionTax.builder()
-                        .jurisdictionType(type)
-                        .code(code)
-                        .rate(rate)
-                        .amount(round(amount))
-                        .exempt(false)
-                        .build());
-                jurisdictionByCode
-                        .computeIfAbsent(type.code() + "|" + code, k -> new JurisdictionAccumulator(type, rate))
-                        .add(amount);
-            }
+            List<JurisdictionTax> lineJurisdictions = mapLineJurisdictions(avaLine, jurisdictionByCode);
 
             String lineId = avaLine.lineNumber();
             BigDecimal lineSubtotal = requestSubtotals.getOrDefault(lineId, round(safeAmount(avaLine.taxableAmount())));
@@ -317,66 +328,96 @@ public class AvalaraTaxProvider implements TaxProviderClient {
                     .jurisdictions(lineJurisdictions)
                     .build());
         }
+        return lineItemTaxes;
+    }
 
-        // Sigma-invariant repair: reconcile line tax amounts to the AvaTax grand total.
-        if (!lineItemTaxes.isEmpty()) {
-            List<BigDecimal> reconciledLineTaxes = reconciler.reconcileAmountsToTarget(rawLineTaxes, totalTax);
-            for (int i = 0; i < lineItemTaxes.size(); i++) {
-                LineItemTax lit = lineItemTaxes.get(i);
-                lit.setTaxAmount(reconciledLineTaxes.get(i));
-                lit.setTotal(lit.getSubtotal().add(reconciledLineTaxes.get(i)));
-            }
+    @NonNull
+    private List<JurisdictionTax> mapLineJurisdictions(
+            @NonNull TransactionLineModel avaLine, @NonNull Map<String, JurisdictionAccumulator> jurisdictionByCode) {
+        List<JurisdictionTax> lineJurisdictions = new ArrayList<>();
+        List<TransactionLineDetailModel> details = avaLine.details() != null ? avaLine.details() : List.of();
+        for (TransactionLineDetailModel detail : details) {
+            BigDecimal rate = detail.rate() != null ? detail.rate() : BigDecimal.ZERO;
+            BigDecimal amount = detail.tax() != null ? detail.tax() : BigDecimal.ZERO;
+            TaxJurisdictionType type = mapJurisdictionType(detail.jurisdictionType());
+            String code = detail.jurisCode() != null ? detail.jurisCode() : type.code();
+            lineJurisdictions.add(JurisdictionTax.builder()
+                    .jurisdictionType(type)
+                    .code(code)
+                    .rate(rate)
+                    .amount(round(amount))
+                    .exempt(false)
+                    .build());
+            jurisdictionByCode
+                    .computeIfAbsent(type.code() + "|" + code, k -> new JurisdictionAccumulator(type, rate))
+                    .add(amount);
         }
+        return lineJurisdictions;
+    }
 
-        // Aggregate top-level jurisdictions and reconcile their amounts to the grand total.
-        List<TaxJurisdiction> jurisdictions = new ArrayList<>();
+    /** Sigma-invariant repair: reconcile line tax amounts to the AvaTax grand total. */
+    private void reconcileLineTaxesToTotal(
+            @NonNull List<LineItemTax> lineItemTaxes,
+            @NonNull List<BigDecimal> rawLineTaxes,
+            @NonNull BigDecimal totalTax) {
+        if (lineItemTaxes.isEmpty()) {
+            return;
+        }
+        List<BigDecimal> reconciledLineTaxes = reconciler.reconcileAmountsToTarget(rawLineTaxes, totalTax);
+        for (int i = 0; i < lineItemTaxes.size(); i++) {
+            LineItemTax lit = lineItemTaxes.get(i);
+            lit.setTaxAmount(reconciledLineTaxes.get(i));
+            lit.setTotal(lit.getSubtotal().add(reconciledLineTaxes.get(i)));
+        }
+    }
+
+    /** Aggregates top-level jurisdictions and reconciles their amounts to the grand total. */
+    @NonNull
+    private List<TaxJurisdiction> aggregateJurisdictions(
+            @NonNull TaxCalculationRequest request,
+            @NonNull Map<String, JurisdictionAccumulator> jurisdictionByCode,
+            @NonNull BigDecimal totalTax) {
         List<BigDecimal> jurisdictionAmounts = new ArrayList<>();
         for (JurisdictionAccumulator acc : jurisdictionByCode.values()) {
             jurisdictionAmounts.add(acc.amount);
         }
-        List<BigDecimal> reconciledJurisdiction = jurisdictionAmounts.isEmpty()
+        List<BigDecimal> reconciled = jurisdictionAmounts.isEmpty()
                 ? jurisdictionAmounts
                 : reconciler.reconcileAmountsToTarget(jurisdictionAmounts, totalTax);
+
+        List<TaxJurisdiction> jurisdictions = new ArrayList<>();
         int j = 0;
-        String country = request.getCountryCode();
         for (JurisdictionAccumulator acc : jurisdictionByCode.values()) {
             jurisdictions.add(TaxJurisdiction.builder()
-                    .countryCode(country)
+                    .countryCode(request.getCountryCode())
                     .regionCode(request.getStateCode())
                     .city(request.getCity())
                     .postalCode(request.getPostalCode())
                     // Top-level taxRate is expressed as percentage points (e.g. 7.25).
                     .taxRate(acc.rate.multiply(HUNDRED))
                     .jurisdictionType(acc.type)
-                    .taxAmount(reconciledJurisdiction.get(j++))
+                    .taxAmount(reconciled.get(j++))
                     .build());
         }
+        return jurisdictions;
+    }
 
-        // Effective rate is tax over the TAXABLE base, not gross subtotal: exempt lines carry
-        // subtotal but contribute no tax, so including them would dilute the rate (#984). Prefer
-        // AvaTax's own taxable figure (it already nets out exempt/entity-use lines); fall back to
-        // the sum of non-exempt request subtotals when the provider omits it.
+    /**
+     * Effective rate is tax over the TAXABLE base, not gross subtotal.
+     *
+     * <p>Exempt lines carry subtotal but contribute no tax, so including them would dilute the rate
+     * (#984). Prefer AvaTax's own taxable figure — it already nets out exempt/entity-use lines — and
+     * fall back to the sum of non-exempt request subtotals when the provider omits it.
+     */
+    @NonNull
+    private BigDecimal effectiveRate(
+            @NonNull TaxCalculationRequest request, @NonNull TransactionModel tx, @NonNull BigDecimal totalTax) {
         BigDecimal taxableBase = tx.totalTaxable() != null && tx.totalTaxable().signum() != 0
                 ? round(tx.totalTaxable())
                 : round(sumNonExemptSubtotals(request));
-        BigDecimal effectiveRate = taxableBase.signum() == 0
+        return taxableBase.signum() == 0
                 ? BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP)
                 : totalTax.multiply(HUNDRED).divide(taxableBase, MONEY_SCALE, RoundingMode.HALF_UP);
-
-        return TaxCalculationResponse.builder()
-                .subtotal(subtotal)
-                .totalTax(totalTax)
-                .total(subtotal.add(totalTax))
-                .effectiveTaxRate(effectiveRate)
-                .jurisdictions(jurisdictions)
-                .lineItemTaxes(lineItemTaxes)
-                .testMode(false)
-                .calculatedAt(clock.instant())
-                .referenceId(request.getReferenceId())
-                .referenceType(request.getReferenceType())
-                .externalTransactionId(externalId(tx))
-                .calculationType(calculationType)
-                .build();
     }
 
     @NonNull

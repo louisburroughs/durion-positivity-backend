@@ -499,4 +499,115 @@ class AvalaraTaxProviderTest {
                 }
                 """;
     }
+
+    @Test
+    @DisplayName("#984c: when AvaTax omits totalTaxable, the rate falls back to non-exempt subtotals")
+    void effectiveRateFallsBackToNonExemptSubtotalsWhenProviderOmitsTaxable() {
+        // sumNonExemptSubtotals had 0% branch coverage: the #984 fallback was never exercised, so
+        // nothing held the rule that an exempt line must not dilute the effective rate when the
+        // provider declines to report a taxable figure. Effective rate is customer-visible.
+        Fixture f = fixture();
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/create"))
+                .andRespond(withSuccess(exemptLineResponseNoTaxableJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationResponse response = f.provider().estimate(exemptLineRequest());
+        f.server().verify();
+
+        assertThat(response.getSubtotal()).isEqualByComparingTo("150.00");
+        assertThat(response.getTotalTax()).isEqualByComparingTo("7.25");
+        // Same answer as when AvaTax reports totalTaxable=100.00: 7.25 / 100.00, not 7.25 / 150.00.
+        assertThat(response.getEffectiveTaxRate()).isEqualByComparingTo("7.25");
+    }
+
+    @Test
+    @DisplayName("#984d: an all-exempt request yields a zero rate rather than dividing by zero")
+    void allExemptRequestYieldsZeroEffectiveRate() {
+        Fixture f = fixture();
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(TaxLineItem.builder()
+                        .lineItemId("1")
+                        .description("Resale Part")
+                        .quantity(BigDecimal.ONE)
+                        .unitPrice(new BigDecimal("50.00"))
+                        .taxExempt(true)
+                        .build()))
+                .destinationAddress(TaxAddress.builder()
+                        .countryCode("US")
+                        .regionCode("CA")
+                        .city("Los Angeles")
+                        .postalCode("90001")
+                        .line1("123 Main St")
+                        .build())
+                .currencyCode("USD")
+                .referenceId(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"))
+                .transactionDate("2026-02-21T09:30:00Z")
+                .build();
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/create"))
+                .andRespond(withSuccess(allExemptResponseJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationResponse response = f.provider().estimate(request);
+        f.server().verify();
+
+        // Taxable base is zero on both paths; the guard must return 0.00, not throw.
+        assertThat(response.getEffectiveTaxRate()).isEqualByComparingTo("0.00");
+        assertThat(response.getTotalTax()).isEqualByComparingTo("0.00");
+    }
+
+    private TaxCalculationRequest exemptLineRequest() {
+        return TaxCalculationRequest.builder()
+                .lineItems(List.of(
+                        TaxLineItem.builder()
+                                .lineItemId("1")
+                                .description("Oil Change Service")
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(new BigDecimal("100.00"))
+                                .taxCategory("SERVICES")
+                                .build(),
+                        TaxLineItem.builder()
+                                .lineItemId("2")
+                                .description("Resale Part")
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(new BigDecimal("50.00"))
+                                .taxExempt(true)
+                                .build()))
+                .destinationAddress(TaxAddress.builder()
+                        .countryCode("US")
+                        .regionCode("CA")
+                        .city("Los Angeles")
+                        .postalCode("90001")
+                        .line1("123 Main St")
+                        .build())
+                .currencyCode("USD")
+                .referenceId(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"))
+                .transactionDate("2026-02-21T09:30:00Z")
+                .build();
+    }
+
+    /** The exempt-line response with totalTaxable absent, forcing the #984 fallback. */
+    private String exemptLineResponseNoTaxableJson() {
+        return exemptLineResponseJson().replace("  \"totalTaxable\": 100.00,\n", "");
+    }
+
+    private String allExemptResponseJson() {
+        return """
+                {
+                  "id": 987654322,
+                  "code": "550e8400-e29b-41d4-a716-446655440000",
+                  "status": "Temporary",
+                  "totalAmount": 50.00,
+                  "totalTax": 0.00,
+                  "lines": [
+                    {
+                      "lineNumber": "1",
+                      "lineAmount": 50.00,
+                      "tax": 0.00,
+                      "taxableAmount": 0.00,
+                      "details": []
+                    }
+                  ]
+                }
+                """;
+    }
 }

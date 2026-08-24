@@ -279,12 +279,36 @@ public class InventoryFactPublisher {
         return pending;
     }
 
+    /**
+     * Drains every pending fact kind to the outbox at beforeCommit.
+     *
+     * <p>One emitter per fact kind rather than one long method: each is independently
+     * readable and independently testable, and a failure in one kind must not stop the
+     * others — which is why every emitter keeps its own try/catch rather than sharing one.
+     */
     private void publishPending() {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         Pending pending = (Pending) TransactionSynchronizationManager.getResource(TX_RESOURCE_KEY);
         if (writer == null || pending == null) {
             return;
         }
+        publishAvailabilityKeys(writer, pending);
+        publishStorageLocationIds(writer, pending);
+        publishPickListIds(writer, pending);
+        publishPickTaskIds(writer, pending);
+        publishConsumptions(writer, pending);
+        publishExpectedSupplyDrops(writer, pending);
+        publishScrapPosts(writer, pending);
+        publishProductValueChanges(writer, pending);
+        publishTransferOrderUpdates(writer, pending);
+        publishBackorderCreations(writer, pending);
+        publishBackorderResolutions(writer, pending);
+        publishReservationOutcomes(writer, pending);
+        publishLotExpiryAlerts(writer, pending);
+        publishLeadTimeProductIds(writer, pending);
+    }
+
+    private void publishAvailabilityKeys(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (AvailabilityKey key : pending.availabilityKeys) {
             try {
                 AvailabilityView view =
@@ -310,6 +334,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping availability fact for {}: {}", key, e.getMessage());
             }
         }
+    }
+
+    private void publishStorageLocationIds(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (UUID storageLocationId : pending.storageLocationIds) {
             try {
                 LocationInventoryInquiryResponse inquiry =
@@ -325,6 +352,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping storage-location on-hand fact for {}: {}", storageLocationId, e.getMessage());
             }
         }
+    }
+
+    private void publishPickListIds(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (UUID pickListId : pending.pickListIds) {
             try {
                 PickListEntity pickList =
@@ -348,6 +378,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping pick-list fact for {}: {}", pickListId, e.getMessage());
             }
         }
+    }
+
+    private void publishPickTaskIds(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (UUID pickTaskId : pending.pickTaskIds) {
             try {
                 PickTaskEntity task = pickTaskRepository.findById(pickTaskId).orElse(null);
@@ -378,6 +411,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping pick-task fact for {}: {}", pickTaskId, e.getMessage());
             }
         }
+    }
+
+    private void publishConsumptions(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (ConsumptionRecordedV1 consumption : pending.consumptions) {
             try {
                 publish(
@@ -390,6 +426,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping consumption fact for {}: {}", consumption.consumptionId(), e.getMessage());
             }
         }
+    }
+
+    private void publishExpectedSupplyDrops(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (ExpectedSupplyDroppedV1 drop : pending.expectedSupplyDrops) {
             try {
                 publish(
@@ -402,6 +441,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping expected-supply-dropped fact for {}: {}", drop.poId(), e.getMessage());
             }
         }
+    }
+
+    private void publishScrapPosts(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (ScrapPostedV1 scrapPost : pending.scrapPosts) {
             try {
                 publish(writer, ScrapPostedV1.EVENT_TYPE, ScrapPostedV1.SCHEMA_VERSION, scrapPost.scrapId(), scrapPost);
@@ -409,6 +451,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
             }
         }
+    }
+
+    private void publishProductValueChanges(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (ProductValueChangedV1 valueChange : pending.productValueChanges) {
             try {
                 publish(
@@ -421,6 +466,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping product-value-changed fact for {}: {}", valueChange.revaluationId(), e.getMessage());
             }
         }
+    }
+
+    private void publishTransferOrderUpdates(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (TransferOrderUpdatedV1 transferUpdate : pending.transferOrderUpdates) {
             try {
                 publish(
@@ -433,6 +481,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping transfer-order fact for {}: {}", transferUpdate.transferOrderId(), e.getMessage());
             }
         }
+    }
+
+    private void publishBackorderCreations(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (BackorderCreatedV1 backorderCreated : pending.backorderCreations) {
             try {
                 publish(
@@ -445,6 +496,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping backorder-created fact for {}: {}", backorderCreated.backorderId(), e.getMessage());
             }
         }
+    }
+
+    private void publishBackorderResolutions(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (BackorderResolvedV1 backorderResolved : pending.backorderResolutions) {
             try {
                 publish(
@@ -458,6 +512,9 @@ public class InventoryFactPublisher {
                         "Skipping backorder-resolved fact for {}: {}", backorderResolved.backorderId(), e.getMessage());
             }
         }
+    }
+
+    private void publishReservationOutcomes(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (ReservationOutcomeV1 reservationOutcome : pending.reservationOutcomes) {
             try {
                 publish(
@@ -473,6 +530,9 @@ public class InventoryFactPublisher {
                         e.getMessage());
             }
         }
+    }
+
+    private void publishLotExpiryAlerts(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (LotExpiryAlertV1 lotExpiryAlert : pending.lotExpiryAlerts) {
             try {
                 publish(
@@ -485,6 +545,9 @@ public class InventoryFactPublisher {
                 log.warn("Skipping lot-expiry-alert fact for {}: {}", lotExpiryAlert.lotId(), e.getMessage());
             }
         }
+    }
+
+    private void publishLeadTimeProductIds(@NonNull OutboxEventWriter writer, @NonNull Pending pending) {
         for (UUID productId : pending.leadTimeProductIds) {
             try {
                 LeadTimeView view = inventoryLeadTimeService.queryLeadTime(productId, null, null);
