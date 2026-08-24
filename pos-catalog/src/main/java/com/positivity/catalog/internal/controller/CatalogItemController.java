@@ -2,8 +2,11 @@ package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
+import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.service.CatalogServiceImpl;
+import com.positivity.catalog.service.ServiceFactReplayService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -11,19 +14,25 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Validated
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/v1/catalog-items")
@@ -31,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CatalogItemController {
 
     private final CatalogServiceImpl catalogService;
+    private final ServiceFactReplayService serviceFactReplayService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -163,5 +173,70 @@ public class CatalogItemController {
         return catalogService.deleteCatalogItem(type, catalogId)
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.notFound().build();
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+    @PostMapping("/services/facts/replay")
+    @EmitEvent(id = "CATALOG_SERVICE_FACT_REPLAY", apiVersion = "1")
+    @Operation(
+            operationId = "replayServiceFacts",
+            summary = "Re-emit Service Facts for Replica Consumers",
+            description = """
+            Re-publishes catalog.service.updated facts for one bounded page of services so that \
+            event-fed replicas in other modules can be seeded or repaired, returning what it emitted and \
+            a cursor for the next page.
+            Use this tool to fill a consumer's replica after a first deployment or a consumer outage longer \
+            than broker retention — pos-marketing resolves a campaign catalogFocusRef of the form \
+            service:<name> against such a replica; do not use it to fix one service, which republishes \
+            itself on its next ordinary update, and use replayProductFacts for the product half of the \
+            same replica.
+            Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and reach \
+            nobody; replayed facts are indistinguishable from live ones, so consumers apply them through \
+            their normal path and their stale guard prevents an older fact regressing newer state. A \
+            deleted service leaves no row to replay, so its tombstone exists only in the live stream.
+            Required inputs: none; afterServiceId resumes a previous page, updatedSince restricts to \
+            services changed at or after an instant, and limit bounds the page at 1000.
+            Emits a CATALOG_SERVICE_FACT_REPLAY event and queues one service fact per service in the page; \
+            no catalog state changes.
+            Returns 200 with complete=true and a null cursor once the end of the service catalog is \
+            reached, and 400 when limit is out of range or a parameter is malformed.
+            """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "What this page emitted and where to resume.",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ServiceFactReplayResultDto.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "A parameter is malformed or the limit is out of range.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<ServiceFactReplayResultDto> replayServiceFacts(
+            @Parameter(
+                            description = "Resume cursor from a previous call; omit to start at the beginning.",
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @RequestParam(required = false)
+                    UUID afterServiceId,
+            @Parameter(
+                            description = "Restrict to services changed at or after this instant; omit to replay all.",
+                            schema = @Schema(type = "string", format = "date-time", example = "2026-08-01T00:00:00Z"))
+                    @RequestParam(required = false)
+                    Instant updatedSince,
+            @Parameter(
+                            description = "Maximum facts to emit in this call (1\u20131000).",
+                            schema = @Schema(type = "integer", example = "500", defaultValue = "500"))
+                    @RequestParam(defaultValue = "500")
+                    @Min(1)
+                    @Max(1000)
+                    int limit) {
+        return ResponseEntity.ok(serviceFactReplayService.replayPage(afterServiceId, updatedSince, limit));
     }
 }

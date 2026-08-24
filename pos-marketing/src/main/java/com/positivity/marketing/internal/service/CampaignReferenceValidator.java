@@ -111,19 +111,21 @@ public class CampaignReferenceValidator {
      * <p><b>Cold-replica behaviour, chosen deliberately: the check stands down for a kind the
      * replica holds no rows of at all, and blocks otherwise.</b> The replica is fed by
      * {@code catalog.events.v1} and is empty until that feed runs
-     * ({@code POS_MARKETING_KAFKA_ENABLED} defaults to false), so resolving strictly against it
-     * would make every catalog reference a scheduling blocker in an environment that never
-     * provisioned the feed. It would also block one that did: pos-catalog's fact replay
-     * ({@code POST /v1/products/facts/replay}, #1309) can seed the product rows, but there is no
-     * equivalent for services, so a freshly deployed consumer learns of a service only when someone
-     * next edits it. Blocking every {@code service:} reference until then would be a check nobody
-     * could satisfy.
+     * ({@code POS_MARKETING_KAFKA_ENABLED} defaults to false), so resolving strictly against an
+     * empty table would make every catalog reference a scheduling blocker in an environment that
+     * never provisioned the feed — and, on a freshly deployed one, until pos-catalog's fact replays
+     * ({@code POST /v1/products/facts/replay}, #1309, and {@code POST
+     * /v1/catalog-items/services/facts/replay}, #1306) have been run. Both are operator actions
+     * this module cannot perform or detect, and a check that fails until someone elsewhere runs a
+     * command is a check nobody can satisfy from here.
      *
      * <p>Cold is judged per kind rather than over the whole table, because the two failures are
      * different: no rows of a kind means this module has never been told about that kind of catalog
-     * item, while rows present and one missing means the reference is genuinely wrong. Standing
-     * down is logged at warn — the objection to this choice is that the check quietly does nothing
-     * in exactly the case nobody notices, and a log line is what answers it.
+     * item, while rows present and one missing means the reference is genuinely wrong. Seeding is
+     * per kind too — the two replays are separate calls — so a table full of products says nothing
+     * about whether the service half ever arrived. Standing down is logged at warn: the objection
+     * to this choice is that the check quietly does nothing in exactly the case nobody notices, and
+     * a log line naming the missing kind is what answers it.
      */
     private Optional<String> catalogFocusProblem(String catalogFocusRef) {
         if (catalogFocusRef == null || catalogFocusRef.isBlank()) {

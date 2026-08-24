@@ -294,8 +294,8 @@ class CampaignReferenceValidatorTest {
             when(catalogReplicaRepository.countByItemKind(CatalogItemKind.PRODUCT))
                     .thenReturn(400L);
 
-            // pos-catalog can seed products through its fact replay (#1309) and has no equivalent
-            // for services, so one kind being replicated says nothing about the other.
+            // The product and service replays are separate operator calls, so one kind being
+            // replicated says nothing about whether the other ever arrived.
             assertThat(validator().problems(campaign(null, "service:alignment")))
                     .isEmpty();
             assertThat(validator().problems(campaign(null, "product:alignment")))
