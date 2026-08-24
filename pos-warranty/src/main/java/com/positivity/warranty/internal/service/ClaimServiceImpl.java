@@ -516,6 +516,12 @@ public class ClaimServiceImpl implements ClaimService {
      *
      * @return whether any line's approved amount overrode the computed amount
      */
+    /**
+     * Applies the adjudicator's per-line decisions, defaulting the lines they did not mention.
+     *
+     * @return whether any line's approved amount overrode the computed one, which the caller uses
+     *     to decide whether the decision needs an override reason recorded against the claim
+     */
     private boolean applyLineDecisions(@NonNull WarrantyClaim claim, @NonNull ClaimDecisionRequest request) {
         List<ClaimDecisionRequest.LineDecision> decisions =
                 request.lineDecisions() == null ? List.of() : request.lineDecisions();
@@ -528,46 +534,15 @@ public class ClaimServiceImpl implements ClaimService {
             return false;
         }
 
-        Map<UUID, ClaimDecisionRequest.LineDecision> byLineId = new LinkedHashMap<>();
-        for (ClaimDecisionRequest.LineDecision decision : decisions) {
-            if (byLineId.put(decision.lineId(), decision) != null) {
-                throw new IllegalArgumentException(
-                        "Duplicate line decision for claim line '" + decision.lineId() + "'");
-            }
-        }
-
+        Map<UUID, ClaimDecisionRequest.LineDecision> byLineId = indexLineDecisions(decisions);
         boolean approve = request.decision() == ClaimDecisionRequest.Action.APPROVE;
         LineDisposition defaultDisposition = approve ? LineDisposition.APPROVED : LineDisposition.DENIED;
+
         boolean anyOverride = false;
         for (WarrantyClaimLine line : claim.getLines()) {
+            // Removed as it is consumed, so whatever remains named a line this claim does not have.
             ClaimDecisionRequest.LineDecision decision = byLineId.remove(line.getId());
-            if (decision == null) {
-                line.setLineDisposition(defaultDisposition);
-                line.setAmountApproved(approve ? line.getAmountRequested() : null);
-                continue;
-            }
-            BigDecimal computed = line.getAmountRequested();
-            BigDecimal amountApproved =
-                    decision.amountApproved() != null ? decision.amountApproved() : (approve ? computed : null);
-            boolean overridesComputed = decision.amountApproved() != null
-                    && (computed == null || decision.amountApproved().compareTo(computed) != 0);
-            String overrideReason = trimToNull(decision.overrideReason());
-            if (overridesComputed && overrideReason == null) {
-                throw new IllegalArgumentException("Claim line '" + line.getId() + "': amountApproved "
-                        + decision.amountApproved() + " overrides the computed amountRequested " + computed
-                        + "; an override reason is required");
-            }
-            line.setAmountApproved(amountApproved);
-            line.setLineDisposition(
-                    decision.lineDisposition() != null ? decision.lineDisposition() : defaultDisposition);
-            if (overridesComputed) {
-                anyOverride = true;
-                noteRepository.save(ClaimNote.builder()
-                        .claimId(claim.getId())
-                        .note("line " + line.getId() + " amount override: " + overrideReason + " (computed " + computed
-                                + ", approved " + decision.amountApproved() + ")")
-                        .build());
-            }
+            anyOverride |= applyLineDecision(claim, line, decision, approve, defaultDisposition);
         }
         if (!byLineId.isEmpty()) {
             throw new WarrantyNotFoundException(
@@ -575,6 +550,62 @@ public class ClaimServiceImpl implements ClaimService {
                     "Claim line(s) " + byLineId.keySet() + " were not found on claim '" + claim.getId() + "'");
         }
         return anyOverride;
+    }
+
+    /** Indexes the decisions by line id, refusing a request that decides the same line twice. */
+    @NonNull
+    private Map<UUID, ClaimDecisionRequest.LineDecision> indexLineDecisions(
+            @NonNull List<ClaimDecisionRequest.LineDecision> decisions) {
+        Map<UUID, ClaimDecisionRequest.LineDecision> byLineId = new LinkedHashMap<>();
+        for (ClaimDecisionRequest.LineDecision decision : decisions) {
+            if (byLineId.put(decision.lineId(), decision) != null) {
+                throw new IllegalArgumentException(
+                        "Duplicate line decision for claim line '" + decision.lineId() + "'");
+            }
+        }
+        return byLineId;
+    }
+
+    /**
+     * Applies one line's outcome: the adjudicator's decision when they gave one, the claim-wide
+     * default otherwise.
+     *
+     * @return whether this line's approved amount overrode the computed one
+     */
+    private boolean applyLineDecision(
+            @NonNull WarrantyClaim claim,
+            @NonNull WarrantyClaimLine line,
+            ClaimDecisionRequest.@Nullable LineDecision decision,
+            boolean approve,
+            @NonNull LineDisposition defaultDisposition) {
+        if (decision == null) {
+            line.setLineDisposition(defaultDisposition);
+            line.setAmountApproved(approve ? line.getAmountRequested() : null);
+            return false;
+        }
+
+        BigDecimal computed = line.getAmountRequested();
+        BigDecimal amountApproved =
+                decision.amountApproved() != null ? decision.amountApproved() : (approve ? computed : null);
+        boolean overridesComputed = decision.amountApproved() != null
+                && (computed == null || decision.amountApproved().compareTo(computed) != 0);
+        String overrideReason = trimToNull(decision.overrideReason());
+        if (overridesComputed && overrideReason == null) {
+            throw new IllegalArgumentException("Claim line '" + line.getId() + "': amountApproved "
+                    + decision.amountApproved() + " overrides the computed amountRequested " + computed
+                    + "; an override reason is required");
+        }
+        line.setAmountApproved(amountApproved);
+        line.setLineDisposition(decision.lineDisposition() != null ? decision.lineDisposition() : defaultDisposition);
+        if (overridesComputed) {
+            noteRepository.save(ClaimNote.builder()
+                    .claimId(claim.getId())
+                    .note("line " + line.getId() + " amount override: " + overrideReason + " (computed " + computed
+                            + ", approved " + decision.amountApproved() + ")")
+                    .build());
+            return true;
+        }
+        return false;
     }
 
     private boolean contradictsSuggestion(@NonNull WarrantyClaim claim, ClaimDecisionRequest.@NonNull Action action) {
