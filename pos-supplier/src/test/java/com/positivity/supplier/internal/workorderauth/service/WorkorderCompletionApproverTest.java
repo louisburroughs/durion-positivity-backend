@@ -83,9 +83,8 @@ class WorkorderCompletionApproverTest {
                 profileResolver,
                 adapterRegistry,
                 baseClient,
-                Clock.fixed(NOW, ZoneOffset.UTC),
-                50,
-                MAX_ATTEMPTS);
+                new WorkorderApprovalRecorder(authorizationRepository, Clock.fixed(NOW, ZoneOffset.UTC), MAX_ATTEMPTS),
+                50);
 
         when(profileResolver.resolveBinding(any(), any())).thenReturn(binding());
         when(adapterRegistry.resolve(any(), any(), any()))

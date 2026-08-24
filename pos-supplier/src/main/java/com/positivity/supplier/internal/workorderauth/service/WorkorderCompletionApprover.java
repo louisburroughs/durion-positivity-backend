@@ -16,8 +16,6 @@ import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,34 +52,31 @@ public class WorkorderCompletionApprover {
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
     private final SupplierBaseClient baseClient;
-    private final Clock clock;
+
+    /**
+     * The outcome writes, in a separate bean so each gets a real transaction.
+     *
+     * <p>Not an arbitrary split: a self-call would bypass the transaction proxy, and these three are
+     * the only writes here that must be one unit with their own read.
+     */
+    private final WorkorderApprovalRecorder approvalRecorder;
 
     /** How many outstanding approvals one tick will attempt. */
     private final int batchSize;
-
-    /**
-     * How many times an approval is attempted before a human is asked to look.
-     *
-     * <p>Finite on purpose. An approval that retries forever looks like an approval that is working,
-     * and the money involved means somebody has to be told when it is not.
-     */
-    private final int maxAttempts;
 
     public WorkorderCompletionApprover(
             SupplierWorkorderAuthorizationRepository authorizationRepository,
             SupplierProfileResolver profileResolver,
             AdapterRegistry adapterRegistry,
             SupplierBaseClient baseClient,
-            Clock clock,
-            @Value("${pos.supplier.workorderauth.approval-batch-size:50}") int batchSize,
-            @Value("${pos.supplier.workorderauth.approval-max-attempts:6}") int maxAttempts) {
+            WorkorderApprovalRecorder approvalRecorder,
+            @Value("${pos.supplier.workorderauth.approval-batch-size:50}") int batchSize) {
         this.authorizationRepository = authorizationRepository;
         this.profileResolver = profileResolver;
         this.adapterRegistry = adapterRegistry;
         this.baseClient = baseClient;
-        this.clock = clock;
+        this.approvalRecorder = approvalRecorder;
         this.batchSize = batchSize;
-        this.maxAttempts = maxAttempts;
     }
 
     /**
@@ -130,7 +125,7 @@ public class WorkorderCompletionApprover {
                         row.getSupplierRef(),
                         e.toString(),
                         e);
-                recordAttempt(row, "approval attempt threw: " + e);
+                approvalRecorder.recordAttempt(row, "approval attempt threw: " + e);
             }
         }
     }
@@ -140,7 +135,8 @@ public class WorkorderCompletionApprover {
         if (vendorAuthorizationId == null || vendorAuthorizationId.isBlank()) {
             // Granted, but the vendor never told us what to call it. No amount of retrying invents
             // an identifier, so this goes to a human immediately rather than burning attempts.
-            park(row, "the vendor granted this authorization without an id, so its completion cannot be approved");
+            approvalRecorder.park(
+                    row, "the vendor granted this authorization without an id, so its completion cannot be approved");
             return;
         }
 
@@ -160,7 +156,7 @@ public class WorkorderCompletionApprover {
             // Parked, not retried. No number of attempts fixes a missing account number, and
             // spending the budget on it would escalate a money-critical approval with a review
             // reason blaming the vendor for a defect on this side.
-            park(row, "completion cannot be approved: " + e.getMessage());
+            approvalRecorder.park(row, "completion cannot be approved: " + e.getMessage());
             return;
         }
 
@@ -168,66 +164,12 @@ public class WorkorderCompletionApprover {
         SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
 
         if (response.isSuccess()) {
-            markApproved(row);
+            approvalRecorder.markApproved(row);
             return;
         }
-        recordAttempt(
+        approvalRecorder.recordAttempt(
                 row,
                 "vendor refused or could not be reached: " + response.outcome()
                         + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
-    }
-
-    @Transactional
-    void markApproved(@NonNull SupplierWorkorderAuthorizationEntity row) {
-        SupplierWorkorderAuthorizationEntity managed = authorizationRepository
-                .findById(row.getSupplierWorkorderAuthorizationId())
-                .orElse(row);
-        managed.setApprovalStatus(WorkorderApprovalStatus.APPROVED);
-        managed.setApprovedAt(Instant.now(clock));
-        managed.setApprovalAttempts(managed.getApprovalAttempts() + 1);
-        authorizationRepository.save(managed);
-        log.info(
-                "Vendor approved completion of workorder {} at {}", managed.getWorkorderId(), managed.getSupplierRef());
-    }
-
-    /** Counts a failed attempt, and escalates once the budget is spent. */
-    @Transactional
-    void recordAttempt(@NonNull SupplierWorkorderAuthorizationEntity row, @NonNull String reason) {
-        SupplierWorkorderAuthorizationEntity managed = authorizationRepository
-                .findById(row.getSupplierWorkorderAuthorizationId())
-                .orElse(row);
-        int attempts = managed.getApprovalAttempts() + 1;
-        managed.setApprovalAttempts(attempts);
-        if (attempts >= maxAttempts) {
-            managed.setApprovalStatus(WorkorderApprovalStatus.MANUAL_REVIEW);
-            managed.setReviewReason(truncate("completion approval gave up after " + attempts + " attempts: " + reason));
-            log.error(
-                    "Completion approval for workorder {} at {} needs review after {} attempts: {}",
-                    managed.getWorkorderId(),
-                    managed.getSupplierRef(),
-                    attempts,
-                    reason);
-        }
-        authorizationRepository.save(managed);
-    }
-
-    @Transactional
-    void park(@NonNull SupplierWorkorderAuthorizationEntity row, @NonNull String reason) {
-        SupplierWorkorderAuthorizationEntity managed = authorizationRepository
-                .findById(row.getSupplierWorkorderAuthorizationId())
-                .orElse(row);
-        managed.setApprovalStatus(WorkorderApprovalStatus.MANUAL_REVIEW);
-        managed.setReviewReason(truncate(reason));
-        authorizationRepository.save(managed);
-        log.error(
-                "Completion approval for workorder {} at {} cannot proceed: {}",
-                managed.getWorkorderId(),
-                managed.getSupplierRef(),
-                reason);
-    }
-
-    @NonNull
-    private static String truncate(@NonNull String reason) {
-        return reason.length() <= 1000 ? reason : reason.substring(0, 1000);
     }
 }
