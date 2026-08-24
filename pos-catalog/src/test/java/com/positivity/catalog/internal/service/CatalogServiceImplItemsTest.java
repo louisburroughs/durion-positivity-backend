@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -398,19 +400,38 @@ class CatalogServiceImplItemsTest {
     class DeleteCatalogItem {
 
         @Test
+        @DisplayName("deletes the product and announces the removal, so replicas stop resolving it")
         void deletesAnExistingProduct() {
-            when(productRepository.existsById(PRODUCT_ID)).thenReturn(true);
+            ProductEntity existing = productEntity();
+            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(existing));
 
             assertThat(service.deleteCatalogItem("product", PRODUCT_ID)).isTrue();
-            verify(productRepository).deleteById(PRODUCT_ID);
+            verify(productRepository).delete(existing);
+            verify(catalogFactPublisher).publishProductRemoved(existing);
+        }
+
+        @Test
+        @DisplayName("announces the removal before the row goes, while its attribute rows still exist")
+        void publishesTheProductTombstoneBeforeDeleting() {
+            ProductEntity existing = productEntity();
+            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(existing));
+
+            service.deleteCatalogItem("product", PRODUCT_ID);
+
+            // The payload is assembled from the product's UoM and substitution rows, which the
+            // delete takes with it.
+            InOrder order = inOrder(catalogFactPublisher, productRepository);
+            order.verify(catalogFactPublisher).publishProductRemoved(existing);
+            order.verify(productRepository).delete(existing);
         }
 
         @Test
         void reportsFalseForAProductThatIsNotThere() {
-            when(productRepository.existsById(PRODUCT_ID)).thenReturn(false);
+            when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
             assertThat(service.deleteCatalogItem("product", PRODUCT_ID)).isFalse();
-            verify(productRepository, never()).deleteById(any(UUID.class));
+            verify(productRepository, never()).delete(any(ProductEntity.class));
+            verifyNoInteractions(catalogFactPublisher);
         }
 
         @Test

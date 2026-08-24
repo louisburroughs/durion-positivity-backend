@@ -1,17 +1,20 @@
 package com.positivity.catalog.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.entity.ServiceEntity;
+import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.repository.ServiceRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -52,6 +55,7 @@ class ServiceFactReplayServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        when(catalogFactPublisher.publicationEnabled()).thenReturn(true);
         service = new ServiceFactReplayServiceImpl(serviceRepository, catalogFactPublisher, CLOCK);
     }
 
@@ -160,5 +164,20 @@ class ServiceFactReplayServiceImplTest {
         assertThat(result.complete()).isTrue();
         assertThat(result.nextAfterId()).isNull();
         verify(catalogFactPublisher, never()).publishServiceUpdated(any());
+    }
+
+    @Test
+    @DisplayName("refuses when fact publication is disabled, rather than reporting a successful no-op")
+    void refusesWhenPublicationIsDisabled() {
+        // The publisher is silent with pos.catalog.kafka.enabled=false, so a replay would read
+        // every row, queue nothing, and report the rows it read as facts it emitted — telling an
+        // operator a replica was seeded when the outbox never saw a row.
+        when(catalogFactPublisher.publicationEnabled()).thenReturn(false);
+
+        assertThatThrownBy(() -> service.replayPage(null, null, 500))
+                .isInstanceOf(CatalogBusinessRuleException.class)
+                .hasMessageContaining("publication is disabled");
+
+        verifyNoInteractions(serviceRepository);
     }
 }

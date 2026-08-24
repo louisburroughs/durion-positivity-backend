@@ -309,11 +309,22 @@ public class CatalogServiceImpl implements CatalogService {
         return saved;
     }
 
+    /**
+     * Delete a product, announcing the removal (#1306).
+     *
+     * <p>The fact is published before the row goes, because the payload reads the product's UoM
+     * and substitution-group rows and the delete takes those with it. Announcing at all is the
+     * change: a hard-deleted product used to leave every replica holding it as active, which
+     * pos-marketing would then happily resolve a {@code product:}, {@code sku:} or
+     * {@code category:} campaign reference against.
+     */
     private boolean deleteProduct(UUID productId) {
-        if (!productRepository.existsById(productId)) {
+        ProductEntity existing = productRepository.findById(productId).orElse(null);
+        if (existing == null) {
             return false;
         }
-        productRepository.deleteById(productId);
+        catalogFactPublisher.publishProductRemoved(existing);
+        productRepository.delete(existing);
         return true;
     }
 

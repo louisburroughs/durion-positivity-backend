@@ -1,6 +1,7 @@
 package com.positivity.marketing.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -244,9 +246,11 @@ class CatalogEventsListenerTest {
         }
 
         @Test
-        @DisplayName("an unparsable message is dropped rather than wedging the partition")
-        void unparsableMessageIsDropped() {
-            listener.onCatalogEvent("not json at all");
+        @DisplayName("an unparsable message is left to the container, so it reaches the dead-letter topic")
+        void unparsableMessagePropagates() {
+            // Swallowing it would acknowledge the record as handled and lose the catalog update;
+            // KafkaErrorHandlingConfig retries and then routes it to {topic}.dlq instead.
+            assertThatThrownBy(() -> listener.onCatalogEvent("not json at all")).isInstanceOf(JacksonException.class);
 
             verifyNoInteractions(catalogReplicaRepository);
             verify(processedEventRepository, never()).save(any());

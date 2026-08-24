@@ -33,9 +33,11 @@ import tools.jackson.databind.ObjectMapper;
  * unresolvable for no reason.
  *
  * <p>Consumer contract mirrors pos-warranty's listener on the same topic: {@code processed_events}
- * idempotency (owner {@code catalog}) written in the apply transaction, a stale guard on the fact's
- * {@code aggregateVersion} so an out-of-order redelivery cannot undo a newer fact, and transient DB
- * errors rethrown so the container retries rather than silently dropping the update.
+ * idempotency (owner {@code catalog}) written in the apply transaction, and a stale guard on the
+ * fact's {@code aggregateVersion} so an out-of-order redelivery cannot undo a newer fact. Nothing
+ * is swallowed — an unreadable envelope or a database failure reaches the container, which retries
+ * and then dead-letters it, because a replica quietly missing an update is worse than a visible
+ * poison message.
  */
 @Slf4j
 @Component
@@ -66,13 +68,11 @@ public class CatalogEventsListener {
             groupId = "${pos.marketing.kafka.catalog-events-consumer-group:pos-marketing-catalog-events}")
     @Transactional
     public void onCatalogEvent(@NonNull String message) {
-        JsonNode envelope;
-        try {
-            envelope = objectMapper.readTree(message);
-        } catch (RuntimeException e) {
-            log.warn("Skipping unparsable catalog event", e);
-            return;
-        }
+        // Parsing failures are deliberately not caught: KafkaErrorHandlingConfig retries the record
+        // and then routes it to {topic}.dlq, where a poison message can be seen and fixed.
+        // Swallowing it here would acknowledge the record as handled and lose the catalog update
+        // for good — the module's other listeners let it propagate for the same reason.
+        JsonNode envelope = objectMapper.readTree(message);
         String eventId = envelope.path("eventId").asString("");
         String eventType = envelope.path("eventType").asString("");
         if (eventId.isBlank() || processedEventRepository.existsById(eventId)) {

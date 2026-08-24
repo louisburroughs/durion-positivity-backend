@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.entity.ServiceEntity;
+import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.repository.ServiceRepository;
 import com.positivity.catalog.service.ServiceFactReplayService;
 import java.time.Clock;
@@ -54,6 +55,15 @@ public class ServiceFactReplayServiceImpl implements ServiceFactReplayService {
     @Transactional
     public ServiceFactReplayResultDto replayPage(
             @Nullable UUID afterServiceId, @Nullable Instant updatedSince, int limit) {
+        // Refused rather than reported as a successful no-op. The publisher is deliberately silent
+        // when pos.catalog.kafka.enabled is off, which is right for an ordinary write — the
+        // business change is what matters — but a replay produces nothing else. Counting the rows
+        // it read as facts it emitted would tell an operator a replica was seeded when the outbox
+        // never saw a row, and the next thing they would do is trust it.
+        if (!catalogFactPublisher.publicationEnabled()) {
+            throw new CatalogBusinessRuleException(
+                    "Fact publication is disabled (pos.catalog.kafka.enabled=false); a replay would emit nothing");
+        }
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         Instant startedAt = Instant.now(clock);
 

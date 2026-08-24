@@ -173,7 +173,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("a service the replica knows and holds active resolves")
         void knownServiceResolves() {
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.SERVICE, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.SERVICE, "alignment"))
                     .thenReturn(List.of(row(CatalogItemKind.SERVICE, true)));
 
             assertThat(validator().problems(campaign(null, "service:alignment")))
@@ -193,7 +193,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("a well-formed reference to nothing blocks, the way an unknown segment does")
         void unresolvableReferenceBlocks() {
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.SERVICE, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.SERVICE, "alignment"))
                     .thenReturn(List.of());
             // The replica knows services; it just does not know this one.
             when(catalogReplicaRepository.countByItemKind(CatalogItemKind.SERVICE))
@@ -208,7 +208,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("a retired item blocks with its own message, not as if it never existed")
         void retiredItemBlocksDistinctly() {
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.SERVICE, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.SERVICE, "alignment"))
                     .thenReturn(List.of(row(CatalogItemKind.SERVICE, false)));
 
             assertThat(validator().problems(campaign(null, "service:alignment")))
@@ -220,7 +220,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("one active match is enough when a name matches several rows")
         void oneActiveMatchIsEnough() {
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.SERVICE, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.SERVICE, "alignment"))
                     .thenReturn(List.of(row(CatalogItemKind.SERVICE, false), row(CatalogItemKind.SERVICE, true)));
 
             assertThat(validator().problems(campaign(null, "service:alignment")))
@@ -230,7 +230,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("sku: resolves against product rows, since a sku is a product attribute")
         void skuResolvesAgainstProducts() {
-            when(catalogReplicaRepository.findBySkuIgnoreCase("SKU-1"))
+            when(catalogReplicaRepository.findBySkuIgnoringCase("SKU-1"))
                     .thenReturn(List.of(row(CatalogItemKind.PRODUCT, true)));
 
             assertThat(validator().problems(campaign(null, "sku:SKU-1"))).isEmpty();
@@ -249,7 +249,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("category: resolves by name through the products that carry it")
         void categoryByNameResolves() {
-            when(catalogReplicaRepository.findByCategoryIgnoreCase("Tires"))
+            when(catalogReplicaRepository.findByCategoryNameIgnoringCase("Tires"))
                     .thenReturn(List.of(row(CatalogItemKind.PRODUCT, true)));
 
             assertThat(validator().problems(campaign(null, "category:Tires"))).isEmpty();
@@ -258,7 +258,7 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("product: looks at products, so a service of the same name does not answer for one")
         void productKindDoesNotMatchServices() {
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.PRODUCT, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.PRODUCT, "alignment"))
                     .thenReturn(List.of());
             when(catalogReplicaRepository.countByItemKind(CatalogItemKind.PRODUCT))
                     .thenReturn(400L);
@@ -273,7 +273,7 @@ class CampaignReferenceValidatorTest {
             // No service ever reached this module: the feed is not provisioned, or nobody has
             // edited a service since it was. Either way the replica cannot answer, and turning
             // that into a scheduling blocker would be a check nobody could satisfy.
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.SERVICE, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.SERVICE, "alignment"))
                     .thenReturn(List.of());
             when(catalogReplicaRepository.countByItemKind(CatalogItemKind.SERVICE))
                     .thenReturn(0L);
@@ -285,11 +285,11 @@ class CampaignReferenceValidatorTest {
         @Test
         @DisplayName("cold is judged per kind: replicated products still hold their own references to account")
         void coldnessIsPerKind() {
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.SERVICE, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.SERVICE, "alignment"))
                     .thenReturn(List.of());
             when(catalogReplicaRepository.countByItemKind(CatalogItemKind.SERVICE))
                     .thenReturn(0L);
-            when(catalogReplicaRepository.findByItemKindAndNameIgnoreCase(CatalogItemKind.PRODUCT, "alignment"))
+            when(catalogReplicaRepository.findByKindAndNameIgnoringCase(CatalogItemKind.PRODUCT, "alignment"))
                     .thenReturn(List.of());
             when(catalogReplicaRepository.countByItemKind(CatalogItemKind.PRODUCT))
                     .thenReturn(400L);

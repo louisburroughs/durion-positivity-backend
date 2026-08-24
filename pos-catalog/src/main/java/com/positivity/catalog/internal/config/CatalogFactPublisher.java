@@ -64,14 +64,54 @@ public class CatalogFactPublisher {
         this.substitutionGroupMemberRepository = substitutionGroupMemberRepository;
     }
 
+    /**
+     * Whether facts published here actually reach the outbox — false when
+     * {@code pos.catalog.kafka.enabled} is off and the {@link OutboxEventWriter} bean is absent.
+     *
+     * <p>Exposed so a bulk re-emit can refuse rather than report success for facts it silently
+     * dropped: an ordinary write is right to carry on regardless (the business change is what
+     * matters), but a replay exists only to produce facts, and one that queues none has done
+     * nothing at all.
+     */
+    public boolean publicationEnabled() {
+        return outboxEventWriter.getIfAvailable() != null;
+    }
+
     public void publishProductUpdated(@NonNull ProductEntity product) {
+        long aggregateVersion =
+                product.getUpdatedAt() == null ? 0L : product.getUpdatedAt().toEpochMilli();
+        publishProduct(product, product.getStatus() == ProductStatus.ACTIVE, aggregateVersion);
+    }
+
+    /**
+     * Emits the {@code catalog.product.updated} tombstone for a hard-deleted product (#1306).
+     *
+     * <p>{@code catalog-items} deletes a product row outright, and until now that removal was
+     * announced to nobody: every replica kept the product active and went on resolving it. That
+     * was invisible while consumers only read manufacturer and warranty terms from their replica,
+     * and stopped being invisible when pos-marketing began answering "does this catalog reference
+     * exist" from one — a deleted product, its SKU and its category all still resolved.
+     *
+     * <p>Published before the row is deleted, not after: the payload is assembled from the
+     * product's UoM and substitution-group rows, which the delete takes with it. Same transaction
+     * either way, so the fact and the deletion still commit together.
+     *
+     * <p>Versioned like the service tombstone — the delete time, floored to one millisecond past
+     * the last update, so a product created and deleted inside one millisecond cannot emit a
+     * tombstone that consumers' stale guard reads as no newer than the upsert it supersedes.
+     */
+    public void publishProductRemoved(@NonNull ProductEntity product) {
+        long lastKnown =
+                product.getUpdatedAt() == null ? 0L : product.getUpdatedAt().toEpochMilli();
+        publishProduct(product, false, Math.max(clock.millis(), lastKnown + 1));
+    }
+
+    private void publishProduct(ProductEntity product, boolean active, long aggregateVersion) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
         }
         Category category = product.getCategory();
-        long aggregateVersion =
-                product.getUpdatedAt() == null ? 0L : product.getUpdatedAt().toEpochMilli();
         ProductTrackingLevel trackingLevel =
                 product.getTrackingLevel() == null ? ProductTrackingLevel.NONE : product.getTrackingLevel();
         SubstitutionGroupMemberEntity membership = substitutionGroupMemberRepository
@@ -88,7 +128,7 @@ public class CatalogFactPublisher {
                 category == null ? null : category.getName(),
                 product.getWarranty(),
                 product.getManufacturerWarranty(),
-                product.getStatus() == ProductStatus.ACTIVE,
+                active,
                 product.getCreatedAt(),
                 product.getUpdatedAt(),
                 product.getUnitOfMeasure(),
@@ -111,7 +151,11 @@ public class CatalogFactPublisher {
                 payload,
                 clock);
         writer.publish(DomainTopics.events("catalog"), envelope);
-        log.debug("Queued catalog.product.updated productId={} sku={}", product.getId(), product.getSku());
+        log.debug(
+                "Queued catalog.product.updated productId={} sku={} active={}",
+                product.getId(),
+                product.getSku(),
+                active);
     }
 
     /**

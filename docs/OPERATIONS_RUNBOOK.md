@@ -555,6 +555,36 @@ Seeding a brand-new replica: create the consumer's `ext_*` tables (Flyway), star
 then call replay with `since` at the epoch (omit the parameter). Consumers skip anything already
 processed.
 
+#### pos-catalog: seeding a catalog replica
+
+pos-catalog publishes products and services as separate facts, so seeding a catalog replica is two
+calls, not one. Both are paged and resumable — pass the previous response's `nextAfterId` until it
+comes back `complete: true` — and both **refuse with 409** when `pos.catalog.kafka.enabled` is off,
+rather than reporting a page of facts nobody received.
+
+```bash
+# Products (catalog.product.updated) — #1309
+curl -X POST "https://<gateway>/catalog/v1/products/facts/replay?limit=500" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+
+# Services (catalog.service.updated) — #1306
+curl -X POST "https://<gateway>/catalog/v1/catalog-items/services/facts/replay?limit=500" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+```
+
+Consumers of `catalog.events.v1`, and what a cold replica costs them:
+
+| Consumer | Replica | If not seeded |
+|---|---|---|
+| `pos-marketing` | `ext_catalog` (products **and** services) | A campaign's `catalogFocusRef` is not verified for a kind with no rows, and blocks scheduling for one the replica knows partially — run **both** replays |
+| `pos-warranty` | `ext_catalog` (products) | Candidate-line product lookup and warranty eligibility have no manufacturer or warranty terms to read |
+| `pos-inventory` | `ext_product_uom` et al. | UoM conversions, tracking level and substitution membership are missing |
+| `pos-supplier` | `ext_product_code` | PRICAT vendor lines match nothing and quarantine |
+
+A deletion cannot be replayed — a deleted row is gone, so its tombstone exists only in the live
+stream. A freshly seeded replica therefore holds what the catalog currently has, which is what
+resolution needs; it will not learn about items removed before the seed.
+
 ### Reconciliation manifests and drift detection
 
 Owners publish a per-window summary (count + checksum of the window's eventIds) on

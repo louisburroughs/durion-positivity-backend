@@ -169,13 +169,13 @@ public class CampaignReferenceValidator {
         return switch (reference.kind()) {
             case PRODUCT -> classify(CatalogItemKind.PRODUCT, itemRows(CatalogItemKind.PRODUCT, value));
             case SERVICE -> classify(CatalogItemKind.SERVICE, itemRows(CatalogItemKind.SERVICE, value));
-            case SKU -> classify(CatalogItemKind.PRODUCT, catalogReplicaRepository.findBySkuIgnoreCase(value));
+            case SKU -> classify(CatalogItemKind.PRODUCT, catalogReplicaRepository.findBySkuIgnoringCase(value));
             case CATEGORY ->
                 classify(
                         CatalogItemKind.PRODUCT,
                         asUuid(value)
                                 .map(catalogReplicaRepository::findByCategoryId)
-                                .orElseGet(() -> catalogReplicaRepository.findByCategoryIgnoreCase(value)));
+                                .orElseGet(() -> catalogReplicaRepository.findByCategoryNameIgnoringCase(value)));
         };
     }
 
@@ -183,7 +183,7 @@ public class CampaignReferenceValidator {
     private List<ExtCatalogReplica> itemRows(CatalogItemKind kind, String value) {
         return asUuid(value)
                 .map(id -> catalogReplicaRepository.findByItemKindAndCatalogItemId(kind, id))
-                .orElseGet(() -> catalogReplicaRepository.findByItemKindAndNameIgnoreCase(kind, value));
+                .orElseGet(() -> catalogReplicaRepository.findByKindAndNameIgnoringCase(kind, value));
     }
 
     /**

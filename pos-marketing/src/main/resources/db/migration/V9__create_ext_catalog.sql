@@ -24,7 +24,12 @@ CREATE TABLE ext_catalog (
     CONSTRAINT ext_catalog_item_kind_chk CHECK (item_kind IN ('PRODUCT', 'SERVICE'))
 );
 
--- A reference is written by hand as either an id or a name, so both are lookup paths.
-CREATE INDEX idx_ext_catalog_kind_name ON ext_catalog (item_kind, name);
-CREATE INDEX idx_ext_catalog_sku ON ext_catalog (sku);
-CREATE INDEX idx_ext_catalog_category ON ext_catalog (category_id, category);
+-- A reference is written by hand as either an id or a name, so both are lookup paths. The name,
+-- sku and category-name lookups are case-insensitive — a marketer types "Alignment" for a service
+-- recorded as "alignment" — so those indexes are case-folded to match the predicate the queries
+-- actually issue. A plain index on the raw column could not serve a lower(...) comparison, which
+-- would leave every catalog-focus resolution scanning the whole replica as it grows.
+CREATE INDEX idx_ext_catalog_kind_name ON ext_catalog (item_kind, lower(name));
+CREATE INDEX idx_ext_catalog_sku ON ext_catalog (lower(sku));
+CREATE INDEX idx_ext_catalog_category_id ON ext_catalog (category_id);
+CREATE INDEX idx_ext_catalog_category_name ON ext_catalog (lower(category));
