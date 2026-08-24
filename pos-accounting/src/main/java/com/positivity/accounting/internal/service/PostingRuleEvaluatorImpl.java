@@ -128,15 +128,9 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                 event.getOrganizationId(),
                 event.getTransactionDate());
 
-        // Validation
-        if (event.getOrganizationId() == null) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing organizationId");
-        }
-        if (event.getTransactionDate() == null) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing transactionDate");
-        }
-        if (event.getEventType() == null || event.getEventType().isBlank()) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing eventType");
+        PostingResult invalid = validateEvent(event);
+        if (invalid != null) {
+            return invalid;
         }
 
         Map<String, Object> evaluationDetails = new HashMap<>();
@@ -149,48 +143,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             // 1. Load applicable PostingRuleVersion
             PostingRuleVersion ruleVersion = loadRuleVersion(event, mappingVersionToUse);
             if (ruleVersion == null) {
-                // Try fallback to default GL mapping (if feature is enabled)
-                if (defaultGLMappingProperties.isEnabled()) {
-                    DefaultGLMapping defaultMapping = loadDefaultGLMapping(event);
-                    if (defaultMapping != null) {
-                        log.debug(
-                                "Using default GL mapping {} for eventType '{}'",
-                                defaultMapping.getMappingId(),
-                                event.getEventType());
-                        JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping);
-
-                        if (!isBalanced(journalEntry)) {
-                            evaluationDetails.put(FAILURE_STEP, "balanceValidation");
-                            evaluationDetails.put("debitTotal", calculateDebitTotal(journalEntry));
-                            evaluationDetails.put("creditTotal", calculateCreditTotal(journalEntry));
-                            return PostingResult.failure(
-                                    PostingFailureReason.UNBALANCED_JOURNAL,
-                                    "Generated journal entry from default mapping is not balanced",
-                                    evaluationDetails);
-                        }
-
-                        evaluationDetails.put("mappingType", "defaultGLMapping");
-                        evaluationDetails.put("defaultMappingId", defaultMapping.getMappingId());
-                        evaluationDetails.put(
-                                "journalEntryLineCount", journalEntry.getLines().size());
-                        evaluationDetails.put("journalEntryAmount", calculateDebitTotal(journalEntry));
-
-                        log.info(
-                                "Successfully evaluated event {} with default GL mapping {}",
-                                event.getEventId(),
-                                defaultMapping.getMappingId());
-                        return PostingResult.success(journalEntry, null, evaluationDetails);
-                    }
-                }
-
-                // No rule version and no default mapping (or feature disabled) - fail
-                String msg = String.format(
-                        "No published rule version or default GL mapping found for eventType '%s' on %s%s",
-                        event.getEventType(),
-                        event.getTransactionDate(),
-                        defaultGLMappingProperties.isEnabled() ? "" : " (default mappings disabled)");
-                evaluationDetails.put(FAILURE_STEP, "loadRuleVersion");
-                return PostingResult.failure(PostingFailureReason.NO_RULE_VERSION, msg, evaluationDetails);
+                return evaluateWithoutRuleVersion(event, evaluationDetails);
             }
 
             evaluationDetails.put("ruleVersionUsed", ruleVersion.getVersionId());
@@ -215,13 +168,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
             // 4. Validate balance
             if (!isBalanced(journalEntry)) {
-                evaluationDetails.put(FAILURE_STEP, "balanceValidation");
-                evaluationDetails.put("debitTotal", calculateDebitTotal(journalEntry));
-                evaluationDetails.put("creditTotal", calculateCreditTotal(journalEntry));
-                return PostingResult.failure(
-                        PostingFailureReason.UNBALANCED_JOURNAL,
-                        "Generated journal entry is not balanced",
-                        evaluationDetails);
+                return unbalancedFailure(journalEntry, evaluationDetails, "Generated journal entry is not balanced");
             }
 
             evaluationDetails.put(
@@ -244,6 +191,82 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                     "Internal error during rule evaluation: " + e.getMessage(),
                     evaluationDetails);
         }
+    }
+
+    /**
+     * The event-shape checks every evaluation starts with.
+     *
+     * @return the failure to return outright, or {@code null} when the event is usable
+     */
+    @Nullable
+    private static PostingResult validateEvent(AccountingEvent event) {
+        if (event.getOrganizationId() == null) {
+            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing organizationId");
+        }
+        if (event.getTransactionDate() == null) {
+            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing transactionDate");
+        }
+        if (event.getEventType() == null || event.getEventType().isBlank()) {
+            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing eventType");
+        }
+        return null;
+    }
+
+    /**
+     * What happens when no published rule version covers the event: the default GL mapping when
+     * that feature is enabled and one exists, an explicit NO_RULE_VERSION failure otherwise.
+     */
+    private PostingResult evaluateWithoutRuleVersion(AccountingEvent event, Map<String, Object> evaluationDetails) {
+        if (defaultGLMappingProperties.isEnabled()) {
+            DefaultGLMapping defaultMapping = loadDefaultGLMapping(event);
+            if (defaultMapping != null) {
+                return evaluateWithDefaultMapping(event, defaultMapping, evaluationDetails);
+            }
+        }
+
+        // No rule version and no default mapping (or feature disabled) - fail
+        String msg = String.format(
+                "No published rule version or default GL mapping found for eventType '%s' on %s%s",
+                event.getEventType(),
+                event.getTransactionDate(),
+                defaultGLMappingProperties.isEnabled() ? "" : " (default mappings disabled)");
+        evaluationDetails.put(FAILURE_STEP, "loadRuleVersion");
+        return PostingResult.failure(PostingFailureReason.NO_RULE_VERSION, msg, evaluationDetails);
+    }
+
+    private PostingResult evaluateWithDefaultMapping(
+            AccountingEvent event, DefaultGLMapping defaultMapping, Map<String, Object> evaluationDetails) {
+        log.debug(
+                "Using default GL mapping {} for eventType '{}'", defaultMapping.getMappingId(), event.getEventType());
+        JournalEntry journalEntry = generateJournalEntryFromDefault(event, defaultMapping);
+
+        // Defensive: generateJournalEntryFromDefault builds one debit and one credit from the same
+        // resolved amount, so this cannot currently fail. Kept so a future change to that builder
+        // cannot post an unbalanced entry unnoticed.
+        if (!isBalanced(journalEntry)) {
+            return unbalancedFailure(
+                    journalEntry, evaluationDetails, "Generated journal entry from default mapping is not balanced");
+        }
+
+        evaluationDetails.put("mappingType", "defaultGLMapping");
+        evaluationDetails.put("defaultMappingId", defaultMapping.getMappingId());
+        evaluationDetails.put("journalEntryLineCount", journalEntry.getLines().size());
+        evaluationDetails.put("journalEntryAmount", calculateDebitTotal(journalEntry));
+
+        log.info(
+                "Successfully evaluated event {} with default GL mapping {}",
+                event.getEventId(),
+                defaultMapping.getMappingId());
+        return PostingResult.success(journalEntry, null, evaluationDetails);
+    }
+
+    /** Records both sides of the imbalance, so the failure says by how much and not merely that. */
+    private PostingResult unbalancedFailure(
+            JournalEntry journalEntry, Map<String, Object> evaluationDetails, String message) {
+        evaluationDetails.put(FAILURE_STEP, "balanceValidation");
+        evaluationDetails.put("debitTotal", calculateDebitTotal(journalEntry));
+        evaluationDetails.put("creditTotal", calculateCreditTotal(journalEntry));
+        return PostingResult.failure(PostingFailureReason.UNBALANCED_JOURNAL, message, evaluationDetails);
     }
 
     /**
@@ -432,31 +455,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
 
             // Evaluate each condition block; first matching condition wins
             for (JsonNode conditionBlock : conditions) {
-                String conditionExpr = conditionBlock.has("condition")
-                        ? conditionBlock.get("condition").asString()
-                        : null;
-
-                eval.addEvaluatedKey(conditionExpr != null ? conditionExpr : "(default)");
-
-                if (!matchesCondition(conditionExpr, event)) {
-                    continue;
-                }
-
-                // Condition matched — resolve GL lines
-                JsonNode linesNode = conditionBlock.get("lines");
-                if (linesNode == null || !linesNode.isArray() || linesNode.isEmpty()) {
-                    log.warn("Condition '{}' matched but has no lines", conditionExpr);
-                    continue;
-                }
-
-                List<MappingEvaluation.ResolvedLine> resolvedLines =
-                        resolveConditionLines(conditionExpr, linesNode, event, dimensions);
-
-                if (resolvedLines != null && !resolvedLines.isEmpty()) {
-                    eval.setSuccess(true);
-                    eval.setMappingType("exact");
-                    eval.setMappingKey(conditionExpr != null ? conditionExpr : event.getEventType());
-                    eval.setResolvedLines(resolvedLines);
+                if (applyCondition(conditionBlock, event, dimensions, eval)) {
                     return eval;
                 }
             }
@@ -480,6 +479,48 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             eval.setSuccess(false);
             return eval;
         }
+    }
+
+    /**
+     * Evaluates one condition block, populating {@code eval} when it both matches and resolves.
+     *
+     * <p>A block that matches but yields no usable lines is <em>not</em> the answer: evaluation
+     * falls through to the next block rather than stopping on a match that describes nothing to
+     * post.
+     *
+     * @return whether this block settled the evaluation, so no further blocks should be tried
+     */
+    private boolean applyCondition(
+            JsonNode conditionBlock, AccountingEvent event, Map<String, String> dimensions, MappingEvaluation eval) {
+        String conditionExpr = conditionBlock.has("condition")
+                ? conditionBlock.get("condition").asString()
+                : null;
+
+        eval.addEvaluatedKey(conditionExpr != null ? conditionExpr : "(default)");
+
+        if (!matchesCondition(conditionExpr, event)) {
+            return false;
+        }
+
+        // Condition matched — resolve GL lines
+        JsonNode linesNode = conditionBlock.get("lines");
+        if (linesNode == null || !linesNode.isArray() || linesNode.isEmpty()) {
+            log.warn("Condition '{}' matched but has no lines", conditionExpr);
+            return false;
+        }
+
+        List<MappingEvaluation.ResolvedLine> resolvedLines =
+                resolveConditionLines(conditionExpr, linesNode, event, dimensions);
+        if (resolvedLines == null || resolvedLines.isEmpty()) {
+            return false;
+        }
+
+        eval.setSuccess(true);
+        eval.setMappingType("exact");
+        // With no expression to name the mapping by, the event type is the only label available.
+        eval.setMappingKey(conditionExpr != null ? conditionExpr : event.getEventType());
+        eval.setResolvedLines(resolvedLines);
+        return true;
     }
 
     /**
@@ -507,49 +548,66 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         List<RuleLineSpec> specs = new ArrayList<>();
 
         for (JsonNode lineNode : linesNode) {
-            String side = lineNode.has("side") ? lineNode.get("side").asString() : "DEBIT";
-            String amountField =
-                    lineNode.has("amountField") ? lineNode.get("amountField").asString() : null;
-            String description =
-                    lineNode.has("description") ? lineNode.get("description").asString() : null;
-            BigDecimal factorPercent = parseFactorPercent(lineNode);
-            String splitGroup = parseSplitGroup(lineNode);
-
-            // Resolve GL account: try postingCategoryId+mappingKeyId first,
-            // then fall back to direct glAccountId reference
-            UUID glAccountId = null;
-
-            if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
-                UUID postingCategoryId =
-                        UUID.fromString(lineNode.get("postingCategoryId").asString());
-                UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asString());
-
-                try {
-                    glAccountId = glMappingResolver.resolveGLAccount(
-                            postingCategoryId, mappingKeyId, event.getTransactionDate(), dimensions);
-                } catch (IllegalArgumentException e) {
-                    log.warn(
-                            "GL mapping resolution failed for category={} key={}: {}",
-                            postingCategoryId,
-                            mappingKeyId,
-                            e.getMessage());
-                    return null;
-                }
-            } else if (lineNode.has("glAccountId")) {
-                // Direct GL account reference (simpler rules without mapping tables)
-                glAccountId = UUID.fromString(lineNode.get("glAccountId").asString());
-            }
-
+            UUID glAccountId = resolveGlAccountId(lineNode, event, dimensions);
             if (glAccountId == null) {
                 log.warn("Could not resolve GL account for line in condition '{}'", conditionExpr);
                 return null;
             }
-
-            specs.add(new RuleLineSpec(glAccountId, side, amountField, description, factorPercent, splitGroup));
+            specs.add(parseLineSpec(lineNode, glAccountId));
         }
 
-        BigDecimal[] amounts = computeLineAmounts(specs, event);
+        return toResolvedLines(specs, computeLineAmounts(specs, event));
+    }
 
+    /**
+     * The GL account a rule line posts to: posting category + mapping key first, direct
+     * {@code glAccountId} as the fallback for simpler rules without mapping tables.
+     *
+     * <p>Both halves of the category/key pair are required — one alone resolves nothing, and
+     * falling through to {@code null} is what stops a half-configured line from posting somewhere
+     * arbitrary.
+     *
+     * @return the resolved account, or {@code null} when the line names none that resolves
+     */
+    @Nullable
+    private UUID resolveGlAccountId(JsonNode lineNode, AccountingEvent event, Map<String, String> dimensions) {
+        if (lineNode.has("postingCategoryId") && lineNode.has("mappingKeyId")) {
+            UUID postingCategoryId =
+                    UUID.fromString(lineNode.get("postingCategoryId").asString());
+            UUID mappingKeyId = UUID.fromString(lineNode.get("mappingKeyId").asString());
+            try {
+                return glMappingResolver.resolveGLAccount(
+                        postingCategoryId, mappingKeyId, event.getTransactionDate(), dimensions);
+            } catch (IllegalArgumentException e) {
+                log.warn(
+                        "GL mapping resolution failed for category={} key={}: {}",
+                        postingCategoryId,
+                        mappingKeyId,
+                        e.getMessage());
+                return null;
+            }
+        }
+        if (lineNode.has("glAccountId")) {
+            // Direct GL account reference (simpler rules without mapping tables)
+            return UUID.fromString(lineNode.get("glAccountId").asString());
+        }
+        return null;
+    }
+
+    /** Reads one rule line's declared shape; a line with no explicit side is a debit. */
+    private RuleLineSpec parseLineSpec(JsonNode lineNode, UUID glAccountId) {
+        String side = lineNode.has("side") ? lineNode.get("side").asString() : "DEBIT";
+        String amountField =
+                lineNode.has("amountField") ? lineNode.get("amountField").asString() : null;
+        String description =
+                lineNode.has("description") ? lineNode.get("description").asString() : null;
+        return new RuleLineSpec(
+                glAccountId, side, amountField, description, parseFactorPercent(lineNode), parseSplitGroup(lineNode));
+    }
+
+    /** Places each computed amount on the side its line declared, zero on the other. */
+    private static List<MappingEvaluation.ResolvedLine> toResolvedLines(
+            List<RuleLineSpec> specs, BigDecimal[] amounts) {
         List<MappingEvaluation.ResolvedLine> resolvedLines = new ArrayList<>();
         for (int i = 0; i < specs.size(); i++) {
             RuleLineSpec spec = specs.get(i);
@@ -622,6 +680,40 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             List<RuleLineSpec> specs,
             BigDecimal[] amounts,
             AccountingEvent event) {
+        String amountField = validateSplitGroup(groupName, memberIndexes, specs);
+        BigDecimal sharedAmount = resolveAmount(amountField, event);
+
+        BigDecimal[] rawShares = new BigDecimal[memberIndexes.size()];
+        BigDecimal roundedSum = BigDecimal.ZERO;
+        for (int j = 0; j < memberIndexes.size(); j++) {
+            RuleLineSpec spec = specs.get(memberIndexes.get(j));
+            // Exact raw share: multiply then shift the decimal point (÷100)
+            rawShares[j] = sharedAmount.multiply(spec.factorPercent()).movePointLeft(2);
+            BigDecimal rounded = rawShares[j].setScale(SPLIT_AMOUNT_SCALE, RoundingMode.HALF_UP);
+            amounts[memberIndexes.get(j)] = rounded;
+            roundedSum = roundedSum.add(rounded);
+        }
+
+        BigDecimal residual = sharedAmount.subtract(roundedSum);
+        if (residual.signum() != 0) {
+            assignResidual(groupName, memberIndexes, rawShares, residual, amounts);
+        }
+    }
+
+    /**
+     * Re-checks the E1 invariants a published split group must satisfy, failing explicitly rather
+     * than distorting amounts.
+     *
+     * <p>Every violation here means the published rules are wrong, not the event: a member without
+     * a {@code factorPercent} has no defensible share, a group drawing on two different amount
+     * fields is no longer a proportional division of one amount, and factors that do not sum to
+     * 100 silently unbalance the entry. Publish-time validation should have caught all of these;
+     * this is the second line of defence for rules published before it existed.
+     *
+     * @return the single amount field the whole group draws on
+     * @throws IllegalStateException on any invariant violation
+     */
+    private static String validateSplitGroup(String groupName, List<Integer> memberIndexes, List<RuleLineSpec> specs) {
         String amountField = null;
         String side = null;
         BigDecimal factorSum = BigDecimal.ZERO;
@@ -655,37 +747,36 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
                     + factorSum.stripTrailingZeros().toPlainString()
                     + " instead of 100");
         }
+        return amountField;
+    }
 
-        BigDecimal sharedAmount = resolveAmount(amountField, event);
-
-        BigDecimal[] rawShares = new BigDecimal[memberIndexes.size()];
-        BigDecimal roundedSum = BigDecimal.ZERO;
-        for (int j = 0; j < memberIndexes.size(); j++) {
-            RuleLineSpec spec = specs.get(memberIndexes.get(j));
-            // Exact raw share: multiply then shift the decimal point (÷100)
-            rawShares[j] = sharedAmount.multiply(spec.factorPercent()).movePointLeft(2);
-            BigDecimal rounded = rawShares[j].setScale(SPLIT_AMOUNT_SCALE, RoundingMode.HALF_UP);
-            amounts[memberIndexes.get(j)] = rounded;
-            roundedSum = roundedSum.add(rounded);
-        }
-
-        BigDecimal residual = sharedAmount.subtract(roundedSum);
-        if (residual.signum() != 0) {
-            int target = 0;
-            for (int j = 1; j < rawShares.length; j++) {
-                // Strict > keeps the FIRST line in rule order on ties
-                if (rawShares[j].abs().compareTo(rawShares[target].abs()) > 0) {
-                    target = j;
-                }
+    /**
+     * Places the rounding residual on the member with the largest absolute raw share, keeping the
+     * first line in rule order on ties.
+     *
+     * <p>Deterministic on purpose: the same rules and the same amount must always put the odd cent
+     * in the same place, or two evaluations of one event would disagree.
+     */
+    private static void assignResidual(
+            String groupName,
+            List<Integer> memberIndexes,
+            BigDecimal[] rawShares,
+            BigDecimal residual,
+            BigDecimal[] amounts) {
+        int target = 0;
+        for (int j = 1; j < rawShares.length; j++) {
+            // Strict > keeps the FIRST line in rule order on ties
+            if (rawShares[j].abs().compareTo(rawShares[target].abs()) > 0) {
+                target = j;
             }
-            int targetIndex = memberIndexes.get(target);
-            amounts[targetIndex] = amounts[targetIndex].add(residual);
-            log.debug(
-                    "Split group '{}': residual {} assigned to line index {} (largest raw share)",
-                    groupName,
-                    residual.toPlainString(),
-                    targetIndex);
         }
+        int targetIndex = memberIndexes.get(target);
+        amounts[targetIndex] = amounts[targetIndex].add(residual);
+        log.debug(
+                "Split group '{}': residual {} assigned to line index {} (largest raw share)",
+                groupName,
+                residual.toPlainString(),
+                targetIndex);
     }
 
     @Nullable
