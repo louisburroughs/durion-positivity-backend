@@ -406,53 +406,110 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
         Set<String> capabilities = new HashSet<>();
         for (BindingSpec binding : bindingSpecs) {
-            String where = PROFILE_PREFIX + spec.key() + "', binding '" + binding.capability() + "': ";
+            validateBinding(spec, binding, authNames, defaultFamily, capabilities);
+        }
+    }
+
+    /**
+     * The ADR-0050 §3 rules for one binding.
+     *
+     * <p>Split by concern rather than left as one run of guards: each rule below rejects a
+     * deployment YAML with its own message, and a reader tracing "why did startup refuse my
+     * config" should land on the rule rather than scan a wall of ifs.
+     */
+    private void validateBinding(
+            @NonNull ProfileSpec spec,
+            @NonNull BindingSpec binding,
+            @NonNull Set<String> authNames,
+            @Nullable String defaultFamily,
+            @NonNull Set<String> seenCapabilities) {
+        String where = PROFILE_PREFIX + spec.key() + "', binding '" + binding.capability() + "': ";
+        validateBindingCapability(spec, binding, where, seenCapabilities);
+        validateBindingFamily(binding, where, defaultFamily);
+        validateBindingEndpoint(binding, where);
+        validateBindingAuth(binding, where, authNames);
+        validateBindingSchedule(binding, where);
+        validateBindingCapture(binding, where);
+    }
+
+    /** The capability must be canonical, and at most one binding may claim it. */
+    private void validateBindingCapability(
+            @NonNull ProfileSpec spec,
+            @NonNull BindingSpec binding,
+            @NonNull String where,
+            @NonNull Set<String> seenCapabilities) {
+        parseEnumOrInvalid(
+                SupplierCapability::valueOf,
+                binding.capability(),
+                PROFILE_PREFIX + spec.key() + "': binding capability '" + binding.capability()
+                        + "' is not a canonical capability key");
+        if (!seenCapabilities.add(binding.capability())) {
+            throw invalid(
+                    where + "capability bound more than once (at most one binding per capability," + " ADR-0050 §3)");
+        }
+    }
+
+    /**
+     * The protocol family comes from the binding or the profile default, and must be canonical.
+     *
+     * <p>{@code TEST} is refused outright: it exists for registry fixtures, and a deployment YAML
+     * naming it would wire a live profile to a stub adapter — worse than failing to start.
+     */
+    private void validateBindingFamily(
+            @NonNull BindingSpec binding, @NonNull String where, @Nullable String defaultFamily) {
+        String family = binding.family() != null ? binding.family() : defaultFamily;
+        ProtocolFamily parsedFamily = parseEnumOrInvalid(
+                ProtocolFamily::valueOf,
+                family,
+                where + "protocol family '" + family + "' is not a canonical protocol family key"
+                        + " (set bindings[].family or protocolDefaults.family)");
+        if (parsedFamily == ProtocolFamily.TEST) {
+            throw invalid(where + "protocol family TEST is reserved for registry test fixtures");
+        }
+    }
+
+    /** Everything needed to address the endpoint: version, base URL and path. */
+    private void validateBindingEndpoint(@NonNull BindingSpec binding, @NonNull String where) {
+        if (binding.version() == null || binding.version().isBlank()) {
+            throw invalid(where + "version must not be blank");
+        }
+        if (binding.baseUrl() == null || binding.baseUrl().isBlank()) {
+            throw invalid(where + "baseUrl must not be blank");
+        }
+        if (binding.path() == null || binding.path().isBlank()) {
+            throw invalid(where + "path must not be blank");
+        }
+    }
+
+    /** The binding's auth must name an auth config declared by the same profile. */
+    private void validateBindingAuth(
+            @NonNull BindingSpec binding, @NonNull String where, @NonNull Set<String> authNames) {
+        if (binding.auth() == null || !authNames.contains(binding.auth())) {
+            throw invalid(where + "auth '" + binding.auth() + "' does not name an auth config of this profile");
+        }
+    }
+
+    /** A schedule is optional, but when present it must be a cron the scheduler can parse. */
+    private void validateBindingSchedule(@NonNull BindingSpec binding, @NonNull String where) {
+        if (binding.schedule() != null && !CronExpression.isValidExpression(binding.schedule())) {
+            throw invalid(where + "schedule '" + binding.schedule() + "' is not a valid cron expression");
+        }
+    }
+
+    /** Payload-capture level and redaction classifications, both optional and both canonical. */
+    private void validateBindingCapture(@NonNull BindingSpec binding, @NonNull String where) {
+        if (binding.captureLevel() != null) {
             parseEnumOrInvalid(
-                    SupplierCapability::valueOf,
-                    binding.capability(),
-                    PROFILE_PREFIX + spec.key() + "': binding capability '" + binding.capability()
-                            + "' is not a canonical capability key");
-            if (!capabilities.add(binding.capability())) {
-                throw invalid(where + "capability bound more than once (at most one binding per capability,"
-                        + " ADR-0050 §3)");
-            }
-            String family = binding.family() != null ? binding.family() : defaultFamily;
-            ProtocolFamily parsedFamily = parseEnumOrInvalid(
-                    ProtocolFamily::valueOf,
-                    family,
-                    where + "protocol family '" + family + "' is not a canonical protocol family key"
-                            + " (set bindings[].family or protocolDefaults.family)");
-            if (parsedFamily == ProtocolFamily.TEST) {
-                throw invalid(where + "protocol family TEST is reserved for registry test fixtures");
-            }
-            if (binding.version() == null || binding.version().isBlank()) {
-                throw invalid(where + "version must not be blank");
-            }
-            if (binding.baseUrl() == null || binding.baseUrl().isBlank()) {
-                throw invalid(where + "baseUrl must not be blank");
-            }
-            if (binding.path() == null || binding.path().isBlank()) {
-                throw invalid(where + "path must not be blank");
-            }
-            if (binding.auth() == null || !authNames.contains(binding.auth())) {
-                throw invalid(where + "auth '" + binding.auth() + "' does not name an auth config of this profile");
-            }
-            if (binding.schedule() != null && !CronExpression.isValidExpression(binding.schedule())) {
-                throw invalid(where + "schedule '" + binding.schedule() + "' is not a valid cron expression");
-            }
-            if (binding.captureLevel() != null) {
+                    PayloadCaptureLevel::valueOf,
+                    binding.captureLevel(),
+                    where + "captureLevel '" + binding.captureLevel() + "' is not a canonical capture level");
+        }
+        if (binding.redactions() != null) {
+            for (String redaction : binding.redactions()) {
                 parseEnumOrInvalid(
-                        PayloadCaptureLevel::valueOf,
-                        binding.captureLevel(),
-                        where + "captureLevel '" + binding.captureLevel() + "' is not a canonical capture level");
-            }
-            if (binding.redactions() != null) {
-                for (String redaction : binding.redactions()) {
-                    parseEnumOrInvalid(
-                            RedactionClassification::valueOf,
-                            redaction,
-                            where + "redactions entry '" + redaction + "' is not a canonical redaction classification");
-                }
+                        RedactionClassification::valueOf,
+                        redaction,
+                        where + "redactions entry '" + redaction + "' is not a canonical redaction classification");
             }
         }
     }

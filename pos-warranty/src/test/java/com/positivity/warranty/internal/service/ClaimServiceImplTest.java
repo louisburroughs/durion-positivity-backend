@@ -13,6 +13,7 @@ import com.positivity.warranty.internal.dto.ClaimCreateRequest;
 import com.positivity.warranty.internal.dto.ClaimDecisionRequest;
 import com.positivity.warranty.internal.dto.ClaimLineRequest;
 import com.positivity.warranty.internal.dto.ClaimResponse;
+import com.positivity.warranty.internal.dto.ClaimSummaryResponse;
 import com.positivity.warranty.internal.dto.ClaimUpdateRequest;
 import com.positivity.warranty.internal.entity.ClaimNote;
 import com.positivity.warranty.internal.entity.ClaimStatusHistory;
@@ -50,12 +51,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * Claim lifecycle service (PRD §5, §7): intake with frozen vehicle snapshot and claim-code
@@ -1072,6 +1076,87 @@ class ClaimServiceImplTest {
                     .satisfies(ex -> assertThat(((IllegalClaimStateException) ex).getNextAction())
                             .contains("terminal"));
             verify(eligibilityService, never()).evaluate(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Claim-code search filters (Phase 3.6 coverage)")
+    class ClaimCodeSearch {
+
+        // The claim-code lookup applies customerId/vehicleId/status/locationId as filters on top
+        // of the matched claim, and JaCoCo had that predicate at 25% branch — 12 of 16 paths
+        // unexercised. The customerId filter is the one that matters most: without it, anyone who
+        // can guess or is told a claim code could read another customer's claim.
+
+        @Test
+        @DisplayName("A claim code belonging to another customer is filtered out")
+        void claimCodeIsScopedToTheRequestingCustomer() {
+            WarrantyClaim found = claim(ClaimStatus.SUBMITTED);
+            when(claimRepository.findByClaimCode(CLAIM_CODE)).thenReturn(Optional.of(found));
+
+            Page<ClaimSummaryResponse> page = service.search(
+                    UUID.fromString("018f0000-0000-7000-8000-0000000001ff"),
+                    null,
+                    null,
+                    CLAIM_CODE,
+                    null,
+                    PageRequest.of(0, 20));
+
+            assertThat(page.getContent()).isEmpty();
+            assertThat(page.getTotalElements()).isZero();
+        }
+
+        @Test
+        @DisplayName("A claim code with matching filters is returned")
+        void claimCodeWithMatchingFiltersIsReturned() {
+            WarrantyClaim found = claim(ClaimStatus.SUBMITTED);
+            when(claimRepository.findByClaimCode(CLAIM_CODE)).thenReturn(Optional.of(found));
+
+            Page<ClaimSummaryResponse> page = service.search(
+                    CUSTOMER_ID,
+                    VEHICLE_ID,
+                    ClaimStatus.SUBMITTED,
+                    "  " + CLAIM_CODE + "  ",
+                    null,
+                    PageRequest.of(0, 20));
+
+            // Also pins that the supplied code is trimmed before lookup.
+            assertThat(page.getContent()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("A non-matching vehicle or status filters the claim out")
+        void nonMatchingVehicleOrStatusFiltersItOut() {
+            WarrantyClaim found = claim(ClaimStatus.SUBMITTED);
+            when(claimRepository.findByClaimCode(CLAIM_CODE)).thenReturn(Optional.of(found));
+
+            assertThat(service.search(
+                                    null,
+                                    UUID.fromString("018f0000-0000-7000-8000-0000000001fe"),
+                                    null,
+                                    CLAIM_CODE,
+                                    null,
+                                    PageRequest.of(0, 20))
+                            .getContent())
+                    .isEmpty();
+            assertThat(service.search(null, null, ClaimStatus.DRAFT, CLAIM_CODE, null, PageRequest.of(0, 20))
+                            .getContent())
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("Claim codes are unique, so any page past the first is empty")
+        void pagesPastTheFirstAreEmpty() {
+            WarrantyClaim found = claim(ClaimStatus.SUBMITTED);
+            when(claimRepository.findByClaimCode(CLAIM_CODE)).thenReturn(Optional.of(found));
+
+            Page<ClaimSummaryResponse> second =
+                    service.search(null, null, null, CLAIM_CODE, null, PageRequest.of(1, 20));
+
+            assertThat(second.getContent()).isEmpty();
+            // The total still reports the one match, so a client can tell "no more pages" from
+            // "no such claim".
+            assertThat(second.getTotalElements()).isEqualTo(1);
         }
     }
 }

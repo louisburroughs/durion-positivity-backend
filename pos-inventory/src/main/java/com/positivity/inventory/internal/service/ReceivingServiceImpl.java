@@ -125,99 +125,125 @@ public class ReceivingServiceImpl implements ReceivingService {
         for (ReceiveLineRequest lineReq : request.getLines()) {
             ReceivingLine line = lineMap.get(lineReq.getLineId());
             if (line == null) {
+                // A line this session does not have: the request names it, we do not invent it.
                 continue;
             }
-
-            // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
-            // expected-vs-received comparison and the ledger posting; keyed values are kept
-            // on the line for audit.
-            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
-                    .convertIfPresent(
-                            parseProductId(line.getProductId()),
-                            line.getProductId(),
-                            lineReq.getDocumentUom(),
-                            lineReq.getDocumentQuantity())
-                    .orElse(null);
-            BigDecimal receivedQty = conversion != null ? conversion.baseQuantity() : lineReq.getReceivedQuantity();
-            if (receivedQty == null) {
-                throw new IllegalArgumentException(
-                        "receivedQuantity is required when documentUom/documentQuantity are absent");
-            }
-            BigDecimal expectedQty = line.getExpectedQuantity();
-
-            // odoo-parity E1 (#1038): LOT-tracked products require a lotNumber (422
-            // LOT_NUMBER_REQUIRED) and find-or-create the lot; untracked products pass
-            // through with a null lot, byte-identical to pre-E1 behavior. odoo-parity E3
-            // (#1047): an optional line expirationDate is stamped on first lot creation.
-            UUID lotId = lotCaptureService.resolveReceiptLot(
-                    line.getProductId(),
-                    lineReq.getLotNumber(),
-                    parseSupplierVendorId(session.getSupplierId()),
-                    lineReq.getExpirationDate());
-
-            line.setReceivedQuantity(receivedQty);
-            line.setLotNumber(lineReq.getLotNumber());
-            line.setDocumentUom(conversion == null ? null : conversion.documentUom());
-            line.setDocumentQuantity(conversion == null ? null : conversion.documentQuantity());
-            line.setConversionFactor(conversion == null ? null : conversion.conversionFactor());
-            int cmp = receivedQty.compareTo(expectedQty);
-            if (cmp == 0) {
-                line.setStatus(ReceivingLineStatus.RECEIVED);
-            } else if (cmp < 0) {
-                line.setStatus(ReceivingLineStatus.RECEIVED_SHORT);
-            } else {
-                line.setStatus(ReceivingLineStatus.RECEIVED_OVER);
-            }
-
-            createGoodsReceiptLedgerEntry(
-                    sessionId,
-                    line.getLineId(),
-                    line.getProductId(),
-                    receivedQty,
-                    lotId,
-                    lineReq.getSerialNumbers(),
-                    actorUserId);
-
-            if (cmp != 0) {
-                InventoryVarianceType varianceType =
-                        cmp < 0 ? InventoryVarianceType.SHORTAGE : InventoryVarianceType.OVERAGE;
-                BigDecimal varianceQty = expectedQty.subtract(receivedQty).abs();
-
-                InventoryVariance variance = InventoryVariance.builder()
-                        .session(session)
-                        .line(line)
-                        .productId(line.getProductId())
-                        .varianceType(varianceType)
-                        .varianceQuantity(varianceQty)
-                        .expectedQuantity(expectedQty)
-                        .receivedQuantity(receivedQty)
-                        .recordedByUserId(actorUserId)
-                        .build();
-
-                variances.add(inventoryVarianceRepository.save(variance));
-            }
-
+            receiveLine(session, line, lineReq, sessionId, actorUserId, variances);
             linesProcessed++;
         }
 
-        boolean allReceived = session.getLines().stream()
-                .allMatch(line -> line.getStatus() == ReceivingLineStatus.RECEIVED
-                        || line.getStatus() == ReceivingLineStatus.RECEIVED_SHORT
-                        || line.getStatus() == ReceivingLineStatus.RECEIVED_OVER
-                        || line.getStatus() == ReceivingLineStatus.CANCELLED);
-
-        if (allReceived) {
-            session.setStatus(ReceivingSessionStatus.COMPLETED);
-        } else {
-            session.setStatus(ReceivingSessionStatus.IN_PROGRESS);
-        }
-
+        session.setStatus(
+                allLinesSettled(session) ? ReceivingSessionStatus.COMPLETED : ReceivingSessionStatus.IN_PROGRESS);
         if (receivingSessionRepository != null) {
             receivingSessionRepository.save(session);
         }
 
         log.info("Processed {} lines for session {}, {} variances", linesProcessed, sessionId, variances.size());
         return buildReceiveItemsResponse(session, linesProcessed, variances);
+    }
+
+    /** Receives one line into staging: quantity, lot, status, ledger entry, and any variance. */
+    private void receiveLine(
+            @NonNull ReceivingSession session,
+            @NonNull ReceivingLine line,
+            @NonNull ReceiveLineRequest lineReq,
+            @NonNull UUID sessionId,
+            @NonNull String actorUserId,
+            @NonNull List<InventoryVariance> variances) {
+        // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
+        // expected-vs-received comparison and the ledger posting; keyed values are kept
+        // on the line for audit.
+        DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                .convertIfPresent(
+                        parseProductId(line.getProductId()),
+                        line.getProductId(),
+                        lineReq.getDocumentUom(),
+                        lineReq.getDocumentQuantity())
+                .orElse(null);
+        BigDecimal receivedQty = conversion != null ? conversion.baseQuantity() : lineReq.getReceivedQuantity();
+        if (receivedQty == null) {
+            throw new IllegalArgumentException(
+                    "receivedQuantity is required when documentUom/documentQuantity are absent");
+        }
+        BigDecimal expectedQty = line.getExpectedQuantity();
+
+        // odoo-parity E1 (#1038): LOT-tracked products require a lotNumber (422
+        // LOT_NUMBER_REQUIRED) and find-or-create the lot; untracked products pass
+        // through with a null lot, byte-identical to pre-E1 behavior. odoo-parity E3
+        // (#1047): an optional line expirationDate is stamped on first lot creation.
+        UUID lotId = lotCaptureService.resolveReceiptLot(
+                line.getProductId(),
+                lineReq.getLotNumber(),
+                parseSupplierVendorId(session.getSupplierId()),
+                lineReq.getExpirationDate());
+
+        line.setReceivedQuantity(receivedQty);
+        line.setLotNumber(lineReq.getLotNumber());
+        line.setDocumentUom(conversion == null ? null : conversion.documentUom());
+        line.setDocumentQuantity(conversion == null ? null : conversion.documentQuantity());
+        line.setConversionFactor(conversion == null ? null : conversion.conversionFactor());
+
+        int cmp = receivedQty.compareTo(expectedQty);
+        line.setStatus(statusFor(cmp));
+
+        createGoodsReceiptLedgerEntry(
+                sessionId,
+                line.getLineId(),
+                line.getProductId(),
+                receivedQty,
+                lotId,
+                lineReq.getSerialNumbers(),
+                actorUserId);
+
+        if (cmp != 0) {
+            variances.add(recordVariance(session, line, expectedQty, receivedQty, cmp, actorUserId));
+        }
+    }
+
+    /** Received exactly what was expected, less, or more. */
+    @NonNull
+    private static ReceivingLineStatus statusFor(int expectedVsReceived) {
+        if (expectedVsReceived == 0) {
+            return ReceivingLineStatus.RECEIVED;
+        }
+        return expectedVsReceived < 0 ? ReceivingLineStatus.RECEIVED_SHORT : ReceivingLineStatus.RECEIVED_OVER;
+    }
+
+    /** Records the shortage or overage a non-matching receipt produced. */
+    @NonNull
+    private InventoryVariance recordVariance(
+            @NonNull ReceivingSession session,
+            @NonNull ReceivingLine line,
+            @NonNull BigDecimal expectedQty,
+            @NonNull BigDecimal receivedQty,
+            int expectedVsReceived,
+            @NonNull String actorUserId) {
+        InventoryVarianceType varianceType =
+                expectedVsReceived < 0 ? InventoryVarianceType.SHORTAGE : InventoryVarianceType.OVERAGE;
+        return inventoryVarianceRepository.save(InventoryVariance.builder()
+                .session(session)
+                .line(line)
+                .productId(line.getProductId())
+                .varianceType(varianceType)
+                .varianceQuantity(expectedQty.subtract(receivedQty).abs())
+                .expectedQuantity(expectedQty)
+                .receivedQuantity(receivedQty)
+                .recordedByUserId(actorUserId)
+                .build());
+    }
+
+    /**
+     * Whether every line has reached a terminal state.
+     *
+     * <p>CANCELLED counts as settled: a cancelled line is never going to be received, so waiting
+     * on it would leave the session IN_PROGRESS forever.
+     */
+    private static boolean allLinesSettled(@NonNull ReceivingSession session) {
+        return session.getLines().stream()
+                .allMatch(line -> line.getStatus() == ReceivingLineStatus.RECEIVED
+                        || line.getStatus() == ReceivingLineStatus.RECEIVED_SHORT
+                        || line.getStatus() == ReceivingLineStatus.RECEIVED_OVER
+                        || line.getStatus() == ReceivingLineStatus.CANCELLED);
     }
 
     @Override
