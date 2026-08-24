@@ -1,7 +1,8 @@
 # SonarQube Remediation Plan
 
-Status: Phases 1, 2, 3.1, 3.2, 3.3 and 3.4 implemented. Phases 3.5 (`S1192`,
-148 findings) and 3.6 (`S3776`, 62 findings) not started.
+Status: Phases 1, 2, 3.1–3.5 implemented. Phase 3.6 (`S3776`, 62 findings)
+in progress: **15 of 62 addressed** across three PRs (#1498, #1500, and a
+third open at the time of writing).
 The `new_reliability_rating` fix is in, so the next analysis should return the
 quality gate to green — confirm against §7 before treating §1's table as stale.
 Date: 2026-08-24
@@ -450,6 +451,44 @@ Sonar's threshold is 15. The distribution is long-tailed: **23 methods score
 By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 `pos-supplier` 6, `pos-warranty` 5, then a tail of 12 modules with 1–3 each.
 
+#### Progress: 15 of 62 addressed
+
+| # | PR | Method split | Class branch coverage |
+| -: | -- | ------------ | --------------------- |
+| 1–5 | #1498 | `EligibilityEvaluationServiceImpl.evaluateSingleRule` (57), `InventoryFactPublisher.publishPending` (52), `PredicateParser` (37), `EligibilityServiceImpl` (34), `AvalaraTaxProvider.mapResponse` (34) | five modules ratcheted |
+| 6–10 | #1500 | `SupplierYamlBootstrap.validateBindings` (31), `ClaimServiceImpl.applyLineDecisions` (30), `ReplenishmentServiceImpl` (27), `ReceivingServiceImpl` (26), `EdiwheelC12MktCatCodec.decodeImageRefs` (25) | `pos-warranty` ratcheted |
+| 11 | part 3 | `CrmSignalService.assess` (25) | 89.3% (already covered) |
+| 12 | part 3 | `AsnServiceImpl.createGoodsReceipt` (25) | coverage-neutral |
+| 13 | part 3 | `SegmentResolutionService.loadCommercialCandidates` (24) | 49.0% → 97.4% |
+| 14 | part 3 | `PostingRuleEvaluatorImpl` — four findings in one class (22, 21, 19, 18) | 75.0% → 89.8% |
+| 15 | part 3 | `ReturnOrderServiceImpl.createReturn` (22) | 61.3% → 87.4% |
+
+**The recurring finding.** In almost every target, the complexity finding names
+a method but the *untested* branches are in the helper or lambda it delegates
+to — and that is where the business rules live. `SegmentResolutionService`'s
+mapper was 0 of 26 branches; `PostingRuleEvaluatorImpl`'s untested arms were
+its unbalanced-journal rejection and every split-group invariant;
+`ReturnOrderServiceImpl.returnableLines` had no coverage at all. Measuring
+before refactoring is what surfaced these; the refactor itself was the cheaper
+half of each target.
+
+**Method used for each target**, unchanged since #1498: measure branch
+coverage → write characterisation tests against the *unrefactored* method,
+aimed at the uncovered branches → refactor → confirm the same tests still pass
+→ close the gaps the split makes visible → ratchet the module floor with
+`scripts/coverage_floors.py`.
+
+Unreachable guards are documented rather than covered with fixtures that
+misrepresent what the code can receive — see `SegmentResolutionService`'s
+`personReplicasByPersonId` (`person_id` is `NOT NULL`), `serviceDue`'s
+null-months `continue`, and `PostingRuleEvaluatorImpl`'s balance check on the
+default-mapping path (balanced by construction).
+
+Next by complexity: `TestModeTaxCalculator` (22, `pos-tax`),
+`OpenApiModuleValidator` (22, `pos-openapi-validation`),
+`EdiwheelC11OrderStatusCodec` (21, `pos-supplier`), `PersonDirectoryService`
+(20, `pos-people-contact`).
+
 This is the only bucket that changes real control flow, so it is scheduled
 **last** and gated on coverage:
 
@@ -482,8 +521,8 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | done: 9 fixed, 25 no-action |
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
-| 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |
+| 3.5 | `S1192` literals | 148 | 21.0 h | none | done |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 15 of 62 |
 | | **Total** | **267** | **≈38 h** | | |
 
 - Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in
