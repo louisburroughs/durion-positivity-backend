@@ -47,11 +47,6 @@ public class ContactSummary {
     @Nullable
     private ContactPreferences preferences;
 
-    public ContactSummary() {
-        // Required by Jackson: the class is deserialized from the CRM snapshot payload, and
-        // its other constructor takes arguments Jackson cannot supply.
-    }
-
     @Nullable
     public String getContactId() {
         return contactId;
@@ -227,11 +222,6 @@ public class ContactSummary {
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String preferredLanguage;
-
-        public ContactPreferences() {
-            // Required by Jackson: the class is deserialized from the CRM snapshot payload, and
-            // its other constructor takes arguments Jackson cannot supply.
-        }
 
         public boolean isEmailOptIn() {
             return emailOptIn;

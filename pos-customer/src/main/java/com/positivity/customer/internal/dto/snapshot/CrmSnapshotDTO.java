@@ -89,11 +89,6 @@ public class CrmSnapshotDTO {
         @Nullable
         private Integer year;
 
-        public VehicleSummary() {
-            // Required by Jackson: the class is deserialized from the CRM snapshot payload, and
-            // its other constructor takes arguments Jackson cannot supply.
-        }
-
         @Nullable
         public String getVehicleId() {
             return vehicleId;
@@ -172,11 +167,6 @@ public class CrmSnapshotDTO {
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         private String invoiceDeliveryMethod;
-
-        public BillingPreferences() {
-            // Required by Jackson: the class is deserialized from the CRM snapshot payload, and
-            // its other constructor takes arguments Jackson cannot supply.
-        }
 
         public boolean isMarketingOptOut() {
             return marketingOptOut;

@@ -358,11 +358,20 @@ the schema generated from the entities — the module's documented default footi
 baseline uses Postgres-only SQL (`SPLIT_PART`) that H2 cannot execute. `FlywayMigrationIT` covers
 the migrations themselves against real Postgres.
 
-**3. Jackson-required no-arg constructors (6 sites).**
+**3. Redundant explicit no-arg constructors (6 sites) — deleted, not documented.**
 `pos-customer/…/dto/snapshot/{BillingRuleRef,ContactSummary,CrmSnapshotDTO}.java` and
-`pos-workorder/…/dto/BillingRulesDTO.java`. Each is genuinely needed — the classes are deserialized
-from the CRM snapshot payload and their other constructors take arguments Jackson cannot supply.
-Intent stated in each body, which is what `S1186` asks for.
+`pos-workorder/…/dto/BillingRulesDTO.java`.
+
+The first attempt documented these as Jackson-required. That was wrong on every
+count, and review caught it: none of the six classes declares any other
+constructor, and none carries a Jackson annotation. A `public Foo() {}` in a
+class with no other constructors is exactly the constructor Java generates
+implicitly, with the same access modifier — so these were not
+undocumented-but-necessary, they were redundant.
+
+Deleted. That removes the finding at its root rather than annotating it, and is
+behaviour-neutral: the implicit default constructor is identical, so reflective
+construction and `new Foo()` are unaffected.
 
 **4. Test fixture stubs (5 sites).**
 `pos-security-common/…/RequiredPermissionsOpenApiAutoConfigurationTest.java:21,24,27,30,32` —
@@ -458,7 +467,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 2 | BLOCKER `S2699` | 1 | 0.2 h | none | done |
 | 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | done: 9 fixed, 25 no-action |
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | not started |
-| 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 2 deleted, 2 fixed, 11 documented |
+| 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
 | 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |
 | | **Total** | **267** | **≈38 h** | | |
