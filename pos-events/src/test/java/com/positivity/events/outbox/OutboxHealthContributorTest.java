@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.events.outbox.OutboxHealthContributor.DrainHead;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.lang.ref.Reference;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +32,23 @@ class OutboxHealthContributorTest {
                 "test.outbox", CLOCK, LAG_THRESHOLD, registry, () -> pending.get(), head::get);
     }
 
+    /**
+     * The contributor has to stay reachable for as long as the gauges are read.
+     *
+     * <p>{@code Gauge.builder(name, this, fn)} holds its measured object <em>weakly</em>, so a
+     * gauge whose contributor has been collected reports {@code NaN} rather than a value. This
+     * test used to discard the contributor as soon as it was constructed, which left the
+     * assertions racing the garbage collector: it passed almost always, and failed as
+     * {@code expected: 7.0 but was: NaN} whenever a collection happened to land in the window.
+     *
+     * <p>The explicit {@link System#gc()} turns that race into a certainty, so the lifetime
+     * contract is exercised on every run instead of once in a few hundred, and
+     * {@link Reference#reachabilityFence} is what actually holds the contributor across the reads.
+     * Removing the fence makes this test fail deterministically — which is the point.
+     *
+     * <p>Production never depended on the accident: the contributor is a Spring bean and the
+     * container holds it.
+     */
     @Test
     @DisplayName("Gauges report pending count and oldest unpublished age (0 when drained)")
     void gaugesReportBacklogAndHeadAge() {
@@ -38,7 +56,8 @@ class OutboxHealthContributorTest {
         pending.set(7L);
         head.set(Optional.of(new DrainHead(NOW.minusSeconds(300), 2)));
 
-        contributor(registry);
+        OutboxHealthContributor contributor = contributor(registry);
+        System.gc();
 
         assertThat(registry.get("test.outbox.pending").gauge().value()).isEqualTo(7.0);
         assertThat(registry.get("test.outbox.oldest.age.seconds").gauge().value())
@@ -47,6 +66,8 @@ class OutboxHealthContributorTest {
         head.set(Optional.empty());
         assertThat(registry.get("test.outbox.oldest.age.seconds").gauge().value())
                 .isZero();
+
+        Reference.reachabilityFence(contributor);
     }
 
     @Test
