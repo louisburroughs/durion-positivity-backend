@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -588,5 +589,98 @@ class EligibilityServiceImplTest {
         assertThatThrownBy(() -> service.evaluate(CLAIM_ID))
                 .isInstanceOf(WarrantyNotFoundException.class)
                 .hasMessageContaining(CLAIM_ID.toString());
+    }
+
+    // ── Registration-matching coverage (Phase 3.6) ─────────────────────────────────
+    //
+    // findActiveRegistration filters on three rules, and JaCoCo had its vehicle-scope
+    // predicate at 16.7% branch: essentially untested. That filter decides whether a
+    // registration taken out for one vehicle can cover a claim on another. Getting it wrong
+    // grants warranty coverage to a vehicle nobody registered, which is the expensive
+    // direction. The expiry boundary was equally unpinned.
+
+    @Test
+    @DisplayName("A registration for a different vehicle does not cover this claim")
+    void registrationForAnotherVehicleDoesNotMatch() {
+        WarrantyClaim claim = claim(ClaimType.ROAD_HAZARD);
+        claim.setVehicleId(UUID.fromString("018f0000-0000-7000-8000-000000000091"));
+        WarrantyPolicy policy = manufacturerTreadPolicy();
+        policy.setCoverageType(CoverageType.ROAD_HAZARD);
+        WarrantyRegistration otherVehicle = registration(policy.getId(), null);
+        otherVehicle.setVehicleId(UUID.fromString("018f0000-0000-7000-8000-000000000099"));
+        stubRegistrationScenario(claim, policy, otherVehicle);
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.INELIGIBLE);
+        assertThat(claim.getRegistrationId()).isNull();
+    }
+
+    @Test
+    @DisplayName("A registration with no vehicle scope covers any vehicle on the policy")
+    void policyLevelRegistrationCoversAnyVehicle() {
+        WarrantyClaim claim = claim(ClaimType.ROAD_HAZARD);
+        claim.setVehicleId(UUID.fromString("018f0000-0000-7000-8000-000000000098"));
+        WarrantyPolicy policy = manufacturerTreadPolicy();
+        policy.setCoverageType(CoverageType.ROAD_HAZARD);
+        // vehicleId left null: a policy-level registration is deliberately not vehicle-bound.
+        WarrantyRegistration policyLevel = registration(policy.getId(), null);
+        stubRegistrationScenario(claim, policy, policyLevel);
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.ELIGIBLE);
+        assertThat(claim.getRegistrationId()).isEqualTo(policyLevel.getId());
+    }
+
+    @Test
+    @DisplayName("A registration that expired before the failure date does not cover the claim")
+    void expiredRegistrationDoesNotMatch() {
+        WarrantyClaim claim = claim(ClaimType.ROAD_HAZARD);
+        WarrantyPolicy policy = manufacturerTreadPolicy();
+        policy.setCoverageType(CoverageType.ROAD_HAZARD);
+        WarrantyRegistration expired = registration(policy.getId(), FAILURE_DATE.minusDays(1));
+        stubRegistrationScenario(claim, policy, expired);
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.INELIGIBLE);
+        assertThat(claim.getRegistrationId()).isNull();
+    }
+
+    @Test
+    @DisplayName("A registration expiring on the failure date still covers it")
+    void registrationExpiringOnTheFailureDateStillMatches() {
+        WarrantyClaim claim = claim(ClaimType.ROAD_HAZARD);
+        WarrantyPolicy policy = manufacturerTreadPolicy();
+        policy.setCoverageType(CoverageType.ROAD_HAZARD);
+        // Boundary: the filter is `!expiresAt.isBefore(referenceDate)`, so cover ends at the
+        // close of the expiry date rather than the start of it.
+        WarrantyRegistration expiringToday = registration(policy.getId(), FAILURE_DATE);
+        stubRegistrationScenario(claim, policy, expiringToday);
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.ELIGIBLE);
+        assertThat(claim.getRegistrationId()).isEqualTo(expiringToday.getId());
+    }
+
+    private WarrantyRegistration registration(UUID policyId, LocalDate expiresAt) {
+        return WarrantyRegistration.builder()
+                .id(UUID.fromString("018f0000-0000-7000-8000-000000000021"))
+                .policyId(policyId)
+                .customerId(CUSTOMER_ID)
+                .purchaseDate(SALE_DATE)
+                .expiresAt(expiresAt)
+                .status(RegistrationStatus.ACTIVE)
+                .build();
+    }
+
+    private void stubRegistrationScenario(WarrantyClaim claim, WarrantyPolicy policy, WarrantyRegistration reg) {
+        stubClaim(claim);
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
+        when(registrationRepository.findByCustomerIdAndStatus(CUSTOMER_ID, RegistrationStatus.ACTIVE))
+                .thenReturn(List.of(reg));
     }
 }
