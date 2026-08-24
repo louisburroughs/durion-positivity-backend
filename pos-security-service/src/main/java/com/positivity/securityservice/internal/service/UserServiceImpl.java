@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+    private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
+
     private final UserRepository userRepository;
 
     private final com.positivity.securityservice.internal.service.PeopleContactCommandEmitter
@@ -42,7 +44,7 @@ public class UserServiceImpl implements UserService {
         for (String roleName : roleNames) {
             Role role = roleRepository
                     .findByName(roleName)
-                    .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
+                    .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + roleName));
             roles.add(role);
         }
         User user = new User();
@@ -91,7 +93,7 @@ public class UserServiceImpl implements UserService {
         for (String roleName : roleNames) {
             Role role = roleRepository
                     .findByName(roleName)
-                    .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
+                    .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + roleName));
             roles.add(role);
         }
         user.setRoles(roles);
@@ -115,7 +117,7 @@ public class UserServiceImpl implements UserService {
             for (String roleName : request.getRoles()) {
                 Role role = roleRepository
                         .findByName(roleName)
-                        .orElseThrow(() -> new IllegalArgumentException("Role not found: " + roleName));
+                        .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + roleName));
                 roles.add(role);
             }
             existingUser.setRoles(roles);

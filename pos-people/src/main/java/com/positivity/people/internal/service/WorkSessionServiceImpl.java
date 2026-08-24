@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class WorkSessionServiceImpl implements WorkSessionService {
+    private static final String SESSION_ID_REQUIRED = "sessionId must not be null";
 
     private final Clock clock;
 
@@ -115,7 +116,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     @Override
     public BreakDto startBreak(@NonNull UUID sessionId) {
-        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(sessionId, SESSION_ID_REQUIRED);
         String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSession session = workSessionRepository
@@ -146,7 +147,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     @Override
     public BreakDto stopBreak(@NonNull UUID sessionId) {
-        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(sessionId, SESSION_ID_REQUIRED);
         String resolvedActor = resolveActorFromSecurityContext();
 
         WorkSessionBreak activeBreak = workSessionBreakRepository
@@ -161,7 +162,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     @Override
     public WorkSessionDto submitSession(@NonNull UUID sessionId, @NonNull WorkSessionSubmitRequest request) {
-        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(sessionId, SESSION_ID_REQUIRED);
         Objects.requireNonNull(request, "request must not be null");
         String resolvedActor = resolveActorFromSecurityContext();
 

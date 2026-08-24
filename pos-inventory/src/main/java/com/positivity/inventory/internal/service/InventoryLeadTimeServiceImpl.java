@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
+    private static final String BUSINESS_DAYS_SUFFIX = " business days";
+
     private final Clock clock;
 
     private final DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository;
@@ -116,12 +118,12 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
         }
         if (minDays != null && maxDays != null) {
             if (minDays.equals(maxDays)) {
-                return minDays + " business days";
+                return minDays + BUSINESS_DAYS_SUFFIX;
             }
-            return minDays + "-" + maxDays + " business days";
+            return minDays + "-" + maxDays + BUSINESS_DAYS_SUFFIX;
         }
         Integer value = minDays != null ? minDays : maxDays;
-        return value + " business days";
+        return value + BUSINESS_DAYS_SUFFIX;
     }
 
     private record LeadTimeCandidate(

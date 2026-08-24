@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class OrderCancellationServiceImpl implements OrderCancellationService {
+    private static final String SYSTEM_ACTOR = "system";
 
     private static final String STATUS_CANCELLED = "CANCELLED";
 
@@ -74,7 +75,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         String idempotencyKey = command.idempotencyKey() != null
                 ? command.idempotencyKey()
                 : UUIDv7Generator.generate().toString();
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
 
         orderStateMachine.transition(order, SalesOrderStatus.CANCEL_REQUESTED, command.cancellationReason());
         order.setCancellationReason(command.cancellationReason());
@@ -119,7 +120,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
     public @NonNull CancellationResult retryCancellation(@NonNull UUID orderId, @NonNull String idempotencyKey) {
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
 
         if (order.getStatus() != SalesOrderStatus.CANCEL_FAILED_BILLING) {
             throw new IllegalStateException(
@@ -205,7 +206,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
 
     private void failTransition(SalesOrder order, SalesOrderStatus failureStatus, String reason) {
         orderStateMachine.transition(order, failureStatus, reason);
-        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
         salesOrderRepository.save(order);
     }
 

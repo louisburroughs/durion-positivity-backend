@@ -42,6 +42,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class GLAccountServiceImpl implements GLAccountService {
+    private static final String UPDATED_AT = "updatedAt";
+
+    private static final String ACCOUNT_CODE = "accountCode";
+
     private final Clock clock;
 
     private static final String GL_ACCOUNT_NOT_FOUND = "GL account not found: ";
@@ -53,16 +57,26 @@ public class GLAccountServiceImpl implements GLAccountService {
      * (see GLAccountResponse) while the entity property is {@code updatedAt}.
      */
     private static final Map<String, String> SORTABLE_PROPERTIES = Map.of(
-            "accountCode", "accountCode",
-            "accountName", "accountName",
-            "accountType", "accountType",
-            "description", "description",
-            "activationDate", "activationDate",
-            "deactivationDate", "deactivationDate",
-            "createdAt", "createdAt",
-            "modifiedAt", "updatedAt",
-            "updatedAt", "updatedAt",
-            "glAccountId", "glAccountId");
+            ACCOUNT_CODE,
+            ACCOUNT_CODE,
+            "accountName",
+            "accountName",
+            "accountType",
+            "accountType",
+            "description",
+            "description",
+            "activationDate",
+            "activationDate",
+            "deactivationDate",
+            "deactivationDate",
+            "createdAt",
+            "createdAt",
+            "modifiedAt",
+            UPDATED_AT,
+            UPDATED_AT,
+            UPDATED_AT,
+            "glAccountId",
+            "glAccountId");
 
     private static final Logger log = LoggerFactory.getLogger(GLAccountServiceImpl.class);
 
@@ -346,7 +360,7 @@ public class GLAccountServiceImpl implements GLAccountService {
         // Build pageable with sorting; ascending default preserves the previous
         // Sort.by(property) behavior.
         Sort sortOrder =
-                SortParamParser.parse(sort != null ? sort : "accountCode", SORTABLE_PROPERTIES, Sort.Direction.ASC);
+                SortParamParser.parse(sort != null ? sort : ACCOUNT_CODE, SORTABLE_PROPERTIES, Sort.Direction.ASC);
         Pageable pageable = PageRequest.of(page, size, sortOrder);
 
         // Fetch all accounts (filtering by status requires derived field)

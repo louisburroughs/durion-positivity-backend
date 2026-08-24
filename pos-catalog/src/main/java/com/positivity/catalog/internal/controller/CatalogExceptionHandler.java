@@ -27,6 +27,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice(basePackages = "com.positivity.catalog.internal.controller")
 @RequiredArgsConstructor
 public class CatalogExceptionHandler {
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
@@ -51,7 +52,7 @@ public class CatalogExceptionHandler {
                 .findFirst()
                 .map(fieldError -> fieldError.getField() + " " + fieldError.getDefaultMessage())
                 .orElse("Validation failed");
-        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, correlationId);
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, message, correlationId);
     }
 
     /**
@@ -66,7 +67,7 @@ public class CatalogExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
-                "VALIDATION_ERROR",
+                VALIDATION_ERROR,
                 "Required parameter '" + ex.getParameterName() + "' is missing",
                 correlationId);
     }
@@ -79,7 +80,7 @@ public class CatalogExceptionHandler {
         // needs to see what the server read, and it is their own input.
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
-                "VALIDATION_ERROR",
+                VALIDATION_ERROR,
                 "Parameter '" + ex.getName() + "' has an invalid value: " + ex.getValue(),
                 correlationId);
     }
@@ -98,7 +99,7 @@ public class CatalogExceptionHandler {
                 .findFirst()
                 .map(violation -> lastNode(violation) + " " + violation.getMessage())
                 .orElse("Validation failed");
-        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, correlationId);
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, message, correlationId);
     }
 
     private static String lastNode(ConstraintViolation<?> violation) {
@@ -110,7 +111,7 @@ public class CatalogExceptionHandler {
     @ExceptionHandler(CatalogValidationException.class)
     public ResponseEntity<ApiError> handleBadRequest(CatalogValidationException ex, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
-        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), correlationId);
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(CatalogBusinessRuleException.class)

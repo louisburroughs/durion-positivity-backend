@@ -54,6 +54,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Journal Entries", description = "Manage journal entries including posting and reversal.")
 @Validated
 public class JournalEntryController {
+    private static final String UPDATED_AT = "updatedAt";
 
     private static final Logger log = LoggerFactory.getLogger(JournalEntryController.class);
 
@@ -62,16 +63,26 @@ public class JournalEntryController {
      * (see JournalEntryResponse) while the entity property is {@code updatedAt}.
      */
     private static final Map<String, String> SORTABLE_PROPERTIES = Map.of(
-            "createdAt", "createdAt",
-            "modifiedAt", "updatedAt",
-            "updatedAt", "updatedAt",
-            "transactionDate", "transactionDate",
-            "postedAt", "postedAt",
-            "status", "status",
-            "entryType", "entryType",
-            "description", "description",
-            "createdBy", "createdBy",
-            "journalEntryId", "journalEntryId");
+            "createdAt",
+            "createdAt",
+            "modifiedAt",
+            UPDATED_AT,
+            UPDATED_AT,
+            UPDATED_AT,
+            "transactionDate",
+            "transactionDate",
+            "postedAt",
+            "postedAt",
+            "status",
+            "status",
+            "entryType",
+            "entryType",
+            "description",
+            "description",
+            "createdBy",
+            "createdBy",
+            "journalEntryId",
+            "journalEntryId");
 
     private final JournalEntryService journalEntryService;
 

@@ -41,6 +41,12 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
+    private static final String WARNING = "WARNING";
+
+    private static final String MECHANIC_PREFIX = "Mechanic ";
+
+    private static final String BLOCKING = "BLOCKING";
+
     private final Clock clock;
 
     private final WorkorderRepository workorderRepository;
@@ -206,7 +212,7 @@ public class DashboardServiceImpl implements DashboardService {
             if (entry.getValue().size() > 1) {
                 conflicts.add(ConflictEntry.builder()
                         .conflictType("BAY_DOUBLE_BOOKED")
-                        .severity("BLOCKING")
+                        .severity(BLOCKING)
                         .message("Bay " + entry.getKey() + " is assigned to multiple workorders")
                         .affectedResourceId(entry.getKey().toString())
                         .build());
@@ -222,8 +228,8 @@ public class DashboardServiceImpl implements DashboardService {
             if (entry.getValue() > 1) {
                 conflicts.add(ConflictEntry.builder()
                         .conflictType("DOUBLE_BOOKED_MECHANIC")
-                        .severity("BLOCKING")
-                        .message("Mechanic " + entry.getKey() + " is assigned to multiple workorders")
+                        .severity(BLOCKING)
+                        .message(MECHANIC_PREFIX + entry.getKey() + " is assigned to multiple workorders")
                         .affectedResourceId(entry.getKey())
                         .build());
             }
@@ -258,8 +264,9 @@ public class DashboardServiceImpl implements DashboardService {
             if ("ON_JOB".equals(personAvailability.getCurrentStatus())) {
                 conflicts.add(ConflictEntry.builder()
                         .conflictType("CLOCK_OUT_MISMATCH")
-                        .severity("WARNING")
-                        .message("Mechanic " + mechanicId + " is clocked in for another job and has not clocked out")
+                        .severity(WARNING)
+                        .message(
+                                MECHANIC_PREFIX + mechanicId + " is clocked in for another job and has not clocked out")
                         .affectedResourceId(personAvailability.getPersonId())
                         .build());
             }
@@ -272,8 +279,8 @@ public class DashboardServiceImpl implements DashboardService {
                             && pto.getEnd().isAfter(dayStart)) {
                         conflicts.add(ConflictEntry.builder()
                                 .conflictType("MECHANIC_PTO_OVERLAP")
-                                .severity("BLOCKING")
-                                .message("Mechanic " + mechanicId + " has PTO on this date")
+                                .severity(BLOCKING)
+                                .message(MECHANIC_PREFIX + mechanicId + " has PTO on this date")
                                 .affectedResourceId(mechanicId)
                                 .build());
                         break;
@@ -293,7 +300,7 @@ public class DashboardServiceImpl implements DashboardService {
                     && breakInfo.getExpectedReturn().isBefore(fifteenMinFromNow)) {
                 conflicts.add(ConflictEntry.builder()
                         .conflictType("MECHANIC_BREAK_OVERLAP")
-                        .severity("WARNING")
+                        .severity(WARNING)
                         .message("Job overlaps with expected break time for mechanic " + mechanicId)
                         .affectedResourceId(mechanicId)
                         .build());
@@ -321,8 +328,8 @@ public class DashboardServiceImpl implements DashboardService {
                 if (!workorderLocationStr.equals(pa.getCurrentLocationId())) {
                     conflicts.add(ConflictEntry.builder()
                             .conflictType("LOCATION_MISMATCH")
-                            .severity("WARNING")
-                            .message("Mechanic " + mechanicId + " is at a different location than the workorder")
+                            .severity(WARNING)
+                            .message(MECHANIC_PREFIX + mechanicId + " is at a different location than the workorder")
                             .affectedResourceId(mechanicId)
                             .build());
                 }
@@ -352,8 +359,9 @@ public class DashboardServiceImpl implements DashboardService {
                     if (!mechanicCerts.contains(required)) {
                         conflicts.add(ConflictEntry.builder()
                                 .conflictType("MECHANIC_SKILL_MISMATCH")
-                                .severity("WARNING")
-                                .message("Mechanic " + mechanicId + " is missing required certification: " + required)
+                                .severity(WARNING)
+                                .message(MECHANIC_PREFIX + mechanicId + " is missing required certification: "
+                                        + required)
                                 .affectedResourceId(mechanicId)
                                 .build());
                         break;

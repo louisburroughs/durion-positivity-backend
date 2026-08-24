@@ -36,6 +36,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class ReplicaSourceDocumentAdapter implements SourceDocumentPort {
+    private static final String LABOR = "LABOR";
 
     private static final String APPROVED = "APPROVED";
 
@@ -80,7 +81,7 @@ public class ReplicaSourceDocumentAdapter implements SourceDocumentPort {
 
     private SourceDocumentLine toWorkorderLine(ExtWorkorderLine line) {
         String sku = line.getLineKind() == ExtWorkorderLine.LineKind.SERVICE
-                ? "LABOR"
+                ? LABOR
                 : resolveSku(line.getProductId(), line.getLineId());
         Quantities quantities = normalize(line.getQuantity(), line.getUnitPrice(), line.getLineTotal());
         return new SourceDocumentLine(
@@ -93,9 +94,8 @@ public class ReplicaSourceDocumentAdapter implements SourceDocumentPort {
     }
 
     private SourceDocumentLine toEstimateLine(ExtEstimateLine item) {
-        String sku = "LABOR".equalsIgnoreCase(item.getItemType())
-                ? "LABOR"
-                : resolveSku(item.getProductId(), item.getItemId());
+        String sku =
+                LABOR.equalsIgnoreCase(item.getItemType()) ? LABOR : resolveSku(item.getProductId(), item.getItemId());
         Quantities quantities = normalize(item.getQuantity(), item.getUnitPrice(), item.getLineTotal());
         // Estimate items are pre-work: returnability is decided at settlement (Q6), never here.
         return new SourceDocumentLine(

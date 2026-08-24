@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class GlobalApiExceptionHandler {
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
     private static final Logger log = LoggerFactory.getLogger(GlobalApiExceptionHandler.class);
 
@@ -182,7 +183,7 @@ public class GlobalApiExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiError.withFieldErrors(
-                        "VALIDATION_ERROR",
+                        VALIDATION_ERROR,
                         "Request validation failed",
                         HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
@@ -208,7 +209,7 @@ public class GlobalApiExceptionHandler {
                 "Unreadable request body on {} [correlationId={}]",
                 request != null ? request.getRequestURI() : "",
                 correlationId);
-        return envelope(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Malformed request body", correlationId);
+        return envelope(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, "Malformed request body", correlationId);
     }
 
     /**
@@ -232,7 +233,7 @@ public class GlobalApiExceptionHandler {
         // Same reasoning as handleMessageNotReadable: the exception message echoes the
         // user-supplied value, and a client 400 is DEBUG-level noise.
         log.debug("Parameter type mismatch on {} [correlationId={}]", path, correlationId);
-        return envelope(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid parameter value", correlationId);
+        return envelope(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, "Invalid parameter value", correlationId);
     }
 
     /**
@@ -332,7 +333,7 @@ public class GlobalApiExceptionHandler {
      */
     private static String frameworkErrorCode(HttpStatusCode status) {
         return switch (status.value()) {
-            case 400 -> "VALIDATION_ERROR";
+            case 400 -> VALIDATION_ERROR;
             case 401 -> "UNAUTHORIZED";
             case 403 -> "FORBIDDEN";
             case 404 -> "NOT_FOUND";

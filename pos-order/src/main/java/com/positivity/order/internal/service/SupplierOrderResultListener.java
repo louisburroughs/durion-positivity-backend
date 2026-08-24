@@ -57,6 +57,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class SupplierOrderResultListener {
+    private static final String PAYLOAD = "payload";
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "supplier";
@@ -119,7 +120,7 @@ public class SupplierOrderResultListener {
 
     private void applyConfirmed(JsonNode envelope) {
         SupplierOrderConfirmedV1 fact =
-                objectMapper.treeToValue(envelope.path("payload"), SupplierOrderConfirmedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), SupplierOrderConfirmedV1.class);
         PurchaseOrderEntity order = orderFor(fact.purchaseOrderId());
         if (order == null) {
             return;
@@ -154,8 +155,7 @@ public class SupplierOrderResultListener {
     }
 
     private void applyRejected(JsonNode envelope) {
-        SupplierOrderRejectedV1 fact =
-                objectMapper.treeToValue(envelope.path("payload"), SupplierOrderRejectedV1.class);
+        SupplierOrderRejectedV1 fact = objectMapper.treeToValue(envelope.path(PAYLOAD), SupplierOrderRejectedV1.class);
         PurchaseOrderEntity order = orderFor(fact.purchaseOrderId());
         if (order == null) {
             return;
@@ -197,7 +197,7 @@ public class SupplierOrderResultListener {
      */
     private void applyReviewRequired(JsonNode envelope) {
         SupplierOrderReviewRequiredV1 fact =
-                objectMapper.treeToValue(envelope.path("payload"), SupplierOrderReviewRequiredV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), SupplierOrderReviewRequiredV1.class);
         PurchaseOrderEntity order = orderFor(fact.purchaseOrderId());
         if (order == null) {
             return;
@@ -239,7 +239,7 @@ public class SupplierOrderResultListener {
 
     private void applyStatusChanged(JsonNode envelope) {
         SupplierOrderStatusChangedV1 fact =
-                objectMapper.treeToValue(envelope.path("payload"), SupplierOrderStatusChangedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), SupplierOrderStatusChangedV1.class);
         PurchaseOrderEntity order = orderFor(fact.purchaseOrderId());
         if (order == null) {
             return;

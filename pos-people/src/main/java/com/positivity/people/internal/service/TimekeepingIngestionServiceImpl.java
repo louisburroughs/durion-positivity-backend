@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionService {
+    private static final String SHOP_MANAGER_SOURCE = "shopmgr";
 
     private final Clock clock;
 
@@ -40,7 +41,7 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
         }
 
         boolean alreadyExists = timekeepingEntryRepository.existsByTenantIdAndSourceSystemAndSourceSessionId(
-                event.tenantId(), "shopmgr", event.sessionId());
+                event.tenantId(), SHOP_MANAGER_SOURCE, event.sessionId());
         if (alreadyExists) {
             log.debug(
                     "Duplicate work session ingestion ignored: tenantId={}, sessionId={}",
@@ -52,7 +53,7 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
         TimekeepingEntry entry = new TimekeepingEntry();
         entry.setTimekeepingEntryId(UUIDv7Generator.generate());
         entry.setTenantId(event.tenantId());
-        entry.setSourceSystem("shopmgr");
+        entry.setSourceSystem(SHOP_MANAGER_SOURCE);
         entry.setSourceSessionId(event.sessionId());
         entry.setEmployeeId(event.employeeId());
         entry.setSessionStartTime(event.startTime());
@@ -70,7 +71,7 @@ public class TimekeepingIngestionServiceImpl implements TimekeepingIngestionServ
         TimekeepingEntry correctionEntry = new TimekeepingEntry();
         correctionEntry.setTimekeepingEntryId(UUIDv7Generator.generate());
         correctionEntry.setTenantId(event.tenantId());
-        correctionEntry.setSourceSystem("shopmgr");
+        correctionEntry.setSourceSystem(SHOP_MANAGER_SOURCE);
         correctionEntry.setSourceSessionId(event.correctionId());
         correctionEntry.setOriginalSourceSessionId(event.originalSessionId());
         correctionEntry.setCorrectionId(event.correctionId());

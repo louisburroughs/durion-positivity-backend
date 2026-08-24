@@ -36,6 +36,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @RequiredArgsConstructor
 public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
+    private static final String APPLICATION_JSON = "application/json";
+
+    private static final String TREAD_DESIGN_VARIANTS_PATH = "/treadDesignVariants/";
 
     private final ObjectMapper objectMapper;
 
@@ -60,7 +63,7 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
     /** Lists every tread design variant the catalogue publishes. */
     @NonNull
     public SupplierRequestSpec buildVariantListRequest() {
-        return new SupplierRequestSpec("GET", "/treadDesignVariants/", Map.of(), null, null, "application/json", true);
+        return new SupplierRequestSpec("GET", TREAD_DESIGN_VARIANTS_PATH, Map.of(), null, null, APPLICATION_JSON, true);
     }
 
     /** Reads one variant's detail. */
@@ -68,11 +71,11 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
     public SupplierRequestSpec buildVariantDetailRequest(@NonNull String variantId) {
         return new SupplierRequestSpec(
                 "GET",
-                "/treadDesignVariants/" + encode(variantId) + "/",
+                TREAD_DESIGN_VARIANTS_PATH + encode(variantId) + "/",
                 Map.of(),
                 null,
                 null,
-                "application/json",
+                APPLICATION_JSON,
                 true);
     }
 
@@ -81,11 +84,11 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
     public SupplierRequestSpec buildVariantImagesRequest(@NonNull String variantId) {
         return new SupplierRequestSpec(
                 "GET",
-                "/treadDesignVariants/" + encode(variantId) + "/images",
+                TREAD_DESIGN_VARIANTS_PATH + encode(variantId) + "/images",
                 Map.of(),
                 null,
                 null,
-                "application/json",
+                APPLICATION_JSON,
                 true);
     }
 
@@ -94,11 +97,11 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
     public SupplierRequestSpec buildVariantLanguageDataRequest(@NonNull String variantId) {
         return new SupplierRequestSpec(
                 "GET",
-                "/treadDesignVariants/" + encode(variantId) + "/languageDependentData",
+                TREAD_DESIGN_VARIANTS_PATH + encode(variantId) + "/languageDependentData",
                 Map.of(),
                 null,
                 null,
-                "application/json",
+                APPLICATION_JSON,
                 true);
     }
 
@@ -115,7 +118,7 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
         query.put("callbackUrl", callbackUrl);
         query.put("event", event);
         return new SupplierRequestSpec(
-                "POST", "/treadDesignVariants/subscribe/", query, "{}", "application/json", "application/json", false);
+                "POST", "/treadDesignVariants/subscribe/", query, "{}", APPLICATION_JSON, APPLICATION_JSON, false);
     }
 
     /** Cancels a change subscription. */
@@ -125,13 +128,13 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
         query.put("callbackUrl", callbackUrl);
         query.put("event", event);
         return new SupplierRequestSpec(
-                "DELETE", "/treadDesignVariants/subscribe/", query, null, null, "application/json", true);
+                "DELETE", "/treadDesignVariants/subscribe/", query, null, null, APPLICATION_JSON, true);
     }
 
     /** Lists supplier master data. */
     @NonNull
     public SupplierRequestSpec buildSupplierListRequest() {
-        return new SupplierRequestSpec("GET", "/suppliers/", Map.of(), null, null, "application/json", true);
+        return new SupplierRequestSpec("GET", "/suppliers/", Map.of(), null, null, APPLICATION_JSON, true);
     }
 
     /**

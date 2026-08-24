@@ -35,6 +35,11 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class CustomerEventsListener {
+    private static final String PAYLOAD = "payload";
+
+    private static final String PARTY_ID = "partyId";
+
+    private static final String CREDIT_LIMIT = "creditLimit";
 
     static final String OWNER = "customer";
 
@@ -95,8 +100,8 @@ public class CustomerEventsListener {
     }
 
     private void applyUpdate(JsonNode envelope) {
-        JsonNode payload = envelope.path("payload");
-        UUID partyId = UUID.fromString(payload.path("partyId").stringValue(null));
+        JsonNode payload = envelope.path(PAYLOAD);
+        UUID partyId = UUID.fromString(payload.path(PARTY_ID).stringValue(null));
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtCustomer existing = extCustomerRepository.findById(partyId).orElse(null);
@@ -121,8 +126,8 @@ public class CustomerEventsListener {
 
     /** Story C4 (spec R4.5): AR billing terms gate the on-account tender at checkout. */
     private void applyBillingRules(JsonNode envelope) {
-        JsonNode payload = envelope.path("payload");
-        UUID partyId = UUID.fromString(payload.path("partyId").stringValue(null));
+        JsonNode payload = envelope.path(PAYLOAD);
+        UUID partyId = UUID.fromString(payload.path(PARTY_ID).stringValue(null));
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtBillingRules existing = extBillingRulesRepository.findById(partyId).orElse(null);
@@ -134,10 +139,10 @@ public class CustomerEventsListener {
         replica.setPartyId(partyId);
         replica.setPaymentTerms(payload.path("paymentTerms").stringValue(null));
         replica.setCreditLimit(
-                payload.path("creditLimit").isMissingNode()
-                                || payload.path("creditLimit").isNull()
+                payload.path(CREDIT_LIMIT).isMissingNode()
+                                || payload.path(CREDIT_LIMIT).isNull()
                         ? null
-                        : payload.path("creditLimit").decimalValue());
+                        : payload.path(CREDIT_LIMIT).decimalValue());
         replica.setCreditHold(
                 payload.path("creditHold").isNull()
                         ? null
@@ -152,7 +157,7 @@ public class CustomerEventsListener {
     }
 
     private void applyDelete(JsonNode envelope) {
-        UUID partyId = UUID.fromString(envelope.path("payload").path("partyId").stringValue(null));
+        UUID partyId = UUID.fromString(envelope.path(PAYLOAD).path(PARTY_ID).stringValue(null));
         extCustomerRepository.deleteById(partyId);
     }
 }

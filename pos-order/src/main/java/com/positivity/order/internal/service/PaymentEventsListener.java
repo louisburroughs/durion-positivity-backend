@@ -47,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class PaymentEventsListener {
+    private static final String OTHER = "OTHER";
 
     static final String OWNER = "payment";
 
@@ -131,7 +132,7 @@ public class PaymentEventsListener {
                 .orderId(order.getOrderId())
                 .recordType(OrderPaymentRecord.RecordType.SETTLED)
                 .paymentIntentId(uuid(payload, "paymentIntentId"))
-                .methodType(payload.path("methodType").stringValue("OTHER"))
+                .methodType(payload.path("methodType").stringValue(OTHER))
                 .amount(money(payload, "amount"))
                 .reference(payload.path("gatewayReference").stringValue(null))
                 .occurredAt(instant(payload, "settledAt"))
@@ -151,7 +152,7 @@ public class PaymentEventsListener {
                 .recordType(OrderPaymentRecord.RecordType.REVERSED)
                 .paymentIntentId(uuid(payload, "paymentIntentId"))
                 .refundId(uuid(payload, "refundId"))
-                .methodType("OTHER")
+                .methodType(OTHER)
                 .amount(money(payload, "amount"))
                 .occurredAt(instant(payload, "reversedAt"))
                 .build());
@@ -201,14 +202,14 @@ public class PaymentEventsListener {
     /** A reversal inherits its settlement's method when the intent matches; OTHER otherwise. */
     private static String resolveReversalMethod(List<OrderPaymentRecord> records, OrderPaymentRecord reversal) {
         if (reversal.getPaymentIntentId() == null) {
-            return "OTHER";
+            return OTHER;
         }
         return records.stream()
                 .filter(r -> r.getRecordType() == OrderPaymentRecord.RecordType.SETTLED)
                 .filter(r -> reversal.getPaymentIntentId().equals(r.getPaymentIntentId()))
                 .map(OrderPaymentRecord::getMethodType)
                 .findFirst()
-                .orElse("OTHER");
+                .orElse(OTHER);
     }
 
     @Nullable

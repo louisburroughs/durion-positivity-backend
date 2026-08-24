@@ -68,6 +68,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
 public class InventoryCommandListener {
+    private static final String PICK_LIST_ID = "pickListId";
 
     /** Canonical dotted name normalized to command-type form: INVENTORY_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "INVENTORY_OUTBOX_REPLAY_REQUESTED";
@@ -215,7 +216,7 @@ public class InventoryCommandListener {
     }
 
     private void handlePickListReleaseRequested(@NonNull JsonNode payload) {
-        UUID pickListId = parseUuid(payload, "pickListId");
+        UUID pickListId = parseUuid(payload, PICK_LIST_ID);
         if (pickListId == null) {
             log.warn("Ignoring pick-list release command with missing pickListId: {}", payload);
             return;
@@ -285,7 +286,7 @@ public class InventoryCommandListener {
     }
 
     private void handlePickTaskConfirmRequested(@NonNull JsonNode payload) {
-        UUID pickListId = parseUuid(payload, "pickListId");
+        UUID pickListId = parseUuid(payload, PICK_LIST_ID);
         UUID pickTaskId = parseUuid(payload, "pickTaskId");
         UUID scannedSkuId = parseUuid(payload, "scannedSkuId");
         UUID scannedLocationId = parseUuid(payload, "scannedLocationId");
@@ -309,7 +310,7 @@ public class InventoryCommandListener {
             log.warn("Ignoring consume command with missing workorderId: {}", payload);
             return;
         }
-        UUID pickListId = parseUuid(payload, "pickListId");
+        UUID pickListId = parseUuid(payload, PICK_LIST_ID);
         List<ConsumeItemLine> items = new ArrayList<>();
         for (JsonNode line : payload.path("items")) {
             UUID pickTaskId = parseUuid(line, "pickTaskId");

@@ -25,6 +25,11 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService {
+    private static final String NOTES = "notes";
+
+    private static final String BUFFER_VALUE = "bufferValue";
+
+    private static final String BUFFER_TYPE = "bufferType";
 
     private static final String TRAVEL_BUFFER_POLICY_NAME_TAKEN = "TRAVEL_BUFFER_POLICY_NAME_TAKEN";
     private static final String TRAVEL_BUFFER_POLICY_CONFLICT = "TRAVEL_BUFFER_POLICY_CONFLICT";
@@ -92,14 +97,14 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
                 .findById(policyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Travel buffer policy not found"));
 
-        if (patch.containsKey("bufferType")) {
-            entity.setBufferType(String.valueOf(patch.get("bufferType")));
+        if (patch.containsKey(BUFFER_TYPE)) {
+            entity.setBufferType(String.valueOf(patch.get(BUFFER_TYPE)));
         }
-        if (patch.containsKey("bufferValue")) {
-            entity.setBufferValue(parseBigDecimal(patch.get("bufferValue")));
+        if (patch.containsKey(BUFFER_VALUE)) {
+            entity.setBufferValue(parseBigDecimal(patch.get(BUFFER_VALUE)));
         }
-        if (patch.containsKey("notes")) {
-            entity.setNotes((String) patch.get("notes"));
+        if (patch.containsKey(NOTES)) {
+            entity.setNotes((String) patch.get(NOTES));
         }
 
         validateRequest(entity.getBufferType(), entity.getBufferValue(), false);
@@ -143,9 +148,9 @@ public class TravelBufferPolicyServiceImpl implements TravelBufferPolicyService 
     private TravelBufferPolicyRequest toRequest(Map<String, Object> map) {
         return TravelBufferPolicyRequest.builder()
                 .name((String) map.get("name"))
-                .bufferType(map.get("bufferType") == null ? null : String.valueOf(map.get("bufferType")))
-                .bufferValue(parseBigDecimal(map.get("bufferValue")))
-                .notes((String) map.get("notes"))
+                .bufferType(map.get(BUFFER_TYPE) == null ? null : String.valueOf(map.get(BUFFER_TYPE)))
+                .bufferValue(parseBigDecimal(map.get(BUFFER_VALUE)))
+                .notes((String) map.get(NOTES))
                 .build();
     }
 

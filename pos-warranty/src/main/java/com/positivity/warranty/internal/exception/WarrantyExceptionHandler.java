@@ -28,6 +28,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  */
 @RestControllerAdvice(basePackages = "com.positivity.warranty.internal.controller")
 public class WarrantyExceptionHandler {
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
     private static final Logger log = LoggerFactory.getLogger(WarrantyExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
@@ -93,7 +94,7 @@ public class WarrantyExceptionHandler {
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
                 ApiError.withFieldErrors(
-                        "VALIDATION_ERROR",
+                        VALIDATION_ERROR,
                         "Request validation failed",
                         HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
@@ -106,7 +107,7 @@ public class WarrantyExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(
             ConstraintViolationException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
@@ -137,7 +138,7 @@ public class WarrantyExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
     /** {@code @PreAuthorize} denials must not fall into the 500 catch-all below. */

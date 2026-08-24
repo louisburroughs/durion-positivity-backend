@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Service
 public class TimeEntryServiceImpl implements TimeEntryService {
+    private static final String SYSTEM_ACTOR = "system";
 
     private static final String ENTRY_NOT_PENDING_CODE = "ENTRY_NOT_PENDING";
 
@@ -109,7 +110,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
             return new ArrayList<>();
         }
 
-        String approverUserId = "system";
+        String approverUserId = SYSTEM_ACTOR;
         java.util.Set<String> permissions = new java.util.HashSet<>();
         org.springframework.security.core.Authentication auth =
                 org.springframework.security.core.context.SecurityContextHolder.getContext()
@@ -124,7 +125,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         String finalApproverUserId = approverUserId;
         java.util.Set<String> finalPermissions = permissions;
 
-        String auditActorId = SecurityContextHelper.getCurrentUsername().orElse("system");
+        String auditActorId = SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_ACTOR);
 
         Map<String, TimeEntry> byId = fetchTimeEntriesById(timeEntryIds);
 
@@ -202,7 +203,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
             }
         }
 
-        String rejectorUserId = "system";
+        String rejectorUserId = SYSTEM_ACTOR;
         java.util.Set<String> permissions = new java.util.HashSet<>();
         org.springframework.security.core.Authentication auth =
                 org.springframework.security.core.context.SecurityContextHolder.getContext()
@@ -217,7 +218,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         String finalRejectorUserId = rejectorUserId;
         java.util.Set<String> finalPermissions = permissions;
 
-        String auditActorId = SecurityContextHelper.getCurrentUsername().orElse("system");
+        String auditActorId = SecurityContextHelper.getCurrentUsername().orElse(SYSTEM_ACTOR);
 
         Map<String, TimeEntry> byId = fetchTimeEntriesById(timeEntryIds);
 

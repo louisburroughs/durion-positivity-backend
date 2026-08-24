@@ -36,6 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
 public class CustomerCommandListener {
+    private static final String PAYLOAD = "payload";
 
     /** Canonical dotted name normalized to command-type form: CUSTOMER_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "CUSTOMER_OUTBOX_REPLAY_REQUESTED";
@@ -110,7 +111,7 @@ public class CustomerCommandListener {
     }
 
     private void handleOutboxReplayRequested(@NonNull JsonNode root) {
-        JsonNode payloadNode = root.get("payload");
+        JsonNode payloadNode = root.get(PAYLOAD);
         Instant since = parseInstant(payloadNode, "since");
         if (since == null) {
             log.warn("Ignoring outbox replay command with missing/malformed payload.since: {}", root);

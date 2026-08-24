@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class EventTypeServiceImpl implements EventTypeService {
+    private static final String TYPE_CODE = "typeCode";
+
     private static final Pattern TYPE_CODE_PATTERN = Pattern.compile("^[A-Z0-9_]+$");
     private static final Pattern API_VERSION_PATTERN = Pattern.compile("^[0-9]+$");
 
@@ -49,14 +51,14 @@ public class EventTypeServiceImpl implements EventTypeService {
 
     @Override
     public Optional<EventTypeResponse> getEventTypeByCode(@NonNull String typeCode) {
-        String normalizedTypeCode = normalizeTypeCode(typeCode, "typeCode");
+        String normalizedTypeCode = normalizeTypeCode(typeCode, TYPE_CODE);
         return eventDao.getEventTypeByCode(normalizedTypeCode).map(EventTypeMapper::toResponse);
     }
 
     @Override
     public Optional<EventTypeResponse> createEventType(@NonNull EventTypeRequest request) {
         validateRequest(request, true);
-        String normalizedTypeCode = normalizeTypeCode(request.getTypeCode(), "typeCode");
+        String normalizedTypeCode = normalizeTypeCode(request.getTypeCode(), TYPE_CODE);
 
         if (eventDao.getEventTypeByCode(normalizedTypeCode).isPresent()) {
             return Optional.empty();
@@ -70,12 +72,12 @@ public class EventTypeServiceImpl implements EventTypeService {
     @Override
     @NonNull
     public EventTypeResponse upsertEventType(@NonNull String typeCode, @NonNull EventTypeRequest request) {
-        String normalizedTypeCode = normalizeTypeCode(typeCode, "typeCode");
+        String normalizedTypeCode = normalizeTypeCode(typeCode, TYPE_CODE);
         validateRequest(request, false);
 
         String requestTypeCode = request.getTypeCode();
         if (requestTypeCode != null && !requestTypeCode.isBlank()) {
-            String normalizedRequestTypeCode = normalizeTypeCode(requestTypeCode, "typeCode");
+            String normalizedRequestTypeCode = normalizeTypeCode(requestTypeCode, TYPE_CODE);
             if (!normalizedTypeCode.equals(normalizedRequestTypeCode)) {
                 throw new IllegalArgumentException("Path typeCode must match request typeCode when provided");
             }
@@ -124,7 +126,7 @@ public class EventTypeServiceImpl implements EventTypeService {
             throw new IllegalArgumentException("request is required");
         }
         if (requireTypeCode) {
-            normalizeTypeCode(request.getTypeCode(), "typeCode");
+            normalizeTypeCode(request.getTypeCode(), TYPE_CODE);
         }
         validateDescription(request.getDescription());
         validateApiVersion(request.getApiVersion());

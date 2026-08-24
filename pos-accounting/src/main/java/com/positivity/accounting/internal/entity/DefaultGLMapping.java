@@ -56,6 +56,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_default_gl_mapping_active", columnList = "active")
         })
 public class DefaultGLMapping {
+    private static final String SYSTEM_SOURCE = "SYSTEM";
 
     @EqualsAndHashCode.Include
     @Id
@@ -67,8 +68,8 @@ public class DefaultGLMapping {
     @PrePersist
     public void onPrePersist() {
         String currentUser = SecurityContextHelper.isAuthenticated()
-                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
-                : "SYSTEM";
+                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_SOURCE)
+                : SYSTEM_SOURCE;
         this.createdBy = currentUser;
         this.modifiedBy = currentUser;
     }
@@ -76,8 +77,8 @@ public class DefaultGLMapping {
     @PreUpdate
     public void onPreUpdate() {
         String currentUser = SecurityContextHelper.isAuthenticated()
-                ? SecurityContextHelper.getCurrentUsernameOrDefault("SYSTEM")
-                : "SYSTEM";
+                ? SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_SOURCE)
+                : SYSTEM_SOURCE;
         this.modifiedBy = currentUser;
     }
 

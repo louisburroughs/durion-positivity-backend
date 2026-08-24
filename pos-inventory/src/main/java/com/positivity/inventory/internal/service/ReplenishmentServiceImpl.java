@@ -46,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class ReplenishmentServiceImpl implements ReplenishmentService {
+    private static final String NO_ACTION = "NO_ACTION";
 
     private static final List<ReplenishmentStatus> OPEN_STATUSES =
             List.of(ReplenishmentStatus.PENDING, ReplenishmentStatus.IN_PROGRESS);
@@ -207,7 +208,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         if (policy.isEmpty()) {
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
-                    .status("NO_ACTION")
+                    .status(NO_ACTION)
                     .build();
         }
 
@@ -216,7 +217,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             logSkip("Event evaluation", policy.get(), suspensionReason);
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
-                    .status("NO_ACTION")
+                    .status(NO_ACTION)
                     .build();
         }
 
@@ -227,13 +228,13 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             if (!purchaseProjection.triggered()) {
                 return ReplenishmentTaskResponse.builder()
                         .taskId(null)
-                        .status("NO_ACTION")
+                        .status(NO_ACTION)
                         .build();
             }
             SuggestionOutcome outcome = evaluatePurchaseSuggestion(policy.get(), purchaseProjection, null);
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
-                    .status(outcome == SuggestionOutcome.NONE ? "NO_ACTION" : "PURCHASE_SUGGESTED")
+                    .status(outcome == SuggestionOutcome.NONE ? NO_ACTION : "PURCHASE_SUGGESTED")
                     .build();
         }
 
@@ -257,7 +258,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         if (!projection.triggered()) {
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
-                    .status("NO_ACTION")
+                    .status(NO_ACTION)
                     .build();
         }
 
@@ -265,7 +266,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         if (quantityNeeded == 0) {
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
-                    .status("NO_ACTION")
+                    .status(NO_ACTION)
                     .build();
         }
 
@@ -277,7 +278,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             SuggestionOutcome outcome = evaluatePurchaseSuggestion(policy.get(), projection, null);
             return ReplenishmentTaskResponse.builder()
                     .taskId(null)
-                    .status(outcome == SuggestionOutcome.NONE ? "NO_ACTION" : "PURCHASE_SUGGESTED")
+                    .status(outcome == SuggestionOutcome.NONE ? NO_ACTION : "PURCHASE_SUGGESTED")
                     .build();
         }
 

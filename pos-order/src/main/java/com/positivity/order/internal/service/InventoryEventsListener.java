@@ -78,6 +78,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
 public class InventoryEventsListener {
+    private static final String PAYLOAD = "payload";
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
@@ -164,7 +165,7 @@ public class InventoryEventsListener {
      * to someone else.
      */
     private void applyReservationOutcome(JsonNode envelope) {
-        ReservationOutcomeV1 outcome = objectMapper.treeToValue(envelope.path("payload"), ReservationOutcomeV1.class);
+        ReservationOutcomeV1 outcome = objectMapper.treeToValue(envelope.path(PAYLOAD), ReservationOutcomeV1.class);
         if (outcome.salesOrderLineId() == null) {
             return;
         }
@@ -200,7 +201,7 @@ public class InventoryEventsListener {
      */
     private void applyAvailabilityUpdated(JsonNode envelope) {
         InventoryAvailabilityUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), InventoryAvailabilityUpdatedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), InventoryAvailabilityUpdatedV1.class);
         String rawAggregateId = envelope.path("aggregateId").stringValue(null);
         if (rawAggregateId == null || rawAggregateId.isBlank()) {
             log.warn("Skipping availability fact without aggregateId for sku {}", payload.stockItemId());
@@ -235,8 +236,7 @@ public class InventoryEventsListener {
     }
 
     private void apply(JsonNode envelope) {
-        GoodsReceiptRecordedV1 receipt =
-                objectMapper.treeToValue(envelope.path("payload"), GoodsReceiptRecordedV1.class);
+        GoodsReceiptRecordedV1 receipt = objectMapper.treeToValue(envelope.path(PAYLOAD), GoodsReceiptRecordedV1.class);
 
         PurchaseOrderEntity order =
                 purchaseOrderRepository.findById(receipt.purchaseOrderId()).orElse(null);

@@ -23,6 +23,13 @@ import lombok.NoArgsConstructor;
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class InventoryPermissionRegistry {
+    private static final String MEDIUM_RISK = "MEDIUM";
+
+    private static final String ISSUE_37 = "Issue #37";
+
+    private static final String ISSUE_1035 = "Issue #1035";
+
+    private static final String CLARIFICATION_229 = "Clarification #229";
 
     // ==================== ADJUSTMENT PERMISSIONS ====================
 
@@ -244,13 +251,13 @@ public class InventoryPermissionRegistry {
                 permission(
                         ADJUSTMENT_CREATE,
                         "Create an adjustment request (draft/pending), capture reason code, quantity, and supporting notes",
-                        "MEDIUM",
-                        "Issue #37"),
+                        MEDIUM_RISK,
+                        ISSUE_37),
                 permission(
                         ADJUSTMENT_APPROVE,
                         "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)",
                         "HIGH",
-                        "Issue #37"),
+                        ISSUE_37),
                 permission(ADJUSTMENT_VIEW, "View adjustment history and details", "LOW"),
 
                 // Stock movement permissions (1)
@@ -258,7 +265,7 @@ public class InventoryPermissionRegistry {
                         STOCK_MOVEMENT_CREATE,
                         "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger",
                         "HIGH",
-                        "Issue #37"),
+                        ISSUE_37),
 
                 // Location permissions (2)
                 permission(
@@ -271,7 +278,7 @@ public class InventoryPermissionRegistry {
                         "HIGH"),
 
                 // Pick list permissions (3)
-                permission(PICK_LIST_CREATE, "Create pick lists for workorders", "MEDIUM"),
+                permission(PICK_LIST_CREATE, "Create pick lists for workorders", MEDIUM_RISK),
                 permission(PICK_LIST_VIEW, "View pick lists and pick tasks", "LOW"),
                 permission(
                         PICK_LIST_EXECUTE,
@@ -279,9 +286,9 @@ public class InventoryPermissionRegistry {
                         "HIGH"),
 
                 // Putaway permissions (4)
-                permission(PUTAWAY_GENERATE, "Generate putaway tasks from received inventory", "MEDIUM"),
+                permission(PUTAWAY_GENERATE, "Generate putaway tasks from received inventory", MEDIUM_RISK),
                 permission(PUTAWAY_VIEW, "View putaway tasks and their assignment status", "LOW"),
-                permission(PUTAWAY_CLAIM, "Claim a putaway task for execution", "MEDIUM"),
+                permission(PUTAWAY_CLAIM, "Claim a putaway task for execution", MEDIUM_RISK),
                 permission(PUTAWAY_EXECUTE, "Execute a putaway task and move inventory into storage", "HIGH"),
 
                 // Putaway override permissions (2)
@@ -289,34 +296,34 @@ public class InventoryPermissionRegistry {
                         PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY,
                         "Override location compatibility rules when location is not valid for SKU",
                         "HIGH",
-                        "Clarification #229"),
+                        CLARIFICATION_229),
                 permission(
                         PUTAWAY_OVERRIDE_LOCATION_CAPACITY,
                         "Override location capacity limits when at or near full capacity",
                         "HIGH",
-                        "Clarification #229"),
+                        CLARIFICATION_229),
 
                 // Cycle count permissions (3)
                 permission(
                         CYCLE_COUNT_INITIATE,
                         "Initiate a cycle count for inventory reconciliation",
-                        "MEDIUM",
-                        "Clarification #229"),
+                        MEDIUM_RISK,
+                        CLARIFICATION_229),
                 permission(CYCLE_COUNT_VIEW, "View cycle count tasks and results", "LOW"),
-                permission(CYCLE_COUNT_COMPLETE, "Complete and submit cycle count results", "MEDIUM"),
+                permission(CYCLE_COUNT_COMPLETE, "Complete and submit cycle count results", MEDIUM_RISK),
 
                 // Transfer order permissions (5)
                 permission(
                         TRANSFER_CREATE,
                         "Create or cancel a cross-site transfer order (DRAFT; cancel only before dispatch)",
-                        "MEDIUM",
-                        "Issue #1035"),
+                        MEDIUM_RISK,
+                        ISSUE_1035),
                 permission(TRANSFER_VIEW, "View transfer orders, their lines, and lifecycle status", "LOW"),
                 permission(
                         TRANSFER_DISPATCH,
                         "Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit)",
                         "HIGH",
-                        "Issue #1035"),
+                        ISSUE_1035),
                 permission(
                         TRANSFER_RECEIVE,
                         "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)",
@@ -326,20 +333,20 @@ public class InventoryPermissionRegistry {
                         TRANSFER_SHORT_CLOSE,
                         "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)",
                         "HIGH",
-                        "Issue #1035"),
+                        ISSUE_1035),
 
                 // Replenishment permissions (1)
                 permission(
                         REPLENISHMENT_MANAGE,
                         "Manage replenishment policies and run the batch replenishment scan",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1025"),
 
                 // Lot permissions (1)
                 permission(
                         LOT_MANAGE,
                         "Manage lot lifecycle: quarantine/recall/release and set expiration/alert dates",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1047"),
 
                 // Inventory view permissions (2)
@@ -350,7 +357,7 @@ public class InventoryPermissionRegistry {
                 permission(
                         VALUATION_VIEW,
                         "View inventory valuation (on-hand x current unit cost) at SKU level, including as-of",
-                        "MEDIUM",
+                        MEDIUM_RISK,
                         "Issue #1052"),
                 permission(
                         VALUATION_ADJUST,

@@ -49,6 +49,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class InventoryEventsListener {
+    private static final String PAYLOAD = "payload";
+
+    private static final String AGGREGATE_VERSION = "aggregateVersion";
 
     static final String OWNER = "inventory";
 
@@ -152,14 +155,14 @@ public class InventoryEventsListener {
      */
     private void applyAvailabilityUpdated(JsonNode envelope) {
         InventoryAvailabilityUpdatedV1 payload =
-                objectMapper.treeToValue(envelope.path("payload"), InventoryAvailabilityUpdatedV1.class);
+                objectMapper.treeToValue(envelope.path(PAYLOAD), InventoryAvailabilityUpdatedV1.class);
         String rawAggregateId = envelope.path("aggregateId").stringValue(null);
         if (rawAggregateId == null || rawAggregateId.isBlank()) {
             log.warn("Skipping availability fact without aggregateId for item {}", payload.stockItemId());
             return;
         }
         UUID aggregateId = UUID.fromString(rawAggregateId);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
 
         ExtInventoryAvailabilityReplica existing =
                 availabilityReplicaRepository.findById(aggregateId).orElse(null);
@@ -203,7 +206,7 @@ public class InventoryEventsListener {
      * workorder line, or one this module does not hold, belongs to someone else.
      */
     private void applyReservationOutcome(JsonNode envelope) {
-        ReservationOutcomeV1 outcome = objectMapper.treeToValue(envelope.path("payload"), ReservationOutcomeV1.class);
+        ReservationOutcomeV1 outcome = objectMapper.treeToValue(envelope.path(PAYLOAD), ReservationOutcomeV1.class);
         if (outcome.workorderLineId() == null) {
             return;
         }
@@ -281,8 +284,8 @@ public class InventoryEventsListener {
     }
 
     private void applyPickListUpdated(JsonNode envelope) {
-        PickListUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PickListUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        PickListUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PickListUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtPickListReplica existing =
                 pickListReplicaRepository.findById(payload.pickListId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
@@ -302,8 +305,8 @@ public class InventoryEventsListener {
     }
 
     private void applyPickTaskUpdated(JsonNode envelope) {
-        PickTaskUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PickTaskUpdatedV1.class);
-        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        PickTaskUpdatedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), PickTaskUpdatedV1.class);
+        long aggregateVersion = envelope.path(AGGREGATE_VERSION).longValue(0);
         ExtPickTaskReplica existing =
                 pickTaskReplicaRepository.findById(payload.pickTaskId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
@@ -334,7 +337,7 @@ public class InventoryEventsListener {
     }
 
     private void applyConsumptionRecorded(JsonNode envelope) {
-        ConsumptionRecordedV1 payload = objectMapper.treeToValue(envelope.path("payload"), ConsumptionRecordedV1.class);
+        ConsumptionRecordedV1 payload = objectMapper.treeToValue(envelope.path(PAYLOAD), ConsumptionRecordedV1.class);
         // Occurrence fact, applied at most once (processed_events gate above): accumulate the
         // consumed quantity per pick task. No stale guard — occurrences are not snapshots.
         for (ConsumptionRecordedV1.Line line : payload.lines()) {

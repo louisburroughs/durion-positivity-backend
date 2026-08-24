@@ -60,6 +60,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SalesOrderServiceImpl implements SalesOrderService {
+    private static final String SYSTEM_ACTOR = "system";
+
+    private static final String ON_ACCOUNT = "ON_ACCOUNT";
 
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
@@ -139,7 +142,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     "locationId is required when no register session is open on the terminal");
         }
 
-        String actor = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         SalesOrder order = SalesOrder.builder()
                 .orderNumber(orderNumberService.nextNumber(locationId))
                 .locationId(locationId)
@@ -414,7 +417,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         orderTaxService.recomputeTax(order);
         orderStateMachine.transition(order, SalesOrderStatus.QUOTED, "counter quote");
         order.setQuoteExpiresAt(Instant.now(clock).plus(quoteValidity));
-        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
         return toSummary(salesOrderRepository.save(order));
     }
 
@@ -441,7 +444,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
         String tender =
                 normalizeBlank(tenderType) == null ? null : tenderType.trim().toUpperCase(java.util.Locale.ROOT);
-        boolean onAccount = "ON_ACCOUNT".equals(tender);
+        boolean onAccount = ON_ACCOUNT.equals(tender);
         if (!onAccount && tender != null && !"DEFAULT".equals(tender)) {
             throw new IllegalArgumentException("Unsupported tenderType: " + tenderType);
         }
@@ -481,7 +484,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         order.setCheckoutIdempotencyKey(key);
         order.setAmountPaid(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         order.setBalanceDue(order.getGrandTotal());
-        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
         SalesOrder saved = salesOrderRepository.save(order);
 
         // Synchronous invoice handshake (stories C1/C2). A failure here throws and rolls the
@@ -598,7 +601,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         paymentRecordRepository.save(OrderPaymentRecord.builder()
                 .orderId(order.getOrderId())
                 .recordType(OrderPaymentRecord.RecordType.SETTLED)
-                .methodType("ON_ACCOUNT")
+                .methodType(ON_ACCOUNT)
                 .amount(order.getGrandTotal())
                 .reference(order.getInvoiceNumber())
                 .occurredAt(Instant.now(clock))
@@ -609,7 +612,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         domainEventPublisher.publishOrderCompleted(
                 order,
                 List.of(new com.positivity.domainevents.order.OrderCompletedV1.Tender(
-                        "ON_ACCOUNT", order.getGrandTotal())));
+                        ON_ACCOUNT, order.getGrandTotal())));
     }
 
     private static OrderInvoiceCreationRequest toInvoiceRequest(SalesOrder order) {
@@ -667,7 +670,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             // Must fail loudly: a failed invoice cancel rolls the void back (atomic like checkout).
             invoicingPort.cancelInvoice(order.getInvoiceId());
         }
-        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
         return toSummary(salesOrderRepository.save(order));
     }
 
@@ -710,7 +713,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private void recomputeAfterMutation(SalesOrder order) {
         totalsCalculator.recalculate(order);
         order.setTaxStale(true);
-        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        order.setUpdatedBy(SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR));
     }
 
     private SalesOrderLineSummary replayAddItem(SalesOrder order, SalesOrderLine line, String itemSku, int quantity) {

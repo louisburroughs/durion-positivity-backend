@@ -53,6 +53,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditService {
+    private static final String EXCHANGE_AUDIT_ID_REQUIRED = "exchangeAuditId must not be null";
 
     private final ExchangeAuditRepository exchangeAuditRepository;
     private final ExchangeAuditRawPayloadRepository rawPayloadRepository;
@@ -112,7 +113,7 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
     @Transactional(readOnly = true)
     @NonNull
     public ExchangeAuditSummary getExchange(@NonNull UUID exchangeAuditId) {
-        Objects.requireNonNull(exchangeAuditId, "exchangeAuditId must not be null");
+        Objects.requireNonNull(exchangeAuditId, EXCHANGE_AUDIT_ID_REQUIRED);
         return toSummary(requireMetadata(exchangeAuditId));
     }
 
@@ -120,7 +121,7 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
     @Transactional(readOnly = true)
     @NonNull
     public PagedResponse<ExchangeAuditAccessView> listAccesses(@NonNull UUID exchangeAuditId, int page, int size) {
-        Objects.requireNonNull(exchangeAuditId, "exchangeAuditId must not be null");
+        Objects.requireNonNull(exchangeAuditId, EXCHANGE_AUDIT_ID_REQUIRED);
         // Deliberately no existence check on the exchange: access records outlive nothing here, but they
         // are keyed by a plain UUID with no foreign key, so an exchange row that was never written and
         // one that has no reads are indistinguishable — and both correctly answer "nobody read it".
@@ -159,7 +160,7 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
     @Transactional(noRollbackFor = PayloadUnreadableException.class)
     @NonNull
     public ExchangeAuditPayloadView readPayload(@NonNull UUID exchangeAuditId) {
-        Objects.requireNonNull(exchangeAuditId, "exchangeAuditId must not be null");
+        Objects.requireNonNull(exchangeAuditId, EXCHANGE_AUDIT_ID_REQUIRED);
 
         // 1. Metadata first, so the access record can name the profile and capability even when the
         //    content turns out to be unreadable. Nothing here decrypts.

@@ -1,6 +1,7 @@
 package com.positivity.order.internal.client;
 
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceResponse;
 import java.util.Map;
@@ -21,6 +22,7 @@ import org.springframework.web.client.RestClient;
 @Component
 @Slf4j
 public class RestInvoicingPortAdapter implements InvoicingPort {
+    private static final String SERVICE_USER = "pos-order";
 
     private final RestClient invoiceServiceRestClient;
 
@@ -34,8 +36,8 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
             OrderInvoiceResponse response = invoiceServiceRestClient
                     .post()
                     .uri("/v1/invoices/from-order")
-                    .header("X-User", "pos-order")
-                    .header("X-Authorities", "invoice:manage")
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, "invoice:manage")
                     .body(request)
                     .retrieve()
                     .body(OrderInvoiceResponse.class);
@@ -72,8 +74,10 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
             invoiceServiceRestClient
                     .post()
                     .uri(path, invoiceId, paymentIntentId)
-                    .header("X-User", "pos-order")
-                    .header("X-Authorities", "invoice:manage," + (isVoid ? "VOID_PAYMENT" : "REFUND_PAYMENT"))
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(
+                            GatewaySecurityConstants.HEADER_AUTHORITIES,
+                            "invoice:manage," + (isVoid ? "VOID_PAYMENT" : "REFUND_PAYMENT"))
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();
@@ -94,8 +98,8 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
             invoiceServiceRestClient
                     .post()
                     .uri("/v1/invoices/{invoiceId}/cancel", invoiceId)
-                    .header("X-User", "pos-order")
-                    .header("X-Authorities", "invoice:manage")
+                    .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, "invoice:manage")
                     .retrieve()
                     .toBodilessEntity();
         } catch (Exception e) {

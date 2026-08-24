@@ -23,6 +23,19 @@ import org.jspecify.annotations.Nullable;
  * unresolvable references out of the database entirely.
  */
 public final class AuthReferenceRules {
+    private static final String USERNAME_REF = "usernameRef";
+
+    private static final String TOKEN_URL_REF = "tokenUrlRef";
+
+    private static final String PASSWORD_REF = "passwordRef";
+
+    private static final String CLIENT_SECRET_REF = "clientSecretRef";
+
+    private static final String CLIENT_ID_REF = "clientIdRef";
+
+    private static final String BEARER_TOKEN_REF = "bearerTokenRef";
+
+    private static final String API_KEY_REF = "apiKeyRef";
 
     private AuthReferenceRules() {
         // static rules
@@ -44,31 +57,31 @@ public final class AuthReferenceRules {
         Objects.requireNonNull(supportedSchemes, "supportedSchemes must not be null");
         switch (request.type()) {
             case BASIC_PLUS_APIKEY -> {
-                requireRef(request.type(), "usernameRef", request.usernameRef(), supportedSchemes);
-                requireRef(request.type(), "passwordRef", request.passwordRef(), supportedSchemes);
-                requireRef(request.type(), "apiKeyRef", request.apiKeyRef(), supportedSchemes);
-                forbidRef(request.type(), "tokenUrlRef", request.tokenUrlRef());
-                forbidRef(request.type(), "clientIdRef", request.clientIdRef());
-                forbidRef(request.type(), "clientSecretRef", request.clientSecretRef());
-                forbidRef(request.type(), "bearerTokenRef", request.bearerTokenRef());
+                requireRef(request.type(), USERNAME_REF, request.usernameRef(), supportedSchemes);
+                requireRef(request.type(), PASSWORD_REF, request.passwordRef(), supportedSchemes);
+                requireRef(request.type(), API_KEY_REF, request.apiKeyRef(), supportedSchemes);
+                forbidRef(request.type(), TOKEN_URL_REF, request.tokenUrlRef());
+                forbidRef(request.type(), CLIENT_ID_REF, request.clientIdRef());
+                forbidRef(request.type(), CLIENT_SECRET_REF, request.clientSecretRef());
+                forbidRef(request.type(), BEARER_TOKEN_REF, request.bearerTokenRef());
             }
             case OAUTH2_CLIENT_CREDENTIALS -> {
-                requireRef(request.type(), "tokenUrlRef", request.tokenUrlRef(), supportedSchemes);
-                requireRef(request.type(), "clientIdRef", request.clientIdRef(), supportedSchemes);
-                requireRef(request.type(), "clientSecretRef", request.clientSecretRef(), supportedSchemes);
-                forbidRef(request.type(), "usernameRef", request.usernameRef());
-                forbidRef(request.type(), "passwordRef", request.passwordRef());
-                forbidRef(request.type(), "apiKeyRef", request.apiKeyRef());
-                forbidRef(request.type(), "bearerTokenRef", request.bearerTokenRef());
+                requireRef(request.type(), TOKEN_URL_REF, request.tokenUrlRef(), supportedSchemes);
+                requireRef(request.type(), CLIENT_ID_REF, request.clientIdRef(), supportedSchemes);
+                requireRef(request.type(), CLIENT_SECRET_REF, request.clientSecretRef(), supportedSchemes);
+                forbidRef(request.type(), USERNAME_REF, request.usernameRef());
+                forbidRef(request.type(), PASSWORD_REF, request.passwordRef());
+                forbidRef(request.type(), API_KEY_REF, request.apiKeyRef());
+                forbidRef(request.type(), BEARER_TOKEN_REF, request.bearerTokenRef());
             }
             case BEARER -> {
-                requireRef(request.type(), "bearerTokenRef", request.bearerTokenRef(), supportedSchemes);
-                forbidRef(request.type(), "usernameRef", request.usernameRef());
-                forbidRef(request.type(), "passwordRef", request.passwordRef());
-                forbidRef(request.type(), "apiKeyRef", request.apiKeyRef());
-                forbidRef(request.type(), "tokenUrlRef", request.tokenUrlRef());
-                forbidRef(request.type(), "clientIdRef", request.clientIdRef());
-                forbidRef(request.type(), "clientSecretRef", request.clientSecretRef());
+                requireRef(request.type(), BEARER_TOKEN_REF, request.bearerTokenRef(), supportedSchemes);
+                forbidRef(request.type(), USERNAME_REF, request.usernameRef());
+                forbidRef(request.type(), PASSWORD_REF, request.passwordRef());
+                forbidRef(request.type(), API_KEY_REF, request.apiKeyRef());
+                forbidRef(request.type(), TOKEN_URL_REF, request.tokenUrlRef());
+                forbidRef(request.type(), CLIENT_ID_REF, request.clientIdRef());
+                forbidRef(request.type(), CLIENT_SECRET_REF, request.clientSecretRef());
             }
         }
     }

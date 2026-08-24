@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class InventoryAvailabilityServiceImpl implements InventoryAvailabilityService {
+    private static final String ON_HAND_QUANTITY = "onHandQuantity";
 
     private static final Pageable FIRST_ONLY = PageRequest.of(0, 1);
     private static final String DEFAULT_UOM = "EACH";
@@ -144,7 +145,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .map(row -> LocationAvailabilityDto.builder()
                         .locationId(row.getLocationId())
                         .locationName(row.getLocationId().toString())
-                        .onHandQuantity(reportable(productId.toString(), "onHandQuantity", row.getQuantity()))
+                        .onHandQuantity(reportable(productId.toString(), ON_HAND_QUANTITY, row.getQuantity()))
                         .build())
                 .toList();
     }
@@ -208,7 +209,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .productSku(productSku)
                 .locationId(locationId)
                 .storageLocationId(storageLocationId)
-                .onHandQuantity(reportable(productSku, "onHandQuantity", onHand))
+                .onHandQuantity(reportable(productSku, ON_HAND_QUANTITY, onHand))
                 .allocatedQuantity(reportable(productSku, "allocatedQuantity", allocated))
                 .availableToPromiseQuantity(reportable(
                         productSku,
@@ -247,7 +248,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         return LocationAvailabilityDto.builder()
                 .locationId(row.getLocationId())
                 .locationName(row.getLocationId().toString())
-                .onHandQuantity(reportable(row.getStockItemId(), "onHandQuantity", row.getOnHand()))
+                .onHandQuantity(reportable(row.getStockItemId(), ON_HAND_QUANTITY, row.getOnHand()))
                 .availableToPromiseQuantity(
                         reportable(row.getStockItemId(), "availableToPromiseQuantity", atpWithReservations))
                 .incomingQty(forecast.incomingQty())

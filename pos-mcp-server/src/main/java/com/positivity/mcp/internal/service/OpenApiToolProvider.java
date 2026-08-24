@@ -44,6 +44,13 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class OpenApiToolProvider {
+    private static final String STRING_TYPE = "string";
+
+    private static final String REQUIRED = "required";
+
+    private static final String PROPERTIES = "properties";
+
+    private static final String QUERY_STRING_PARAMETERS_DESCRIPTION = "Query-string parameters.";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiToolProvider.class);
 
@@ -60,17 +67,17 @@ public class OpenApiToolProvider {
         List<String> pathParams = extractPathParams(op.httpPath());
         Map<String, Object> pathParamsSchema = schemaObject("Path template parameters.");
         @SuppressWarnings("unchecked")
-        Map<String, Object> pathProperties = (Map<String, Object>) pathParamsSchema.get("properties");
+        Map<String, Object> pathProperties = (Map<String, Object>) pathParamsSchema.get(PROPERTIES);
         for (String name : pathParams) {
-            pathProperties.put(name, schemaProperty("string", "Path parameter " + name));
+            pathProperties.put(name, schemaProperty(STRING_TYPE, "Path parameter " + name));
         }
         if (!pathParams.isEmpty()) {
-            pathParamsSchema.put("required", pathParams);
+            pathParamsSchema.put(REQUIRED, pathParams);
         }
         Map<String, Object> schema =
                 schemaObject("Parameters for the gateway operation named in the tool description.");
         @SuppressWarnings("unchecked")
-        Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+        Map<String, Object> properties = (Map<String, Object>) schema.get(PROPERTIES);
         properties.put("pathParams", pathParamsSchema);
         properties.put("queryParams", buildQueryParamsSchema(op.inputSchema()));
         properties.put("headers", schemaObject("Extra HTTP headers (auth is relayed automatically)."));
@@ -89,16 +96,16 @@ public class OpenApiToolProvider {
      */
     private Map<String, Object> buildQueryParamsSchema(@Nullable String inputSchemaJson) {
         if (inputSchemaJson == null || inputSchemaJson.isBlank()) {
-            return schemaObject("Query-string parameters.");
+            return schemaObject(QUERY_STRING_PARAMETERS_DESCRIPTION);
         }
         try {
             JsonNode query = objectMapper.readTree(inputSchemaJson).get("query");
             if (query == null || !query.isArray() || query.isEmpty()) {
-                return schemaObject("Query-string parameters.");
+                return schemaObject(QUERY_STRING_PARAMETERS_DESCRIPTION);
             }
-            Map<String, Object> builder = schemaObject("Query-string parameters.");
+            Map<String, Object> builder = schemaObject(QUERY_STRING_PARAMETERS_DESCRIPTION);
             @SuppressWarnings("unchecked")
-            Map<String, Object> properties = (Map<String, Object>) builder.get("properties");
+            Map<String, Object> properties = (Map<String, Object>) builder.get(PROPERTIES);
             List<String> required = new ArrayList<>();
             for (JsonNode param : query) {
                 String name = param.path("name").asText(null);
@@ -106,18 +113,18 @@ public class OpenApiToolProvider {
                     continue;
                 }
                 String description = "Query parameter " + name;
-                properties.put(name, schemaProperty(param.path("type").asText("string"), description));
-                if (param.path("required").asBoolean(false)) {
+                properties.put(name, schemaProperty(param.path("type").asText(STRING_TYPE), description));
+                if (param.path(REQUIRED).asBoolean(false)) {
                     required.add(name);
                 }
             }
             if (!required.isEmpty()) {
-                builder.put("required", required);
+                builder.put(REQUIRED, required);
             }
             return builder;
         } catch (JsonProcessingException | RuntimeException e) {
             LOGGER.debug("MCP openapi query-param schema parse failed; using free-form object", e);
-            return schemaObject("Query-string parameters.");
+            return schemaObject(QUERY_STRING_PARAMETERS_DESCRIPTION);
         }
     }
 
@@ -125,7 +132,7 @@ public class OpenApiToolProvider {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("description", description);
-        schema.put("properties", new LinkedHashMap<String, Object>());
+        schema.put(PROPERTIES, new LinkedHashMap<String, Object>());
         return schema;
     }
 
@@ -137,7 +144,7 @@ public class OpenApiToolProvider {
                     case "integer" -> "integer";
                     case "number" -> "number";
                     case "boolean" -> "boolean";
-                    default -> "string";
+                    default -> STRING_TYPE;
                 });
         property.put("description", description);
         return property;

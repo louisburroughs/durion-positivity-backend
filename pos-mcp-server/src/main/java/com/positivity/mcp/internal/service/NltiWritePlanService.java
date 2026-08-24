@@ -67,6 +67,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class NltiWritePlanService {
+    private static final String TOOL_PREFIX = "tool=";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NltiWritePlanService.class);
 
@@ -342,7 +343,7 @@ public class NltiWritePlanService {
 
         transition(plan, request, NltiRequestStatus.EXECUTING);
         // Destructive audit events propagate write failures — a non-auditable execution never runs.
-        appendPlanAudit(plan, request, NltiAuditEventType.EXECUTION_STEP, "tool=" + plan.getTargetTool());
+        appendPlanAudit(plan, request, NltiAuditEventType.EXECUTION_STEP, TOOL_PREFIX + plan.getTargetTool());
 
         try {
             // The exact persisted args — never a re-parse of the user's text.
@@ -350,7 +351,7 @@ public class NltiWritePlanService {
             plan.setExecutedAt(OffsetDateTime.now(clock));
             plan.setExecutionResult(result);
             transition(plan, request, NltiRequestStatus.COMPLETE);
-            appendPlanAudit(plan, request, NltiAuditEventType.EXECUTION_COMPLETE, "tool=" + plan.getTargetTool());
+            appendPlanAudit(plan, request, NltiAuditEventType.EXECUTION_COMPLETE, TOOL_PREFIX + plan.getTargetTool());
             return toResponse(plan);
         } catch (RuntimeException executionFailure) {
             transition(plan, request, NltiRequestStatus.ERROR);
@@ -358,7 +359,7 @@ public class NltiWritePlanService {
                     plan,
                     request,
                     NltiAuditEventType.EXECUTION_FAILED,
-                    "tool=" + plan.getTargetTool() + " error="
+                    TOOL_PREFIX + plan.getTargetTool() + " error="
                             + executionFailure.getClass().getSimpleName());
             if (executionFailure instanceof WritePlanExecutionException) {
                 throw executionFailure;

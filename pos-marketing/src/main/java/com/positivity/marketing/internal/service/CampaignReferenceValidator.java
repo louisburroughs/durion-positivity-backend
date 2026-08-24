@@ -35,6 +35,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class CampaignReferenceValidator {
+    private static final String PROMOTION_OFFER_PREFIX = "promotion offer ";
 
     private final Clock clock;
     private final PromotionOfferPort promotionOfferPort;
@@ -65,9 +66,10 @@ public class CampaignReferenceValidator {
         }
         PromotionOfferPort.OfferLookup lookup = promotionOfferPort.findOffer(promotionOfferId);
         return switch (lookup.outcome()) {
-            case NOT_FOUND -> Optional.of("promotion offer " + promotionOfferId + " does not exist");
+            case NOT_FOUND -> Optional.of(PROMOTION_OFFER_PREFIX + promotionOfferId + " does not exist");
             case UNAVAILABLE ->
-                Optional.of("promotion offer " + promotionOfferId + " could not be verified; pricing is unavailable");
+                Optional.of(
+                        PROMOTION_OFFER_PREFIX + promotionOfferId + " could not be verified; pricing is unavailable");
             case FOUND -> activeOfferProblem(promotionOfferId, lookup.offer());
         };
     }
@@ -75,17 +77,17 @@ public class CampaignReferenceValidator {
     private Optional<String> activeOfferProblem(UUID promotionOfferId, PromotionOfferPort.PromotionOffer offer) {
         if (offer == null) {
             return Optional.of(
-                    "promotion offer " + promotionOfferId + " could not be verified; pricing is unavailable");
+                    PROMOTION_OFFER_PREFIX + promotionOfferId + " could not be verified; pricing is unavailable");
         }
         if (!offer.isActive()) {
-            return Optional.of("promotion offer " + promotionOfferId + " is "
+            return Optional.of(PROMOTION_OFFER_PREFIX + promotionOfferId + " is "
                     + (offer.status() == null ? "in an unknown status" : offer.status()) + ", not ACTIVE");
         }
         // Offers run on calendar days and carry no zone; UTC is the only defensible reading of
         // "today" for a service that schedules across regions.
         LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
         if (!offer.runsOn(today)) {
-            return Optional.of("promotion offer " + promotionOfferId + " is ACTIVE but its window ("
+            return Optional.of(PROMOTION_OFFER_PREFIX + promotionOfferId + " is ACTIVE but its window ("
                     + describeWindow(offer) + ") does not include today");
         }
         return Optional.empty();

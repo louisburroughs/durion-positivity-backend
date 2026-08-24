@@ -48,6 +48,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AsnServiceImpl implements AsnService {
+    private static final String OCCURRED_AT = "occurredAt";
+
+    private static final String EVENT_TYPE = "eventType";
+
+    private static final String ASN_ID = "asnId";
+
     private final Clock clock;
     private final AsnRepository asnRepository;
     private final AsnLineRepository asnLineRepository;
@@ -141,15 +147,15 @@ public class AsnServiceImpl implements AsnService {
         eventPublisher.publishEvent(Map.of(
                 "type",
                 "ASNLoaded",
-                "eventType",
+                EVENT_TYPE,
                 "ASNLoaded",
-                "asnId",
+                ASN_ID,
                 persistedAsn.getAsnId().toString(),
                 "vendorId",
                 persistedAsn.getVendorId().toString(),
                 "actorId",
                 actorId,
-                "occurredAt",
+                OCCURRED_AT,
                 Instant.now(clock).toString()));
 
         return toAsnResponse(persistedAsn);
@@ -238,13 +244,13 @@ public class AsnServiceImpl implements AsnService {
         eventPublisher.publishEvent(Map.of(
                 "type",
                 "ReceiptCreated",
-                "eventType",
+                EVENT_TYPE,
                 "ReceiptCreated",
                 "receiptId",
                 persistedReceipt.getReceiptId().toString(),
                 "poId",
                 poId.toString(),
-                "asnId",
+                ASN_ID,
                 persistedReceipt.getAsn() == null
                         ? ""
                         : persistedReceipt.getAsn().getAsnId().toString(),
@@ -262,7 +268,7 @@ public class AsnServiceImpl implements AsnService {
                         .toList(),
                 "createdBy",
                 actorId,
-                "occurredAt",
+                OCCURRED_AT,
                 Instant.now(clock).toString()));
 
         for (ReceiptLineComputation computed : computedLines) {
@@ -314,13 +320,13 @@ public class AsnServiceImpl implements AsnService {
         eventPublisher.publishEvent(Map.of(
                 "type",
                 "ReceiptCompleted",
-                "eventType",
+                EVENT_TYPE,
                 "ReceiptCompleted",
                 "receiptId",
                 persistedReceipt.getReceiptId().toString(),
                 "poId",
                 poId.toString(),
-                "asnId",
+                ASN_ID,
                 persistedReceipt.getAsn() == null
                         ? ""
                         : persistedReceipt.getAsn().getAsnId().toString(),
@@ -328,7 +334,7 @@ public class AsnServiceImpl implements AsnService {
                 receiptTotalMinor,
                 "actorId",
                 actorId,
-                "occurredAt",
+                OCCURRED_AT,
                 Instant.now(clock).toString()));
 
         return toGoodsReceiptResponse(persistedReceipt);
