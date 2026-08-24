@@ -71,6 +71,26 @@ class PeopleContactEventsListenerTest {
     }
 
     @Test
+    @DisplayName("No primary EMAIL contact point leaves primaryEmail null, not the non-primary address")
+    void personWithoutPrimaryEmailStoresNullPrimaryEmail() {
+        when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
+
+        listener.onPeopleContactEvent("""
+                {"eventId":"01980000-0000-7000-8000-000000000e04","eventType":"people-contact.person.updated",
+                 "aggregateVersion":12,
+                 "payload":{"personId":"%s","firstName":"Jane","lastName":"Doe","preferredName":null,
+                            "contactPoints":[
+                              {"contactType":"EMAIL","value":"work@example.com","primary":false},
+                              {"contactType":"PHONE_MOBILE","value":"+1-217-555-0100","primary":true}]}}
+                """.formatted(PERSON_ID));
+
+        ArgumentCaptor<ExtPersonReplica> saved = ArgumentCaptor.forClass(ExtPersonReplica.class);
+        verify(extPersonReplicaRepository).save(saved.capture());
+        assertThat(saved.getValue().getPrimaryEmail()).isNull();
+        assertThat(saved.getValue().getContactPoints()).contains("work@example.com");
+    }
+
+    @Test
     @DisplayName("Stale person.updated (lower aggregateVersion) is skipped but still marked processed")
     void staleUpdateSkipped() {
         when(extPersonReplicaRepository.findById(PERSON_ID))

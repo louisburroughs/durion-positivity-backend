@@ -169,6 +169,28 @@ class SupplierYamlBootstrapTest {
                 .hasSize(2);
     }
 
+    /**
+     * A YAML profile may omit {@code protocolDefaults.retry} entirely, or give a
+     * {@code maxAttempts} with no {@code backoff} strategy. Both are valid (§7) and leave the
+     * retry columns unset rather than failing reconciliation.
+     */
+    @Test
+    void absentRetryBlockAndAbsentBackoffLeaveRetryColumnsNull() {
+        bootstrap.reconcile(properties(michelinSpecWithRetry(null)));
+
+        SupplierProfileEntity withoutRetry =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow();
+        assertThat(withoutRetry.getRetryMaxAttempts()).isNull();
+        assertThat(withoutRetry.getRetryBackoff()).isNull();
+
+        bootstrap.reconcile(properties(michelinSpecWithRetry(new Retry(2, null))));
+
+        SupplierProfileEntity withoutBackoff =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow();
+        assertThat(withoutBackoff.getRetryMaxAttempts()).isEqualTo(2);
+        assertThat(withoutBackoff.getRetryBackoff()).isNull();
+    }
+
     @Test
     void changedYamlOverwritesProfileAndChildrenExactly() {
         bootstrap.reconcile(properties(michelinSpec()));
@@ -534,6 +556,21 @@ class SupplierYamlBootstrapTest {
                 null,
                 null,
                 null);
+    }
+
+    /** {@link #michelinSpec()} with its {@code protocolDefaults.retry} block replaced. */
+    private static ProfileSpec michelinSpecWithRetry(Retry retry) {
+        ProfileSpec base = michelinSpec();
+        ProtocolDefaults defaults = base.protocolDefaults();
+        return new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                new ProtocolDefaults(defaults.family(), defaults.connectTimeoutMs(), defaults.readTimeoutMs(), retry),
+                base.accounts(),
+                base.auth(),
+                base.bindings(),
+                base.sandbox());
     }
 
     /** Mirrors the architecture doc §7 YAML example, families per binding. */

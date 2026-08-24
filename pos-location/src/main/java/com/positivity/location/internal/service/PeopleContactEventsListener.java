@@ -10,8 +10,10 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
@@ -121,11 +123,7 @@ public class PeopleContactEventsListener {
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
             return;
         }
-        String primaryEmail = payload.contactPoints().stream()
-                .filter(cp -> "EMAIL".equals(cp.contactType()) && cp.primary())
-                .map(PersonUpdatedV1.ContactPointV1::value)
-                .findFirst()
-                .orElse(null);
+        String primaryEmail = primaryEmailOf(payload.contactPoints());
         String contactJson;
         try {
             contactJson = objectMapper.writeValueAsString(payload.contactPoints());
@@ -141,6 +139,21 @@ public class PeopleContactEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+    }
+
+    /**
+     * The value of the person's primary {@code EMAIL} contact point, or {@code null} when they
+     * have none. {@link PersonUpdatedV1.ContactPointV1#value()} is itself non-null, so the
+     * absence of a primary email is expressed here rather than by a null element.
+     */
+    @Nullable
+    private static String primaryEmailOf(@NonNull List<PersonUpdatedV1.ContactPointV1> contactPoints) {
+        for (PersonUpdatedV1.ContactPointV1 contactPoint : contactPoints) {
+            if ("EMAIL".equals(contactPoint.contactType()) && contactPoint.primary()) {
+                return contactPoint.value();
+            }
+        }
+        return null;
     }
 
     private void applyPersonDeleted(JsonNode envelope) {
