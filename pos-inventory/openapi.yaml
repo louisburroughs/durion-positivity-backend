@@ -416,7 +416,7 @@ paths:
 
         Use this tool only when a caller requires a list-shaped response from the root availability path; use getAvailabilityBySku instead for the plain object form, and getAvailabilityByProduct for a per-location breakdown.
 
-        Preconditions: the SKU must have at least one stock-summary row, meaning it has been received or counted at least once.
+        Preconditions: requires the inventory:availability:read authority; the SKU must have at least one stock-summary row, meaning it has been received or counted at least once.
 
         Required inputs: sku (string); locationId and storageLocationId (UUIDs) optionally narrow the scope, sourceType (WAREHOUSE, SUPPLIER or TRANSIT) selects the lookup strategy, and horizon (ISO-8601 instant) bounds the forecast quantities; locationId is only valid when sourceType is WAREHOUSE or omitted.
 
@@ -499,21 +499,19 @@ paths:
           description: Unexpected server error
       security:
       - bearerAuth:
-        - inventory:on_hand:view
-        - inventory:on_hand:search
+        - inventory:availability:read
       summary: Query inventory availability by SKU (list form)
       tags:
       - Inventory Availability
       x-required-permissions:
-      - inventory:on_hand:view
-      - inventory:on_hand:search
+      - inventory:availability:read
   /v1/inventory/availability/by-sku:
     get:
       description: 'Returns a single aggregated availability view for a SKU: on-hand, allocated, available-to-promise, the derived unit of measure and the forecast quantities incomingQty, outgoingQty and projectedAvailable.
 
         Use this tool to check whether quantity can be promised, for example before createOrUpdateReservation; use getAvailabilityByProduct instead for a per-location breakdown, and listAvailabilityBySku only when a list-shaped response is required.
 
-        Preconditions: the SKU must have at least one stock-summary row; expired ACTIVE lots stay counted in on-hand but are subtracted from ATP.
+        Preconditions: requires the inventory:availability:read authority; the SKU must have at least one stock-summary row; expired ACTIVE lots stay counted in on-hand but are subtracted from ATP.
 
         Required inputs: productSku (string); locationId and storageLocationId (UUIDs) optionally narrow the scope (storageLocationId wins when both are given), sourceType (WAREHOUSE, SUPPLIER or TRANSIT) selects the lookup strategy, and horizon (ISO-8601 instant) bounds the forecast quantities; forecast supply is keyed by site, so a storage location is resolved to its parent site for the forecast fields.
 
@@ -594,21 +592,19 @@ paths:
           description: Unexpected server error
       security:
       - bearerAuth:
-        - inventory:on_hand:view
-        - inventory:on_hand:search
+        - inventory:availability:read
       summary: Query inventory availability by SKU and location
       tags:
       - Inventory Availability
       x-required-permissions:
-      - inventory:on_hand:view
-      - inventory:on_hand:search
+      - inventory:availability:read
   /v1/inventory/availability/lead-time:
     get:
       description: 'Returns a dynamic lead-time estimate (minDays, maxDays, display text, source and confidence) for a product, preferring the distributor inventory feed (source INVENTORY, confidence HIGH) and falling back to the manufacturer supply feed (source SUPPLY_CHAIN, confidence MEDIUM).
 
         Use this tool to estimate replenishment timing when stock is short; use getAvailabilityBySku instead for on-hand and ATP quantities.
 
-        Preconditions: at least one normalized feed must carry lead-time data for the product.
+        Preconditions: requires the inventory:availability:read authority; at least one normalized feed must carry lead-time data for the product.
 
         Required inputs: productId (UUID); locationId and storageLocationId (UUIDs) are optional and are echoed into the response scope (storageLocationId wins) but do not filter the feed lookup, and sourceType follows the same WAREHOUSE-only rule as the availability reads.
 
@@ -683,27 +679,25 @@ paths:
           description: Unexpected server error
       security:
       - bearerAuth:
-        - inventory:on_hand:view
-        - inventory:on_hand:search
+        - inventory:availability:read
       summary: Query product lead time
       tags:
       - Inventory Availability
       x-required-permissions:
-      - inventory:on_hand:view
-      - inventory:on_hand:search
+      - inventory:availability:read
   /v1/inventory/availability/{productId}:
     get:
       description: 'Returns per-location availability for a product: on-hand, available-to-promise and the forecast quantities incomingQty, outgoingQty and projectedAvailable computed from open purchase orders, ASNs, reservations and released pick tasks; ATP in this per-location list subtracts hard allocations, soft reservations and expired ACTIVE lot on-hand from on-hand.
 
         Use this tool when the productId is known and a per-location breakdown is wanted; use getAvailabilityBySku instead for a single aggregated view keyed by SKU, and getInventoryLeadTime for lead-time estimates.
 
-        Preconditions: none for the current view; an asOf request additionally requires the inventory:ledger:view authority because it exposes ledger history.
+        Preconditions: requires the inventory:availability:search authority, because enumerating locations discloses where stock sits across the estate; an asOf request additionally requires inventory:ledger:view because it exposes ledger history.
 
         Required inputs: productId (UUID) path parameter; horizon (ISO-8601 instant) optionally bounds incomingQty/outgoingQty and excludes documents without an expected date; asOf (ISO-8601 instant) switches to historical on-hand computed by direct ledger aggregation, in which case availableToPromiseQuantity and the forecast fields are null because historical allocation state is not reliably reconstructable.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 when asOf is combined with horizon (INVALID_PARAM_COMBINATION) or productId is missing, 403 when an asOf request lacks inventory:ledger:view, and 422 when asOf is in the future (AS_OF_IN_FUTURE).
+        Returns 400 when asOf is combined with horizon (INVALID_PARAM_COMBINATION) or productId is missing, 403 when the caller lacks inventory:availability:search or an asOf request lacks inventory:ledger:view, and 422 when asOf is in the future (AS_OF_IN_FUTURE).
 
         '
       operationId: getAvailabilityByProduct
@@ -748,12 +742,12 @@ paths:
           description: Invalid product identifier
       security:
       - bearerAuth:
-        - inventory:on_hand:view
+        - inventory:availability:search
       summary: Query per-location inventory availability
       tags:
       - Inventory Availability
       x-required-permissions:
-      - inventory:on_hand:view
+      - inventory:availability:search
     post:
       description: 'Rejects direct availability writes with 501 NOT_IMPLEMENTED by design: availability is a projection derived from inventory ledger events, and overwriting it would bypass movement validation and break auditability.
 
