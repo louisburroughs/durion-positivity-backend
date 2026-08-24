@@ -49,14 +49,21 @@ class FleetAuthorizationResourceReleaseRunnerTest {
 
     private FleetAuthorizationResourceReleaseRunner runner;
 
+    /**
+     * Held alongside the runner: the per-row release lives in its own bean so that it gets a real
+     * transaction, and the guard tests below drive it directly rather than through a tick.
+     */
+    private FleetAuthorizationResourceReleaser releaser;
+
     @BeforeEach
     void setUp() {
-        runner = new FleetAuthorizationResourceReleaseRunner(
+        releaser = new FleetAuthorizationResourceReleaser(
                 authorizationRepository,
                 technicianAssignmentService,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                Duration.ofHours(4),
-                50);
+                Duration.ofHours(4));
+        runner = new FleetAuthorizationResourceReleaseRunner(
+                authorizationRepository, releaser, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofHours(4), 50);
         when(authorizationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -100,7 +107,7 @@ class FleetAuthorizationResourceReleaseRunnerTest {
         when(authorizationRepository.findDueForResourceRelease(any(), any(), any()))
                 .thenReturn(List.of(authorization));
 
-        runner.releaseOne(authorization);
+        releaser.releaseOne(authorization);
 
         verify(technicianAssignmentService, never()).releaseAssignment(any(), any(), any());
     }
