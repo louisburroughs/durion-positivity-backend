@@ -120,6 +120,14 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
         <!-- Spring Boot Starter Test -->
+        <!-- @DataJpaTest slice (Boot 4 modular test starter): pos-people has JPA entities and
+             repositories but no persistence-slice coverage, and the audit-timestamp behaviour of
+             TimeEntryException can only be proven against a real EntityManager. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
