@@ -39,28 +39,36 @@ public class OpenApiModuleValidator {
 
         List<OpenApiValidationIssue> issues = new ArrayList<>();
         for (Map.Entry<String, PathItem> pathEntry : openApi.getPaths().entrySet()) {
-            String path = pathEntry.getKey();
-            PathItem pathItem = pathEntry.getValue();
-            if (pathItem.readOperationsMap() == null) continue;
+            // readOperationsMap() builds a fresh map from the operation fields on every call —
+            // it can be empty but never null — so it is read once, not guarded and re-read.
             for (Map.Entry<PathItem.HttpMethod, Operation> opEntry :
-                    pathItem.readOperationsMap().entrySet()) {
-                String method = opEntry.getKey().name();
-                Operation operation = opEntry.getValue();
-                String prefix = module + " " + method + " " + path + ":";
-                if (isBlank(operation.getSummary())) {
-                    issues.add(new OpenApiValidationIssue(module, policy.mode(), prefix + " missing summary"));
-                }
-                if (isBlank(operation.getDescription())) {
-                    issues.add(new OpenApiValidationIssue(module, policy.mode(), prefix + " missing description"));
-                }
-                if (policy.annotationDepth() != OpenApiModulePolicy.DepthMode.EXEMPT) {
-                    for (String finding : depthValidator.check(operation)) {
-                        issues.add(new OpenApiValidationIssue(module, policy.depthIssueMode(), prefix + " " + finding));
-                    }
-                }
+                    pathEntry.getValue().readOperationsMap().entrySet()) {
+                checkOperation(module, policy, pathEntry.getKey(), opEntry.getKey(), opEntry.getValue(), issues);
             }
         }
         return List.copyOf(issues);
+    }
+
+    /** The per-operation checks: spec shape (summary, description), then ADR-0042 depth. */
+    private void checkOperation(
+            String module,
+            OpenApiModulePolicy policy,
+            String path,
+            PathItem.HttpMethod method,
+            Operation operation,
+            List<OpenApiValidationIssue> issues) {
+        String prefix = module + " " + method.name() + " " + path + ":";
+        if (isBlank(operation.getSummary())) {
+            issues.add(new OpenApiValidationIssue(module, policy.mode(), prefix + " missing summary"));
+        }
+        if (isBlank(operation.getDescription())) {
+            issues.add(new OpenApiValidationIssue(module, policy.mode(), prefix + " missing description"));
+        }
+        if (policy.annotationDepth() != OpenApiModulePolicy.DepthMode.EXEMPT) {
+            for (String finding : depthValidator.check(operation)) {
+                issues.add(new OpenApiValidationIssue(module, policy.depthIssueMode(), prefix + " " + finding));
+            }
+        }
     }
 
     private static boolean isBlank(String value) {

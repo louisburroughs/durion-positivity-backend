@@ -52,6 +52,37 @@ class OpenApiModuleValidatorTest {
     }
 
     @Test
+    void reportsAnExplicitlyEmptyPathsSection() {
+        // `paths: {}` parses to an empty map rather than null — a different arm of the same
+        // guard as missing-paths.yaml, and the shape a generator emits for a service with no
+        // endpoints yet. Both must read as "missing paths", not as a compliant module.
+        var issues = validator.validate(
+                "pos-api-gateway",
+                Path.of("src/test/resources/openapi/fixtures/module/empty-paths.yaml"),
+                new OpenApiModulePolicy(OpenApiModulePolicy.Mode.STRICT, null));
+
+        assertThat(issues)
+                .singleElement()
+                .extracting(OpenApiValidationIssue::message)
+                .isEqualTo("pos-api-gateway: missing paths section");
+    }
+
+    @Test
+    void reportsABlankSummaryAsMissing() {
+        // summary: "" is present in the YAML but says nothing; treating it as provided would
+        // let a module pass the gate with empty strings.
+        var issues = validator.validate(
+                "pos-documents",
+                Path.of("src/test/resources/openapi/fixtures/module/blank-summary.yaml"),
+                new OpenApiModulePolicy(OpenApiModulePolicy.Mode.REPORT_ONLY, "baseline gap"));
+
+        assertThat(issues)
+                .extracting(OpenApiValidationIssue::message)
+                .contains("pos-documents GET /v1/documents: missing summary")
+                .doesNotContain("pos-documents GET /v1/documents: missing description");
+    }
+
+    @Test
     void throwsForMissingSpecFile() {
         assertThatThrownBy(() -> validator.validate(
                         "pos-order",
