@@ -3,6 +3,8 @@ package com.positivity.customer.internal.service;
 import com.positivity.customer.internal.domain.PartyAttributes;
 import com.positivity.customer.internal.domain.SegmentPredicate;
 import com.positivity.customer.internal.domain.SegmentPredicateEvaluator;
+import com.positivity.customer.internal.entity.AbstractParty;
+import com.positivity.customer.internal.entity.BillingRulesEmbeddable;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.entity.ExtOrganizationPostalAddress;
@@ -13,6 +15,7 @@ import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.entity.Segment;
 import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.MarketingConsent;
+import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.enums.SegmentType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
@@ -71,6 +74,12 @@ public class SegmentResolutionService {
      * audience is smaller than it is.
      */
     public static final int MAX_CANDIDATES = 50_000;
+
+    /** Projected party type when a commercial account's own column is unset. */
+    private static final String DEFAULT_COMMERCIAL_TYPE = PartyType.COMMERCIAL.name();
+
+    /** Individuals have no stored party type; the audience they came from is the type. */
+    private static final String INDIVIDUAL_TYPE = PartyType.PERSON.name();
 
     private final CommercialPartyRepository commercialPartyRepository;
     private final PersonPartyRepository personPartyRepository;
@@ -168,65 +177,13 @@ public class SegmentResolutionService {
                 .limit(MAX_CANDIDATES)
                 .toList();
         List<UUID> ids = accounts.stream().map(CommercialParty::getPartyId).toList();
-        Map<UUID, CommunicationPreference> preferences = preferencesByParty(ids);
-        Map<UUID, Set<UUID>> tags = tagsByParty(ids);
-        Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
-        Map<UUID, List<PartyVehicleLastServiceView>> lastServiceRows = lastServiceByPartyVehicle(ids);
-        Map<UUID, Instant> lastService = latestByParty(lastServiceRows);
-        Map<UUID, Integer> intervalOverrides = intervalOverridesByVehicle(lastServiceRows);
-        Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
+        SharedFacts facts = loadSharedFacts(ids);
         // FI-4 (#1135): organization addresses replicate from pos-people-contact keyed by the
         // commercial party id this module minted.
         Map<UUID, ExtOrganizationPostalAddress> addresses = orgAddressesByParty(ids);
 
         return accounts.stream()
-                .map(account -> {
-                    List<ExtVehicle> owned = vehicles.getOrDefault(account.getPartyId(), List.of());
-                    CommunicationPreference preference = preferences.get(account.getPartyId());
-                    ExtOrganizationPostalAddress address = addresses.get(account.getPartyId());
-                    Integer monthsSinceService = monthsSince(lastService.get(account.getPartyId()));
-                    return new PartyAttributes(
-                            account.getPartyId(),
-                            account.getPartyType() != null
-                                    ? account.getPartyType().name()
-                                    : "COMMERCIAL",
-                            account.getTier() != null ? account.getTier().name() : null,
-                            account.getStatus() != null ? account.getStatus().name() : null,
-                            account.getParentParty() != null,
-                            account.getExternalIdentifiers() != null
-                                    ? Map.copyOf(account.getExternalIdentifiers())
-                                    : Map.of(),
-                            tags.getOrDefault(account.getPartyId(), Set.of()),
-                            account.getBillingRules() != null
-                                    ? account.getBillingRules().getTaxExempt()
-                                    : null,
-                            account.getBillingRules() != null
-                                    ? account.getBillingRules().getCreditHold()
-                                    : null,
-                            account.getBillingRules() != null
-                                    ? account.getBillingRules().getPaymentTerms()
-                                    : null,
-                            consent(preference, true),
-                            consent(preference, false),
-                            distinct(owned, ExtVehicle::getMake),
-                            distinct(owned, ExtVehicle::getModel),
-                            owned.stream()
-                                    .map(ExtVehicle::getYear)
-                                    .filter(java.util.Objects::nonNull)
-                                    .collect(Collectors.toSet()),
-                            owned.stream().anyMatch(ExtVehicle::isActive),
-                            owned.size(),
-                            account.getDisplayName() != null ? account.getDisplayName() : account.getLegalName(),
-                            monthsSinceService,
-                            lastService.containsKey(account.getPartyId()),
-                            daysSince(lastDeclined.get(account.getPartyId())),
-                            serviceDue(
-                                    lastServiceRows.getOrDefault(account.getPartyId(), List.of()), intervalOverrides),
-                            address != null ? address.getCountryCode() : null,
-                            address != null ? address.getRegion() : null,
-                            address != null ? address.getCity() : null,
-                            address != null ? address.getPostalCode() : null);
-                })
+                .map(account -> toAttributes(account, facts, AddressSnapshot.of(addresses.get(account.getPartyId()))))
                 .toList();
     }
 
@@ -234,57 +191,198 @@ public class SegmentResolutionService {
         List<PersonParty> people =
                 personPartyRepository.findAll().stream().limit(MAX_CANDIDATES).toList();
         List<UUID> ids = people.stream().map(PersonParty::getPartyId).toList();
-        Map<UUID, CommunicationPreference> preferences = preferencesByParty(ids);
-        Map<UUID, Set<UUID>> tags = tagsByParty(ids);
-        Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
-        Map<UUID, List<PartyVehicleLastServiceView>> lastServiceRows = lastServiceByPartyVehicle(ids);
-        Map<UUID, Instant> lastService = latestByParty(lastServiceRows);
-        Map<UUID, Integer> intervalOverrides = intervalOverridesByVehicle(lastServiceRows);
-        Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
+        SharedFacts facts = loadSharedFacts(ids);
         // FI-4 (#1135): individual addresses live on the person identity replica, keyed by the
         // people-contact person id, not the local party id.
         Map<UUID, ExtPersonReplica> personReplicas = personReplicasByPersonId(people);
 
         return people.stream()
-                .map(person -> {
-                    List<ExtVehicle> owned = vehicles.getOrDefault(person.getPartyId(), List.of());
-                    CommunicationPreference preference = preferences.get(person.getPartyId());
-                    ExtPersonReplica replica = personReplicas.get(person.getPersonId());
-                    Integer monthsSinceService = monthsSince(lastService.get(person.getPartyId()));
-                    return new PartyAttributes(
-                            person.getPartyId(),
-                            "PERSON",
-                            person.getTier() != null ? person.getTier().name() : null,
-                            person.getStatus() != null ? person.getStatus().name() : null,
-                            false,
-                            Map.of(),
-                            tags.getOrDefault(person.getPartyId(), Set.of()),
-                            null,
-                            null,
-                            null,
-                            consent(preference, true),
-                            consent(preference, false),
-                            distinct(owned, ExtVehicle::getMake),
-                            distinct(owned, ExtVehicle::getModel),
-                            owned.stream()
-                                    .map(ExtVehicle::getYear)
-                                    .filter(java.util.Objects::nonNull)
-                                    .collect(Collectors.toSet()),
-                            owned.stream().anyMatch(ExtVehicle::isActive),
-                            owned.size(),
-                            // Person names live in pos-people-contact (ADR-0015); the customer
-                            // number is the only local label, and it is already non-identifying.
-                            person.getCustomerNumber(),
-                            monthsSinceService,
-                            lastService.containsKey(person.getPartyId()),
-                            daysSince(lastDeclined.get(person.getPartyId())),
-                            serviceDue(lastServiceRows.getOrDefault(person.getPartyId(), List.of()), intervalOverrides),
-                            replica != null ? replica.getAddressCountryCode() : null,
-                            replica != null ? replica.getAddressRegion() : null,
-                            replica != null ? replica.getAddressCity() : null,
-                            replica != null ? replica.getAddressPostalCode() : null);
-                })
+                .map(person ->
+                        toAttributes(person, facts, AddressSnapshot.of(personReplicas.get(person.getPersonId()))))
                 .toList();
+    }
+
+    /**
+     * The per-party facts both audiences need, batch-loaded once in a fixed query count.
+     *
+     * <p>Commercial and individual candidates differ only in the entity they start from and where
+     * their address comes from; everything below is loaded identically for both.
+     */
+    private record SharedFacts(
+            Map<UUID, CommunicationPreference> preferences,
+            Map<UUID, Set<UUID>> tags,
+            Map<UUID, List<ExtVehicle>> vehicles,
+            Map<UUID, List<PartyVehicleLastServiceView>> lastServiceRows,
+            Map<UUID, Instant> lastService,
+            Map<UUID, Integer> intervalOverrides,
+            Map<UUID, Instant> lastDeclined) {}
+
+    private SharedFacts loadSharedFacts(List<UUID> ids) {
+        Map<UUID, List<PartyVehicleLastServiceView>> lastServiceRows = lastServiceByPartyVehicle(ids);
+        return new SharedFacts(
+                preferencesByParty(ids),
+                tagsByParty(ids),
+                vehiclesByAccount(ids),
+                lastServiceRows,
+                latestByParty(lastServiceRows),
+                intervalOverridesByVehicle(lastServiceRows),
+                lastDeclinedByParty(ids));
+    }
+
+    /**
+     * A party's structured postal address, or {@link #NONE} when none is on file.
+     *
+     * <p>One shape for both audiences, which read it from different replicas: commercial parties
+     * from {@code ext_organization_postal_address}, individuals from the person replica (FI-4,
+     * #1135). Collapsing the absent case here is what keeps four repeated null guards out of each
+     * mapper.
+     */
+    private record AddressSnapshot(
+            @Nullable String country,
+            @Nullable String region,
+            @Nullable String city,
+            @Nullable String postalCode) {
+
+        private static final AddressSnapshot NONE = new AddressSnapshot(null, null, null, null);
+
+        static AddressSnapshot of(@Nullable ExtOrganizationPostalAddress address) {
+            return address == null
+                    ? NONE
+                    : new AddressSnapshot(
+                            address.getCountryCode(), address.getRegion(), address.getCity(), address.getPostalCode());
+        }
+
+        static AddressSnapshot of(@Nullable ExtPersonReplica replica) {
+            return replica == null
+                    ? NONE
+                    : new AddressSnapshot(
+                            replica.getAddressCountryCode(),
+                            replica.getAddressRegion(),
+                            replica.getAddressCity(),
+                            replica.getAddressPostalCode());
+        }
+    }
+
+    /**
+     * The billing terms a segment can target, or {@link #NONE} for a party with no billing rules.
+     *
+     * <p>All three fields stay nullable: "no billing rules on file" and "tax exemption not yet
+     * decided" are different states, and flattening the first to {@code false} would put
+     * never-assessed accounts into a tax-exempt-is-false segment.
+     */
+    private record BillingSnapshot(
+            @Nullable Boolean taxExempt,
+            @Nullable Boolean creditHold,
+            @Nullable String paymentTerms) {
+
+        private static final BillingSnapshot NONE = new BillingSnapshot(null, null, null);
+
+        static BillingSnapshot of(@Nullable BillingRulesEmbeddable rules) {
+            return rules == null
+                    ? NONE
+                    : new BillingSnapshot(rules.getTaxExempt(), rules.getCreditHold(), rules.getPaymentTerms());
+        }
+    }
+
+    /** The fleet attributes derived from a party's vehicles; empty for a party with none. */
+    private record VehicleSnapshot(
+            Set<String> makes, Set<String> models, Set<Integer> years, boolean anyActive, long count) {
+
+        static VehicleSnapshot of(List<ExtVehicle> owned) {
+            return new VehicleSnapshot(
+                    distinct(owned, ExtVehicle::getMake),
+                    distinct(owned, ExtVehicle::getModel),
+                    owned.stream()
+                            .map(ExtVehicle::getYear)
+                            .filter(java.util.Objects::nonNull)
+                            .collect(Collectors.toSet()),
+                    owned.stream().anyMatch(ExtVehicle::isActive),
+                    owned.size());
+        }
+    }
+
+    private PartyAttributes toAttributes(CommercialParty account, SharedFacts facts, AddressSnapshot address) {
+        UUID partyId = account.getPartyId();
+        BillingSnapshot billing = BillingSnapshot.of(account.getBillingRules());
+        return build(
+                partyId,
+                // A party type is always projected, even when the column is somehow unset: a
+                // predicate on party.type compares strings, so a null there matches nothing at all
+                // and would silently drop the account from every audience that names its type.
+                java.util.Objects.requireNonNullElse(enumName(account.getPartyType()), DEFAULT_COMMERCIAL_TYPE),
+                account.getParentParty() != null,
+                account.getExternalIdentifiers() == null ? Map.of() : Map.copyOf(account.getExternalIdentifiers()),
+                billing,
+                commercialLabel(account),
+                account,
+                facts,
+                address);
+    }
+
+    private PartyAttributes toAttributes(PersonParty person, SharedFacts facts, AddressSnapshot address) {
+        return build(
+                person.getPartyId(),
+                INDIVIDUAL_TYPE,
+                false,
+                Map.of(),
+                BillingSnapshot.NONE,
+                // Person names live in pos-people-contact (ADR-0015); the customer number is the
+                // only local label, and it is already non-identifying.
+                person.getCustomerNumber(),
+                person,
+                facts,
+                address);
+    }
+
+    private PartyAttributes build(
+            UUID partyId,
+            String partyType,
+            boolean hasParentParty,
+            Map<String, String> externalIdentifiers,
+            BillingSnapshot billing,
+            @Nullable String displayLabel,
+            AbstractParty party,
+            SharedFacts facts,
+            AddressSnapshot address) {
+        VehicleSnapshot fleet = VehicleSnapshot.of(facts.vehicles().getOrDefault(partyId, List.of()));
+        CommunicationPreference preference = facts.preferences().get(partyId);
+        List<PartyVehicleLastServiceView> serviceRows = facts.lastServiceRows().getOrDefault(partyId, List.of());
+        return new PartyAttributes(
+                partyId,
+                partyType,
+                enumName(party.getTier()),
+                enumName(party.getStatus()),
+                hasParentParty,
+                externalIdentifiers,
+                facts.tags().getOrDefault(partyId, Set.of()),
+                billing.taxExempt(),
+                billing.creditHold(),
+                billing.paymentTerms(),
+                consent(preference, true),
+                consent(preference, false),
+                fleet.makes(),
+                fleet.models(),
+                fleet.years(),
+                fleet.anyActive(),
+                fleet.count(),
+                displayLabel,
+                monthsSince(facts.lastService().get(partyId)),
+                facts.lastService().containsKey(partyId),
+                daysSince(facts.lastDeclined().get(partyId)),
+                serviceDue(serviceRows, facts.intervalOverrides()),
+                address.country(),
+                address.region(),
+                address.city(),
+                address.postalCode());
+    }
+
+    /** The account's own display name, falling back to the legal name it was registered under. */
+    private static @Nullable String commercialLabel(CommercialParty account) {
+        return account.getDisplayName() != null ? account.getDisplayName() : account.getLegalName();
+    }
+
+    private static @Nullable String enumName(@Nullable Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     private Set<UUID> audienceMemberIds(AudienceType audienceType, List<UUID> candidateIds) {

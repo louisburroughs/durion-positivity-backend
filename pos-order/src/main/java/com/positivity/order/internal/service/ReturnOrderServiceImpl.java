@@ -45,6 +45,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -128,52 +129,11 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         Set<UUID> seenLineIds = new HashSet<>();
 
         for (ReturnLineCommand lineCommand : command.lines()) {
-            // One return line per sold line: duplicates would each cap-check against the same
-            // remainder (letting the combined qty exceed the cap) and collide on the inventory
-            // restock idempotency key (returnOrderId:originalOrderLineId).
-            if (!seenLineIds.add(lineCommand.originalOrderLineId())) {
-                throw new IllegalArgumentException("Duplicate return line for order line "
-                        + lineCommand.originalOrderLineId() + "; combine the quantity into a single line");
+            BigDecimal lineRefund =
+                    appendReturnLine(returnOrder, lineCommand, original, soldLines, seenLineIds, overCap);
+            if (lineRefund != null) {
+                totalRefund = totalRefund.add(lineRefund);
             }
-            SalesOrderLine sold = soldLines.get(lineCommand.originalOrderLineId());
-            if (sold == null) {
-                throw new IllegalArgumentException(
-                        "Line " + lineCommand.originalOrderLineId() + " is not part of order " + original.getOrderId());
-            }
-            if (lineCommand.returnQty() <= 0) {
-                throw new IllegalArgumentException(
-                        "returnQty must be positive for line " + lineCommand.originalOrderLineId());
-            }
-            ReturnCondition condition = parseCondition(lineCommand.condition());
-            boolean returnable = lineReturnable(sold);
-            if (!returnable) {
-                if (condition == ReturnCondition.WARRANTY) {
-                    throw new WarrantyReturnRoutingException(sold.getOrderLineId());
-                }
-                throw new IllegalArgumentException("Line " + sold.getOrderLineId() + " is not returnable");
-            }
-
-            // Row-lock the sold line so concurrent returns of the same remainder serialize (R5.2).
-            salesOrderLineRepository.findByOrderLineIdForUpdate(sold.getOrderLineId());
-            int alreadyReturned =
-                    returnOrderLineRepository.sumReturnedQty(sold.getOrderLineId(), CAP_EXCLUDED_STATUSES);
-            int returnableQty = Math.max(0, sold.getQuantity() - alreadyReturned);
-            if (lineCommand.returnQty() > returnableQty) {
-                overCap.add(new OverCapReturnException.LineCap(
-                        sold.getOrderLineId(), lineCommand.returnQty(), returnableQty));
-                continue;
-            }
-
-            BigDecimal lineRefund = perLineRefund(sold, lineCommand.returnQty());
-            totalRefund = totalRefund.add(lineRefund);
-            returnOrder.addLine(ReturnOrderLine.builder()
-                    .originalOrderLineId(sold.getOrderLineId())
-                    .itemSku(sold.getItemSku())
-                    .returnQty(lineCommand.returnQty())
-                    .condition(condition)
-                    .lineRefund(lineRefund)
-                    .serialNumbers(new ArrayList<>(lineCommand.serialNumbers()))
-                    .build());
         }
 
         if (!overCap.isEmpty()) {
@@ -194,6 +154,88 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
                 totalRefund,
                 saved.getStatus());
         return toSummary(saved);
+    }
+
+    /**
+     * Cap-checks one requested line and, when it fits, adds it to the return.
+     *
+     * <p>Over-cap lines are collected rather than thrown on immediately, so one request reports
+     * every line that exceeds its remainder instead of only the first.
+     *
+     * @return the line's refund, or {@code null} when it exceeded the cap and was recorded in
+     *     {@code overCap} instead
+     */
+    @Nullable
+    private BigDecimal appendReturnLine(
+            ReturnOrder returnOrder,
+            ReturnLineCommand lineCommand,
+            SalesOrder original,
+            Map<UUID, SalesOrderLine> soldLines,
+            Set<UUID> seenLineIds,
+            List<OverCapReturnException.LineCap> overCap) {
+        ReturnCondition condition = parseCondition(lineCommand.condition());
+        SalesOrderLine sold = requireReturnableSoldLine(lineCommand, condition, original, soldLines, seenLineIds);
+
+        // Row-lock the sold line so concurrent returns of the same remainder serialize (R5.2).
+        salesOrderLineRepository.findByOrderLineIdForUpdate(sold.getOrderLineId());
+        int alreadyReturned = returnOrderLineRepository.sumReturnedQty(sold.getOrderLineId(), CAP_EXCLUDED_STATUSES);
+        int returnableQty = Math.max(0, sold.getQuantity() - alreadyReturned);
+        if (lineCommand.returnQty() > returnableQty) {
+            overCap.add(
+                    new OverCapReturnException.LineCap(sold.getOrderLineId(), lineCommand.returnQty(), returnableQty));
+            return null;
+        }
+
+        BigDecimal lineRefund = perLineRefund(sold, lineCommand.returnQty());
+        returnOrder.addLine(ReturnOrderLine.builder()
+                .originalOrderLineId(sold.getOrderLineId())
+                .itemSku(sold.getItemSku())
+                .returnQty(lineCommand.returnQty())
+                .condition(condition)
+                .lineRefund(lineRefund)
+                .serialNumbers(new ArrayList<>(lineCommand.serialNumbers()))
+                .build());
+        return lineRefund;
+    }
+
+    /**
+     * The four ways a requested line can be rejected outright, before any cap arithmetic.
+     *
+     * <p>These are argument errors rather than cap failures, so each throws where it is found
+     * instead of being collected: a duplicated, unknown, non-positive or non-returnable line means
+     * the request itself is wrong, and reporting a remaining quantity for it would be meaningless.
+     *
+     * @return the sold line this command refers to
+     */
+    private SalesOrderLine requireReturnableSoldLine(
+            ReturnLineCommand lineCommand,
+            ReturnCondition condition,
+            SalesOrder original,
+            Map<UUID, SalesOrderLine> soldLines,
+            Set<UUID> seenLineIds) {
+        // One return line per sold line: duplicates would each cap-check against the same
+        // remainder (letting the combined qty exceed the cap) and collide on the inventory
+        // restock idempotency key (returnOrderId:originalOrderLineId).
+        if (!seenLineIds.add(lineCommand.originalOrderLineId())) {
+            throw new IllegalArgumentException("Duplicate return line for order line "
+                    + lineCommand.originalOrderLineId() + "; combine the quantity into a single line");
+        }
+        SalesOrderLine sold = soldLines.get(lineCommand.originalOrderLineId());
+        if (sold == null) {
+            throw new IllegalArgumentException(
+                    "Line " + lineCommand.originalOrderLineId() + " is not part of order " + original.getOrderId());
+        }
+        if (lineCommand.returnQty() <= 0) {
+            throw new IllegalArgumentException(
+                    "returnQty must be positive for line " + lineCommand.originalOrderLineId());
+        }
+        if (!lineReturnable(sold)) {
+            if (condition == ReturnCondition.WARRANTY) {
+                throw new WarrantyReturnRoutingException(sold.getOrderLineId());
+            }
+            throw new IllegalArgumentException("Line " + sold.getOrderLineId() + " is not returnable");
+        }
+        return sold;
     }
 
     @Override
