@@ -14,6 +14,8 @@ Utility scripts for development, operations, testing, and deployment.
 | [`workorder-kafka-local.sh`](#workorder-kafka-localsh) | Kafka | Manage the local Kafka stack for `pos-workorder` |
 | [`check-noarg-now.sh`](#check-noarg-nowsh) | Code Quality | Detect forbidden no-arg `Instant.now()` / `LocalDateTime.now()` calls |
 | [`check-flyway-hygiene.sh`](#check-flyway-hygienesh) | Code Quality | Validate Flyway migration hygiene across `pos-*` modules |
+| [`check-coverage-floor-drift.sh`](#check-coverage-floor-driftsh) | Coverage | Verify each module's JaCoCo floor still sits a sane distance under its coverage |
+| [`update-coverage-floors.sh`](#update-coverage-floorssh) | Coverage | Re-derive the per-module JaCoCo coverage floors and write them into the poms |
 | [`verify-secrets.sh`](#verify-secretssh) | Security | Scan `application.yml` files for hardcoded secrets |
 | [`verify-docker-compose-secrets.sh`](#verify-docker-compose-secretssh) | Security | Verify `docker-compose.yml` secrets are fully externalized |
 | [`check-authz-doc-drift.sh`](#check-authz-doc-driftsh) | Documentation / Security | Check live authz docs against current token, endpoint, and catalog-version expectations |
@@ -350,6 +352,59 @@ Verifies that every module with a committed `openapi.yaml` is registered in
 - Exits non-zero on either kind of drift; runs in CI alongside the other drift guards.
 - Registration mode is not checked — only presence. A module that cannot be made `STRICT`-clean should be registered `REPORT_ONLY` or `EXCEPTION` rather than left out.
 - `EXEMPT_MODULES` in the script exists for specs the validator cannot load at all; prefer an `EXCEPTION` entry with a reason in the inventory itself.
+
+---
+
+### `check-coverage-floor-drift.sh`
+
+Verifies that every module's coverage ratchet still gates something.
+
+Root `pom.xml` checks each module against `<jacoco.line.min>` / `<jacoco.branch.min>`, set a few points below measured coverage (`docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md` §6.2). Nothing kept those floors in step with the code: `jacoco:check` catches a module falling below its floor, but not a floor left far behind a module that improved. When this check was written the reactor's floors permitted roughly 3,400 covered lines and 970 covered branches to disappear — about four points of overall coverage — without one build turning red.
+
+**Usage:**
+```bash
+# Measure the way both binding gates measure, then check.
+./mvnw -pl pos-coverage-aggregate -am verify -DskipITs -Darchunit.skipTests=true -T 1C
+./scripts/check-coverage-floor-drift.sh
+```
+
+**Fails on:**
+- `BREACH` — measured coverage is under the floor (`jacoco:check` fails too; this names the module and counter)
+- `THIN` — the cushion is under `--min-cushion` (default 2). §6.2: "a cushion any thinner than about two points is not a gate, it is a coin toss"
+- `STALE` — the cushion is over `--max-cushion` (default 6), i.e. coverage rose and the floor was never raised behind it
+- `UNGUARDED` — a module with at least `--min-lines` lines (default 50) carries no floor
+
+**Notes:**
+- Reads each module's own `target/site/jacoco/jacoco.csv`, never the aggregate — the aggregate credits a shared library with its consumers' coverage, and it is not what `jacoco:check` evaluates (§6.1).
+- Refuses to score coverage produced with ITs. Failsafe inherits the JaCoCo agent through `@{argLine}` and appends to the same `jacoco.exec`, so an IT-inclusive run yields floors the gate can never reproduce. `--allow-its` overrides, at the cost of that guarantee.
+- Modules with no `jacoco.csv` are listed and skipped, not failed — only a build that ran tests produces one.
+- Runs nightly in the `Full Coverage SonarCloud Analysis` job, right after the ratchet itself.
+- Fix any finding with `./scripts/update-coverage-floors.sh --apply`.
+
+---
+
+### `update-coverage-floors.sh`
+
+Re-derives every module's JaCoCo floors from the last `-DskipITs` build and writes them into the module poms. This is what makes the ratchet a ratchet — §6.2 says "raise a module's floor when its coverage rises", and before this script nothing did.
+
+**Usage:**
+```bash
+./mvnw -pl pos-coverage-aggregate -am verify -DskipITs -Darchunit.skipTests=true -T 1C
+./scripts/update-coverage-floors.sh            # preview the changes
+./scripts/update-coverage-floors.sh --apply    # write the poms
+```
+
+**Options:**
+- `--cushion N` — points below measured coverage (default 3, per §6.2)
+- `--allow-lower` — permit lowering a floor; §6.2 requires the reason in the commit message
+- `--allow-its` — proceed despite Failsafe reports, accepting floors the gate cannot reproduce
+
+**Notes:**
+- Floors are raised, never lowered: a proposal below the standing floor is reported and dropped unless `--allow-lower`.
+- Never writes a `0.00` floor — "a 0.00 floor is not a gate" (§6.2); an all-zero module needs first tests, not a threshold.
+- Refreshes the `Coverage ratchet: measured …` comment in each pom it touches, so the recorded numbers and cushion stay honest.
+- Adds the properties (and a `<properties>` block, in POM-sequence position) to a module that has none.
+- Both scripts share `coverage_floors.py`; its tests are `scripts/tests/test_coverage_floors.py`.
 
 ---
 

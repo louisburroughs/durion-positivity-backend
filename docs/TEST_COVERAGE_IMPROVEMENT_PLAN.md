@@ -762,6 +762,7 @@ them are binding:
 | PR — "Test changed modules and dependents" | `test` + `jacoco:check`, `-DskipITs` | **yes** — pre-merge gate |
 | main — "…incl. ITs" | `verify`, ITs included | no — `haltOnFailure=false` |
 | nightly — "Build aggregate coverage report" | `verify -DskipITs`, full reactor | **yes** — job fails on any violation |
+| nightly — "Enforce coverage floor drift" | the same `-DskipITs` reports, read by `scripts/check-coverage-floor-drift.sh` | **yes** — job fails on a stale, thin, or missing floor |
 
 The PR step invokes `jacoco:check` directly instead of running `verify`. The
 `check-ratchet` execution is bound to `verify`, so a build that stops at `test`
@@ -779,11 +780,16 @@ are derived (§6.1).
 **Working rules.**
 
 - Raise a module's floor when its coverage rises — that is what makes it a
-  ratchet rather than a fixed bar.
-- Never lower a floor without saying why in the commit message.
+  ratchet rather than a fixed bar. `scripts/update-coverage-floors.sh --apply`
+  does this for the whole reactor; `scripts/check-coverage-floor-drift.sh` fails
+  the nightly when a floor has been left behind. Both are described in
+  `scripts/README.md`, and §6.5 records why they exist.
+- Never lower a floor without saying why in the commit message. The updater
+  refuses to lower one at all unless `--allow-lower` is passed.
 - Re-derive floors only from a `-DskipITs` run. If you find yourself reading a
   coverage number that included the ITs, stop: that number cannot be turned into
-  a floor, because the gate will never reproduce it.
+  a floor, because the gate will never reproduce it. Both scripts refuse to run
+  when they find Failsafe reports, for exactly this reason.
 - A floor sitting within ~2 points of measured coverage is not "tight", it is
   unstable, and it will fail on a night when nothing changed. Treat a
   thin-margin module as a bug in the floor or a gap in the tests, not as a
@@ -855,6 +861,59 @@ The fix, applied in `ci.yml`:
 Branch-level coverage for `main` now has exactly one source: the aggregate report.
 Keep it that way — any new job that runs `sonar-maven-plugin` outside PR mode must
 import the aggregate XML, never per-module reports.
+
+### 6.5 The ratchet is now enforced in both directions (2026-08-24)
+
+§6.2 has said "raise a module's floor when its coverage rises" since the ratchet
+landed. Nothing implemented it. Floors were hand-edited, so they moved only when
+someone remembered, and `jacoco:check` is blind in that direction by
+construction: it fails a module that falls **below** its floor and says nothing
+about a floor sitting far **under** a module that improved.
+
+Measured on `main` at the time of writing, summing every guarded module's
+distance from its own floor:
+
+```
+3,437 covered lines + 971 covered conditions may go uncovered before any floor trips
+implied overall floor: 74.2%, against 78.2% measured
+```
+
+Four points of overall coverage could be given back without one build turning
+red — on a project whose gate target is 80%. The individual findings were small
+and specific: `pos-supplier` sat 1.0 point over both its floors (the sub-2-point
+margin this section calls a coin toss), `pos-domain-events` more than 10 points
+over its line floor, and `pos-web-common` carried no floor at all despite having
+real code and 188 lines to cover — it is absent from §6.1's table entirely.
+
+Two scripts close this, sharing `scripts/coverage_floors.py`:
+
+| script | what it does |
+|---|---|
+| `scripts/update-coverage-floors.sh` | re-derives every floor from the last `-DskipITs` build (measured coverage minus `--cushion`, default 3, rounded down to 2dp — the §6.2 formula) and writes the poms |
+| `scripts/check-coverage-floor-drift.sh` | fails on `BREACH`, `THIN` (cushion < 2), `STALE` (cushion > 6), or `UNGUARDED` (a module over 50 lines with no floor) |
+
+Both inherit this section's constraints rather than restating them: they read
+each module's own `jacoco.csv` and not the aggregate (§6.1), they refuse to
+score a build whose `target/failsafe-reports` shows Failsafe ran, and the
+updater raises but never lowers unless `--allow-lower` is passed. The drift
+check runs in the nightly `code-quality-full` job immediately after the ratchet.
+
+`STALE` at 6 points is deliberately two full cushions: at 3 points the check
+would fire on the ordinary drift of a module that gained a test since the last
+re-derivation, and a gate that fires on healthy movement gets switched off.
+
+**First run.** The floors in §6.1 were derived on 2026-08-16 and the check has
+never been run against a fresh measurement, so the first nightly after this
+lands will report the modules that have drifted since. The fix is one command
+against that build's reports:
+
+```bash
+./mvnw -pl pos-coverage-aggregate -am verify -DskipITs -Darchunit.skipTests=true -T 1C
+scripts/update-coverage-floors.sh --apply
+```
+
+Then regenerate §6.1's table from the same reports, so the document and the poms
+describe one measurement rather than two.
 
 ## 7. What is still open
 
