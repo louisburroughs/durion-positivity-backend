@@ -45,7 +45,10 @@ class CustomerCommandListenerTest {
     @BeforeEach
     void setUp() {
         listener = new CustomerCommandListener(
-                TEST_CLOCK, new ObjectMapper(), replayService, segmentService, suppressionService);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                replayService,
+                new CustomerCommandHandlers(segmentService, suppressionService));
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 
