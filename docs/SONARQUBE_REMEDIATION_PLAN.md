@@ -1,7 +1,8 @@
 # SonarQube Remediation Plan
 
-Status: Phases 1 and 2 implemented (see §2 and §3). Phase 3.1 triaged — all 34
-`S6809` sites classified, 9 real and 25 needing no change; fixes not yet written.
+Status: Phases 1, 2 and 3.1 implemented. All 34 `S6809` sites are classified —
+9 were real and are fixed, 25 need no change (see §4.1). Phases 3.2–3.6 not
+started.
 The `new_reliability_rating` fix is in, so the next analysis should return the
 quality gate to green — confirm against §7 before treating §1's table as stale.
 Date: 2026-08-24
@@ -261,10 +262,18 @@ Note the negative evidence in `CustomerCommandListener`: the third branch,
 is private and carries no `@Transactional`. Sonar is discriminating here, not
 pattern-matching on self-calls.
 
-Fix shape for all nine: extract the transactional writer into a collaborator
-bean and inject it, so the call crosses a proxy. Each needs a test that proves
-the boundary — the writer rolling back without taking its caller's loop down, or
-the handler's partial work not surviving a mid-handler failure.
+**All nine are fixed.** Each transactional writer moved into a collaborator bean
+so the call crosses a proxy: `MktCatVariantStager`, `WorkorderApprovalRecorder`,
+`FleetAuthorizationResourceReleaser` and `CustomerCommandHandlers`. The splits
+follow the data rather than the rule — in every case the moved methods took their
+exclusive collaborators with them, so no field is now shared across the seam.
+
+`MktCatVariantStagerTransactionTest` covers the boundary directly, following the
+existing `SupplierExchangeAuditPersistenceTest` pattern (`@DataJpaTest` with
+`Propagation.NOT_SUPPORTED`, because a test wrapped in its own rolled-back
+transaction cannot observe a commit boundary and would pass with the bug
+present). It was checked against the bug: with `@Transactional` removed from
+`stageAndPublish`, `failedOutboxWriteRollsBackTheStagedRow` fails.
 
 **Class 1 — no action: the caller already holds an equivalent or wider
 transaction (25 sites).**
@@ -421,7 +430,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | ----- | ------- | -----: | -----: | ----------- | ------ |
 | 1 | Reliability `S2637` | 2 | 0.5 h | **Red → Green** | done |
 | 2 | BLOCKER `S2699` | 1 | 0.2 h | none | done |
-| 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | triaged: 9 real, 25 no-action |
+| 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | done: 9 fixed, 25 no-action |
 | 3.2–3.4 | `S1948`, `S3252`, `S1186` | 20 | 2.0 h | none | not started |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
 | 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |
