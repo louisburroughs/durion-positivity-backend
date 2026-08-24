@@ -312,136 +312,162 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 .atStartOfDay(ZoneOffset.UTC)
                 .toInstant();
 
-        int policiesEvaluated = 0;
-        int belowMinimum = 0;
-        int tasksCreated = 0;
-        int tasksRefreshed = 0;
-        int policiesSkipped = 0;
-        int suggestionsCreated = 0;
-        int suggestionsRefreshed = 0;
-
+        ScanTally tally = new ScanTally();
         for (ReplenishmentPolicy policy : replenishmentPolicyRepository.findAll()) {
-            String suspensionReason = suspensionReason(policy, now);
-            if (suspensionReason != null) {
-                logSkip("Batch scan", policy, suspensionReason);
-                policiesSkipped++;
-                continue;
-            }
-            policiesEvaluated++;
-            Projection projection = project(policy);
-            if (!projection.triggered()) {
-                continue;
-            }
-            belowMinimum++;
-
-            // F4 (#1044): PURCHASE-preferring policies produce a purchase suggestion, not a
-            // ReplenishmentTask — see evaluatePurchaseSuggestion for guards and netting.
-            if (policy.getPreferredSourceType() == ReplenishmentSourceType.PURCHASE) {
-                switch (evaluatePurchaseSuggestion(policy, projection, startOfDayUtc)) {
-                    case CREATED -> suggestionsCreated++;
-                    case REFRESHED -> suggestionsRefreshed++;
-                    case NONE -> {
-                        /* covered by in-progress supply or same-day guard */
-                    }
-                }
-                continue;
-            }
-
-            // F5 (#1045): an open source TransferOrder already covers this SKU→site need — do
-            // not re-source it (a DRAFT transfer is not yet netted by the forecast).
-            if (replenishmentSourcingService.hasOpenSourceTransfer(policy)) {
-                log.debug(
-                        "Batch scan skip (open source transfer covers the need): sku={} locationId={}",
-                        policy.getItemSKU(),
-                        policy.getLocationId());
-                continue;
-            }
-
-            Optional<ReplenishmentTask> openTask =
-                    replenishmentTaskRepository
-                            .findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
-                                    policy.getItemSKU(), policy.getLocationId(), OPEN_STATUSES);
-            if (openTask.isPresent()) {
-                // Re-derive the open task's quantity, netting any OTHER open tasks for the
-                // same SKU/location (the refreshed task itself is excluded from in-progress
-                // so its own quantity is replaced, not subtracted).
-                int quantityNeeded =
-                        quantityToReplenish(policy, projection, openTask.get().getTaskId());
-                if (quantityNeeded > 0 && refreshOpenTask(openTask.get(), quantityNeeded, deadlineFor(projection))) {
-                    logRefresh(policy, projection, quantityNeeded, openTask.get());
-                    tasksRefreshed++;
-                }
-                continue;
-            }
-
-            int quantityNeeded = quantityToReplenish(policy, projection, null);
-            if (quantityNeeded == 0) {
-                log.debug(
-                        "Batch scan skip (in-progress supply covers to max): sku={} locationId={}",
-                        policy.getItemSKU(),
-                        policy.getLocationId());
-                continue;
-            }
-
-            boolean alreadyScannedToday =
-                    replenishmentTaskRepository
-                            .existsByItemSKUAndDestinationLocationIdAndTriggerTypeAndCreatedAtGreaterThanEqual(
-                                    policy.getItemSKU(),
-                                    policy.getLocationId(),
-                                    ReplenishmentTriggerType.BATCH,
-                                    startOfDayUtc);
-            if (alreadyScannedToday) {
-                log.debug(
-                        "Batch scan skip (already created today): sku={} locationId={}",
-                        policy.getItemSKU(),
-                        policy.getLocationId());
-                continue;
-            }
-
-            // F5 (#1045): resolve real sourcing. A triggered EITHER policy with no internal
-            // surplus but a selectable vendor routes to a purchase suggestion (F4) instead of
-            // a task; everything else materializes a task (same-site bin move, cross-site
-            // transfer, or BACKSTOCK_UNAVAILABLE).
-            ReplenishmentSourcingService.SourcingResolution resolution =
-                    replenishmentSourcingService.resolve(policy, quantityNeeded);
-            if (resolution.kind() == ReplenishmentSourcingService.Kind.PURCHASE_FALLBACK) {
-                switch (evaluatePurchaseSuggestion(policy, projection, startOfDayUtc)) {
-                    case CREATED -> suggestionsCreated++;
-                    case REFRESHED -> suggestionsRefreshed++;
-                    case NONE -> {
-                        /* covered by in-progress supply or same-day guard */
-                    }
-                }
-                continue;
-            }
-
-            replenishmentTaskRepository.save(newTask(
-                    policy, quantityNeeded, ReplenishmentTriggerType.BATCH, deadlineFor(projection), resolution));
-            logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded, resolution);
-            tasksCreated++;
+            scanPolicy(policy, now, startOfDayUtc, tally);
         }
 
         log.info(
                 "Batch replenishment scan complete: policiesEvaluated={} belowMinimum={} tasksCreated={}"
                         + " tasksRefreshed={} suggestionsCreated={} suggestionsRefreshed={} policiesSkipped={}",
-                policiesEvaluated,
-                belowMinimum,
-                tasksCreated,
-                tasksRefreshed,
-                suggestionsCreated,
-                suggestionsRefreshed,
-                policiesSkipped);
+                tally.policiesEvaluated,
+                tally.belowMinimum,
+                tally.tasksCreated,
+                tally.tasksRefreshed,
+                tally.suggestionsCreated,
+                tally.suggestionsRefreshed,
+                tally.policiesSkipped);
 
         return ReplenishmentScanResultResponse.builder()
-                .policiesEvaluated(policiesEvaluated)
-                .policiesBelowMinimum(belowMinimum)
-                .tasksCreated(tasksCreated)
-                .tasksRefreshed(tasksRefreshed)
-                .suggestionsCreated(suggestionsCreated)
-                .suggestionsRefreshed(suggestionsRefreshed)
-                .policiesSkipped(policiesSkipped)
+                .policiesEvaluated(tally.policiesEvaluated)
+                .policiesBelowMinimum(tally.belowMinimum)
+                .tasksCreated(tally.tasksCreated)
+                .tasksRefreshed(tally.tasksRefreshed)
+                .suggestionsCreated(tally.suggestionsCreated)
+                .suggestionsRefreshed(tally.suggestionsRefreshed)
+                .policiesSkipped(tally.policiesSkipped)
                 .scanAt(now.toString())
                 .build();
+    }
+
+    /** What one batch scan has decided so far. Mutable on purpose: one instance per scan. */
+    private static final class ScanTally {
+        private int policiesEvaluated;
+        private int belowMinimum;
+        private int tasksCreated;
+        private int tasksRefreshed;
+        private int policiesSkipped;
+        private int suggestionsCreated;
+        private int suggestionsRefreshed;
+    }
+
+    /**
+     * Decides what one policy needs, and records it against the scan's tally.
+     *
+     * <p>The order of the guards is the policy: suspension, then trigger, then the sourcing
+     * decisions in descending preference. Each `return` below is a deliberate "nothing to do for
+     * this policy", and the comment on it says which rule made that call.
+     */
+    private void scanPolicy(
+            @NonNull ReplenishmentPolicy policy,
+            @NonNull Instant now,
+            @NonNull Instant startOfDayUtc,
+            @NonNull ScanTally tally) {
+        String suspensionReason = suspensionReason(policy, now);
+        if (suspensionReason != null) {
+            logSkip("Batch scan", policy, suspensionReason);
+            tally.policiesSkipped++;
+            return;
+        }
+        tally.policiesEvaluated++;
+        Projection projection = project(policy);
+        if (!projection.triggered()) {
+            return;
+        }
+        tally.belowMinimum++;
+
+        // F4 (#1044): PURCHASE-preferring policies produce a purchase suggestion, not a
+        // ReplenishmentTask — see evaluatePurchaseSuggestion for guards and netting.
+        if (policy.getPreferredSourceType() == ReplenishmentSourceType.PURCHASE) {
+            tallyPurchaseSuggestion(policy, projection, startOfDayUtc, tally);
+            return;
+        }
+
+        // F5 (#1045): an open source TransferOrder already covers this SKU→site need — do
+        // not re-source it (a DRAFT transfer is not yet netted by the forecast).
+        if (replenishmentSourcingService.hasOpenSourceTransfer(policy)) {
+            log.debug(
+                    "Batch scan skip (open source transfer covers the need): sku={} locationId={}",
+                    policy.getItemSKU(),
+                    policy.getLocationId());
+            return;
+        }
+
+        Optional<ReplenishmentTask> openTask =
+                replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
+                        policy.getItemSKU(), policy.getLocationId(), OPEN_STATUSES);
+        if (openTask.isPresent()) {
+            // Re-derive the open task's quantity, netting any OTHER open tasks for the
+            // same SKU/location (the refreshed task itself is excluded from in-progress
+            // so its own quantity is replaced, not subtracted).
+            int quantityNeeded =
+                    quantityToReplenish(policy, projection, openTask.get().getTaskId());
+            if (quantityNeeded > 0 && refreshOpenTask(openTask.get(), quantityNeeded, deadlineFor(projection))) {
+                logRefresh(policy, projection, quantityNeeded, openTask.get());
+                tally.tasksRefreshed++;
+            }
+            return;
+        }
+
+        int quantityNeeded = quantityToReplenish(policy, projection, null);
+        if (quantityNeeded == 0) {
+            log.debug(
+                    "Batch scan skip (in-progress supply covers to max): sku={} locationId={}",
+                    policy.getItemSKU(),
+                    policy.getLocationId());
+            return;
+        }
+
+        boolean alreadyScannedToday =
+                replenishmentTaskRepository
+                        .existsByItemSKUAndDestinationLocationIdAndTriggerTypeAndCreatedAtGreaterThanEqual(
+                                policy.getItemSKU(),
+                                policy.getLocationId(),
+                                ReplenishmentTriggerType.BATCH,
+                                startOfDayUtc);
+        if (alreadyScannedToday) {
+            log.debug(
+                    "Batch scan skip (already created today): sku={} locationId={}",
+                    policy.getItemSKU(),
+                    policy.getLocationId());
+            return;
+        }
+
+        // F5 (#1045): resolve real sourcing. A triggered EITHER policy with no internal
+        // surplus but a selectable vendor routes to a purchase suggestion (F4) instead of
+        // a task; everything else materializes a task (same-site bin move, cross-site
+        // transfer, or BACKSTOCK_UNAVAILABLE).
+        ReplenishmentSourcingService.SourcingResolution resolution =
+                replenishmentSourcingService.resolve(policy, quantityNeeded);
+        if (resolution.kind() == ReplenishmentSourcingService.Kind.PURCHASE_FALLBACK) {
+            tallyPurchaseSuggestion(policy, projection, startOfDayUtc, tally);
+            return;
+        }
+
+        replenishmentTaskRepository.save(
+                newTask(policy, quantityNeeded, ReplenishmentTriggerType.BATCH, deadlineFor(projection), resolution));
+        logDecision("created", ReplenishmentTriggerType.BATCH, policy, projection, quantityNeeded, resolution);
+        tally.tasksCreated++;
+    }
+
+    /**
+     * Runs the F4 suggestion evaluation and records its outcome.
+     *
+     * <p>Shared by both routes into it — a PURCHASE-preferring policy and an EITHER policy that
+     * fell back to purchase — so the two cannot drift in how they count.
+     */
+    private void tallyPurchaseSuggestion(
+            @NonNull ReplenishmentPolicy policy,
+            @NonNull Projection projection,
+            @NonNull Instant startOfDayUtc,
+            @NonNull ScanTally tally) {
+        switch (evaluatePurchaseSuggestion(policy, projection, startOfDayUtc)) {
+            case CREATED -> tally.suggestionsCreated++;
+            case REFRESHED -> tally.suggestionsRefreshed++;
+            case NONE -> {
+                /* covered by in-progress supply or same-day guard */
+            }
+        }
     }
 
     /** Outcome of one PURCHASE-policy suggestion evaluation (F4, #1044). */
