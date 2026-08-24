@@ -341,4 +341,39 @@ class PredicateParserTest {
         assertThat(eval("eventType=='billing.invoicePosted'&&payload.amount>100", payload))
                 .isTrue();
     }
+
+    @Nested
+    @DisplayName("Comparison-operator coverage (Phase 3.6)")
+    class ComparisonOperatorCoverage {
+
+        // Closing the last branches the tokenizer split left uncovered. These are real semantics,
+        // not coverage filler: string ordering and numeric equality are both reachable from a rule
+        // an author can write, and neither was asserted anywhere.
+
+        @Test
+        @DisplayName("Ordering operators are rejected against a string literal at parse time")
+        void stringOrderingIsRejectedByTheGrammar() {
+            // Worth recording why compareString's ordering arm shows as uncovered: it is not a
+            // testing gap, it is unreachable. The parser refuses `>=` against a quoted string
+            // before evaluation is ever reached, so that arm is defensive depth behind a guard.
+            // Lexicographic ordering of grades is exactly the kind of thing a rule author might
+            // assume works, and the grammar says so plainly rather than comparing strings by
+            // accident.
+            assertThatThrownBy(() -> eval("payload.grade >= 'B'", payload("grade", "C")))
+                    .isInstanceOf(ParseException.class)
+                    .hasMessageContaining("requires a numeric literal");
+        }
+
+        @Test
+        @DisplayName("Numeric equality compares by value, not by scale or boxed type")
+        void numericEqualityComparesByValue() {
+            // 5 and 5.00 are equal numerically; a BigDecimal.equals() would say otherwise, and a
+            // posting rule keyed on an amount must not depend on how the payload spelled it.
+            assertThat(eval("payload.amount == 5", payload("amount", new BigDecimal("5.00"))))
+                    .isTrue();
+            assertThat(eval("payload.amount == 5", payload("amount", 5))).isTrue();
+            assertThat(eval("payload.amount == 5", payload("amount", new BigDecimal("5.01"))))
+                    .isFalse();
+        }
+    }
 }
