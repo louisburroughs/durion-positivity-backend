@@ -196,17 +196,43 @@ public class InventoryPermissionRegistry {
      */
     public static final String LOT_MANAGE = "inventory:lot:manage";
 
-    // ==================== INVENTORY VIEW PERMISSIONS ====================
+    // ==================== ON-HAND VIEW PERMISSIONS ====================
 
     /**
-     * View on-hand inventory levels.
+     * View the stock record itself at a location: counted on-hand quantity, lot and serial detail,
+     * location contents and rollups. This is what is physically there, uncommitted-for.
+     *
+     * <p>Does NOT confer availability (ADR-0057, #1494): availability is the derived projection net
+     * of prior commitments and is gated by {@link #AVAILABILITY_READ} / {@link #AVAILABILITY_SEARCH}.
      */
     public static final String INVENTORY_VIEW = "inventory:on_hand:view";
 
     /**
-     * Search inventory across locations.
+     * Read the stock record across locations rather than at one — the cross-location counterpart of
+     * {@link #INVENTORY_VIEW}.
      */
     public static final String INVENTORY_SEARCH = "inventory:on_hand:search";
+
+    // ==================== AVAILABILITY PERMISSIONS ====================
+
+    /**
+     * Read the scope-limited availability answer for a SKU: on-hand net of prior commitments (hard
+     * allocations, soft reservations on the per-location projection, expired ACTIVE lot on-hand)
+     * plus the incoming/outgoing forecast — in short, what can be promised, optionally narrowed to a
+     * location or storage location.
+     *
+     * <p>Availability and on-hand are different questions and neither implies the other (ADR-0057,
+     * #1494). This permission never discloses which locations hold the SKU; enumerating them
+     * requires {@link #AVAILABILITY_SEARCH}.
+     */
+    public static final String AVAILABILITY_READ = "inventory:availability:read";
+
+    /**
+     * Read the cross-location availability answer: the per-location breakdown that enumerates every
+     * location holding the SKU. Mirrors {@link #INVENTORY_SEARCH} for the derived projection
+     * (ADR-0057, #1494).
+     */
+    public static final String AVAILABILITY_SEARCH = "inventory:availability:search";
 
     // ==================== VALUATION PERMISSIONS ====================
 
@@ -349,9 +375,22 @@ public class InventoryPermissionRegistry {
                         MEDIUM_RISK,
                         "Issue #1047"),
 
-                // Inventory view permissions (2)
+                // On-hand view permissions (2)
                 permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
                 permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"),
+
+                // Availability permissions (2)
+                permission(
+                        AVAILABILITY_READ,
+                        "Read availability for a SKU: on-hand net of prior commitments plus forecast, "
+                                + "optionally scoped to a location",
+                        "LOW",
+                        "Issue #1494"),
+                permission(
+                        AVAILABILITY_SEARCH,
+                        "Read the per-location availability breakdown, enumerating every location holding the SKU",
+                        "LOW",
+                        "Issue #1494"),
 
                 // Valuation permissions (2)
                 permission(
@@ -439,10 +478,17 @@ public class InventoryPermissionRegistry {
     }
 
     /**
-     * Inventory viewing permissions
+     * On-hand viewing permissions
      */
     public static List<String> inventoryViewPermissions() {
         return Arrays.asList(INVENTORY_VIEW, INVENTORY_SEARCH);
+    }
+
+    /**
+     * Availability permissions (ADR-0057)
+     */
+    public static List<String> availabilityPermissions() {
+        return Arrays.asList(AVAILABILITY_READ, AVAILABILITY_SEARCH);
     }
 
     /**

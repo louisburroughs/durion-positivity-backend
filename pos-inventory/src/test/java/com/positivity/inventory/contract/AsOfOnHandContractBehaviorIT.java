@@ -48,11 +48,23 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
         inventoryStockSummaryRepository.deleteAll();
     }
 
-    /** Auth with on-hand read access but WITHOUT {@code inventory:ledger:view}. */
-    private MockHttpServletRequestBuilder withOnHandOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {
+    /**
+     * Everything needed to reach the endpoints under test, WITHOUT
+     * {@code inventory:ledger:view} — which is what isolates the as-of gate: a request that
+     * still 403s here failed on ledger-view alone, not on a missing read authority.
+     *
+     * <p>That means both permission families, because these tests span both kinds of endpoint:
+     * the location-inquiry reads take {@code inventory:on_hand:*} (the stock record), while
+     * {@code /availability/{productId}} takes {@code inventory:availability:search} (the derived
+     * projection) since ADR-0057, #1494.
+     */
+    private MockHttpServletRequestBuilder withoutLedgerViewAuth(MockHttpServletRequestBuilder requestBuilder) {
         return requestBuilder
                 .header("X-User", "contract-test-user")
-                .header("X-Authorities", "inventory:on_hand:view,inventory:on_hand:search");
+                .header(
+                        "X-Authorities",
+                        "inventory:on_hand:view,inventory:on_hand:search,"
+                                + "inventory:availability:read,inventory:availability:search");
     }
 
     @Test
@@ -153,19 +165,19 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
 
         String pastInstant = Instant.now().minusSeconds(1).toString();
 
-        mockMvc.perform(withOnHandOnlyAuth(
+        mockMvc.perform(withoutLedgerViewAuth(
                         get("/v1/inventory/availability/{productId}", productId).param("asOf", pastInstant)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
-        mockMvc.perform(withOnHandOnlyAuth(get("/v1/inventory/availability/{productId}", productId)))
+        mockMvc.perform(withoutLedgerViewAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(withOnHandOnlyAuth(get("/v1/inventory/locations/{locationId}/inventory-inquiry", location)
+        mockMvc.perform(withoutLedgerViewAuth(get("/v1/inventory/locations/{locationId}/inventory-inquiry", location)
                         .param("asOf", pastInstant)))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(withOnHandOnlyAuth(get("/v1/inventory/locations/{locationId}/inventory-items", location)
+        mockMvc.perform(withoutLedgerViewAuth(get("/v1/inventory/locations/{locationId}/inventory-items", location)
                         .param("asOf", pastInstant)))
                 .andExpect(status().isForbidden());
     }

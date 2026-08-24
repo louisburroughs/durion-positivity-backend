@@ -57,6 +57,19 @@
 --   issue, putaway, shortages, on-hand visibility) plus purchase-order
 --   create/view. The elevated escape hatches stay out: goods_receipt:override
 --   and the putaway capacity/compatibility overrides are not granted here.
+-- * The inventory:availability:* and inventory:on_hand:* families answer two
+--   different questions and neither implies the other (ADR-0057, #1494).
+--   on_hand:* reads the stock record itself — counted quantity, lot and serial
+--   detail, location contents, rollups. availability:* reads the derived
+--   projection: on-hand net of prior commitments (allocations, reservations,
+--   expired lots) plus the incoming/outgoing forecast, i.e. what can be
+--   promised. Each family splits again on cross-location disclosure:
+--   availability:read is the scope-limited answer, availability:search the
+--   per-location breakdown that enumerates every location holding the SKU.
+--   TECHNICIAN and SERVICE_ADVISOR hold :read so they can tell whether a part
+--   can be committed to the job in front of them; they deliberately do NOT hold
+--   :search or any on_hand code. Before #1494, availability:read was granted
+--   here and enforced by no endpoint, so it granted nothing.
 -- * order:purchase_order:approve and :transmit (#1438) are held by ADMIN and
 --   the PO-approver personas LOCATION_MANAGER and INVENTORY_MANAGER only.
 --   Note the legacy inventory:purchase_order:* family remains seeded
@@ -244,6 +257,7 @@ FROM (VALUES
     ('inventory:asn:create', 'inventory', 'asn', 'create', 75),
     ('inventory:asn:view', 'inventory', 'asn', 'view', 76),
     ('inventory:availability:read', 'inventory', 'availability', 'read', 311),
+    ('inventory:availability:search', 'inventory', 'availability', 'search', 470),
     ('inventory:cycle_count:complete', 'inventory', 'cycle_count', 'complete', 63),
     ('inventory:cycle_count:initiate', 'inventory', 'cycle_count', 'initiate', 61),
     ('inventory:cycle_count:view', 'inventory', 'cycle_count', 'view', 62),
@@ -662,6 +676,7 @@ FROM (VALUES
     ('ADMIN', 'inventory:asn:create'),
     ('ADMIN', 'inventory:asn:view'),
     ('ADMIN', 'inventory:availability:read'),
+    ('ADMIN', 'inventory:availability:search'),
     ('ADMIN', 'inventory:cycle_count:complete'),
     ('ADMIN', 'inventory:cycle_count:initiate'),
     ('ADMIN', 'inventory:cycle_count:view'),
@@ -952,6 +967,8 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'inventory:adjustment:view'),
     ('INVENTORY_LEAD', 'inventory:asn:create'),
     ('INVENTORY_LEAD', 'inventory:asn:view'),
+    ('INVENTORY_LEAD', 'inventory:availability:read'),
+    ('INVENTORY_LEAD', 'inventory:availability:search'),
     ('INVENTORY_LEAD', 'inventory:goods_receipt:create'),
     ('INVENTORY_LEAD', 'inventory:goods_receipt:view'),
     ('INVENTORY_LEAD', 'inventory:issue:parts'),
@@ -1399,6 +1416,7 @@ BEGIN
         ('inventory:asn:create'),
         ('inventory:asn:view'),
         ('inventory:availability:read'),
+        ('inventory:availability:search'),
         ('inventory:cycle_count:complete'),
         ('inventory:cycle_count:initiate'),
         ('inventory:cycle_count:view'),

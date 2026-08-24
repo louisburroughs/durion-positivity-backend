@@ -11,6 +11,35 @@ All architectural decisions for this feature are documented in:
 
 Please review the ADR for complete context and rationale.
 
+## Availability vs On-Hand — the firm definition
+
+They are two different questions, and since **ADR-0057** (issue #1494) they carry two different
+permission families. Neither implies the other.
+
+| | Question | Reads | Permissions |
+| --- | --- | --- | --- |
+| **On-hand** | *What is physically there?* | The stock record itself: counted quantity, lot and serial detail, location contents, ledger-derived counts, rollups. Uncommitted-for. | `inventory:on_hand:view` (one location) / `inventory:on_hand:search` (across locations) |
+| **Availability** | *What can I promise, and when?* | The derived projection: on-hand **net of prior commitments** — hard allocations, soft reservations on the per-location projection, expired ACTIVE lot on-hand — plus the incoming/outgoing forecast. | `inventory:availability:read` (scope-limited) / `inventory:availability:search` (per-location breakdown) |
+
+On-hand is the raw input; availability is the answer computed from it. A technician holding
+`inventory:availability:read` can ask whether a part can be committed to the job in front of them —
+and, naming a location, whether it can be committed *there* — without holding any authority over the
+inventory record. Enumerating which locations hold the SKU is a wider disclosure and takes
+`inventory:availability:search`, mirroring `on_hand:view` vs `on_hand:search`.
+
+Endpoint mapping:
+
+| Operation | Path | Requires |
+| --- | --- | --- |
+| `getAvailabilityBySku` | `GET /v1/inventory/availability/by-sku` | `inventory:availability:read` |
+| `listAvailabilityBySku` | `GET /v1/inventory/availability` | `inventory:availability:read` |
+| `getInventoryLeadTime` | `GET /v1/inventory/availability/lead-time` | `inventory:availability:read` |
+| `getAvailabilityByProduct` | `GET /v1/inventory/availability/{productId}` | `inventory:availability:search` |
+| `getLocationInventory`, `listLocationInventoryItems`, the site/location rollups, lot and serial-unit reads, replenishment evaluations, purchase suggestions | various | `inventory:on_hand:view` |
+
+The `asOf` historical variants additionally require `inventory:ledger:view`, independently of the
+above, because they expose ledger history.
+
 ## Quick Reference
 
 ### ATP Formula (v1)

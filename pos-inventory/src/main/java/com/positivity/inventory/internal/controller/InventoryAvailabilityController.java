@@ -27,6 +27,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Availability reads: what can be promised, as distinct from what is physically on the shelf.
+ *
+ * <p>Availability is on-hand net of prior commitments — hard allocations, soft reservations on the
+ * per-location projection, and expired ACTIVE lot on-hand — plus the incoming/outgoing forecast.
+ * On-hand is the raw stock record. Per ADR-0057 (#1494) neither permission family implies the other,
+ * so these endpoints are gated on {@code inventory:availability:*} and never on
+ * {@code inventory:on_hand:*}, which stays with the endpoints that read the record itself.
+ *
+ * <p>The split within the family is cross-location disclosure: the scope-limited reads take
+ * {@code inventory:availability:read}, and the per-location breakdown — which enumerates every
+ * location holding the SKU — takes {@code inventory:availability:search}.
+ */
 @Slf4j
 @RestController
 @RequestMapping("/v1/inventory/availability")
@@ -45,8 +58,8 @@ public class InventoryAvailabilityController {
     @GetMapping("/{productId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
+            scopes = {"inventory:availability:search"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.AVAILABILITY_SEARCH + "')")
     @Operation(
             operationId = "getAvailabilityByProduct",
             summary = "Query per-location inventory availability",
@@ -58,8 +71,10 @@ public class InventoryAvailabilityController {
                     Use this tool when the productId is known and a per-location breakdown is wanted; use \
                     getAvailabilityBySku instead for a single aggregated view keyed by SKU, and \
                     getInventoryLeadTime for lead-time estimates.
-                    Preconditions: none for the current view; an asOf request additionally requires the \
-                    inventory:ledger:view authority because it exposes ledger history.
+                    Preconditions: requires the inventory:availability:search authority, because \
+                    enumerating locations discloses where stock sits across the estate; an asOf \
+                    request additionally requires inventory:ledger:view because it exposes ledger \
+                    history.
                     Required inputs: productId (UUID) path parameter; horizon (ISO-8601 instant) optionally bounds \
                     incomingQty/outgoingQty and excludes documents without an expected date; asOf (ISO-8601 \
                     instant) switches to historical on-hand computed by direct ledger aggregation, in which case \
@@ -67,8 +82,8 @@ public class InventoryAvailabilityController {
                     is not reliably reconstructable.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 400 when asOf is combined with horizon (INVALID_PARAM_COMBINATION) or productId is \
-                    missing, 403 when an asOf request lacks inventory:ledger:view, and 422 when asOf is in the \
-                    future (AS_OF_IN_FUTURE).
+                    missing, 403 when the caller lacks inventory:availability:search or an asOf request lacks \
+                    inventory:ledger:view, and 422 when asOf is in the future (AS_OF_IN_FUTURE).
                     """,
             tags = {"Inventory Availability"})
     @ApiResponse(
@@ -110,9 +125,8 @@ public class InventoryAvailabilityController {
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
-    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "','"
-            + InventoryPermissionRegistry.INVENTORY_SEARCH + "')")
+            scopes = {"inventory:availability:read"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.AVAILABILITY_READ + "')")
     @Operation(
             operationId = "listAvailabilityBySku",
             summary = "Query inventory availability by SKU (list form)",
@@ -122,8 +136,8 @@ public class InventoryAvailabilityController {
                     Use this tool only when a caller requires a list-shaped response from the root availability \
                     path; use getAvailabilityBySku instead for the plain object form, and getAvailabilityByProduct \
                     for a per-location breakdown.
-                    Preconditions: the SKU must have at least one stock-summary row, meaning it has been received \
-                    or counted at least once.
+                    Preconditions: requires the inventory:availability:read authority; the SKU must have at \
+                    least one stock-summary row, meaning it has been received or counted at least once.
                     Required inputs: sku (string); locationId and storageLocationId (UUIDs) optionally narrow the \
                     scope, sourceType (WAREHOUSE, SUPPLIER or TRANSIT) selects the lookup strategy, and horizon \
                     (ISO-8601 instant) bounds the forecast quantities; locationId is only valid when sourceType is \
@@ -196,9 +210,8 @@ public class InventoryAvailabilityController {
     @GetMapping("/by-sku")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
-    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "','"
-            + InventoryPermissionRegistry.INVENTORY_SEARCH + "')")
+            scopes = {"inventory:availability:read"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.AVAILABILITY_READ + "')")
     @Operation(
             operationId = "getAvailabilityBySku",
             summary = "Query inventory availability by SKU and location",
@@ -209,8 +222,9 @@ public class InventoryAvailabilityController {
                     Use this tool to check whether quantity can be promised, for example before \
                     createOrUpdateReservation; use getAvailabilityByProduct instead for a per-location breakdown, \
                     and listAvailabilityBySku only when a list-shaped response is required.
-                    Preconditions: the SKU must have at least one stock-summary row; expired ACTIVE lots stay \
-                    counted in on-hand but are subtracted from ATP.
+                    Preconditions: requires the inventory:availability:read authority; the SKU must have at \
+                    least one stock-summary row; expired ACTIVE lots stay counted in on-hand but are \
+                    subtracted from ATP.
                     Required inputs: productSku (string); locationId and storageLocationId (UUIDs) optionally \
                     narrow the scope (storageLocationId wins when both are given), sourceType (WAREHOUSE, SUPPLIER \
                     or TRANSIT) selects the lookup strategy, and horizon (ISO-8601 instant) bounds the forecast \
@@ -299,9 +313,8 @@ public class InventoryAvailabilityController {
     @GetMapping("/lead-time")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
-    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "','"
-            + InventoryPermissionRegistry.INVENTORY_SEARCH + "')")
+            scopes = {"inventory:availability:read"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.AVAILABILITY_READ + "')")
     @Operation(
             operationId = "getInventoryLeadTime",
             summary = "Query product lead time",
@@ -311,7 +324,8 @@ public class InventoryAvailabilityController {
                     and falling back to the manufacturer supply feed (source SUPPLY_CHAIN, confidence MEDIUM).
                     Use this tool to estimate replenishment timing when stock is short; use getAvailabilityBySku \
                     instead for on-hand and ATP quantities.
-                    Preconditions: at least one normalized feed must carry lead-time data for the product.
+                    Preconditions: requires the inventory:availability:read authority; at least one normalized \
+                    feed must carry lead-time data for the product.
                     Required inputs: productId (UUID); locationId and storageLocationId (UUIDs) are optional and \
                     are echoed into the response scope (storageLocationId wins) but do not filter the feed lookup, \
                     and sourceType follows the same WAREHOUSE-only rule as the availability reads.
