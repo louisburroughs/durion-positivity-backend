@@ -1,6 +1,8 @@
 # SonarQube Remediation Plan
 
-Status: Phases 1 and 2 implemented (see §2 and §3); Phase 3 not started.
+Status: Phases 1, 2 and 3.1 implemented. All 34 `S6809` sites are classified —
+9 were real and are fixed, 25 need no change (see §4.1). Phases 3.2–3.6 not
+started.
 The `new_reliability_rating` fix is in, so the next analysis should return the
 quality gate to green — confirm against §7 before treating §1's table as stale.
 Date: 2026-08-24
@@ -138,7 +140,12 @@ Note that the `existing` lookup a few lines above performs the same
       green across all three modules, with Spotless, Checkstyle and SpotBugs
       enabled (no `-Dskip` flags).
 - [ ] Next SonarCloud analysis reports `new_reliability_rating = 1` and the
-      quality gate flips to **Green**.
+      quality gate flips to **Green**. Note this does **not** happen on merge:
+      per `.github/workflows/ci.yml` (`code-quality-full`), the only job that
+      publishes a branch-level analysis runs on `schedule` (nightly, 06:00 UTC)
+      or `workflow_dispatch`. Until one of those runs, the project gate keeps
+      reporting the last nightly value, which predates the fix. The PR-mode scan
+      on #1487 reported zero reliability issues before it merged.
 
 ## 3. Phase 2 — The single BLOCKER (1 issue, ~10 min) — DONE
 
@@ -227,6 +234,71 @@ inner unit while the outer continues, or vice versa.
 
 Do these module-by-module, one PR per module, so a regression in transaction
 semantics is bisectable.
+
+#### Triage results (all 34 sites classified)
+
+Done. Nine sites are real, twenty-five are not. The split is lopsided because
+most `S6809` hits in this codebase are a convenience overload delegating to its
+full-argument sibling with *identical* `@Transactional` attributes — the caller
+has already opened the transaction the callee would have asked for, so `REQUIRED`
+joins it whether or not the proxy is involved.
+
+**Class 3 — real: a non-transactional caller self-invoking a `@Transactional`
+method, so no transaction is created at all (9 sites).**
+
+| Module | Site | Entry point | Self-invoked | Consequence |
+| ------ | ---- | ----------- | ------------ | ----------- |
+| `pos-supplier` | `MktCatImporter:152` | `importAll` / `importVariants` (not transactional) → `importOne` (private) | `stageAndPublish` (`@Transactional`) | Stage-write and outbox emit are not atomic |
+| `pos-supplier` | `WorkorderCompletionApprover:133,143,163,171,174` | `@Scheduled approveOutstanding` → `approveOne` (private) | `park`, `markApproved`, `recordAttempt` (all `@Transactional`) | Read-modify-write on the authorization row runs untransacted |
+| `pos-workorder` | `FleetAuthorizationResourceReleaseRunner:86` | `@Scheduled releaseOverdue` | `releaseOne` (`@Transactional`) | Guard re-read and the release write are not one unit |
+| `pos-customer` | `CustomerCommandListener:98,102` | `@KafkaListener onCommand` | `handleSegmentResolveRequested`, `handleSuppressionAddRequested` (both `@Transactional`) | Command handling is not atomic against redelivery |
+
+`MktCatImporter` is the sharpest of these: `stageAndPublish`'s own javadoc states
+the invariant being lost — *"Both in one transaction, through the outbox: a
+variant recorded as published that was never emitted would be skipped on every
+later run, because its hash now matches (ADR-0044 §4)."* Self-invocation means
+that transaction does not exist, so the exact interleaving the comment warns
+about is reachable today. `FleetAuthorizationResourceReleaseRunner` has the same
+tell — `releaseOne` opens with *"Re-read the guard inside the transaction"*,
+inside a method that has no transaction when called this way.
+
+Note the negative evidence in `CustomerCommandListener`: the third branch,
+`handleOutboxReplayRequested` (line 94), is *not* flagged, because that handler
+is private and carries no `@Transactional`. Sonar is discriminating here, not
+pattern-matching on self-calls.
+
+**All nine are fixed.** Each transactional writer moved into a collaborator bean
+so the call crosses a proxy: `MktCatVariantStager`, `WorkorderApprovalRecorder`,
+`FleetAuthorizationResourceReleaser` and `CustomerCommandHandlers`. The splits
+follow the data rather than the rule — in every case the moved methods took their
+exclusive collaborators with them, so no field is now shared across the seam.
+
+`MktCatVariantStagerTransactionTest` covers the boundary directly, following the
+existing `SupplierExchangeAuditPersistenceTest` pattern (`@DataJpaTest` with
+`Propagation.NOT_SUPPORTED`, because a test wrapped in its own rolled-back
+transaction cannot observe a commit boundary and would pass with the bug
+present). It was checked against the bug: with `@Transactional` removed from
+`stageAndPublish`, `failedOutboxWriteRollsBackTheStagedRow` fails.
+
+**Class 1 — no action: the caller already holds an equivalent or wider
+transaction (25 sites).**
+
+| Shape | Sites |
+| ----- | ----- |
+| Overload delegating to its full-argument sibling, identical attributes | `AccountingPeriodServiceImpl:108`, `CrmVehicleServiceImpl:98`, `PartyServiceImpl:231`, `PersonServiceImpl:231`, `InventoryAvailabilityServiceImpl:102,159`, `UomConversionServiceImpl:78`, `ServiceAreaServiceImpl:50`, `TravelBufferPolicyServiceImpl:48`, `LedgerPostingServiceImpl:113,119,125`, `InventoryLeadTimeServiceImpl:45`, `SourcingStrategyServiceImpl:89`, `AudienceEligibilityService:137` |
+| Private helper inside a transactional entry point, calling a `readOnly` method | `SegmentResolutionService:131,161`, `MarketingConsentServiceImpl:188,221,222` |
+| Read-write caller invoking a `readOnly = true` method | `PromotionOfferServiceImpl:103,119`, `VehiclePreferencesServiceImpl:128`, `FleetAuthorizationService:80` |
+| `@Transactional` entry point calling another `@Transactional` method | `SupplierYamlBootstrap:93` |
+
+The third row deserves a word, since it looks like a mismatch: `readOnly = true`
+is honoured only when a transaction is *created*. An inner `REQUIRED` method
+joining an existing read-write transaction does not downgrade it — so routing
+these through the proxy would change nothing. The annotation is misleading to a
+reader, but it is not wrong at runtime.
+
+No code change is proposed for these 25. Removing the callee's `@Transactional`
+is not available either: in every case above the callee is a public API method
+that external callers reach through the proxy, where the annotation is load-bearing.
 
 ### 3.2 `java:S1948` (1 issue)
 
@@ -363,7 +435,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | ----- | ------- | -----: | -----: | ----------- | ------ |
 | 1 | Reliability `S2637` | 2 | 0.5 h | **Red → Green** | done |
 | 2 | BLOCKER `S2699` | 1 | 0.2 h | none | done |
-| 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | not started |
+| 3.1 | `S6809` transactional self-invocation | 34 | 2.8 h | none (real runtime risk) | done: 9 fixed, 25 no-action |
 | 3.2–3.4 | `S1948`, `S3252`, `S1186` | 20 | 2.0 h | none | not started |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | not started |
 | 3.6 | `S3776` complexity | 62 | 11.6 h | none | not started |
@@ -405,8 +477,10 @@ movement — `./mvnw -pl pos-archunit -am -Dtest=ArchitectureTests test`.
 
 ## 7. Re-measuring
 
-SonarCloud analysis runs on pull requests and on the full-coverage job
-(`.github/workflows/ci.yml`). To re-derive the tables above from the live
+SonarCloud analysis runs on pull requests (`code-quality`, PR-scoped) and on the
+full-coverage job (`code-quality-full`), which is the only one that publishes a
+branch-level analysis and runs **only** nightly at 06:00 UTC or via
+`workflow_dispatch` — merging to `main` does not refresh the project gate. To re-derive the tables above from the live
 project without a token (the project is public):
 
 ```bash
