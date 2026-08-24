@@ -2,9 +2,11 @@ package com.positivity.supplier.internal.adapter.ediwheelc12;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 
 import com.positivity.supplier.internal.domain.model.MarketingVariant;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -213,6 +215,60 @@ class EdiwheelC12MktCatCodecTest {
             assertThat(spec.queryParams())
                     .containsEntry("callbackUrl", "https://us/callback")
                     .containsEntry("event", "TDV_CHANGED");
+        }
+    }
+
+    @Nested
+    @DisplayName("Supplier master data (Phase 3.6 coverage)")
+    class DecodeSuppliers {
+
+        // decodeSuppliers had 0% branch coverage: a public decode method on the MKCAT wire
+        // contract with nothing holding any of its behaviour.
+
+        @Test
+        @DisplayName("A supplier is keyed by party id and named from its first name entry")
+        void decodesPartyIdAndName() {
+            Map<String, String> suppliers =
+                    codec.decodeSuppliers("[{\"PartyID\":\"P-1\",\"Name\":[{\"Name\":\"Michelin Europe\"}]}]");
+
+            assertThat(suppliers).containsExactly(entry("P-1", "Michelin Europe"));
+        }
+
+        @Test
+        @DisplayName("A supplier with no usable name falls back to its party id")
+        void fallsBackToPartyIdWhenNameIsAbsentOrBlank() {
+            // The party id is always present — it is the key — so it is the only safe label when
+            // the catalogue omits a name. An empty display name downstream would be worse.
+            assertThat(codec.decodeSuppliers("[{\"PartyID\":\"P-2\"}]")).containsExactly(entry("P-2", "P-2"));
+            assertThat(codec.decodeSuppliers("[{\"PartyID\":\"P-3\",\"Name\":[]}]"))
+                    .containsExactly(entry("P-3", "P-3"));
+            assertThat(codec.decodeSuppliers("[{\"PartyID\":\"P-4\",\"Name\":[{\"Name\":\"   \"}]}]"))
+                    .containsExactly(entry("P-4", "P-4"));
+        }
+
+        @Test
+        @DisplayName("An entry without a party id is skipped rather than keyed on null")
+        void skipsEntriesWithoutAPartyId() {
+            Map<String, String> suppliers =
+                    codec.decodeSuppliers("[{\"Name\":[{\"Name\":\"Nameless\"}]},{\"PartyID\":\"P-5\"}]");
+
+            assertThat(suppliers).containsExactly(entry("P-5", "P-5"));
+        }
+
+        @Test
+        @DisplayName("An empty or unreadable body is a decode failure, not an empty map")
+        void rejectsEmptyOrUnreadableBodies() {
+            // Returning an empty map would read as "this catalogue has no suppliers", which is a
+            // different fact from "the response could not be read".
+            assertThatThrownBy(() -> codec.decodeSuppliers(null))
+                    .isInstanceOf(MktCatDecodeException.class)
+                    .hasMessageContaining("supplier list response body was empty");
+            assertThatThrownBy(() -> codec.decodeSuppliers("  "))
+                    .isInstanceOf(MktCatDecodeException.class)
+                    .hasMessageContaining("supplier list response body was empty");
+            assertThatThrownBy(() -> codec.decodeSuppliers("not json"))
+                    .isInstanceOf(MktCatDecodeException.class)
+                    .hasMessageContaining("was not readable JSON");
         }
     }
 }

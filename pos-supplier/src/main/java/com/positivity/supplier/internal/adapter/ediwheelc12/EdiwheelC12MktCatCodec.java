@@ -234,47 +234,69 @@ public class EdiwheelC12MktCatCodec implements SupplierAdapterCodec {
     private List<MarketingVariant.MarketingImageRef> decodeImageRefs(
             @Nullable String imagesBody, @Nullable String languageBody) {
         Map<String, MarketingVariant.MarketingImageRef> byUri = new LinkedHashMap<>();
-
-        if (imagesBody != null && !imagesBody.isBlank()) {
-            try {
-                for (MktCatWire.ImageEntry entry : objectMapper.<List<MktCatWire.ImageEntry>>readValue(
-                        imagesBody, new TypeReference<List<MktCatWire.ImageEntry>>() {})) {
-                    String uri = trimToNull(entry.URI());
-                    if (uri != null) {
-                        byUri.putIfAbsent(
-                                uri, new MarketingVariant.MarketingImageRef(trimToNull(entry.ImageType()), uri));
-                    }
-                }
-            } catch (RuntimeException e) {
-                throw new MktCatDecodeException("variant image list was not readable JSON: " + e.getMessage(), e);
-            }
-        }
-
-        if (languageBody != null && !languageBody.isBlank()) {
-            try {
-                for (MktCatWire.LanguageEntry entry : objectMapper.<List<MktCatWire.LanguageEntry>>readValue(
-                        languageBody, new TypeReference<List<MktCatWire.LanguageEntry>>() {})) {
-                    if (entry.AdditionalGraphic() == null) {
-                        continue;
-                    }
-                    for (MktCatWire.AdditionalGraphic graphic : entry.AdditionalGraphic()) {
-                        String uri = trimToNull(graphic.URI());
-                        if (uri != null) {
-                            byUri.putIfAbsent(
-                                    uri, new MarketingVariant.MarketingImageRef(trimToNull(graphic.Graphic()), uri));
-                        }
-                    }
-                }
-            } catch (RuntimeException e) {
-                // The language body is optional and already tolerated above; a graphic list that
-                // will not parse costs those graphics, not the variant.
-                return List.copyOf(byUri.values());
-            }
-        }
-
+        collectVariantImages(imagesBody, byUri);
+        collectLanguageGraphics(languageBody, byUri);
         // Deduplicated by URI: the same picture is routinely listed against several languages, and
         // fetching it once per language would multiply every ingest by the number of markets.
         return List.copyOf(byUri.values());
+    }
+
+    /**
+     * The variant's own images resource.
+     *
+     * <p>Strict: an unreadable images body fails the variant. This is the catalogue's primary
+     * artwork listing, and silently ingesting a variant with none of it would publish marketing
+     * copy that looks complete and is not.
+     */
+    private void collectVariantImages(
+            @Nullable String imagesBody, @NonNull Map<String, MarketingVariant.MarketingImageRef> byUri) {
+        if (imagesBody == null || imagesBody.isBlank()) {
+            return;
+        }
+        try {
+            for (MktCatWire.ImageEntry entry : objectMapper.<List<MktCatWire.ImageEntry>>readValue(
+                    imagesBody, new TypeReference<List<MktCatWire.ImageEntry>>() {})) {
+                String uri = trimToNull(entry.URI());
+                if (uri != null) {
+                    byUri.putIfAbsent(uri, new MarketingVariant.MarketingImageRef(trimToNull(entry.ImageType()), uri));
+                }
+            }
+        } catch (RuntimeException e) {
+            throw new MktCatDecodeException("variant image list was not readable JSON: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Additional graphics attached to language-dependent data.
+     *
+     * <p>Tolerant, deliberately unlike {@link #collectVariantImages}: the language body is optional
+     * to begin with, so a graphic list that will not parse costs those graphics rather than the
+     * variant. Reading only the primary resource would silently drop the per-market artwork, which
+     * is exactly the material a marketing catalogue exists to supply — but losing it is still
+     * preferable to losing the variant.
+     */
+    private void collectLanguageGraphics(
+            @Nullable String languageBody, @NonNull Map<String, MarketingVariant.MarketingImageRef> byUri) {
+        if (languageBody == null || languageBody.isBlank()) {
+            return;
+        }
+        try {
+            for (MktCatWire.LanguageEntry entry : objectMapper.<List<MktCatWire.LanguageEntry>>readValue(
+                    languageBody, new TypeReference<List<MktCatWire.LanguageEntry>>() {})) {
+                if (entry.AdditionalGraphic() == null) {
+                    continue;
+                }
+                for (MktCatWire.AdditionalGraphic graphic : entry.AdditionalGraphic()) {
+                    String uri = trimToNull(graphic.URI());
+                    if (uri != null) {
+                        byUri.putIfAbsent(
+                                uri, new MarketingVariant.MarketingImageRef(trimToNull(graphic.Graphic()), uri));
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            // Keep whatever was already collected; see the note above on why this one is tolerant.
+        }
     }
 
     /** Decodes supplier master data into the catalogue's party identifiers and names. */
