@@ -540,6 +540,140 @@ class SupplierYamlBootstrapTest {
 
     // ── Fixtures ────────────────────────────────────────────────────────────────────
 
+    // ── Binding-validation coverage (Phase 3.6) ────────────────────────────────────
+    //
+    // validateBindings enforces the ADR-0050 §3 binding rules, and JaCoCo had seven of its
+    // rejection branches unexercised. These are the guardrails on a deployment YAML: an
+    // untested rejection is one that might silently accept a malformed config, or report the
+    // wrong reason for one. Each test names the rule it holds.
+
+    @Test
+    void bindingWithUnknownAuthNameIsRejected() {
+        ProfileSpec spec = michelinSpecWithBinding(binding("STOCK_INQUIRY", "no-such-auth", null));
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("does not name an auth config of this profile");
+    }
+
+    @Test
+    void bindingWithBlankVersionIsRejected() {
+        BindingSpec b = new BindingSpec(
+                "STOCK_INQUIRY",
+                "EDIWHEEL_A25",
+                "  ",
+                "https://api.example",
+                "/x",
+                "ediwheel-basic",
+                null,
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(michelinSpecWithBinding(b))))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("version must not be blank");
+    }
+
+    @Test
+    void bindingWithBlankBaseUrlIsRejected() {
+        BindingSpec b = new BindingSpec(
+                "STOCK_INQUIRY", "EDIWHEEL_A25", "A2_5", "", "/x", "ediwheel-basic", null, null, null, null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(michelinSpecWithBinding(b))))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("baseUrl must not be blank");
+    }
+
+    @Test
+    void bindingWithBlankPathIsRejected() {
+        BindingSpec b = new BindingSpec(
+                "STOCK_INQUIRY",
+                "EDIWHEEL_A25",
+                "A2_5",
+                "https://api.example",
+                null,
+                "ediwheel-basic",
+                null,
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(michelinSpecWithBinding(b))))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("path must not be blank");
+    }
+
+    @Test
+    void bindingWithInvalidCronScheduleIsRejected() {
+        BindingSpec b = new BindingSpec(
+                "STOCK_INQUIRY",
+                "EDIWHEEL_A25",
+                "A2_5",
+                "https://api.example",
+                "/x",
+                "ediwheel-basic",
+                "not a cron",
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(michelinSpecWithBinding(b))))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("is not a valid cron expression");
+    }
+
+    @Test
+    void theTestProtocolFamilyIsReservedForFixtures() {
+        // TEST exists for registry fixtures; a deployment YAML naming it would wire a live
+        // profile to a stub adapter, which is worse than failing to start.
+        BindingSpec b = new BindingSpec(
+                "STOCK_INQUIRY", "TEST", "A2_5", "https://api.example", "/x", "ediwheel-basic", null, null, null, null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(michelinSpecWithBinding(b))))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("reserved for registry test fixtures");
+    }
+
+    @Test
+    void bindingTheSameCapabilityTwiceIsRejected() {
+        ProfileSpec base = michelinSpec();
+        ProfileSpec spec = new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                base.protocolDefaults(),
+                base.accounts(),
+                base.auth(),
+                List.of(
+                        binding("STOCK_INQUIRY", "ediwheel-basic", null),
+                        binding("STOCK_INQUIRY", "ediwheel-basic", null)),
+                base.sandbox());
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasMessageContaining("capability bound more than once");
+    }
+
+    private static BindingSpec binding(String capability, String auth, String schedule) {
+        return new BindingSpec(
+                capability, "EDIWHEEL_A25", "A2_5", "https://api.example", "/x", auth, schedule, null, null, null);
+    }
+
+    /** {@link #michelinSpec()} carrying exactly one binding, so a rule can be isolated. */
+    private static ProfileSpec michelinSpecWithBinding(BindingSpec binding) {
+        ProfileSpec base = michelinSpec();
+        return new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                base.protocolDefaults(),
+                base.accounts(),
+                base.auth(),
+                List.of(binding),
+                base.sandbox());
+    }
+
     private static SupplierProfileProperties properties(ProfileSpec... specs) {
         return new SupplierProfileProperties(List.of(specs));
     }
