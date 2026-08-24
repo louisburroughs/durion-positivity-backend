@@ -2,6 +2,9 @@ package com.positivity.marketing.internal.service;
 
 import com.positivity.marketing.internal.domain.CatalogFocusRef;
 import com.positivity.marketing.internal.entity.Campaign;
+import com.positivity.marketing.internal.entity.ExtCatalogReplica;
+import com.positivity.marketing.internal.enums.CatalogItemKind;
+import com.positivity.marketing.internal.repository.ExtCatalogReplicaRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -35,6 +38,7 @@ public class CampaignReferenceValidator {
 
     private final Clock clock;
     private final PromotionOfferPort promotionOfferPort;
+    private final ExtCatalogReplicaRepository catalogReplicaRepository;
 
     /** Everything wrong with this campaign's offer and catalog references, in message form. */
     public @NonNull List<String> problems(@NonNull Campaign campaign) {
@@ -93,14 +97,33 @@ public class CampaignReferenceValidator {
     }
 
     /**
-     * The catalog reference must be one this platform can interpret.
+     * The catalog reference must name something that exists in the catalog and is still active.
      *
-     * <p>Only the grammar is checked. Resolving the reference against the catalog itself needs
-     * either a synchronous read across a domain wall or a replicated catalog fact, and neither
-     * exists for this module: ADR-0044 permits no synchronous edge to the catalog domain, and
-     * {@code catalog.events.v1} carries products only — nothing for the {@code service:} form
-     * that campaigns most often point at. Grammar is what can be verified today, and it is
-     * what catches the mistake actually made in practice: a marketer typing a bare name.
+     * <p>Two checks, in order. The grammar check catches the mistake actually made in practice — a
+     * marketer typing a bare name — and tells them what to write instead. Resolution then answers
+     * the question grammar cannot: {@code service:alignment} is perfectly well-formed and still
+     * points at nothing if nobody ever created that service, and the mistake surfaces when the
+     * message lands in a customer's inbox advertising it.
+     *
+     * <p>Resolution reads the {@code ext_catalog} replica (#1306), never pos-catalog itself:
+     * ADR-0044 R1 permits no synchronous edge into that domain.
+     *
+     * <p><b>Cold-replica behaviour, chosen deliberately: the check stands down for a kind the
+     * replica holds no rows of at all, and blocks otherwise.</b> The replica is fed by
+     * {@code catalog.events.v1} and is empty until that feed runs
+     * ({@code POS_MARKETING_KAFKA_ENABLED} defaults to false), so resolving strictly against it
+     * would make every catalog reference a scheduling blocker in an environment that never
+     * provisioned the feed. It would also block one that did: pos-catalog's fact replay
+     * ({@code POST /v1/products/facts/replay}, #1309) can seed the product rows, but there is no
+     * equivalent for services, so a freshly deployed consumer learns of a service only when someone
+     * next edits it. Blocking every {@code service:} reference until then would be a check nobody
+     * could satisfy.
+     *
+     * <p>Cold is judged per kind rather than over the whole table, because the two failures are
+     * different: no rows of a kind means this module has never been told about that kind of catalog
+     * item, while rows present and one missing means the reference is genuinely wrong. Standing
+     * down is logged at warn — the objection to this choice is that the check quietly does nothing
+     * in exactly the case nobody notices, and a log line is what answers it.
      */
     private Optional<String> catalogFocusProblem(String catalogFocusRef) {
         if (catalogFocusRef == null || catalogFocusRef.isBlank()) {
@@ -112,7 +135,85 @@ public class CampaignReferenceValidator {
                     + "' is not a catalog reference; write it as kind:value using one of "
                     + CatalogFocusRef.supportedKinds());
         }
-        log.debug("Campaign catalog focus parsed as {}", parsed.get());
-        return Optional.empty();
+        CatalogFocusRef reference = parsed.get();
+        return switch (resolve(reference)) {
+            case RESOLVED, NOT_REPLICATED -> Optional.empty();
+            case RETIRED ->
+                Optional.of("catalogFocusRef '" + reference + "' refers to a "
+                        + reference.kind().wireName() + " that is no longer active in the catalog");
+            case UNKNOWN -> Optional.of("catalogFocusRef '" + reference + "' is not known to this module yet");
+        };
+    }
+
+    /** What the replica has to say about a reference. */
+    private enum Resolution {
+        RESOLVED,
+        RETIRED,
+        UNKNOWN,
+        /** The replica holds nothing of this kind, so it cannot answer — see the note above. */
+        NOT_REPLICATED
+    }
+
+    /**
+     * Look the reference up by the kind it was written as.
+     *
+     * <p>{@code sku:} and {@code category:} resolve against product rows because that is what they
+     * are — attributes of a product, not aggregates pos-catalog publishes facts about. A category
+     * is therefore known here only through the products that carry it, which is the whole of what
+     * the catalog says about it.
+     */
+    private Resolution resolve(CatalogFocusRef reference) {
+        String value = reference.value();
+        return switch (reference.kind()) {
+            case PRODUCT -> classify(CatalogItemKind.PRODUCT, itemRows(CatalogItemKind.PRODUCT, value));
+            case SERVICE -> classify(CatalogItemKind.SERVICE, itemRows(CatalogItemKind.SERVICE, value));
+            case SKU -> classify(CatalogItemKind.PRODUCT, catalogReplicaRepository.findBySkuIgnoreCase(value));
+            case CATEGORY ->
+                classify(
+                        CatalogItemKind.PRODUCT,
+                        asUuid(value)
+                                .map(catalogReplicaRepository::findByCategoryId)
+                                .orElseGet(() -> catalogReplicaRepository.findByCategoryIgnoreCase(value)));
+        };
+    }
+
+    /** A product or service is named either by id or by name; both are how references get written. */
+    private List<ExtCatalogReplica> itemRows(CatalogItemKind kind, String value) {
+        return asUuid(value)
+                .map(id -> catalogReplicaRepository.findByItemKindAndCatalogItemId(kind, id))
+                .orElseGet(() -> catalogReplicaRepository.findByItemKindAndNameIgnoreCase(kind, value));
+    }
+
+    /**
+     * One active match is enough.
+     *
+     * <p>Names are not unique in pos-catalog, so a name can match several rows. A campaign pointing
+     * at a name that resolves to two services is ambiguous but not wrong — it advertises something
+     * that exists — whereas one whose every match has been retired advertises something that is
+     * gone, which is the case worth stopping.
+     *
+     * <p>A miss is only a problem when the replica holds that kind of item at all; the count is
+     * asked for only on a miss, so the ordinary answer costs one query.
+     */
+    private Resolution classify(CatalogItemKind kind, List<ExtCatalogReplica> rows) {
+        if (!rows.isEmpty()) {
+            return rows.stream().anyMatch(ExtCatalogReplica::isActive) ? Resolution.RESOLVED : Resolution.RETIRED;
+        }
+        if (catalogReplicaRepository.countByItemKind(kind) == 0) {
+            log.warn(
+                    "Catalog reference left unchecked: ext_catalog holds no {} rows, so the catalog feed has"
+                            + " not reached this module. Campaign scheduling is not verifying catalog references.",
+                    kind);
+            return Resolution.NOT_REPLICATED;
+        }
+        return Resolution.UNKNOWN;
+    }
+
+    private static Optional<UUID> asUuid(String value) {
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 }

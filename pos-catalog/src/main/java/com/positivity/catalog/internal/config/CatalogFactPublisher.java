@@ -4,15 +4,18 @@ import com.positivity.catalog.internal.entity.Category;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductStatus;
 import com.positivity.catalog.internal.entity.ProductTrackingLevel;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
 import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
+import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.domainevents.catalog.SupplierArticleCodeUpdatedV1;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -22,8 +25,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * Emits {@code catalog.product.updated} to the catalog outbox after product mutations
- * (ADR-0044 §6, #924).
+ * Emits this module's facts — {@code catalog.product.updated} after product mutations
+ * (ADR-0044 §6, #924), {@code catalog.service.updated} after service mutations (#1306), and
+ * {@code catalog.supplier-article-code.updated} (CAP-320 #1347) — to the catalog outbox.
  *
  * <p>No-op when the Kafka feature flag ({@code pos.catalog.kafka.enabled}) is off — the
  * {@link OutboxEventWriter} bean is conditional, so this publisher degrades gracefully. Must be
@@ -108,6 +112,77 @@ public class CatalogFactPublisher {
                 clock);
         writer.publish(DomainTopics.events("catalog"), envelope);
         log.debug("Queued catalog.product.updated productId={} sku={}", product.getId(), product.getSku());
+    }
+
+    /**
+     * Emits {@code catalog.service.updated} after a service is created or updated (#1306).
+     *
+     * <p>Services had no fact of their own, so a consumer of {@code catalog.events.v1} could
+     * resolve {@code product:} references and nothing else; pos-marketing needs {@code service:}
+     * — the form a campaign's {@code catalogFocusRef} most often takes — to be resolvable without
+     * a synchronous read across the catalog domain wall (ADR-0044 R1).
+     *
+     * <p>Called after the entity is saved, so auditing has stamped {@code updatedAt} and the
+     * envelope's {@code aggregateVersion} can carry it as epoch millis — the same monotonic
+     * stale-event guard {@link #publishProductUpdated} uses, for the same reason: there is no JPA
+     * {@code @Version} on catalog entities.
+     */
+    public void publishServiceUpdated(@NonNull ServiceEntity service) {
+        long aggregateVersion =
+                service.getUpdatedAt() == null ? 0L : service.getUpdatedAt().toEpochMilli();
+        publishService(service, true, service.getUpdatedAt(), aggregateVersion);
+    }
+
+    /**
+     * Emits the {@code catalog.service.updated} tombstone for a deleted service (#1306).
+     *
+     * <p>A deletion is the only retirement a service currently has, and a consumer that never
+     * hears about it keeps resolving a reference to something no longer in the catalog. The
+     * tombstone carries {@code active = false} and the name the service had, which is what lets a
+     * replica answer "that service was removed" rather than either resolving it or forgetting it
+     * ever existed.
+     *
+     * <p>The row is gone, so there is no fresh {@code updatedAt} to version the fact with. The
+     * delete time is used instead, floored to one millisecond past the last update: a service
+     * created and deleted inside the same millisecond would otherwise emit a tombstone that
+     * consumers' strictly-below stale guard reads as no newer than the upsert it must supersede.
+     */
+    public void publishServiceRemoved(@NonNull ServiceEntity service) {
+        long lastKnown =
+                service.getUpdatedAt() == null ? 0L : service.getUpdatedAt().toEpochMilli();
+        publishService(service, false, null, Math.max(clock.millis(), lastKnown + 1));
+    }
+
+    private void publishService(
+            ServiceEntity service, boolean active, @Nullable Instant updatedAt, long aggregateVersion) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CatalogServiceUpdatedV1 payload = new CatalogServiceUpdatedV1(
+                service.getId(),
+                service.getName(),
+                service.getShortDescription(),
+                service.getLongDescription(),
+                active,
+                service.getCreatedAt(),
+                updatedAt);
+        DomainEventEnvelope<CatalogServiceUpdatedV1> envelope = DomainEventEnvelope.of(
+                CatalogServiceUpdatedV1.EVENT_TYPE,
+                CatalogServiceUpdatedV1.SCHEMA_VERSION,
+                service.getId(),
+                aggregateVersion,
+                "pos-catalog",
+                null,
+                null,
+                payload,
+                clock);
+        writer.publish(DomainTopics.events("catalog"), envelope);
+        log.debug(
+                "Queued catalog.service.updated serviceId={} name={} active={}",
+                service.getId(),
+                service.getName(),
+                active);
     }
 
     /**

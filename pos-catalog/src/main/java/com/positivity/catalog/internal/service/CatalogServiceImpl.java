@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
@@ -40,16 +41,19 @@ public class CatalogServiceImpl implements CatalogService {
     private final ServiceRepository serviceRepository;
     private final NonInventoryProductRepository nonInventoryProductRepository;
     private final CatalogRepository catalogRepository;
+    private final CatalogFactPublisher catalogFactPublisher;
 
     public CatalogServiceImpl(
             ProductRepository productRepository,
             ServiceRepository serviceRepository,
             NonInventoryProductRepository nonInventoryProductRepository,
-            CatalogRepository catalogRepository) {
+            CatalogRepository catalogRepository,
+            CatalogFactPublisher catalogFactPublisher) {
         this.productRepository = productRepository;
         this.serviceRepository = serviceRepository;
         this.nonInventoryProductRepository = nonInventoryProductRepository;
         this.catalogRepository = catalogRepository;
+        this.catalogFactPublisher = catalogFactPublisher;
     }
 
     @Override
@@ -121,11 +125,18 @@ public class CatalogServiceImpl implements CatalogService {
                 .toList();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Transactional because a service mutation queues {@code catalog.service.updated} to the
+     * outbox in the same transaction (#1306): the fact must exist if and only if the row does.
+     */
     @Override
+    @Transactional
     public CatalogItemResponseDto addCatalogItem(String type, CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {
             case PRODUCT -> toCatalogItemResponse(PRODUCT, productRepository.save(toProductEntity(request)));
-            case SERVICE -> toCatalogItemResponse(SERVICE, serviceRepository.save(toServiceEntity(request)));
+            case SERVICE -> toCatalogItemResponse(SERVICE, saveService(toServiceEntity(request)));
             case NONINVENTORY ->
                 toCatalogItemResponse(NONINVENTORY, nonInventoryProductRepository.save(toNonInventoryEntity(request)));
             default -> throw unsupportedType(type);
@@ -133,6 +144,7 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     @Override
+    @Transactional
     public Optional<CatalogItemResponseDto> updateCatalogItem(
             String type, UUID catalogId, CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {
@@ -146,7 +158,10 @@ public class CatalogServiceImpl implements CatalogService {
                 serviceRepository.findById(catalogId).map(existing -> {
                     ServiceEntity updated = toServiceEntity(request);
                     updated.setId(catalogId);
-                    return toCatalogItemResponse(SERVICE, serviceRepository.save(updated));
+                    // The request carries no createdAt, and merging a detached entity would blank
+                    // the in-memory value the published fact reads from.
+                    updated.setCreatedAt(existing.getCreatedAt());
+                    return toCatalogItemResponse(SERVICE, saveService(updated));
                 });
             case NONINVENTORY ->
                 nonInventoryProductRepository.findById(catalogId).map(existing -> {
@@ -159,6 +174,7 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     @Override
+    @Transactional
     public boolean deleteCatalogItem(String type, UUID catalogId) {
         return switch (normalizeType(type)) {
             case PRODUCT -> deleteProduct(catalogId);
@@ -280,6 +296,19 @@ public class CatalogServiceImpl implements CatalogService {
                 .toList();
     }
 
+    /**
+     * Persist a service and announce it, so consumers can resolve {@code service:} references.
+     *
+     * <p>Flushed before publishing so auditing has stamped {@code updatedAt}: the fact's
+     * {@code aggregateVersion} is that timestamp, and versioning an update with the value it had
+     * before the update would stall the consumers' stale-event guard.
+     */
+    private ServiceEntity saveService(ServiceEntity service) {
+        ServiceEntity saved = serviceRepository.saveAndFlush(service);
+        catalogFactPublisher.publishServiceUpdated(saved);
+        return saved;
+    }
+
     private boolean deleteProduct(UUID productId) {
         if (!productRepository.existsById(productId)) {
             return false;
@@ -288,11 +317,21 @@ public class CatalogServiceImpl implements CatalogService {
         return true;
     }
 
+    /**
+     * Delete a service, announcing the removal (#1306).
+     *
+     * <p>The row is read before it is deleted so the tombstone can carry the name that was
+     * removed. A consumer holding a replica has no other way to learn that a
+     * {@code service:<name>} reference stopped being resolvable — silence would leave it
+     * resolving a service that no longer exists.
+     */
     private boolean deleteService(UUID serviceId) {
-        if (!serviceRepository.existsById(serviceId)) {
+        ServiceEntity existing = serviceRepository.findById(serviceId).orElse(null);
+        if (existing == null) {
             return false;
         }
-        serviceRepository.deleteById(serviceId);
+        serviceRepository.delete(existing);
+        catalogFactPublisher.publishServiceRemoved(existing);
         return true;
     }
 

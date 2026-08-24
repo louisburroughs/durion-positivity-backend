@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
@@ -25,6 +27,7 @@ import com.positivity.catalog.internal.repository.CatalogRepository;
 import com.positivity.catalog.internal.repository.NonInventoryProductRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -53,6 +56,7 @@ class CatalogServiceImplItemsTest {
     private static final UUID NON_INVENTORY_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9a03");
     private static final UUID CATALOG_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9a04");
     private static final UUID MANUFACTURER_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9a05");
+    private static final Instant CREATED_AT = Instant.parse("2026-01-04T08:00:00Z");
 
     @Mock
     private ProductRepository productRepository;
@@ -66,14 +70,21 @@ class CatalogServiceImplItemsTest {
     @Mock
     private CatalogRepository catalogRepository;
 
+    @Mock
+    private CatalogFactPublisher catalogFactPublisher;
+
     private CatalogServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new CatalogServiceImpl(
-                productRepository, serviceRepository, nonInventoryProductRepository, catalogRepository);
+                productRepository,
+                serviceRepository,
+                nonInventoryProductRepository,
+                catalogRepository,
+                catalogFactPublisher);
         when(productRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(serviceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(serviceRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(nonInventoryProductRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(catalogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -259,7 +270,17 @@ class CatalogServiceImplItemsTest {
             CatalogItemResponseDto response = service.addCatalogItem("service", itemRequest());
 
             assertThat(response.getItemType()).isEqualTo("service");
-            verify(serviceRepository).save(any(ServiceEntity.class));
+            verify(serviceRepository).saveAndFlush(any(ServiceEntity.class));
+        }
+
+        @Test
+        @DisplayName("announces the new service so consumers can resolve service: references (#1306)")
+        void publishesTheServiceFact() {
+            service.addCatalogItem("service", itemRequest());
+
+            ArgumentCaptor<ServiceEntity> published = ArgumentCaptor.forClass(ServiceEntity.class);
+            verify(catalogFactPublisher).publishServiceUpdated(published.capture());
+            assertThat(published.getValue().getName()).isEqualTo("Tire 205/55R16");
         }
 
         @Test
@@ -319,6 +340,22 @@ class CatalogServiceImplItemsTest {
 
             assertThat(service.updateCatalogItem("service", SERVICE_ID, itemRequest()))
                     .isPresent();
+            verify(catalogFactPublisher).publishServiceUpdated(any(ServiceEntity.class));
+        }
+
+        @Test
+        @DisplayName("carries the original createdAt onto the replacement entity, so the fact keeps it")
+        void keepsCreatedAtOnTheReplacementService() {
+            ServiceEntity existing = serviceEntity();
+            existing.setCreatedAt(CREATED_AT);
+            when(serviceRepository.findById(SERVICE_ID)).thenReturn(Optional.of(existing));
+
+            service.updateCatalogItem("service", SERVICE_ID, itemRequest());
+
+            ArgumentCaptor<ServiceEntity> saved = ArgumentCaptor.forClass(ServiceEntity.class);
+            verify(serviceRepository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getId()).isEqualTo(SERVICE_ID);
+            assertThat(saved.getValue().getCreatedAt()).isEqualTo(CREATED_AT);
         }
 
         @Test
@@ -327,6 +364,7 @@ class CatalogServiceImplItemsTest {
 
             assertThat(service.updateCatalogItem("service", SERVICE_ID, itemRequest()))
                     .isEmpty();
+            verifyNoInteractions(catalogFactPublisher);
         }
 
         @Test
@@ -376,18 +414,22 @@ class CatalogServiceImplItemsTest {
         }
 
         @Test
+        @DisplayName("deletes the service and announces the removal, so replicas stop resolving it")
         void deletesAnExistingService() {
-            when(serviceRepository.existsById(SERVICE_ID)).thenReturn(true);
+            ServiceEntity existing = serviceEntity();
+            when(serviceRepository.findById(SERVICE_ID)).thenReturn(Optional.of(existing));
 
             assertThat(service.deleteCatalogItem("service", SERVICE_ID)).isTrue();
-            verify(serviceRepository).deleteById(SERVICE_ID);
+            verify(serviceRepository).delete(existing);
+            verify(catalogFactPublisher).publishServiceRemoved(existing);
         }
 
         @Test
         void reportsFalseForAServiceThatIsNotThere() {
-            when(serviceRepository.existsById(SERVICE_ID)).thenReturn(false);
+            when(serviceRepository.findById(SERVICE_ID)).thenReturn(Optional.empty());
 
             assertThat(service.deleteCatalogItem("service", SERVICE_ID)).isFalse();
+            verifyNoInteractions(catalogFactPublisher);
         }
 
         @Test
