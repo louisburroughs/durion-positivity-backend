@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -181,6 +182,7 @@ class ReturnOrderReadModelAndGuardsTest {
 
             // An `in ()` against an empty id list is a query with no possible result.
             assertThat(service.returnableLines(ORDER_ID)).isEmpty();
+            verify(returnOrderLineRepository, never()).sumReturnedQtyByLine(anyList(), any());
         }
 
         @Test

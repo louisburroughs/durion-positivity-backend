@@ -1,8 +1,11 @@
 # SonarQube Remediation Plan
 
 Status: Phases 1, 2, 3.1–3.5 implemented. Phase 3.6 (`S3776`, 62 findings)
-in progress: **15 of 62 addressed** across three PRs (#1498, #1500, and a
-third open at the time of writing).
+in progress: **18 of 62 findings addressed** (15 classes — `PostingRuleEvaluatorImpl`
+carried four findings) across #1498 and #1500 (merged) and #1501 (open); 44 remain.
+Per-finding status is now a `status` column in
+`docs/sonarqube-remediation-inventory.csv`, mapping every row of every phase to
+the PR that resolved it or its documented no-action reason.
 The `new_reliability_rating` fix is in, so the next analysis should return the
 quality gate to green — confirm against §7 before treating §1's table as stale.
 Date: 2026-08-24
@@ -451,7 +454,7 @@ Sonar's threshold is 15. The distribution is long-tailed: **23 methods score
 By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 `pos-supplier` 6, `pos-warranty` 5, then a tail of 12 modules with 1–3 each.
 
-#### Progress: 15 of 62 addressed
+#### Progress: 18 of 62 findings addressed (15 classes)
 
 | # | PR | Method split | Class branch coverage |
 | -: | -- | ------------ | --------------------- |
@@ -483,6 +486,11 @@ misrepresent what the code can receive — see `SegmentResolutionService`'s
 `personReplicasByPersonId` (`person_id` is `NOT NULL`), `serviceDue`'s
 null-months `continue`, and `PostingRuleEvaluatorImpl`'s balance check on the
 default-mapping path (balanced by construction).
+
+Note that four of the files above carry a *second, unaddressed* finding in a
+different method — `AvalaraTaxProvider:188` (16), `EligibilityServiceImpl:233`
+(18), `ReceivingServiceImpl:225` (18), `ReplenishmentServiceImpl:516` (17) —
+which the CSV keeps `open`. Resolution is per method, not per file.
 
 Next by complexity: `TestModeTaxCalculator` (22, `pos-tax`),
 `OpenApiModuleValidator` (22, `pos-openapi-validation`),
@@ -522,7 +530,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | done |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 15 of 62 |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 18 of 62 (15 classes) |
 | | **Total** | **267** | **≈38 h** | | |
 
 - Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in
