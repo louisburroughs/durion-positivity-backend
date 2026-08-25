@@ -244,14 +244,56 @@ public class ReceivingServiceImpl implements ReceivingService {
         ReceivingSession session = receivingSessionRepository
                 .findById(sessionId)
                 .orElseThrow(() -> new ReceivingSessionNotFoundException("Receiving session not found: " + sessionId));
+        ReceivingLine line = requireLine(session, lineId);
 
-        ReceivingLine line = session.getLines().stream()
+        String workorderId = request.getWorkorderId();
+        validateWorkorderEligibility(workorderId, request, line, actorUserId);
+
+        CrossDockQuantityPlan quantities = planCrossDockQuantities(line, request, lineId);
+        UUID crossDockLocationId = resolveCrossDockLocationId();
+        CrossDockLot lot = resolveCrossDockLot(session, line, request);
+
+        List<String> ledgerEntryIds = postCrossDockLedgerEntries(
+                sessionId,
+                workorderId,
+                line.getProductId(),
+                crossDockLocationId,
+                quantities.quantityDelta(),
+                lot.lotId(),
+                actorUserId);
+
+        applyCrossDockLineOutcome(line, request, workorderId, quantities, lot);
+        settleSessionStatus(session);
+        receivingSessionRepository.save(session);
+
+        return CrossDockResponse.builder()
+                .lineId(lineId)
+                .workorderId(workorderId)
+                .workorderLineId(request.getWorkorderLineId())
+                .crossDockedQuantity(request.getQuantity())
+                .unitOfMeasure(line.getDocumentUom())
+                .sessionStatus(session.getStatus().name())
+                .lineStatus(line.getStatus().name())
+                .ledgerEntryIds(ledgerEntryIds)
+                .build();
+    }
+
+    /** The session's line named by {@code lineId}, or a 404 when this session does not have it. */
+    @NonNull
+    private static ReceivingLine requireLine(@NonNull ReceivingSession session, @NonNull UUID lineId) {
+        return session.getLines().stream()
                 .filter(candidate -> lineId.equals(candidate.getLineId()))
                 .findFirst()
                 .orElseThrow(
                         () -> new ReceivingSessionNotFoundException("Receiving line not found in session: " + lineId));
+    }
 
-        String workorderId = request.getWorkorderId();
+    /** The workorder-closed and part-match gates a cross-dock must pass before anything posts. */
+    private void validateWorkorderEligibility(
+            @NonNull String workorderId,
+            @NonNull CrossDockRequest request,
+            @NonNull ReceivingLine line,
+            @NonNull String actorUserId) {
         WorkorderValidationService.WorkorderLineValidation workorderValidation =
                 workorderValidationService.getWorkorderLineValidation(workorderId, request.getWorkorderLineId());
         if (isClosedWorkorderStatus(workorderValidation.status())) {
@@ -259,7 +301,16 @@ public class ReceivingServiceImpl implements ReceivingService {
         }
         validatePartMatchOrOverride(
                 line, actorUserId, request.getWorkorderLineId(), workorderValidation.demandedProductId());
+    }
 
+    /** The ledger delta and the expected-vs-cumulative totals one cross-dock must respect. */
+    private record CrossDockQuantityPlan(
+            BigDecimal quantityDelta, BigDecimal cumulativeReceivedQuantity, BigDecimal expectedQuantity) {}
+
+    /** Computes the cross-dock's quantities, rejecting a request that would exceed what is expected. */
+    @NonNull
+    private CrossDockQuantityPlan planCrossDockQuantities(
+            @NonNull ReceivingLine line, @NonNull CrossDockRequest request, @NonNull UUID lineId) {
         BigDecimal quantityDelta = toLedgerQuantity(line.getProductId(), request.getQuantity(), "quantity");
         BigDecimal existingReceivedQuantity =
                 line.getReceivedQuantity() != null ? line.getReceivedQuantity() : BigDecimal.ZERO;
@@ -276,28 +327,50 @@ public class ReceivingServiceImpl implements ReceivingService {
                     + request.getQuantity()
                     + ")");
         }
+        return new CrossDockQuantityPlan(quantityDelta, cumulativeReceivedQuantity, expectedQuantity);
+    }
 
-        UUID crossDockLocationId = resolveCrossDockLocationId();
-        BigDecimal receiptQuantityAfter =
-                calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
+    /** The lot to stamp on both paired ledger entries, and the line, once resolved. */
+    private record CrossDockLot(UUID lotId, String lotNumber) {}
 
-        // odoo-parity E2 (#1042): cross-dock is lot-gated like any other receipt of a
-        // LOT-tracked product (E1 deferred this because only the receipt half could have been
-        // stamped, stranding phantom per-lot on-hand). The lot number comes from the request,
-        // falling back to one already keyed on the receiving line, and the lot is
-        // found-or-created (inbound semantics — this receipt IS the lot's first sighting).
-        // BOTH paired entries carry the same lotId, so the per-lot row nets to zero and the
-        // funnel's status reconciler marks the lot CONSUMED — stock went straight to the
-        // workorder. Untracked products resolve to null, byte-identical to pre-E2.
+    /**
+     * odoo-parity E2 (#1042): cross-dock is lot-gated like any other receipt of a LOT-tracked
+     * product (E1 deferred this because only the receipt half could have been stamped, stranding
+     * phantom per-lot on-hand). The lot number comes from the request, falling back to one
+     * already keyed on the receiving line, and the lot is found-or-created (inbound semantics —
+     * this receipt IS the lot's first sighting). Untracked products resolve to null,
+     * byte-identical to pre-E2.
+     */
+    @NonNull
+    private CrossDockLot resolveCrossDockLot(
+            @NonNull ReceivingSession session, @NonNull ReceivingLine line, @NonNull CrossDockRequest request) {
         String effectiveLotNumber =
                 request.getLotNumber() != null && !request.getLotNumber().isBlank()
                         ? request.getLotNumber()
                         : line.getLotNumber();
         UUID lotId = lotCaptureService.resolveReceiptLot(
                 line.getProductId(), effectiveLotNumber, parseSupplierVendorId(session.getSupplierId()));
+        return new CrossDockLot(lotId, effectiveLotNumber);
+    }
 
+    /**
+     * Posts the paired GOODS_RECEIPT/GOODS_ISSUE at the cross-dock location — BOTH entries carry
+     * the same lot id, so the per-lot row nets to zero and the funnel's status reconciler marks
+     * the lot CONSUMED once stock has gone straight to the workorder. Returns the posted entries'
+     * ids for the response, skipping any entry a stub posting service returned without one.
+     */
+    @NonNull
+    private List<String> postCrossDockLedgerEntries(
+            @NonNull UUID sessionId,
+            @NonNull String workorderId,
+            @NonNull String productId,
+            @NonNull UUID crossDockLocationId,
+            @NonNull BigDecimal quantityDelta,
+            UUID lotId,
+            @NonNull String actorUserId) {
+        BigDecimal receiptQuantityAfter = calculateQuantityAfter(productId, crossDockLocationId, quantityDelta);
         InventoryLedgerEntry receiptEntry = InventoryLedgerEntry.builder()
-                .stockItemId(line.getProductId())
+                .stockItemId(productId)
                 .locationId(crossDockLocationId)
                 .toLocationId(crossDockLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
@@ -308,14 +381,12 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
                 .build();
-
         InventoryLedgerEntry savedReceiptEntry = ledgerPostingService.post(receiptEntry);
         inventoryFactPublisher.markEntry(savedReceiptEntry);
-        BigDecimal issueQuantityAfter =
-                calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta.negate());
 
+        BigDecimal issueQuantityAfter = calculateQuantityAfter(productId, crossDockLocationId, quantityDelta.negate());
         InventoryLedgerEntry issueEntry = InventoryLedgerEntry.builder()
-                .stockItemId(line.getProductId())
+                .stockItemId(productId)
                 .locationId(crossDockLocationId)
                 .fromLocationId(crossDockLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
@@ -326,38 +397,8 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_ISSUE to workorder " + workorderId)
                 .build();
-
         InventoryLedgerEntry savedIssueEntry = ledgerPostingService.post(issueEntry);
         inventoryFactPublisher.markEntry(savedIssueEntry);
-
-        line.setWorkorderId(workorderId);
-        line.setWorkorderLineId(request.getWorkorderLineId());
-        line.setReceivedQuantity(cumulativeReceivedQuantity);
-        if (lotId != null && effectiveLotNumber != null) {
-            line.setLotNumber(effectiveLotNumber.trim());
-        }
-
-        int quantityCompare = cumulativeReceivedQuantity.compareTo(expectedQuantity);
-        if (quantityCompare == 0) {
-            line.setStatus(ReceivingLineStatus.RECEIVED);
-        } else if (quantityCompare < 0) {
-            line.setStatus(ReceivingLineStatus.RECEIVED_SHORT);
-        } else {
-            line.setStatus(ReceivingLineStatus.RECEIVED_OVER);
-        }
-
-        boolean allReceived = session.getLines().stream()
-                .allMatch(existingLine -> existingLine.getStatus() == ReceivingLineStatus.RECEIVED
-                        || existingLine.getStatus() == ReceivingLineStatus.RECEIVED_SHORT
-                        || existingLine.getStatus() == ReceivingLineStatus.RECEIVED_OVER
-                        || existingLine.getStatus() == ReceivingLineStatus.CANCELLED);
-        if (allReceived) {
-            session.setStatus(ReceivingSessionStatus.COMPLETED);
-        } else {
-            session.setStatus(ReceivingSessionStatus.IN_PROGRESS);
-        }
-
-        receivingSessionRepository.save(session);
 
         List<String> ledgerEntryIds = new ArrayList<>();
         if (savedReceiptEntry != null && savedReceiptEntry.getLedgerEntryId() != null) {
@@ -366,17 +407,29 @@ public class ReceivingServiceImpl implements ReceivingService {
         if (savedIssueEntry != null && savedIssueEntry.getLedgerEntryId() != null) {
             ledgerEntryIds.add(savedIssueEntry.getLedgerEntryId().toString());
         }
+        return ledgerEntryIds;
+    }
 
-        return CrossDockResponse.builder()
-                .lineId(lineId)
-                .workorderId(workorderId)
-                .workorderLineId(request.getWorkorderLineId())
-                .crossDockedQuantity(request.getQuantity())
-                .unitOfMeasure(line.getDocumentUom())
-                .sessionStatus(session.getStatus().name())
-                .lineStatus(line.getStatus().name())
-                .ledgerEntryIds(ledgerEntryIds)
-                .build();
+    /** Stamps the cross-docked quantity, workorder linkage, lot, and settlement status onto the line. */
+    private void applyCrossDockLineOutcome(
+            @NonNull ReceivingLine line,
+            @NonNull CrossDockRequest request,
+            @NonNull String workorderId,
+            @NonNull CrossDockQuantityPlan quantities,
+            @NonNull CrossDockLot lot) {
+        line.setWorkorderId(workorderId);
+        line.setWorkorderLineId(request.getWorkorderLineId());
+        line.setReceivedQuantity(quantities.cumulativeReceivedQuantity());
+        if (lot.lotId() != null && lot.lotNumber() != null) {
+            line.setLotNumber(lot.lotNumber().trim());
+        }
+        line.setStatus(statusFor(quantities.cumulativeReceivedQuantity().compareTo(quantities.expectedQuantity())));
+    }
+
+    /** A session settles once every one of its lines has reached a terminal state. */
+    private void settleSessionStatus(@NonNull ReceivingSession session) {
+        session.setStatus(
+                allLinesSettled(session) ? ReceivingSessionStatus.COMPLETED : ReceivingSessionStatus.IN_PROGRESS);
     }
 
     private ReceivingSession resolveSessionForReceive(UUID sessionId) {
