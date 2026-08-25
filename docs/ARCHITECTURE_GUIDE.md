@@ -302,20 +302,22 @@ already satisfies the strictly-advancing contract:
 | `vehicle.events.v1` (`VehicleCarePreferenceUpdatedV1`) | Epoch millis by design (rows are hard-deleted and re-created, so an entity version would restart at 0) | No | Its one consumer already applies on equal; acceptable for a last-writer-wins preference fact |
 | `invoice.events.v1` | pos-invoice `Invoice`/`BillingRules` `@Version`, flushed before emit | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
 | `warranty.events.v1` | pos-warranty `WarrantyClaim` `@Version`, flushed and force-incremented on otherwise-clean mutations | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
-| `workorder.events.v1` | `Instant.now(clock)` epoch millis; `Workorder` has no `@Version` | **No** | Scoped out — see below |
-| `customer.events.v1` | `Instant.now(clock)` epoch millis; party entities carry no optimistic-lock version | **No** | Scoped out — see below |
+| `workorder.events.v1` (`WorkorderUpdatedV1`, `EstimateUpdatedV1`) | pos-workorder `Workorder.version` / `Estimate.aggregateVersion` `@Version`, flushed before emit, seeded at migration time from wall-clock millis (#1486 follow-up; `Estimate` already had an unrelated manual `version` revision counter, hence the distinct column) | Yes | Yes — pos-order's `>=` flipped |
+| `workorder.events.v1` (service-completion, fleet-auth, time/work-session facts) | Emission-timestamp epoch millis via `OutboxEventWriter`'s 4-arg form | No | No consumer version-guards these facts — acceptable until one does |
+| `customer.events.v1` (`CustomerPartyUpdatedV1`, `BillingRulesUpdatedV1`) | pos-customer `AbstractParty` `@Version` (TABLE_PER_CLASS root: `person_party` and `commercial_party` each carry the seeded column), flushed before emit; party deletes tombstone `version + 1` (#1486 follow-up) | Yes | Yes — pos-order's and pos-accounting's `>=` flipped (the legacy `aggregateVersion > 0` carve-out for versionless envelopes is retired) |
+| `customer.events.v1` (tag/segment/suppression/consent/redemption facts) | Emission-timestamp epoch millis | No | No consumer version-guards these facts — acceptable until one does |
 | `location.events.v1` | pos-location `Location`/`StorageLocationEntity` `@Version`, flushed before emit, seeded at migration time from wall-clock millis (#1486 follow-up) | Yes | Yes — pos-order's `>=` flipped |
 
-**Scoped out, and why:** the `>=` guards consuming `workorder.events.v1` and
-`customer.events.v1` (pos-order's workorder/customer listeners, pos-accounting's customer
-listener) keep their skip-on-equal behavior for now. Those publishers still stamp wall-clock
-millis, so their versions can tie or even invert across instances; a `>=` guard at least fails
-closed on a tie, and neither topic has a regenerate-from-current-state replay whose repairs the
-guard could be blocking (their `OutboxReplayServiceImpl` re-sends existing outbox rows under
-the original `eventId`, which consumers drop by idempotency regardless of any version guard).
-Adopting the rule on such a topic means fixing its publisher first — the `@Version`-flush
-pattern above — and only then moving its consumers to `ReplicaVersionGuard`. Doing it in the
-other order reintroduces the same-millisecond race #1486 closed.
+**Nothing is scoped out any more.** Every fact a consumer version-guards now rides a
+strictly-advancing JPA `@Version`, and every former `>=` guard has moved to
+`ReplicaVersionGuard`. The emission-timestamp rows above survive only on facts no consumer
+version-guards (and on `VehicleCarePreferenceUpdatedV1`, where it is by design); the moment a
+consumer wants to version-guard one of them, its publisher must first adopt the
+`@Version`-flush pattern — flipping the guard first would reintroduce the same-millisecond
+race #1486 closed. Note that each domain's `OutboxReplayServiceImpl` re-sends existing outbox
+rows under their original `eventId`s (dropped by consumer idempotency); a repair that must
+re-apply state needs a regenerate-from-current-state replay like catalog's, which the
+equal-applies rule is what makes effective.
 
 ---
 
