@@ -13,10 +13,10 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
 import com.positivity.catalog.service.ProductUomService;
+import com.positivity.domainevents.AggregateTouch;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -109,7 +109,7 @@ public class ProductUomServiceImpl implements ProductUomService {
      * changes still advance it for consumers' stale-event guards.
      */
     private void touchAndPublish(ProductEntity product) {
-        product.setUpdatedAt(Instant.now(clock));
+        product.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(product.getUpdatedAt(), clock));
         productRepository.saveAndFlush(product);
         catalogFactPublisher.publishProductUpdated(product);
     }

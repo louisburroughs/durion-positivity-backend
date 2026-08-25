@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
 import com.positivity.workorder.internal.entity.WorkOrderPartSubstitution;
@@ -135,7 +136,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         Workorder workorder = workorderRepository
                 .findById(workorderId)
                 .orElseThrow(() -> new NoSuchElementException("Workorder not found: " + workorderId));
-        workorder.setUpdatedAt(Instant.now(clock));
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorderId);
 

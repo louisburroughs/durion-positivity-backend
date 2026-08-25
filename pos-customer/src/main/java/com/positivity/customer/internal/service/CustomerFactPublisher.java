@@ -6,6 +6,7 @@ import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.CustomerConsentDecisionChangedV1;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
@@ -184,7 +185,7 @@ public class CustomerFactPublisher {
             return;
         }
         personPartyRepository.findByPersonId(personId).ifPresent(person -> {
-            person.setUpdatedAt(Instant.now(clock));
+            person.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(person.getUpdatedAt(), clock));
             personPartyRepository.save(person);
             publishPartyUpdated(writer, person);
         });

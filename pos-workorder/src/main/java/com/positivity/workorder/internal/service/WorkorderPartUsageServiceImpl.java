@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
@@ -174,7 +175,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // This write only touches workorder_part; dirty the workorder row itself so the publisher's
         // flush has a pending @Version increment to pick up (#1486) — a clean row leaves the
         // emitted fact carrying stale part totals under an unchanged aggregateVersion.
-        workorder.setUpdatedAt(Instant.now(clock));
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
@@ -376,7 +377,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // This write only touches workorder_part; dirty the workorder row itself so the publisher's
         // flush has a pending @Version increment to pick up (#1486) — a clean row leaves the
         // emitted fact carrying stale part totals under an unchanged aggregateVersion.
-        workorder.setUpdatedAt(Instant.now(clock));
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
@@ -482,7 +483,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // This write only touches workorder_part; dirty the workorder row itself so the publisher's
         // flush has a pending @Version increment to pick up (#1486) — a clean row leaves the
         // emitted fact carrying stale part totals under an unchanged aggregateVersion.
-        workorder.setUpdatedAt(Instant.now(clock));
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 

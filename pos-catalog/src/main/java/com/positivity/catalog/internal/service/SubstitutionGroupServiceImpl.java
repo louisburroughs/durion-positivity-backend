@@ -13,8 +13,8 @@ import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupRepository;
 import com.positivity.catalog.service.SubstitutionGroupService;
+import com.positivity.domainevents.AggregateTouch;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -116,7 +116,7 @@ public class SubstitutionGroupServiceImpl implements SubstitutionGroupService {
      * changes still advance it for consumers' stale-event guards.
      */
     private void touchAndPublish(ProductEntity product) {
-        product.setUpdatedAt(Instant.now(clock));
+        product.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(product.getUpdatedAt(), clock));
         productRepository.saveAndFlush(product);
         catalogFactPublisher.publishProductUpdated(product);
     }
