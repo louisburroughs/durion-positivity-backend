@@ -45,6 +45,25 @@ public record TransferOrderUpdatedV1(
     public static final int SCHEMA_VERSION = 1;
 
     public TransferOrderUpdatedV1 {
+        requireCoreFields(transferOrderId, status, sourceLocationId, destinationLocationId, lines, occurredAt);
+        requireShortCloseInvariant(status, shortCloseDisposition);
+        lines = List.copyOf(lines);
+    }
+
+    /**
+     * The unconditional required-field sweep: every component that must always be present,
+     * independent of any other field's value. Split out of the compact constructor to keep it
+     * (and {@link #requireShortCloseInvariant}) each independently under the cognitive-complexity
+     * threshold; the checks, their order and their messages are unchanged from the original
+     * single-method form.
+     */
+    private static void requireCoreFields(
+            @Nullable UUID transferOrderId,
+            @Nullable String status,
+            @Nullable UUID sourceLocationId,
+            @Nullable UUID destinationLocationId,
+            @Nullable List<LineSummary> lines,
+            @Nullable Instant occurredAt) {
         if (transferOrderId == null) {
             throw new IllegalArgumentException("transferOrderId must not be null");
         }
@@ -63,6 +82,14 @@ public record TransferOrderUpdatedV1(
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
+    }
+
+    /**
+     * The cross-field rule between {@code status} and {@code shortCloseDisposition}: the two must
+     * imply each other exactly (see the record's javadoc). Called after {@link #requireCoreFields}
+     * has already rejected a null/blank {@code status}, so it is safe to compare here.
+     */
+    private static void requireShortCloseInvariant(String status, @Nullable String shortCloseDisposition) {
         if (shortCloseDisposition != null) {
             if (!"SHORT_CLOSED".equals(status)) {
                 throw new IllegalArgumentException("shortCloseDisposition is only valid for status SHORT_CLOSED");
@@ -77,7 +104,6 @@ public record TransferOrderUpdatedV1(
         if ("SHORT_CLOSED".equals(status) && shortCloseDisposition == null) {
             throw new IllegalArgumentException("status SHORT_CLOSED requires a shortCloseDisposition");
         }
-        lines = List.copyOf(lines);
     }
 
     /**

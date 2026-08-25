@@ -124,6 +124,58 @@ class TransferOrderAndSupplyInvariantsTest {
                     .hasMessageContaining("lines must not be empty");
         }
 
+        @Test
+        @DisplayName("a null lines list is rejected, distinctly from an empty one")
+        void nullLinesRejected() {
+            // Same guard, the other branch: lines == null must be caught before isEmpty() would
+            // NPE, so this is a decision, not an incidental crash.
+            assertThatThrownBy(() -> new TransferOrderUpdatedV1(
+                            ID, "IN_TRANSIT", ID, null, OTHER_ID, null, null, null, OCCURRED_AT))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("lines must not be empty");
+        }
+
+        @Test
+        @DisplayName("each required identity field is rejected when null")
+        void requiredFieldsRejectedWhenNull() {
+            // Every one of these guards fires before the fact ever reaches a consumer that
+            // would dereference the missing value.
+            assertThatThrownBy(() -> new TransferOrderUpdatedV1(
+                            null, "IN_TRANSIT", ID, null, OTHER_ID, null, lines, null, OCCURRED_AT))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("transferOrderId must not be null");
+
+            assertThatThrownBy(() -> new TransferOrderUpdatedV1(
+                            ID, "IN_TRANSIT", null, null, OTHER_ID, null, lines, null, OCCURRED_AT))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("sourceLocationId must not be null");
+
+            assertThatThrownBy(() -> new TransferOrderUpdatedV1(
+                            ID, "IN_TRANSIT", ID, null, null, null, lines, null, OCCURRED_AT))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("destinationLocationId must not be null");
+
+            assertThatThrownBy(() ->
+                            new TransferOrderUpdatedV1(ID, "IN_TRANSIT", ID, null, OTHER_ID, null, lines, null, null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("occurredAt must not be null");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "   "})
+        @DisplayName("a null or blank status is rejected")
+        void statusRequired(String blankStatus) {
+            assertThatThrownBy(() -> new TransferOrderUpdatedV1(
+                            ID, blankStatus, ID, null, OTHER_ID, null, lines, null, OCCURRED_AT))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("status must not be blank");
+
+            assertThatThrownBy(() ->
+                            new TransferOrderUpdatedV1(ID, null, ID, null, OTHER_ID, null, lines, null, OCCURRED_AT))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("status must not be blank");
+        }
+
         @ParameterizedTest
         @ValueSource(strings = {"LOST_IN_TRANSIT", "RETURNED_TO_SOURCE"})
         @DisplayName("SHORT_CLOSED accepts exactly the two dispositions that describe where the stock went")
