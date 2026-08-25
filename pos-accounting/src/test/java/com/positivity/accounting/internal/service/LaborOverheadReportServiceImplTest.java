@@ -323,6 +323,41 @@ class LaborOverheadReportServiceImplTest {
         assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("5"); // only the matching-location line counts
     }
 
+    @Test
+    void generate_skipsLinesWithNullAccountIdOrTransactionDate() {
+        // Malformed journal-entry-line data (missing GL account id, or a journal entry with no
+        // transaction date) must not corrupt the report or throw — such a line is silently excluded
+        // from the monthly totals rather than blowing up month-index arithmetic on a null date.
+        mappings(mapping("1.1.1", ACCT_WAGES));
+
+        JournalEntryLine missingAccount = line(ACCT_WAGES, 1, LOCATION, money("500"), BigDecimal.ZERO);
+        missingAccount.setGlAccountId(null);
+
+        JournalEntryLine missingTransactionDate = line(ACCT_WAGES, 1, LOCATION, money("700"), BigDecimal.ZERO);
+        missingTransactionDate.getJournalEntry().setTransactionDate(null);
+
+        postedLines(
+                missingAccount, missingTransactionDate, line(ACCT_WAGES, 1, LOCATION, money("100"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 12), "1.1.1");
+
+        assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("100"); // only the well-formed line counts
+    }
+
+    @Test
+    void generate_leavesMappedAccountAtZeroWhenNeverPosted() {
+        // A leaf mapped to a GL account with no posted activity yet this fiscal year (a newly added
+        // account, or simply nothing posted) must render as zero rather than being omitted or
+        // throwing when the aggregation has no entry for that account at all.
+        mappings(mapping("1.1.1", ACCT_WAGES), mapping("2.10", ACCT_UTIL));
+        postedLines(line(ACCT_WAGES, 1, LOCATION, money("1000"), BigDecimal.ZERO)); // nothing posted to ACCT_UTIL
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        assertThat(find(report, "2.10").getMonthly().get(0)).isEqualByComparingTo("0");
+        assertThat(find(report, "1.1.1").getMonthly().get(0)).isEqualByComparingTo("1000");
+    }
+
     private static StatementLineMapping mapping(String lineCode, UUID accountId, String locationId) {
         StatementLineMapping mapping = mapping(lineCode, accountId);
         mapping.setLocationId(locationId);

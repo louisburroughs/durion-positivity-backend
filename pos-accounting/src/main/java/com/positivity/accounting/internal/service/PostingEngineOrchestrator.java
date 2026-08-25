@@ -26,6 +26,7 @@ import java.time.YearMonth;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -109,76 +110,22 @@ public class PostingEngineOrchestrator {
         try {
             // 1. Idempotency check
             String idempotencyKey = computePostingIdempotencyKey(event, mappingVersionToUse);
-            if (idempotencyService.isKeyProcessed(idempotencyKey)) {
-                log.info("Event {} already processed (idempotency key: {})", event.getEventId(), idempotencyKey);
-                String existingRef = event.getFinalPostingReferenceId();
-                if (existingRef != null) {
-                    // Return success with existing reference info
-                    return PostingResult.builder()
-                            .success(true)
-                            .mappingVersionUsed(mappingVersionToUse)
-                            .evaluationDetails(Map.of("postingReference", existingRef, "idempotent", true))
-                            .build();
-                }
+            Optional<PostingResult> idempotentResult = checkIdempotency(event, idempotencyKey, mappingVersionToUse);
+            if (idempotentResult.isPresent()) {
+                return idempotentResult.get();
             }
 
-            // 2. Period gate pre-check (story B2, issue #944): an autoPost
-            // event whose transaction date falls in a CLOSED (or hard-locked)
-            // period is routed to SUSPENDED with failureReasonCode
-            // PERIOD_CLOSED instead of failing mid-posting. The engine has no
-            // interactive caller, so no override applies here — the remedy is
-            // reopening the period and reprocessing (manual reprocess;
-            // the scheduled auto-retry loop skips PERIOD_CLOSED suspensions).
-            // Draft-only processing (autoPost=false) is unaffected: drafts
-            // may be created into any period and gate at posting time.
-            if (autoPost) {
-                LocalDate transactionDate = event.getTransactionDate().toLocalDate();
-                if (accountingPeriodGate.isPostingBlocked(transactionDate)) {
-                    String periodCode = YearMonth.from(transactionDate).toString();
-                    // Distinguish the two block causes: a hard lock is
-                    // monotonic-forward and never reopened (no remedy), while
-                    // a CLOSED period can be reopened and the event
-                    // reprocessed.
-                    String details;
-                    if (accountingPeriodGate.isHardLocked(transactionDate)) {
-                        details = "Transaction date " + transactionDate
-                                + " is before the organization hard-lock date"
-                                + "; event suspended — posting is permanently blocked and cannot be"
-                                + " reprocessed (the hard lock is never reopened)";
-                    } else {
-                        details = "Transaction date " + transactionDate
-                                + " falls in CLOSED accounting period " + periodCode
-                                + "; event suspended — reprocess after the period is reopened";
-                    }
-                    return suspendPeriodBlocked(event, attemptHistory, details);
-                }
+            // 2. Period gate pre-check
+            Optional<PostingResult> periodBlocked = checkPeriodGate(event, attemptHistory, autoPost);
+            if (periodBlocked.isPresent()) {
+                return periodBlocked.get();
             }
 
             // 3. Evaluate posting rules
             log.debug("Evaluating posting rules for event {}", event.getEventId());
             PostingResult evaluationResult = postingRuleEvaluator.evaluateEvent(event, mappingVersionToUse);
-
             if (!evaluationResult.isSuccess()) {
-                // Evaluation failed - update event status to SUSPENDED
-                log.warn(
-                        "Posting rule evaluation failed for event {}: {} - {}",
-                        event.getEventId(),
-                        evaluationResult.getFailureReason(),
-                        evaluationResult.getFailureDetails());
-
-                event.setStatus(AccountingEventStatus.SUSPENDED);
-                event.setFailureReasonCode(evaluationResult.getFailureReason().name());
-                event.setFailureDetails(evaluationResult.getFailureDetails());
-
-                attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
-                attemptHistory.setOutcomeDetails(String.format(
-                        "Evaluation failed: %s - %s",
-                        evaluationResult.getFailureReason(), evaluationResult.getFailureDetails()));
-
-                accountingEventRepository.save(event);
-                reprocessingAttemptHistoryRepository.save(attemptHistory);
-
-                return evaluationResult;
+                return handleEvaluationFailure(event, attemptHistory, evaluationResult);
             }
 
             // 4. Evaluation succeeded - create/post journal entry
@@ -186,56 +133,17 @@ public class PostingEngineOrchestrator {
             if (journalEntry == null) {
                 throw new IllegalStateException("Evaluation succeeded but no journal entry draft present");
             }
+            String postingReference = createOrPostJournalEntry(journalEntry, autoPost, event.getEventId());
 
-            String postingReference;
-            if (autoPost) {
-                // Auto-post: create and immediately post the journal entry
-                log.info("Auto-posting journal entry for event {}", event.getEventId());
-                JournalEntry createdEntry = journalEntryService.createJournalEntry(journalEntry);
-                JournalEntry postedEntry = journalEntryService.postJournalEntry(createdEntry.getJournalEntryId());
-                postingReference = postedEntry.getJournalEntryId().toString();
-            } else {
-                // Draft only: create journal entry in DRAFT status
-                log.info("Creating draft journal entry for event {}", event.getEventId());
-                JournalEntry draftEntry = journalEntryService.createJournalEntry(journalEntry);
-                postingReference = draftEntry.getJournalEntryId().toString();
-            }
-
-            // 5. Update event status to PROCESSED, clearing failure metadata
-            // left over from an earlier suspension (e.g. PERIOD_CLOSED before
-            // a reopen-then-reprocess) so the record reads clean.
-            event.setStatus(AccountingEventStatus.PROCESSED);
-            event.setFinalPostingReferenceId(postingReference);
-            event.setProcessedAt(java.time.Instant.now(clock));
-            event.setResolvedByUserId(triggeredByUserId);
-            event.setFailureReasonCode(null);
-            event.setFailureDetails(null);
-            event.setErrorMessage(null);
-
-            attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);
-            attemptHistory.setOutcomeDetails(String.format(
-                    "Successfully %s journal entry with reference: %s",
-                    autoPost ? "posted" : "created draft", postingReference));
-
-            // Register idempotency key
-            idempotencyService.registerKey(idempotencyKey, event.getEventId());
-
-            accountingEventRepository.save(event);
-            reprocessingAttemptHistoryRepository.save(attemptHistory);
-
-            log.info("Successfully processed event {} with posting reference {}", event.getEventId(), postingReference);
-
-            // Build evaluation details with posting reference
-            Map<String, Object> detailsWithRef = new HashMap<>(evaluationResult.getEvaluationDetails());
-            detailsWithRef.put("postingReference", postingReference);
-            detailsWithRef.put("autoPosted", autoPost);
-
-            return PostingResult.builder()
-                    .success(true)
-                    .journalEntryDraft(journalEntry)
-                    .mappingVersionUsed(evaluationResult.getMappingVersionUsed())
-                    .evaluationDetails(detailsWithRef)
-                    .build();
+            // 5. Update event status, persist, and build the success result
+            return recordSuccessfulProcessing(
+                    event,
+                    attemptHistory,
+                    evaluationResult,
+                    postingReference,
+                    idempotencyKey,
+                    triggeredByUserId,
+                    autoPost);
 
         } catch (AccountingPeriodClosedException e) {
             // The period closed mid-flight, between the step-2 pre-check and
@@ -257,20 +165,193 @@ public class PostingEngineOrchestrator {
                     + " reprocessed (the hard lock is never reopened)";
             return suspendPeriodBlocked(event, attemptHistory, details);
         } catch (Exception e) {
-            log.error("Error processing event {} through posting engine", event.getEventId(), e);
-
-            event.setStatus(AccountingEventStatus.FAILED);
-            event.setFailureDetails("Posting engine error: " + e.getMessage());
-            event.setErrorMessage(e.getMessage());
-
-            attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
-            attemptHistory.setOutcomeDetails("Exception during processing: " + e.getMessage());
-
-            accountingEventRepository.save(event);
-            reprocessingAttemptHistoryRepository.save(attemptHistory);
-
-            return PostingResult.failure(PostingFailureReason.INTERNAL_ERROR, "Internal error: " + e.getMessage());
+            return handleUnexpectedFailure(event, attemptHistory, e);
         }
+    }
+
+    /**
+     * Idempotency short-circuit (step 1): when the key was already processed AND a final posting
+     * reference was persisted, returns that prior success result untouched. A key marked processed
+     * but missing its reference — an earlier attempt that was interrupted before it saved — is
+     * treated as unseen and falls through to a fresh evaluation, rather than returning a broken
+     * success with a null reference.
+     */
+    @NonNull
+    private Optional<PostingResult> checkIdempotency(
+            @NonNull AccountingEvent event, @NonNull String idempotencyKey, @Nullable UUID mappingVersionToUse) {
+        if (!idempotencyService.isKeyProcessed(idempotencyKey)) {
+            return Optional.empty();
+        }
+        log.info("Event {} already processed (idempotency key: {})", event.getEventId(), idempotencyKey);
+        String existingRef = event.getFinalPostingReferenceId();
+        if (existingRef == null) {
+            return Optional.empty();
+        }
+        return Optional.of(PostingResult.builder()
+                .success(true)
+                .mappingVersionUsed(mappingVersionToUse)
+                .evaluationDetails(Map.of("postingReference", existingRef, "idempotent", true))
+                .build());
+    }
+
+    /**
+     * Period gate pre-check (step 2, story B2, issue #944): an autoPost event whose transaction
+     * date falls in a CLOSED (or hard-locked) period is routed to SUSPENDED with failureReasonCode
+     * PERIOD_CLOSED instead of failing mid-posting. The engine has no interactive caller, so no
+     * override applies here — the remedy is reopening the period and reprocessing (manual
+     * reprocess; the scheduled auto-retry loop skips PERIOD_CLOSED suspensions). Draft-only
+     * processing (autoPost=false) is unaffected: drafts may be created into any period and gate at
+     * posting time.
+     */
+    @NonNull
+    private Optional<PostingResult> checkPeriodGate(
+            @NonNull AccountingEvent event, @NonNull ReprocessingAttemptHistory attemptHistory, boolean autoPost) {
+        if (!autoPost) {
+            return Optional.empty();
+        }
+        LocalDate transactionDate = event.getTransactionDate().toLocalDate();
+        if (!accountingPeriodGate.isPostingBlocked(transactionDate)) {
+            return Optional.empty();
+        }
+        return Optional.of(suspendPeriodBlocked(event, attemptHistory, periodBlockedDetails(transactionDate)));
+    }
+
+    /**
+     * Distinguishes the two period-gate block causes: a hard lock is monotonic-forward and never
+     * reopened (no remedy), while a CLOSED period can be reopened and the event reprocessed.
+     */
+    @NonNull
+    private String periodBlockedDetails(@NonNull LocalDate transactionDate) {
+        if (accountingPeriodGate.isHardLocked(transactionDate)) {
+            return "Transaction date " + transactionDate
+                    + " is before the organization hard-lock date"
+                    + "; event suspended — posting is permanently blocked and cannot be"
+                    + " reprocessed (the hard lock is never reopened)";
+        }
+        String periodCode = YearMonth.from(transactionDate).toString();
+        return "Transaction date " + transactionDate
+                + " falls in CLOSED accounting period " + periodCode
+                + "; event suspended — reprocess after the period is reopened";
+    }
+
+    /**
+     * Evaluation failure handling (step 3): the posting rules rejected the event (e.g. an
+     * unbalanced journal or an unresolvable mapping) — suspend it with the evaluator's own failure
+     * reason rather than a generic error, so the reprocessing UI shows what actually needs fixing.
+     */
+    @NonNull
+    private PostingResult handleEvaluationFailure(
+            @NonNull AccountingEvent event,
+            @NonNull ReprocessingAttemptHistory attemptHistory,
+            @NonNull PostingResult evaluationResult) {
+        log.warn(
+                "Posting rule evaluation failed for event {}: {} - {}",
+                event.getEventId(),
+                evaluationResult.getFailureReason(),
+                evaluationResult.getFailureDetails());
+
+        event.setStatus(AccountingEventStatus.SUSPENDED);
+        event.setFailureReasonCode(evaluationResult.getFailureReason().name());
+        event.setFailureDetails(evaluationResult.getFailureDetails());
+
+        attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+        attemptHistory.setOutcomeDetails(String.format(
+                "Evaluation failed: %s - %s",
+                evaluationResult.getFailureReason(), evaluationResult.getFailureDetails()));
+
+        accountingEventRepository.save(event);
+        reprocessingAttemptHistoryRepository.save(attemptHistory);
+
+        return evaluationResult;
+    }
+
+    /**
+     * Creates the journal entry from the evaluated draft (step 4) and, for autoPost, posts it
+     * immediately; otherwise leaves it in DRAFT. Returns the resulting entry's id as the posting
+     * reference.
+     */
+    @NonNull
+    private String createOrPostJournalEntry(
+            @NonNull JournalEntry journalEntry, boolean autoPost, @NonNull UUID eventId) {
+        if (autoPost) {
+            log.info("Auto-posting journal entry for event {}", eventId);
+            JournalEntry createdEntry = journalEntryService.createJournalEntry(journalEntry);
+            JournalEntry postedEntry = journalEntryService.postJournalEntry(createdEntry.getJournalEntryId());
+            return postedEntry.getJournalEntryId().toString();
+        }
+        log.info("Creating draft journal entry for event {}", eventId);
+        JournalEntry draftEntry = journalEntryService.createJournalEntry(journalEntry);
+        return draftEntry.getJournalEntryId().toString();
+    }
+
+    /**
+     * Finalizes a successful posting (step 5): marks the event PROCESSED, clearing any failure
+     * metadata left over from an earlier suspension (e.g. PERIOD_CLOSED before a
+     * reopen-then-reprocess) so the record reads clean, persists the attempt history, burns the
+     * idempotency key, and builds the caller-facing result.
+     */
+    @NonNull
+    private PostingResult recordSuccessfulProcessing(
+            @NonNull AccountingEvent event,
+            @NonNull ReprocessingAttemptHistory attemptHistory,
+            @NonNull PostingResult evaluationResult,
+            @NonNull String postingReference,
+            @NonNull String idempotencyKey,
+            @NonNull String triggeredByUserId,
+            boolean autoPost) {
+        event.setStatus(AccountingEventStatus.PROCESSED);
+        event.setFinalPostingReferenceId(postingReference);
+        event.setProcessedAt(java.time.Instant.now(clock));
+        event.setResolvedByUserId(triggeredByUserId);
+        event.setFailureReasonCode(null);
+        event.setFailureDetails(null);
+        event.setErrorMessage(null);
+
+        attemptHistory.setOutcome(ReprocessingOutcome.SUCCESS);
+        attemptHistory.setOutcomeDetails(String.format(
+                "Successfully %s journal entry with reference: %s",
+                autoPost ? "posted" : "created draft", postingReference));
+
+        idempotencyService.registerKey(idempotencyKey, event.getEventId());
+
+        accountingEventRepository.save(event);
+        reprocessingAttemptHistoryRepository.save(attemptHistory);
+
+        log.info("Successfully processed event {} with posting reference {}", event.getEventId(), postingReference);
+
+        Map<String, Object> detailsWithRef = new HashMap<>(evaluationResult.getEvaluationDetails());
+        detailsWithRef.put("postingReference", postingReference);
+        detailsWithRef.put("autoPosted", autoPost);
+
+        return PostingResult.builder()
+                .success(true)
+                .journalEntryDraft(evaluationResult.getJournalEntryDraft())
+                .mappingVersionUsed(evaluationResult.getMappingVersionUsed())
+                .evaluationDetails(detailsWithRef)
+                .build();
+    }
+
+    /**
+     * Unexpected-exception path: mid-flow errors other than the two period-gate exceptions mark the
+     * event FAILED rather than SUSPENDED, since — unlike a rejected rule or a closed period —
+     * there is no known remedy to point the operator at.
+     */
+    @NonNull
+    private PostingResult handleUnexpectedFailure(
+            @NonNull AccountingEvent event, @NonNull ReprocessingAttemptHistory attemptHistory, @NonNull Exception e) {
+        log.error("Error processing event {} through posting engine", event.getEventId(), e);
+
+        event.setStatus(AccountingEventStatus.FAILED);
+        event.setFailureDetails("Posting engine error: " + e.getMessage());
+        event.setErrorMessage(e.getMessage());
+
+        attemptHistory.setOutcome(ReprocessingOutcome.FAILURE);
+        attemptHistory.setOutcomeDetails("Exception during processing: " + e.getMessage());
+
+        accountingEventRepository.save(event);
+        reprocessingAttemptHistoryRepository.save(attemptHistory);
+
+        return PostingResult.failure(PostingFailureReason.INTERNAL_ERROR, "Internal error: " + e.getMessage());
     }
 
     /**
