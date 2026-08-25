@@ -675,14 +675,14 @@ Repo-wide, summing all per-module reports: **80.4% line** (15,791 missed of
 |---|---:|---:|---:|---:|---:|
 | `pos-accounting` | 10668 | 80.3 | 67.3 | 0.77 | 0.64 |
 | `pos-inventory` | 10153 | 79.2 | 64.1 | 0.76 | 0.61 |
-| `pos-workorder` | 7584 | 77.7 | 63.1 | 0.74 | 0.60 |
+| `pos-workorder` | 8373 | 78.8 | 65.0 | 0.75 | 0.62 |
 | `pos-mcp-server` | 6166 | 80.2 | 68.5 | 0.77 | 0.65 |
-| `pos-customer` | 5439 | 82.4 | 69.6 | 0.79 | 0.66 |
-| `pos-supplier` | 5155 | 87.3 | 73.5 | 0.84 | 0.70 |
+| `pos-customer` | 5439 | 83.9 | 74.0 | 0.80 | 0.71 |
+| `pos-supplier` | 6644 | 87.1 | 74.8 | 0.84 | 0.71 |
 | `pos-order` | 4201 | 84.4 | 71.3 | 0.81 | 0.68 |
 | `pos-security-service` | 3559 | 77.1 | 66.6 | 0.74 | 0.63 |
 | `pos-invoice` | 3380 | 77.3 | 63.7 | 0.74 | 0.60 |
-| `pos-catalog` | 3009 | 77.6 | 61.6 | 0.74 | 0.58 |
+| `pos-catalog` | 3302 | 78.4 | 63.1 | 0.75 | 0.60 |
 | `pos-people` | 2901 | 78.7 | 73.1 | 0.75 | 0.70 |
 | `pos-warranty` | 2638 | 87.3 | 78.9 | 0.84 | 0.75 |
 | `pos-location` | 2208 | 78.1 | 66.1 | 0.75 | 0.63 |
@@ -691,21 +691,22 @@ Repo-wide, summing all per-module reports: **80.4% line** (15,791 missed of
 | `pos-people-contact` | 1481 | 72.8 | 62.2 | 0.69 | 0.59 |
 | `pos-marketing` | 1402 | 90.7 | 85.2 | 0.87 | 0.82 |
 | `pos-price` | 1053 | 94.4 | 80.4 | 0.91 | 0.77 |
-| `pos-vehicle-inventory` | 993 | 79.6 | 74.7 | 0.76 | 0.71 |
+| `pos-vehicle-inventory` | 1017 | 79.2 | 75.0 | 0.76 | 0.72 |
 | `pos-tax` | 984 | 78.5 | 66.8 | 0.75 | 0.63 |
 | `pos-domain-events` | 648 | 84.9 | 78.9 | 0.81 | 0.75 |
 | `pos-vehicle-fitment` | 542 | 78.4 | 63.6 | 0.75 | 0.60 |
 | `pos-event-receiver` | 441 | 77.6 | 87.2 | 0.74 | 0.84 |
-| `pos-api-gateway` | 436 | 85.6 | 72.2 | 0.82 | 0.69 |
+| `pos-api-gateway` | 451 | 86.0 | 72.7 | 0.83 | 0.69 |
 | `pos-security-common` | 407 | 79.4 | 80.7 | 0.76 | 0.77 |
-| `pos-documents` | 384 | 72.9 | 75.0 | 0.69 | 0.72 |
+| `pos-documents` | 382 | 73.3 | 75.0 | 0.70 | 0.72 |
 | `pos-openapi-validation` | 258 | 94.2 | 81.2 | 0.91 | 0.78 |
 | `pos-vehicle-reference-nhtsa` | 189 | 53.4 | 58.3 | 0.50 | 0.55 |
-| `pos-events` | 174 | 59.8 | 57.1 | 0.56 | 0.54 |
+| `pos-events` | 284 | 75.4 | 74.4 | 0.72 | 0.71 |
+| `pos-image` | 213 | 76.1 | 91.7 | 0.73 | 0.88 |
+| `pos-web-common` | 188 | 84.6 | 63.4 | 0.81 | 0.60 |
 | `pos-document-helper` | 162 | 95.7 | 90.0 | 0.92 | 0.87 |
 | `pos-tax-common` | 104 | 89.4 | 74.1 | 0.86 | 0.71 |
 | `pos-vehicle-reference-carapi` | 69 | 78.3 | 88.9 | 0.75 | 0.85 |
-| `pos-image` | 61 | 31.1 | 100.0 | 0.28 | 0.97 |
 | `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
 | `pos-service-discovery` | 4 | 0.0 | — | — *(unguarded)* | — |
@@ -794,10 +795,15 @@ are derived (§6.1).
   unstable, and it will fail on a night when nothing changed. Treat a
   thin-margin module as a bug in the floor or a gap in the tests, not as a
   module doing well.
-- The four all-zero modules (`pos-image`, `pos-inquiry`,
-  `pos-vehicle-reference-carapi`, `pos-vehicle-reference-nhtsa`) carry **no**
-  floor. A `0.00` floor is not a gate, and pretending otherwise would misrepresent
-  them as guarded. They need first tests, not thresholds — see §7.
+- The four all-zero modules (`pos-bulk-ingest-lib`, `pos-inquiry`,
+  `pos-service-discovery`, `pos-shared-dtos`) carry **no** floor — each is under
+  the `--min-lines` threshold (§6.5) with no coverage of its own to gate. A
+  `0.00` floor is not a gate, and pretending otherwise would misrepresent them
+  as guarded. They need first tests, not thresholds — see §7.
+  (`pos-image` and `pos-vehicle-reference-carapi` are no longer in this
+  category: both now measure real, non-zero coverage and carry real floors —
+  see the §6.1 table. An earlier version of this list still named them from
+  when they were genuinely all-zero.)
 - Deliberately **not** a single repo-wide bar. At 81.1% a uniform 85% would fail
   a third of the reactor on day one, and a uniform 70% would let the best modules
   rot 15 points before anyone noticed.

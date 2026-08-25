@@ -13,12 +13,12 @@
     <description>POS Customer Module</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 83.8% line / 73.8% branch by the gate's own
+        <!-- Coverage ratchet: measured 83.9% line / 74.0% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
         <jacoco.line.min>0.80</jacoco.line.min>
-        <jacoco.branch.min>0.70</jacoco.branch.min>
+        <jacoco.branch.min>0.71</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
