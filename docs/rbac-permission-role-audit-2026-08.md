@@ -174,8 +174,8 @@ based on each role's documented job function in the seed header.
    service-to-service traffic that shouldn't use RBAC at all?
 4. ~~**Period close discipline**~~ — **decided**: a re-created CONTROLLER role owns the
    close cycle and all accounting management; ACCOUNT_MANAGER becomes the
-   customer-accounts role. Full mapping in §6 (which carries its own residual
-   sub-decisions).
+   customer-accounts role. Full mapping in §6; its sub-decisions a–f are also
+   resolved.
 5. **`order:order:charge_on_account`** and **`order:session:approve_variance`**: which
    manager tier? These gate money movement.
 6. **`invoice:finalize:override` precedent** applies: several of these are deliberate
@@ -330,16 +330,16 @@ code, do not carry into the TO-BE model (deprecate per §4).
 | --- | --- | --- | --- |
 | **Customer accounts (AR) — ACCOUNT_MANAGER** | | | |
 | `accounting:payment:apply` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep |
-| `accounting:payment:reverse` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep (elevated AR action per #114; CONTROLLER additionally, for oversight — flag a) |
+| `accounting:payment:reverse` | ACCOUNT_MANAGER | ACCOUNT_MANAGER, CONTROLLER | keep + CONTROLLER (decision a) |
 | `accounting:credit-memo:create` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep |
 | `accounting:credit-memo:read` | ACCOUNT_MANAGER | ACCOUNT_MANAGER, CONTROLLER | keep + CONTROLLER view |
 | `accounting:customer-credit:view` | *nobody* | ACCOUNT_MANAGER, CONTROLLER, ACCOUNTING_ASSOCIATE | **new** |
 | `accounting:customer-credit:apply` | *nobody* | ACCOUNT_MANAGER | **new** |
-| `accounting:customer-credit:refund` | *nobody* | ACCOUNT_MANAGER | **new** (money-out — flag b) |
+| `accounting:customer-credit:refund` | *nobody* | ACCOUNT_MANAGER, CONTROLLER, LOCATION_MANAGER, GENERAL_MANAGER | **new** (money-out; wide-but-senior holder set — decision b) |
 | `invoice:manage` | ACCOUNT_MANAGER, SERVICE_ADVISOR | unchanged | keep |
-| `invoice:billing-rules` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep (customer billing config — flag c) |
+| `invoice:billing-rules` | ACCOUNT_MANAGER | ACCOUNT_MANAGER, CONTROLLER | keep + CONTROLLER (decision c: both — customer billing config and financial config) |
 | `invoice:finalize:override` | ACCOUNT_MANAGER + manager roles | unchanged | keep (#1374 decision stands) |
-| `tax:exemption:view` / `tax:exemption:manage` | *nobody* | ACCOUNT_MANAGER (+ SERVICE_ADVISOR view, per §2) | **new** (customer tax status — flag d) |
+| `tax:exemption:view` / `tax:exemption:manage` | *nobody* | ACCOUNT_MANAGER, LOCATION_MANAGER (+ SERVICE_ADVISOR view only) | **new** (decision d) |
 | **Accounting management — CONTROLLER** | | | |
 | `accounting:coa:view/create/edit/deactivate` | ACCOUNT_MANAGER | CONTROLLER | move |
 | `accounting:je:view/create/post/reverse` | ACCOUNT_MANAGER | CONTROLLER | move |
@@ -351,8 +351,8 @@ code, do not carry into the TO-BE model (deprecate per §4).
 | `accounting:events:view/submit/retry/reprocess` | ACCOUNT_MANAGER | CONTROLLER | move |
 | `accounting:export:view` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out) |
 | `accounting:ap:view` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out) |
-| `accounting:ap:pay` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out; associate keeps clerk-level AP — flag e) |
-| `reporting:view:financial-statements` | ACCOUNT_MANAGER | CONTROLLER | move (flag f) |
+| `accounting:ap:pay` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out; decision e: both CONTROLLER and the associate hold it) |
+| `reporting:view:financial-statements` | ACCOUNT_MANAGER, ADMIN | ACCOUNT_MANAGER, ADMIN, CONTROLLER, GENERAL_MANAGER | keep + add (decision f: current holders retain; CONTROLLER and GENERAL_MANAGER added) |
 | `accounting:period:view` | *nobody* | CONTROLLER, ACCOUNTING_ASSOCIATE | **new** |
 | `accounting:period:close` / `reopen` | *nobody* | CONTROLLER | **new** |
 | `accounting:period:hard_lock` | *nobody* | CONTROLLER | **new** |
@@ -374,9 +374,10 @@ code, do not carry into the TO-BE model (deprecate per §4).
 
 | Role | TO-BE identity | Grant count (approx.) |
 | --- | --- | --- |
-| CONTROLLER | accounting management: GL config, JE, COA, close cycle, reconciliation, AP oversight, exports, statements, tax commit | ~49 (33 moved + 12 new + 4 baseline) |
-| ACCOUNT_MANAGER | customer accounts: payments, customer credits, credit memos, invoicing/billing, tax exemptions | ~16 (down from 50) |
+| CONTROLLER | accounting management: GL config, JE, COA, close cycle, reconciliation, AP, exports, statements, tax commit; shares payment reversal, customer-credit refund and billing rules with the AR side | ~52 (33 moved + 12 new + 3 shared per decisions a–c + 4 baseline) |
+| ACCOUNT_MANAGER | customer accounts: payments, customer credits, credit memos, invoicing/billing, tax exemptions, financial-statements read | ~17 (down from 50) |
 | ACCOUNTING_ASSOCIATE | accounting clerk: read surface + AP pay + period/reconciliation view | ~14 (net: −3 retired, +3 new views) |
+| LOCATION_MANAGER / GENERAL_MANAGER | unchanged identity; gain `accounting:customer-credit:refund` (both), `tax:exemption:view/manage` (LOCATION_MANAGER), `reporting:view:financial-statements` (GENERAL_MANAGER) | +2–3 each |
 
 ```mermaid
 flowchart LR
@@ -397,26 +398,25 @@ flowchart LR
     AA1 -- "read surface + ap:pay\n(dead codes retired)" --> AA2
 ```
 
-### Residual sub-decisions (flags a–f above)
+### Sub-decisions a–f — resolved 2026-08-25
 
-a. Should CONTROLLER *also* hold `accounting:payment:reverse`, or is that AR-only?
-b. `accounting:customer-credit:refund` is money-out — keep on ACCOUNT_MANAGER alone, or
-   require CONTROLLER (or manager) elevation?
-c. `invoice:billing-rules` — customer-billing configuration: ACCOUNT_MANAGER (as mapped)
-   or CONTROLLER as financial config?
-d. Tax exemption certificates — ACCOUNT_MANAGER manage + SERVICE_ADVISOR view is the
-   mapped default; confirm.
-e. Does ACCOUNTING_ASSOCIATE keep `accounting:ap:pay` (clerk executes payment runs) or
-   does AP payment move to CONTROLLER only?
-f. Does ACCOUNT_MANAGER retain read access to `reporting:view:financial-statements`, or
-   is that CONTROLLER/ADMIN only (as mapped)?
+All six flags are decided; the chart above reflects them:
+
+| Flag | Decision |
+| --- | --- |
+| a. `accounting:payment:reverse` | CONTROLLER holds it **in addition to** ACCOUNT_MANAGER |
+| b. `accounting:customer-credit:refund` | ACCOUNT_MANAGER **plus CONTROLLER, LOCATION_MANAGER and GENERAL_MANAGER** |
+| c. `invoice:billing-rules` | **Both** ACCOUNT_MANAGER and CONTROLLER |
+| d. Tax exemption certificates | ACCOUNT_MANAGER view+manage, SERVICE_ADVISOR view, **plus LOCATION_MANAGER view+manage** |
+| e. `accounting:ap:pay` | **Both** — CONTROLLER and ACCOUNTING_ASSOCIATE (clerk keeps payment runs) |
+| f. `reporting:view:financial-statements` | Current holders (ACCOUNT_MANAGER, ADMIN) **retain**; add CONTROLLER and GENERAL_MANAGER |
 
 ## 7. Summary of recommendations
 
 | # | Action | Effort | Blocked on decision? |
 | --- | --- | --- | --- |
 | 1 | Wire role grants for the 112 required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | partially — accounting is decided (§6); rest per §2 decision list |
-| 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split: create CONTROLLER role, move the 33 accounting-management grants, add the 12 new codes, revoke via versioned migration | medium | flags a–f in §6 only |
+| 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split: create CONTROLLER role, move the 33 accounting-management grants, add the 12 new codes, revoke via versioned migration | medium | no — fully decided (incl. sub-decisions a–f) |
 | 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | naming pick only |
 | 3 | Re-point `shop:location/bay` holders to `location:*` family | small | no |
 | 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | convention sign-off |
