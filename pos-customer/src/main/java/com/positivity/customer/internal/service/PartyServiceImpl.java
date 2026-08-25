@@ -277,29 +277,41 @@ public class PartyServiceImpl implements PartyService {
 
     private boolean matchesBrowseFilter(
             SearchPartiesResponse.PartySummary s, String name, String status, String partyType, String customerNumber) {
-        if (StringUtils.hasText(name)) {
-            // Unified typeahead term: match legal name, display name, OR customer number
-            // so a single query box finds customers by name or by account number.
-            String needle = name.toLowerCase(java.util.Locale.ROOT);
-            String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
-            String display = s.getDisplayName() != null ? s.getDisplayName().toLowerCase(java.util.Locale.ROOT) : "";
-            String number =
-                    s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
-            if (!legal.contains(needle) && !display.contains(needle) && !number.contains(needle)) {
-                return false;
-            }
+        return matchesBrowseName(s, name)
+                && matchesBrowseStatus(s, status)
+                && matchesBrowsePartyType(s, partyType)
+                && matchesBrowseCustomerNumber(s, customerNumber);
+    }
+
+    /**
+     * Unified typeahead term: match legal name, display name, OR customer number so a single
+     * query box finds customers by name or by account number.
+     */
+    private boolean matchesBrowseName(SearchPartiesResponse.PartySummary s, String name) {
+        if (!StringUtils.hasText(name)) {
+            return true;
         }
-        if (StringUtils.hasText(status) && !status.equalsIgnoreCase(s.getStatus())) {
-            return false;
+        String needle = name.toLowerCase(java.util.Locale.ROOT);
+        String legal = s.getLegalName() != null ? s.getLegalName().toLowerCase(java.util.Locale.ROOT) : "";
+        String display = s.getDisplayName() != null ? s.getDisplayName().toLowerCase(java.util.Locale.ROOT) : "";
+        String number = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
+        return legal.contains(needle) || display.contains(needle) || number.contains(needle);
+    }
+
+    private boolean matchesBrowseStatus(SearchPartiesResponse.PartySummary s, String status) {
+        return !StringUtils.hasText(status) || status.equalsIgnoreCase(s.getStatus());
+    }
+
+    private boolean matchesBrowsePartyType(SearchPartiesResponse.PartySummary s, String partyType) {
+        return !StringUtils.hasText(partyType) || partyType.equalsIgnoreCase(s.getPartyType());
+    }
+
+    private boolean matchesBrowseCustomerNumber(SearchPartiesResponse.PartySummary s, String customerNumber) {
+        if (!StringUtils.hasText(customerNumber)) {
+            return true;
         }
-        if (StringUtils.hasText(partyType) && !partyType.equalsIgnoreCase(s.getPartyType())) {
-            return false;
-        }
-        if (StringUtils.hasText(customerNumber)) {
-            String cn = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
-            return cn.contains(customerNumber.toLowerCase(java.util.Locale.ROOT));
-        }
-        return true;
+        String cn = s.getCustomerNumber() != null ? s.getCustomerNumber().toLowerCase(java.util.Locale.ROOT) : "";
+        return cn.contains(customerNumber.toLowerCase(java.util.Locale.ROOT));
     }
 
     private Comparator<SearchPartiesResponse.PartySummary> browseComparator(String sortField, String sortOrder) {
@@ -756,29 +768,15 @@ public class PartyServiceImpl implements PartyService {
     public CrmSnapshotDTO buildSnapshotForParty(UUID partyId) {
         log.debug("Building CRM snapshot for party: {}", partyId);
         Cache snapshotCache = cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE);
-        if (snapshotCache != null) {
-            Cache.ValueWrapper wrapper = snapshotCache.get(partyId);
-            if (wrapper != null) {
-                CrmSnapshotDTO cached = (CrmSnapshotDTO) wrapper.get();
-                if (cached != null && cached.getSnapshotMetadata() != null) {
-                    cached.getSnapshotMetadata().setSource("CACHE");
-                }
-                if (cached != null) {
-                    return cached;
-                }
-            }
+
+        CrmSnapshotDTO cached = readCachedSnapshot(snapshotCache, partyId);
+        if (cached != null) {
+            return cached;
         }
 
-        CommercialParty party = findPartyByIdInternal(partyId);
-        CrmSnapshotDTO fresh;
-        if (party != null) {
-            fresh = assembleSnapshot(party);
-        } else {
-            PersonParty personParty = findPersonPartyByIdInternal(partyId);
-            if (personParty == null) {
-                return null;
-            }
-            fresh = assembleSnapshotForPersonParty(personParty);
+        CrmSnapshotDTO fresh = assembleFreshSnapshot(partyId);
+        if (fresh == null) {
+            return null;
         }
 
         if (fresh.getSnapshotMetadata() != null) {
@@ -788,6 +786,43 @@ public class PartyServiceImpl implements PartyService {
             snapshotCache.put(partyId, fresh);
         }
         return fresh;
+    }
+
+    /**
+     * Looks up {@code partyId} in the snapshot cache and stamps a hit's source as {@code CACHE}.
+     * Returns {@code null} on any kind of miss — no cache, no entry, or an entry that unwraps to
+     * {@code null} (e.g. a previously-cached {@code null} value) — so the caller falls back to
+     * rebuilding a fresh snapshot.
+     */
+    private @Nullable CrmSnapshotDTO readCachedSnapshot(@Nullable Cache snapshotCache, UUID partyId) {
+        if (snapshotCache == null) {
+            return null;
+        }
+        Cache.ValueWrapper wrapper = snapshotCache.get(partyId);
+        if (wrapper == null) {
+            return null;
+        }
+        CrmSnapshotDTO cached = (CrmSnapshotDTO) wrapper.get();
+        if (cached != null && cached.getSnapshotMetadata() != null) {
+            cached.getSnapshotMetadata().setSource("CACHE");
+        }
+        return cached;
+    }
+
+    /**
+     * Assembles a fresh snapshot for a commercial or person party; {@code null} when neither party
+     * type exists for {@code partyId}.
+     */
+    private @Nullable CrmSnapshotDTO assembleFreshSnapshot(UUID partyId) {
+        CommercialParty party = findPartyByIdInternal(partyId);
+        if (party != null) {
+            return assembleSnapshot(party);
+        }
+        PersonParty personParty = findPersonPartyByIdInternal(partyId);
+        if (personParty == null) {
+            return null;
+        }
+        return assembleSnapshotForPersonParty(personParty);
     }
 
     @Override
