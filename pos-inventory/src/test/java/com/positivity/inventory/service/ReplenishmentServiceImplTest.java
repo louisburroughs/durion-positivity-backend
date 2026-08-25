@@ -768,10 +768,15 @@ class ReplenishmentServiceImplTest {
      * the mapping code is unreachable from any policy this method can evaluate.
      */
     @Test
-    void getReplenishmentNeeds_missingPolicyIdAndSourceType_fallsBackToDefaults() {
+    void getReplenishmentNeeds_missingSourceType_fallsBackToEither() {
+        // policyId is deliberately set: a policy reaching this method is repository-loaded, so
+        // its @Id is never null, and the response declares policyId REQUIRED. Only the
+        // preferredSourceType fallback is a reachable default (a row predating the column).
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-00000000000d");
         ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
+                .policyId(policyId)
                 .locationId(LOC_01)
-                .itemSKU("SKU-NO-ID")
+                .itemSKU("SKU-NO-SRC")
                 .minimumQuantity(5)
                 .maximumQuantity(20)
                 // Overrides the entity's own @Builder.Default (EITHER) to reach the
@@ -779,14 +784,14 @@ class ReplenishmentServiceImplTest {
                 .preferredSourceType(null)
                 .build();
         when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
-        givenOnHand("SKU-NO-ID", LOC_01, 5);
+        givenOnHand("SKU-NO-SRC", LOC_01, 5);
 
         List<com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse> needs =
                 replenishmentService.getReplenishmentNeeds();
 
         assertEquals(1, needs.size());
         com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse need = needs.getFirst();
-        assertEquals(null, need.getPolicyId());
+        assertEquals(policyId.toString(), need.getPolicyId());
         assertEquals("EITHER", need.getPreferredSourceType());
     }
 }

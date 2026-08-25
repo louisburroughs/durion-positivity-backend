@@ -557,7 +557,9 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         int suggestedQuantity = projection.triggered() ? quantityToReplenish(policy, projection, null) : 0;
         LocalDate deadline = projection.triggered() ? deadlineFor(projection) : null;
         return ReplenishmentNeedResponse.builder()
-                .policyId(policy.getPolicyId() != null ? policy.getPolicyId().toString() : null)
+                // No null fallback: policyId is the repository-loaded @Id, and the response
+                // declares it REQUIRED — emitting null would violate the schema, not honour it.
+                .policyId(policy.getPolicyId().toString())
                 .itemSKU(policy.getItemSKU())
                 .locationId(policy.getLocationId())
                 .onHand(projection.onHand())
