@@ -565,10 +565,9 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
                 .leadHorizonDate(LocalDate.ofInstant(projection.leadHorizon(), ZoneOffset.UTC)
                         .toString())
                 .leadTimeSource(projection.leadTime().source().name())
-                // minimumQuantity has no null branch to defend here: project() (called just above,
-                // for every policy this method reaches) already unboxes it unconditionally, so a
-                // null value would have failed before a row was ever built.
-                .minimumQuantity(policy.getMinimumQuantity() != null ? policy.getMinimumQuantity() : 0)
+                // No null fallback: project() (called for every policy this method reaches)
+                // already unboxed minimumQuantity, so it cannot be null by this line.
+                .minimumQuantity(policy.getMinimumQuantity())
                 .maximumQuantity(policy.getMaximumQuantity() != null ? policy.getMaximumQuantity() : 0)
                 .wouldTrigger(projection.triggered())
                 .suggestedQuantity(suggestedQuantity)
