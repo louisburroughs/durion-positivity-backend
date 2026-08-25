@@ -344,6 +344,51 @@ class EstimateServiceImplTest {
     }
 
     @Test
+    void updateEstimateItem_nonDraftStatus_throwsIllegalStateException() {
+        // Once the estimate has left DRAFT (e.g. sent for customer approval), line
+        // items are frozen — revising one would silently change what the customer is
+        // approving.
+        estimate.setStatus(EstimateStatus.PENDING_APPROVAL);
+        EstimateItem item =
+                EstimateItem.builder().id(ITEM_ID).estimate(estimate).build();
+        when(estimateRepository.findById(estimate.getId())).thenReturn(Optional.of(estimate));
+        UpdateEstimateItemRequest request = new UpdateEstimateItemRequest("new description", null, null, null, null);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> estimateService.updateEstimateItem(estimate.getId(), item.getId(), request));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("PENDING_APPROVAL"));
+        verify(estimateItemRepository, org.mockito.Mockito.never())
+                .findByIdAndEstimate_IdAndDeletedFalse(any(UUID.class), any(UUID.class));
+    }
+
+    @Test
+    void updateEstimateItem_revisesUnitPriceAndTaxCode() {
+        // The money arms of a revision (unitPrice, taxCode) are gated independently
+        // of description/quantity/uomCode — each is its own optional PATCH field.
+        EstimateItem item = EstimateItem.builder()
+                .id(ITEM_ID)
+                .estimate(estimate)
+                .itemType(EstimateItemType.LABOR)
+                .description("Diagnostic")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100.00"))
+                .taxCode("TX-OLD")
+                .build();
+        when(estimateRepository.findById(estimate.getId())).thenReturn(Optional.of(estimate));
+        when(estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(item.getId(), estimate.getId()))
+                .thenReturn(Optional.of(item));
+        when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
+        UpdateEstimateItemRequest request =
+                new UpdateEstimateItemRequest(null, null, new BigDecimal("125.00"), "TX-NEW", null);
+
+        EstimateItemResponse result = estimateService.updateEstimateItem(estimate.getId(), item.getId(), request);
+
+        assertEquals(new BigDecimal("125.00"), result.getUnitPrice());
+        assertEquals("TX-NEW", result.getTaxCode());
+    }
+
+    @Test
     void updateEstimateFinancials_scaleOnlyTotalRestatement_isNotARevision() {
         // 100 vs 100.00 is the same amount at a different scale — e.g. the value read back from
         // a numeric column. It must not bump the version or publish EstimateRevisedEvent.

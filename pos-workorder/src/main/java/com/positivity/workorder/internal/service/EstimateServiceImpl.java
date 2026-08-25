@@ -948,12 +948,7 @@ public class EstimateServiceImpl implements EstimateService {
         Estimate estimate = estimateRepository
                 .findById(estimateId)
                 .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
-
-        // Validate estimate is in DRAFT status
-        if (estimate.getStatus() != EstimateStatus.DRAFT) {
-            throw new IllegalStateException("Cannot update items in estimate with status: " + estimate.getStatus()
-                    + ". Estimate must be in DRAFT status.");
-        }
+        requireDraftEstimateForItemUpdate(estimate);
 
         EstimateItem item = estimateItemRepository
                 .findByIdAndEstimate_IdAndDeletedFalse(itemId, estimateId)
@@ -967,29 +962,66 @@ public class EstimateServiceImpl implements EstimateService {
         boolean uomCodeProvided = request.getUomCode() != null;
         String normalizedRequestUomCode = PartQuantityDivisibilityService.normalizeUomCode(request.getUomCode());
 
+        requireValidUomCodeRevision(item, uomCodeProvided);
+        revalidateQuantityScaleIfNeeded(item, request, uomCodeProvided, normalizedRequestUomCode);
+        applyProvidedItemFields(item, request, uomCodeProvided, normalizedRequestUomCode);
+
+        // Re-validate entity invariants after mutations
+        item.validate();
+
+        EstimateItem saved = estimateItemRepository.save(item);
+        estimateFactPublisher.markChanged(estimateId);
+
+        log.info("Updated item {} on estimate {}", itemId, estimateId);
+
+        return EstimateItemResponse.fromEntity(saved);
+    }
+
+    private void requireDraftEstimateForItemUpdate(@NonNull Estimate estimate) {
+        if (estimate.getStatus() != EstimateStatus.DRAFT) {
+            throw new IllegalStateException("Cannot update items in estimate with status: " + estimate.getStatus()
+                    + ". Estimate must be in DRAFT status.");
+        }
+    }
+
+    private void requireValidUomCodeRevision(@NonNull EstimateItem item, boolean uomCodeProvided) {
         // LABOR rows never carry a uomCode (ADR-0055 stage 3, #1415): revising one onto a LABOR
         // row has to be rejected the same way entering one would be.
         if (uomCodeProvided && item.getItemType() == EstimateItemType.LABOR) {
             throw new IllegalArgumentException("uomCode is not valid for LABOR items");
         }
+    }
 
-        // Revising the quantity has to clear the same gate as entering it, or the rule would be
-        // one PATCH away from being bypassed (#1413). Runs whenever either the quantity or the
-        // unit changes -- not only quantity -- because re-pointing an unchanged quantity at a new
-        // uomCode can make it fractional in the new unit just as surely as editing the number
-        // would (ADR-0055 stage 3, #1415); the effective value/unit fall back to the item's
-        // existing ones when this request leaves them alone.
-        if ((request.getQuantity() != null || uomCodeProvided) && item.getItemType() == EstimateItemType.PART) {
-            BigDecimal effectiveQuantity = request.getQuantity() != null ? request.getQuantity() : item.getQuantity();
-            String effectiveUomCode = uomCodeProvided ? normalizedRequestUomCode : item.getUomCode();
-            partQuantityDivisibilityService.requirePermittedScale(
-                    item.getProductId(),
-                    request.getDescription() != null ? request.getDescription() : item.getDescription(),
-                    effectiveQuantity,
-                    effectiveUomCode);
+    /**
+     * Revising the quantity has to clear the same gate as entering it, or the rule would be one
+     * PATCH away from being bypassed (#1413). Runs whenever either the quantity or the unit
+     * changes -- not only quantity -- because re-pointing an unchanged quantity at a new uomCode
+     * can make it fractional in the new unit just as surely as editing the number would
+     * (ADR-0055 stage 3, #1415); the effective value/unit fall back to the item's existing ones
+     * when this request leaves them alone.
+     */
+    private void revalidateQuantityScaleIfNeeded(
+            @NonNull EstimateItem item,
+            @NonNull UpdateEstimateItemRequest request,
+            boolean uomCodeProvided,
+            @Nullable String normalizedRequestUomCode) {
+        if (!((request.getQuantity() != null || uomCodeProvided) && item.getItemType() == EstimateItemType.PART)) {
+            return;
         }
+        BigDecimal effectiveQuantity = request.getQuantity() != null ? request.getQuantity() : item.getQuantity();
+        String effectiveUomCode = uomCodeProvided ? normalizedRequestUomCode : item.getUomCode();
+        partQuantityDivisibilityService.requirePermittedScale(
+                item.getProductId(),
+                request.getDescription() != null ? request.getDescription() : item.getDescription(),
+                effectiveQuantity,
+                effectiveUomCode);
+    }
 
-        // Update only provided fields
+    private void applyProvidedItemFields(
+            @NonNull EstimateItem item,
+            @NonNull UpdateEstimateItemRequest request,
+            boolean uomCodeProvided,
+            @Nullable String normalizedRequestUomCode) {
         if (request.getDescription() != null) {
             item.setDescription(request.getDescription());
         }
@@ -1005,16 +1037,6 @@ public class EstimateServiceImpl implements EstimateService {
         if (request.getTaxCode() != null) {
             item.setTaxCode(request.getTaxCode());
         }
-
-        // Re-validate entity invariants after mutations
-        item.validate();
-
-        EstimateItem saved = estimateItemRepository.save(item);
-        estimateFactPublisher.markChanged(estimateId);
-
-        log.info("Updated item {} on estimate {}", itemId, estimateId);
-
-        return EstimateItemResponse.fromEntity(saved);
     }
 
     /**

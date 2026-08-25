@@ -264,6 +264,23 @@ class EstimateItemQuantityGateTest {
         }
 
         @Test
+        @DisplayName("revising quantity together with description re-validates using the new description")
+        void revisingQuantityWithDescriptionUsesNewDescriptionInGateMessage() {
+            // The gate call reads request.getDescription() when the PATCH supplies one,
+            // falling back to the item's stored description only when it doesn't — so a
+            // combined description+quantity revision must name the NEW description in
+            // the rejection, not the stale one still on the entity.
+            givenExistingItem(EstimateItemType.PART, PRODUCT_ID);
+
+            assertThatThrownBy(() -> service.updateEstimateItem(
+                            ESTIMATE_ID,
+                            ITEM_ID,
+                            new UpdateEstimateItemRequest("Rear brake pads", new BigDecimal("0.5"), null, null, null)))
+                    .isInstanceOf(FractionalQuantityNotAllowedException.class)
+                    .hasMessageContaining("Rear brake pads");
+        }
+
+        @Test
         @DisplayName("re-pointing an unchanged quantity at a new uomCode still clears the gate")
         void rejectsUomCodeOnlyRevisionThatMakesTheExistingQuantityFractional() {
             // The existing item carries quantity=1 (base EA, scale 0). Re-pointing it at a unit
