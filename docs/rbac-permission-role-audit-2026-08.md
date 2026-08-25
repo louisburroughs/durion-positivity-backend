@@ -1,6 +1,9 @@
 # RBAC Permission / Role Audit — August 2026
 
 Status: **findings and recommendations only — no fixes applied yet.**
+One product decision has since been recorded and mapped in §6: **ACCOUNT_MANAGER becomes
+a customer-accounts (AR-facing) role, and a re-created CONTROLLER role takes all
+accounting management permissions**, including the loose (currently ungranted) ones.
 Audited commit: `09d7eef` (main). Companion issues: #1499 (granted-but-unenforced sweep),
 #1512 (required-but-ungranted sweep), with #1494 as the originating defect shape and
 ADR-0057 / #1497 as prior art.
@@ -152,11 +155,12 @@ based on each role's documented job function in the seed header.
 | LOCATION_MANAGER / GENERAL_MANAGER / MANAGER | `order:order:void`, `order:return:approve`, `order:session:approve_variance`; `warranty:claim:decide/cancel/close`, `warranty:part-return:*`, `warranty:reimbursement:view`; `crm:tag:*`, `crm:suppression:view`, `crm:segment:view`; `workorder:fleet_auth:resolve`, `workorder:labor:add_on_behalf`; `location:read/write`, `location:bay:manage`; `inventory:scrap:approve` (or keep to inventory roles); `tax:exemption:manage` |
 | INVENTORY_LEAD | `inventory:transfer:create/view/receive`, `inventory:scrap:create/view`, `inventory:supplier_stock_hint:view`, `supplier:stock:inquire`, `supplier:profile:read` |
 | INVENTORY_MANAGER / INVENTORY_CONTROLLER | `inventory:transfer:dispatch/short_close`, `inventory:replenishment:manage`, `inventory:lot:manage`, `inventory:cycle_count_tolerance:manage`, `inventory:valuation:view` (+ `:adjust` for CONTROLLER only), `inventory:location:sync`, `catalog:item_cost:update` |
-| ACCOUNT_MANAGER | `accounting:period:view/close/reopen`, `accounting:reconciliation:view/adjust`, `accounting:customer-credit:view/apply/refund`, `accounting:credit-memo:void`, `accounting:time:export`, `tax:commit`(?), `accounting:tax-snapshot:freeze` |
-| ACCOUNTING_ASSOCIATE | `accounting:period:view`, `accounting:reconciliation:view`, `accounting:customer-credit:view` |
+| ACCOUNT_MANAGER | **superseded by the §6 TO-BE model** — becomes the customer-accounts role: gains `accounting:customer-credit:view/apply/refund`; sheds GL/close-cycle authority to CONTROLLER |
+| CONTROLLER (new — see §6) | all accounting management, including the loose codes: `accounting:period:*` (incl. `override`, `hard_lock`), `accounting:reconciliation:view/adjust`, `accounting:credit-memo:void`, `accounting:tax-snapshot:freeze`, `accounting:time:export`, `tax:commit` |
+| ACCOUNTING_ASSOCIATE | `accounting:period:view`, `accounting:reconciliation:view`, `accounting:customer-credit:view` (clerk tier under CONTROLLER — §6) |
 | ADMIN | all 112 §1 codes it lacks (ADMIN is documented as "the all-domain role" yet holds none of them) |
 | SYSTEM_ADMINISTRATOR | `workorder:events:replay`, `people:compliance:view`, `supplier:audit:read`, `supplier:transmission:read/resolve` |
-| *nobody obvious* | `accounting:period:hard_lock`, `accounting:period:override`, `order:order:charge_on_account`, `inventory:valuation:adjust`, `marketing:*`, `supplier:*` imports — see decisions below |
+| *nobody obvious* | `order:order:charge_on_account`, `inventory:valuation:adjust`, `marketing:*`, `supplier:*` imports — see decisions below (`accounting:period:hard_lock`/`override` are now CONTROLLER's, per §6) |
 
 ### Decisions needed (no defensible default)
 
@@ -168,9 +172,10 @@ based on each role's documented job function in the seed header.
    integration/system identity?
 3. **`image:image:store`**: which identities upload images — human roles, or
    service-to-service traffic that shouldn't use RBAC at all?
-4. **Period close discipline**: does `accounting:period:close/hard_lock/override` belong
-   to ACCOUNT_MANAGER, or is a CONTROLLER-style role needed? (The old CONTROLLER role
-   was retired without replacement.)
+4. ~~**Period close discipline**~~ — **decided**: a re-created CONTROLLER role owns the
+   close cycle and all accounting management; ACCOUNT_MANAGER becomes the
+   customer-accounts role. Full mapping in §6 (which carries its own residual
+   sub-decisions).
 5. **`order:order:charge_on_account`** and **`order:session:approve_variance`**: which
    manager tier? These gate money movement.
 6. **`invoice:finalize:override` precedent** applies: several of these are deliberate
@@ -287,11 +292,131 @@ The two gaps:
 
 ---
 
-## 6. Summary of recommendations
+## 6. TO-BE role model — ACCOUNT_MANAGER / CONTROLLER split (decided 2026-08-25)
+
+**Decision:** ACCOUNT_MANAGER is a **customer-accounts** role (receivables-facing:
+customer payments, credits, credit memos, billing/invoicing), *not* an accounting role.
+All **accounting management** authority — GL configuration, journal entries, chart of
+accounts, the close cycle, reconciliation, AP, exports, financial statements — moves to
+**CONTROLLER**, a role the retired hardcoded switch used to expand but which was
+suppressed when roles moved to the database (seed header: "ACCOUNTANT, AP_CLERK,
+CONTROLLER, CSR, FLEET_MANAGER and GL_ANALYST … are NOT reproduced here"). The loose
+(currently ungranted) accounting codes from §1 also land on CONTROLLER.
+
+References to §2's ACCOUNT_MANAGER/ACCOUNTING_ASSOCIATE recommendations are superseded
+by this section.
+
+### Prerequisites to implement
+
+1. **Create the CONTROLLER role** — versioned migration inserting into `roles` (the
+   pattern of `V8__seed_self_service_customer_role.sql`), since no migration currently
+   creates it and `user_roles`/`role_assignments` are FK'd to `roles(id)`.
+2. Add CONTROLLER to the seed's **section 3 assistant baseline** (`mcp:chat:execute`,
+   `mcp:chat:stream`, `nlti:request:submit`, `nlti:request:read`) — the seed states new
+   roles get nothing implicitly.
+3. **Revoking ACCOUNT_MANAGER's moved grants needs a versioned migration** — the
+   repeatable seed is additive (`ON CONFLICT DO NOTHING`) and never deletes; V23 is the
+   precedent. Seed rows move in the same change so re-runs don't re-grant.
+4. ADMIN stays the strict superset: every code CONTROLLER gains, ADMIN gains too
+   (consistent with §1's finding that ADMIN currently lacks all of them).
+
+### TO-BE chart — accounting-adjacent roles
+
+Legend: **keep** = stays where it is · **move** = leaves ACCOUNT_MANAGER for CONTROLLER ·
+**new** = currently granted to *no* role (§1's loose codes) · **retire** = superseded
+code, do not carry into the TO-BE model (deprecate per §4).
+
+| Permission | AS-IS | TO-BE | Change |
+| --- | --- | --- | --- |
+| **Customer accounts (AR) — ACCOUNT_MANAGER** | | | |
+| `accounting:payment:apply` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep |
+| `accounting:payment:reverse` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep (elevated AR action per #114; CONTROLLER additionally, for oversight — flag a) |
+| `accounting:credit-memo:create` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep |
+| `accounting:credit-memo:read` | ACCOUNT_MANAGER | ACCOUNT_MANAGER, CONTROLLER | keep + CONTROLLER view |
+| `accounting:customer-credit:view` | *nobody* | ACCOUNT_MANAGER, CONTROLLER, ACCOUNTING_ASSOCIATE | **new** |
+| `accounting:customer-credit:apply` | *nobody* | ACCOUNT_MANAGER | **new** |
+| `accounting:customer-credit:refund` | *nobody* | ACCOUNT_MANAGER | **new** (money-out — flag b) |
+| `invoice:manage` | ACCOUNT_MANAGER, SERVICE_ADVISOR | unchanged | keep |
+| `invoice:billing-rules` | ACCOUNT_MANAGER | ACCOUNT_MANAGER | keep (customer billing config — flag c) |
+| `invoice:finalize:override` | ACCOUNT_MANAGER + manager roles | unchanged | keep (#1374 decision stands) |
+| `tax:exemption:view` / `tax:exemption:manage` | *nobody* | ACCOUNT_MANAGER (+ SERVICE_ADVISOR view, per §2) | **new** (customer tax status — flag d) |
+| **Accounting management — CONTROLLER** | | | |
+| `accounting:coa:view/create/edit/deactivate` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:je:view/create/post/reverse` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:gl-mapping:create/resolve` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:mapping-key:view/create/edit/deactivate` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:default-mapping:view/create/edit/delete` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:posting-category:view/create/edit/deactivate` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:posting_rules:view/create/publish` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:events:view/submit/retry/reprocess` | ACCOUNT_MANAGER | CONTROLLER | move |
+| `accounting:export:view` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out) |
+| `accounting:ap:view` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out) |
+| `accounting:ap:pay` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | CONTROLLER, ACCOUNTING_ASSOCIATE | move (AM out; associate keeps clerk-level AP — flag e) |
+| `reporting:view:financial-statements` | ACCOUNT_MANAGER | CONTROLLER | move (flag f) |
+| `accounting:period:view` | *nobody* | CONTROLLER, ACCOUNTING_ASSOCIATE | **new** |
+| `accounting:period:close` / `reopen` | *nobody* | CONTROLLER | **new** |
+| `accounting:period:hard_lock` | *nobody* | CONTROLLER | **new** |
+| `accounting:period:override` | *nobody* (enforced at `AccountingPeriodGate.java:192`) | CONTROLLER | **new** — closed-period posting escape hatch, CONTROLLER only |
+| `accounting:reconciliation:view` | *nobody* | CONTROLLER, ACCOUNTING_ASSOCIATE | **new** |
+| `accounting:reconciliation:adjust` | *nobody* | CONTROLLER | **new** |
+| `accounting:credit-memo:void` | *nobody* | CONTROLLER | **new** — destructive elevation stays above AR |
+| `accounting:tax-snapshot:freeze` | *nobody* | CONTROLLER | **new** |
+| `accounting:time:export` | *nobody* | CONTROLLER | **new** (payroll export; the `people:time:export:read` alternate retires per §3) |
+| `tax:commit` | *nobody* | CONTROLLER | **new** |
+| **Retired — carried by neither role** | | | |
+| `accounting:ap:approve` / `accounting:ap:reject` | ACCOUNT_MANAGER, ACCOUNTING_ASSOCIATE | — | retire (enforced nowhere; `accounting:ap:pay` is the live code — §3) |
+| `accounting:mapping:view/create/edit/deactivate` | ACCOUNT_MANAGER (+ ASSOCIATE view) | — | retire (superseded by `gl-mapping`/`mapping-key`/`default-mapping` — §3) |
+| **Unchanged tiers** | | | |
+| assistant baseline (`mcp:chat:*`, `nlti:request:*`) | all seeded roles | + CONTROLLER | per seed §3 policy |
+| ACCOUNTING_ASSOCIATE views (`coa:view`, `je:view`, `events:view`, `posting_rules:view`) | ACCOUNTING_ASSOCIATE | ACCOUNTING_ASSOCIATE | keep — clerk tier now reports into CONTROLLER's domain |
+
+### Resulting role shapes
+
+| Role | TO-BE identity | Grant count (approx.) |
+| --- | --- | --- |
+| CONTROLLER | accounting management: GL config, JE, COA, close cycle, reconciliation, AP oversight, exports, statements, tax commit | ~49 (33 moved + 12 new + 4 baseline) |
+| ACCOUNT_MANAGER | customer accounts: payments, customer credits, credit memos, invoicing/billing, tax exemptions | ~16 (down from 50) |
+| ACCOUNTING_ASSOCIATE | accounting clerk: read surface + AP pay + period/reconciliation view | ~14 (net: −3 retired, +3 new views) |
+
+```mermaid
+flowchart LR
+    subgraph ASIS["AS-IS"]
+        AM1["ACCOUNT_MANAGER\n50 grants: AR + GL + close + AP\n(6 dead/superseded)"]
+        AA1["ACCOUNTING_ASSOCIATE\n14 grants (3 dead)"]
+        NB1["Granted to nobody:\nperiods, reconciliation,\ncustomer credits, tax:commit"]
+    end
+    subgraph TOBE["TO-BE"]
+        CT["CONTROLLER (re-created)\naccounting management"]
+        AM2["ACCOUNT_MANAGER\ncustomer accounts (AR)"]
+        AA2["ACCOUNTING_ASSOCIATE\naccounting clerk"]
+    end
+    AM1 -- "GL / COA / JE / AP /\nexports / statements" --> CT
+    AM1 -- "payments, credit memos,\ninvoicing" --> AM2
+    NB1 -- "close cycle, reconciliation,\ntax:commit, credit-memo:void" --> CT
+    NB1 -- "customer-credit\nview / apply / refund" --> AM2
+    AA1 -- "read surface + ap:pay\n(dead codes retired)" --> AA2
+```
+
+### Residual sub-decisions (flags a–f above)
+
+a. Should CONTROLLER *also* hold `accounting:payment:reverse`, or is that AR-only?
+b. `accounting:customer-credit:refund` is money-out — keep on ACCOUNT_MANAGER alone, or
+   require CONTROLLER (or manager) elevation?
+c. `invoice:billing-rules` — customer-billing configuration: ACCOUNT_MANAGER (as mapped)
+   or CONTROLLER as financial config?
+d. Tax exemption certificates — ACCOUNT_MANAGER manage + SERVICE_ADVISOR view is the
+   mapped default; confirm.
+e. Does ACCOUNTING_ASSOCIATE keep `accounting:ap:pay` (clerk executes payment runs) or
+   does AP payment move to CONTROLLER only?
+f. Does ACCOUNT_MANAGER retain read access to `reporting:view:financial-statements`, or
+   is that CONTROLLER/ADMIN only (as mapped)?
+
+## 7. Summary of recommendations
 
 | # | Action | Effort | Blocked on decision? |
 | --- | --- | --- | --- |
-| 1 | Wire role grants for the 112 required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | yes — §2 decision list |
+| 1 | Wire role grants for the 112 required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | partially — accounting is decided (§6); rest per §2 decision list |
+| 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split: create CONTROLLER role, move the 33 accounting-management grants, add the 12 new codes, revoke via versioned migration | medium | flags a–f in §6 only |
 | 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | naming pick only |
 | 3 | Re-point `shop:location/bay` holders to `location:*` family | small | no |
 | 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | convention sign-off |
