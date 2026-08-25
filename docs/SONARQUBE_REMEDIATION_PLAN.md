@@ -1,9 +1,11 @@
 # SonarQube Remediation Plan
 
 Status: Phases 1, 2, 3.1–3.5 implemented. Phase 3.6 (`S3776`, 62 findings)
-in progress: **54 of 62 findings addressed** (45 distinct classes) across
-#1498–#1506 (merged) and stacked parts 6–7 (open at the time of writing);
-8 remain, all in stacked part 8.
+**COMPLETE — all 62 findings addressed** (52 distinct classes) across
+#1498–#1506 (merged) and stacked parts 6–8 (open at the time of writing).
+Every row of the inventory CSV now carries a resolution status; SonarCloud
+reflects the phase once the merged stack is picked up by the next scheduled
+analysis of main.
 Per-finding status is now a `status` column in
 `docs/sonarqube-remediation-inventory.csv`, mapping every row of every phase to
 the PR that resolved it or its documented no-action reason.
@@ -455,7 +457,7 @@ Sonar's threshold is 15. The distribution is long-tailed: **23 methods score
 By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 `pos-supplier` 6, `pos-warranty` 5, then a tail of 12 modules with 1–3 each.
 
-#### Progress: 54 of 62 findings addressed (45 distinct classes)
+#### Progress: COMPLETE — 62 of 62 findings addressed (52 distinct classes)
 
 | # | PR | Method split | Class branch coverage |
 | -: | -- | ------------ | --------------------- |
@@ -495,6 +497,14 @@ the low-coverage `resolveRequestScopedSiteId` flagged earlier lives in
 | 43–46 | part 7 | `DistributorFeedServiceImpl.normalizeLeadTime` (17), `ReplenishmentServiceImpl.getReplenishmentNeeds` (17), `SupplierStockHintResolver.runResolutionPass` (17), `LedgerPostingServiceImpl.postAll` (16) | 60.0% → 83.9%; 80.3% → 82.2%; 80.0% → 90.0%; 75.0% → 77.2% (methods 100%) |
 | 47–49 | part 7 | `BankStatementCsvParser.splitCsv` (16), `FinancialReportingServiceImpl.generateTaxLiability` (16), `MappingResolutionTestServiceImpl.scanConditions` (16) | methods 42.9%/90.0%/61.5% → 100% each |
 | 50 | part 7 | `ProrationService.prorate` (17) | 86.5% → 100% |
+
+| 51 | part 8 | `AvalaraTaxProvider.buildCreateModel` (16) | 69.7% → 77.8% (method 100%) |
+| 52 | part 8 | `TransferOrderUpdatedV1` canonical constructor (16) | 75.0% → 100% (wire contract; 19 dependents rebuilt) |
+| 53–54 | part 8 | `PartyServiceImpl.matchesBrowseFilter` (17), `.buildSnapshotForParty` (16) | 76.3% → 80.8% |
+| 55 | part 8 | `ToolRegistrationServiceImpl.persistDiscoveredOperations` (17) | 73.1% → 85.7% |
+| 56 | part 8 | `MechanicSyncServiceImpl.processUpsert` (16) | 83.3% → 89.6% (method 100%) |
+| 57 | part 8 | `CampaignServiceImpl.readinessProblems` (16) | 85.7% → 91.4% (method 100%) |
+| 58 | part 8 | `ProductDetailServiceImpl.readInteger` (16) | 51.4% → 82.9% |
 
 **The recurring finding.** In almost every target, the complexity finding names
 a method but the *untested* branches are in the helper or lambda it delegates
@@ -560,7 +570,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | done |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 54 of 62 (45 classes) |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | done: 62 of 62 |
 | | **Total** | **267** | **≈38 h** | | |
 
 - Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in
