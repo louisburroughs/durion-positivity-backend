@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.workorder.internal.entity.ExtProductUomReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
@@ -93,13 +94,17 @@ public class CatalogEventsListener {
      * would leave a UoM catalog has retired still declared here, so a part could go on being judged
      * divisible against a scale its owner no longer publishes.
      *
-     * <p>The stale guard compares the fact's {@code aggregateVersion} — catalog stamps the product's
-     * {@code updatedAt} epoch millis there — against the highest version this module already holds
-     * for the product, and applies on equality because catalog fans out several facts for one
-     * product within the same millisecond. It is belt-and-braces: facts are keyed by product id, so
-     * a partition already delivers one product's facts in order, and what this guards is redelivery
-     * after a rebalance. A product that currently holds no rows has nothing to roll backwards, so
-     * the guard does not apply and the fact lands.
+     * <p>The stale guard compares the fact's {@code aggregateVersion} — pos-catalog's JPA
+     * {@code @Version}-backed counter, strictly advancing (seeded from the legacy {@code updatedAt}
+     * epoch millis so magnitudes continue seamlessly) — against the highest version this module
+     * already holds for the product, using {@link ReplicaVersionGuard} (#1486). It applies on
+     * equality rather than skipping: catalog's strictly-advancing contract means an equal version
+     * is identical content, and {@code POST .../facts/replay} deliberately resends a fact at the
+     * held version to repair a replica that holds the version number but wrong or missing rows —
+     * skipping on equal would silently turn replay into a no-op. It is belt-and-braces: facts are
+     * keyed by product id, so a partition already delivers one product's facts in order, and what
+     * this guards is redelivery after a rebalance. A product that currently holds no rows has
+     * nothing to roll backwards, so the guard does not apply and the fact lands.
      */
     private void applyUomConversions(JsonNode envelope) {
         JsonNode payload = envelope.path("payload");
@@ -107,7 +112,7 @@ public class CatalogEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         List<Long> heldVersions = productUomReplicaRepository.findAggregateVersions(productId);
-        if (heldVersions.stream().anyMatch(held -> held > aggregateVersion)) {
+        if (heldVersions.stream().anyMatch(held -> ReplicaVersionGuard.isStale(held, aggregateVersion))) {
             return;
         }
 

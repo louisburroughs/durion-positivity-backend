@@ -172,7 +172,7 @@ class WarrantyEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Skips stale events whose aggregateVersion is at or below the row's")
+    @DisplayName("Skips stale events whose aggregateVersion is strictly below the row's")
     void skipsStaleVersions() {
         when(processedEvents.existsById("e-old")).thenReturn(false);
         when(expectations.findById(REIMBURSEMENT_ID)).thenReturn(Optional.of(expectedRow(9)));
@@ -182,6 +182,25 @@ class WarrantyEventsListenerTest {
         verify(expectations, never()).save(any());
         // Still recorded as processed so redelivery does not reprocess it.
         verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Applies an event with an equal version stamp (#1486, ReplicaVersionGuard)")
+    void appliesEqualVersion() {
+        // Load-bearing: pos-warranty flushes — and even force-increments — the claim's JPA
+        // @Version to stay strictly monotonic, so an equal version means identical content, and
+        // POST .../facts/replay deliberately resends a fact at the held version to repair a row
+        // with wrong or missing data. Skipping on equal (the old `>=` guard) silently turned
+        // replay into a no-op (#1486).
+        when(processedEvents.existsById("e-eq")).thenReturn(false);
+        when(expectations.findById(REIMBURSEMENT_ID)).thenReturn(Optional.of(expectedRow(9)));
+
+        listener.onWarrantyEvent(resolved("e-eq", 9, "APPROVED"));
+
+        ArgumentCaptor<WarrantyReimbursementExpectation> saved =
+                ArgumentCaptor.forClass(WarrantyReimbursementExpectation.class);
+        verify(expectations).save(saved.capture());
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(9L);
     }
 
     @Test

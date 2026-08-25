@@ -182,7 +182,7 @@ class VehicleEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Skips stale events whose aggregateVersion is at or below the replica's")
+    @DisplayName("Skips stale events whose aggregateVersion is strictly below the replica's")
     void skipsStaleVersions() {
         when(processedEvents.existsById("e-old")).thenReturn(false);
         when(replica.findById(VEHICLE_ID))
@@ -201,6 +201,37 @@ class VehicleEventsListenerTest {
         verify(replica, never()).save(any());
         // Still recorded as processed so redelivery does not reprocess it.
         verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Applies an event with an equal version stamp (#1486, ReplicaVersionGuard)")
+    void appliesEqualVehicleVersion() {
+        // Load-bearing: aggregateVersion strictly advances (committed JPA @Version, flushed before
+        // emit), so an equal version means identical content, and POST .../facts/replay
+        // deliberately resends a fact at the held version to repair a replica with wrong or
+        // missing rows. Skipping on equal (the old `>=` guard) silently turned replay into a no-op
+        // (#1486).
+        when(processedEvents.existsById("e-eq")).thenReturn(false);
+        when(replica.findById(VEHICLE_ID))
+                .thenReturn(Optional.of(ExtVehicle.builder()
+                        .vehicleId(VEHICLE_ID)
+                        .accountId(ACCOUNT_ID)
+                        .vin(VIN)
+                        .vinNormalized(VIN)
+                        .active(true)
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+        when(personParties.findByVehicleVin(VIN)).thenReturn(List.of());
+        when(commercialParties.findByVehicleVin(VIN)).thenReturn(List.of());
+        when(personParties.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(commercialParties.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
+
+        listener.onVehicleEvent(event("e-eq", 9, ACCOUNT_ID, true));
+
+        ArgumentCaptor<ExtVehicle> captor = ArgumentCaptor.forClass(ExtVehicle.class);
+        verify(replica).save(captor.capture());
+        assertThat(captor.getValue().getAggregateVersion()).isEqualTo(9L);
     }
 
     @Test

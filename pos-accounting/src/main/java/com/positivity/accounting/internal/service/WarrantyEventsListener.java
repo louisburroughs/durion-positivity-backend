@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.WarrantyReimbursementExpectation;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.WarrantyReimbursementExpectationRepository;
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.warranty.WarrantyReimbursementResolvedV1;
 import com.positivity.domainevents.warranty.WarrantyReimbursementSubmittedV1;
 import io.micrometer.core.instrument.Counter;
@@ -27,11 +28,18 @@ import tools.jackson.databind.ObjectMapper;
  * expected-credit records (issue #927).
  *
  * <p>Same contract as {@link InvoiceEventsListener}: idempotent via {@code processed_events} in
- * the upsert transaction, stale envelopes (aggregateVersion at or below the row's) skipped,
+ * the upsert transaction, stale envelopes (aggregateVersion strictly below the row's) skipped,
  * transient DB errors rethrown for container retry/DLQ, malformed payloads logged and skipped.
  * The topic also carries claim-lifecycle facts ({@code warranty.claim.settled},
  * {@code warranty.claim.snapshot}, part-return facts) this module ignores — their eventIds are
  * still recorded so redelivery stays cheap.
+ *
+ * <p>The stale guard is {@link ReplicaVersionGuard} (#1486): pos-warranty's
+ * {@code ReimbursementServiceImpl} flushes — and even force-increments — the claim's JPA
+ * {@code @Version} to stay strictly monotonic, so an equal version applies rather than skips: it
+ * is an idempotent no-op for live traffic, and it is what would let a regenerate-from-state replay
+ * (the catalog/vehicle {@code facts/replay} pattern, should pos-warranty grow one) repair a row
+ * that holds the version number but wrong or missing data.
  */
 @Slf4j
 @Component
@@ -182,9 +190,11 @@ public class WarrantyEventsListener {
     }
 
     private boolean isStale(WarrantyReimbursementExpectation existing, long aggregateVersion, String reimbursementId) {
-        // Claim aggregate versions are strictly increasing per emitted fact, so an equal or lower
-        // version is a replay and must never overwrite a newer row (mirrors InvoiceEventsListener).
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Claim aggregate versions are strictly increasing per emitted fact (mirrors
+        // InvoiceEventsListener). Strictly-newer-only skip: equal versions APPLY (#1486,
+        // ReplicaVersionGuard) — equal means identical content, and replay resends the held
+        // version deliberately to repair wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
                     "Skipping stale warranty reimbursement event reimbursementId={} eventVersion={} rowVersion={}",
                     reimbursementId,

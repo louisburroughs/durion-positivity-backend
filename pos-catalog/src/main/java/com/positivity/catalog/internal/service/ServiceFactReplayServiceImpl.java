@@ -29,10 +29,13 @@ import org.springframework.transaction.annotation.Transactional;
  *       live one. A parallel replay-specific serializer would drift from the first the moment the
  *       payload gained a field.
  *   <li><b>The consumers' existing stale guard is the ordering guarantee.</b>
- *       {@code aggregateVersion} stays the service's {@code updatedAt} epoch millis, so a replayed
- *       fact carries the same version as the live fact for that state and cannot regress a replica
- *       holding something newer. New {@code eventId}s per re-emit are expected; consumers dedupe on
- *       them for redelivery, not for replay.
+ *       {@code aggregateVersion} is now the service's JPA {@code @Version} (#1486), not the retired
+ *       {@code updatedAt} epoch-millis convention, so a replayed fact carries exactly the version
+ *       the live row holds. Consumers apply on an equal version and skip only when they already
+ *       hold something strictly greater — which is what makes replay-as-repair real rather than a
+ *       silent no-op, and still cannot regress a replica holding something newer. New
+ *       {@code eventId}s per re-emit are expected; consumers dedupe on them for redelivery, not for
+ *       replay.
  *   <li><b>Paged rather than fire-and-forget,</b> so one call cannot bury live traffic behind a
  *       burst on the outbox and an operator can tell a slow replay from a stuck one. The cursor is
  *       the service id, not an offset, because offsets shift under concurrent writes.

@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.SupplierArticleCodeUpdatedV1;
 import com.positivity.order.internal.entity.ExtSupplierArticleCode;
 import com.positivity.order.internal.entity.ProcessedEvent;
@@ -29,6 +30,12 @@ import tools.jackson.databind.ObjectMapper;
  * ({@code productId}), which is right for a fact that is one row per product. This fact is one row
  * per {@code (supplierRef, productId)} pair, so its existing-row lookup and its stale guard both
  * need the pair, not the id alone — a shape the other listener's contract does not fit.
+ *
+ * <p>The stale guard itself is {@link ReplicaVersionGuard} (#1486):
+ * pos-catalog's {@code aggregateVersion} strictly advances, so a held row is stale only when its
+ * version is strictly greater than the incoming fact's — an equal version applies, both because it
+ * is an idempotent no-op for live traffic and because {@code POST .../facts/replay} depends on it
+ * to repair a replica that holds the version number but wrong or missing rows.
  */
 @Slf4j
 @Component
@@ -106,7 +113,10 @@ public class SupplierArticleCodeEventsListener {
         ExtSupplierArticleCode existing = extSupplierArticleCodeRepository
                 .findBySupplierRefAndProductId(supplierRef, productId)
                 .orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — catalog's
+        // aggregateVersion strictly advances, so equal means identical content, and replay resends
+        // the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
         ExtSupplierArticleCode replica = existing != null ? existing : new ExtSupplierArticleCode();

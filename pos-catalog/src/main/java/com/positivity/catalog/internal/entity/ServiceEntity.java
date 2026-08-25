@@ -32,6 +32,17 @@ public class ServiceEntity implements CatalogItem {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * The fact-envelope aggregate version (#1486). JPA optimistic-lock counter that strictly
+     * increments on every committed mutation, so it can never tie the way the legacy
+     * {@code updatedAt}-epoch-millis convention could when two mutations landed in the same
+     * millisecond. Seeded from those legacy values by migration V15 so the published sequence
+     * never regresses for consumers already holding a replica.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
     @Override
     public String getLongDescription() {
         return this.longDescription;

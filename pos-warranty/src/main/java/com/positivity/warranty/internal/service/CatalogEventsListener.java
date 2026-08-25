@@ -1,5 +1,6 @@
 package com.positivity.warranty.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.warranty.internal.entity.ExtCatalogReplica;
 import com.positivity.warranty.internal.entity.ProcessedEvent;
@@ -27,10 +28,15 @@ import tools.jackson.databind.ObjectMapper;
  * product resolution and warranty eligibility read manufacturer / warranty terms from this replica.
  *
  * <p>Consumer contract mirrors the module's other listeners: {@code processed_events} idempotency
- * (owner {@code catalog}) in the apply transaction, strictly-below stale guard on the fact's
- * {@code aggregateVersion} (pos-catalog stamps {@code updatedAt} epoch millis there, monotonic per
- * product), transient DB errors rethrown for container retry/DLQ. Unsupported event types still
- * record their eventIds so the owner's manifest reconciles.
+ * (owner {@code catalog}) in the apply transaction, a strictly-below stale guard on the fact's
+ * {@code aggregateVersion} (pos-catalog's JPA {@code @Version}-backed counter, strictly advancing —
+ * seeded from the legacy {@code updatedAt} epoch millis so magnitudes continue seamlessly),
+ * transient DB errors rethrown for container retry/DLQ. Unsupported event types still record their
+ * eventIds so the owner's manifest reconciles.
+ *
+ * <p>The guard is {@link ReplicaVersionGuard} (#1486): equal versions apply rather than skip, both
+ * as an idempotent no-op for live traffic and because {@code POST .../facts/replay} depends on
+ * equal-applies to repair a replica that holds the version number but wrong or missing rows.
  */
 @Slf4j
 @Component
@@ -119,7 +125,10 @@ public class CatalogEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtCatalogReplica existing =
                 extCatalogReplicaRepository.findById(payload.productId()).orElse(null);
-        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — catalog's
+        // aggregateVersion strictly advances, so equal means identical content, and replay resends
+        // the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
         extCatalogReplicaRepository.save(ExtCatalogReplica.builder()

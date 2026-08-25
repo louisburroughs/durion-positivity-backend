@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.inventory.internal.entity.ExtProductCodeReplica;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
@@ -44,9 +45,12 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Two catalog-specific contract points (X1 producer guidance):
  *
  * <ul>
- *   <li>{@code aggregateVersion} is the product's {@code updatedAt} epoch millis; the guard skips
- *       ONLY strictly-lower versions — equal versions apply, because group-membership changes fan
- *       out multiple facts with the same millisecond timestamp.
+ *   <li>{@code aggregateVersion} is pos-catalog's strictly-advancing {@code @Version} counter
+ *       (seeded from the legacy {@code updatedAt} epoch millis, so magnitudes continue seamlessly);
+ *       the guard is {@link ReplicaVersionGuard} (#1486) and skips ONLY strictly-lower versions —
+ *       equal versions apply, both because group-membership changes can fan out multiple facts at
+ *       the same version and because {@code POST .../facts/replay} depends on equal-applies to
+ *       repair a replica that holds the version number but wrong or missing rows.
  *   <li>Null tolerance for pre-v2 facts: {@code trackingLevel} null ⇒ {@code NONE};
  *       {@code uomConversions} / {@code substitutionProductIds} null ⇒ empty (children cleared —
  *       the fact carries the full sets, replace wholesale).
@@ -149,9 +153,10 @@ public class CatalogEventsListener {
         UUID productId = payload.productId();
         ExtProductReplica existing =
                 extProductReplicaRepository.findById(productId).orElse(null);
-        // Strictly-lower-only skip: equal versions APPLY. Catalog stamps updatedAt epoch millis
-        // as the version and fans out same-millisecond facts on group-membership changes.
-        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+        // Strictly-lower-only skip: equal versions APPLY (#1486, ReplicaVersionGuard). Catalog's
+        // aggregateVersion strictly advances; equal means identical content, and replay relies on
+        // equal-applies to repair a replica that holds the version number but wrong/missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
 

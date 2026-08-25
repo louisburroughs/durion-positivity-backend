@@ -1,5 +1,6 @@
 package com.positivity.marketing.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.marketing.internal.entity.ExtCatalogReplica;
@@ -34,10 +35,14 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Consumer contract mirrors pos-warranty's listener on the same topic: {@code processed_events}
  * idempotency (owner {@code catalog}) written in the apply transaction, and a stale guard on the
- * fact's {@code aggregateVersion} so an out-of-order redelivery cannot undo a newer fact. Nothing
- * is swallowed — an unreadable envelope or a database failure reaches the container, which retries
- * and then dead-letters it, because a replica quietly missing an update is worse than a visible
- * poison message.
+ * fact's {@code aggregateVersion} so an out-of-order redelivery cannot undo a newer fact. The guard
+ * is {@link ReplicaVersionGuard} (#1486): pos-catalog's aggregateVersion strictly advances, so a
+ * held row is stale only when its version is strictly greater than the incoming fact's — an equal
+ * version applies, both as an idempotent no-op for live traffic and because
+ * {@code POST .../facts/replay} depends on it to repair a replica that holds the version number but
+ * wrong or missing rows. Nothing is swallowed — an unreadable envelope or a database failure
+ * reaches the container, which retries and then dead-letters it, because a replica quietly missing
+ * an update is worse than a visible poison message.
  */
 @Slf4j
 @Component
@@ -151,7 +156,11 @@ public class CatalogEventsListener {
     private void upsert(ExtCatalogReplica row) {
         ExtCatalogReplica existing =
                 catalogReplicaRepository.findById(row.getCatalogItemId()).orElse(null);
-        if (existing != null && existing.getAggregateVersion() > row.getAggregateVersion()) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — catalog's
+        // aggregateVersion strictly advances, so equal means identical content, and replay resends
+        // the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null
+                && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), row.getAggregateVersion())) {
             log.debug(
                     "Ignoring stale catalog fact for {} (held {} > incoming {})",
                     row.getCatalogItemId(),

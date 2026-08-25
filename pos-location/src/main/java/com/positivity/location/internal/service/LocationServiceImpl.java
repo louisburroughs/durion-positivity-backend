@@ -25,7 +25,9 @@ import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
 import com.positivity.location.service.LocationService;
+import java.time.Clock;
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -65,6 +67,7 @@ public class LocationServiceImpl implements LocationService {
 
     private static final ObjectMapper JSON_MAPPER = JsonMapper.builder().build();
 
+    private final Clock clock;
     private final LocationRepository locationRepository;
     private final LocationParentRepository locationParentRepository;
     private final LocationTypeRepository locationTypeRepository;
@@ -349,10 +352,24 @@ public class LocationServiceImpl implements LocationService {
         return all.toString();
     }
 
+    /**
+     * Deletes a location and emits the {@code location.location.deleted} tombstone.
+     *
+     * <p>Loads the row before deleting it so the fact can be versioned from its final
+     * {@code @Version} (#1486) — the tombstone publisher needs the entity, not just the id. An id
+     * that resolves to nothing has no state to version and no delete to announce, so this is now a
+     * silent no-op for a missing location; previously {@code deleteById} was itself a no-op on a
+     * missing row (Spring Data does not throw), but the fact was still published unconditionally,
+     * so a caller retrying a delete for an id that never existed produced a tombstone every time.
+     */
     @Transactional
     public void deleteLocation(UUID id) {
-        locationRepository.deleteById(id);
-        locationFactPublisher.locationDeleted(id);
+        Location location = locationRepository.findById(id).orElse(null);
+        if (location == null) {
+            return;
+        }
+        locationRepository.delete(location);
+        locationFactPublisher.locationDeleted(location);
     }
 
     @Transactional
@@ -405,7 +422,13 @@ public class LocationServiceImpl implements LocationService {
             throw new IllegalStateException("Circular relationship detected after save");
         }
         // Parent edges travel on the child's location.location.updated fact (issue #892), so
-        // replica consumers see hierarchy changes without a dedicated edge event.
+        // replica consumers see hierarchy changes without a dedicated edge event. The edge write
+        // alone leaves the child row clean, and a clean row gives the publisher's flush no
+        // @Version increment to apply — the fact would carry changed parentRefs under an unchanged
+        // aggregateVersion, breaking the strictly-advancing contract (#1486). Dirty the child
+        // first, the same convention catalog's attribute-table mutations follow.
+        child.setUpdatedAt(Instant.now(clock));
+        locationRepository.saveAndFlush(child);
         locationFactPublisher.locationChanged(child);
         return saved;
     }

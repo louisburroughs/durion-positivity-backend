@@ -204,4 +204,16 @@ public class ProductEntity implements CatalogItem {
     @LastModifiedDate
     @Schema(description = "Timestamp when product was last updated")
     private Instant updatedAt;
+
+    /**
+     * The fact-envelope aggregate version (#1486). JPA optimistic-lock counter that strictly
+     * increments on every committed mutation, so it can never tie the way the legacy
+     * {@code updatedAt}-epoch-millis convention could when two mutations landed in the same
+     * millisecond. Seeded from those legacy values by migration V15 so the published sequence
+     * never regresses for consumers already holding a replica.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    @Schema(description = "Fact-envelope aggregate version; strictly increments per committed mutation (#1486)")
+    private long version;
 }

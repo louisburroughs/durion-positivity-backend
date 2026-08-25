@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,11 +16,14 @@ import com.positivity.catalog.internal.entity.ProductUomType;
 import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.SubstitutionGroupEntity;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
+import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.domainevents.catalog.SupplierArticleCodeUpdatedV1;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -69,6 +73,9 @@ class CatalogFactPublisherTest {
     @Mock
     private SubstitutionGroupMemberRepository substitutionGroupMemberRepository;
 
+    @Mock
+    private EntityManager entityManager;
+
     private CatalogFactPublisher publisher;
 
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
@@ -80,7 +87,8 @@ class CatalogFactPublisherTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 outboxEventWriterProvider,
                 productUomRepository,
-                substitutionGroupMemberRepository);
+                substitutionGroupMemberRepository,
+                entityManager);
     }
 
     @Test
@@ -114,7 +122,10 @@ class CatalogFactPublisherTest {
         assertThat(envelope.eventType()).isEqualTo("catalog.product.updated");
         assertThat(envelope.schemaVersion()).isEqualTo(2);
         assertThat(envelope.aggregateId()).isEqualTo(product.getId());
-        assertThat(envelope.aggregateVersion()).isEqualTo(product.getUpdatedAt().toEpochMilli());
+        // Flushed before the version is read (#1486), so the fact carries the entity's current
+        // @Version rather than the retired updatedAt-epoch-millis value.
+        verify(entityManager).flush();
+        assertThat(envelope.aggregateVersion()).isEqualTo(product.getVersion());
 
         JsonNode payload =
                 objectMapper.readTree(objectMapper.writeValueAsString(envelope)).path("payload");
@@ -191,8 +202,10 @@ class CatalogFactPublisherTest {
             assertThat(envelope.eventType()).isEqualTo("catalog.service.updated");
             assertThat(envelope.schemaVersion()).isEqualTo(1);
             assertThat(envelope.aggregateId()).isEqualTo(entity.getId());
-            assertThat(envelope.aggregateVersion())
-                    .isEqualTo(entity.getUpdatedAt().toEpochMilli());
+            // Flushed before the version is read (#1486), so the fact carries the entity's current
+            // @Version rather than the retired updatedAt-epoch-millis value.
+            verify(entityManager).flush();
+            assertThat(envelope.aggregateVersion()).isEqualTo(entity.getVersion());
 
             JsonNode payload = objectMapper
                     .readTree(objectMapper.writeValueAsString(envelope))
@@ -226,13 +239,18 @@ class CatalogFactPublisherTest {
         @DisplayName("the tombstone outranks the upsert it supersedes, even within one millisecond")
         void tombstoneVersionOutranksTheLastUpdate() {
             ServiceEntity entity = serviceEntity();
-            // A service created and deleted inside the same millisecond as the fixed clock: the
-            // delete time alone would tie, and a consumer's stale guard would keep resolving it.
+            // A service created and deleted inside the same millisecond as the fixed clock used to
+            // make the retired updatedAt-floor scheme tie; version + 1 (#1486) is deterministic and
+            // does not depend on the clock at all.
             entity.setUpdatedAt(NOW);
+            entity.setVersion(7L);
 
             publisher.publishServiceRemoved(entity);
 
-            assertThat(capturedServiceEnvelope().aggregateVersion()).isEqualTo(NOW.toEpochMilli() + 1);
+            assertThat(capturedServiceEnvelope().aggregateVersion()).isEqualTo(8L);
+            // No flush for a tombstone: the row is about to be deleted, not re-saved, so there is
+            // no pending @Version increment to pick up.
+            verify(entityManager, never()).flush();
         }
 
         private DomainEventEnvelope<?> capturedServiceEnvelope() {
@@ -252,7 +270,46 @@ class CatalogFactPublisherTest {
             entity.setLongDescription("Four wheel alignment");
             entity.setCreatedAt(NOW.minusSeconds(7200));
             entity.setUpdatedAt(NOW.minusSeconds(60));
+            // Deliberately distinct from updatedAt's epoch millis, so a test asserting on the
+            // retired convention would fail loudly rather than passing by coincidence.
+            entity.setVersion(3L);
             return entity;
+        }
+    }
+
+    @Nested
+    @DisplayName("catalog.supplier-article-code.updated (CAP-320 #1347)")
+    class SupplierArticleCodeFact {
+
+        @Test
+        @DisplayName("flushes before reading the version, so the fact carries the current @Version (#1486)")
+        void publishesTheCurrentVersionAfterFlush() {
+            SupplierArticleCodeEntity entry = SupplierArticleCodeEntity.builder()
+                    .id(UUID.fromString("00000000-0000-0000-0000-0000000006a1"))
+                    .vendorProfileId(UUID.fromString("00000000-0000-0000-0000-0000000006b1"))
+                    .supplierRef("michelin-eu")
+                    .productId(UUID.fromString("00000000-0000-0000-0000-0000000006c1"))
+                    .supplierArticleCode("CODE-1")
+                    .updatedAt(NOW.minusSeconds(60))
+                    .version(9L)
+                    .build();
+
+            publisher.publishSupplierArticleCodeUpdated(entry);
+
+            verify(entityManager).flush();
+            DomainEventEnvelope<?> envelope = capturedSupplierArticleCodeEnvelope();
+            assertThat(envelope.eventType()).isEqualTo("catalog.supplier-article-code.updated");
+            assertThat(envelope.aggregateId()).isEqualTo(entry.getId());
+            assertThat(envelope.aggregateVersion()).isEqualTo(9L);
+        }
+
+        private DomainEventEnvelope<?> capturedSupplierArticleCodeEnvelope() {
+            @SuppressWarnings("rawtypes")
+            ArgumentCaptor<DomainEventEnvelope> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+            verify(outboxEventWriter).publish(eq("catalog.events.v1"), captor.capture());
+            DomainEventEnvelope<?> envelope = captor.getValue();
+            assertThat(envelope.payload()).isInstanceOf(SupplierArticleCodeUpdatedV1.class);
+            return envelope;
         }
     }
 
@@ -276,6 +333,9 @@ class CatalogFactPublisherTest {
         product.setTrackingLevel(ProductTrackingLevel.LOT);
         product.setCreatedAt(NOW.minusSeconds(3600));
         product.setUpdatedAt(NOW);
+        // Deliberately distinct from updatedAt's epoch millis, so a test asserting on the retired
+        // convention would fail loudly rather than passing by coincidence.
+        product.setVersion(42L);
         Category category = new Category();
         product.setCategory(category);
         return product;

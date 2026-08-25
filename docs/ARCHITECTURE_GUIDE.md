@@ -7,9 +7,10 @@ This document covers the architectural patterns, Docker configuration, service c
 1. [Port Strategy](#port-strategy)
 2. [Docker Configuration](#docker-configuration)
 3. [Inter-Service Communication](#inter-service-communication)
-4. [Observability](#observability)
-5. [Correlation ID Implementation](#correlation-id-implementation)
-6. [PostgreSQL Setup](#postgresql-setup)
+4. [Event Replication: `aggregateVersion` Semantics](#event-replication-aggregateversion-semantics)
+5. [Observability](#observability)
+6. [Correlation ID Implementation](#correlation-id-implementation)
+7. [PostgreSQL Setup](#postgresql-setup)
 
 ---
 
@@ -240,6 +241,81 @@ public class LoadBalancedClientConfig {
 | pos-workorder | `workorder` | `/workorder/**` |
 | pos-security-service | `security-service` | `/security-service/**` |
 | pos-shop-manager | `shop-manager` | `/shop-manager/**` |
+
+---
+
+## Event Replication: `aggregateVersion` Semantics
+
+Replica-maintaining consumers guard against out-of-order delivery by comparing the envelope's
+`aggregateVersion` with the version their replica row already holds. #1486 found the six
+`catalog.events.v1` consumers split between `>` and `>=` guards, and the epoch-millis version
+convention able to tie inside one millisecond — a combination that made replays silently
+repair some replicas and no-op on others. This section states the one rule; the split must
+not come back.
+
+### The rule
+
+**An equal `aggregateVersion` applies. A consumer skips a fact only when the version it
+already holds is *strictly greater* than the incoming one.**
+
+The canonical implementation is `com.positivity.domainevents.ReplicaVersionGuard.isStale(held,
+incoming)` in `pos-domain-events`, whose unit test pins these semantics once for every
+consumer. Listeners must delegate to it rather than hand-rolling the comparison — the `>` /
+`>=` split is exactly what hand-rolling produced. A replica row that does not exist holds
+nothing to protect; the fact lands.
+
+The rule covers both cases an equal version can arise:
+
+- **Live traffic**: publishers must emit *strictly advancing* versions (see below), so an
+  equal version means the fact describes state the consumer already holds — applying it is an
+  idempotent no-op, never a regression.
+- **Replay**: a replayed fact deliberately carries the *same* version as the state it
+  describes (that is what makes it indistinguishable from the live fact). Applying on equal
+  is what lets `POST /v1/products/facts/replay` (#1309) and
+  `POST /v1/catalog-items/services/facts/replay` (#1306) repair a replica whose rows are
+  wrong or missing even though it holds the right version number. A `>=` guard turns that
+  replay into a `200` that repairs nothing — the operational trap #1486 closed.
+
+### The publisher contract
+
+The rule above is only safe because publishers guarantee the version *strictly advances* on
+every committed mutation of an aggregate. Wall-clock timestamps do not satisfy this: two
+mutations in one millisecond tie, and a tie plus "equal applies" lets an older snapshot
+overwrite a newer one when outbox rows drain out of order.
+
+pos-catalog (the `catalog.events.v1` owner) satisfies the contract with a JPA optimistic-lock
+`@Version` column on `ProductEntity`, `ServiceEntity`, and `SupplierArticleCodeEntity`
+(#1486). Migration `V15` seeds the column from each row's legacy `updatedAt` epoch millis, so
+the published sequence continues monotonically from the versions consumers already hold — no
+consumer-side migration was needed. Delete tombstones publish `version + 1`, deterministically
+past every fact the aggregate ever emitted.
+
+### Other domains' topics
+
+Every fact topic was surveyed (#1486) for the same guard split and for whether its publisher
+already satisfies the strictly-advancing contract:
+
+| Topic | Publisher version source | Strictly advancing? | Consumers on the rule? |
+|---|---|---|---|
+| `catalog.events.v1` | pos-catalog `@Version`, flushed before emit (#1486) | Yes | Yes — all seven use `ReplicaVersionGuard` |
+| `vehicle.events.v1` (`VehicleUpdatedV1`) | pos-vehicle-inventory `VehicleRecord` `@Version`, flushed before emit | Yes | Yes — former `>=` guards (pos-order, pos-customer) flipped in #1486 |
+| `vehicle.events.v1` (`VehicleCarePreferenceUpdatedV1`) | Epoch millis by design (rows are hard-deleted and re-created, so an entity version would restart at 0) | No | Its one consumer already applies on equal; acceptable for a last-writer-wins preference fact |
+| `invoice.events.v1` | pos-invoice `Invoice`/`BillingRules` `@Version`, flushed before emit | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
+| `warranty.events.v1` | pos-warranty `WarrantyClaim` `@Version`, flushed and force-incremented on otherwise-clean mutations | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
+| `workorder.events.v1` | `Instant.now(clock)` epoch millis; `Workorder` has no `@Version` | **No** | Scoped out — see below |
+| `customer.events.v1` | `Instant.now(clock)` epoch millis; party entities carry no optimistic-lock version | **No** | Scoped out — see below |
+| `location.events.v1` | pos-location `Location`/`StorageLocationEntity` `@Version`, flushed before emit, seeded at migration time from wall-clock millis (#1486 follow-up) | Yes | Yes — pos-order's `>=` flipped |
+
+**Scoped out, and why:** the `>=` guards consuming `workorder.events.v1` and
+`customer.events.v1` (pos-order's workorder/customer listeners, pos-accounting's customer
+listener) keep their skip-on-equal behavior for now. Those publishers still stamp wall-clock
+millis, so their versions can tie or even invert across instances; a `>=` guard at least fails
+closed on a tie, and neither topic has a regenerate-from-current-state replay whose repairs the
+guard could be blocking (their `OutboxReplayServiceImpl` re-sends existing outbox rows under
+the original `eventId`, which consumers drop by idempotency regardless of any version guard).
+Adopting the rule on such a topic means fixing its publisher first — the `@Version`-flush
+pattern above — and only then moving its consumers to `ReplicaVersionGuard`. Doing it in the
+other order reintroduces the same-millisecond race #1486 closed.
 
 ---
 

@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import com.positivity.order.internal.entity.ExtVehicle;
 import com.positivity.order.internal.entity.ProcessedEvent;
@@ -23,6 +24,13 @@ import tools.jackson.databind.ObjectMapper;
  * Consumes {@code vehicle.events.v1} into the {@code ext_vehicle} replica (ADR-0044 §6, parity
  * story I2 replica redesign). {@code accountId} is the owning customer party; the replica powers
  * vehicle existence + ownership validation in {@code ReplicaCustomerPortAdapter}.
+ *
+ * <p>The stale guard on the fact's {@code aggregateVersion} is {@link ReplicaVersionGuard}
+ * (#1486): pos-vehicle-inventory's {@code VehicleEventPublisher} flushes a JPA {@code @Version}
+ * before emit, so the version strictly advances — a held row is stale only when its version is
+ * strictly greater than the incoming fact's. An equal version applies, both as an idempotent no-op
+ * for live traffic and because {@code POST .../facts/replay} depends on it to repair a replica that
+ * holds the version number but wrong or missing rows.
  */
 @Slf4j
 @Component
@@ -81,7 +89,10 @@ public class VehicleEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtVehicle existing = extVehicleRepository.findById(vehicleId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — the
+        // publisher's aggregateVersion strictly advances, so equal means identical content, and
+        // replay resends the held version deliberately to repair wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
         ExtVehicle replica = existing != null ? existing : new ExtVehicle();

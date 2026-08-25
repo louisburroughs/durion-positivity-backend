@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.order.internal.entity.ExtLocation;
@@ -24,6 +25,13 @@ import tools.jackson.databind.ObjectMapper;
  * Consumes {@code location.events.v1} into the {@code ext_location} replica (ADR-0044 §6, parity
  * story B3): shop address for tax jurisdiction resolution, mirroring pos-workorder's ext_location
  * pattern (#892).
+ *
+ * <p>The stale guard on the fact's {@code aggregateVersion} is {@link ReplicaVersionGuard}
+ * (#1486): pos-location's version strictly advances, so a held row is stale only when its version
+ * is strictly greater than the incoming fact's — an equal version applies, both because it is an
+ * idempotent no-op for live traffic and because it is what would let a future
+ * regenerate-from-state replay repair a replica that holds the version number but wrong or
+ * missing rows.
  */
 @Slf4j
 @Component
@@ -90,7 +98,10 @@ public class LocationEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtLocation existing = extLocationRepository.findById(locationId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — location's
+        // aggregateVersion strictly advances, so equal means identical content, and a future replay
+        // would resend the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
         ExtLocation replica = existing != null ? existing : new ExtLocation();

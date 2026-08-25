@@ -20,6 +20,7 @@ import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.LocationParentRepository;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -43,6 +44,7 @@ class LocationFactPublisherTest {
 
     private final OutboxEventWriter writer = mock(OutboxEventWriter.class);
     private final LocationParentRepository locationParentRepository = mock(LocationParentRepository.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
 
     private LocationFactPublisher publisher;
 
@@ -50,12 +52,12 @@ class LocationFactPublisherTest {
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         when(locationParentRepository.findByChild_Id(any())).thenReturn(List.of());
-        publisher =
-                new LocationFactPublisher(writerProvider, locationParentRepository, TEST_CLOCK, "location.events.v1");
+        publisher = new LocationFactPublisher(
+                writerProvider, locationParentRepository, TEST_CLOCK, "location.events.v1", entityManager);
     }
 
     @Test
-    @DisplayName("Location fact carries the tax address and site defaults")
+    @DisplayName("Location fact carries the tax address and site defaults, versioned from the flushed @Version (#1486)")
     void locationFact() {
         Location location = new Location();
         location.setId(UUID.randomUUID());
@@ -69,6 +71,9 @@ class LocationFactPublisherTest {
         location.setState("VA");
         location.setPostalCode("22150");
         location.setCountry("US");
+        // Deliberately distinct from any clock-derived value, so a test asserting on the retired
+        // emission-timestamp convention would fail loudly rather than passing by coincidence.
+        location.setVersion(42L);
         StorageLocationEntity staging = StorageLocationEntity.builder()
                 .id(UUID.randomUUID())
                 .name("Staging")
@@ -85,9 +90,13 @@ class LocationFactPublisherTest {
 
         publisher.locationChanged(location);
 
+        // Flushed before the version is read (#1486), so the fact carries the entity's current
+        // @Version rather than the retired Instant.now(clock)-stamped emission timestamp.
+        verify(entityManager).flush();
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(eq("location.events.v1"), captor.capture());
         assertThat(captor.getValue().eventType()).isEqualTo(LocationUpdatedV1.EVENT_TYPE);
+        assertThat(captor.getValue().aggregateVersion()).isEqualTo(42L);
         LocationUpdatedV1 fact = (LocationUpdatedV1) captor.getValue().payload();
         assertThat(fact.locationId()).isEqualTo(location.getId());
         assertThat(fact.name()).isEqualTo("Main Shop");
@@ -102,21 +111,27 @@ class LocationFactPublisherTest {
     }
 
     @Test
-    @DisplayName("Location delete emits the deleted fact")
+    @DisplayName("Location delete emits the deleted fact versioned as version + 1 (#1486)")
     void locationDeleted() {
-        UUID id = UUID.randomUUID();
+        Location location = new Location();
+        location.setId(UUID.randomUUID());
+        location.setVersion(9L);
 
-        publisher.locationDeleted(id);
+        publisher.locationDeleted(location);
 
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(eq("location.events.v1"), captor.capture());
         assertThat(captor.getValue().eventType()).isEqualTo(LocationDeletedV1.EVENT_TYPE);
+        // Deterministic tombstone version (#1486) — one past every fact this aggregate has ever
+        // published, without needing a clock comparison or a flush (the row is being deleted, not
+        // re-saved, so there is no pending increment to pick up).
+        assertThat(captor.getValue().aggregateVersion()).isEqualTo(10L);
         assertThat(((LocationDeletedV1) captor.getValue().payload()).locationId())
-                .isEqualTo(id);
+                .isEqualTo(location.getId());
     }
 
     @Test
-    @DisplayName("Storage-location fact carries site + parent topology")
+    @DisplayName("Storage-location fact carries site + parent topology, versioned from the flushed @Version (#1486)")
     void storageLocationFact() {
         Location site = new Location();
         site.setId(UUID.randomUUID());
@@ -131,13 +146,18 @@ class LocationFactPublisherTest {
                 .site(site)
                 .parentStorageLocation(parent)
                 .capacity("{\"maxUnitCount\": 12}")
+                .version(7L)
                 .build();
 
         publisher.storageLocationChanged(storage);
 
+        // Flushed before the version is read (#1486), so the fact carries the entity's current
+        // @Version rather than the retired Instant.now(clock)-stamped emission timestamp.
+        verify(entityManager).flush();
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
         verify(writer).publish(eq("location.events.v1"), captor.capture());
         assertThat(captor.getValue().eventType()).isEqualTo(StorageLocationUpdatedV1.EVENT_TYPE);
+        assertThat(captor.getValue().aggregateVersion()).isEqualTo(7L);
         StorageLocationUpdatedV1 fact =
                 (StorageLocationUpdatedV1) captor.getValue().payload();
         assertThat(fact.storageLocationId()).isEqualTo(storage.getId());
@@ -152,12 +172,15 @@ class LocationFactPublisherTest {
     @DisplayName("All methods no-op when Kafka publishing is disabled")
     void noopWhenWriterAbsent() {
         when(writerProvider.getIfAvailable()).thenReturn(null);
+        Location location = new Location();
+        location.setId(UUID.randomUUID());
 
-        publisher.locationChanged(new Location());
-        publisher.locationDeleted(UUID.randomUUID());
+        publisher.locationChanged(location);
+        publisher.locationDeleted(location);
         publisher.storageLocationChanged(
                 StorageLocationEntity.builder().id(UUID.randomUUID()).build());
 
         verify(writer, never()).publish(any(), any());
+        verify(entityManager, never()).flush();
     }
 }
