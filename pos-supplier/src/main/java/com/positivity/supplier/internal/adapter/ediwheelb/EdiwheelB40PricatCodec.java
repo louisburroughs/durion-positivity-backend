@@ -108,6 +108,33 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
      */
     @NonNull
     public PricatDocument decode(@Nullable String body) {
+        PricatB40Wire.Catalog catalog = parseDocument(body);
+        PricatB40Wire.EnvelopeHeader header = catalog.envelopeHeader();
+        requireNoVendorError(header);
+
+        String documentId = header == null ? null : trimToNull(header.documentId());
+        LocalDate documentDate = header == null ? null : parseHeaderDate(header.date());
+        String countryCode = header == null ? null : trimToNull(header.countryCode());
+        String currency = header == null ? null : trimToNull(header.currency());
+
+        List<PricatB40Wire.Article> articles = catalog.articles() == null ? List.of() : catalog.articles();
+        DecodedArticles decoded = decodeArticles(articles, documentId, documentDate, countryCode, currency);
+
+        return new PricatDocument(
+                documentId,
+                documentDate,
+                countryCode,
+                currency,
+                decoded.entries(),
+                decoded.rejected(),
+                articles.size());
+    }
+
+    /**
+     * Parses the raw body into a document, or fails with the specific reason a caller needs to
+     * distinguish an empty response from a malformed one from a syntactically valid non-document.
+     */
+    private PricatB40Wire.@NonNull Catalog parseDocument(@Nullable String body) {
         if (body == null || body.isBlank()) {
             throw new PricatDecodeException("PRICAT response body was empty");
         }
@@ -120,21 +147,30 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
         if (catalog == null) {
             throw new PricatDecodeException("PRICAT response body decoded to no document");
         }
+        return catalog;
+    }
 
-        PricatB40Wire.EnvelopeHeader header = catalog.envelopeHeader();
+    /**
+     * A document-level error means the vendor answered with a rejection, not a catalog. Treating it
+     * as an empty catalog would let a vendor-side failure look like "no prices".
+     */
+    private void requireNoVendorError(PricatB40Wire.@Nullable EnvelopeHeader header) {
         String errorCode = header == null ? null : trimToNull(header.errorCode());
         if (errorCode != null && !"0".equals(errorCode)) {
-            // A document-level error means the vendor answered with a rejection, not a catalog.
-            // Treating it as an empty catalog would let a vendor-side failure look like "no prices".
             throw new PricatDecodeException("PRICAT document carries vendor error code " + errorCode);
         }
+    }
 
-        String documentId = header == null ? null : trimToNull(header.documentId());
-        LocalDate documentDate = header == null ? null : parseHeaderDate(header.date());
-        String countryCode = header == null ? null : trimToNull(header.countryCode());
-        String currency = header == null ? null : trimToNull(header.currency());
+    /** The article lines split into what mapped cleanly and what a line-level failure rejected. */
+    private record DecodedArticles(
+            List<SupplierPriceCatalogEntry> entries, List<PricatDocument.RejectedLine> rejected) {}
 
-        List<PricatB40Wire.Article> articles = catalog.articles() == null ? List.of() : catalog.articles();
+    private DecodedArticles decodeArticles(
+            List<PricatB40Wire.Article> articles,
+            String documentId,
+            LocalDate documentDate,
+            String countryCode,
+            String currency) {
         List<SupplierPriceCatalogEntry> entries = new ArrayList<>(articles.size());
         List<PricatDocument.RejectedLine> rejected = new ArrayList<>();
 
@@ -154,7 +190,7 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
                         e.getMessage()));
             }
         }
-        return new PricatDocument(documentId, documentDate, countryCode, currency, entries, rejected, articles.size());
+        return new DecodedArticles(entries, rejected);
     }
 
     private SupplierPriceCatalogEntry toEntry(
