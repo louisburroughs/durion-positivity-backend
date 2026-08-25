@@ -136,6 +136,15 @@ class ProrationServiceTest {
         assertThat(outcome.inputs()).containsEntry("treadPullPointThirtySeconds", 0);
     }
 
+    @Test
+    void treadDepth_missingOriginalDepth_isIndeterminate() {
+        ProrationOutcome outcome = service.prorate(treadPolicy(2), tireLine(6, null), null, null);
+
+        assertThat(outcome.indeterminate()).isTrue();
+        assertThat(outcome.prorationPct()).isNull();
+        assertThat(outcome.inputs()).containsEntry("missing", List.of("originalTreadDepth"));
+    }
+
     // --- MILEAGE ---------------------------------------------------------------------------
 
     private static WarrantyPolicy mileagePolicy(Integer limit) {
@@ -179,6 +188,16 @@ class ProrationServiceTest {
         assertThat(outcome.prorationPct()).isNull();
     }
 
+    @Test
+    void mileage_missingLimit_isIndeterminate() {
+        // Distinct from the zero-limit case above: here the policy simply never configured a limit.
+        ProrationOutcome outcome = service.prorate(mileagePolicy(null), line("100.00", "1"), 100L, null);
+
+        assertThat(outcome.indeterminate()).isTrue();
+        assertThat(outcome.prorationPct()).isNull();
+        assertThat(outcome.inputs()).containsEntry("missing", List.of("mileageLimit (must be a positive limit)"));
+    }
+
     // --- TIME ------------------------------------------------------------------------------
 
     private static WarrantyPolicy timePolicy(Integer durationMonths) {
@@ -219,6 +238,16 @@ class ProrationServiceTest {
 
         assertThat(outcome.indeterminate()).isTrue();
         assertThat(outcome.prorationPct()).isNull();
+    }
+
+    @Test
+    void time_missingDuration_isIndeterminate() {
+        // Distinct from the zero-duration case above: here the policy never configured a duration.
+        ProrationOutcome outcome = service.prorate(timePolicy(null), line("100.00", "1"), null, 3L);
+
+        assertThat(outcome.indeterminate()).isTrue();
+        assertThat(outcome.prorationPct()).isNull();
+        assertThat(outcome.inputs()).containsEntry("missing", List.of("durationMonths (must be a positive duration)"));
     }
 
     // --- Audit inputs ------------------------------------------------------------------------
@@ -286,6 +315,47 @@ class ProrationServiceTest {
                 .containsEntry("laborCovered", true)
                 .containsEntry("laborHoursCap", new BigDecimal("1.50"))
                 .containsEntry("laborRateCap", new BigDecimal("100.00"));
+    }
+
+    @Test
+    void laborLine_coveredNoCaps_fullCreditAtFullRate() {
+        WarrantyPolicy policy = WarrantyPolicy.builder()
+                .prorationMethod(ProrationMethod.NONE)
+                .laborCovered(true)
+                .build();
+
+        ProrationOutcome outcome = service.prorate(policy, laborLine("120.00", "2"), null, null);
+
+        assertThat(outcome.amountRequested()).isEqualByComparingTo("240.00");
+        assertThat(outcome.inputs())
+                .containsEntry("laborCovered", true)
+                .doesNotContainKey("laborHoursCap")
+                .doesNotContainKey("laborRateCap");
+    }
+
+    @Test
+    void laborLine_rateCapWithMissingPrice_skipsClampAndReportsMissingPrice() {
+        // rateCap is configured but originalUnitPrice is unknown: the cap must not be applied
+        // (nothing to clamp), and the missing price is reported same as any other line.
+        WarrantyPolicy policy = WarrantyPolicy.builder()
+                .prorationMethod(ProrationMethod.NONE)
+                .laborCovered(true)
+                .laborRateCap(new BigDecimal("100.00"))
+                .build();
+        WarrantyClaimLine claimLine = WarrantyClaimLine.builder()
+                .sourceType(LineSourceType.WORKORDER_SERVICE)
+                .originalUnitPrice(null)
+                .quantity(new BigDecimal("2"))
+                .build();
+
+        ProrationOutcome outcome = service.prorate(policy, claimLine, null, null);
+
+        assertThat(outcome.indeterminate()).isTrue();
+        assertThat(outcome.amountRequested()).isNull();
+        assertThat(outcome.inputs())
+                .containsEntry("laborCovered", true)
+                .doesNotContainKey("laborRateCap")
+                .containsEntry("missing", List.of("originalUnitPrice"));
     }
 
     @Test

@@ -51,55 +51,14 @@ public class ProrationService {
         List<String> missing = new ArrayList<>();
         inputs.put("method", policy.getProrationMethod().name());
 
-        BigDecimal pct =
-                switch (policy.getProrationMethod()) {
-                    case NONE -> BigDecimal.ONE;
-                    case TREAD_DEPTH -> treadDepthFraction(policy, line, inputs, missing);
-                    case MILEAGE -> mileageFraction(policy, milesDriven, inputs, missing);
-                    case TIME -> timeFraction(policy, monthsElapsed, inputs, missing);
-                };
-        if (pct != null) {
-            pct = clamp(pct, BigDecimal.ZERO, BigDecimal.ONE).setScale(PCT_SCALE, RoundingMode.HALF_UP);
-        }
+        BigDecimal pct = prorationFraction(policy, line, milesDriven, monthsElapsed, inputs, missing);
         inputs.put("prorationPct", pct);
 
-        BigDecimal unitPrice = line.getOriginalUnitPrice();
-        BigDecimal quantity = line.getQuantity() != null ? line.getQuantity() : BigDecimal.ONE;
+        LaborTerms terms = applyLaborTerms(policy, line, inputs);
+        inputs.put("originalUnitPrice", terms.unitPrice());
+        inputs.put("quantity", terms.quantity());
 
-        // Labor terms (PRD §3.2, §6): WORKORDER_SERVICE lines carry labor hours as quantity and
-        // the hourly rate as unitPrice. A policy that does not cover labor yields a definite
-        // zero credit; caps clamp hours/rate before the credit is computed. All applied terms
-        // are frozen into the inputs map (PRD §6 "all inputs frozen").
-        boolean laborNotCovered = false;
-        if (line.getSourceType() == LineSourceType.WORKORDER_SERVICE) {
-            boolean covered = Boolean.TRUE.equals(policy.getLaborCovered());
-            inputs.put("laborCovered", covered);
-            if (!covered) {
-                laborNotCovered = true;
-            } else {
-                if (policy.getLaborHoursCap() != null) {
-                    inputs.put("laborHoursCap", policy.getLaborHoursCap());
-                    quantity = quantity.min(policy.getLaborHoursCap());
-                }
-                if (policy.getLaborRateCap() != null && unitPrice != null) {
-                    inputs.put("laborRateCap", policy.getLaborRateCap());
-                    unitPrice = unitPrice.min(policy.getLaborRateCap());
-                }
-            }
-        }
-        inputs.put("originalUnitPrice", unitPrice);
-        inputs.put("quantity", quantity);
-
-        BigDecimal amount = null;
-        if (laborNotCovered) {
-            amount = BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        } else if (unitPrice == null) {
-            missing.add("originalUnitPrice");
-        } else if (pct != null) {
-            BigDecimal original = unitPrice.multiply(quantity);
-            amount = clamp(pct.multiply(original), BigDecimal.ZERO, original)
-                    .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        }
+        BigDecimal amount = requestedAmount(terms, pct, missing);
         inputs.put("amountRequested", amount);
 
         boolean indeterminate = !missing.isEmpty();
@@ -107,6 +66,76 @@ public class ProrationService {
             inputs.put("missing", List.copyOf(missing));
         }
         return new ProrationOutcome(pct, amount, inputs, indeterminate);
+    }
+
+    /** Selects and rounds the method-specific fraction; {@code null} stays null (indeterminate). */
+    @Nullable
+    private static BigDecimal prorationFraction(
+            WarrantyPolicy policy,
+            WarrantyClaimLine line,
+            @Nullable Long milesDriven,
+            @Nullable Long monthsElapsed,
+            Map<String, Object> inputs,
+            List<String> missing) {
+        BigDecimal pct =
+                switch (policy.getProrationMethod()) {
+                    case NONE -> BigDecimal.ONE;
+                    case TREAD_DEPTH -> treadDepthFraction(policy, line, inputs, missing);
+                    case MILEAGE -> mileageFraction(policy, milesDriven, inputs, missing);
+                    case TIME -> timeFraction(policy, monthsElapsed, inputs, missing);
+                };
+        return pct == null
+                ? null
+                : clamp(pct, BigDecimal.ZERO, BigDecimal.ONE).setScale(PCT_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /** The unit price, quantity, and labor-coverage verdict a claim line prices at, after caps. */
+    private record LaborTerms(@Nullable BigDecimal unitPrice, BigDecimal quantity, boolean notCovered) {}
+
+    /**
+     * Labor terms (PRD §3.2, §6): WORKORDER_SERVICE lines carry labor hours as quantity and the
+     * hourly rate as unitPrice. A policy that does not cover labor yields a definite zero credit;
+     * caps clamp hours/rate before the credit is computed. All applied terms are frozen into the
+     * inputs map (PRD §6 "all inputs frozen"). Non-labor lines pass through unchanged.
+     */
+    private static LaborTerms applyLaborTerms(
+            WarrantyPolicy policy, WarrantyClaimLine line, Map<String, Object> inputs) {
+        BigDecimal unitPrice = line.getOriginalUnitPrice();
+        BigDecimal quantity = line.getQuantity() != null ? line.getQuantity() : BigDecimal.ONE;
+        if (line.getSourceType() != LineSourceType.WORKORDER_SERVICE) {
+            return new LaborTerms(unitPrice, quantity, false);
+        }
+        boolean covered = Boolean.TRUE.equals(policy.getLaborCovered());
+        inputs.put("laborCovered", covered);
+        if (!covered) {
+            return new LaborTerms(unitPrice, quantity, true);
+        }
+        if (policy.getLaborHoursCap() != null) {
+            inputs.put("laborHoursCap", policy.getLaborHoursCap());
+            quantity = quantity.min(policy.getLaborHoursCap());
+        }
+        if (policy.getLaborRateCap() != null && unitPrice != null) {
+            inputs.put("laborRateCap", policy.getLaborRateCap());
+            unitPrice = unitPrice.min(policy.getLaborRateCap());
+        }
+        return new LaborTerms(unitPrice, quantity, false);
+    }
+
+    /** Requested credit: zero when labor isn't covered, unset when price or fraction is unknown. */
+    @Nullable
+    private static BigDecimal requestedAmount(LaborTerms terms, @Nullable BigDecimal pct, List<String> missing) {
+        if (terms.notCovered()) {
+            return BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        }
+        if (terms.unitPrice() == null) {
+            missing.add("originalUnitPrice");
+            return null;
+        }
+        if (pct == null) {
+            return null;
+        }
+        BigDecimal original = terms.unitPrice().multiply(terms.quantity());
+        return clamp(pct.multiply(original), BigDecimal.ZERO, original).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     /** Tire-industry standard: remaining usable tread over original usable tread. */
