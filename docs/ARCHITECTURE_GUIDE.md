@@ -292,14 +292,32 @@ past every fact the aggregate ever emitted.
 
 ### Other domains' topics
 
-Consumers of topics whose publishers still derive `aggregateVersion` from wall-clock
-timestamps keep their current guards for now: flipping a `>=` guard to `>` without a
-strictly-advancing publisher would reintroduce the same-millisecond race on that topic, and
-none of those topics has a replay endpoint whose repairs a `>=` guard could be blocking.
-Adopting the rule on such a topic means fixing its publisher first (the `@Version` pattern
-above), then moving its consumers to `ReplicaVersionGuard` — in that order.
+Every fact topic was surveyed (#1486) for the same guard split and for whether its publisher
+already satisfies the strictly-advancing contract:
 
-<!-- SURVEY_TABLE -->
+| Topic | Publisher version source | Strictly advancing? | Consumers on the rule? |
+|---|---|---|---|
+| `catalog.events.v1` | pos-catalog `@Version`, flushed before emit (#1486) | Yes | Yes — all seven use `ReplicaVersionGuard` |
+| `vehicle.events.v1` (`VehicleUpdatedV1`) | pos-vehicle-inventory `VehicleRecord` `@Version`, flushed before emit | Yes | Yes — former `>=` guards (pos-order, pos-customer) flipped in #1486 |
+| `vehicle.events.v1` (`VehicleCarePreferenceUpdatedV1`) | Epoch millis by design (rows are hard-deleted and re-created, so an entity version would restart at 0) | No | Its one consumer already applies on equal; acceptable for a last-writer-wins preference fact |
+| `invoice.events.v1` | pos-invoice `Invoice`/`BillingRules` `@Version`, flushed before emit | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
+| `warranty.events.v1` | pos-warranty `WarrantyClaim` `@Version`, flushed and force-incremented on otherwise-clean mutations | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
+| `workorder.events.v1` | `Instant.now(clock)` epoch millis; `Workorder` has no `@Version` | **No** | Scoped out — see below |
+| `customer.events.v1` | `Instant.now(clock)` epoch millis; party entities carry no optimistic-lock version | **No** | Scoped out — see below |
+| `location.events.v1` | `Instant.now(clock)` epoch millis — `Location` *has* an unused `@Version` the publisher ignores | **No** | Scoped out — see below |
+
+**Scoped out, and why:** the `>=` guards consuming `workorder.events.v1`,
+`customer.events.v1`, and `location.events.v1` (pos-order's workorder/customer/location
+listeners, pos-accounting's customer listener) keep their skip-on-equal behavior for now.
+Those publishers still stamp wall-clock millis, so their versions can tie or even invert
+across instances; a `>=` guard at least fails closed on a tie, and none of those topics has a
+regenerate-from-current-state replay whose repairs the guard could be blocking (their
+`OutboxReplayServiceImpl` re-sends existing outbox rows under the original `eventId`, which
+consumers drop by idempotency regardless of any version guard). Adopting the rule on such a
+topic means fixing its publisher first — the `@Version`-flush pattern above; for
+`location.events.v1` that is one line, since the column already exists — and only then moving
+its consumers to `ReplicaVersionGuard`. Doing it in the other order reintroduces the
+same-millisecond race #1486 closed.
 
 ---
 
