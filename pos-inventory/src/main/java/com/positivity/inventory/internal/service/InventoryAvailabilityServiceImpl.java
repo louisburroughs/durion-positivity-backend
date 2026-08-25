@@ -176,22 +176,25 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
         BigDecimal onHand;
         BigDecimal allocated;
+        // Every arm routes through Quantities.nz: SonarCloud's dataflow engine models a bare
+        // BigDecimal.ZERO read as possibly null (see Quantities.nz), and proved an NPE at the
+        // ATP subtraction below from these assignments (javabugs:S2259).
         if (scopeLocationId == null) {
-            onHand = productRows.stream()
+            onHand = Quantities.nz(productRows.stream()
                     .map(InventoryStockSummary::getOnHand)
                     .map(Quantities::nz)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            allocated = productRows.stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            allocated = Quantities.nz(productRows.stream()
                     .map(InventoryStockSummary::getAllocated)
                     .map(Quantities::nz)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
         } else {
             InventoryStockSummary scoped = productRows.stream()
                     .filter(row -> scopeLocationId.equals(row.getLocationId()))
                     .findFirst()
                     .orElse(null);
-            onHand = scoped == null ? BigDecimal.ZERO : Quantities.nz(scoped.getOnHand());
-            allocated = scoped == null ? BigDecimal.ZERO : Quantities.nz(scoped.getAllocated());
+            onHand = Quantities.nz(scoped == null ? null : scoped.getOnHand());
+            allocated = Quantities.nz(scoped == null ? null : scoped.getAllocated());
         }
 
         // Forecast site scope (odoo-parity A2, #1028): the site parameter when present,

@@ -595,3 +595,21 @@ calls after each phase lands, and update the Status line at the top of this
 document. Every `file.java:NN` coordinate in this plan and in the CSV is the
 location SonarCloud reported at the analysis named above; fixing a file shifts
 the lines below it, so re-derive rather than trusting a stale number.
+
+## Post-baseline findings
+
+Issues registered by analyses after the 2026-08-24 06:30 baseline are tracked
+here rather than in the inventory CSV (which is frozen to the analysed
+snapshot).
+
+| Registered | Rule | Location | Status |
+| ---------- | ---- | -------- | ------ |
+| 2026-08-24 18:11 | `javabugs:S2259` (reliability BLOCKER) | `pos-inventory/…/InventoryAvailabilityServiceImpl` — `queryAvailability`'s ATP subtraction | fixed — all four `onHand`/`allocated` assignment arms routed through `Quantities.nz` |
+
+The S2259 finding is the dataflow engine's documented limitation, not a
+runtime bug: it models a bare `BigDecimal.ZERO` static-field read as possibly
+null (see `Quantities.nz`'s javadoc, which exists for exactly this), and both
+the scoped ternaries and the reduce identities assigned from one, so the
+engine proved an NPE path into the subtraction. `Quantities.nz` is the one
+shape the engine accepts as non-null; behaviour is identical.
+
