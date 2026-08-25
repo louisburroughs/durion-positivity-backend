@@ -37,10 +37,10 @@ import tools.jackson.databind.ObjectMapper;
  * strictly greater than the incoming fact's — an equal version applies, both because it is an
  * idempotent no-op for live traffic and because it is what would let a future
  * regenerate-from-state replay repair a replica that holds the version number but wrong or missing
- * data. A held version can never legitimately be beaten by an incoming {@code aggregateVersion} of
- * 0: the publisher always stamps a real, flushed {@code @Version} now (never 0 once any mutation
- * has actually been committed), so a 0 can only be a legacy or malformed envelope, and treating it
- * as stale relative to any real held version is the safer read.
+ * data. An incoming {@code aggregateVersion} of 0 is legitimate only for a brand-new party (a
+ * fresh {@code @Version} row starts at 0), where no replica row exists yet and the guard is never
+ * consulted — the fact lands. Once a replica holds any higher version, an incoming 0 can only be a
+ * legacy or malformed envelope, and treating it as stale is the safer read.
  */
 @Slf4j
 @Component
@@ -131,10 +131,11 @@ public class CustomerEventsListener {
         // party's aggregateVersion strictly advances, so equal means identical content, and a
         // future replay would resend the held version deliberately to repair a replica with wrong
         // or missing rows. The old `&& aggregateVersion > 0` carve-out let a legacy version-0
-        // envelope always apply, no matter how far ahead the held replica already was; the
-        // publisher now always stamps a real, flushed @Version (never 0 once any mutation has
-        // actually committed), so a 0 is legacy/malformed, and letting the plain > comparison
-        // treat it as stale against any real held version is the safer behavior.
+        // envelope always apply, no matter how far ahead the held replica already was. A version-0
+        // fact is legitimate only for a brand-new party (a fresh @Version row starts at 0), and
+        // then no replica row exists so this guard is never consulted; against a replica already
+        // holding a higher version, a 0 can only be legacy/malformed, and letting the plain >
+        // comparison treat it as stale is the safer behavior.
         if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
                     "Skipping stale billing-rules event partyId={} eventVersion={} replicaVersion={}",

@@ -2,8 +2,10 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -90,10 +92,13 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * {@code aggregateVersion}.
      */
     private void dirtyWorkorder(UUID workorderId) {
-        workorderRepository.findById(workorderId).ifPresent(workorder -> {
-            workorder.setUpdatedAt(Instant.now(clock));
-            workorderRepository.save(workorder);
-        });
+        // Fail fast on a missing row — silently skipping the bump would emit the fact under an
+        // unchanged aggregateVersion, the exact contract violation this helper exists to prevent.
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        workorder.setUpdatedAt(Instant.now(clock));
+        workorderRepository.save(workorder);
     }
 
     /**
