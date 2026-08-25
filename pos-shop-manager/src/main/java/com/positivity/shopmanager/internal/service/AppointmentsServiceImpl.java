@@ -214,10 +214,14 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             throw new AppointmentValidationException(
                     "An appointment already exists for this source entity. appointmentId=" + existingAppointmentId);
         }
-        if (request.getSourceType() == AppointmentSourceType.ESTIMATE) {
-            sourceEligibilityService.validateEstimateEligibility(request.getSourceId(), facilityId);
-        } else if (request.getSourceType() == AppointmentSourceType.WORK_ORDER) {
-            sourceEligibilityService.validateWorkOrderEligibility(request.getSourceId(), facilityId);
+        switch (request.getSourceType()) {
+            case ESTIMATE -> sourceEligibilityService.validateEstimateEligibility(request.getSourceId(), facilityId);
+            case WORK_ORDER -> sourceEligibilityService.validateWorkOrderEligibility(request.getSourceId(), facilityId);
+            // A source type with no eligibility rule must fail here, not book unvalidated: a
+            // future enum constant that reaches this default was never wired into eligibility.
+            default ->
+                throw new AppointmentValidationException(
+                        "No eligibility validation defined for sourceType " + request.getSourceType());
         }
     }
 

@@ -264,8 +264,13 @@ public class ReplenishmentSourcingService {
         }
         SourceSelection selection = pick.get();
         UUID sourceLocation = selection.candidate().locationId();
-        UUID sourceSite =
-                siteByLocation.getOrDefault(sourceLocation, forecastSiteResolver.resolveForecastSite(sourceLocation));
+        // get-then-resolve rather than getOrDefault: getOrDefault evaluates its default eagerly,
+        // which would call the resolver on every selection even when the partition already
+        // recorded the site.
+        UUID sourceSite = siteByLocation.get(sourceLocation);
+        if (sourceSite == null) {
+            sourceSite = forecastSiteResolver.resolveForecastSite(sourceLocation);
+        }
         Optional<UUID> transferOrderId =
                 createCrossSiteTransfer(policy, sku, neededQuantity, sourceSite, sourceLocation, destinationSite);
         if (transferOrderId.isEmpty()) {
