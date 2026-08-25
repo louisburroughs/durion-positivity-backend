@@ -38,7 +38,8 @@ class ReplicaVersionGuardTest {
 
     @Test
     void heldOneBelowLongMaxIsNotStaleAgainstLongMax() {
-        assertThat(ReplicaVersionGuard.isStale(Long.MAX_VALUE - 1, Long.MAX_VALUE)).isFalse();
+        assertThat(ReplicaVersionGuard.isStale(Long.MAX_VALUE - 1, Long.MAX_VALUE))
+                .isFalse();
     }
 
     @Test

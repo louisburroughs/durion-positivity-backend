@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import io.micrometer.core.instrument.Counter;
@@ -32,8 +33,15 @@ import tools.jackson.databind.ObjectMapper;
  * #842).
  *
  * <p>Same contract as {@link CustomerEventsListener}: idempotent via {@code processed_events} in
- * the upsert transaction, stale envelopes (aggregateVersion at or below the replica's) skipped,
+ * the upsert transaction, stale envelopes (aggregateVersion strictly below the replica's) skipped,
  * transient DB errors rethrown for container retry/DLQ, malformed payloads logged and skipped.
+ *
+ * <p>The stale guard is {@link ReplicaVersionGuard} (#1486): pos-invoice's {@code
+ * InvoiceEventPublisher} flushes the invoice's JPA {@code @Version} before emit, so the version
+ * strictly advances — an equal version applies rather than skips: it is an idempotent no-op for
+ * live traffic, and it is what would let a regenerate-from-state replay (the catalog/vehicle
+ * {@code facts/replay} pattern, should pos-invoice grow one) repair a replica that holds the
+ * version number but wrong or missing rows.
  */
 @Slf4j
 @Component
@@ -125,7 +133,10 @@ public class InvoiceEventsListener {
         // Versions are strictly increasing per invoice (committed JPA @Version, flushed before
         // emit), so version 0 (the create) participates in the comparison too — a late or
         // replayed version-0 event must never overwrite a newer replica row (PR #850 review).
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — equal
+        // means identical content, and replay resends the held version deliberately to repair
+        // wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
                     "Skipping stale invoice event invoiceId={} eventVersion={} replicaVersion={}",
                     invoiceId,

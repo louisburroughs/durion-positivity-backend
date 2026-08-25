@@ -159,7 +159,8 @@ public class CatalogEventsListener {
         // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — catalog's
         // aggregateVersion strictly advances, so equal means identical content, and replay resends
         // the held version deliberately to repair a replica with wrong or missing rows.
-        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), row.getAggregateVersion())) {
+        if (existing != null
+                && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), row.getAggregateVersion())) {
             log.debug(
                     "Ignoring stale catalog fact for {} (held {} > incoming {})",
                     row.getCatalogItemId(),

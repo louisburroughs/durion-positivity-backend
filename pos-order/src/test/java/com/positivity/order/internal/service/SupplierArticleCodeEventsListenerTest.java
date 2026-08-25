@@ -93,7 +93,7 @@ class SupplierArticleCodeEventsListenerTest {
     }
 
     @Test
-    void skipsAFactOlderThanTheReplicaItAlreadyHolds() {
+    void skipsAFactStrictlyOlderThanTheReplicaItAlreadyHolds() {
         when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("michelin-eu", PRODUCT_ID))
                 .thenReturn(Optional.of(ExtSupplierArticleCode.builder()
                         .supplierRef("michelin-eu")
@@ -107,6 +107,30 @@ class SupplierArticleCodeEventsListenerTest {
 
         verify(extSupplierArticleCodeRepository, never()).save(any());
         // Still recorded as processed: the fact was delivered and deliberately not applied.
+        verify(processedEventRepository).save(any(ProcessedEvent.class));
+    }
+
+    @Test
+    void appliesAFactAtTheSameVersionAsTheReplicaItAlreadyHolds() {
+        // Load-bearing (#1486): pos-catalog's aggregateVersion strictly advances, so an equal
+        // version means identical content, and POST .../facts/replay deliberately resends a fact
+        // at the held version to repair a replica with wrong or missing rows. Skipping on equal
+        // (the old `>=` guard) silently turned replay into a no-op — that was #1486's trap.
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("michelin-eu", PRODUCT_ID))
+                .thenReturn(Optional.of(ExtSupplierArticleCode.builder()
+                        .supplierRef("michelin-eu")
+                        .vendorProfileId(VENDOR_PROFILE_ID)
+                        .productId(PRODUCT_ID)
+                        .supplierArticleCode("999908")
+                        .aggregateVersion(200L)
+                        .build()));
+
+        listener.onCatalogEvent(factEvent("e-3", 200L, "michelin-eu", "999999"));
+
+        ArgumentCaptor<ExtSupplierArticleCode> captor = ArgumentCaptor.forClass(ExtSupplierArticleCode.class);
+        verify(extSupplierArticleCodeRepository).save(captor.capture());
+        assertThat(captor.getValue().getSupplierArticleCode()).isEqualTo("999999");
+        assertThat(captor.getValue().getAggregateVersion()).isEqualTo(200L);
         verify(processedEventRepository).save(any(ProcessedEvent.class));
     }
 

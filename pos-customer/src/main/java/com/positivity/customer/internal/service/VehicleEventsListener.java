@@ -11,6 +11,7 @@ import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepos
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.vehicle.VehicleCarePreferenceUpdatedV1;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import io.micrometer.core.instrument.Counter;
@@ -47,6 +48,13 @@ import tools.jackson.databind.ObjectMapper;
  * (ADR-0012): the event's {@code accountId} is the owning party, so the VIN is added to that
  * party's set and removed from any other party still holding it (ownership transfer), and a
  * deactivation removes the VIN everywhere.
+ *
+ * <p>The {@code ext_vehicle} stale guard is {@link ReplicaVersionGuard} (#1486): the vehicle
+ * event's {@code aggregateVersion} strictly advances (committed JPA {@code @Version}, flushed
+ * before emit), so a held row is stale only when its version is strictly greater than the incoming
+ * fact's — an equal version applies, both as an idempotent no-op for live traffic and because
+ * {@code POST .../facts/replay} depends on it to repair a replica that holds the version number but
+ * wrong or missing rows.
  */
 @Slf4j
 @Component
@@ -150,8 +158,10 @@ public class VehicleEventsListener {
         ExtVehicle existing = extVehicleRepository.findById(vehicleId).orElse(null);
         // Versions are strictly increasing per vehicle (committed JPA @Version, flushed before
         // emit), so version 0 (the create) participates in the comparison too — a late or
-        // replayed version-0 event must never overwrite a newer replica row.
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // replayed version-0 event must never overwrite a newer replica row. Strictly-newer-only
+        // skip: equal versions APPLY (#1486, ReplicaVersionGuard) — equal means identical content,
+        // and replay resends the held version deliberately to repair wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
                     "Skipping stale vehicle event vehicleId={} eventVersion={} replicaVersion={}",
                     vehicleId,
