@@ -1,7 +1,11 @@
 # RBAC Permission / Role Audit — August 2026
 
-Status: **findings and recommendations only — no fixes applied yet.**
-One product decision has since been recorded and mapped in §6: **ACCOUNT_MANAGER becomes
+Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on this branch**
+(migrations V24–V27 plus code/seed changes; see the §7 status column). Headline drift
+after execution: required-but-ungranted 112 → 94, granted-but-unenforced 77 → 64,
+unreachable operations 229 → 199, roles 16 → 17 (CONTROLLER). The +14 in dead bits is
+the retired codes keeping their permanent bit indexes, as designed.
+One product decision was recorded and mapped in §6: **ACCOUNT_MANAGER becomes
 a customer-accounts (AR-facing) role, and a re-created CONTROLLER role takes all
 accounting management permissions**, including the loose (currently ungranted) ones.
 Audited commit: `09d7eef` (main). Companion issues: #1499 (granted-but-unenforced sweep),
@@ -415,17 +419,17 @@ All six flags are decided; the chart above reflects them:
 
 | # | Action | Effort | Blocked on decision? |
 | --- | --- | --- | --- |
-| 1 | Wire role grants for the 112 required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | partially — accounting is decided (§6); rest per §2 decision list |
-| 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split: create CONTROLLER role, move the 33 accounting-management grants, add the 12 new codes, revoke via versioned migration | medium | no — fully decided (incl. sub-decisions a–f) |
-| 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | naming pick only |
-| 3 | Re-point `shop:location/bay` holders to `location:*` family | small | no |
+| 1 | Wire role grants for the remaining required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | yes — §2 decision list (accounting portion DONE via 1a; 94 codes remain) |
+| 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split | medium | **DONE** — V24 (CONTROLLER role), V25 (rescope + retire dead accounting codes), seed + guard-fixture updates |
+| 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | **DONE** — `workorder:workorder:start` wins; endpoint + capability flag aligned, V26 migrates grants |
+| 3 | Re-point `shop:location/bay` holders to `location:*` family | small | **DONE** — faithful-mirror grants added, seven dead codes revoked (V27) |
 | 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | convention sign-off |
 | 5 | Triage remaining ~55 ADMIN-only unenforced codes: enforce or retire | medium | per-code |
 | 6 | Close the `x-required-permissions` gap (security-service, catalog) | medium | no |
 | 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | thresholds |
 | 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | no |
-| 9 | Remove dead authorities: literal `"admin"` check, `ACCOUNTING_ADMIN`/`AR_MANAGER` alternates, `people:time:export:read` alternate | small | no |
-| 10 | Seed dummy users for the roles that currently have none (see below) so every persona is exercisable under its own login | small | customer-persona mechanics only |
+| 9 | Remove dead authorities: literal `"admin"` check, `ACCOUNTING_ADMIN`/`AR_MANAGER` alternates, `people:time:export:read` alternate | small | **DONE** — pos-people, pos-people-contact and pos-accounting code, contracts and tests cleaned |
+| 10 | Seed dummy users for the roles that currently have none (see below) so every persona is exercisable under its own login | small | **DONE** — 8 users seeded (…012–…019); felicia.grant's LOCATION-scoped assignment deferred until a location fixture exists; customer-persona flag still open |
 
 ### Task 10 — dummy users for unrepresented roles
 
