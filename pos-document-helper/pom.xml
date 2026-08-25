@@ -18,10 +18,12 @@
     <properties>
         <!-- Coverage ratchet: measured 95.7% line / 90.0% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
-             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
-             IT-inclusive measurement describes coverage the gate cannot see.
-             The branch floor tolerates one whole branch instead: the module has only 10
-             branches, so one is worth 10 points and a 3-point cushion would fail on noise. -->
+             Floors sit 3 points under, the same standard cushion every module gets.
+             Re-derive them ONLY from a -DskipITs run — an IT-inclusive measurement
+             describes coverage the gate cannot see.
+             Note: this module has only 10 branches (jacoco.csv), so each one is worth
+             about 10 points of the branch percentage — a single branch regression can
+             move the measured figure by more than the 3-point cushion. -->
         <jacoco.line.min>0.92</jacoco.line.min>
         <jacoco.branch.min>0.87</jacoco.branch.min>
     </properties>

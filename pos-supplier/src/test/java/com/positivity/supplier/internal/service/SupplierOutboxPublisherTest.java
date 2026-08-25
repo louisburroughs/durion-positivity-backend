@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -112,7 +114,12 @@ class SupplierOutboxPublisherTest {
 
         assertThat(first.getPublishedAt()).isEqualTo(NOW);
         assertThat(second.getPublishedAt()).isEqualTo(NOW);
-        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), anyString());
+        // times(2) alone would not catch topic-b going out before topic-a -- pin the exact
+        // sequence with InOrder, which is the property "in order" actually promises.
+        InOrder inOrder = inOrder(kafkaTemplate);
+        inOrder.verify(kafkaTemplate).send("topic-a", "key-1", "{}");
+        inOrder.verify(kafkaTemplate).send("topic-b", "key-1", "{}");
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test
