@@ -257,63 +257,75 @@ public class EligibilityServiceImpl implements EligibilityService {
     private void checkTerms(
             WarrantyClaim claim, WarrantyPolicy policy, LocalDate saleDate, List<Map<String, Object>> reasons) {
         LocalDate referenceDate = referenceDate(claim);
+        reasons.add(durationReason(policy, saleDate, referenceDate));
+        reasons.add(mileageReason(policy, claim));
+        addTreadDepthReasons(policy, claim, reasons);
+        addRegistrationReason(claim, policy, referenceDate, reasons);
+    }
 
-        // Duration: within durationMonths of the original sale (null = unlimited).
-        // Compared as
-        // dates — ChronoUnit.MONTHS truncates partial months, which would grant up to
-        // ~30 days
-        // of grace past the true expiry. Coverage ends at (and includes) saleDate +
-        // duration.
+    /**
+     * Duration: within durationMonths of the original sale (null = unlimited). Compared as
+     * dates — ChronoUnit.MONTHS truncates partial months, which would grant up to ~30 days of
+     * grace past the true expiry. Coverage ends at (and includes) saleDate + duration.
+     */
+    private static Map<String, Object> durationReason(
+            WarrantyPolicy policy, LocalDate saleDate, LocalDate referenceDate) {
         Integer durationMonths = policy.getDurationMonths();
         if (durationMonths == null) {
-            reasons.add(reason("duration", "unlimited", "n/a", Boolean.TRUE));
-        } else {
-            long monthsElapsed = ChronoUnit.MONTHS.between(saleDate, referenceDate);
-            LocalDate coverageEnd = saleDate.plusMonths(durationMonths);
-            reasons.add(reason(
-                    "duration",
-                    "within " + durationMonths + " months of sale (through " + coverageEnd + ")",
-                    monthsElapsed + " months elapsed",
-                    !referenceDate.isAfter(coverageEnd)));
+            return reason("duration", "unlimited", "n/a", Boolean.TRUE);
         }
+        long monthsElapsed = ChronoUnit.MONTHS.between(saleDate, referenceDate);
+        LocalDate coverageEnd = saleDate.plusMonths(durationMonths);
+        return reason(
+                "duration",
+                "within " + durationMonths + " months of sale (through " + coverageEnd + ")",
+                monthsElapsed + " months elapsed",
+                !referenceDate.isAfter(coverageEnd));
+    }
 
-        // Mileage: odometer delta since sale <= mileageLimit. The sale-time odometer is
-        // not
-        // recorded upstream, so a set limit is indeterminate until that fact exists.
+    /**
+     * Mileage: odometer delta since sale &lt;= mileageLimit. The sale-time odometer is not
+     * recorded upstream, so a set limit is indeterminate until that fact exists.
+     */
+    private static Map<String, Object> mileageReason(WarrantyPolicy policy, WarrantyClaim claim) {
         Integer mileageLimit = policy.getMileageLimit();
         if (mileageLimit == null) {
-            reasons.add(reason("mileage", "no mileage limit", "n/a", Boolean.TRUE));
-        } else {
-            reasons.add(reason(
-                    "mileage",
-                    "odometer delta since sale <= " + mileageLimit,
-                    claim.getOdometerAtClaim() != null
-                            ? "odometer at claim " + claim.getOdometerAtClaim() + ", sale odometer unknown"
-                            : "odometer unknown",
-                    null));
+            return reason("mileage", "no mileage limit", "n/a", Boolean.TRUE);
         }
+        return reason(
+                "mileage",
+                "odometer delta since sale <= " + mileageLimit,
+                claim.getOdometerAtClaim() != null
+                        ? "odometer at claim " + claim.getOdometerAtClaim() + ", sale odometer unknown"
+                        : "odometer unknown",
+                null);
+    }
 
-        // Tread depth: measured remaining depth must exceed the pull point (tires
-        // only).
+    /** Tread depth: measured remaining depth must exceed the pull point (tires only). */
+    private static void addTreadDepthReasons(
+            WarrantyPolicy policy, WarrantyClaim claim, List<Map<String, Object>> reasons) {
         Integer pullPoint = policy.getTreadPullPointThirtySeconds();
-        if (pullPoint != null) {
-            for (WarrantyClaimLine line : claim.getLines()) {
-                Integer measured = line.getMeasuredTreadDepth();
-                reasons.add(reasonForLine(
-                        "treadDepth",
-                        line,
-                        "measured tread > " + pullPoint + "/32",
-                        measured != null ? measured + "/32" : null,
-                        measured != null ? measured > pullPoint : null));
-            }
+        if (pullPoint == null) {
+            return;
         }
+        for (WarrantyClaimLine line : claim.getLines()) {
+            Integer measured = line.getMeasuredTreadDepth();
+            reasons.add(reasonForLine(
+                    "treadDepth",
+                    line,
+                    "measured tread > " + pullPoint + "/32",
+                    measured != null ? measured + "/32" : null,
+                    measured != null ? measured > pullPoint : null));
+        }
+    }
 
-        // Registration-bound coverage: ROAD_HAZARD / EXTENDED_PLAN require an active
-        // registration.
-        // Evaluation owns the pointer: set when found, cleared when the registration
-        // lapsed or
-        // the governing coverage is not registration-bound, so a re-run never leaves a
-        // stale id.
+    /**
+     * Registration-bound coverage: ROAD_HAZARD / EXTENDED_PLAN require an active registration.
+     * Evaluation owns the pointer: set when found, cleared when the registration lapsed or the
+     * governing coverage is not registration-bound, so a re-run never leaves a stale id.
+     */
+    private void addRegistrationReason(
+            WarrantyClaim claim, WarrantyPolicy policy, LocalDate referenceDate, List<Map<String, Object>> reasons) {
         if (policy.getCoverageType() == CoverageType.ROAD_HAZARD
                 || policy.getCoverageType() == CoverageType.EXTENDED_PLAN) {
             Optional<WarrantyRegistration> registration = findActiveRegistration(claim, policy, referenceDate);

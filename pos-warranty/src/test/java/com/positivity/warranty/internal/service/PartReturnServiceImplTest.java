@@ -431,6 +431,61 @@ class PartReturnServiceImplTest {
             assertThatThrownBy(() -> service.update(PART_RETURN_ID, statusOnly(PartReturnStatus.ON_HOLD)))
                     .isInstanceOf(WarrantyNotFoundException.class);
         }
+
+        @Test
+        void statusEqualToCurrentIsANoOpTransitionNotAnIllegalMove() {
+            // request.status() == current is neither "no status change" (null) nor a real
+            // move: LEGAL_MOVES is never consulted for it, so it must not be mistaken for an
+            // illegal transition. It still applies any accompanying detail edits.
+            when(partReturnRepository.findById(PART_RETURN_ID))
+                    .thenReturn(Optional.of(
+                            partReturn(PartReturnStatus.ON_HOLD, PartReturnDisposition.HOLD_FOR_INSPECTION)));
+            stubSaveEcho();
+
+            PartReturnResponse response = service.update(
+                    PART_RETURN_ID,
+                    new PartReturnUpdateRequest(PartReturnStatus.ON_HOLD, null, null, null, null, "RMA-99", null));
+
+            assertThat(response.status()).isEqualTo(PartReturnStatus.ON_HOLD);
+            assertThat(response.rmaNumber()).isEqualTo("RMA-99");
+            verify(outboxEventWriter, never()).publish(any(), any());
+        }
+
+        @Test
+        void shippedAtIsIgnoredWhenTheReturnHasNeverBeenShipped() {
+            // A caller supplying shippedAt without moving the return into (or through) SHIPPED
+            // must not fabricate a ship time on a part that was never shipped: the correction
+            // branch only fires when a shippedAt already exists to correct.
+            when(partReturnRepository.findById(PART_RETURN_ID))
+                    .thenReturn(Optional.of(
+                            partReturn(PartReturnStatus.ON_HOLD, PartReturnDisposition.HOLD_FOR_INSPECTION)));
+            stubSaveEcho();
+
+            PartReturnResponse response = service.update(
+                    PART_RETURN_ID, new PartReturnUpdateRequest(null, null, null, null, NOW, null, null));
+
+            assertThat(response.status()).isEqualTo(PartReturnStatus.ON_HOLD);
+            assertThat(response.shippedAt()).isNull();
+        }
+
+        @Test
+        void shippedAtOnAnAlreadyShippedReturnCorrectsTheRecordedTimeWithoutReemittingShippedEvent() {
+            // Re-supplying shippedAt on a return that is already SHIPPED (no status move in
+            // this request) is a correction to the recorded ship time, not a fresh transition:
+            // it must not re-trigger the warranty.part-return.shipped outbox event.
+            PartReturn shipped = partReturn(PartReturnStatus.SHIPPED, PartReturnDisposition.RETURN_TO_VENDOR);
+            shipped.setShippedAt(Instant.parse("2026-07-10T08:00:00Z"));
+            Instant corrected = Instant.parse("2026-07-09T18:30:00Z");
+            when(partReturnRepository.findById(PART_RETURN_ID)).thenReturn(Optional.of(shipped));
+            stubSaveEcho();
+
+            PartReturnResponse response = service.update(
+                    PART_RETURN_ID, new PartReturnUpdateRequest(null, null, null, null, corrected, null, null));
+
+            assertThat(response.status()).isEqualTo(PartReturnStatus.SHIPPED);
+            assertThat(response.shippedAt()).isEqualTo(corrected);
+            verify(outboxEventWriter, never()).publish(any(), any());
+        }
     }
 
     @Nested

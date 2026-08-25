@@ -275,6 +275,27 @@ class EligibilityServiceImplTest {
     }
 
     @Test
+    void mileageLimitWithNoClaimOdometerEither_reportsOdometerUnknown() {
+        // Distinct from the case above (claim odometer known, sale odometer not): here the
+        // claim odometer itself is unset, so the mileage reason's "actual" text must say
+        // "odometer unknown" rather than reference a claim reading that does not exist.
+        WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
+        WarrantyPolicy policy = manufacturerTreadPolicy();
+        policy.setMileageLimit(40000);
+        stubClaim(claim);
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.INDETERMINATE);
+        assertThat(evaluation.reasons())
+                .anySatisfy(reason -> assertThat(reason)
+                        .containsEntry("term", "mileage")
+                        .containsEntry("actual", "odometer unknown"));
+    }
+
+    @Test
     void noMatchingPolicy_isIneligible() {
         WarrantyClaim claim = claim(ClaimType.MANUFACTURER_DEFECT);
         stubClaim(claim);
@@ -512,6 +533,33 @@ class EligibilityServiceImplTest {
         policy.setCoverageType(CoverageType.ROAD_HAZARD);
         WarrantyRegistration registration = WarrantyRegistration.builder()
                 .id(UUID.fromString("018f0000-0000-7000-8000-000000000020"))
+                .policyId(policy.getId())
+                .customerId(CUSTOMER_ID)
+                .purchaseDate(SALE_DATE)
+                .status(RegistrationStatus.ACTIVE)
+                .build();
+        stubClaim(claim);
+        when(extCatalogReplicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product()));
+        when(policyRepository.findEffectiveOn(SALE_DATE)).thenReturn(List.of(policy));
+        when(registrationRepository.findByCustomerIdAndStatus(CUSTOMER_ID, RegistrationStatus.ACTIVE))
+                .thenReturn(List.of(registration));
+
+        EligibilityEvaluation evaluation = service.evaluate(CLAIM_ID);
+
+        assertThat(evaluation.result()).isEqualTo(EligibilityResult.ELIGIBLE);
+        assertThat(claim.getRegistrationId()).isEqualTo(registration.getId());
+    }
+
+    @Test
+    void extendedPlanCoverage_alsoGatesOnActiveRegistrationLikeRoadHazard() {
+        // checkTerms' registration gate is `ROAD_HAZARD || EXTENDED_PLAN`: every other test
+        // exercises it via ROAD_HAZARD only, which never evaluates the EXTENDED_PLAN arm of
+        // the OR. EXTENDED_PLAN coverage must be registration-bound too, not silently exempt.
+        WarrantyClaim claim = claim(ClaimType.EXTENDED_PLAN);
+        WarrantyPolicy policy = manufacturerTreadPolicy();
+        policy.setCoverageType(CoverageType.EXTENDED_PLAN);
+        WarrantyRegistration registration = WarrantyRegistration.builder()
+                .id(UUID.fromString("018f0000-0000-7000-8000-000000000022"))
                 .policyId(policy.getId())
                 .customerId(CUSTOMER_ID)
                 .purchaseDate(SALE_DATE)
