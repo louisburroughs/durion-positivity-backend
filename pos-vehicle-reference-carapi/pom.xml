@@ -18,7 +18,7 @@
              IT-inclusive measurement describes coverage the gate cannot see.
              The branch floor tolerates one whole branch (18 branches total, one = 5.6 points). -->
         <jacoco.line.min>0.75</jacoco.line.min>
-        <jacoco.branch.min>0.83</jacoco.branch.min>
+        <jacoco.branch.min>0.85</jacoco.branch.min>
     </properties>
 
     <packaging>jar</packaging>

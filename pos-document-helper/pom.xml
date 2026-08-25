@@ -23,7 +23,7 @@
              The branch floor tolerates one whole branch instead: the module has only 10
              branches, so one is worth 10 points and a 3-point cushion would fail on noise. -->
         <jacoco.line.min>0.92</jacoco.line.min>
-        <jacoco.branch.min>0.80</jacoco.branch.min>
+        <jacoco.branch.min>0.87</jacoco.branch.min>
     </properties>
 
     <dependencies>

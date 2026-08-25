@@ -11,11 +11,11 @@
     <description>Spring Cloud API Gateway for POS modules</description>
     <packaging>jar</packaging>
     <properties>
-        <!-- Coverage ratchet: measured 85.6% line / 72.2% branch by the gate's own
+        <!-- Coverage ratchet: measured 86.0% line / 72.7% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.82</jacoco.line.min>
+        <jacoco.line.min>0.83</jacoco.line.min>
         <jacoco.branch.min>0.69</jacoco.branch.min>
 
         <java.version>25</java.version>

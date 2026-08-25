@@ -12,14 +12,14 @@
     <description>POS Image module</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 31.1% line / 100.0% branch by the gate's own
+        <!-- Coverage ratchet: measured 76.1% line / 91.7% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see.
              The branch floor tolerates one whole branch (6 branches total, one = 17 points).
              The line figure is held down by Spring config classes; the controller is covered. -->
-        <jacoco.line.min>0.28</jacoco.line.min>
-        <jacoco.branch.min>0.83</jacoco.branch.min>
+        <jacoco.line.min>0.73</jacoco.line.min>
+        <jacoco.branch.min>0.88</jacoco.branch.min>
     </properties>
 
     <packaging>jar</packaging>
