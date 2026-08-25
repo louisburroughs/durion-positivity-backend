@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -330,6 +331,271 @@ class AppointmentsServiceNewBehaviorsTest {
         assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
                 .isInstanceOf(AppointmentValidationException.class)
                 .hasMessageContaining("slot");
+    }
+
+    // Coverage gap: createAppointment_Failure_NoServiceRequests (above) never
+    // actually reaches the serviceRequestIds==null branch — its bare request has
+    // no startAt/endAt, so validateTimeRange throws first and the test's
+    // assertThrows still passes for the wrong reason. This test supplies valid
+    // startAt/endAt/CRM ids so the null check itself is the one that fires.
+    @Test
+    void createAppointment_throwsValidation_whenServiceRequestIdsNull_withOtherwiseValidRequest() {
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setResourceId("BAY-01");
+        request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
+        request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
+        request.setServiceRequestIds(null);
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
+                .isInstanceOf(AppointmentValidationException.class)
+                .hasMessageContaining("serviceRequestIds must contain at least one entry");
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    // PRCR-101 follow-up: a fresh Idempotency-Key (repository lookup finds
+    // nothing) must fall through to the normal create path rather than short
+    // circuiting — the existing-appointment branch is only for a REPEATED key.
+    @Test
+    void createAppointment_createsNewAppointment_whenIdempotencyKeyIsFreshAndUnseen() {
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setResourceId("BAY-01");
+        request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
+        request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        when(appointmentRepository.findByIdempotencyKey("fresh-key")).thenReturn(Optional.empty());
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+            Appointment apt = inv.getArgument(0);
+            apt.setAppointmentId(savedId);
+            return apt;
+        });
+
+        AppointmentResponse response = appointmentsService.createAppointment(request, "fresh-key", null);
+
+        assertEquals(savedId, response.getAppointmentId());
+        verify(appointmentRepository).save(any(Appointment.class));
+    }
+
+    // PRCR-101 follow-up: an overlapping appointment on the same resource that is
+    // no longer SCHEDULED (e.g. CANCELLED) must not block rebooking the slot —
+    // only active SCHEDULED bookings are conflicts.
+    @Test
+    void createAppointment_ignoresOverlap_whenExistingAppointmentIsNotScheduled() {
+        Appointment cancelledOverlap = Appointment.builder()
+                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .status(AppointmentStatus.CANCELLED)
+                .resourceId("BAY-01")
+                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
+                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
+                .startAt(Instant.parse("2025-07-01T09:00:00Z"))
+                .endAt(Instant.parse("2025-07-01T10:00:00Z"))
+                .build();
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(cancelledOverlap));
+
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setResourceId("BAY-01");
+        request.setStartAt(Instant.parse("2025-07-01T09:00:00Z"));
+        request.setEndAt(Instant.parse("2025-07-01T10:00:00Z"));
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+            Appointment apt = inv.getArgument(0);
+            apt.setAppointmentId(savedId);
+            return apt;
+        });
+
+        AppointmentResponse response = appointmentsService.createAppointment(request, null, null);
+
+        assertEquals(savedId, response.getAppointmentId());
+    }
+
+    // PRCR-101 follow-up: the conflict filter treats an existing SCHEDULED
+    // appointment as a real conflict as soon as ANY of customer/vehicle/start/end
+    // differs from the incoming request — each disjunct below is exercised in
+    // isolation so all its short-circuit arms are pinned, not just the first.
+    //
+    // Note: createAppointment_throwsConflict_whenSlotOverlaps (above) is commented
+    // as testing "different customer", but its literal UUIDs for customerId and
+    // the mocked existing appointment's crmCustomerId are identical
+    // ("...0001" both), and the mock's unstubbed getCrmVehicleId() defaults to
+    // null versus the request's non-null vehicleId — so that test actually
+    // exercises the VEHICLE arm of the disjunction, not the customer arm. This
+    // test covers the customer arm that the comment claims but the data does not.
+    @Test
+    void createAppointment_throwsConflict_whenOnlyCustomerDiffers() {
+        UUID sharedVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        Instant sharedStart = Instant.parse("2025-07-01T09:00:00Z");
+        Instant sharedEnd = Instant.parse("2025-07-01T10:00:00Z");
+        Appointment existing = Appointment.builder()
+                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .status(AppointmentStatus.SCHEDULED)
+                .resourceId("BAY-01")
+                .crmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000066"))
+                .crmVehicleId(sharedVehicleId)
+                .startAt(sharedStart)
+                .endAt(sharedEnd)
+                .build();
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(existing));
+
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(UUID.fromString("00000000-0000-0000-0000-000000000055")); // different customer
+        request.setCrmVehicleId(sharedVehicleId);
+        request.setResourceId("BAY-01");
+        request.setStartAt(sharedStart);
+        request.setEndAt(sharedEnd);
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
+                .isInstanceOf(AppointmentValidationException.class)
+                .hasMessageContaining("slot");
+    }
+
+    @Test
+    void createAppointment_throwsConflict_whenOnlyVehicleDiffers() {
+        UUID sharedCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        Appointment existing = Appointment.builder()
+                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .status(AppointmentStatus.SCHEDULED)
+                .resourceId("BAY-01")
+                .crmCustomerId(sharedCustomerId)
+                .crmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000077"))
+                .startAt(Instant.parse("2025-07-01T09:00:00Z"))
+                .endAt(Instant.parse("2025-07-01T10:00:00Z"))
+                .build();
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(existing));
+
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(sharedCustomerId);
+        request.setCrmVehicleId(UUID.fromString("00000000-0000-0000-0000-000000000088")); // different vehicle
+        request.setResourceId("BAY-01");
+        request.setStartAt(existing.getStartAt());
+        request.setEndAt(existing.getEndAt());
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
+                .isInstanceOf(AppointmentValidationException.class)
+                .hasMessageContaining("slot");
+    }
+
+    @Test
+    void createAppointment_throwsConflict_whenOnlyStartAtDiffers() {
+        UUID sharedCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        UUID sharedVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        Appointment existing = Appointment.builder()
+                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .status(AppointmentStatus.SCHEDULED)
+                .resourceId("BAY-01")
+                .crmCustomerId(sharedCustomerId)
+                .crmVehicleId(sharedVehicleId)
+                .startAt(Instant.parse("2025-07-01T09:00:00Z"))
+                .endAt(Instant.parse("2025-07-01T10:00:00Z"))
+                .build();
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(existing));
+
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(sharedCustomerId);
+        request.setCrmVehicleId(sharedVehicleId);
+        request.setResourceId("BAY-01");
+        request.setStartAt(Instant.parse("2025-07-01T09:15:00Z")); // overlapping but different start
+        request.setEndAt(existing.getEndAt());
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
+                .isInstanceOf(AppointmentValidationException.class)
+                .hasMessageContaining("slot");
+    }
+
+    @Test
+    void createAppointment_throwsConflict_whenOnlyEndAtDiffers() {
+        UUID sharedCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        UUID sharedVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        Instant sharedStart = Instant.parse("2025-07-01T09:00:00Z");
+        Appointment existing = Appointment.builder()
+                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .status(AppointmentStatus.SCHEDULED)
+                .resourceId("BAY-01")
+                .crmCustomerId(sharedCustomerId)
+                .crmVehicleId(sharedVehicleId)
+                .startAt(sharedStart)
+                .endAt(Instant.parse("2025-07-01T10:00:00Z"))
+                .build();
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(existing));
+
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(sharedCustomerId);
+        request.setCrmVehicleId(sharedVehicleId);
+        request.setResourceId("BAY-01");
+        request.setStartAt(sharedStart);
+        request.setEndAt(Instant.parse("2025-07-01T10:30:00Z")); // overlapping but different end
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        assertThatThrownBy(() -> appointmentsService.createAppointment(request, null, null))
+                .isInstanceOf(AppointmentValidationException.class)
+                .hasMessageContaining("slot");
+    }
+
+    // PRCR-101 follow-up: when the existing SCHEDULED appointment matches the
+    // request exactly (same customer, vehicle, start, end) it is NOT treated as a
+    // conflict — this is the resubmission case without an Idempotency-Key, and
+    // pins the all-four-terms-false arm of the disjunction.
+    @Test
+    void createAppointment_doesNotConflict_whenExistingAppointmentIsExactDuplicate() {
+        UUID sharedCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        UUID sharedVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        Instant sharedStart = Instant.parse("2025-07-01T09:00:00Z");
+        Instant sharedEnd = Instant.parse("2025-07-01T10:00:00Z");
+        Appointment existing = Appointment.builder()
+                .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .status(AppointmentStatus.SCHEDULED)
+                .resourceId("BAY-01")
+                .crmCustomerId(sharedCustomerId)
+                .crmVehicleId(sharedVehicleId)
+                .startAt(sharedStart)
+                .endAt(sharedEnd)
+                .build();
+        when(appointmentRepository.findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(any(), any(), any()))
+                .thenReturn(List.of(existing));
+
+        UUID savedId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        AppointmentCreateRequest request = new AppointmentCreateRequest();
+        request.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        request.setCrmCustomerId(sharedCustomerId);
+        request.setCrmVehicleId(sharedVehicleId);
+        request.setResourceId("BAY-01");
+        request.setStartAt(sharedStart);
+        request.setEndAt(sharedEnd);
+        request.setServiceRequestIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")));
+
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+            Appointment apt = inv.getArgument(0);
+            apt.setAppointmentId(savedId);
+            return apt;
+        });
+
+        AppointmentResponse response = appointmentsService.createAppointment(request, null, null);
+
+        assertEquals(savedId, response.getAppointmentId());
     }
 
     // PRCR-102b: workorderLinkRef set in request must appear in

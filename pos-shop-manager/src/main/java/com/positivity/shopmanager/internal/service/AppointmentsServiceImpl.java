@@ -60,6 +60,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -133,20 +134,12 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 normalizedIdempotencyKey);
 
         validateTimeRange(request.getStartAt(), request.getEndAt());
-        if (request.getServiceRequestIds() == null
-                || request.getServiceRequestIds().isEmpty()) {
-            throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
-        }
+        validateServiceRequestIdsPresent(request.getServiceRequestIds());
         validateCrmIdentifiers(request.getCrmCustomerId(), request.getCrmVehicleId());
 
-        if (normalizedIdempotencyKey != null) {
-            Appointment existing = appointmentRepository
-                    .findByIdempotencyKey(normalizedIdempotencyKey)
-                    .orElse(null);
-            if (existing != null) {
-                ensureIdempotentRequestMatches(existing, request);
-                return toResponse(existing);
-            }
+        Optional<AppointmentResponse> idempotentDuplicate = findIdempotentDuplicate(normalizedIdempotencyKey, request);
+        if (idempotentDuplicate.isPresent()) {
+            return idempotentDuplicate.get();
         }
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
@@ -157,42 +150,115 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         validateCrmRelationship(request.getCrmCustomerId(), request.getCrmVehicleId(), vehicleSnapshot);
 
         // Source eligibility validation (CAP-249 Story #12)
-        if (request.getSourceType() != null) {
-            if (request.getSourceId() == null || request.getSourceId().isBlank()) {
-                throw new AppointmentValidationException("sourceId is required when sourceType is provided");
-            }
-            String facilityId = request.getLocationId().toString();
-            // Guard against duplicate appointment from same source entity
-            String existingAppointmentId = sourceEligibilityService.getExistingAppointmentId(
-                    request.getSourceType().name(), request.getSourceId(), facilityId);
-            if (existingAppointmentId != null) {
-                throw new AppointmentValidationException(
-                        "An appointment already exists for this source entity. appointmentId=" + existingAppointmentId);
-            }
-            if (request.getSourceType() == AppointmentSourceType.ESTIMATE) {
-                sourceEligibilityService.validateEstimateEligibility(request.getSourceId(), facilityId);
-            } else if (request.getSourceType() == AppointmentSourceType.WORK_ORDER) {
-                sourceEligibilityService.validateWorkOrderEligibility(request.getSourceId(), facilityId);
-            }
-        }
+        validateSourceEligibility(request);
+        rejectIfSlotConflicts(request);
 
-        List<Appointment> conflicts = appointmentRepository
+        Appointment saved =
+                persistAppointment(request, actor, normalizedIdempotencyKey, customerSnapshot, vehicleSnapshot);
+        saveServiceRequests(saved, request.getServiceRequestIds());
+        publishAppointmentCreatedEvents(saved);
+
+        return toResponse(saved);
+    }
+
+    private void validateServiceRequestIdsPresent(List<UUID> serviceRequestIds) {
+        if (serviceRequestIds == null || serviceRequestIds.isEmpty()) {
+            throw new AppointmentValidationException("serviceRequestIds must contain at least one entry");
+        }
+    }
+
+    /**
+     * Resolves a repeated {@code Idempotency-Key} to its previously created
+     * appointment.
+     * Empty when no key was supplied or the key has not been seen before, in
+     * which case the caller proceeds with a normal create.
+     *
+     * @throws AppointmentValidationException if the key was seen before but the
+     *                                         request no longer matches what was
+     *                                         originally submitted under it
+     */
+    private Optional<AppointmentResponse> findIdempotentDuplicate(
+            String normalizedIdempotencyKey, @NonNull AppointmentCreateRequest request) {
+        if (normalizedIdempotencyKey == null) {
+            return Optional.empty();
+        }
+        return appointmentRepository
+                .findByIdempotencyKey(normalizedIdempotencyKey)
+                .map(existing -> {
+                    ensureIdempotentRequestMatches(existing, request);
+                    return toResponse(existing);
+                });
+    }
+
+    /**
+     * Validates sourceId/eligibility for a request that names an origin
+     * (ESTIMATE/WORK_ORDER). No-op when {@code sourceType} is absent.
+     *
+     * <p>
+     * {@link AppointmentSourceType} has exactly two constants, so once
+     * {@code sourceType} is non-null and not ESTIMATE it is necessarily
+     * WORK_ORDER; there is no reachable "neither" case to validate.
+     */
+    private void validateSourceEligibility(@NonNull AppointmentCreateRequest request) {
+        if (request.getSourceType() == null) {
+            return;
+        }
+        if (request.getSourceId() == null || request.getSourceId().isBlank()) {
+            throw new AppointmentValidationException("sourceId is required when sourceType is provided");
+        }
+        String facilityId = request.getLocationId().toString();
+        // Guard against duplicate appointment from same source entity
+        String existingAppointmentId = sourceEligibilityService.getExistingAppointmentId(
+                request.getSourceType().name(), request.getSourceId(), facilityId);
+        if (existingAppointmentId != null) {
+            throw new AppointmentValidationException(
+                    "An appointment already exists for this source entity. appointmentId=" + existingAppointmentId);
+        }
+        if (request.getSourceType() == AppointmentSourceType.ESTIMATE) {
+            sourceEligibilityService.validateEstimateEligibility(request.getSourceId(), facilityId);
+        } else if (request.getSourceType() == AppointmentSourceType.WORK_ORDER) {
+            sourceEligibilityService.validateWorkOrderEligibility(request.getSourceId(), facilityId);
+        }
+    }
+
+    private void rejectIfSlotConflicts(@NonNull AppointmentCreateRequest request) {
+        List<Appointment> conflicts = findConflictingAppointments(request);
+        if (!conflicts.isEmpty()) {
+            throw new AppointmentValidationException(
+                    "Requested slot is already booked. " + conflicts.size() + " conflicting appointment(s) found.");
+        }
+    }
+
+    private List<Appointment> findConflictingAppointments(@NonNull AppointmentCreateRequest request) {
+        return appointmentRepository
                 .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
                         request.getLocationId(), request.getEndAt(), request.getStartAt())
                 .stream()
                 .filter(existing -> Objects.equals(existing.getResourceId(), request.getResourceId()))
                 .filter(existing -> existing.getStatus() == AppointmentStatus.SCHEDULED)
-                .filter(existing -> !Objects.equals(existing.getCrmCustomerId(), request.getCrmCustomerId())
-                        || !Objects.equals(existing.getCrmVehicleId(), request.getCrmVehicleId())
-                        || !Objects.equals(existing.getStartAt(), request.getStartAt())
-                        || !Objects.equals(existing.getEndAt(), request.getEndAt()))
+                .filter(existing -> differsFromRequestedSlot(existing, request))
                 .toList();
+    }
 
-        if (!conflicts.isEmpty()) {
-            throw new AppointmentValidationException(
-                    "Requested slot is already booked. " + conflicts.size() + " conflicting appointment(s) found.");
-        }
+    /**
+     * An existing SCHEDULED appointment on the same resource/time window is only
+     * a real conflict if it differs from the request in customer, vehicle, start,
+     * or end — an exact duplicate (e.g. a resubmission without an
+     * Idempotency-Key) is not flagged.
+     */
+    private boolean differsFromRequestedSlot(Appointment existing, AppointmentCreateRequest request) {
+        return !Objects.equals(existing.getCrmCustomerId(), request.getCrmCustomerId())
+                || !Objects.equals(existing.getCrmVehicleId(), request.getCrmVehicleId())
+                || !Objects.equals(existing.getStartAt(), request.getStartAt())
+                || !Objects.equals(existing.getEndAt(), request.getEndAt());
+    }
 
+    private Appointment persistAppointment(
+            @NonNull AppointmentCreateRequest request,
+            String actor,
+            String normalizedIdempotencyKey,
+            Map<String, Object> customerSnapshot,
+            Map<String, Object> vehicleSnapshot) {
         Appointment appointment = Appointment.builder()
                 .status(AppointmentStatus.SCHEDULED)
                 .locationId(request.getLocationId())
@@ -210,8 +276,10 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .sourceId(request.getSourceType() == null ? null : request.getSourceId())
                 .build();
 
-        Appointment saved = appointmentRepository.save(appointment);
-        saveServiceRequests(saved, request.getServiceRequestIds());
+        return appointmentRepository.save(appointment);
+    }
+
+    private void publishAppointmentCreatedEvents(@NonNull Appointment saved) {
         eventPublisher.publishEvent(new AppointmentCreatedEvent(
                 saved.getAppointmentId(),
                 saved.getCrmCustomerId().toString(),
@@ -244,8 +312,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                     saved.getCreatedBy(),
                     clock.instant()));
         }
-
-        return toResponse(saved);
     }
 
     /**
