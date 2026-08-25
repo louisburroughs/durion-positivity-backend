@@ -320,6 +320,179 @@ class ProductDetailDegradationTest {
         assertThat(detail().getAvailability().getLeadTime().getConfidence()).isEqualTo(DataConfidence.LOW);
     }
 
+    // ─── parsing the catalog lead-time hint out of product attributes JSON ───
+    //
+    // These pin the exact tolerance extractCatalogLeadTimeHint()/readInteger()/readString()
+    // have for what another team put in the `attributes` JSON blob: numbers, numbers-as-text,
+    // blank fields, unparsable text, wrong JSON types, and multiple spellings of the same key.
+    // None of it should ever turn into a 500 or an invented lead time.
+
+    @Test
+    @DisplayName("integer min/max attributes become the catalog lead time range")
+    void integerMinMaxAttributesBecomeCatalogRange() {
+        product.setAttributes("{\"leadTimeMinDays\": 2, \"leadTimeMaxDays\": 5}");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        assertThat(leadTime.getMinDays()).isEqualTo(2);
+        assertThat(leadTime.getMaxDays()).isEqualTo(5);
+        assertThat(leadTime.getDisplayText()).isEqualTo("2-5 business days (estimated)");
+        assertThat(leadTime.getConfidence()).isEqualTo(DataConfidence.MEDIUM);
+    }
+
+    @Test
+    @DisplayName("a single leadTimeDays attribute fills in both ends of the range")
+    void exactDaysAttributeFillsBothEnds() {
+        product.setAttributes("{\"leadTimeDays\": 4}");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        assertThat(leadTime.getMinDays()).isEqualTo(4);
+        assertThat(leadTime.getMaxDays()).isEqualTo(4);
+        assertThat(leadTime.getDisplayText()).isEqualTo("4 business days (estimated)");
+    }
+
+    @Test
+    @DisplayName("leadTimeDays only fills in an end of the range that is not already explicit")
+    void exactDaysDoesNotOverrideExplicitMinOrMax() {
+        product.setAttributes("{\"leadTimeDays\": 4, \"leadTimeMinDays\": 2, \"leadTimeMaxDays\": 10}");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        // 4 is a fallback for a missing bound, not an override of one the catalog already gave.
+        assertThat(leadTime.getMinDays()).isEqualTo(2);
+        assertThat(leadTime.getMaxDays()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("min/max attributes written as JSON strings are parsed as numbers")
+    void numericStringAttributesAreParsed() {
+        // Bulk-loaded catalog data frequently arrives with every field as text.
+        product.setAttributes("{\"leadTimeMinDays\": \"3\", \"leadTimeMaxDays\": \"7\"}");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        assertThat(leadTime.getMinDays()).isEqualTo(3);
+        assertThat(leadTime.getMaxDays()).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("a blank value for one key spelling falls through to a populated alias")
+    void blankValueFallsThroughToAlias() {
+        product.setAttributes("{\"leadTimeMinDays\": \"\", \"lead_time_min_days\": 6}");
+
+        // "" is not treated as "6 is missing" and it is not treated as an error either — the
+        // reader just keeps looking at the other accepted spellings of the same field.
+        assertThat(detail().getAvailability().getLeadTime().getMinDays()).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("an unparsable numeric string falls through to a populated alias")
+    void unparsableStringFallsThroughToAlias() {
+        product.setAttributes("{\"leadTimeMinDays\": \"not-a-number\", \"lead_time_min_days\": 8}");
+
+        // A NumberFormatException on one spelling must not abort the whole lookup.
+        assertThat(detail().getAvailability().getLeadTime().getMinDays()).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("a value that is neither a number nor text is skipped in favour of an alias")
+    void nonNumericJsonTypeFallsThroughToAlias() {
+        product.setAttributes("{\"leadTimeMinDays\": true, \"lead_time_min_days\": 9}");
+
+        assertThat(detail().getAvailability().getLeadTime().getMinDays()).isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("unparsable text on every alias leaves the hint absent, not a fabricated range")
+    void garbageOnEveryAliasYieldsNoHint() {
+        product.setAttributes("{\"leadTimeMinDays\": \"abc\", \"leadTimeMaxDays\": \"xyz\"}");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        // Falls all the way back to the same "nothing known" default as no attributes at all.
+        assertThat(leadTime.getMinDays()).isEqualTo(3);
+        assertThat(leadTime.getMaxDays()).isEqualTo(3);
+        assertThat(leadTime.getConfidence()).isEqualTo(DataConfidence.LOW);
+    }
+
+    @Test
+    @DisplayName("an explicit display text overrides the generated one")
+    void explicitDisplayTextOverridesGenerated() {
+        product.setAttributes("{\"leadTimeDisplayText\": \"Ships within a week\"}");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        assertThat(leadTime.getDisplayText()).isEqualTo("Ships within a week");
+        assertThat(leadTime.getConfidence()).isEqualTo(DataConfidence.MEDIUM);
+    }
+
+    @Test
+    @DisplayName("a blank display text falls through to a populated alias")
+    void blankDisplayTextFallsThroughToAlias() {
+        product.setAttributes("{\"leadTimeDisplayText\": \"\", \"lead_time_display_text\": \"Custom text\"}");
+
+        assertThat(detail().getAvailability().getLeadTime().getDisplayText()).isEqualTo("Custom text");
+    }
+
+    @Test
+    @DisplayName("malformed attributes JSON degrades to no hint rather than failing the request")
+    void malformedAttributesJsonYieldsNoHint() {
+        product.setAttributes("{not valid json");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        // Bad data written by another module must not take this endpoint down.
+        assertThat(leadTime.getMinDays()).isEqualTo(3);
+        assertThat(leadTime.getMaxDays()).isEqualTo(3);
+        assertThat(leadTime.getConfidence()).isEqualTo(DataConfidence.LOW);
+    }
+
+    @Test
+    @DisplayName("blank (but non-null) attributes JSON yields no hint, same as no attributes at all")
+    void blankAttributesJsonYieldsNoHint() {
+        product.setAttributes("");
+
+        var leadTime = detail().getAvailability().getLeadTime();
+
+        assertThat(leadTime.getMinDays()).isEqualTo(3);
+        assertThat(leadTime.getConfidence()).isEqualTo(DataConfidence.LOW);
+    }
+
+    @Test
+    @DisplayName("an explicit JSON null for a numeric key alias falls through like a missing key")
+    void explicitJsonNullFallsThroughToAlias() {
+        product.setAttributes("{\"leadTimeMinDays\": null, \"lead_time_min_days\": 5}");
+
+        assertThat(detail().getAvailability().getLeadTime().getMinDays()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("an explicit JSON null for a display-text key alias falls through like a missing key")
+    void explicitJsonNullDisplayTextFallsThroughToAlias() {
+        product.setAttributes("{\"leadTimeDisplayText\": null, \"lead_time_display_text\": \"Ships Monday\"}");
+
+        assertThat(detail().getAvailability().getLeadTime().getDisplayText()).isEqualTo("Ships Monday");
+    }
+
+    @Test
+    @DisplayName("a non-scalar display-text value is ignored in favour of an alias")
+    void nonScalarDisplayTextFallsThroughToAlias() {
+        // readString() has no isString() guard the way readInteger() does — it relies on the
+        // JSON library to hand back null for a value it cannot render as text, which is true
+        // for containers (arrays/objects) but not for scalars: a boolean or number value comes
+        // back as "true"/"5" and would be accepted as-is, matching production behaviour.
+        product.setAttributes("{\"leadTimeDisplayText\": [1, 2], \"lead_time_display_text\": \"Ships Tuesday\"}");
+
+        assertThat(detail().getAvailability().getLeadTime().getDisplayText()).isEqualTo("Ships Tuesday");
+    }
+
+    // Not exercised: parseIntegerValue()'s `raw == null` half of `raw == null || raw.isBlank()`.
+    // It is dead defensively — reached only once `value.isString()` is true, and a textual
+    // JSON node's asString() always yields a real (possibly empty) String, never null — so no
+    // attributes payload can drive it. Left in place as a guard against a future JSON-library
+    // change rather than removed, and left uncovered rather than faked with a mock JsonNode.
+
     // ─── the rest of the view ────────────────────────────────────────────────
 
     @Test
