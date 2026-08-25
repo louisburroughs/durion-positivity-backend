@@ -206,6 +206,28 @@ class BankReconciliationGuardsAndViewsTest {
         }
 
         @Test
+        @DisplayName("a duplicated statement line id dedupes to one line and one amount")
+        void duplicatedStatementLineIdDedupes() {
+            when(reconciliationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            UUID s1 = UUID.randomUUID();
+            UUID g1 = UUID.randomUUID();
+            BankReconciliationLine line = statementLine(s1, new BigDecimal("100.0000"));
+            when(lineRepository.findAllById(List.of(s1, s1))).thenReturn(List.of(line));
+            when(journalEntryLineRepository.findAllById(List.of(g1)))
+                    .thenReturn(List.of(postedGlLine(g1, new BigDecimal("100.0000"), BigDecimal.ZERO)));
+            when(glMatchRepository.existsByGlLineId(g1)).thenReturn(false);
+            when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID)).thenReturn(List.of(line));
+            when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
+                    .thenReturn(List.of());
+
+            // The repository returns the row once, so the statement side nets 100.00 — counting
+            // it per requested id would demand 200.00 of GL for 100.00 of statement.
+            service.match(RECON_ID, matchRequest(List.of(s1, s1), List.of(g1)));
+
+            assertThat(line.getStatus()).isEqualTo(BankReconciliationLineStatus.MATCHED);
+        }
+
+        @Test
         @DisplayName("a statement line already in a match group cannot be matched again")
         void alreadyMatchedStatementLine() {
             UUID s1 = UUID.randomUUID();

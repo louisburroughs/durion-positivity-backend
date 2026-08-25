@@ -227,6 +227,26 @@ class PersonDirectoryServiceTest {
         }
 
         @Test
+        @DisplayName("identity mapping surfaces typed contact points from the replica JSON")
+        void batchLookupMapsTypedContactPoints() {
+            ExtPersonReplica jane = person(ALICE);
+            jane.setFirstName("Jane");
+            jane.setLastName("Smith");
+            jane.setContactPoints("[{\"contactType\":\"EMAIL\",\"value\":\"jane@example.com\",\"primary\":true},"
+                    + "{\"contactType\":\"PHONE_MOBILE\",\"value\":\"+15551234567\",\"primary\":false}]");
+            when(replicaRepository.findByPersonIdIn(List.of(ALICE))).thenReturn(List.of(jane));
+
+            PersonDirectoryService.PersonIdentity identity =
+                    service.fetchPersonIdentities(List.of(ALICE)).get(ALICE);
+
+            // The typed points must survive the JSON round trip and type-partition correctly:
+            // callers read emails() and phones() rather than the raw list.
+            assertThat(identity.displayName()).isEqualTo("Jane Smith");
+            assertThat(identity.emails()).containsExactly("jane@example.com");
+            assertThat(identity.phones()).containsExactly("+15551234567");
+        }
+
+        @Test
         @DisplayName("a null or blank search answers empty without a query")
         void blankSearchAnswersEmpty() {
             assertThat(service.searchPersons(null)).isEmpty();

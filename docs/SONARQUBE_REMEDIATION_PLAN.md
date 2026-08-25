@@ -1,7 +1,7 @@
 # SonarQube Remediation Plan
 
 Status: Phases 1, 2, 3.1–3.5 implemented. Phase 3.6 (`S3776`, 62 findings)
-in progress: **28 of 62 findings addressed** (24 classes) across #1498, #1500
+in progress: **28 of 62 findings addressed** (23 classes) across #1498, #1500
 and #1501 (merged) and part 4 (open at the time of writing); 34 remain.
 Per-finding status is now a `status` column in
 `docs/sonarqube-remediation-inventory.csv`, mapping every row of every phase to
@@ -454,7 +454,7 @@ Sonar's threshold is 15. The distribution is long-tailed: **23 methods score
 By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 `pos-supplier` 6, `pos-warranty` 5, then a tail of 12 modules with 1–3 each.
 
-#### Progress: 28 of 62 findings addressed (24 classes)
+#### Progress: 28 of 62 findings addressed (23 classes)
 
 | # | PR | Method split | Class branch coverage |
 | -: | -- | ------------ | --------------------- |
@@ -539,7 +539,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | done |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 28 of 62 (24 classes) |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 28 of 62 (23 classes) |
 | | **Total** | **267** | **≈38 h** | | |
 
 - Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in
