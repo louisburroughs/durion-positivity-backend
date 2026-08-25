@@ -25,7 +25,9 @@ import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
 import com.positivity.location.service.LocationService;
+import java.time.Clock;
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -65,6 +67,7 @@ public class LocationServiceImpl implements LocationService {
 
     private static final ObjectMapper JSON_MAPPER = JsonMapper.builder().build();
 
+    private final Clock clock;
     private final LocationRepository locationRepository;
     private final LocationParentRepository locationParentRepository;
     private final LocationTypeRepository locationTypeRepository;
@@ -419,7 +422,13 @@ public class LocationServiceImpl implements LocationService {
             throw new IllegalStateException("Circular relationship detected after save");
         }
         // Parent edges travel on the child's location.location.updated fact (issue #892), so
-        // replica consumers see hierarchy changes without a dedicated edge event.
+        // replica consumers see hierarchy changes without a dedicated edge event. The edge write
+        // alone leaves the child row clean, and a clean row gives the publisher's flush no
+        // @Version increment to apply — the fact would carry changed parentRefs under an unchanged
+        // aggregateVersion, breaking the strictly-advancing contract (#1486). Dirty the child
+        // first, the same convention catalog's attribute-table mutations follow.
+        child.setUpdatedAt(Instant.now(clock));
+        locationRepository.saveAndFlush(child);
         locationFactPublisher.locationChanged(child);
         return saved;
     }

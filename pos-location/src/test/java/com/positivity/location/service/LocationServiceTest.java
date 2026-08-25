@@ -3,6 +3,7 @@ package com.positivity.location.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -651,6 +652,13 @@ class LocationServiceTest {
         assertThat(result.getParentId()).isEqualTo(parentId);
         assertThat(result.getChildId()).isEqualTo(childId);
         assertThat(result.getParentType()).isEqualTo("HOME_OFFICE");
+        // The edge write alone leaves the child row clean, so the service must dirty it before
+        // publishing — otherwise the fact's parentRefs change under an unchanged aggregateVersion
+        // and the strictly-advancing publisher contract breaks (#1486).
+        assertThat(child.getUpdatedAt()).isEqualTo(TEST_CLOCK.instant());
+        var inOrder = inOrder(locationRepository, locationFactPublisher);
+        inOrder.verify(locationRepository).saveAndFlush(child);
+        inOrder.verify(locationFactPublisher).locationChanged(child);
     }
 
     @Test
