@@ -158,4 +158,115 @@ class InvoiceTaxBreakdownWriterTest {
         verify(lineTaxRepository, org.mockito.Mockito.times(2)).deleteByInvoiceId(INVOICE_ID);
         verify(lineTaxRepository, org.mockito.Mockito.times(2)).saveAll(any());
     }
+
+    @Test
+    @DisplayName("A non-null response with a null lineItemTaxes list only clears, like a null response")
+    void responseWithNullLineItemTaxes_clearsWithoutInserting() {
+        TaxCalculationResponse response = TaxCalculationResponse.builder()
+                .subtotal(BigDecimal.ZERO)
+                .totalTax(BigDecimal.ZERO)
+                .total(BigDecimal.ZERO)
+                .effectiveTaxRate(BigDecimal.ZERO)
+                .jurisdictions(List.of())
+                .lineItemTaxes(null)
+                .calculatedAt(Instant.parse("2026-07-20T00:00:00Z"))
+                .build();
+
+        writer.replace(INVOICE_ID, response);
+
+        verify(lineTaxRepository, org.mockito.Mockito.never()).saveAll(any());
+        verify(taxSummaryRepository, org.mockito.Mockito.never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("A line with no jurisdictions list contributes no rows, without disturbing sibling lines")
+    void lineWithNullJurisdictions_skipsLineEntirely() {
+        LineItemTax untaxedLine = LineItemTax.builder()
+                .lineItemId("1")
+                .subtotal(new BigDecimal("25.00"))
+                .taxAmount(BigDecimal.ZERO)
+                .total(new BigDecimal("25.00"))
+                .jurisdictions(null)
+                .build();
+        LineItemTax taxedLine = LineItemTax.builder()
+                .lineItemId("2")
+                .subtotal(new BigDecimal("100.00"))
+                .taxAmount(new BigDecimal("7.25"))
+                .total(new BigDecimal("107.25"))
+                .jurisdictions(List.of(jurisdiction(TaxJurisdictionType.STATE, "0.0725", "7.25")))
+                .build();
+
+        writer.replace(INVOICE_ID, response(List.of(untaxedLine, taxedLine)));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InvoiceLineTax>> lineRows = ArgumentCaptor.forClass(List.class);
+        verify(lineTaxRepository).saveAll(lineRows.capture());
+        assertThat(lineRows.getValue()).hasSize(1);
+        assertThat(lineRows.getValue().get(0).getLineItemId()).isEqualTo("2");
+    }
+
+    @Test
+    @DisplayName(
+            "Jurisdiction rows missing type, code, or rate are each skipped defensively; an all-skipped line saves nothing")
+    void incompleteJurisdictionIdentity_skipsEachDefensivelyAndSavesNothingWhenAllInvalid() {
+        JurisdictionTax missingType = JurisdictionTax.builder()
+                .jurisdictionType(null)
+                .code("STATE")
+                .rate(new BigDecimal("0.0725"))
+                .amount(new BigDecimal("7.25"))
+                .build();
+        JurisdictionTax missingCode = JurisdictionTax.builder()
+                .jurisdictionType(TaxJurisdictionType.COUNTY)
+                .code(null)
+                .rate(new BigDecimal("0.0102"))
+                .amount(new BigDecimal("1.02"))
+                .build();
+        JurisdictionTax missingRate = JurisdictionTax.builder()
+                .jurisdictionType(TaxJurisdictionType.CITY)
+                .code("CITY")
+                .rate(null)
+                .amount(new BigDecimal("0.50"))
+                .build();
+        LineItemTax line = LineItemTax.builder()
+                .lineItemId("1")
+                .subtotal(new BigDecimal("100.00"))
+                .taxAmount(new BigDecimal("8.77"))
+                .total(new BigDecimal("108.77"))
+                .jurisdictions(List.of(missingType, missingCode, missingRate))
+                .build();
+
+        writer.replace(INVOICE_ID, response(List.of(line)));
+
+        // Every jurisdiction on the line was defensively skipped, so nothing is left to persist —
+        // a malformed pos-tax response must not silently write partial/garbage rows.
+        verify(lineTaxRepository, org.mockito.Mockito.never()).saveAll(any());
+        verify(taxSummaryRepository, org.mockito.Mockito.never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("Missing line subtotal or jurisdiction amount reconciles to zero rather than NPE-ing")
+    void nullMoneyValuesOnJurisdiction_defaultToZero() {
+        JurisdictionTax jurisdictionWithNullAmount = JurisdictionTax.builder()
+                .jurisdictionType(TaxJurisdictionType.STATE)
+                .code("STATE")
+                .rate(new BigDecimal("0.0725"))
+                .amount(null)
+                .build();
+        LineItemTax lineWithNullSubtotal = LineItemTax.builder()
+                .lineItemId("1")
+                .subtotal(null)
+                .taxAmount(BigDecimal.ZERO)
+                .total(BigDecimal.ZERO)
+                .jurisdictions(List.of(jurisdictionWithNullAmount))
+                .build();
+
+        writer.replace(INVOICE_ID, response(List.of(lineWithNullSubtotal)));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<InvoiceLineTax>> lineRows = ArgumentCaptor.forClass(List.class);
+        verify(lineTaxRepository).saveAll(lineRows.capture());
+        InvoiceLineTax row = lineRows.getValue().get(0);
+        assertThat(row.getTaxableBase()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(row.getTaxAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
 }

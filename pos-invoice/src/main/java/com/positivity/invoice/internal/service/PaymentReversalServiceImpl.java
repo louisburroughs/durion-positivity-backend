@@ -127,6 +127,43 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @Nullable String notes,
             @Nullable String externalReference) {
         requireAuthority(REFUND_PAYMENT);
+        PaymentIntent paymentIntent = resolveCapturedPaymentIntent(invoiceId, paymentIntentId);
+
+        List<RefundRecord> existingRefunds = refundRecordRepository.findByPaymentIntent_Id(paymentIntentId);
+
+        // Idempotent replay guard: a caller retrying after a transport timeout (its refund may
+        // have committed here already) supplies the same externalReference — return the
+        // existing non-FAILED refund instead of paying the customer twice (warranty settlements
+        // pass their settlement id).
+        String normalizedReference = normalizeExternalReference(externalReference);
+        RefundRecord replayed = findReplay(existingRefunds, normalizedReference);
+        if (replayed != null) {
+            return toResult(replayed);
+        }
+
+        requireWithinRefundWindow(paymentIntent);
+
+        BigDecimal alreadyRefunded = sumNonFailed(existingRefunds);
+        BigDecimal refundable = paymentIntent.getCapturedAmount().subtract(alreadyRefunded);
+        requireRefundableCovers(amount, refundable);
+
+        GatewayRefundRequest refundRequest = new GatewayRefundRequest(paymentIntent.getGatewayReference(), amount);
+        GatewayPaymentResult result = paymentGatewayPort.refund(refundRequest);
+
+        RefundRecord saved = refundRecordRepository.save(
+                buildCapturedRefundRecord(paymentIntent, amount, reason, notes, normalizedReference, result));
+        if (saved.getStatus() == RefundStatus.COMPLETED) {
+            paymentEventPublisher.publishPaymentRefunded(saved);
+        }
+        return toResult(saved);
+    }
+
+    /**
+     * Looks up the PaymentIntent and confirms it belongs to {@code invoiceId} and is CAPTURED —
+     * the only state a gateway refund can be issued against.
+     */
+    @NonNull
+    private PaymentIntent resolveCapturedPaymentIntent(@NonNull UUID invoiceId, @NonNull UUID paymentIntentId) {
         PaymentIntent paymentIntent = paymentIntentRepository
                 .findById(paymentIntentId)
                 .orElseThrow(() -> new PaymentIntentNotFoundException("PaymentIntent not found: " + paymentIntentId));
@@ -140,45 +177,65 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             throw new InvalidPaymentStateException(
                     "Payment must be CAPTURED to refund, current: " + paymentIntent.getStatus());
         }
+        return paymentIntent;
+    }
 
-        List<RefundRecord> existingRefunds = refundRecordRepository.findByPaymentIntent_Id(paymentIntentId);
-
-        // Idempotent replay guard: a caller retrying after a transport timeout (its refund may
-        // have committed here already) supplies the same externalReference — return the
-        // existing non-FAILED refund instead of paying the customer twice (warranty settlements
-        // pass their settlement id).
-        String normalizedReference = normalizeExternalReference(externalReference);
-        if (normalizedReference != null) {
-            for (RefundRecord existing : existingRefunds) {
-                if (existing.getStatus() != RefundStatus.FAILED
-                        && normalizedReference.equals(existing.getExternalReference())) {
-                    return toResult(existing);
-                }
-            }
+    /**
+     * Idempotent replay guard for a payment-anchored refund: a retry carrying the same
+     * externalReference returns the existing non-FAILED record instead of paying twice.
+     */
+    @Nullable
+    private static RefundRecord findReplay(
+            @NonNull List<RefundRecord> existingRefunds, @Nullable String normalizedReference) {
+        if (normalizedReference == null) {
+            return null;
         }
+        return existingRefunds.stream()
+                .filter(existing -> existing.getStatus() != RefundStatus.FAILED)
+                .filter(existing -> normalizedReference.equals(existing.getExternalReference()))
+                .findFirst()
+                .orElse(null);
+    }
 
+    private void requireWithinRefundWindow(@NonNull PaymentIntent paymentIntent) {
         Instant capturedAt = paymentIntent.getCreatedAt();
-        if (capturedAt != null) {
-            Instant windowCutoff = Instant.now(clock).minus(REFUND_WINDOW_DAYS, ChronoUnit.DAYS);
-            if (capturedAt.isBefore(windowCutoff) && !SecurityContextHelper.hasAuthority(SUPERVISOR_OVERRIDE)) {
-                throw new PaymentWindowExpiredException("Refund window of 180 days has expired");
-            }
+        if (capturedAt == null) {
+            return;
         }
+        Instant windowCutoff = Instant.now(clock).minus(REFUND_WINDOW_DAYS, ChronoUnit.DAYS);
+        if (capturedAt.isBefore(windowCutoff) && !SecurityContextHelper.hasAuthority(SUPERVISOR_OVERRIDE)) {
+            throw new PaymentWindowExpiredException("Refund window of 180 days has expired");
+        }
+    }
 
-        BigDecimal alreadyRefunded = existingRefunds.stream()
+    /** Sum of amounts across every non-FAILED refund — a FAILED attempt never moved money. */
+    @NonNull
+    private static BigDecimal sumNonFailed(@NonNull List<RefundRecord> refunds) {
+        return refunds.stream()
                 .filter(refund -> refund.getStatus() != RefundStatus.FAILED)
                 .map(RefundRecord::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
-        BigDecimal refundable = paymentIntent.getCapturedAmount().subtract(alreadyRefunded);
+    private static void requireRefundableCovers(@NonNull BigDecimal amount, @NonNull BigDecimal refundable) {
         if (amount.compareTo(refundable) > 0) {
             throw new InsufficientRefundableAmountException(
                     "Insufficient refundable amount: " + refundable + " < " + amount);
         }
+    }
 
-        GatewayRefundRequest refundRequest = new GatewayRefundRequest(paymentIntent.getGatewayReference(), amount);
-        GatewayPaymentResult result = paymentGatewayPort.refund(refundRequest);
-
+    /**
+     * Builds the refund record for a gateway-backed refund; COMPLETED carries the gateway
+     * reference and completion time, FAILED carries neither (still persisted for audit).
+     */
+    @NonNull
+    private RefundRecord buildCapturedRefundRecord(
+            @NonNull PaymentIntent paymentIntent,
+            @NonNull BigDecimal amount,
+            @NonNull RefundReason reason,
+            @Nullable String notes,
+            @Nullable String normalizedReference,
+            @NonNull GatewayPaymentResult result) {
         String requestedBy = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         RefundRecord refundRecord = new RefundRecord();
         refundRecord.setPaymentIntent(paymentIntent);
@@ -195,12 +252,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             refundRecord.setGatewayReference(result.getGatewayReference());
             refundRecord.setCompletedAt(Instant.now(clock));
         }
-
-        RefundRecord saved = refundRecordRepository.save(refundRecord);
-        if (saved.getStatus() == RefundStatus.COMPLETED) {
-            paymentEventPublisher.publishPaymentRefunded(saved);
-        }
-        return toResult(saved);
+        return refundRecord;
     }
 
     @Override
