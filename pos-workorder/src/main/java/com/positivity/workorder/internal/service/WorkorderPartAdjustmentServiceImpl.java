@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderPartAdjustmentService;
 import java.math.BigDecimal;
@@ -62,6 +63,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     private final IdempotencyService idempotencyService;
     private final WorkorderFactPublisher workorderFactPublisher;
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
+    private final WorkorderRepository workorderRepository;
 
     public WorkorderPartAdjustmentServiceImpl(
             WorkorderPartRepository workorderPartRepository,
@@ -69,6 +71,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             IdempotencyService idempotencyService,
             WorkorderFactPublisher workorderFactPublisher,
             PartQuantityDivisibilityService partQuantityDivisibilityService,
+            WorkorderRepository workorderRepository,
             Clock clock) {
         this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
@@ -76,6 +79,21 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         this.idempotencyService = idempotencyService;
         this.workorderFactPublisher = workorderFactPublisher;
         this.partQuantityDivisibilityService = partQuantityDivisibilityService;
+        this.workorderRepository = workorderRepository;
+    }
+
+    /**
+     * Dirties the workorder row itself for a mutation that only touched a
+     * {@code workorder_part} row (#1486): {@link WorkorderFactPublisher} flushes before reading
+     * the aggregate's {@code @Version}, and a clean workorder row gives that flush no pending
+     * increment to pick up, so the emitted fact would carry the new part state under an unchanged
+     * {@code aggregateVersion}.
+     */
+    private void dirtyWorkorder(UUID workorderId) {
+        workorderRepository.findById(workorderId).ifPresent(workorder -> {
+            workorder.setUpdatedAt(Instant.now(clock));
+            workorderRepository.save(workorder);
+        });
     }
 
     /**
@@ -167,6 +185,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 .build();
 
         substitutePart = workorderPartRepository.save(substitutePart);
+        // This substitution only touches workorder_part rows; dirty the workorder row itself so the
+        // publisher's flush has a pending @Version increment to pick up (#1486).
+        dirtyWorkorder(workorderId);
         workorderFactPublisher.markChanged(substitutePart.getWorkorder().getId());
         if (log.isInfoEnabled()) {
             log.info(
@@ -280,6 +301,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         // Update part.quantityReturned
         part.setQuantityReturned(part.getQuantityReturned().add(quantity));
         workorderPartRepository.save(part);
+        // This write only touches the workorder_part row; dirty the workorder row itself so the
+        // publisher's flush has a pending @Version increment to pick up (#1486).
+        dirtyWorkorder(workorderId);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Create ADDITIONAL_RETURN adjustment event (negative quantity)
@@ -395,6 +419,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             part.setLineTotal(newQuantity.multiply(part.getUnitPrice()));
         }
         workorderPartRepository.save(part);
+        // This correction only touches the workorder_part row; dirty the workorder row itself so
+        // the publisher's flush has a pending @Version increment to pick up (#1486).
+        dirtyWorkorder(workorderId);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Create CORRECTION adjustment event

@@ -174,8 +174,28 @@ class WorkorderEventsListenerTest {
     }
 
     @Test
-    @DisplayName("ignores a snapshot no newer than the replica it already holds")
-    void staleWorkorderSnapshotIsIgnored() {
+    @DisplayName("ignores a snapshot strictly older than the replica it already holds")
+    void strictlyOlderWorkorderSnapshotIsIgnored() {
+        ExtWorkorder existing = new ExtWorkorder();
+        existing.setWorkorderId(WORKORDER_ID);
+        existing.setAggregateVersion(5);
+        when(extWorkorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(existing));
+
+        listener.onWorkorderEvent(workorderEnvelope(3));
+
+        verify(extWorkorderRepository, never()).save(any());
+        verify(extWorkorderLineRepository, never()).deleteByWorkorderId(any());
+        // Still recorded: the event was consumed and correctly decided against.
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("applies a workorder snapshot at the same version as the replica it already holds (#1486)")
+    void workorderSnapshotAtTheSameVersionIsApplied() {
+        // Load-bearing: pos-workorder's aggregateVersion strictly advances, so an equal version
+        // means identical content, and a future regenerate-from-state replay would deliberately
+        // resend a fact at the held version to repair a replica with wrong or missing rows.
+        // Skipping on equal (the old `>=` guard) would silently turn that into a no-op (#1486).
         ExtWorkorder existing = new ExtWorkorder();
         existing.setWorkorderId(WORKORDER_ID);
         existing.setAggregateVersion(5);
@@ -183,10 +203,8 @@ class WorkorderEventsListenerTest {
 
         listener.onWorkorderEvent(workorderEnvelope(5));
 
-        verify(extWorkorderRepository, never()).save(any());
-        verify(extWorkorderLineRepository, never()).deleteByWorkorderId(any());
-        // Still recorded: the event was consumed and correctly decided against.
-        verify(processedEventRepository).save(any());
+        verify(extWorkorderRepository).save(existing);
+        assertThat(existing.getAggregateVersion()).isEqualTo(5);
     }
 
     @Test
@@ -229,8 +247,8 @@ class WorkorderEventsListenerTest {
     }
 
     @Test
-    @DisplayName("ignores an estimate snapshot no newer than the replica it already holds")
-    void staleEstimateSnapshotIsIgnored() {
+    @DisplayName("ignores an estimate snapshot strictly older than the replica it already holds")
+    void strictlyOlderEstimateSnapshotIsIgnored() {
         ExtEstimate existing = new ExtEstimate();
         existing.setEstimateId(ESTIMATE_ID);
         existing.setAggregateVersion(9);
@@ -240,5 +258,24 @@ class WorkorderEventsListenerTest {
 
         verify(extEstimateRepository, never()).save(any());
         verify(extEstimateLineRepository, never()).deleteByEstimateId(any());
+    }
+
+    @Test
+    @DisplayName("applies an estimate snapshot at the same version as the replica it already holds (#1486)")
+    void estimateSnapshotAtTheSameVersionIsApplied() {
+        // Load-bearing: pos-workorder's aggregateVersion strictly advances, so an equal version
+        // means identical content, and a future regenerate-from-state replay would deliberately
+        // resend a fact at the held version to repair a replica with wrong or missing rows.
+        // Skipping on equal (the old `>=` guard) would silently turn that into a no-op (#1486).
+        ExtEstimate existing = new ExtEstimate();
+        existing.setEstimateId(ESTIMATE_ID);
+        existing.setAggregateVersion(9);
+        when(extEstimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(existing));
+
+        listener.onWorkorderEvent(estimateEnvelope(9));
+
+        ArgumentCaptor<ExtEstimate> header = ArgumentCaptor.forClass(ExtEstimate.class);
+        verify(extEstimateRepository).save(header.capture());
+        assertThat(header.getValue().getAggregateVersion()).isEqualTo(9);
     }
 }

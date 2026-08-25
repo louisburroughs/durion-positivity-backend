@@ -20,6 +20,7 @@ import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -77,6 +78,9 @@ class WorkorderSubstitutionServiceImplTest {
     @Mock
     private WorkorderFactPublisher workorderFactPublisher;
 
+    @Mock
+    private WorkorderRepository workorderRepository;
+
     private WorkorderSubstitutionServiceImpl service;
 
     @BeforeEach
@@ -88,6 +92,7 @@ class WorkorderSubstitutionServiceImplTest {
                 idempotencyService,
                 new ObjectMapper(),
                 workorderFactPublisher,
+                workorderRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         UsernamePasswordAuthenticationToken token =
@@ -111,6 +116,9 @@ class WorkorderSubstitutionServiceImplTest {
         });
         when(idempotencyService.getExistingPartAdjustmentEventId(anyString(), anyString()))
                 .thenReturn(Optional.empty());
+        Workorder workorder = new Workorder();
+        workorder.setId(WORKORDER_ID);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
     }
 
     @AfterEach

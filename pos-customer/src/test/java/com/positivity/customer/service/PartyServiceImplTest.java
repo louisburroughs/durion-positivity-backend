@@ -107,7 +107,8 @@ class PartyServiceImplTest {
                 emptyOutboxWriterProvider(),
                 org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class),
                 org.mockito.Mockito.mock(com.positivity.customer.service.MarketingConsentService.class),
-                org.mockito.Mockito.mock(com.positivity.customer.service.CustomerInteractionService.class));
+                org.mockito.Mockito.mock(com.positivity.customer.service.CustomerInteractionService.class),
+                org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
     }
 
     private CommercialParty party(UUID id) {

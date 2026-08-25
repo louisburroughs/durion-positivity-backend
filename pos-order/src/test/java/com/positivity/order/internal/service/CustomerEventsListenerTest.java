@@ -86,11 +86,16 @@ class CustomerEventsListenerTest {
     }
 
     private static String billingRulesEnvelope(String creditLimit, String creditHold, String poRequired) {
+        return billingRulesEnvelope(creditLimit, creditHold, poRequired, 2);
+    }
+
+    private static String billingRulesEnvelope(
+            String creditLimit, String creditHold, String poRequired, long version) {
         return """
-                {"eventId":"evt-2","eventType":"%s","aggregateVersion":2,
+                {"eventId":"evt-2","eventType":"%s","aggregateVersion":%d,
                  "payload":{"partyId":"%s","paymentTerms":"NET30","creditLimit":%s,
                    "creditHold":%s,"poRequired":%s}}
-                """.formatted(BillingRulesUpdatedV1.EVENT_TYPE, PARTY_ID, creditLimit, creditHold, poRequired);
+                """.formatted(BillingRulesUpdatedV1.EVENT_TYPE, version, PARTY_ID, creditLimit, creditHold, poRequired);
     }
 
     @Test
@@ -123,8 +128,27 @@ class CustomerEventsListenerTest {
     }
 
     @Test
-    @DisplayName("ignores an update no newer than the replica it already holds")
+    @DisplayName("ignores an update strictly older than the replica it already holds")
     void staleUpdateIsIgnored() {
+        ExtCustomer existing = new ExtCustomer();
+        existing.setPartyId(PARTY_ID);
+        existing.setAggregateVersion(7);
+        when(extCustomerRepository.findById(PARTY_ID)).thenReturn(Optional.of(existing));
+
+        listener.onCustomerEvent(updateEnvelope(6));
+
+        verify(extCustomerRepository, never()).save(any());
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("applies an update with an equal version stamp (#1486, ReplicaVersionGuard)")
+    void appliesEqualVersion() {
+        // Load-bearing: pos-customer's party aggregateVersion strictly advances (committed JPA
+        // @Version, flushed before emit), so an equal version means identical content, and
+        // POST .../facts/replay deliberately resends a fact at the held version to repair a
+        // replica with wrong or missing rows. Skipping on equal (the old `>=` guard) silently
+        // turned replay into a no-op (#1486).
         ExtCustomer existing = new ExtCustomer();
         existing.setPartyId(PARTY_ID);
         existing.setAggregateVersion(7);
@@ -132,8 +156,9 @@ class CustomerEventsListenerTest {
 
         listener.onCustomerEvent(updateEnvelope(7));
 
-        verify(extCustomerRepository, never()).save(any());
-        verify(processedEventRepository).save(any());
+        ArgumentCaptor<ExtCustomer> captor = ArgumentCaptor.forClass(ExtCustomer.class);
+        verify(extCustomerRepository).save(captor.capture());
+        assertThat(captor.getValue().getAggregateVersion()).isEqualTo(7);
     }
 
     @Test
@@ -177,15 +202,30 @@ class CustomerEventsListenerTest {
     }
 
     @Test
-    @DisplayName("ignores billing rules no newer than the replica it already holds")
+    @DisplayName("ignores billing rules strictly older than the replica it already holds")
     void staleBillingRulesAreIgnored() {
         ExtBillingRules existing = new ExtBillingRules();
         existing.setPartyId(PARTY_ID);
         existing.setAggregateVersion(4);
         when(extBillingRulesRepository.findById(PARTY_ID)).thenReturn(Optional.of(existing));
 
-        listener.onCustomerEvent(billingRulesEnvelope("100", "false", "false"));
+        listener.onCustomerEvent(billingRulesEnvelope("100", "false", "false", 3));
 
         verify(extBillingRulesRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("applies billing rules with an equal version stamp (#1486, ReplicaVersionGuard)")
+    void appliesEqualBillingRulesVersion() {
+        ExtBillingRules existing = new ExtBillingRules();
+        existing.setPartyId(PARTY_ID);
+        existing.setAggregateVersion(4);
+        when(extBillingRulesRepository.findById(PARTY_ID)).thenReturn(Optional.of(existing));
+
+        listener.onCustomerEvent(billingRulesEnvelope("100", "false", "false", 4));
+
+        ArgumentCaptor<ExtBillingRules> captor = ArgumentCaptor.forClass(ExtBillingRules.class);
+        verify(extBillingRulesRepository).save(captor.capture());
+        assertThat(captor.getValue().getAggregateVersion()).isEqualTo(4);
     }
 }

@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
@@ -26,9 +27,15 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Consumes {@code customer.events.v1} into the {@code ext_customer} replica (ADR-0044 §6, parity
  * story I2 replica redesign). Same contract as the pos-customer/pos-invoice replica listeners:
- * idempotent via {@code processed_events} in the upsert transaction, stale envelopes
- * (aggregateVersion at or below the replica's) skipped, transient DB errors rethrown for container
- * retry, malformed payloads logged and skipped.
+ * idempotent via {@code processed_events} in the upsert transaction, stale envelopes skipped,
+ * transient DB errors rethrown for container retry, malformed payloads logged and skipped.
+ *
+ * <p>The stale guard on {@code customer.party.updated} and {@code customer.billing-rules.updated}
+ * is {@link ReplicaVersionGuard} (#1486): pos-customer's party {@code aggregateVersion} strictly
+ * advances, so a held row is stale only when its version is strictly greater than the incoming
+ * fact's — an equal version applies, both because it is an idempotent no-op for live traffic and
+ * because it is what would let a future regenerate-from-state replay repair a replica that holds
+ * the version number but wrong or missing data.
  */
 @Slf4j
 @Component
@@ -105,9 +112,13 @@ public class CustomerEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtCustomer existing = extCustomerRepository.findById(partyId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — the
+        // party's aggregateVersion strictly advances, so equal means identical content, and a
+        // future replay would resend the held version deliberately to repair a replica with
+        // wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
-                    "Skipping stale customer event for {} (v{} <= v{})",
+                    "Skipping stale customer event for {} (v{} < v{})",
                     partyId,
                     aggregateVersion,
                     existing.getAggregateVersion());
@@ -131,7 +142,11 @@ public class CustomerEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtBillingRules existing = extBillingRulesRepository.findById(partyId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — the
+        // party's aggregateVersion strictly advances, so equal means identical content, and a
+        // future replay would resend the held version deliberately to repair a replica with
+        // wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug("Skipping stale billing-rules event for {}", partyId);
             return;
         }

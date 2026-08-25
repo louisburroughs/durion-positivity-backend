@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import jakarta.persistence.EntityManager;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +30,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * built from the final persisted state (workorder row + full part-line set). When Kafka
  * publishing is disabled the outbox writer bean is absent and every call is a no-op, so callers
  * never need their own guard.
+ *
+ * <p>{@code Workorder} carries a JPA {@code @Version}, and the envelope's {@code aggregateVersion}
+ * is that counter (#1486): it strictly increments on every committed mutation, so — unlike the
+ * retired {@code Instant.now(clock)}-stamped emission timestamp — two mutations landing in the same
+ * millisecond can never tie. Migration V21 seeded it from wall-clock millis at migration time, so
+ * the published sequence continues above every version consumers already hold. The persistence
+ * context is flushed before reading it, so the increment Hibernate is about to apply is already
+ * reflected in the emitted fact. A mutation that only touches {@code workorder_part} /
+ * {@code workorder_service_line} rows without dirtying the {@code workorder} row itself must dirty
+ * it first (bumping {@code updatedAt}) before calling {@link #markChanged(UUID)}, or the flush here
+ * has no pending {@code @Version} increment to pick up.
  */
 @Slf4j
 @Component
@@ -41,6 +53,7 @@ public class WorkorderFactPublisher {
     private final WorkorderRepository workorderRepository;
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
+    private final EntityManager entityManager;
 
     /** Mark a workorder as changed in the current transaction; one fact is emitted at commit. */
     public void markChanged(@NonNull UUID workorderId) {
@@ -77,6 +90,11 @@ public class WorkorderFactPublisher {
         if (writer == null || pending == null) {
             return;
         }
+        // Flushed before reading aggregateVersion: mutations from this transaction are still
+        // pending in the persistence context, and flushing here forces Hibernate to apply every
+        // pending @Version increment so each emitted fact carries the version its row is about to
+        // commit as, not the one it held before this write (#1486).
+        entityManager.flush();
         for (UUID workorderId : pending) {
             Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
             if (workorder == null) {
@@ -102,7 +120,12 @@ public class WorkorderFactPublisher {
                     services,
                     workorder.getCreatedAt(),
                     workorder.getUpdatedAt());
-            writer.publish(WorkorderUpdatedV1.EVENT_TYPE, WorkorderUpdatedV1.SCHEMA_VERSION, workorderId, payload);
+            writer.publish(
+                    WorkorderUpdatedV1.EVENT_TYPE,
+                    WorkorderUpdatedV1.SCHEMA_VERSION,
+                    workorderId,
+                    workorder.getVersion(),
+                    payload);
         }
     }
 

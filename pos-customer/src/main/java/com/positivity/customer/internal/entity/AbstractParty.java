@@ -18,6 +18,7 @@ import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -111,6 +112,20 @@ public abstract class AbstractParty implements Party {
     @LastModifiedBy
     @Column(name = "modified_by")
     private String modifiedBy;
+
+    /**
+     * The {@code customer.party.updated}/{@code customer.party.deleted} fact-envelope aggregate
+     * version (#1486). JPA optimistic-lock counter that strictly increments on every committed
+     * mutation of this row, so it can never tie the way the legacy {@code updatedAt}-epoch-millis
+     * convention could when two mutations landed in the same millisecond. Seeded from wall-clock
+     * millis at migration time (V30) so the published sequence never regresses for consumers
+     * already holding a replica. {@code TABLE_PER_CLASS} gives every concrete party table
+     * ({@code person_party}, {@code commercial_party}) its own independent column and counter.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    @Schema(description = "Fact-envelope aggregate version; strictly increments per committed mutation (#1486)")
+    private long version;
 
     /** Helper method to validate customer names */
     protected abstract void validateNames();

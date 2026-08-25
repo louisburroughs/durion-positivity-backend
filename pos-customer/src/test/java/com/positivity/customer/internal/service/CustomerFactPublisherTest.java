@@ -20,6 +20,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPersonIdentityUpdatedV1;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -48,6 +49,7 @@ class CustomerFactPublisherTest {
     private final PersonDirectoryService personDirectoryService = mock(PersonDirectoryService.class);
     private final PersonPartyRepository personPartyRepository = mock(PersonPartyRepository.class);
     private final PartyRelationshipRepository partyRelationshipRepository = mock(PartyRelationshipRepository.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
 
     private CustomerFactPublisher publisher;
 
@@ -60,7 +62,8 @@ class CustomerFactPublisherTest {
                 personDirectoryService,
                 personPartyRepository,
                 partyRelationshipRepository,
-                "customer.events.v1");
+                "customer.events.v1",
+                entityManager);
     }
 
     private CommercialParty commercialParty(AccountStatus status, Boolean creditHold) {
@@ -69,6 +72,9 @@ class CustomerFactPublisherTest {
         party.setCustomerNumber("CUST-001");
         party.setLegalName("Acme Corp");
         party.setStatus(status);
+        // Deliberately distinct from TEST_CLOCK's epoch millis, so a test asserting on the retired
+        // emission-millis convention would fail loudly rather than passing by coincidence (#1486).
+        party.setVersion(5L);
         if (creditHold != null) {
             BillingRulesEmbeddable rules = new BillingRulesEmbeddable();
             rules.setCreditHold(creditHold);
@@ -95,6 +101,9 @@ class CustomerFactPublisherTest {
         assertThat(fact.requirementsMet()).isFalse();
         assertThat(fact.creditHold()).isTrue();
         assertThat(fact.personId()).isNull();
+        // Flushed before reading the version, so the fact carries the current @Version (#1486).
+        verify(entityManager).flush();
+        assertThat(captor.getValue().aggregateVersion()).isEqualTo(5L);
     }
 
     @Test
@@ -117,6 +126,7 @@ class CustomerFactPublisherTest {
         person.setPersonId(personId);
         person.setCustomerNumber("CUST-PER-1");
         person.setStatus(AccountStatus.ACTIVE);
+        person.setVersion(11L);
         when(personDirectoryService.fetchPersonIdentitiesQuietly(Set.of(personId)))
                 .thenReturn(Map.of(
                         personId,
@@ -135,6 +145,7 @@ class CustomerFactPublisherTest {
         assertThat(partyFact.personId()).isEqualTo(personId);
         assertThat(partyFact.displayName()).isEqualTo("Jane Smith");
         assertThat(partyFact.requirementsMet()).isTrue();
+        assertThat(captor.getAllValues().get(0).aggregateVersion()).isEqualTo(11L);
 
         CustomerPersonIdentityUpdatedV1 identityFact =
                 (CustomerPersonIdentityUpdatedV1) captor.getAllValues().get(1).payload();
@@ -152,6 +163,7 @@ class CustomerFactPublisherTest {
         person.setPersonPartyId(UUID.randomUUID());
         person.setPersonId(personId);
         person.setStatus(AccountStatus.ACTIVE);
+        person.setVersion(4L);
         when(personPartyRepository.findByPersonId(personId)).thenReturn(Optional.empty());
 
         publisher.partyDeleted(person);
@@ -162,6 +174,10 @@ class CustomerFactPublisherTest {
                 (CustomerPartyDeletedV1) captor.getAllValues().get(0).payload();
         assertThat(deleted.partyId()).isEqualTo(person.getPersonPartyId());
         assertThat(deleted.personId()).isEqualTo(personId);
+        // Tombstone: one past every fact this party has ever published (#1486). No flush — the
+        // row is being deleted, not re-saved, so there is no pending @Version increment to apply.
+        assertThat(captor.getAllValues().get(0).aggregateVersion()).isEqualTo(5L);
+        verify(entityManager, never()).flush();
 
         CustomerPersonIdentityUpdatedV1 identityFact =
                 (CustomerPersonIdentityUpdatedV1) captor.getAllValues().get(1).payload();
@@ -191,5 +207,33 @@ class CustomerFactPublisherTest {
         publisher.personReplicaChanged(personId);
 
         verify(writer, never()).publish(any(), any());
+    }
+
+    @Test
+    @DisplayName("personReplicaChanged dirties the party row before publishing (#1486)")
+    void personReplicaChangedDirtiesTheRowFirst() {
+        // ext_people_contact_person is a side table the PersonParty row has no mapped relationship
+        // to, so nothing here would otherwise dirty the row: the flush inside publishPartyUpdated
+        // would have no pending @Version increment to apply, and the fact would carry a changed
+        // displayName under an unchanged aggregateVersion. Bumping updatedAt and saving first (the
+        // addParentInternal pattern) is what keeps the version strictly advancing.
+        UUID personId = UUID.randomUUID();
+        PersonParty person = new PersonParty();
+        person.setPersonPartyId(UUID.randomUUID());
+        person.setPersonId(personId);
+        person.setStatus(AccountStatus.ACTIVE);
+        person.setVersion(9L);
+        Instant before = person.getUpdatedAt();
+        when(personPartyRepository.findByPersonId(personId)).thenReturn(Optional.of(person));
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(Set.of(personId))).thenReturn(Map.of());
+
+        publisher.personReplicaChanged(personId);
+
+        assertThat(person.getUpdatedAt()).isNotEqualTo(before);
+        verify(personPartyRepository).save(person);
+        verify(entityManager).flush();
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("customer.events.v1"), captor.capture());
+        assertThat(captor.getValue().aggregateVersion()).isEqualTo(9L);
     }
 }

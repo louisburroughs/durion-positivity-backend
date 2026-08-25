@@ -41,6 +41,7 @@ import com.positivity.customer.service.PartyService;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -96,6 +97,7 @@ public class PartyServiceImpl implements PartyService {
     private final CustomerFactPublisher customerFactPublisher;
     private final MarketingConsentService marketingConsentService;
     private final CustomerInteractionService customerInteractionService;
+    private final EntityManager entityManager;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -909,7 +911,7 @@ public class PartyServiceImpl implements PartyService {
         embedded.setDiscountPolicyRef(request.getDiscountPolicyRef());
         party.setBillingRules(embedded);
         partyRepository.save(party);
-        publishBillingRulesUpdated(partyId, embedded);
+        publishBillingRulesUpdated(party, embedded);
         // Credit hold feeds the party fact's requirementsMet verdict — re-emit it (#889).
         customerFactPublisher.partyChanged(party);
         return mapToBillingRuleRef(embedded);
@@ -918,17 +920,20 @@ public class PartyServiceImpl implements PartyService {
     /**
      * ADR-0044 (issue #842): billing-rule changes are facts owned by this module; consumers
      * (pos-accounting) maintain read-only replicas from customer.events.v1. Written through the
-     * outbox inside this transaction — no event on rollback. The envelope's aggregateVersion uses
-     * the update timestamp (epoch millis): CommercialParty has no optimistic-lock version, and
-     * millisecond ordering is sufficient for replica staleness checks on this low-frequency data.
+     * outbox inside this transaction — no event on rollback. The envelope's {@code aggregateVersion}
+     * is {@code CommercialParty}'s JPA {@code @Version} (#1486): {@code billingRules} is
+     * {@code @Embedded} on the party row, so setting it above already dirtied the row this flush
+     * picks up — the increment Hibernate is about to apply is reflected in the emitted fact, the
+     * same as {@link CustomerFactPublisher#partyChanged}.
      */
-    private void publishBillingRulesUpdated(UUID partyId, BillingRulesEmbeddable embedded) {
+    private void publishBillingRulesUpdated(CommercialParty party, BillingRulesEmbeddable embedded) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
         }
+        entityManager.flush();
         BillingRulesUpdatedV1 payload = new BillingRulesUpdatedV1(
-                partyId,
+                party.getPartyId(),
                 embedded.getPoRequired(),
                 embedded.getTaxExempt(),
                 embedded.getCreditHold(),
@@ -944,8 +949,8 @@ public class PartyServiceImpl implements PartyService {
         DomainEventEnvelope<BillingRulesUpdatedV1> envelope = DomainEventEnvelope.of(
                 BillingRulesUpdatedV1.EVENT_TYPE,
                 BillingRulesUpdatedV1.SCHEMA_VERSION,
-                partyId,
-                java.time.Instant.now(clock).toEpochMilli(),
+                party.getPartyId(),
+                party.getVersion(),
                 "pos-customer",
                 null,
                 null,

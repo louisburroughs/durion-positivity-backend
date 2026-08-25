@@ -643,6 +643,12 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (status != part.getStatus()) {
             part.setStatus(status);
             workorderPartRepository.save(part);
+            // This write only touches the workorder_part row; dirty the workorder row itself so the
+            // publisher's flush has a pending @Version increment to pick up (#1486).
+            workorderRepository.findById(workorderId).ifPresent(workorder -> {
+                workorder.setUpdatedAt(Instant.now(clock));
+                workorderRepository.save(workorder);
+            });
             workorderFactPublisher.markChanged(workorderId);
             log.info("Part {} on workorder {} marked COMPLETED by {}", partId, workorderId, actorId);
         }

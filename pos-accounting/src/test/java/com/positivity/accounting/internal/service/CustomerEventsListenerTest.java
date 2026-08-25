@@ -79,7 +79,7 @@ class CustomerEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Stale event (version at or below replica) does not regress the replica")
+    @DisplayName("Stale event (version strictly below the replica's) does not regress the replica")
     void skipsStaleVersions() {
         when(processedEvents.existsById("e-2")).thenReturn(false);
         when(replica.findById(PARTY_ID))
@@ -93,6 +93,50 @@ class CustomerEventsListenerTest {
 
         verify(replica, never()).save(any());
         // Still recorded as processed so redelivery does not loop.
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Applies an event with an equal version stamp (#1486, ReplicaVersionGuard)")
+    void appliesEqualVersion() {
+        // Load-bearing: the party's aggregateVersion strictly advances (committed JPA @Version,
+        // flushed before emit), so an equal version means identical content, and
+        // POST .../facts/replay deliberately resends a fact at the held version to repair a
+        // replica with wrong or missing rows. Skipping on equal (the old `>=` guard) silently
+        // turned replay into a no-op (#1486).
+        when(processedEvents.existsById("e-eq")).thenReturn(false);
+        when(replica.findById(PARTY_ID))
+                .thenReturn(Optional.of(ExtCustomerBillingRules.builder()
+                        .partyId(PARTY_ID)
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.parse("2026-07-08T11:00:00Z"))
+                        .build()));
+
+        listener.onCustomerEvent(event("e-eq", 9));
+
+        ArgumentCaptor<ExtCustomerBillingRules> saved = ArgumentCaptor.forClass(ExtCustomerBillingRules.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("Skips a legacy version-0 event when the replica already holds a real version (#1486)")
+    void skipsVersionZeroEventAgainstARealHeldVersion() {
+        // The publisher always stamps a real, flushed @Version now, so a 0 here can only be a
+        // legacy or malformed envelope; ReplicaVersionGuard treats it as stale against any real
+        // held version rather than special-casing it to always apply (the retired
+        // `&& aggregateVersion > 0` carve-out).
+        when(processedEvents.existsById("e-zero")).thenReturn(false);
+        when(replica.findById(PARTY_ID))
+                .thenReturn(Optional.of(ExtCustomerBillingRules.builder()
+                        .partyId(PARTY_ID)
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.parse("2026-07-08T11:00:00Z"))
+                        .build()));
+
+        listener.onCustomerEvent(event("e-zero", 0));
+
+        verify(replica, never()).save(any());
         verify(processedEvents).save(any());
     }
 

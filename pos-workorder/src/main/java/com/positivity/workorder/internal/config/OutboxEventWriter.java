@@ -32,6 +32,15 @@ import tools.jackson.databind.ObjectMapper;
  * envelope: the callers are transactional relays that know their payload and aggregate id but not
  * the topic, and building the nine-argument envelope at each of them would duplicate the same
  * source-service and clock wiring thirteen times.
+ *
+ * <p>Two {@code publish} overloads exist for two different {@code aggregateVersion} contracts
+ * (#1486). The four-argument form stamps {@code Instant.now(clock).toEpochMilli()} — an
+ * emission-timestamp LWW hint, fine for facts nothing version-guards, but two mutations landing in
+ * the same millisecond tie under it. The five-argument form takes an explicit
+ * {@code aggregateVersion} and MUST be used for facts about a version-guarded aggregate: as of
+ * #1486 that is {@code WorkorderUpdatedV1} and {@code EstimateUpdatedV1}, fed from
+ * {@code Workorder}/{@code Estimate}'s flushed JPA {@code @Version}, which strictly increments on
+ * every committed mutation and so can never tie.
  */
 @Slf4j
 @Component
@@ -55,21 +64,39 @@ public class OutboxEventWriter {
      * at the call site, so the number moves with the payload it describes (#1279). Payloads that
      * have a {@code pos-domain-events} record pass that record's {@code SCHEMA_VERSION}; the
      * module-internal payload types declare their own.
+     *
+     * <p>Stamps {@code Instant.now(clock).toEpochMilli()} as {@code aggregateVersion} — an
+     * emission-timestamp LWW hint (ADR-0044 §6, #897), fine for a fact nothing version-guards, but
+     * not strictly-advancing: two mutations landing in the same millisecond tie. A fact about a
+     * version-guarded aggregate ({@code WorkorderUpdatedV1}, {@code EstimateUpdatedV1} as of #1486)
+     * must use {@link #publish(String, int, UUID, long, Object)} instead, fed from the entity's
+     * flushed {@code @Version}.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(
             @NonNull String eventType, int schemaVersion, @NonNull UUID aggregateId, @NonNull Object payload) {
+        publish(eventType, schemaVersion, aggregateId, Instant.now(clock).toEpochMilli(), payload);
+    }
+
+    /**
+     * Queue a domain event for publication with an explicit {@code aggregateVersion}, as part of
+     * the current transaction. Must be called inside the business transaction ({@code MANDATORY}).
+     *
+     * <p>Use this overload — never the emission-millis four-argument form — for a fact about a
+     * version-guarded aggregate (#1486): {@code aggregateVersion} must come from that aggregate's
+     * flushed JPA {@code @Version}, which strictly increments on every committed mutation, so it
+     * can never tie the way emission-timestamp millis could. The caller is responsible for
+     * flushing the pending mutation before reading the version.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publish(
+            @NonNull String eventType,
+            int schemaVersion,
+            @NonNull UUID aggregateId,
+            long aggregateVersion,
+            @NonNull Object payload) {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType,
-                schemaVersion,
-                aggregateId,
-                // Emission-timestamp LWW hint for replica stale guards (ADR-0044 §6, #897).
-                Instant.now(clock).toEpochMilli(),
-                SOURCE_SERVICE,
-                null,
-                null,
-                payload,
-                clock);
+                eventType, schemaVersion, aggregateId, aggregateVersion, SOURCE_SERVICE, null, null, payload, clock);
         OutboxEvent event = OutboxEvent.builder()
                 .topic(eventsTopic)
                 .recordKey(envelope.recordKey())
