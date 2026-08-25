@@ -1,8 +1,8 @@
 # SonarQube Remediation Plan
 
 Status: Phases 1, 2, 3.1–3.5 implemented. Phase 3.6 (`S3776`, 62 findings)
-in progress: **18 of 62 findings addressed** (15 classes — `PostingRuleEvaluatorImpl`
-carried four findings) across #1498 and #1500 (merged) and #1501 (open); 44 remain.
+in progress: **28 of 62 findings addressed** (24 classes) across #1498, #1500
+and #1501 (merged) and part 4 (open at the time of writing); 34 remain.
 Per-finding status is now a `status` column in
 `docs/sonarqube-remediation-inventory.csv`, mapping every row of every phase to
 the PR that resolved it or its documented no-action reason.
@@ -454,7 +454,7 @@ Sonar's threshold is 15. The distribution is long-tailed: **23 methods score
 By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 `pos-supplier` 6, `pos-warranty` 5, then a tail of 12 modules with 1–3 each.
 
-#### Progress: 18 of 62 findings addressed (15 classes)
+#### Progress: 28 of 62 findings addressed (24 classes)
 
 | # | PR | Method split | Class branch coverage |
 | -: | -- | ------------ | --------------------- |
@@ -465,6 +465,15 @@ By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 | 13 | part 3 | `SegmentResolutionService.loadCommercialCandidates` (24) | 49.0% → 97.4% |
 | 14 | part 3 | `PostingRuleEvaluatorImpl` — four findings in one class (22, 21, 19, 18) | 75.0% → 89.8% |
 | 15 | part 3 | `ReturnOrderServiceImpl.createReturn` (22) | 61.3% → 87.4% |
+
+| 16 | part 4 | `OpenApiModuleValidator.validate` (22) | 91.7% → 100% (+ one dead guard removed) |
+| 17 | part 4 | `TestModeTaxCalculator.resolveRates` (22) | 63.5% → 87.3% |
+| 18 | part 4 | `EdiwheelC11OrderStatusCodec` — two findings (21, 17) | 68.3% → 94.1% |
+| 19 | part 4 | `PostingRuleDefinitionValidator.validateCondition` (20) | 91.5% (already covered) |
+| 20 | part 4 | `AccountTierServiceImpl.calculateTier` (20) | 96.0% → 100% |
+| 21 | part 4 | `PartyRelationshipServiceImpl.getContactsForCommercialAccount` (20) | 89.1% → 97.8% |
+| 22 | part 4 | `PersonDirectoryService.bestMatch` (20) | 44.8% → 85.4% |
+| 23–24 | part 4 | `BankReconciliationServiceImpl` — two findings (19, 18) | 52.2% → 92.2% |
 
 **The recurring finding.** In almost every target, the complexity finding names
 a method but the *untested* branches are in the helper or lambda it delegates
@@ -530,7 +539,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | done |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 18 of 62 (15 classes) |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 28 of 62 (24 classes) |
 | | **Total** | **267** | **≈38 h** | | |
 
 - Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in
