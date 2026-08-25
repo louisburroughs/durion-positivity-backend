@@ -170,24 +170,35 @@ based on each role's documented job function in the seed header.
 | SYSTEM_ADMINISTRATOR | `workorder:events:replay`, `people:compliance:view`, `supplier:audit:read`, `supplier:transmission:read/resolve` |
 | *nobody obvious* | `order:order:charge_on_account`, `inventory:valuation:adjust`, `marketing:*`, `supplier:*` imports — see decisions below (`accounting:period:hard_lock`/`override` are now CONTROLLER's, per §6) |
 
-### Decisions needed (no defensible default)
+### Decisions needed (decisions 1–5 recorded 2026-08-25)
 
-1. **Marketing**: no role owns campaigns. Grant to GENERAL_MANAGER, or create a
-   MARKETING role? (Roles created outside the seed start with zero grants — the seed
-   header documents this — so a new role means a seed change too.)
-2. **Supplier imports** (`supplier:pricecatalog:import`, `supplier:mktcat:import`,
-   `supplier:invoice:fetch`, `supplier:workorderauth:*`): operator-facing or
-   integration/system identity?
-3. **`image:image:store`**: which identities upload images — human roles, or
-   service-to-service traffic that shouldn't use RBAC at all?
+1. ~~**Marketing**~~ — **decided**: the marketing surface (all 9 codes: campaigns,
+   templates, stats) belongs to **ACCOUNT_MANAGER**, consistent with its §6
+   customer-accounts identity. No new MARKETING role. ADMIN gains the codes too
+   (strict-superset rule).
+2. ~~**Supplier imports**~~ — **decided**: the supplier module belongs to the
+   **inventory-control roles — INVENTORY_MANAGER and INVENTORY_CONTROLLER** (which
+   hold identical sets by design, #1373; scope differentiates them). All 12 supplier
+   codes go to both, plus ADMIN. Open sub-question: whether INVENTORY_LEAD also gets
+   the read-only pair (`supplier:stock:inquire`, `supplier:profile:read`) per the
+   §2 matrix recommendation.
+3. ~~**`image:image:store`**~~ — **decided**: image upload belongs to **both admin
+   roles — ADMIN and SYSTEM_ADMINISTRATOR**.
 4. ~~**Period close discipline**~~ — **decided**: a re-created CONTROLLER role owns the
    close cycle and all accounting management; ACCOUNT_MANAGER becomes the
    customer-accounts role. Full mapping in §6; its sub-decisions a–f are also
-   resolved.
-5. **`order:order:charge_on_account`** and **`order:session:approve_variance`**: which
-   manager tier? These gate money movement.
-6. **`invoice:finalize:override` precedent** applies: several of these are deliberate
-   elevation caps — wide grants would defeat their purpose.
+   resolved. Implemented in V24/V25 (PR #1515).
+5. ~~**Money-movement tier**~~ — **decided**: `order:order:charge_on_account` and
+   `order:session:approve_variance` go to **LOCATION_MANAGER, GENERAL_MANAGER and
+   ADMIN**, mirroring the `accounting:customer-credit:refund` holder set (§6
+   decision b) and the `invoice:finalize:override` precedent.
+6. **`invoice:finalize:override` precedent** applies to everything above: several of
+   these codes are deliberate elevation caps — wide grants would defeat their purpose.
+
+**Still open: the recommended-grants matrix above** (warranty, crm engagement,
+inventory operations, order POS flow, tax, workorder rows) is a per-role starting
+recommendation, not a decision — it needs sign-off (with edits) before the remaining
+required-but-ungranted codes are wired.
 
 ---
 
