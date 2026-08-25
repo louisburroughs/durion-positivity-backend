@@ -3,10 +3,14 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.InventoryLotStatus;
+import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +33,9 @@ class LedgerPostingServiceImplTest {
 
     @Autowired
     private InventoryStockSummaryRepository summaryRepository;
+
+    @Autowired
+    private InventoryLotRepository lotRepository;
 
     private static String uniqueSku() {
         return "SKU-" + UUID.randomUUID();
@@ -151,5 +158,72 @@ class LedgerPostingServiceImplTest {
                         .orElseThrow()
                         .getOnHand())
                 .isEqualByComparingTo("7");
+    }
+
+    /**
+     * E2 lot-reconciliation trigger set (odoo-parity E2, #1042): only lots touched by an
+     * on-hand-affecting entry are handed to {@code InventoryLotStatusReconciler}.
+     *
+     * <p>Two seeded lots, opposite starting status, in one batch: the {@code GOODS_RECEIPT}
+     * lot starts {@code CONSUMED} with zero stock — reconciliation flips it {@code ACTIVE} once
+     * the receipt lands, proving the on-hand-affecting entry reached the reconciler. The
+     * {@code ALLOCATION_CREATED} lot starts {@code ACTIVE} with zero stock, which already
+     * satisfies the reconciler's {@code ACTIVE -> CONSUMED} rule — if the allocation entry were
+     * (wrongly) treated as on-hand-affecting, this lot would flip too. It must not: asserting it
+     * stays {@code ACTIVE} pins that {@code affectsOnHand() == false} keeps a lot out of the
+     * touched set even when the entry carries a {@code lotId}.
+     *
+     * <p>Not pinned here: {@code touchesLotOnHand}'s {@code entry.getEventType() == null} arm.
+     * Every posting path that reaches {@code postAll} sets {@code eventType} (it drives the
+     * summary delta computed earlier in the same method), so a saved entry with a null event
+     * type is not a case this service's own callers can produce — left uncovered rather than
+     * faked with a hand-built entry no real caller would send.
+     */
+    @Test
+    void postAll_onlyOnHandAffectingLotEntriesReachLotReconciliation() {
+        String sku = uniqueSku();
+        UUID location = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        InventoryLot receivingLot = lotRepository.save(InventoryLot.builder()
+                .stockItemId(sku)
+                .lotNumber("LOT-RECV-" + UUID.randomUUID())
+                .receivedAt(now)
+                .status(InventoryLotStatus.CONSUMED)
+                .build());
+        InventoryLot allocationOnlyLot = lotRepository.save(InventoryLot.builder()
+                .stockItemId(sku)
+                .lotNumber("LOT-ALLOC-" + UUID.randomUUID())
+                .receivedAt(now)
+                .status(InventoryLotStatus.ACTIVE)
+                .build());
+
+        ledgerPostingService.postAll(List.of(
+                InventoryLedgerEntry.builder()
+                        .stockItemId(sku)
+                        .locationId(location)
+                        .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
+                        .changeInQuantity(BigDecimal.TEN)
+                        .quantityAfter(BigDecimal.TEN)
+                        .transactionUserId("posting-test")
+                        .lotId(receivingLot.getLotId())
+                        .build(),
+                InventoryLedgerEntry.builder()
+                        .stockItemId(sku)
+                        .locationId(location)
+                        .eventType(InventoryLedgerEventType.ALLOCATION_CREATED)
+                        .changeInQuantity(BigDecimal.valueOf(4))
+                        .quantityAfter(BigDecimal.ZERO)
+                        .transactionUserId("posting-test")
+                        .lotId(allocationOnlyLot.getLotId())
+                        .build()));
+
+        assertThat(lotRepository.findById(receivingLot.getLotId()).orElseThrow().getStatus())
+                .isEqualTo(InventoryLotStatus.ACTIVE);
+        assertThat(lotRepository
+                        .findById(allocationOnlyLot.getLotId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(InventoryLotStatus.ACTIVE);
     }
 }

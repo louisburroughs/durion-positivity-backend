@@ -93,59 +93,80 @@ public class SupplierStockHintResolver {
         List<SupplierStockHint> pending = hintRepository.findByResolutionStatusOrderByFetchedAtAsc(
                 SupplierHintResolutionStatus.PENDING,
                 Limit.of(Math.max(1, properties.getResolution().getBatchSize())));
-        int resolved = 0;
-        int unresolved = 0;
-        int notResolvable = 0;
-        int deferred = 0;
+        PassTally tally = new PassTally();
         // Evaluated at most once per pass, and only once some hint actually needs the replica.
         Boolean replicaSeeded = null;
         for (SupplierStockHint hint : pending) {
             String ean = hint.getArticleEan();
             if (ean == null || ean.isBlank()) {
-                // Settled without consulting the replica: no EAN is no EAN whatever we hold, so
-                // this verdict must not be deferred behind an unseeded replica.
-                hint.setResolutionStatus(SupplierHintResolutionStatus.NOT_RESOLVABLE);
-                clearResolution(hint);
-                hintRepository.save(hint);
-                notResolvable++;
+                settleNotResolvable(hint, tally);
                 continue;
             }
-            if (replicaSeeded == null) {
-                replicaSeeded = productCodeReplicaRepository.count() > 0;
-                if (!replicaSeeded) {
-                    log.warn("ext_product_code replica is empty; deferring supplier stock hints that carry an EAN");
-                }
-            }
+            replicaSeeded = replicaSeeded != null ? replicaSeeded : replicaIsSeeded();
             if (!replicaSeeded) {
-                deferred++;
+                tally.deferred++;
                 continue;
             }
-            List<ExtProductCodeReplica> matches = productCodeReplicaRepository.findByCodeTypeAndCode(EAN, ean.trim());
-            if (matches.size() == 1) {
-                hint.setResolvedProductId(matches.getFirst().getProductId());
-                hint.setResolvedAt(Instant.now(clock));
-                hint.setResolvedBy(RESOLVED_BY);
-                hint.setResolutionStatus(SupplierHintResolutionStatus.RESOLVED);
-                resolved++;
-            } else {
-                if (matches.size() > 1) {
-                    // pos-catalog constrains (codeType, code) at the source, so this is a
-                    // replication defect rather than a catalog state. Refused rather than guessed,
-                    // and logged loudly enough to be found.
-                    log.warn(
-                            "ext_product_code replica holds {} products for EAN {}; refusing to resolve hint {}",
-                            matches.size(),
-                            ean,
-                            hint.getHintId());
-                }
-                // Keep the hint and what the vendor said; the next snapshot re-queues the attempt.
-                hint.setResolutionStatus(SupplierHintResolutionStatus.UNRESOLVED);
-                clearResolution(hint);
-                unresolved++;
-            }
-            hintRepository.save(hint);
+            settleAgainstReplica(hint, ean, tally);
         }
-        return new ResolutionPassResult(pending.size(), resolved, unresolved, notResolvable, deferred);
+        return new ResolutionPassResult(
+                pending.size(), tally.resolved, tally.unresolved, tally.notResolvable, tally.deferred);
+    }
+
+    /** Whether the replica has been sent any codes yet — logged once, the moment a hint first needs it. */
+    private boolean replicaIsSeeded() {
+        boolean seeded = productCodeReplicaRepository.count() > 0;
+        if (!seeded) {
+            log.warn("ext_product_code replica is empty; deferring supplier stock hints that carry an EAN");
+        }
+        return seeded;
+    }
+
+    /**
+     * Settles a hint with no EAN: no EAN is no EAN whatever the replica holds, so this verdict
+     * is never deferred behind an unseeded replica.
+     */
+    private void settleNotResolvable(SupplierStockHint hint, PassTally tally) {
+        hint.setResolutionStatus(SupplierHintResolutionStatus.NOT_RESOLVABLE);
+        clearResolution(hint);
+        hintRepository.save(hint);
+        tally.notResolvable++;
+    }
+
+    /** Looks the EAN up in a seeded replica and settles the hint RESOLVED or UNRESOLVED. */
+    private void settleAgainstReplica(SupplierStockHint hint, String ean, PassTally tally) {
+        List<ExtProductCodeReplica> matches = productCodeReplicaRepository.findByCodeTypeAndCode(EAN, ean.trim());
+        if (matches.size() == 1) {
+            hint.setResolvedProductId(matches.getFirst().getProductId());
+            hint.setResolvedAt(Instant.now(clock));
+            hint.setResolvedBy(RESOLVED_BY);
+            hint.setResolutionStatus(SupplierHintResolutionStatus.RESOLVED);
+            tally.resolved++;
+        } else {
+            if (matches.size() > 1) {
+                // pos-catalog constrains (codeType, code) at the source, so this is a
+                // replication defect rather than a catalog state. Refused rather than guessed,
+                // and logged loudly enough to be found.
+                log.warn(
+                        "ext_product_code replica holds {} products for EAN {}; refusing to resolve hint {}",
+                        matches.size(),
+                        ean,
+                        hint.getHintId());
+            }
+            // Keep the hint and what the vendor said; the next snapshot re-queues the attempt.
+            hint.setResolutionStatus(SupplierHintResolutionStatus.UNRESOLVED);
+            clearResolution(hint);
+            tally.unresolved++;
+        }
+        hintRepository.save(hint);
+    }
+
+    /** Outcome counts accumulated while one pass works through its backlog slice. */
+    private static final class PassTally {
+        private int resolved;
+        private int unresolved;
+        private int notResolvable;
+        private int deferred;
     }
 
     /**
