@@ -488,6 +488,136 @@ class MechanicSyncServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // processUpsert update-path branch coverage (payload absent / partial payload)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Update path, null payload: a MECHANIC_UPSERTED event for an EXISTING
+     * mechanic with a null payload must NOT touch firstName/lastName/hireDate,
+     * but must still bump status/version/lastSyncedAt and run the replace-set
+     * skills step (deleteAll with no re-insert, since there is no skills source).
+     */
+    @Test
+    void ac1_mechanicUpserted_existingPerson_nullPayload_preservesNameAndHireDate() {
+        // Arrange
+        String personId = "HR-UPD-NULLPAY-001";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        HrMechanicEvent event = HrMechanicEvent.builder()
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .eventType(HrEventType.MECHANIC_UPSERTED)
+                .personId(personId)
+                .version(4)
+                .occurredAt(Instant.now(FIXED_CLOCK))
+                .payload(null)
+                .build();
+
+        when(hrIntegrationLogRepository.existsByEventId(event.getEventId())).thenReturn(false);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        mechanicSyncService.processHrEvent(event);
+
+        // Assert – name/hireDate untouched, status/version/sync bumped
+        ArgumentCaptor<Mechanic> captor = ArgumentCaptor.forClass(Mechanic.class);
+        verify(mechanicRepository).save(captor.capture());
+        assertThat(captor.getValue().getFirstName()).isEqualTo("Test");
+        assertThat(captor.getValue().getLastName()).isEqualTo("Mechanic");
+        assertThat(captor.getValue().getHireDate()).isEqualTo(LocalDate.of(2022, 1, 1));
+        assertThat(captor.getValue().getStatus()).isEqualTo(MechanicStatus.ACTIVE);
+        assertThat(captor.getValue().getVersion()).isEqualTo(4);
+
+        // Assert – replace-set still runs its delete, but nothing to re-insert
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+        verify(mechanicSkillRepository, never()).saveAll(any());
+    }
+
+    /**
+     * Update path, payload present but hireDate absent: a partial HR payload
+     * (name change without a hireDate) must update firstName/lastName but leave
+     * the stored hireDate untouched — protects against field drift from a
+     * payload that omits a field rather than intentionally clearing it.
+     */
+    @Test
+    void ac1_mechanicUpserted_existingPerson_payloadWithoutHireDate_keepsExistingHireDate() {
+        // Arrange
+        String personId = "HR-UPD-NOHIRE-001";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        HrMechanicEvent.Payload payload = HrMechanicEvent.Payload.builder()
+                .firstName("Updated")
+                .lastName("Name")
+                .hireDate(null)
+                .skills(List.of(HrMechanicEvent.Payload.Skill.builder()
+                        .skillCode("OIL_CHANGE")
+                        .proficiencyLevel(2)
+                        .build()))
+                .build();
+        HrMechanicEvent event = HrMechanicEvent.builder()
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .eventType(HrEventType.MECHANIC_UPSERTED)
+                .personId(personId)
+                .version(4)
+                .occurredAt(Instant.now(FIXED_CLOCK))
+                .payload(payload)
+                .build();
+
+        when(hrIntegrationLogRepository.existsByEventId(event.getEventId())).thenReturn(false);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        mechanicSyncService.processHrEvent(event);
+
+        // Assert – name updated, hireDate preserved from the existing record
+        ArgumentCaptor<Mechanic> captor = ArgumentCaptor.forClass(Mechanic.class);
+        verify(mechanicRepository).save(captor.capture());
+        assertThat(captor.getValue().getFirstName()).isEqualTo("Updated");
+        assertThat(captor.getValue().getLastName()).isEqualTo("Name");
+        assertThat(captor.getValue().getHireDate()).isEqualTo(LocalDate.of(2022, 1, 1));
+    }
+
+    /**
+     * Upsert with payload present but no skills source (skills list null, as
+     * opposed to an empty list): the replace-set step must still delete existing
+     * skills for idempotent re-delivery, but must not attempt to save a skill
+     * list built from a null source.
+     */
+    @Test
+    void ac1_mechanicUpserted_payloadPresentSkillsNull_deletesButDoesNotSaveSkills() {
+        // Arrange
+        String personId = "HR-UPD-NOSKILLS-001";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        HrMechanicEvent.Payload payload = HrMechanicEvent.Payload.builder()
+                .firstName("Test")
+                .lastName("Mechanic")
+                .hireDate(LocalDate.of(2023, 6, 1))
+                .skills(null)
+                .build();
+        HrMechanicEvent event = HrMechanicEvent.builder()
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .eventType(HrEventType.MECHANIC_UPSERTED)
+                .personId(personId)
+                .version(4)
+                .occurredAt(Instant.now(FIXED_CLOCK))
+                .payload(payload)
+                .build();
+
+        when(hrIntegrationLogRepository.existsByEventId(event.getEventId())).thenReturn(false);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        mechanicSyncService.processHrEvent(event);
+
+        // Assert – hireDate from payload applied, but skills step is delete-only
+        ArgumentCaptor<Mechanic> captor = ArgumentCaptor.forClass(Mechanic.class);
+        verify(mechanicRepository).save(captor.capture());
+        assertThat(captor.getValue().getHireDate()).isEqualTo(LocalDate.of(2023, 6, 1));
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+        verify(mechanicSkillRepository, never()).saveAll(any());
+    }
+
+    // -------------------------------------------------------------------------
     // F-07 – Null eventType before switch → throws IllegalArgumentException
     // -------------------------------------------------------------------------
 
