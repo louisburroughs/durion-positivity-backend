@@ -444,21 +444,38 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             if (value == null || value.isNull()) {
                 continue;
             }
-            if (value.isInt()) {
-                return value.asInt();
+            Integer parsed = parseIntegerValue(value);
+            if (parsed != null) {
+                return parsed;
             }
-            if (value.isString()) {
-                String raw = value.asString();
-                if (raw != null && !raw.isBlank()) {
-                    try {
-                        return Integer.parseInt(raw.trim());
-                    } catch (NumberFormatException ignored) {
-                        // Keep trying other keys.
-                    }
-                }
-            }
+            // Not a usable value under this key spelling: keep trying the others.
         }
         return null;
+    }
+
+    /**
+     * Reads one JSON value as an integer, or null if it is not a usable one.
+     *
+     * <p>Accepts a JSON number as-is and a JSON string that parses as an integer; anything else
+     * (blank string, unparsable string, or a value that is neither) is null rather than an
+     * exception — a spelling mismatch in imported catalog data must not fail the whole lookup.
+     */
+    private Integer parseIntegerValue(JsonNode value) {
+        if (value.isInt()) {
+            return value.asInt();
+        }
+        if (!value.isString()) {
+            return null;
+        }
+        String raw = value.asString();
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private String readString(JsonNode node, String... keys) {

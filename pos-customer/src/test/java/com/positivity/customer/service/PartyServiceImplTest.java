@@ -349,6 +349,61 @@ class PartyServiceImplTest {
         assertThat(result.getVehicles().getFirst().getYear()).isEqualTo(2024);
     }
 
+    /**
+     * A cache entry whose {@code Cache.ValueWrapper} exists but unwraps to {@code null} (e.g. a
+     * previously-cached {@code null} value) must be treated the same as a cache miss: fall through
+     * and rebuild from the repositories rather than NPE-ing on {@code cached.getSnapshotMetadata()}.
+     */
+    @Test
+    void buildSnapshotForParty_treatsNullCachedValue_asCacheMiss() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000051");
+        CommercialParty p = party(partyId);
+
+        Cache.ValueWrapper wrapper = mock(Cache.ValueWrapper.class);
+        when(wrapper.get()).thenReturn(null);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(wrapper);
+        when(partyRepository.findByPartyId(partyId)).thenReturn(p);
+        when(partyRelationshipRepository.findActiveByFromPartyId(partyId, LocalDate.of(2024, 1, 1)))
+                .thenReturn(Collections.emptyList());
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getSnapshotMetadata().getSource()).isEqualTo("CRM_API");
+        verify(cache).put(partyId, result);
+    }
+
+    /**
+     * A cached snapshot with no {@code SnapshotMetadata} (defensive case; production always
+     * populates it via {@code createMetadata()}) must be returned as-is: no NPE stamping the
+     * source, and the cache is not re-queried.
+     */
+    @Test
+    void buildSnapshotForParty_returnsCachedSnapshot_whenCachedMetadataMissing() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000052");
+        CrmSnapshotDTO cachedSnapshot = new CrmSnapshotDTO();
+        cachedSnapshot.setSnapshotMetadata(null);
+
+        Cache.ValueWrapper wrapper = mock(Cache.ValueWrapper.class);
+        when(wrapper.get()).thenReturn(cachedSnapshot);
+        when(cacheManager.getCache(CacheConfig.SNAPSHOT_CACHE)).thenReturn(cache);
+        when(cache.get(partyId)).thenReturn(wrapper);
+
+        CrmSnapshotDTO result = service.buildSnapshotForParty(partyId);
+
+        assertThat(result).isSameAs(cachedSnapshot);
+        assertThat(result.getSnapshotMetadata()).isNull();
+        verify(partyRepository, never()).findByPartyId(any());
+    }
+
+    // Deliberately uncovered: the `fresh.getSnapshotMetadata() == null` branch inside
+    // buildSnapshotForParty (guarding the CRM_API source stamp on a freshly-assembled snapshot).
+    // assembleSnapshot and assembleSnapshotForPersonParty both always populate metadata via
+    // createMetadata(), so a fresh snapshot with null metadata cannot occur through any public
+    // entry point today; the null-check is defensive and left uncovered rather than faked with a
+    // contrived subclass/mock of the assembly path.
+
     @Test
     void findPartyById_delegatesToRepository() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -594,6 +649,71 @@ class PartyServiceImplTest {
                         .getResults())
                 .extracting(SearchPartiesResponse.PartySummary::getCustomerNumber)
                 .containsExactly("CUST-100");
+    }
+
+    @Test
+    void browseParties_filtersByPartyType() {
+        CommercialParty commercial = browseable("01", "Acme Corp", "CUST-100", AccountStatus.ACTIVE);
+
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-0000000000d9");
+        PersonParty individual = new PersonParty();
+        individual.setPartyId(UUID.fromString("00000000-0000-0000-0000-0000000000e9"));
+        individual.setPersonId(personId);
+        individual.setStatus(AccountStatus.ACTIVE);
+
+        when(partyRepository.findAll()).thenReturn(List.of(commercial));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of(individual));
+        lenient()
+                .when(personDirectoryService.fetchPersonIdentitiesQuietly(java.util.Set.of(personId)))
+                .thenReturn(java.util.Map.of(personId, identity(personId, "Pat", "Person", null, null)));
+
+        assertThat(service.browseParties(Pageable.unpaged(), null, null, "COMMERCIAL", null, null, null)
+                        .getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getPartyType)
+                .containsExactly(PartyType.COMMERCIAL.toString());
+
+        assertThat(service.browseParties(Pageable.unpaged(), null, null, "PERSON", null, null, null)
+                        .getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getPartyType)
+                .containsExactly(PartyType.PERSON.toString());
+    }
+
+    /**
+     * The name filter's OR-across-legal/display/customerNumber check must tolerate any of those
+     * fields being null on individual rows without NPE-ing, matching on whichever field is present.
+     */
+    @Test
+    void browseParties_nameFilter_toleratesNullLegalDisplayOrCustomerNumber() {
+        CommercialParty noLegalName = browseable("c9", "placeholder", "CUST-777", AccountStatus.ACTIVE);
+        noLegalName.setLegalName(null);
+        noLegalName.setDisplayName("Findable Display");
+
+        CommercialParty noDisplayName = browseable("ca", "Findable Legal", "CUST-778", AccountStatus.ACTIVE);
+        noDisplayName.setDisplayName(null);
+
+        CommercialParty noCustomerNumber = browseable("cb", "Other Co", "CUST-779", AccountStatus.ACTIVE);
+        noCustomerNumber.setDisplayName("Other Co");
+        noCustomerNumber.setCustomerNumber(null);
+
+        when(partyRepository.findAll()).thenReturn(List.of(noLegalName, noDisplayName, noCustomerNumber));
+        when(personPartyRepository.findIndividualCustomers()).thenReturn(List.of());
+
+        // Matches via display name only; a null legalName must not NPE.
+        assertThat(service.browseParties(Pageable.unpaged(), "findable display", null, null, null, null, null)
+                        .getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getPartyId)
+                .containsExactly(noLegalName.getPartyId().toString());
+
+        // Matches via legal name only; a null displayName must not NPE.
+        assertThat(service.browseParties(Pageable.unpaged(), "findable legal", null, null, null, null, null)
+                        .getResults())
+                .extracting(SearchPartiesResponse.PartySummary::getPartyId)
+                .containsExactly(noDisplayName.getPartyId().toString());
+
+        // No row matches; the row with a null customerNumber must not NPE while being checked.
+        assertThat(service.browseParties(Pageable.unpaged(), "no-such-term", null, null, null, null, null)
+                        .getResults())
+                .isEmpty();
     }
 
     @Test

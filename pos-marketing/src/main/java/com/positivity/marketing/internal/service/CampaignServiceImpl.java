@@ -198,34 +198,55 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign.getChannels().isEmpty()) {
             problems.add("no delivery channel selected");
         }
+        problems.addAll(segmentProblems(campaign));
+        problems.addAll(channelTemplateProblems(campaign));
+        problems.addAll(referenceValidator.problems(campaign));
+        return problems;
+    }
+
+    /**
+     * Everything wrong with the campaign's bound segment: no id at all, a replica this module has
+     * not seen yet, an inactive segment, or one whose audienceType (once known) does not match the
+     * campaign's.
+     */
+    private List<String> segmentProblems(Campaign campaign) {
         if (campaign.getSegmentId() == null) {
-            problems.add("no segment bound");
-        } else {
-            Optional<SegmentReplica> segment = segmentReplicaRepository.findById(campaign.getSegmentId());
-            if (segment.isEmpty()) {
-                // Either the segment does not exist or its fact has not reached us yet. Both are
-                // reasons not to schedule; the operator can retry once the replica catches up.
-                problems.add("segment " + campaign.getSegmentId() + " is not known to this module yet");
-            } else {
-                SegmentReplica replica = segment.get();
-                if (!replica.isActive()) {
-                    problems.add("segment " + replica.getName() + " is inactive");
-                }
-                if (replica.getAudienceType() != null
-                        && !campaign.getAudienceType().name().equalsIgnoreCase(replica.getAudienceType())) {
-                    // A commercial campaign bound to an individual segment would render templates
-                    // written for organizations against people, for every recipient.
-                    problems.add("segment audienceType " + replica.getAudienceType() + " does not match campaign "
-                            + campaign.getAudienceType());
-                }
-            }
+            return List.of("no segment bound");
         }
+        Optional<SegmentReplica> segment = segmentReplicaRepository.findById(campaign.getSegmentId());
+        if (segment.isEmpty()) {
+            // Either the segment does not exist or its fact has not reached us yet. Both are
+            // reasons not to schedule; the operator can retry once the replica catches up.
+            return List.of("segment " + campaign.getSegmentId() + " is not known to this module yet");
+        }
+        SegmentReplica replica = segment.get();
+        List<String> problems = new ArrayList<>();
+        if (!replica.isActive()) {
+            problems.add("segment " + replica.getName() + " is inactive");
+        }
+        if (audienceTypeMismatches(campaign, replica)) {
+            // A commercial campaign bound to an individual segment would render templates
+            // written for organizations against people, for every recipient.
+            problems.add("segment audienceType " + replica.getAudienceType() + " does not match campaign "
+                    + campaign.getAudienceType());
+        }
+        return problems;
+    }
+
+    /** A replica with no audienceType on record yet has nothing to compare, so it never mismatches. */
+    private boolean audienceTypeMismatches(Campaign campaign, SegmentReplica replica) {
+        return replica.getAudienceType() != null
+                && !campaign.getAudienceType().name().equalsIgnoreCase(replica.getAudienceType());
+    }
+
+    /** Delivery channels whose template id is missing or no longer resolves. */
+    private List<String> channelTemplateProblems(Campaign campaign) {
+        List<String> problems = new ArrayList<>();
         for (CampaignChannel channel : campaign.getChannels()) {
             if (templateFor(campaign, channel).isEmpty()) {
                 problems.add("no " + channel + " template attached");
             }
         }
-        problems.addAll(referenceValidator.problems(campaign));
         return problems;
     }
 

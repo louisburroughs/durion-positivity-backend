@@ -426,6 +426,33 @@ class CampaignServiceImplTest {
 
             assertThatThrownBy(() -> sut.schedule(CAMPAIGN_ID)).hasMessageContaining("no EMAIL template attached");
         }
+
+        @Test
+        @DisplayName("skips the audienceType match check when the segment replica has not carried one over")
+        void schedule_whenSegmentAudienceTypeUnknown_doesNotReportMismatch() {
+            Campaign existing = campaign(CampaignStatus.DRAFT);
+            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(existing));
+            when(campaignRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+            // Active but the replica's audienceType has not (yet) been populated — nothing to
+            // compare against, so this must not be reported as a mismatch.
+            when(segmentReplicaRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segmentReplica(true, null)));
+            when(templateRepository.findById(EMAIL_TEMPLATE_ID)).thenReturn(Optional.of(new MessageTemplate()));
+
+            assertThat(sut.schedule(CAMPAIGN_ID).status()).isEqualTo("SCHEDULED");
+        }
+
+        @Test
+        @DisplayName("reports a channel with no template id set at all as missing, same as a dangling one")
+        void schedule_whenChannelHasNoTemplateIdAtAll_reportsProblem() {
+            Campaign existing = campaign(CampaignStatus.DRAFT);
+            existing.setChannels(new java.util.HashSet<>(Set.of(CampaignChannel.SMS)));
+            existing.setSmsTemplateId(null);
+            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(existing));
+            when(segmentReplicaRepository.findById(SEGMENT_ID))
+                    .thenReturn(Optional.of(segmentReplica(true, "COMMERCIAL")));
+
+            assertThatThrownBy(() -> sut.schedule(CAMPAIGN_ID)).hasMessageContaining("no SMS template attached");
+        }
     }
 
     @Nested

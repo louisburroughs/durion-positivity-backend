@@ -74,49 +74,69 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
 
     private void processUpsert(HrMechanicEvent event, Mechanic existing) {
         String beforeState = existing != null ? existing.toString() : null;
-        Mechanic mechanic;
-
-        if (existing != null) {
-            if (event.getPayload() != null) {
-                existing.setFirstName(event.getPayload().getFirstName());
-                existing.setLastName(event.getPayload().getLastName());
-                if (event.getPayload().getHireDate() != null) {
-                    existing.setHireDate(event.getPayload().getHireDate());
-                }
-            }
-            existing.setStatus(MechanicStatus.ACTIVE);
-            existing.setVersion(event.getVersion());
-            existing.setLastSyncedAt(Instant.now(clock));
-            mechanic = existing;
-        } else {
-            mechanic = Mechanic.builder()
-                    .personId(event.getPersonId())
-                    .firstName(event.getPayload() != null ? event.getPayload().getFirstName() : null)
-                    .lastName(event.getPayload() != null ? event.getPayload().getLastName() : null)
-                    .hireDate(event.getPayload() != null ? event.getPayload().getHireDate() : null)
-                    .status(MechanicStatus.ACTIVE)
-                    .version(event.getVersion())
-                    .lastSyncedAt(Instant.now(clock))
-                    .build();
-        }
+        Mechanic mechanic = existing != null ? updateExistingMechanic(existing, event) : buildNewMechanic(event);
 
         Mechanic saved = mechanicRepository.save(mechanic);
 
         // AC3: replace-set skills
-        mechanicSkillRepository.deleteAllByMechanicId(saved.getMechanicId());
-        if (event.getPayload() != null && event.getPayload().getSkills() != null) {
-            List<MechanicSkill> skills = event.getPayload().getSkills().stream()
-                    .map(s -> MechanicSkill.builder()
-                            .mechanic(saved)
-                            .skillCode(s.getSkillCode())
-                            .proficiencyLevel(s.getProficiencyLevel())
-                            .build())
-                    .toList();
-            mechanicSkillRepository.saveAll(skills);
-        }
+        replaceMechanicSkills(saved, event);
 
         persistAuditLog(event, beforeState, saved.toString());
         persistIntegrationLog(event);
+    }
+
+    /** Decides which fields an existing mechanic record carries forward vs. takes from the event. */
+    private Mechanic updateExistingMechanic(Mechanic existing, HrMechanicEvent event) {
+        applyPayloadFields(existing, event.getPayload());
+        existing.setStatus(MechanicStatus.ACTIVE);
+        existing.setVersion(event.getVersion());
+        existing.setLastSyncedAt(Instant.now(clock));
+        return existing;
+    }
+
+    /**
+     * Applies name/hireDate from an HR payload onto a mechanic, if present. A missing payload
+     * leaves the mechanic untouched; a payload with no hireDate leaves the existing hireDate
+     * untouched (a partial HR update must not clear a field it didn't send).
+     */
+    private void applyPayloadFields(Mechanic mechanic, HrMechanicEvent.Payload payload) {
+        if (payload == null) {
+            return;
+        }
+        mechanic.setFirstName(payload.getFirstName());
+        mechanic.setLastName(payload.getLastName());
+        if (payload.getHireDate() != null) {
+            mechanic.setHireDate(payload.getHireDate());
+        }
+    }
+
+    private Mechanic buildNewMechanic(HrMechanicEvent event) {
+        HrMechanicEvent.Payload payload = event.getPayload();
+        return Mechanic.builder()
+                .personId(event.getPersonId())
+                .firstName(payload != null ? payload.getFirstName() : null)
+                .lastName(payload != null ? payload.getLastName() : null)
+                .hireDate(payload != null ? payload.getHireDate() : null)
+                .status(MechanicStatus.ACTIVE)
+                .version(event.getVersion())
+                .lastSyncedAt(Instant.now(clock))
+                .build();
+    }
+
+    /** Deletes the mechanic's current skill set and re-inserts from the event's payload, if any. */
+    private void replaceMechanicSkills(Mechanic saved, HrMechanicEvent event) {
+        mechanicSkillRepository.deleteAllByMechanicId(saved.getMechanicId());
+        if (event.getPayload() == null || event.getPayload().getSkills() == null) {
+            return;
+        }
+        List<MechanicSkill> skills = event.getPayload().getSkills().stream()
+                .map(s -> MechanicSkill.builder()
+                        .mechanic(saved)
+                        .skillCode(s.getSkillCode())
+                        .proficiencyLevel(s.getProficiencyLevel())
+                        .build())
+                .toList();
+        mechanicSkillRepository.saveAll(skills);
     }
 
     private void processDeactivation(HrMechanicEvent event, Mechanic existing) {

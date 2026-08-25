@@ -187,24 +187,50 @@ public class AvalaraTaxProvider implements TaxProviderClient {
     @NonNull
     private CreateTransactionModel buildCreateModel(
             @NonNull TaxCalculationRequest request, @NonNull String type, @Nullable String referenceCode) {
-        // #984: a committable calculation becomes a provider document that a later commit/void
-        // must resolve by code (== referenceId). A null id would let AvaTax auto-assign a code the
-        // caller can never reproduce, so reject it here rather than 404 at finalization. Read-only
-        // estimates (committable=false) may omit referenceId — AvaTax does not persist them.
+        requireReferenceIdWhenCommittable(request);
+        TaxProperties.Avalara avalara = properties.getAvalara();
+        AvalaraAddress shipTo = buildShipToAddress(request.getDestinationAddress());
+        List<AvalaraLine> lines = buildLines(request);
+
+        return new CreateTransactionModel(
+                type,
+                avalara.getCompanyCode(),
+                transactionDate(request),
+                customerCode(request),
+                referenceIdCode(request),
+                request.getCurrencyCode(),
+                false,
+                referenceCode,
+                Map.of(SHIP_TO, shipTo),
+                lines);
+    }
+
+    /**
+     * #984: a committable calculation becomes a provider document that a later commit/void must
+     * resolve by code (== referenceId). A null id would let AvaTax auto-assign a code the caller
+     * can never reproduce, so reject it here rather than 404 at finalization. Read-only estimates
+     * (committable=false) may omit referenceId — AvaTax does not persist them.
+     */
+    private static void requireReferenceIdWhenCommittable(@NonNull TaxCalculationRequest request) {
         if (request.isCommittable() && request.getReferenceId() == null) {
             throw new TaxCalculationException(
                     "referenceId is required for a committable tax calculation (it is the provider document code)");
         }
-        TaxProperties.Avalara avalara = properties.getAvalara();
-        TaxCalculationRequest.TaxAddress dest = request.getDestinationAddress();
-        AvalaraAddress shipTo = new AvalaraAddress(
+    }
+
+    @NonNull
+    private static AvalaraAddress buildShipToAddress(TaxCalculationRequest.@Nullable TaxAddress dest) {
+        return new AvalaraAddress(
                 dest == null ? null : dest.getLine1(),
                 dest == null ? null : dest.getLine2(),
                 dest == null ? null : dest.getCity(),
                 dest == null ? null : dest.getRegionCode(),
                 dest == null ? null : dest.getCountryCode(),
                 dest == null ? null : dest.getPostalCode());
+    }
 
+    @NonNull
+    private static List<AvalaraLine> buildLines(@NonNull TaxCalculationRequest request) {
         List<AvalaraLine> lines = new ArrayList<>();
         for (TaxLineItem item : request.getLineItems()) {
             lines.add(new AvalaraLine(
@@ -213,24 +239,29 @@ public class AvalaraTaxProvider implements TaxProviderClient {
                     item.getSubtotal(),
                     item.getTaxCategory(),
                     item.getDescription(),
-                    item.isTaxExempt()
-                            ? item.getExemptionReasonCode() != null
-                                    ? item.getExemptionReasonCode().name()
-                                    : null
-                            : null));
+                    exemptionEntityUseCode(item)));
         }
+        return lines;
+    }
 
-        return new CreateTransactionModel(
-                type,
-                avalara.getCompanyCode(),
-                transactionDate(request),
-                request.getCustomerId() != null ? request.getCustomerId() : "GUEST",
-                request.getReferenceId() != null ? request.getReferenceId().toString() : null,
-                request.getCurrencyCode(),
-                false,
-                referenceCode,
-                Map.of(SHIP_TO, shipTo),
-                lines);
+    /** AvaTax {@code entityUseCode}: the line's exemption reason when it is claimed exempt (story T3). */
+    @Nullable
+    private static String exemptionEntityUseCode(@NonNull TaxLineItem item) {
+        return item.isTaxExempt()
+                ? item.getExemptionReasonCode() != null
+                        ? item.getExemptionReasonCode().name()
+                        : null
+                : null;
+    }
+
+    @NonNull
+    private static String customerCode(@NonNull TaxCalculationRequest request) {
+        return request.getCustomerId() != null ? request.getCustomerId() : "GUEST";
+    }
+
+    @Nullable
+    private static String referenceIdCode(@NonNull TaxCalculationRequest request) {
+        return request.getReferenceId() != null ? request.getReferenceId().toString() : null;
     }
 
     @NonNull
