@@ -130,7 +130,8 @@ public class CatalogFactPublisher {
         publishProduct(writer, product, false, product.getVersion() + 1);
     }
 
-    private void publishProduct(OutboxEventWriter writer, ProductEntity product, boolean active, long aggregateVersion) {
+    private void publishProduct(
+            OutboxEventWriter writer, ProductEntity product, boolean active, long aggregateVersion) {
         Category category = product.getCategory();
         ProductTrackingLevel trackingLevel =
                 product.getTrackingLevel() == null ? ProductTrackingLevel.NONE : product.getTrackingLevel();
@@ -222,7 +223,11 @@ public class CatalogFactPublisher {
     }
 
     private void publishService(
-            OutboxEventWriter writer, ServiceEntity service, boolean active, @Nullable Instant updatedAt, long aggregateVersion) {
+            OutboxEventWriter writer,
+            ServiceEntity service,
+            boolean active,
+            @Nullable Instant updatedAt,
+            long aggregateVersion) {
         CatalogServiceUpdatedV1 payload = new CatalogServiceUpdatedV1(
                 service.getId(),
                 service.getName(),
