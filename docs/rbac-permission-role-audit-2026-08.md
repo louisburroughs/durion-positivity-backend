@@ -2,9 +2,12 @@
 
 Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on this branch**
 (migrations V24–V27 plus code/seed changes; see the §7 status column). Headline drift
-after execution: required-but-ungranted 112 → 94, granted-but-unenforced 77 → 64,
+after execution: required-but-ungranted 112 → 93, granted-but-unenforced 77 → 64,
 unreachable operations 229 → 199, roles 16 → 17 (CONTROLLER). The +14 in dead bits is
-the retired codes keeping their permanent bit indexes, as designed.
+the retired codes keeping their permanent bit indexes, as designed. (The audit script
+now excludes the `AUTHENTICATED` sentinel from its required-set computations — Copilot
+review on PR #1515; the pre-execution counts in the tables below predate that and
+include it as one entry in required-but-ungranted / unregistered / no-bit.)
 One product decision was recorded and mapped in §6: **ACCOUNT_MANAGER becomes
 a customer-accounts (AR-facing) role, and a re-created CONTROLLER role takes all
 accounting management permissions**, including the loose (currently ungranted) ones.
@@ -113,7 +116,8 @@ them work:
   no migration creates either name. Dead alternates —
   `accounting:payment:reverse` is the live path and ACCOUNT_MANAGER holds it.
 - `AUTHENTICATED` — not a defect: the sentinel `RequiredPermissionsOpenApiAutoConfiguration`
-  emits for isAuthenticated-only operations.
+  emits for isAuthenticated-only operations. (`scripts/audit-rbac.py` now excludes it
+  from the required set entirely, so it no longer appears in these lists on re-runs.)
 - `people:timeEntry:` — artifact of dynamic construction at `TimeEntryServiceImpl.java:74`
   (`"people:timeEntry:" + action`); the concrete codes exist and are granted. Note the
   same line also accepts a literal `"admin"` authority that nothing issues — dead code or

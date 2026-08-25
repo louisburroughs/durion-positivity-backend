@@ -90,7 +90,14 @@ for oapi in sorted(root.glob("pos-*/openapi.yaml")):
     op_missing[mod] = len(ops) - len(re.findall(r"x-required-permissions:", text))
     for block in blocks:
         for line in block.strip().splitlines():
-            contract[line.strip().lstrip("- ").strip()].add(mod)
+            entry = line.strip().lstrip("- ").strip()
+            # AUTHENTICATED is the isAuthenticated-only sentinel emitted by
+            # RequiredPermissionsOpenApiAutoConfiguration, not a permission code —
+            # it can never be granted, registered, or bit-indexed, so keep it out
+            # of the required set (op-level reachability special-cases it below).
+            if entry == "AUTHENTICATED":
+                continue
+            contract[entry].add(mod)
 
 # ---- A. granted -------------------------------------------------------------
 seed_path = root / "pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql"
