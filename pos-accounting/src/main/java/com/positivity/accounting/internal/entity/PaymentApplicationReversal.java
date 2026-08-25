@@ -17,7 +17,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * - Reversals are NEW records, not deletions
  * - Original PaymentApplication remains unchanged
  * - Reversals restore invoice balances and payment unapplied amounts
- * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
+ * - Requires elevated permission (accounting:payment:reverse)
  * - Requires non-empty reason for audit trail
  *
  * @see <a href=

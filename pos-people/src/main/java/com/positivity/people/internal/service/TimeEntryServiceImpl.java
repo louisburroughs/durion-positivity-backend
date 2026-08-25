@@ -27,8 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  * <li>Only entries in a {@code PENDING_APPROVAL} or {@code SUBMITTED} state can be
  * processed.</li>
- * <li>The requesting user has the appropriate permissions (e.g., 'admin' or targeted
- * action rights).</li>
+ * <li>The requesting user has the appropriate targeted action permission.</li>
  * <li>A comprehensive audit trail is generated for every decision attempt, including
  * failures due to permission denials or invalid state transitions.</li>
  * </ul>
@@ -70,8 +69,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
     }
 
     private boolean isAllowedToProcess(java.util.Set<String> permissions, String action) {
-        return permissions != null
-                && (permissions.contains("admin") || permissions.contains("people:timeEntry:" + action));
+        return permissions != null && permissions.contains("people:timeEntry:" + action);
     }
 
     private boolean isPendingOrSubmitted(com.positivity.people.internal.enums.TimeEntryStatus status) {

@@ -56,8 +56,8 @@ public class PeopleReportsController {
     @GetMapping("/attendanceJobtimeDiscrepancy")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"people:time:export:read", "accounting:time:export"})
-    @PreAuthorize("hasAnyAuthority('people:time:export:read','" + PeoplePermissions.ACCOUNTING_TIME_EXPORT + "')")
+            scopes = {"accounting:time:export"})
+    @PreAuthorize("hasAnyAuthority('" + PeoplePermissions.ACCOUNTING_TIME_EXPORT + "')")
     public ResponseEntity<List<AttendanceDiscrepancyReportResponse>> getAttendanceDiscrepancyReport(
             @Parameter(description = "Start date (inclusive)", required = true, example = "2026-02-01") @RequestParam
                     LocalDate startDate,
@@ -103,8 +103,8 @@ public class PeopleReportsController {
     @EmitEvent(id = "PEOPLE_TIME_APPROVED_EXPORT_READ", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"people:time:export:read", "accounting:time:export"})
-    @PreAuthorize("hasAnyAuthority('people:time:export:read','" + PeoplePermissions.ACCOUNTING_TIME_EXPORT + "')")
+            scopes = {"accounting:time:export"})
+    @PreAuthorize("hasAnyAuthority('" + PeoplePermissions.ACCOUNTING_TIME_EXPORT + "')")
     @GetMapping("/approvedTime")
     public ResponseEntity<List<ApprovedTimeExportResponse>> getApprovedTimeForExport(
             @Parameter(description = "Start date (inclusive)", required = true, example = "2026-02-01") @RequestParam

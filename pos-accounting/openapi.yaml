@@ -3907,7 +3907,7 @@ paths:
 
         Preconditions: the application must exist, must not already be reversed, and must not belong to a multi-application request.
 
-        Required inputs: applicationId (UUID) as a path parameter and a reason of 10 to 1000 characters for the audit trail; the caller needs accounting:payment:reverse or an ACCOUNTING_ADMIN or AR_MANAGER authority.
+        Required inputs: applicationId (UUID) as a path parameter and a reason of 10 to 1000 characters for the audit trail; the caller needs accounting:payment:reverse authority.
 
         Emits an ACCOUNTING_PAYMENT_APPLICATION_REVERSE event; the reversal is a new record, not a deletion.
 
@@ -3945,15 +3945,11 @@ paths:
       security:
       - bearerAuth:
         - accounting:payment:reverse
-        - ACCOUNTING_ADMIN
-        - AR_MANAGER
       summary: Reverse Payment Application
       tags:
       - Payment Applications
       x-required-permissions:
       - accounting:payment:reverse
-      - ACCOUNTING_ADMIN
-      - AR_MANAGER
   /v1/accounting/payments/{paymentId}/applications:
     post:
       description: 'Applies a receivable payment to one or more invoices atomically, updating each invoice''s balance and status and reducing the payment''s unapplied amount.

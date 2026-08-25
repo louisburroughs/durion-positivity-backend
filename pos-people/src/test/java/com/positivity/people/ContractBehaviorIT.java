@@ -171,7 +171,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("startDate", reportDate.toString())
                         .param("endDate", reportDate.toString())
                         .param("locationId", locationId.toString())
-                        .header("X-Authorities", "people:time:export:read")))
+                        .header("X-Authorities", "accounting:time:export")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].employeeId").value(technicianId.toString()))
                 .andExpect(jsonPath("$[0].employeeName").value("Jane Doe"))
@@ -186,7 +186,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("startDate", "2026-02-17")
                         .param("endDate", "2026-02-16")
                         .param("locationId", locationId.toString())
-                        .header("X-Authorities", "people:time:export:read")))
+                        .header("X-Authorities", "accounting:time:export")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("endDate must be on or after startDate"));
     }
@@ -226,7 +226,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("startDate", "2026-02-16")
                         .param("endDate", "2026-02-16")
                         .param("locationId", locationId.toString())
-                        .header("X-Authorities", "people:time:export:read")))
+                        .header("X-Authorities", "accounting:time:export")))
                 .andExpect(status().isServiceUnavailable());
     }
 

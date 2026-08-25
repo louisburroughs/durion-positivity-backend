@@ -235,7 +235,7 @@ public class PaymentApplicationController {
      * Reverse a payment application (compensating transaction).
      *
      * Business Rules (from Issue #114):
-     * - Requires elevated permission (ACCOUNTING_ADMIN or AR_MANAGER)
+     * - Requires elevated permission (accounting:payment:reverse)
      * - Requires non-empty reason for audit trail
      * - Reversals are NEW records, not deletions
      * - Restores invoice balance and payment unappliedAmount
@@ -247,8 +247,8 @@ public class PaymentApplicationController {
     @PostMapping("/payment-applications/{applicationId}/reverse")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"accounting:payment:reverse", "ACCOUNTING_ADMIN", "AR_MANAGER"})
-    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.PAYMENT_REVERSE + "', 'ACCOUNTING_ADMIN', 'AR_MANAGER')")
+            scopes = {"accounting:payment:reverse"})
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.PAYMENT_REVERSE + "')")
     @Operation(
             operationId = "reversePaymentApplication",
             summary = "Reverse Payment Application",
@@ -261,8 +261,7 @@ public class PaymentApplicationController {
                     Preconditions: the application must exist, must not already be reversed, and must not \
                     belong to a multi-application request.
                     Required inputs: applicationId (UUID) as a path parameter and a reason of 10 to 1000 \
-                    characters for the audit trail; the caller needs accounting:payment:reverse or an \
-                    ACCOUNTING_ADMIN or AR_MANAGER authority.
+                    characters for the audit trail; the caller needs accounting:payment:reverse authority.
                     Emits an ACCOUNTING_PAYMENT_APPLICATION_REVERSE event; the reversal is a new record, not \
                     a deletion.
                     Returns 404 when the application is not found, 409 when it is already reversed, 422 \
