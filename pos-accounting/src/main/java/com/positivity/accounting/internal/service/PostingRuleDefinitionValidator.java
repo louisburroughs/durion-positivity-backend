@@ -110,62 +110,93 @@ public final class PostingRuleDefinitionValidator {
         Map<String, List<SplitLine>> groups = new LinkedHashMap<>();
 
         for (int i = 0; i < linesNode.size(); i++) {
-            JsonNode lineNode = linesNode.get(i);
             String lineField = CONDITIONS_PREFIX + conditionIndex + "].lines[" + i + "]";
-
-            String splitGroup = textOrNull(lineNode, "splitGroup");
-            boolean hasFactor = lineNode.has(FACTOR_PERCENT);
-
-            if (splitGroup == null && !hasFactor) {
-                continue; // plain line — untouched by E1
-            }
-
-            if (lineNode.has("splitGroup") && (splitGroup == null || splitGroup.isBlank())) {
-                violations.add(new RuleViolation(lineField + ".splitGroup", "splitGroup must be a non-blank string"));
-                continue;
-            }
-
-            if (splitGroup == null) {
-                violations.add(new RuleViolation(
-                        lineField + FACTOR_PERCENT_SUFFIX,
-                        "factorPercent requires a splitGroup — a line cannot declare a split factor "
-                                + "outside a split group"));
-                continue;
-            }
-
-            if (!hasFactor) {
-                violations.add(new RuleViolation(
-                        lineField + FACTOR_PERCENT_SUFFIX,
-                        "line in split group '" + splitGroup + "' must declare a factorPercent"));
-                groups.computeIfAbsent(splitGroup, g -> new ArrayList<>())
-                        .add(new SplitLine(i, lineField, null, textOrNull(lineNode, "amountField"), sideOf(lineNode)));
-                continue;
-            }
-
-            BigDecimal factor = parseFactor(lineNode.get(FACTOR_PERCENT));
-            if (factor == null) {
-                violations.add(new RuleViolation(
-                        lineField + FACTOR_PERCENT_SUFFIX, "factorPercent must be a decimal number between 0 and 100"));
-            } else if (factor.compareTo(BigDecimal.ZERO) < 0 || factor.compareTo(ONE_HUNDRED) > 0) {
-                violations.add(new RuleViolation(
-                        lineField + FACTOR_PERCENT_SUFFIX,
-                        "factorPercent must be between 0 and 100 (was " + factor.toPlainString() + ")"));
-                factor = null;
-            } else if (factor.stripTrailingZeros().scale() > MAX_FACTOR_SCALE) {
-                violations.add(new RuleViolation(
-                        lineField + FACTOR_PERCENT_SUFFIX,
-                        "factorPercent supports at most " + MAX_FACTOR_SCALE + " decimal places (was "
-                                + lineNode.get(FACTOR_PERCENT).asString() + ")"));
-                factor = null;
-            }
-
-            groups.computeIfAbsent(splitGroup, g -> new ArrayList<>())
-                    .add(new SplitLine(i, lineField, factor, textOrNull(lineNode, "amountField"), sideOf(lineNode)));
+            validateLine(linesNode.get(i), i, lineField, groups, violations);
         }
 
         for (Map.Entry<String, List<SplitLine>> entry : groups.entrySet()) {
             validateGroup(entry.getKey(), entry.getValue(), conditionIndex, violations);
         }
+    }
+
+    /**
+     * Validates one line's own split declaration and, when it names a usable group, registers it as
+     * a member for the group-level checks.
+     *
+     * <p>A line rejected here for a blank or missing group is <em>not</em> registered — there is no
+     * group to attribute it to — but a member merely missing its factor is, so the group's shared
+     * amountField and side checks still see it.
+     */
+    private static void validateLine(
+            JsonNode lineNode,
+            int lineIndex,
+            String lineField,
+            Map<String, List<SplitLine>> groups,
+            List<RuleViolation> violations) {
+        String splitGroup = textOrNull(lineNode, "splitGroup");
+        boolean hasFactor = lineNode.has(FACTOR_PERCENT);
+
+        if (splitGroup == null && !hasFactor) {
+            return; // plain line — untouched by E1
+        }
+
+        if (lineNode.has("splitGroup") && (splitGroup == null || splitGroup.isBlank())) {
+            violations.add(new RuleViolation(lineField + ".splitGroup", "splitGroup must be a non-blank string"));
+            return;
+        }
+
+        if (splitGroup == null) {
+            violations.add(new RuleViolation(
+                    lineField + FACTOR_PERCENT_SUFFIX,
+                    "factorPercent requires a splitGroup — a line cannot declare a split factor "
+                            + "outside a split group"));
+            return;
+        }
+
+        if (!hasFactor) {
+            violations.add(new RuleViolation(
+                    lineField + FACTOR_PERCENT_SUFFIX,
+                    "line in split group '" + splitGroup + "' must declare a factorPercent"));
+            groups.computeIfAbsent(splitGroup, g -> new ArrayList<>())
+                    .add(new SplitLine(
+                            lineIndex, lineField, null, textOrNull(lineNode, "amountField"), sideOf(lineNode)));
+            return;
+        }
+
+        BigDecimal factor = validatedFactor(lineNode, lineField, violations);
+        groups.computeIfAbsent(splitGroup, g -> new ArrayList<>())
+                .add(new SplitLine(
+                        lineIndex, lineField, factor, textOrNull(lineNode, "amountField"), sideOf(lineNode)));
+    }
+
+    /**
+     * Parses and range-checks a declared factorPercent.
+     *
+     * @return the factor, or {@code null} when it was rejected — the member still joins its group
+     *     so the sum check can report against the surviving factors
+     */
+    @Nullable
+    private static BigDecimal validatedFactor(JsonNode lineNode, String lineField, List<RuleViolation> violations) {
+        BigDecimal factor = parseFactor(lineNode.get(FACTOR_PERCENT));
+        if (factor == null) {
+            violations.add(new RuleViolation(
+                    lineField + FACTOR_PERCENT_SUFFIX, "factorPercent must be a decimal number between 0 and 100"));
+            return null;
+        }
+        if (factor.compareTo(BigDecimal.ZERO) < 0 || factor.compareTo(ONE_HUNDRED) > 0) {
+            violations.add(new RuleViolation(
+                    lineField + FACTOR_PERCENT_SUFFIX,
+                    "factorPercent must be between 0 and 100 (was " + factor.toPlainString() + ")"));
+            return null;
+        }
+        if (factor.stripTrailingZeros().scale() > MAX_FACTOR_SCALE) {
+            violations.add(new RuleViolation(
+                    lineField + FACTOR_PERCENT_SUFFIX,
+                    "factorPercent supports at most " + MAX_FACTOR_SCALE + " decimal places (was "
+                            + lineNode.get(FACTOR_PERCENT).asString() + ")"));
+            return null;
+        }
+        return factor;
     }
 
     private static void validateGroup(
