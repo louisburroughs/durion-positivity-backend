@@ -27,14 +27,12 @@ public interface ReceivingService {
      * @param request     the source document identifier and entry method
      * @param actorUserId the authenticated user initiating the session
      * @return the created receiving session with pre-populated lines
-     * @throws com.positivity.inventory.internal.exception.SourceDocumentNotFoundException        if
-     *                                                                                            PO/ASN
-     *                                                                                            not
-     *                                                                                            found
+     * @throws com.positivity.inventory.internal.exception.SourceDocumentNotFoundException if the
+     *     source document id cannot even parse as a purchase order identifier
+     * @throws com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException
+     *     if the purchase order id is well-formed but absent from the projection
      * @throws com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException if
-     *                                                                                            PO/ASN
-     *                                                                                            already
-     *                                                                                            closed
+     *     PO/ASN already closed
      */
     @NonNull
     ReceivingSessionResponse createReceivingSession(

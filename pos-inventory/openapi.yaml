@@ -2527,7 +2527,7 @@ paths:
 
         Emits an INVENTORY_GOODS_RECEIPT_CREATE event, decrements the purchase order''s open balance, moves the PO to PARTIALLY_RECEIVED or FULLY_RECEIVED, and updates the linked ASN''s received quantities and status.
 
-        Returns 403 when the receipt exceeds the open balance without the override authority, 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase order is unknown or not receivable, and 422 when a UoM has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
+        Returns 403 when the caller lacks inventory:goods_receipt:create, 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase order is unknown or not receivable, and 422 when a UoM has no conversion path, a LOT-tracked line omits lotNumber, a serialized line''s serial count mismatches the received quantity, or the receipt exceeds the open balance without the override authority (OVER_RECEIPT_NOT_PERMITTED).
 
         '
       operationId: createGoodsReceipt
@@ -2587,7 +2587,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: UoM conversion undefined, lot number required, or serial count mismatch
+          description: UoM conversion undefined, lot number required, serial count mismatch, or over-receipt without the override authority (OVER_RECEIPT_NOT_PERMITTED)
       security:
       - bearerAuth:
         - inventory:goods_receipt:create
@@ -4521,17 +4521,17 @@ paths:
       - inventory:putaway:view
   /v1/inventory/putaway/tasks/generate:
     post:
-      description: 'Generates one UNASSIGNED putaway task per received line of a goods receipt, sourced from the staging location, with the suggested destination resolved by the highest-priority enabled putaway rule or the default location when no rule exists.
+      description: 'Generates one UNASSIGNED putaway task per received line of a goods receipt, sourced from the receipt''s staging location, with the suggested destination resolved by the highest-priority enabled putaway rule or the default location when no rule exists.
 
         Use this tool once staged goods need storage assignments; do not use executePutaway, which performs the physical move for one task, and do not use claimPutawayTask, which assigns an existing task to a worker.
 
-        Preconditions: the goods receipt named by sourceReceiptId must exist; putaway rules are optional.
+        Preconditions: the goods receipt named by sourceReceiptId must exist and its stock must actually be at the staging location - a receipt that placed stock directly on hand elsewhere (the ASN direct-to-location path) has nothing staged to put away; putaway rules are optional, but the resolved destination must be valid for the SKU under replenishment policy.
 
         Required inputs: sourceReceiptId (UUID string) plus either lineItems, each naming productId (UUID string) and a quantity of at least 1, or the legacy productId/quantity pair, but never both forms together.
 
         Emits an INVENTORY_PUTAWAY_TASK_GENERATE event; the tasks are created UNASSIGNED and no stock moves until executePutaway runs.
 
-        Returns 404 when the goods receipt does not exist, and 400 when both line forms are supplied, neither is supplied, an id is not a valid UUID, or a quantity is below 1.
+        Returns 404 when the goods receipt does not exist, 422 with RECEIPT_NOT_STAGED when the receipt''s stock is not at the staging location or LOCATION_NOT_VALID_FOR_SKU when the resolved destination is not valid for the SKU under replenishment policy (whole request refused, no tasks persisted), and 400 when both line forms are supplied, neither is supplied, an id is not a valid UUID, or a quantity is below 1.
 
         '
       operationId: generatePutawayTasks
@@ -4575,6 +4575,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Goods receipt not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Generation refused: RECEIPT_NOT_STAGED (receipt placed stock directly on hand; nothing staged to put away) or LOCATION_NOT_VALID_FOR_SKU (resolved destination not valid for the SKU under replenishment policy)'
       security:
       - bearerAuth:
         - inventory:putaway:generate
@@ -4718,7 +4724,7 @@ paths:
 
         Emits an INVENTORY_RECEIVING_SESSION_CREATE event; no stock is posted, the session only stages expected quantities until items are received.
 
-        Returns 404 when no such purchase order has been projected, 400 when it is already fully received, is not in a receivable status, or entryMethod is not a known value, and 422 when the source document type is not a purchase order.
+        Returns 409 (SOURCE_DOCUMENT_LINES_UNAVAILABLE) when sourceDocumentId is a well-formed purchase order id absent from this service''s projection - the projection may simply not have caught up yet, or the id may be unknown, and this service cannot tell which; retry after a few seconds, per the response''s nextAction - 404 when sourceDocumentId cannot even be parsed as a purchase order identifier, 400 when the purchase order is already fully received, is not in a receivable status, or entryMethod is not a known value, and 422 when the source document type is not a purchase order.
 
         '
       operationId: createReceivingSession
@@ -4759,7 +4765,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: No such purchase order has been projected into pos-inventory
+          description: sourceDocumentId does not parse as a purchase order identifier
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: SOURCE_DOCUMENT_LINES_UNAVAILABLE - the purchase order's line projection has not caught up (or the id is unknown); retryable, see nextAction
         '422':
           content:
             application/json:

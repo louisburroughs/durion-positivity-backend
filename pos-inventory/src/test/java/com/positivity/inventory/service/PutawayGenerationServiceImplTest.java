@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
@@ -15,6 +18,8 @@ import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
+import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
+import com.positivity.inventory.internal.exception.ReceiptNotStagedException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
@@ -23,6 +28,7 @@ import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.service.ProximitySourcingStrategy;
 import com.positivity.inventory.internal.service.PutawayDestinationResolver;
 import com.positivity.inventory.internal.service.PutawayGenerationServiceImpl;
+import com.positivity.inventory.internal.service.StagingLocationResolver;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PutawayGenerationServiceImplTest {
     private static final UUID DEST_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID STAGING_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     @Mock
     private PutawayRuleRepository putawayRuleRepository;
@@ -56,6 +63,9 @@ class PutawayGenerationServiceImplTest {
     @Mock
     private PutawayValidationService putawayValidationService;
 
+    @Mock
+    private StagingLocationResolver stagingLocationResolver;
+
     private PutawayGenerationServiceImpl service;
 
     @BeforeEach
@@ -66,10 +76,16 @@ class PutawayGenerationServiceImplTest {
                 proximitySourcingStrategy,
                 putawayValidationService);
         service = new PutawayGenerationServiceImpl(
-                putawayRuleRepository, putawayTaskRepository, goodsReceiptRepository, destinationResolver);
+                putawayRuleRepository,
+                putawayTaskRepository,
+                goodsReceiptRepository,
+                destinationResolver,
+                stagingLocationResolver,
+                putawayValidationService);
         lenient()
                 .when(goodsReceiptRepository.findById(any(UUID.class)))
                 .thenAnswer(inv -> Optional.of(receipt(inv.getArgument(0))));
+        lenient().when(stagingLocationResolver.resolveStagingLocationId()).thenReturn(STAGING_LOCATION);
     }
 
     @Test
@@ -92,6 +108,7 @@ class PutawayGenerationServiceImplTest {
         PutawayTaskResponse response = responses.get(0);
         assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.UNASSIGNED.toString());
         assertThat(response.getSuggestedDestinationLocationId()).isEqualTo(DEST_A);
+        assertThat(response.getSourceLocationId()).isEqualTo(STAGING_LOCATION);
     }
 
     @Test
@@ -330,9 +347,54 @@ class PutawayGenerationServiceImplTest {
                 .hasMessage("Either lineItems or productId/quantity is required");
     }
 
+    @Test
+    void generateTasksForReceipt_receiptNotAtStagingLocation_throwsReceiptNotStagedException() {
+        UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID directOnHandLocation = UUID.fromString("00000000-0000-0000-0000-0000000000f0");
+        GoodsReceiptEntity receipt = new GoodsReceiptEntity();
+        receipt.setReceiptId(receiptId);
+        receipt.setLocationId(directOnHandLocation);
+        when(goodsReceiptRepository.findById(receiptId)).thenReturn(Optional.of(receipt));
+
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(receiptId.toString())
+                .productId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .quantity(5)
+                .build();
+
+        assertThatThrownBy(() -> service.generateTasksForReceipt(request))
+                .isInstanceOf(ReceiptNotStagedException.class)
+                .hasMessageContaining(directOnHandLocation.toString())
+                .hasMessageContaining(STAGING_LOCATION.toString());
+    }
+
+    @Test
+    void generateTasksForReceipt_destinationInvalidForSku_throwsLocationNotValidForSkuException() {
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .productId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .quantity(5)
+                .build();
+        PutawayRule rule = new PutawayRule();
+        rule.setDestinationLocationId(DEST_A);
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
+        doThrow(new LocationNotValidForSkuException(DEST_A, "sku", "SKU is not configured in replenishment policies"))
+                .when(putawayValidationService)
+                .validateLocationCompatibility(any(UUID.class), any(String.class));
+
+        assertThatThrownBy(() -> service.generateTasksForReceipt(request))
+                .isInstanceOf(LocationNotValidForSkuException.class);
+
+        verify(putawayTaskRepository, never()).saveAll(anyList());
+    }
+
     private GoodsReceiptEntity receipt(UUID receiptId) {
         GoodsReceiptEntity receipt = new GoodsReceiptEntity();
         receipt.setReceiptId(receiptId);
+        receipt.setLocationId(STAGING_LOCATION);
         return receipt;
     }
 }

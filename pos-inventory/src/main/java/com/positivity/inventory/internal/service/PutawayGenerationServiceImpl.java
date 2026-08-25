@@ -7,12 +7,14 @@ import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
+import com.positivity.inventory.internal.exception.ReceiptNotStagedException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayGenerationService;
+import com.positivity.inventory.service.PutawayValidationService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,16 +29,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
-    // NOTE: These default/staging location IDs are hardcoded for simplicity, but in
-    // a real implementation they would likely be configurable or determined
-    // dynamically based on the receipt or warehouse context.
     private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID STAGING_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     private final PutawayRuleRepository putawayRuleRepository;
     private final PutawayTaskRepository putawayTaskRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final PutawayDestinationResolver putawayDestinationResolver;
+    private final StagingLocationResolver stagingLocationResolver;
+    private final PutawayValidationService putawayValidationService;
 
     @Override
     @Transactional
@@ -45,6 +45,11 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
         GoodsReceiptEntity sourceReceipt = goodsReceiptRepository
                 .findById(sourceReceiptId)
                 .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
+
+        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationId();
+        if (!stagingLocationId.equals(sourceReceipt.getLocationId())) {
+            throw new ReceiptNotStagedException(sourceReceiptId, sourceReceipt.getLocationId(), stagingLocationId);
+        }
 
         List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
         Optional<PutawayRule> winningRule =
@@ -111,12 +116,14 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
         PutawayDestinationResolver.ResolvedDestination destination = winningRule
                 .map(rule -> putawayDestinationResolver.resolve(rule, lineItem.productId(), lineItem.quantity()))
                 .orElseGet(() -> new PutawayDestinationResolver.ResolvedDestination(DEFAULT_LOCATION, null, null));
+        putawayValidationService.validateLocationCompatibility(
+                destination.destinationLocationId(), lineItem.productId().toString());
 
         return PutawayTask.builder()
                 .sourceReceipt(sourceReceipt)
                 .productId(lineItem.productId())
                 .quantity(lineItem.quantity())
-                .sourceLocationId(STAGING_LOCATION)
+                .sourceLocationId(sourceReceipt.getLocationId())
                 .suggestedDestinationLocationId(destination.destinationLocationId())
                 .originalSuggestedLocationId(destination.originalSuggestedLocationId())
                 .finalSuggestedLocationId(destination.isFallback() ? destination.destinationLocationId() : null)

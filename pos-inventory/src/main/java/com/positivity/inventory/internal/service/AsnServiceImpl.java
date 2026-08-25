@@ -254,7 +254,8 @@ public class AsnServiceImpl implements AsnService {
         long currentOpenBalance = safeLong(purchaseOrder.getOpenBalanceMinor());
         if (receiptTotalMinor > currentOpenBalance
                 && !SecurityContextHelper.hasAuthority("inventory:goods_receipt:override")) {
-            throw new OverReceiptNotPermittedException("OVER_RECEIPT_NOT_PERMITTED");
+            throw new OverReceiptNotPermittedException("Receiving " + receiptTotalMinor + " exceeds the "
+                    + currentOpenBalance + " outstanding on purchase order " + purchaseOrder.getPurchaseOrderId());
         }
     }
 

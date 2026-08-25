@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
+import com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
@@ -110,12 +111,12 @@ class SourceDocumentResolverTest {
     }
 
     @Test
-    @DisplayName("an order the projection does not hold is not found")
-    void unprojectedOrderIsNotFound() {
+    @DisplayName("an order the projection does not hold reports lines unavailable rather than NOT_FOUND (#1492)")
+    void unprojectedOrderReportsLinesUnavailable() {
         when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(this::resolve)
-                .isInstanceOf(SourceDocumentNotFoundException.class)
+                .isInstanceOf(SourceDocumentLinesUnavailableException.class)
                 .hasMessageContaining(PO_ID.toString());
     }
 

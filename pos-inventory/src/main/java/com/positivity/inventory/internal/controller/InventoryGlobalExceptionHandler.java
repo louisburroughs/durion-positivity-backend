@@ -45,6 +45,7 @@ import com.positivity.inventory.internal.exception.SerialNotAvailableException;
 import com.positivity.inventory.internal.exception.ShortageResolutionException;
 import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
+import com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
@@ -127,7 +128,7 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(OverReceiptNotPermittedException.class)
     public ResponseEntity<ApiError> handleOverReceiptNotPermitted(OverReceiptNotPermittedException ex) {
-        return build(HttpStatus.FORBIDDEN, FORBIDDEN, ex.getMessage());
+        return build(HttpStatus.valueOf(422), OverReceiptNotPermittedException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(TaskNotFoundException.class)
@@ -287,6 +288,29 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler({SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class})
     public ResponseEntity<ApiError> handleReceivingNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    /**
+     * A receiving session named a purchase order id absent from the projection (#1492). The header
+     * and its lines are projected atomically and ADR-0044 forbids a synchronous check against
+     * pos-order, so this module cannot tell replication lag from an unknown id — 409, with a
+     * nextAction that says both.
+     */
+    @ExceptionHandler(SourceDocumentLinesUnavailableException.class)
+    public ResponseEntity<ApiError> handleSourceDocumentLinesUnavailable(SourceDocumentLinesUnavailableException ex) {
+        String correlationId = resolveCorrelationId(null);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.guided(
+                        SourceDocumentLinesUnavailableException.ERROR_CODE,
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        null,
+                        "The purchase-order line projection has not caught up. Retry in a few seconds; "
+                                + "if this persists, the purchase order id is unknown.",
+                        null));
     }
 
     /**

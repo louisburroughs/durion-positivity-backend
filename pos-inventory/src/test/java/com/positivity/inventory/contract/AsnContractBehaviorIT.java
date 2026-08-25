@@ -208,32 +208,33 @@ class AsnContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.locationId").value(locationId.toString()));
     }
 
-    // ─── AC #5: Over-receipt without permission → 403 ─────────────────────────
+    // ─── AC #5: Over-receipt without permission → 422 ─────────────────────────
 
     /**
      * AC #5: Verifies that a goods receipt whose quantity exceeds the remaining PO
-     * quantity is rejected with 403 FORBIDDEN (error code
-     * OVER_RECEIPT_NOT_PERMITTED)
+     * quantity is rejected with 422 (error code OVER_RECEIPT_NOT_PERMITTED)
      * when the actor does not hold the override permission.
      *
-     * Issue: #571
+     * Issue: #571, #1493
      */
     @Test
-    @DisplayName("POST /goods-receipts over-receive without override permission → 403 Forbidden")
-    void overReceipt_withoutPermission_returns403() throws Exception {
-        // Issue #571 AC #5: over-receipt without permission must be 403
+    @DisplayName("POST /goods-receipts over-receive without override permission → 422 Unprocessable Entity")
+    void overReceipt_withoutPermission_returns422() throws Exception {
+        // Issue #1493: over-receipt without permission is a 422 domain rule violation, not a 403
         UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(asnService.createGoodsReceipt(any(CreateGoodsReceiptRequest.class), anyString()))
-                .thenThrow(new OverReceiptNotPermittedException("OVER_RECEIPT_NOT_PERMITTED"));
+                .thenThrow(new OverReceiptNotPermittedException(
+                        "Receiving 50000 exceeds the 10000 outstanding on purchase order " + poId));
 
         String body = objectMapper.writeValueAsString(buildCreateGoodsReceiptRequest(poId, locationId));
 
         mockMvc.perform(withGoodsReceiptCreateAuth(post("/v1/inventory/goods-receipts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OVER_RECEIPT_NOT_PERMITTED"));
     }
 
     // ─── AC #6: GRNI balance available for AP matching ───────────────────────
