@@ -184,56 +184,79 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         return Mono.fromRunnable(() -> {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
-                    // Names of every op discovered this run — the desired persisted set for the #1121 prune
-                    // below. name is @NonNull by contract; the filter is a defensive guard so a stray null
-                    // can never enter the keep-set and turn the prune's NOT IN (...) into a silent no-op.
-                    Set<String> discoveredNames = operations.stream()
-                            .map(DiscoveredOperation::name)
-                            .filter(java.util.Objects::nonNull)
-                            .collect(Collectors.toSet());
-                    int persisted = 0;
-                    for (DiscoveredOperation operation : operations) {
-                        String path = operation.httpPath();
-                        if (path == null) {
-                            continue;
-                        }
-                        try {
-                            UUID toolId = toolMetadataRepository.upsertDiscoveredOperation(
-                                    operation, OpenApiToolMapper.extractDomain(path));
-                            toolMetadataRepository.linkToolToWorkflow(toolId, DISCOVERED_WORKFLOW_STATE);
-                            // #781: grant the op's x-required-permissions (fail-closed — absent extension
-                            // grants nothing, so the op stays unselectable until curated via #785 admin).
-                            for (String permissionCode : operation.requiredPermissions()) {
-                                toolMetadataRepository.addToolPermission(toolId, permissionCode);
-                            }
-                            persisted++;
-                        } catch (RuntimeException exception) {
-                            log.warn(
-                                    "Failed to persist discovered openapi op {}: {}",
-                                    operation.name(),
-                                    exception.getMessage());
-                        }
-                    }
+                    Set<String> discoveredNames = discoveredNames(operations);
+                    int persisted = persistAll(operations);
                     log.info(
                             "Persisted {} discovered openapi ops (source='openapi', {} workflow); "
                                     + "embeddings backfilled by ToolEmbeddingInitializer, permissions granted from "
                                     + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
-                    // #1121: reconcile — delete any source='openapi' row absent from this run (orphans left
-                    // by a spec change or discovery-mode switch, since persistence is otherwise upsert-only).
-                    // Guarded on persisted > 0 so a run that wrote nothing (bad/empty spec, DB trouble) can
-                    // never wipe the catalog; pruneDiscoveredOperationsExcept also no-ops on an empty set.
-                    if (persisted > 0 && !discoveredNames.isEmpty()) {
-                        int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames);
-                        if (pruned > 0) {
-                            toolsPrunedTotal.increment(pruned);
-                            log.info("Pruned {} stale openapi mcp_tool row(s) not in the current spec (#1121)", pruned);
-                        }
-                    }
+                    pruneStaleOperations(persisted, discoveredNames);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();
+    }
+
+    /**
+     * Names of every op discovered this run — the desired persisted set for the #1121 prune. {@code
+     * name} is {@code @NonNull} by contract; the filter is a defensive guard so a stray null can never
+     * enter the keep-set and turn the prune's {@code NOT IN (...)} into a silent no-op.
+     */
+    private static @NonNull Set<String> discoveredNames(@NonNull List<DiscoveredOperation> operations) {
+        return operations.stream()
+                .map(DiscoveredOperation::name)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** Persists every op with a usable path, skipping and warning past any single failure. Returns the count persisted. */
+    private int persistAll(@NonNull List<DiscoveredOperation> operations) {
+        int persisted = 0;
+        for (DiscoveredOperation operation : operations) {
+            if (operation.httpPath() != null && persistOne(operation)) {
+                persisted++;
+            }
+        }
+        return persisted;
+    }
+
+    /**
+     * Persists a single discovered op: upserts the {@code mcp_tool} row, links it to the discovered
+     * workflow, and grants its {@code x-required-permissions} (#781, fail-closed — absent extension
+     * grants nothing, so the op stays unselectable until curated via #785 admin). A failure is logged
+     * and swallowed so one bad op never aborts the batch. Returns {@code true} on success.
+     */
+    private boolean persistOne(@NonNull DiscoveredOperation operation) {
+        try {
+            UUID toolId = toolMetadataRepository.upsertDiscoveredOperation(
+                    operation, OpenApiToolMapper.extractDomain(operation.httpPath()));
+            toolMetadataRepository.linkToolToWorkflow(toolId, DISCOVERED_WORKFLOW_STATE);
+            for (String permissionCode : operation.requiredPermissions()) {
+                toolMetadataRepository.addToolPermission(toolId, permissionCode);
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            log.warn("Failed to persist discovered openapi op {}: {}", operation.name(), exception.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * #1121: reconcile — delete any source='openapi' row absent from this run (orphans left by a spec
+     * change or discovery-mode switch, since persistence is otherwise upsert-only). Guarded on {@code
+     * persisted > 0} so a run that wrote nothing (bad/empty spec, DB trouble) can never wipe the
+     * catalog; {@code pruneDiscoveredOperationsExcept} also no-ops on an empty set.
+     */
+    private void pruneStaleOperations(int persisted, @NonNull Set<String> discoveredNames) {
+        if (persisted <= 0 || discoveredNames.isEmpty()) {
+            return;
+        }
+        int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames);
+        if (pruned > 0) {
+            toolsPrunedTotal.increment(pruned);
+            log.info("Pruned {} stale openapi mcp_tool row(s) not in the current spec (#1121)", pruned);
+        }
     }
 
     private void warnIfIncludedServicesDeprecated() {

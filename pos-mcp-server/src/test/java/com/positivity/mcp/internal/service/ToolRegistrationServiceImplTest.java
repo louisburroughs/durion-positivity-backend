@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -239,6 +240,14 @@ class ToolRegistrationServiceImplTest {
         assertThat(meterRegistry.get("tools.pruned").counter().count()).isEqualTo(3.0);
     }
 
+    /**
+     * Covers the {@code persisted <= 0} arm of {@code pruneStaleOperations}'s guard. The sibling arm —
+     * {@code persisted > 0 && discoveredNames.isEmpty()} — is not exercised anywhere: {@code
+     * discoveredNames} is derived from the same operations list {@code persistAll} iterates, and {@link
+     * DiscoveredOperation#name()} is {@code @NonNull} by contract, so a successful persist (persisted >
+     * 0) always implies at least one discovered name. That combination is an unreachable defensive
+     * guard, not a real branch to characterise.
+     */
     @Test
     @DisplayName("registerDiscoveredTools does not prune when the aggregate persists no ops (#1121 safety guard)")
     void registerDiscoveredTools_doesNotPrune_whenNothingPersisted() {
@@ -261,6 +270,175 @@ class ToolRegistrationServiceImplTest {
         serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
 
         verify(repo, never()).pruneDiscoveredOperationsExcept(any());
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools skips persisting a discovered op with a null httpPath but still "
+            + "counts its name toward the prune keep-set (#1121)")
+    void registerDiscoveredTools_skipsUnmappedOp_butKeepsItsNameInPruneSet() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation mapped = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+        // No httpPath: the mapper produced a name/description but no execution path (e.g. an operation
+        // the OpenAPI spec never gave a concrete route). persistDiscoveredOperations must skip the
+        // repository upsert for it while still counting its name for the #1121 prune keep-set, since
+        // discoveredNames is built from every discovered op's name, not just the persisted ones.
+        DiscoveredOperation unmapped =
+                new DiscoveredOperation("accounting_orphan", "Orphan op", null, null, null, null, List.of());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(mapped, unmapped));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(eq(mapped), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(repo, never()).upsertDiscoveredOperation(eq(unmapped), any());
+        verify(repo).upsertDiscoveredOperation(eq(mapped), any());
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices", "accounting_orphan"));
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools logs and continues when upsertDiscoveredOperation fails for one op, "
+            + "still persisting the rest")
+    void registerDiscoveredTools_logsAndContinues_whenUpsertFailsForOneOp() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation ok = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+        DiscoveredOperation failing = new DiscoveredOperation(
+                "accounting_broken",
+                "Broken op",
+                "GET",
+                "/accounting/v1/broken",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(ok, failing));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(eq(ok), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000003"));
+        when(repo.upsertDiscoveredOperation(eq(failing), any())).thenThrow(new RuntimeException("db unavailable"));
+
+        ListAppender<ILoggingEvent> logAppender = attachLogAppender();
+        try {
+            serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+            boolean hasFailureWarning = logAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.WARN)
+                    .anyMatch(e -> e.getFormattedMessage().contains("accounting_broken"));
+            assertThat(hasFailureWarning)
+                    .as("Expected a WARN log naming the op that failed to persist")
+                    .isTrue();
+        } finally {
+            detachLogAppender(logAppender);
+        }
+        // The failing op never reaches linkToolToWorkflow; the ok op still does (persistence continues
+        // past the failure rather than aborting the batch).
+        verify(repo).linkToolToWorkflow(eq(UUID.fromString("00000000-0000-0000-0000-000000000003")), any());
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices", "accounting_broken"));
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools grants every x-required-permissions code from a discovered op (#781)")
+    void registerDiscoveredTools_grantsEachRequiredPermission() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation op = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of("accounting:invoice:view", "accounting:invoice:export"));
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        UUID toolId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        when(repo.upsertDiscoveredOperation(eq(op), any())).thenReturn(toolId);
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(repo).addToolPermission(toolId, "accounting:invoice:view");
+        verify(repo).addToolPermission(toolId, "accounting:invoice:export");
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools does not increment the pruned counter when nothing was pruned (#1121)")
+    void registerDiscoveredTools_doesNotIncrementPrunedCounter_whenPruneRemovesNothing() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation op = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000005"));
+        // Current spec's op set matches the DB already, so the #1121 reconciliation deletes nothing.
+        when(repo.pruneDiscoveredOperationsExcept(any())).thenReturn(0);
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"));
+        assertThat(meterRegistry.get("tools.pruned").counter().count()).isEqualTo(0.0);
     }
 
     // --- helpers ---
