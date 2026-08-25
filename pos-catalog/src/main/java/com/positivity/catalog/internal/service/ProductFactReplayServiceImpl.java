@@ -31,11 +31,14 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h2>Ordering and the stale guard</h2>
  *
- * {@code aggregateVersion} stays the product's {@code updatedAt} epoch millis, so a replayed fact
- * carries the same version as the live fact for that state. Consumers skip strictly-lower versions,
- * which means a replay can never regress a replica that already holds something newer — the guard
- * they already have is the guard this relies on. New {@code eventId}s per re-emit are expected;
- * consumers dedupe on them for redelivery, not for replay.
+ * {@code aggregateVersion} is now the product's JPA {@code @Version} (#1486), not the retired
+ * {@code updatedAt} epoch-millis convention, but the property this relies on is unchanged: a
+ * replayed fact carries exactly the version the live row holds. Consumers apply on an equal
+ * version and skip only when the version they already hold is strictly greater, so a replay can
+ * never regress a replica that already holds something newer — and applying on equal is what makes
+ * replay-as-repair real: a replica that silently dropped a field can be made whole again without
+ * the replay looking like a no-op to the consumer's guard. New {@code eventId}s per re-emit are
+ * expected; consumers dedupe on them for redelivery, not for replay.
  *
  * <h2>Why paged rather than fire-and-forget</h2>
  *

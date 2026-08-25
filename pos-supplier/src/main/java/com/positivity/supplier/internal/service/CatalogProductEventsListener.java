@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.supplier.internal.entity.ExtProductCodeReplica;
 import com.positivity.supplier.internal.entity.ProcessedEvent;
@@ -29,9 +30,12 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Consumer contract mirrors the platform's other catalog consumers: {@code processed_events}
  * idempotency (owner {@code catalog}) written in the apply transaction, a stale guard on the fact's
  * {@code aggregateVersion} that skips only strictly-lower versions, and transient database errors
- * rethrown so the container retries rather than recording the event as processed. Unsupported event
- * types still record their eventId, so the owner's manifest reconciles instead of reporting facts
- * this module deliberately ignored as missing.
+ * rethrown so the container retries rather than recording the event as processed. The guard is
+ * {@link ReplicaVersionGuard} (#1486): pos-catalog's aggregateVersion strictly advances, so equal
+ * versions apply rather than skip — both as an idempotent no-op for live traffic and because
+ * {@code POST .../facts/replay} depends on it to repair a replica that holds the version number but
+ * wrong or missing rows. Unsupported event types still record their eventId, so the owner's
+ * manifest reconciles instead of reporting facts this module deliberately ignored as missing.
  */
 @Slf4j
 @Component
@@ -96,7 +100,10 @@ public class CatalogProductEventsListener {
         UUID productId = payload.productId();
 
         ExtProductCodeReplica existing = replicaRepository.findById(productId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — catalog's
+        // aggregateVersion strictly advances, so equal means identical content, and replay resends
+        // the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
 

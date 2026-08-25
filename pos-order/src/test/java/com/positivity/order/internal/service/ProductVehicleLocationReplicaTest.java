@@ -138,7 +138,7 @@ class ProductVehicleLocationReplicaTest {
         }
 
         @Test
-        @DisplayName("ignores a snapshot no newer than the replica it already holds")
+        @DisplayName("ignores a snapshot strictly older than the replica it already holds")
         void staleSnapshotIsIgnored() {
             ExtProduct existing = new ExtProduct();
             existing.setProductId(PRODUCT_ID);
@@ -149,6 +149,25 @@ class ProductVehicleLocationReplicaTest {
 
             verify(extProductRepository, never()).save(any());
             verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("applies a snapshot at the same version as the replica it already holds (#1486)")
+        void snapshotAtTheSameVersionIsApplied() {
+            // Load-bearing: pos-catalog's aggregateVersion strictly advances, so an equal version
+            // means identical content, and POST .../facts/replay deliberately resends a fact at the
+            // held version to repair a replica with wrong or missing rows. Skipping on equal would
+            // silently turn replay into a no-op (#1486) — the old `>=` guard did exactly that.
+            ExtProduct existing = new ExtProduct();
+            existing.setProductId(PRODUCT_ID);
+            existing.setAggregateVersion(2);
+            when(extProductRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(existing));
+
+            listener().onCatalogEvent(envelope(2, "true"));
+
+            ArgumentCaptor<ExtProduct> captor = ArgumentCaptor.forClass(ExtProduct.class);
+            verify(extProductRepository).save(captor.capture());
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(2);
         }
     }
 

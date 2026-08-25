@@ -110,9 +110,10 @@ public class SubstitutionGroupServiceImpl implements SubstitutionGroupService {
     }
 
     /**
-     * Bump the product row's {@code updatedAt} before re-emitting its fact: the envelope's
-     * {@code aggregateVersion} is {@code updatedAt} epoch millis, so membership-only changes must
-     * advance it for consumers' stale-event guards.
+     * Bump the product row's {@code updatedAt} before re-emitting its fact: the mutation must dirty
+     * the row for the envelope's {@code aggregateVersion} — the product's JPA {@code @Version}
+     * (#1486) — to actually advance when {@link CatalogFactPublisher} flushes, so membership-only
+     * changes still advance it for consumers' stale-event guards.
      */
     private void touchAndPublish(ProductEntity product) {
         product.setUpdatedAt(Instant.now(clock));

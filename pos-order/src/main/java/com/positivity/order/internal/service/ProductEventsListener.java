@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtProductCode;
@@ -27,6 +28,12 @@ import tools.jackson.databind.ObjectMapper;
  * Consumes {@code catalog.events.v1} into the {@code ext_product} replica (ADR-0044 §6, parity
  * story B1): SKU → productId/description/tracking-level resolution for pricing without synchronous
  * REST toward pos-catalog.
+ *
+ * <p>The stale guard on the fact's {@code aggregateVersion} is {@link ReplicaVersionGuard}
+ * (#1486): pos-catalog's version strictly advances, so a held row is stale only when its version
+ * is strictly greater than the incoming fact's — an equal version applies, both because it is an
+ * idempotent no-op for live traffic and because {@code POST .../facts/replay} depends on it to
+ * repair a replica that holds the version number but wrong or missing rows.
  */
 @Slf4j
 @Component
@@ -87,7 +94,10 @@ public class ProductEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtProduct existing = extProductRepository.findById(productId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — catalog's
+        // aggregateVersion strictly advances, so equal means identical content, and replay resends
+        // the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             return;
         }
         ExtProduct replica = existing != null ? existing : new ExtProduct();

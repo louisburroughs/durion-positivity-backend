@@ -20,6 +20,7 @@ import com.positivity.catalog.internal.repository.SubstitutionGroupMemberReposit
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -69,6 +70,9 @@ class CatalogFactPublisherTest {
     @Mock
     private SubstitutionGroupMemberRepository substitutionGroupMemberRepository;
 
+    @Mock
+    private EntityManager entityManager;
+
     private CatalogFactPublisher publisher;
 
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
@@ -80,7 +84,8 @@ class CatalogFactPublisherTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 outboxEventWriterProvider,
                 productUomRepository,
-                substitutionGroupMemberRepository);
+                substitutionGroupMemberRepository,
+                entityManager);
     }
 
     @Test
@@ -114,7 +119,10 @@ class CatalogFactPublisherTest {
         assertThat(envelope.eventType()).isEqualTo("catalog.product.updated");
         assertThat(envelope.schemaVersion()).isEqualTo(2);
         assertThat(envelope.aggregateId()).isEqualTo(product.getId());
-        assertThat(envelope.aggregateVersion()).isEqualTo(product.getUpdatedAt().toEpochMilli());
+        // Flushed before the version is read (#1486), so the fact carries the entity's current
+        // @Version rather than the retired updatedAt-epoch-millis value.
+        verify(entityManager).flush();
+        assertThat(envelope.aggregateVersion()).isEqualTo(product.getVersion());
 
         JsonNode payload =
                 objectMapper.readTree(objectMapper.writeValueAsString(envelope)).path("payload");
@@ -191,8 +199,10 @@ class CatalogFactPublisherTest {
             assertThat(envelope.eventType()).isEqualTo("catalog.service.updated");
             assertThat(envelope.schemaVersion()).isEqualTo(1);
             assertThat(envelope.aggregateId()).isEqualTo(entity.getId());
-            assertThat(envelope.aggregateVersion())
-                    .isEqualTo(entity.getUpdatedAt().toEpochMilli());
+            // Flushed before the version is read (#1486), so the fact carries the entity's current
+            // @Version rather than the retired updatedAt-epoch-millis value.
+            verify(entityManager).flush();
+            assertThat(envelope.aggregateVersion()).isEqualTo(entity.getVersion());
 
             JsonNode payload = objectMapper
                     .readTree(objectMapper.writeValueAsString(envelope))
@@ -276,6 +286,9 @@ class CatalogFactPublisherTest {
         product.setTrackingLevel(ProductTrackingLevel.LOT);
         product.setCreatedAt(NOW.minusSeconds(3600));
         product.setUpdatedAt(NOW);
+        // Deliberately distinct from updatedAt's epoch millis, so a test asserting on the retired
+        // convention would fail loudly rather than passing by coincidence.
+        product.setVersion(42L);
         Category category = new Category();
         product.setCategory(category);
         return product;

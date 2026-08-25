@@ -150,18 +150,13 @@ public class CatalogServiceImpl implements CatalogService {
         return switch (normalizeType(type)) {
             case PRODUCT ->
                 productRepository.findById(catalogId).map(existing -> {
-                    ProductEntity updated = toProductEntity(request);
-                    updated.setId(catalogId);
-                    return toCatalogItemResponse(PRODUCT, productRepository.save(updated));
+                    copyOntoProductEntity(request, existing);
+                    return toCatalogItemResponse(PRODUCT, productRepository.save(existing));
                 });
             case SERVICE ->
                 serviceRepository.findById(catalogId).map(existing -> {
-                    ServiceEntity updated = toServiceEntity(request);
-                    updated.setId(catalogId);
-                    // The request carries no createdAt, and merging a detached entity would blank
-                    // the in-memory value the published fact reads from.
-                    updated.setCreatedAt(existing.getCreatedAt());
-                    return toCatalogItemResponse(SERVICE, saveService(updated));
+                    copyOntoServiceEntity(request, existing);
+                    return toCatalogItemResponse(SERVICE, saveService(existing));
                 });
             case NONINVENTORY ->
                 nonInventoryProductRepository.findById(catalogId).map(existing -> {
@@ -217,6 +212,19 @@ public class CatalogServiceImpl implements CatalogService {
 
     private ProductEntity toProductEntity(CatalogItemRequestDto dto) {
         ProductEntity product = new ProductEntity();
+        copyOntoProductEntity(dto, product);
+        return product;
+    }
+
+    /**
+     * Copies the request's fields onto an already-loaded (managed or previously-loaded) entity
+     * rather than building a fresh detached one, so an update goes through Hibernate's ordinary
+     * dirty-checked save path instead of a merge. {@code ProductEntity} carries a JPA
+     * {@code @Version} (#1486): merging a detached instance whose {@code version} field defaults to
+     * 0 against a row the seeding migration gave a non-zero version throws an optimistic-lock
+     * failure on every update.
+     */
+    private void copyOntoProductEntity(CatalogItemRequestDto dto, ProductEntity product) {
         product.setName(dto.getName());
         product.setShortDescription(dto.getShortDescription());
         product.setLongDescription(dto.getLongDescription());
@@ -237,15 +245,24 @@ public class CatalogServiceImpl implements CatalogService {
         product.setSpecifications(dto.getSpecifications());
         product.setAttributes(dto.getSpecifications());
         product.setDescription(dto.getLongDescription());
-        return product;
     }
 
     private ServiceEntity toServiceEntity(CatalogItemRequestDto dto) {
         ServiceEntity service = new ServiceEntity();
+        copyOntoServiceEntity(dto, service);
+        return service;
+    }
+
+    /**
+     * Copies the request's fields onto an already-loaded entity, for the same reason
+     * {@link #copyOntoProductEntity} does: {@code ServiceEntity} also carries a {@code @Version}
+     * (#1486), and mutating the loaded row in place — rather than merging a detached replacement —
+     * is what keeps {@code createdAt} and the current {@code version} intact for free.
+     */
+    private void copyOntoServiceEntity(CatalogItemRequestDto dto, ServiceEntity service) {
         service.setName(dto.getName());
         service.setShortDescription(dto.getShortDescription());
         service.setLongDescription(dto.getLongDescription());
-        return service;
     }
 
     private NonInventoryProductEntity toNonInventoryEntity(CatalogItemRequestDto dto) {
