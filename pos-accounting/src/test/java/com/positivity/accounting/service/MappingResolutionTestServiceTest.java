@@ -401,4 +401,171 @@ class MappingResolutionTestServiceTest {
             assertThat(response.getResolvedLines().get(1).getCreditAmount()).isEqualByComparingTo("0");
         }
     }
+
+    /**
+     * Characterises {@code scanConditions}'s own defensive re-parse of {@code rulesDefinition} —
+     * the evaluator fails these rule versions the same way (so the dry-run outcome is still a
+     * clean no-match), but the enrichment re-scan has to independently survive the same
+     * malformed/degenerate shapes without throwing.
+     */
+    @Nested
+    @DisplayName("Degenerate rulesDefinition shapes (rescan robustness)")
+    class DegenerateRulesDefinition {
+
+        @Test
+        @DisplayName("a stub rule set with an empty '{}' rulesDefinition yields a clean no-match")
+        void emptyStubRulesDefinitionYieldsNoMatch() {
+            stubPublishedRulesRaw("{}");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getNoMatchReason()).isEqualTo("UNMAPPED_EVENT_TYPE");
+            assertThat(response.getPredicateEvaluations()).isNull();
+        }
+
+        @Test
+        @DisplayName("a blank rulesDefinition yields a clean no-match")
+        void blankRulesDefinitionYieldsNoMatch() {
+            stubPublishedRulesRaw("   ");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getPredicateEvaluations()).isNull();
+        }
+
+        @Test
+        @DisplayName("a null rulesDefinition yields a clean no-match")
+        void nullRulesDefinitionYieldsNoMatch() {
+            stubPublishedRulesRaw(null);
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getPredicateEvaluations()).isNull();
+        }
+
+        @Test
+        @DisplayName("a rulesDefinition with no 'conditions' array yields a clean no-match")
+        void missingConditionsArrayYieldsNoMatch() {
+            stubPublishedRulesRaw("{\"note\":\"never configured\"}");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getPredicateEvaluations()).isNull();
+        }
+
+        @Test
+        @DisplayName("a 'conditions' field that is not an array yields a clean no-match")
+        void nonArrayConditionsYieldsNoMatch() {
+            stubPublishedRulesRaw("{\"conditions\":{}}");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getPredicateEvaluations()).isNull();
+        }
+
+        @Test
+        @DisplayName("syntactically invalid JSON is caught and yields a clean no-match, not an exception")
+        void malformedJsonIsCaughtNotThrown() {
+            stubPublishedRulesRaw("{\"conditions\": [ this is not valid json");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getNoMatchReason()).isEqualTo("UNMAPPED_EVENT_TYPE");
+            assertThat(response.getPredicateEvaluations()).isNull();
+        }
+
+        @Test
+        @DisplayName("a condition that matches but declares no lines is skipped, not treated as the answer")
+        void matchedConditionWithNoLinesIsSkipped() {
+            stubPublishedRulesRaw(rules("*"));
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            // The predicate itself matched ("*" is catch-all) even though the condition, having
+            // no lines, could not settle the evaluation — that distinction is what the dry-run
+            // rescan surfaces to the caller.
+            assertThat(response.getPredicateEvaluations()).hasSize(1);
+            assertThat(response.getPredicateEvaluations().get(0).isMatched()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a matched condition with no 'lines' key at all is skipped, not treated as the answer")
+        void matchedConditionWithMissingLinesKeyIsSkipped() {
+            stubPublishedRulesRaw("{\"conditions\":[{\"condition\":\"*\"}]}");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getPredicateEvaluations()).hasSize(1);
+            assertThat(response.getPredicateEvaluations().get(0).isMatched()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a matched condition whose 'lines' is not an array is skipped, not treated as the answer")
+        void matchedConditionWithNonArrayLinesIsSkipped() {
+            stubPublishedRulesRaw("{\"conditions\":[{\"condition\":\"*\",\"lines\":\"not-an-array\"}]}");
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "10.00")));
+
+            assertThat(response.isMatched()).isFalse();
+            assertThat(response.getPredicateEvaluations()).hasSize(1);
+            assertThat(response.getPredicateEvaluations().get(0).isMatched()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a condition block with no 'condition' key defaults to a catch-all match")
+        void conditionBlockWithoutConditionKeyDefaultsToCatchAll() {
+            stubPublishedRulesRaw("{\"conditions\":[{\"lines\":[" + line(ACCOUNT_A, "DEBIT", "") + ","
+                    + line(ACCOUNT_D, "CREDIT", "") + "]}]}");
+            when(glAccountRepository.findAllById(any()))
+                    .thenReturn(List.of(
+                            glAccount(ACCOUNT_A, "4000", "Sales Revenue A"),
+                            glAccount(ACCOUNT_D, "1200", "Accounts Receivable")));
+
+            MappingResolutionTestResponse response =
+                    service.resolveTest(request(EVENT_TYPE, Map.of("totalAmount", "50.00")));
+
+            assertThat(response.isMatched()).isTrue();
+            assertThat(response.getPredicateEvaluations()).hasSize(1);
+            assertThat(response.getPredicateEvaluations().get(0).getPredicate()).isEqualTo("*");
+            assertThat(response.getPredicateEvaluations().get(0).isMatched()).isTrue();
+        }
+
+        /** Variant of {@link #stubPublishedRules} that installs a caller-supplied raw rulesDefinition verbatim. */
+        private void stubPublishedRulesRaw(String rulesDefinition) {
+            PostingRuleSet ruleSet = new PostingRuleSet();
+            ruleSet.setPostingRuleSetId(RULE_SET_ID);
+            ruleSet.setName("Stub rule set");
+            ruleSet.setEventType(EVENT_TYPE);
+
+            PostingRuleVersion version = new PostingRuleVersion();
+            version.setVersionId(VERSION_ID);
+            version.setVersionNumber(1);
+            version.setState(PostingRuleSetState.PUBLISHED);
+            version.setRulesDefinition(rulesDefinition);
+            version.setPostingRuleSet(ruleSet);
+
+            when(ruleSetRepository.findByEventType(EVENT_TYPE)).thenReturn(List.of(ruleSet));
+            when(versionRepository.findByPostingRuleSet_PostingRuleSetIdAndState(
+                            RULE_SET_ID, PostingRuleSetState.PUBLISHED))
+                    .thenReturn(List.of(version));
+            when(versionRepository.findById(VERSION_ID)).thenReturn(Optional.of(version));
+        }
+    }
 }

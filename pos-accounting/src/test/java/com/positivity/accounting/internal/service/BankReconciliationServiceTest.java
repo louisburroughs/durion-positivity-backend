@@ -232,6 +232,95 @@ class BankReconciliationServiceTest {
     }
 
     @Test
+    @DisplayName("import unquotes a double-quoted description containing an embedded comma")
+    void importParsesQuotedFieldWithEmbeddedComma() {
+        when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(reconcilableAccount()));
+        when(journalEntryLineRepository.getAccountBalanceAsOf(eq(ACCOUNT_ID), any()))
+                .thenReturn(BigDecimal.ZERO);
+        when(reconciliationRepository.save(any(BankReconciliation.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(lineRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
+        when(adjustmentRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
+
+        BankReconciliationImportRequest request = BankReconciliationImportRequest.builder()
+                .glAccountId(ACCOUNT_ID)
+                .periodStartDate(LocalDate.of(2026, 6, 1))
+                .periodEndDate(LocalDate.of(2026, 6, 30))
+                .statementDate(LocalDate.of(2026, 6, 30))
+                .statementEndingBalance(new BigDecimal("2000.0000"))
+                .currency("USD")
+                // Description is quoted because it contains the field delimiter itself.
+                .csv("2026-06-15,\"ACME, INC\",100.00,REF-1")
+                .build();
+
+        ArgumentCaptor<BankReconciliation> captor = ArgumentCaptor.forClass(BankReconciliation.class);
+        service.importStatement(request);
+
+        verify(reconciliationRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatementLines()).hasSize(1);
+        assertThat(captor.getValue().getStatementLines().get(0).getDescription())
+                .isEqualTo("ACME, INC");
+    }
+
+    @Test
+    @DisplayName("import unescapes a doubled quote (\"\") inside a quoted field")
+    void importParsesQuotedFieldWithEscapedQuote() {
+        when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(reconcilableAccount()));
+        when(journalEntryLineRepository.getAccountBalanceAsOf(eq(ACCOUNT_ID), any()))
+                .thenReturn(BigDecimal.ZERO);
+        when(reconciliationRepository.save(any(BankReconciliation.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(lineRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
+        when(adjustmentRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
+
+        BankReconciliationImportRequest request = BankReconciliationImportRequest.builder()
+                .glAccountId(ACCOUNT_ID)
+                .periodStartDate(LocalDate.of(2026, 6, 1))
+                .periodEndDate(LocalDate.of(2026, 6, 30))
+                .statementDate(LocalDate.of(2026, 6, 30))
+                .statementEndingBalance(new BigDecimal("2000.0000"))
+                .currency("USD")
+                // "" inside a quoted field is the CSV escape for a literal embedded quote.
+                .csv("2026-06-15,\"Joe\"\"s Diner\",50.00,REF-1")
+                .build();
+
+        ArgumentCaptor<BankReconciliation> captor = ArgumentCaptor.forClass(BankReconciliation.class);
+        service.importStatement(request);
+
+        verify(reconciliationRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatementLines().get(0).getDescription())
+                .isEqualTo("Joe\"s Diner");
+    }
+
+    @Test
+    @DisplayName("import unquotes a quoted final field with nothing following its closing quote")
+    void importParsesQuotedLastFieldAtEndOfLine() {
+        when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(reconcilableAccount()));
+        when(journalEntryLineRepository.getAccountBalanceAsOf(eq(ACCOUNT_ID), any()))
+                .thenReturn(BigDecimal.ZERO);
+        when(reconciliationRepository.save(any(BankReconciliation.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(lineRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
+        when(adjustmentRepository.findByReconciliation_ReconciliationId(any())).thenReturn(List.of());
+
+        BankReconciliationImportRequest request = BankReconciliationImportRequest.builder()
+                .glAccountId(ACCOUNT_ID)
+                .periodStartDate(LocalDate.of(2026, 6, 1))
+                .periodEndDate(LocalDate.of(2026, 6, 30))
+                .statementDate(LocalDate.of(2026, 6, 30))
+                .statementEndingBalance(new BigDecimal("2000.0000"))
+                .currency("USD")
+                // The closing quote of the reference column is the very last character of the
+                // row, so the escape lookahead (i + 1 < line.length()) is false rather than
+                // short-circuited by a following non-quote character.
+                .csv("2026-06-15,ACH DEPOSIT,100.00,\"REF-1\"")
+                .build();
+
+        ArgumentCaptor<BankReconciliation> captor = ArgumentCaptor.forClass(BankReconciliation.class);
+        service.importStatement(request);
+
+        verify(reconciliationRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatementLines().get(0).getReference()).isEqualTo("REF-1");
+    }
+
+    @Test
     @DisplayName("match links N statement lines to 1 GL line when amounts net within tolerance")
     void matchNToOneWithinTolerance() {
         BankReconciliation recon = openReconciliation();

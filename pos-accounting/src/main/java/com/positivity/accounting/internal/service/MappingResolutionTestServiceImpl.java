@@ -263,12 +263,34 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
      */
     private ConditionScan scanConditions(@Nullable PostingRuleVersion version, AccountingEvent event) {
         ConditionScan scan = new ConditionScan();
-        if (version == null) {
+        JsonNode conditions = resolveConditionsArray(version);
+        if (conditions == null) {
             return scan;
+        }
+        for (JsonNode conditionBlock : conditions) {
+            if (scanConditionBlock(conditionBlock, event, scan)) {
+                break;
+            }
+        }
+        return scan;
+    }
+
+    /**
+     * Parses the rule version's {@code rulesDefinition} down to its {@code conditions} array,
+     * covering every reason a dry-run rescan has nothing to replay: no matched version, an
+     * empty/stub rules definition, malformed JSON, or a {@code conditions} field that is absent
+     * or not an array. Mirrors the evaluator's own tolerance for these shapes.
+     *
+     * @return the conditions array to replay, or {@code null} when there is nothing to scan
+     */
+    @Nullable
+    private JsonNode resolveConditionsArray(@Nullable PostingRuleVersion version) {
+        if (version == null) {
+            return null;
         }
         String rulesJson = version.getRulesDefinition();
         if (rulesJson == null || rulesJson.isBlank() || "{}".equals(rulesJson.trim())) {
-            return scan;
+            return null;
         }
 
         JsonNode conditions;
@@ -280,42 +302,45 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
                     "Dry-run could not parse rulesDefinition for version {}: {}",
                     version.getVersionId(),
                     e.getMessage());
-            return scan;
+            return null;
         }
-        if (conditions == null || !conditions.isArray()) {
-            return scan;
+        return conditions != null && conditions.isArray() ? conditions : null;
+    }
+
+    /**
+     * Evaluates one condition block against {@code event}, recording its predicate outcome into
+     * {@code scan} and, when it both matches and declares lines, capturing its line specs.
+     *
+     * @return whether this block settled the scan (matched with usable lines), so the caller
+     *     should stop replaying further blocks — mirroring the evaluator's first-match rule
+     */
+    private boolean scanConditionBlock(JsonNode conditionBlock, AccountingEvent event, ConditionScan scan) {
+        String conditionExpr = conditionBlock.has("condition")
+                ? conditionBlock.get("condition").asString()
+                : null;
+        String predicateLabel = conditionExpr != null ? conditionExpr : "*";
+        scan.keysEvaluated.add(predicateLabel);
+
+        PredicateOutcome outcome = evaluatePredicate(conditionExpr, event);
+        scan.predicateEvaluations.add(PredicateEvaluation.builder()
+                .predicate(predicateLabel)
+                .matched(outcome.matched())
+                .detail(outcome.detail())
+                .build());
+
+        if (!outcome.matched()) {
+            return false;
         }
 
-        for (JsonNode conditionBlock : conditions) {
-            String conditionExpr = conditionBlock.has("condition")
-                    ? conditionBlock.get("condition").asString()
-                    : null;
-            String predicateLabel = conditionExpr != null ? conditionExpr : "*";
-            scan.keysEvaluated.add(predicateLabel);
-
-            PredicateOutcome outcome = evaluatePredicate(conditionExpr, event);
-            scan.predicateEvaluations.add(PredicateEvaluation.builder()
-                    .predicate(predicateLabel)
-                    .matched(outcome.matched())
-                    .detail(outcome.detail())
-                    .build());
-
-            if (!outcome.matched()) {
-                continue;
-            }
-
-            JsonNode linesNode = conditionBlock.get("lines");
-            if (linesNode == null || !linesNode.isArray() || linesNode.isEmpty()) {
-                // Mirror the evaluator: a matched-but-empty condition is skipped.
-                continue;
-            }
-
-            // First condition that matches and has lines is the one the
-            // evaluator resolved; capture its line specs and stop.
-            scan.matchedLineSpecs = parseLineSpecs(linesNode);
-            break;
+        JsonNode linesNode = conditionBlock.get("lines");
+        if (linesNode == null || !linesNode.isArray() || linesNode.isEmpty()) {
+            // Mirror the evaluator: a matched-but-empty condition is skipped.
+            return false;
         }
-        return scan;
+
+        // First condition that matches and has lines is the one the evaluator resolved.
+        scan.matchedLineSpecs = parseLineSpecs(linesNode);
+        return true;
     }
 
     private List<LineSpec> parseLineSpecs(JsonNode linesNode) {

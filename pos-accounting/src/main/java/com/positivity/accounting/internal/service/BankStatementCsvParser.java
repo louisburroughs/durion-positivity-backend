@@ -173,28 +173,56 @@ final class BankStatementCsvParser {
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
         for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
             if (inQuotes) {
-                if (c == '"') {
-                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
-                        current.append('"');
-                        i++;
-                    } else {
-                        inQuotes = false;
-                    }
-                } else {
-                    current.append(c);
-                }
-            } else if (c == '"') {
-                inQuotes = true;
-            } else if (c == ',') {
-                fields.add(current.toString());
-                current.setLength(0);
+                QuotedCharOutcome outcome = consumeQuotedChar(line, i, current);
+                inQuotes = outcome.stillInQuotes();
+                i = outcome.nextIndex();
             } else {
-                current.append(c);
+                inQuotes = consumeUnquotedChar(line.charAt(i), current, fields);
             }
         }
         fields.add(current.toString());
         return fields;
+    }
+
+    /** Outcome of {@link #consumeQuotedChar}: whether the field is still open, and the loop index
+     * to resume from (advances one extra position past an escaped {@code ""}). */
+    private record QuotedCharOutcome(boolean stillInQuotes, int nextIndex) {}
+
+    /**
+     * Consumes the character at index {@code i} while inside a quoted field: a quote either
+     * escapes a literal embedded quote (when immediately followed by another quote) or closes
+     * the field; any other character is appended verbatim.
+     */
+    private static QuotedCharOutcome consumeQuotedChar(String line, int i, StringBuilder current) {
+        char c = line.charAt(i);
+        if (c != '"') {
+            current.append(c);
+            return new QuotedCharOutcome(true, i);
+        }
+        if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+            current.append('"');
+            return new QuotedCharOutcome(true, i + 1);
+        }
+        return new QuotedCharOutcome(false, i);
+    }
+
+    /**
+     * Consumes character {@code c} while outside any quoted field: a quote opens a quoted field,
+     * a comma ends the current field, anything else is appended verbatim.
+     *
+     * @return whether the field is now inside a quoted field
+     */
+    private static boolean consumeUnquotedChar(char c, StringBuilder current, List<String> fields) {
+        if (c == '"') {
+            return true;
+        }
+        if (c == ',') {
+            fields.add(current.toString());
+            current.setLength(0);
+        } else {
+            current.append(c);
+        }
+        return false;
     }
 }

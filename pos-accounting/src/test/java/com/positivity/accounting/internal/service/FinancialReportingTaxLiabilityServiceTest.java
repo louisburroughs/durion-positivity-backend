@@ -212,6 +212,36 @@ class FinancialReportingTaxLiabilityServiceTest {
     }
 
     @Test
+    @DisplayName("An exempt row with a null or blank exemption reason code contributes no reason")
+    void exemptRowsWithNullOrBlankReasonAddNothing() {
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(invoiceFinalized(INV1)));
+
+        // Two exempt jurisdictions on the same invoice: one with a null reason code, one with a
+        // blank (empty string) reason code. Neither should be added to exemptionReasons — only a
+        // present, non-blank reason is recorded (issue #966 AC).
+        List<ExtInvoiceTax> master = List.of(
+                taxRow(INV1, "STATE", "WA", "500.00", "0.00", true, null),
+                taxRow(INV1, "COUNTY", "KING", "300.00", "0.00", true, ""));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of());
+        when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.empty());
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        TaxLiabilityRow wa = report.getRows().get(0);
+        assertThat(wa.getExemptBase()).isEqualByComparingTo("500.00");
+        assertThat(wa.getExemptionReasons()).isEmpty();
+
+        TaxLiabilityRow king = report.getRows().get(1);
+        assertThat(king.getExemptBase()).isEqualByComparingTo("300.00");
+        assertThat(king.getExemptionReasons()).isEmpty();
+    }
+
+    @Test
     @DisplayName("Rejects an inverted date range")
     void rejectsInvertedRange() {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.generateTaxLiability(END, START))
