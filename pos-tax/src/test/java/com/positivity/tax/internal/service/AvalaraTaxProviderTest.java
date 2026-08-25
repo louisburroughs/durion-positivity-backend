@@ -3,6 +3,7 @@ package com.positivity.tax.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.ExpectedCount.times;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -17,6 +18,7 @@ import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.dto.TaxProviderTransactionResult;
+import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.config.TaxProperties;
@@ -399,6 +401,54 @@ class AvalaraTaxProviderTest {
         TaxCalculationResponse response = f.provider().estimate(request);
         f.server().verify();
         assertThat(response.getTotalTax()).isEqualByComparingTo("10.88");
+    }
+
+    @Test
+    @DisplayName("buildCreateModel: a null destinationAddress maps to an all-null ShipTo (no NPE)")
+    void nullDestinationAddressMapsToNullShipTo() {
+        // buildCreateModel's dest==null branch had 0% branch coverage: every other test supplies
+        // a destinationAddress, so the null-address defensive path was never exercised.
+        Fixture f = fixture();
+        TaxCalculationRequest request = sampleRequest();
+        request.setDestinationAddress(null);
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/create"))
+                .andExpect(jsonPath("$.addresses.ShipTo.line1").value(nullValue()))
+                .andExpect(jsonPath("$.addresses.ShipTo.city").value(nullValue()))
+                .andExpect(jsonPath("$.addresses.ShipTo.region").value(nullValue()))
+                .andExpect(jsonPath("$.addresses.ShipTo.country").value(nullValue()))
+                .andExpect(jsonPath("$.addresses.ShipTo.postalCode").value(nullValue()))
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationResponse response = f.provider().estimate(request);
+        f.server().verify();
+
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.88");
+    }
+
+    @Test
+    @DisplayName("buildCreateModel: a certificate-backed exempt line maps its reason code to entityUseCode")
+    void exemptLineWithReasonCodeMapsToEntityUseCode() {
+        // buildCreateModel's exemptionReasonCode!=null branch had 0% branch coverage: the only
+        // exempt-line fixture in this suite leaves exemptionReasonCode unset, so the
+        // certificate-backed exemption path (story T3) never reached AvaTax's entityUseCode.
+        Fixture f = fixture();
+        TaxCalculationRequest request = sampleRequest();
+        request.setLineItems(List.of(TaxLineItem.builder()
+                .lineItemId("1")
+                .description("Resale Part")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("50.00"))
+                .taxExempt(true)
+                .exemptionReasonCode(ExemptionReasonCode.RESALE)
+                .build()));
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/create"))
+                .andExpect(jsonPath("$.lines[0].entityUseCode").value("RESALE"))
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+
+        f.provider().estimate(request);
+        f.server().verify();
     }
 
     private String exemptLineResponseJson() {
