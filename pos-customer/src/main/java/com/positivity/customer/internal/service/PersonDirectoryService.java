@@ -126,39 +126,59 @@ public class PersonDirectoryService {
     private Optional<UUID> bestMatch(
             @Nullable String email, @Nullable String phone, @Nullable String firstName, @Nullable String lastName) {
         Map<UUID, Integer> scores = new HashMap<>();
-        if (email != null && !email.isBlank()) {
-            for (ExtPersonReplica person :
-                    replicaRepository.findByPrimaryEmailIgnoreCase(email.trim().toLowerCase(Locale.ROOT))) {
-                scores.merge(person.getPersonId(), EMAIL_WEIGHT, Integer::sum);
-            }
-        }
-        if (phone != null && !phone.isBlank()) {
-            // DB narrows by JSON containment; re-verify the typed match here.
-            String normalizedPhone = phone.trim();
-            for (ExtPersonReplica person : replicaRepository.findByContactPointsContaining(normalizedPhone)) {
-                if (contactPointsOf(person).stream()
-                        .anyMatch(cp -> cp.contactType() != null
-                                && cp.contactType().startsWith("PHONE")
-                                && normalizedPhone.equals(cp.value()))) {
-                    scores.merge(person.getPersonId(), PHONE_WEIGHT, Integer::sum);
-                }
-            }
-        }
-        if (lastName != null && !lastName.isBlank()) {
-            for (ExtPersonReplica person : replicaRepository.findByLastNameIgnoreCase(lastName.trim())) {
-                scores.merge(person.getPersonId(), LAST_NAME_WEIGHT, Integer::sum);
-            }
-        }
-        if (firstName != null && !firstName.isBlank()) {
-            for (ExtPersonReplica person : replicaRepository.findByFirstNameIgnoreCase(firstName.trim())) {
-                scores.merge(person.getPersonId(), FIRST_NAME_WEIGHT, Integer::sum);
-            }
-        }
+        scoreEmail(scores, email);
+        scorePhone(scores, phone);
+        scoreCandidates(scores, LAST_NAME_WEIGHT, lastName, replicaRepository::findByLastNameIgnoreCase);
+        scoreCandidates(scores, FIRST_NAME_WEIGHT, firstName, replicaRepository::findByFirstNameIgnoreCase);
         return scores.entrySet().stream()
                 .filter(entry -> entry.getValue() >= MATCH_THRESHOLD)
+                // Ties resolve by UUID string order, so the same request finds the same person
+                // every time rather than whichever hashed first.
                 .max(Map.Entry.<UUID, Integer>comparingByValue()
                         .thenComparing(entry -> entry.getKey().toString()))
                 .map(Map.Entry::getKey);
+    }
+
+    private void scoreEmail(Map<UUID, Integer> scores, @Nullable String email) {
+        scoreCandidates(
+                scores,
+                EMAIL_WEIGHT,
+                email == null ? null : email.toLowerCase(Locale.ROOT),
+                replicaRepository::findByPrimaryEmailIgnoreCase);
+    }
+
+    /**
+     * Scores phone candidates. The DB narrows by JSON containment, which also matches the digits
+     * appearing inside any other contact value — so each candidate is re-verified as a typed
+     * {@code PHONE*} point with exactly this value before it scores.
+     */
+    private void scorePhone(Map<UUID, Integer> scores, @Nullable String phone) {
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        String normalizedPhone = phone.trim();
+        for (ExtPersonReplica person : replicaRepository.findByContactPointsContaining(normalizedPhone)) {
+            if (contactPointsOf(person).stream()
+                    .anyMatch(cp -> cp.contactType() != null
+                            && cp.contactType().startsWith("PHONE")
+                            && normalizedPhone.equals(cp.value()))) {
+                scores.merge(person.getPersonId(), PHONE_WEIGHT, Integer::sum);
+            }
+        }
+    }
+
+    /** Adds {@code weight} to every person the facet's finder returns; blank facets score no one. */
+    private static void scoreCandidates(
+            Map<UUID, Integer> scores,
+            int weight,
+            @Nullable String value,
+            java.util.function.Function<String, List<ExtPersonReplica>> finder) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        for (ExtPersonReplica person : finder.apply(value.trim())) {
+            scores.merge(person.getPersonId(), weight, Integer::sum);
+        }
     }
 
     private PersonIdentity toIdentity(ExtPersonReplica person) {

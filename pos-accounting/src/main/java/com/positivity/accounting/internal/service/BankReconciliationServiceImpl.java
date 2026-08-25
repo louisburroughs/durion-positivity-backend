@@ -187,51 +187,10 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
             @NonNull UUID reconciliationId, @NonNull ReconciliationMatchRequest request) {
         BankReconciliation recon = requireOpenReconciliation(reconciliationId);
 
-        List<BankReconciliationLine> statementLines = lineRepository.findAllById(request.getStatementLineIds());
-        if (statementLines.size() != new HashSet<>(request.getStatementLineIds()).size()) {
-            throw new ReconciliationNotFoundException("One or more statement lines were not found");
-        }
-        for (BankReconciliationLine line : statementLines) {
-            if (!reconciliationId.equals(line.getReconciliationId())) {
-                throw new ReconciliationNotFoundException("Statement line " + line.getLineId()
-                        + " does not belong to reconciliation " + reconciliationId);
-            }
-            if (line.getStatus() != BankReconciliationLineStatus.UNMATCHED) {
-                throw new ReconciliationLineIneligibleException(
-                        "Statement line " + line.getLineId() + " is not UNMATCHED");
-            }
-        }
-
-        List<JournalEntryLine> glLines = journalEntryLineRepository.findAllById(request.getGlLineIds());
-        if (glLines.size() != new HashSet<>(request.getGlLineIds()).size()) {
-            throw new ReconciliationNotFoundException("One or more GL journal-entry lines were not found");
-        }
-        for (JournalEntryLine glLine : glLines) {
-            if (!recon.getGlAccountId().equals(glLine.getGlAccountId())) {
-                throw new IllegalArgumentException("GL line " + glLine.getLineId()
-                        + " does not post to the reconciled account " + recon.getGlAccountId());
-            }
-            if (glLine.getJournalEntry() == null || glLine.getJournalEntry().getStatus() != JournalEntryStatus.POSTED) {
-                throw new ReconciliationLineIneligibleException(
-                        "GL line " + glLine.getLineId() + " is not on a POSTED entry");
-            }
-            // Global dedup: a posted GL line represents one cash movement and may be reconciled in at
-            // most one reconciliation (across all reconciliations, not just this one). The DB unique
-            // index on bank_reconciliation_gl_match(gl_line_id) is the backstop.
-            if (glMatchRepository.existsByGlLineId(glLine.getLineId())) {
-                throw new ReconciliationLineIneligibleException(
-                        "GL line " + glLine.getLineId() + " is already matched in a reconciliation");
-            }
-        }
-
-        BigDecimal statementSum =
-                statementLines.stream().map(BankReconciliationLine::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal glSum =
-                glLines.stream().map(BankReconciliationServiceImpl::signedGl).reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (statementSum.subtract(glSum).abs().compareTo(TOLERANCE) > 0) {
-            throw new MatchAmountMismatchException("Statement lines net " + statementSum + " but GL lines net " + glSum
-                    + " (must agree within ±0.01)");
-        }
+        List<BankReconciliationLine> statementLines =
+                requireMatchableStatementLines(reconciliationId, request.getStatementLineIds());
+        List<JournalEntryLine> glLines = requireMatchableGlLines(recon, request.getGlLineIds());
+        requireAmountsAgree(statementLines, glLines);
 
         UUID matchId = UUIDv7Generator.generate();
         for (BankReconciliationLine line : statementLines) {
@@ -270,40 +229,83 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         return toResponse(recon);
     }
 
+    /**
+     * The statement side of a match: every requested line must exist, belong to this
+     * reconciliation, and still be UNMATCHED.
+     *
+     * <p>The size check compares against the distinct requested ids, so a duplicated id dedupes
+     * rather than erroring — but an id resolving to no row fails the whole request. Matching only
+     * the lines that were found would report success for a selection the operator did not make.
+     */
+    private List<BankReconciliationLine> requireMatchableStatementLines(
+            UUID reconciliationId, List<UUID> statementLineIds) {
+        List<BankReconciliationLine> statementLines = lineRepository.findAllById(statementLineIds);
+        if (statementLines.size() != new HashSet<>(statementLineIds).size()) {
+            throw new ReconciliationNotFoundException("One or more statement lines were not found");
+        }
+        for (BankReconciliationLine line : statementLines) {
+            if (!reconciliationId.equals(line.getReconciliationId())) {
+                throw new ReconciliationNotFoundException("Statement line " + line.getLineId()
+                        + " does not belong to reconciliation " + reconciliationId);
+            }
+            if (line.getStatus() != BankReconciliationLineStatus.UNMATCHED) {
+                throw new ReconciliationLineIneligibleException(
+                        "Statement line " + line.getLineId() + " is not UNMATCHED");
+            }
+        }
+        return statementLines;
+    }
+
+    /**
+     * The GL side of a match: every requested line must exist, post to the reconciled account, sit
+     * on a POSTED entry, and not already explain a statement anywhere.
+     */
+    private List<JournalEntryLine> requireMatchableGlLines(BankReconciliation recon, List<UUID> glLineIds) {
+        List<JournalEntryLine> glLines = journalEntryLineRepository.findAllById(glLineIds);
+        if (glLines.size() != new HashSet<>(glLineIds).size()) {
+            throw new ReconciliationNotFoundException("One or more GL journal-entry lines were not found");
+        }
+        for (JournalEntryLine glLine : glLines) {
+            if (!recon.getGlAccountId().equals(glLine.getGlAccountId())) {
+                throw new IllegalArgumentException("GL line " + glLine.getLineId()
+                        + " does not post to the reconciled account " + recon.getGlAccountId());
+            }
+            if (glLine.getJournalEntry() == null || glLine.getJournalEntry().getStatus() != JournalEntryStatus.POSTED) {
+                throw new ReconciliationLineIneligibleException(
+                        "GL line " + glLine.getLineId() + " is not on a POSTED entry");
+            }
+            // Global dedup: a posted GL line represents one cash movement and may be reconciled in at
+            // most one reconciliation (across all reconciliations, not just this one). The DB unique
+            // index on bank_reconciliation_gl_match(gl_line_id) is the backstop.
+            if (glMatchRepository.existsByGlLineId(glLine.getLineId())) {
+                throw new ReconciliationLineIneligibleException(
+                        "GL line " + glLine.getLineId() + " is already matched in a reconciliation");
+            }
+        }
+        return glLines;
+    }
+
+    /** Both sides of a match must net to the same amount, within the ±0.01 rounding tolerance. */
+    private static void requireAmountsAgree(
+            List<BankReconciliationLine> statementLines, List<JournalEntryLine> glLines) {
+        BigDecimal statementSum =
+                statementLines.stream().map(BankReconciliationLine::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal glSum =
+                glLines.stream().map(BankReconciliationServiceImpl::signedGl).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (statementSum.subtract(glSum).abs().compareTo(TOLERANCE) > 0) {
+            throw new MatchAmountMismatchException("Statement lines net " + statementSum + " but GL lines net " + glSum
+                    + " (must agree within ±0.01)");
+        }
+    }
+
     @Override
     public BankReconciliationResponse unmatch(
             @NonNull UUID reconciliationId, @NonNull ReconciliationUnmatchRequest request) {
         BankReconciliation recon = requireOpenReconciliation(reconciliationId);
 
-        UUID matchId = request.getMatchId();
-        if (matchId == null) {
-            if (request.getStatementLineIds() == null
-                    || request.getStatementLineIds().isEmpty()) {
-                throw new IllegalArgumentException("Provide either matchId or statementLineIds to unmatch");
-            }
-            List<UUID> requestedIds = request.getStatementLineIds();
-            List<BankReconciliationLine> requested = lineRepository.findAllById(requestedIds);
-            if (requested.size() != new HashSet<>(requestedIds).size()) {
-                throw new ReconciliationNotFoundException("One or more statement lines were not found");
-            }
-            Set<UUID> matchIds = new HashSet<>();
-            for (BankReconciliationLine line : requested) {
-                // Ownership check: a line from another reconciliation must not influence matchId
-                // resolution (returns 404 rather than silently matching across reconciliations).
-                if (!reconciliationId.equals(line.getReconciliationId())) {
-                    throw new ReconciliationNotFoundException("Statement line " + line.getLineId()
-                            + " does not belong to reconciliation " + reconciliationId);
-                }
-                if (line.getMatchId() != null) {
-                    matchIds.add(line.getMatchId());
-                }
-            }
-            if (matchIds.size() != 1) {
-                throw new IllegalArgumentException(
-                        "statementLineIds must resolve to exactly one match group; found " + matchIds.size());
-            }
-            matchId = matchIds.iterator().next();
-        }
+        UUID matchId = request.getMatchId() != null
+                ? request.getMatchId()
+                : resolveMatchId(reconciliationId, request.getStatementLineIds());
 
         List<BankReconciliationLine> lines =
                 lineRepository.findByReconciliation_ReconciliationIdAndMatchId(reconciliationId, matchId);
@@ -322,6 +324,38 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         reconciliationRepository.save(recon);
         log.info("Unmatched match {} in reconciliation {} ({} line(s))", matchId, reconciliationId, lines.size());
         return toResponse(recon);
+    }
+
+    /**
+     * Resolves the one match group the requested statement lines belong to.
+     *
+     * <p>Exactly one, deliberately: lines spanning two groups would release a match the operator
+     * meant to keep, and lines in no group name nothing to release. A line from another
+     * reconciliation is a 404 before it can influence the resolution at all.
+     */
+    private UUID resolveMatchId(UUID reconciliationId, @Nullable List<UUID> statementLineIds) {
+        if (statementLineIds == null || statementLineIds.isEmpty()) {
+            throw new IllegalArgumentException("Provide either matchId or statementLineIds to unmatch");
+        }
+        List<BankReconciliationLine> requested = lineRepository.findAllById(statementLineIds);
+        if (requested.size() != new HashSet<>(statementLineIds).size()) {
+            throw new ReconciliationNotFoundException("One or more statement lines were not found");
+        }
+        Set<UUID> matchIds = new HashSet<>();
+        for (BankReconciliationLine line : requested) {
+            if (!reconciliationId.equals(line.getReconciliationId())) {
+                throw new ReconciliationNotFoundException("Statement line " + line.getLineId()
+                        + " does not belong to reconciliation " + reconciliationId);
+            }
+            if (line.getMatchId() != null) {
+                matchIds.add(line.getMatchId());
+            }
+        }
+        if (matchIds.size() != 1) {
+            throw new IllegalArgumentException(
+                    "statementLineIds must resolve to exactly one match group; found " + matchIds.size());
+        }
+        return matchIds.iterator().next();
     }
 
     @Override

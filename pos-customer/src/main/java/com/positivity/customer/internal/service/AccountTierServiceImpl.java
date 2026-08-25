@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -134,69 +135,77 @@ public class AccountTierServiceImpl implements AccountTierService {
      * Calculate the appropriate tier based on business rules.
      */
     private TierCalculation calculateTier(ResolveAccountTierRequest request) {
-        int score = 0;
-        StringBuilder reason = new StringBuilder();
-        AccountTier tier = AccountTier.STANDARD;
-
-        // Revenue-based calculation
-        if (request.getAnnualRevenue() != null) {
-            BigDecimal revenue = request.getAnnualRevenue();
-            if (revenue.compareTo(ENTERPRISE_THRESHOLD) >= 0) {
-                tier = AccountTier.ENTERPRISE;
-                score = 600;
-                reason.append("Annual revenue >= $1M. ");
-            } else if (revenue.compareTo(PLATINUM_THRESHOLD) >= 0) {
-                tier = AccountTier.PLATINUM;
-                score = 500;
-                reason.append("Annual revenue >= $500K. ");
-            } else if (revenue.compareTo(GOLD_THRESHOLD) >= 0) {
-                tier = AccountTier.GOLD;
-                score = 400;
-                reason.append("Annual revenue >= $250K. ");
-            } else if (revenue.compareTo(SILVER_THRESHOLD) >= 0) {
-                tier = AccountTier.SILVER;
-                score = 300;
-                reason.append("Annual revenue >= $100K. ");
-            } else if (revenue.compareTo(BRONZE_THRESHOLD) >= 0) {
-                tier = AccountTier.BRONZE;
-                score = 200;
-                reason.append("Annual revenue >= $50K. ");
-            }
+        TierCalculation calculation = new TierCalculation(AccountTier.STANDARD, 0, "");
+        calculation = revenueTier(calculation, request.getAnnualRevenue());
+        calculation = contractUpgrade(calculation, request.getActiveContractCount());
+        calculation = ageUpgrade(calculation, request.getAccountAgeMonths());
+        if (calculation.reason().isEmpty()) {
+            return new TierCalculation(calculation.tier(), calculation.score(), "Default tier assignment.");
         }
+        return new TierCalculation(
+                calculation.tier(), calculation.score(), calculation.reason().trim());
+    }
 
-        // Contract-based upgrade
-        if (request.getActiveContractCount() != null) {
-            int contracts = request.getActiveContractCount();
-            if (contracts >= PLATINUM_CONTRACTS && tier.ordinal() < AccountTier.PLATINUM.ordinal()) {
-                tier = AccountTier.PLATINUM;
-                score = Math.max(score, 500);
-                reason.append("5+ active contracts. ");
-            } else if (contracts >= GOLD_CONTRACTS && tier.ordinal() < AccountTier.GOLD.ordinal()) {
-                tier = AccountTier.GOLD;
-                score = Math.max(score, 400);
-                reason.append("3+ active contracts. ");
-            } else if (contracts >= SILVER_CONTRACTS && tier.ordinal() < AccountTier.SILVER.ordinal()) {
-                tier = AccountTier.SILVER;
-                score = Math.max(score, 300);
-                reason.append("2+ active contracts. ");
-            }
+    /** The base tier, from annual revenue alone. */
+    private static TierCalculation revenueTier(TierCalculation calculation, @Nullable BigDecimal revenue) {
+        if (revenue == null) {
+            return calculation;
         }
-
-        // Age-based upgrade (minimum BRONZE for established accounts)
-        if (request.getAccountAgeMonths() != null) {
-            int ageMonths = request.getAccountAgeMonths();
-            if (ageMonths >= BRONZE_AGE_MONTHS && tier == AccountTier.STANDARD) {
-                tier = AccountTier.BRONZE;
-                score = Math.max(score, 200);
-                reason.append("Account age >= 3 months. ");
-            }
+        if (revenue.compareTo(ENTERPRISE_THRESHOLD) >= 0) {
+            return new TierCalculation(AccountTier.ENTERPRISE, 600, "Annual revenue >= $1M. ");
         }
-
-        if (reason.length() == 0) {
-            reason.append("Default tier assignment. ");
+        if (revenue.compareTo(PLATINUM_THRESHOLD) >= 0) {
+            return new TierCalculation(AccountTier.PLATINUM, 500, "Annual revenue >= $500K. ");
         }
+        if (revenue.compareTo(GOLD_THRESHOLD) >= 0) {
+            return new TierCalculation(AccountTier.GOLD, 400, "Annual revenue >= $250K. ");
+        }
+        if (revenue.compareTo(SILVER_THRESHOLD) >= 0) {
+            return new TierCalculation(AccountTier.SILVER, 300, "Annual revenue >= $100K. ");
+        }
+        if (revenue.compareTo(BRONZE_THRESHOLD) >= 0) {
+            return new TierCalculation(AccountTier.BRONZE, 200, "Annual revenue >= $50K. ");
+        }
+        return calculation;
+    }
 
-        return new TierCalculation(tier, score, reason.toString().trim());
+    /**
+     * Contract counts can only raise the tier. A rule whose target the account already meets is a
+     * complete no-op — its reason must not be appended either, or the resolution would attribute
+     * the tier to a rule that did not decide it.
+     */
+    private static TierCalculation contractUpgrade(TierCalculation calculation, @Nullable Integer contractCount) {
+        if (contractCount == null) {
+            return calculation;
+        }
+        if (contractCount >= PLATINUM_CONTRACTS) {
+            return raiseTo(calculation, AccountTier.PLATINUM, 500, "5+ active contracts. ");
+        }
+        if (contractCount >= GOLD_CONTRACTS) {
+            return raiseTo(calculation, AccountTier.GOLD, 400, "3+ active contracts. ");
+        }
+        if (contractCount >= SILVER_CONTRACTS) {
+            return raiseTo(calculation, AccountTier.SILVER, 300, "2+ active contracts. ");
+        }
+        return calculation;
+    }
+
+    /** Age grants a minimum BRONZE to established accounts that earned nothing else. */
+    private static TierCalculation ageUpgrade(TierCalculation calculation, @Nullable Integer ageMonths) {
+        if (ageMonths == null || ageMonths < BRONZE_AGE_MONTHS || calculation.tier() != AccountTier.STANDARD) {
+            return calculation;
+        }
+        return new TierCalculation(
+                AccountTier.BRONZE,
+                Math.max(calculation.score(), 200),
+                calculation.reason() + "Account age >= 3 months. ");
+    }
+
+    private static TierCalculation raiseTo(TierCalculation calculation, AccountTier target, int score, String reason) {
+        if (calculation.tier().ordinal() >= target.ordinal()) {
+            return calculation;
+        }
+        return new TierCalculation(target, Math.max(calculation.score(), score), calculation.reason() + reason);
     }
 
     /**

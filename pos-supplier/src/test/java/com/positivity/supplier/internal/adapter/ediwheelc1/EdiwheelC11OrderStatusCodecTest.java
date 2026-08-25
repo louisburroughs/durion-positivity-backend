@@ -295,6 +295,138 @@ class EdiwheelC11OrderStatusCodecTest {
         }
 
         @Test
+        void readsARejectedOrderAsRejectedWithTheVendorsReason() {
+            String rejected = """
+                    <ew:order_status xmlns:ew="http://www.reifen.net">
+                        <ew:DocumentID>C1</ew:DocumentID>
+                        <ew:ErrorHead><ew:ErrorCode>0</ew:ErrorCode></ew:ErrorHead>
+                        <ew:ReferencedOrder>
+                            <ew:Error>
+                                <ew:ErrorCode>402</ew:ErrorCode>
+                                <ew:ErrorText>Article no longer available</ew:ErrorText>
+                            </ew:Error>
+                            <ew:OrderReference><ew:DocumentID>%s</ew:DocumentID></ew:OrderReference>
+                            <ew:OrderLine><ew:LineID>000001</ew:LineID></ew:OrderLine>
+                        </ew:ReferencedOrder>
+                    </ew:order_status>
+                    """.formatted(DOCUMENT_ID);
+
+            SupplierOrderStatusResult result =
+                    codec.decode(DOCUMENT_ID, rejected).result();
+
+            // An order-level error is the vendor answering "no", which must not read as the
+            // header-level "your query is malformed" nor as an order still in progress.
+            assertThat(result.status()).isEqualTo(SupplierOrderStatusResult.Status.REJECTED);
+            assertThat(result.vendorErrorCode()).isEqualTo("402");
+            assertThat(result.vendorReason()).isEqualTo("Article no longer available");
+        }
+
+        @Test
+        void assumesASingleTerseAnswerIsOursAndRecordsTheAssumption() {
+            String terse = """
+                    <ew:order_status xmlns:ew="http://www.reifen.net">
+                        <ew:DocumentID>C1</ew:DocumentID>
+                        <ew:ReferencedOrder>
+                            <ew:OrderLine><ew:LineID>000001</ew:LineID></ew:OrderLine>
+                        </ew:ReferencedOrder>
+                    </ew:order_status>
+                    """;
+
+            EdiwheelC11OrderStatusCodec.Decoded decoded = codec.decode(DOCUMENT_ID, terse);
+
+            // One answer to a single-reference query, echoing no reference: taken as ours, but
+            // the assumption is recorded — silently trusting it would be indistinguishable from
+            // a genuine match in the reconciliation log.
+            assertThat(decoded.result().isKnownToVendor()).isTrue();
+            assertThat(decoded.unmappedFields()).anyMatch(field -> field.contains("single answer assumed to be ours"));
+        }
+
+        @Test
+        void readsALineWithNoArticleBlockAsAllUnknowns() {
+            String bare = """
+                    <ew:order_status xmlns:ew="http://www.reifen.net">
+                        <ew:DocumentID>C1</ew:DocumentID>
+                        <ew:ReferencedOrder>
+                            <ew:OrderReference><ew:DocumentID>%s</ew:DocumentID></ew:OrderReference>
+                            <ew:OrderLine>
+                                <ew:LineID>000009</ew:LineID>
+                                <ew:CustomerLineItemNumber>000009</ew:CustomerLineItemNumber>
+                            </ew:OrderLine>
+                        </ew:ReferencedOrder>
+                    </ew:order_status>
+                    """.formatted(DOCUMENT_ID);
+
+            SupplierOrderStatusResult.Line line =
+                    codec.decode(DOCUMENT_ID, bare).result().lines().getFirst();
+
+            // A vendor acknowledging a line without repeating the article must yield a line of
+            // unknowns, not a crash: the line id is still the reconciliation key.
+            assertThat(line.lineId()).isEqualTo("000009");
+            assertThat(line.articleEan()).isNull();
+            assertThat(line.orderedQuantity()).isNull();
+            assertThat(line.requestedDeliveryDate()).isNull();
+            assertThat(line.schedules()).isEmpty();
+        }
+
+        @Test
+        void recordsEveryUnreadableDateAndQuantityInsteadOfReadingThemAsAbsent() {
+            String garbled = """
+                    <ew:order_status xmlns:ew="http://www.reifen.net">
+                        <ew:DocumentID>C1</ew:DocumentID>
+                        <ew:ReferencedOrder>
+                            <ew:OrderDate>NEXT-TUESDAY</ew:OrderDate>
+                            <ew:OrderReference><ew:DocumentID>%s</ew:DocumentID></ew:OrderReference>
+                            <ew:OrderLine>
+                                <ew:LineID>000001</ew:LineID>
+                                <ew:OrderedArticle>
+                                    <ew:RequestedDeliveryDate>SOON</ew:RequestedDeliveryDate>
+                                    <ew:ScheduleDetails>
+                                        <ew:DeliveryDate>SOMETIME</ew:DeliveryDate>
+                                        <ew:ShippedDetails>
+                                            <ew:ShippedQuantity>
+                                                <ew:QuantityValue>MANY</ew:QuantityValue>
+                                            </ew:ShippedQuantity>
+                                            <ew:DespatchedDetails>
+                                                <ew:ScheduledArticleDespatchDetails>
+                                                    <ew:DespatchDate>YESTERDAYISH</ew:DespatchDate>
+                                                </ew:ScheduledArticleDespatchDetails>
+                                            </ew:DespatchedDetails>
+                                        </ew:ShippedDetails>
+                                    </ew:ScheduleDetails>
+                                    <ew:OrderedQuantity>
+                                        <ew:QuantityValue>A FEW</ew:QuantityValue>
+                                    </ew:OrderedQuantity>
+                                </ew:OrderedArticle>
+                            </ew:OrderLine>
+                        </ew:ReferencedOrder>
+                    </ew:order_status>
+                    """.formatted(DOCUMENT_ID);
+
+            EdiwheelC11OrderStatusCodec.Decoded decoded = codec.decode(DOCUMENT_ID, garbled);
+
+            // An unparseable value and an absent one both render as null; only these records
+            // distinguish a vendor format change from a vendor silence.
+            assertThat(decoded.unmappedFields())
+                    .contains(
+                            "ReferencedOrder/OrderDate",
+                            "OrderedArticle/RequestedDeliveryDate",
+                            "OrderedArticle/OrderedQuantity",
+                            "ScheduleDetails/DeliveryDate",
+                            "ScheduleDetails/ShippedDetails/ShippedQuantity",
+                            "ScheduledArticleDespatchDetails/DespatchDate");
+            SupplierDeliverySchedule schedule =
+                    decoded.result().lines().getFirst().schedules().getFirst();
+            assertThat(schedule.deliveryDate()).isNull();
+            assertThat(schedule.despatches().getFirst().despatchAdviceDocumentId())
+                    .isNull();
+        }
+
+        @Test
+        void rejectsANullBody() {
+            assertThatThrownBy(() -> codec.decode(DOCUMENT_ID, null)).isInstanceOf(OrderDecodeException.class);
+        }
+
+        @Test
         void rejectsAnEmptyBody() {
             assertThatThrownBy(() -> codec.decode(DOCUMENT_ID, "  ")).isInstanceOf(OrderDecodeException.class);
         }
