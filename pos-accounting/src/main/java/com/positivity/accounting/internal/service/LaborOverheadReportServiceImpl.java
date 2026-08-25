@@ -169,28 +169,49 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
         Set<UUID> accountIds = new HashSet<>();
         leafToAccounts.values().forEach(accountIds::addAll);
 
+        Map<UUID, BigDecimal[]> accountMonthly = aggregateAccountMonthly(accountIds, locationId, fiscalYear);
+        return rollUpLeafMonthly(leafToAccounts, accountMonthly);
+    }
+
+    /**
+     * Aggregate posted net amounts (debit − credit) per GL account into a 12-element monthly array,
+     * filtered to the requested location dimension. A line missing its GL account id or transaction
+     * date (malformed data) is silently excluded rather than corrupting the month-index arithmetic.
+     */
+    private Map<UUID, BigDecimal[]> aggregateAccountMonthly(Set<UUID> accountIds, String locationId, int fiscalYear) {
         Map<UUID, BigDecimal[]> accountMonthly = new HashMap<>();
-        if (!accountIds.isEmpty()) {
-            LocalDateTime start = LocalDate.of(fiscalYear, 1, 1).atStartOfDay();
-            LocalDateTime end = LocalDate.of(fiscalYear, 12, 31).atTime(LocalTime.MAX);
-            List<JournalEntryLine> lines =
-                    journalEntryLineRepository.findPostedLinesByAccountsAndDateRange(accountIds, start, end);
-            for (JournalEntryLine line : lines) {
-                if (!matchesLocation(line, locationId)) {
-                    continue;
-                }
-                UUID accountId = line.getGlAccountId();
-                LocalDateTime transactionDate = line.getJournalEntry().getTransactionDate();
-                if (accountId == null || transactionDate == null) {
-                    continue;
-                }
-                int monthIndex = transactionDate.getMonthValue() - 1;
-                BigDecimal net = nullToZero(line.getDebitAmount()).subtract(nullToZero(line.getCreditAmount()));
-                BigDecimal[] perAccount = accountMonthly.computeIfAbsent(accountId, key -> zeroMonths());
-                perAccount[monthIndex] = perAccount[monthIndex].add(net);
-            }
+        if (accountIds.isEmpty()) {
+            return accountMonthly;
         }
 
+        LocalDateTime start = LocalDate.of(fiscalYear, 1, 1).atStartOfDay();
+        LocalDateTime end = LocalDate.of(fiscalYear, 12, 31).atTime(LocalTime.MAX);
+        List<JournalEntryLine> lines =
+                journalEntryLineRepository.findPostedLinesByAccountsAndDateRange(accountIds, start, end);
+        for (JournalEntryLine line : lines) {
+            if (!matchesLocation(line, locationId)) {
+                continue;
+            }
+            UUID accountId = line.getGlAccountId();
+            LocalDateTime transactionDate = line.getJournalEntry().getTransactionDate();
+            if (accountId == null || transactionDate == null) {
+                continue;
+            }
+            int monthIndex = transactionDate.getMonthValue() - 1;
+            BigDecimal net = nullToZero(line.getDebitAmount()).subtract(nullToZero(line.getCreditAmount()));
+            BigDecimal[] perAccount = accountMonthly.computeIfAbsent(accountId, key -> zeroMonths());
+            perAccount[monthIndex] = perAccount[monthIndex].add(net);
+        }
+        return accountMonthly;
+    }
+
+    /**
+     * Sum each leaf line's contributing accounts into its monthly array. A leaf mapped to an
+     * account with no posted activity this fiscal year (no entry in {@code accountMonthly}) simply
+     * contributes zero, rather than being omitted from the report.
+     */
+    private Map<String, BigDecimal[]> rollUpLeafMonthly(
+            Map<String, Set<UUID>> leafToAccounts, Map<UUID, BigDecimal[]> accountMonthly) {
         Map<String, BigDecimal[]> leafMonthly = new HashMap<>();
         leafToAccounts.forEach((code, accounts) -> {
             BigDecimal[] monthly = zeroMonths();

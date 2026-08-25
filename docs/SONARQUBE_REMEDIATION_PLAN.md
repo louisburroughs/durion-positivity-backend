@@ -1,8 +1,9 @@
 # SonarQube Remediation Plan
 
 Status: Phases 1, 2, 3.1–3.5 implemented. Phase 3.6 (`S3776`, 62 findings)
-in progress: **28 of 62 findings addressed** (23 classes) across #1498, #1500
-and #1501 (merged) and part 4 (open at the time of writing); 34 remain.
+in progress: **38 of 62 findings addressed** (31 distinct classes) across
+#1498, #1500, #1501, #1502 (merged) and part 5 (open at the time of writing);
+24 remain.
 Per-finding status is now a `status` column in
 `docs/sonarqube-remediation-inventory.csv`, mapping every row of every phase to
 the PR that resolved it or its documented no-action reason.
@@ -454,7 +455,7 @@ Sonar's threshold is 15. The distribution is long-tailed: **23 methods score
 By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 `pos-supplier` 6, `pos-warranty` 5, then a tail of 12 modules with 1–3 each.
 
-#### Progress: 28 of 62 findings addressed (23 classes)
+#### Progress: 38 of 62 findings addressed (31 distinct classes)
 
 | # | PR | Method split | Class branch coverage |
 | -: | -- | ------------ | --------------------- |
@@ -474,6 +475,18 @@ By module: `pos-accounting` 13, `pos-inventory` 11, `pos-customer` 7,
 | 21 | part 4 | `PartyRelationshipServiceImpl.getContactsForCommercialAccount` (20) | 89.1% → 97.8% |
 | 22 | part 4 | `PersonDirectoryService.bestMatch` (20) | 44.8% → 85.4% |
 | 23–24 | part 4 | `BankReconciliationServiceImpl` — two findings (19, 18) | 52.2% → 92.2% |
+
+| 25 | part 5 | `SalesOrderServiceImpl.linkSource` (18) | 89.4% → 91.3% (method 100%) |
+| 26–27 | part 5 | `PartReturnServiceImpl.update` (19), `EligibilityServiceImpl.checkTerms` (18) | 88.5% → 96.2%; 83.6% → 85.2% |
+| 28 | part 5 | `ContactRoleServiceImpl.getContactsWithRoles` (19) | 0% unit → 76.9% (method 100%) |
+| 29 | part 5 | `AppointmentsServiceImpl.createAppointment` (19) | 56.0% → 59.2% (method + helpers ~100%) |
+| 30–32 | part 5 | `CycleCountScheduleServiceImpl.runDueSchedules` (19), `ReplenishmentSourcingService.resolve` (19), `ReceivingServiceImpl.crossDockLineToWorkorder` (18) | 76.2%; 70.8% → 82.7% (first unit tests); 66.2% → 72.1% |
+| 33–34 | part 5 | `LaborOverheadReportServiceImpl.aggregateLeafMonthly` (19), `PostingEngineOrchestrator.processEvent` (19) | 88.6% → 92.9%; 91.7% → 96.4% |
+
+Part 5 was executed by per-module subagents working from a shared plan; note
+that the `ReceivingServiceImpl:225` finding is `crossDockLineToWorkorder` —
+the low-coverage `resolveRequestScopedSiteId` flagged earlier lives in
+`StagingLocationResolver`, a different class, and stays open.
 
 **The recurring finding.** In almost every target, the complexity finding names
 a method but the *untested* branches are in the helper or lambda it delegates
@@ -539,7 +552,7 @@ This is the only bucket that changes real control flow, so it is scheduled
 | 3.2–3.3 | `S1948`, `S3252` | 5 | 0.8 h | none | done |
 | 3.4 | `S1186` empty methods | 15 | 1.2 h | none | done: 8 deleted, 2 fixed, 5 documented |
 | 3.5 | `S1192` literals | 148 | 21.0 h | none | done |
-| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 28 of 62 (23 classes) |
+| 3.6 | `S3776` complexity | 62 | 11.6 h | none | in progress: 38 of 62 (31 classes) |
 | | **Total** | **267** | **≈38 h** | | |
 
 - Phases 1 and 2 shipped as **one small PR** — 3 issues, and the only change in

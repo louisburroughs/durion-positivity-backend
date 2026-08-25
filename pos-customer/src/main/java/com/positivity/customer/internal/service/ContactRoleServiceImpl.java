@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -92,50 +93,74 @@ public class ContactRoleServiceImpl implements ContactRoleService {
             UUID contactId = entry.getKey();
             List<ContactRoleAssignment> contactAssignments = entry.getValue();
 
-            // Get person details
-            personRepository.findByPersonId(contactId).ifPresent(person -> {
-                PersonDirectoryService.PersonIdentity identity = identities.get(contactId);
-                // Name/email/phone from pos-people (sole source of truth, ADR-0015 I2; issue #684).
-                String contactName =
-                        identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
-                var contactDto = GetContactsWithRolesResponse.ContactWithRoles.builder()
-                        .contactId(contactId.toString())
-                        .contactName(contactName)
-                        .build();
-
-                String email = identity != null && !identity.emails().isEmpty()
-                        ? identity.emails().get(0)
-                        : null;
-                if (email != null) {
-                    contactDto.setEmail(email);
-                }
-                contactDto.setHasPrimaryEmail(email != null);
-
-                String phone = identity != null && !identity.phones().isEmpty()
-                        ? identity.phones().get(0)
-                        : null;
-                if (phone != null) {
-                    contactDto.setPhone(phone);
-                }
-
-                // Map role assignments
-                List<GetContactsWithRolesResponse.AssignedRole> roles = contactAssignments.stream()
-                        .map(assignment -> GetContactsWithRolesResponse.AssignedRole.builder()
-                                .roleCode(assignment.getRoleName().name())
-                                .roleLabel(assignment.getRoleName().getLabel())
-                                .isPrimary(assignment.isPrimary())
-                                .build())
-                        .toList();
-
-                contactDto.setRoles(roles);
-                contacts.add(contactDto);
-            });
+            // Only surface contacts that still resolve to a person record in pos-customer.
+            personRepository
+                    .findByPersonId(contactId)
+                    .ifPresent(person -> contacts.add(
+                            buildContactWithRoles(contactId, contactAssignments, identities.get(contactId))));
         }
 
         return GetContactsWithRolesResponse.builder()
                 .partyId(partyId.toString())
                 .contacts(contacts)
                 .build();
+    }
+
+    /**
+     * Assembles one contact's response entry: name/email/phone projected from the pos-people
+     * identity (ADR-0015 I2; issue #684, each independently optional), plus its mapped role
+     * assignments.
+     */
+    private static GetContactsWithRolesResponse.@NonNull ContactWithRoles buildContactWithRoles(
+            @NonNull UUID contactId,
+            @NonNull List<ContactRoleAssignment> contactAssignments,
+            PersonDirectoryService.@Nullable PersonIdentity identity) {
+        var contactDto = GetContactsWithRolesResponse.ContactWithRoles.builder()
+                .contactId(contactId.toString())
+                .contactName(resolveContactName(identity))
+                .build();
+
+        String email = resolvePrimaryEmail(identity);
+        if (email != null) {
+            contactDto.setEmail(email);
+        }
+        contactDto.setHasPrimaryEmail(email != null);
+
+        String phone = resolvePrimaryPhone(identity);
+        if (phone != null) {
+            contactDto.setPhone(phone);
+        }
+
+        contactDto.setRoles(mapAssignedRoles(contactAssignments));
+        return contactDto;
+    }
+
+    private static String resolveContactName(PersonDirectoryService.@Nullable PersonIdentity identity) {
+        return identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
+    }
+
+    private static String resolvePrimaryEmail(PersonDirectoryService.@Nullable PersonIdentity identity) {
+        return identity != null && !identity.emails().isEmpty()
+                ? identity.emails().get(0)
+                : null;
+    }
+
+    private static String resolvePrimaryPhone(PersonDirectoryService.@Nullable PersonIdentity identity) {
+        return identity != null && !identity.phones().isEmpty()
+                ? identity.phones().get(0)
+                : null;
+    }
+
+    @NonNull
+    private static List<GetContactsWithRolesResponse.AssignedRole> mapAssignedRoles(
+            @NonNull List<ContactRoleAssignment> contactAssignments) {
+        return contactAssignments.stream()
+                .map(assignment -> GetContactsWithRolesResponse.AssignedRole.builder()
+                        .roleCode(assignment.getRoleName().name())
+                        .roleLabel(assignment.getRoleName().getLabel())
+                        .isPrimary(assignment.isPrimary())
+                        .build())
+                .toList();
     }
 
     /**

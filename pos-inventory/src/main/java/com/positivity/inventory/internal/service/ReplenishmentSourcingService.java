@@ -154,6 +154,36 @@ public class ReplenishmentSourcingService {
         String sku = policy.getItemSKU();
         UUID destinationSite = forecastSiteResolver.resolveForecastSite(policy.getLocationId());
 
+        CandidatePartition candidates = partitionCandidates(policy, sku, destinationSite);
+
+        Optional<SourcingResolution> sameSite =
+                trySameSiteSourcing(sku, destinationSite, policy, candidates.sameSite(), neededQuantity);
+        if (sameSite.isPresent()) {
+            return sameSite.get();
+        }
+
+        Optional<SourcingResolution> crossSite = tryCrossSiteSourcing(
+                policy, sku, destinationSite, candidates.crossSite(), candidates.siteByLocation(), neededQuantity);
+        if (crossSite.isPresent()) {
+            return crossSite.get();
+        }
+
+        return noInternalSourceResolution(policy, sku, destinationSite, neededQuantity);
+    }
+
+    /** Same-site and cross-site surplus candidates for one SKU, keyed by resolved site. */
+    private record CandidatePartition(
+            @NonNull List<SourcingCandidate> sameSite,
+            @NonNull List<SourcingCandidate> crossSite,
+            @NonNull Map<UUID, UUID> siteByLocation) {}
+
+    /**
+     * Splits every stock-summary row for the SKU into same-site backstock and cross-site surplus,
+     * dropping rows with no location, no offerable surplus, or (same-site only) the pick face
+     * itself — sourcing a location from itself is never a candidate.
+     */
+    private @NonNull CandidatePartition partitionCandidates(
+            @NonNull ReplenishmentPolicy policy, @NonNull String sku, @Nullable UUID destinationSite) {
         List<SourcingCandidate> sameSite = new ArrayList<>();
         List<SourcingCandidate> crossSite = new ArrayList<>();
         Map<UUID, UUID> siteByLocation = new HashMap<>();
@@ -179,63 +209,99 @@ public class ReplenishmentSourcingService {
                 siteByLocation.put(loc, rowSite);
             }
         }
+        return new CandidatePartition(sameSite, crossSite, siteByLocation);
+    }
 
-        // 1. Same-site backstock surplus → bin-move task (no transfer).
-        Optional<SourceSelection> sameSitePick = sameSite.isEmpty()
+    /** Same-site backstock surplus → bin-move task (no transfer); empty when none qualifies. */
+    private @NonNull Optional<SourcingResolution> trySameSiteSourcing(
+            @NonNull String sku,
+            @Nullable UUID destinationSite,
+            @NonNull ReplenishmentPolicy policy,
+            @NonNull List<SourcingCandidate> sameSite,
+            int neededQuantity) {
+        Optional<SourceSelection> pick = sameSite.isEmpty()
                 ? Optional.empty()
                 : sourcingStrategyService.selectSource(
                         new SourcingSelection(sku, destinationSite, policy.getLocationId(), sameSite),
                         BigDecimal.valueOf(neededQuantity));
-        if (sameSitePick.isPresent()) {
-            SourceSelection selection = sameSitePick.get();
-            log.info(
-                    "F5 internal sourcing (same-site bin move): sku={} destinationSite={} source={} qty={}"
-                            + " strategy={}",
-                    sku,
-                    destinationSite,
-                    selection.candidate().locationId(),
-                    neededQuantity,
-                    selection.decision().effectiveStrategy());
-            return SourcingResolution.task(
-                    selection.candidate().locationId(),
-                    null,
-                    sourcingReasonOf(selection.decision().effectiveStrategy()),
-                    ReplenishmentDecisionReason.BELOW_MIN);
+        if (pick.isEmpty()) {
+            return Optional.empty();
         }
+        SourceSelection selection = pick.get();
+        log.info(
+                "F5 internal sourcing (same-site bin move): sku={} destinationSite={} source={} qty={}"
+                        + " strategy={}",
+                sku,
+                destinationSite,
+                selection.candidate().locationId(),
+                neededQuantity,
+                selection.decision().effectiveStrategy());
+        return Optional.of(SourcingResolution.task(
+                selection.candidate().locationId(),
+                null,
+                sourcingReasonOf(selection.decision().effectiveStrategy()),
+                ReplenishmentDecisionReason.BELOW_MIN));
+    }
 
-        // 2. Cross-site surplus → materialize a WS-C TransferOrder (DRAFT) and link it.
-        Optional<SourceSelection> crossSitePick = crossSite.isEmpty()
+    /**
+     * Cross-site surplus → materializes a WS-C TransferOrder (DRAFT) and links it; empty when no
+     * candidate qualifies OR the selected transfer's creation fails (the caller falls through to
+     * purchase / backstock-unavailable so the need is never silently dropped).
+     */
+    private @NonNull Optional<SourcingResolution> tryCrossSiteSourcing(
+            @NonNull ReplenishmentPolicy policy,
+            @NonNull String sku,
+            @Nullable UUID destinationSite,
+            @NonNull List<SourcingCandidate> crossSite,
+            @NonNull Map<UUID, UUID> siteByLocation,
+            int neededQuantity) {
+        Optional<SourceSelection> pick = crossSite.isEmpty()
                 ? Optional.empty()
                 : sourcingStrategyService.selectSource(
                         new SourcingSelection(sku, null, null, crossSite), BigDecimal.valueOf(neededQuantity));
-        if (crossSitePick.isPresent()) {
-            SourceSelection selection = crossSitePick.get();
-            UUID sourceLocation = selection.candidate().locationId();
-            UUID sourceSite = siteByLocation.getOrDefault(
-                    sourceLocation, forecastSiteResolver.resolveForecastSite(sourceLocation));
-            Optional<UUID> transferOrderId =
-                    createCrossSiteTransfer(policy, sku, neededQuantity, sourceSite, sourceLocation, destinationSite);
-            if (transferOrderId.isPresent()) {
-                log.info(
-                        "F5 internal sourcing (cross-site transfer): sku={} sourceSite={} destinationSite={}"
-                                + " qty={} strategy={} transferOrderId={}",
-                        sku,
-                        sourceSite,
-                        destinationSite,
-                        neededQuantity,
-                        selection.decision().effectiveStrategy(),
-                        transferOrderId.get());
-                return SourcingResolution.task(
-                        sourceSite,
-                        transferOrderId.get(),
-                        sourcingReasonOf(selection.decision().effectiveStrategy()),
-                        ReplenishmentDecisionReason.BELOW_MIN);
-            }
-            // Transfer creation failed (e.g. an ineligible site) — fall through to purchase /
-            // backstock-unavailable so the need is never silently dropped.
+        if (pick.isEmpty()) {
+            return Optional.empty();
         }
+        SourceSelection selection = pick.get();
+        UUID sourceLocation = selection.candidate().locationId();
+        // get-then-resolve rather than getOrDefault: getOrDefault evaluates its default eagerly,
+        // which would call the resolver on every selection even when the partition already
+        // recorded the site.
+        UUID sourceSite = siteByLocation.get(sourceLocation);
+        if (sourceSite == null) {
+            sourceSite = forecastSiteResolver.resolveForecastSite(sourceLocation);
+        }
+        Optional<UUID> transferOrderId =
+                createCrossSiteTransfer(policy, sku, neededQuantity, sourceSite, sourceLocation, destinationSite);
+        if (transferOrderId.isEmpty()) {
+            return Optional.empty();
+        }
+        log.info(
+                "F5 internal sourcing (cross-site transfer): sku={} sourceSite={} destinationSite={}"
+                        + " qty={} strategy={} transferOrderId={}",
+                sku,
+                sourceSite,
+                destinationSite,
+                neededQuantity,
+                selection.decision().effectiveStrategy(),
+                transferOrderId.get());
+        return Optional.of(SourcingResolution.task(
+                sourceSite,
+                transferOrderId.get(),
+                sourcingReasonOf(selection.decision().effectiveStrategy()),
+                ReplenishmentDecisionReason.BELOW_MIN));
+    }
 
-        // 3. No qualifying internal source.
+    /**
+     * No internal source qualified: an EITHER policy with a selectable vendor routes to the F4
+     * purchase-suggestion path; everything else (including default-policy degradation) becomes an
+     * actionable BACKSTOCK_UNAVAILABLE task rather than a silently-dropped need.
+     */
+    private @NonNull SourcingResolution noInternalSourceResolution(
+            @NonNull ReplenishmentPolicy policy,
+            @NonNull String sku,
+            @Nullable UUID destinationSite,
+            int neededQuantity) {
         if (policy.getPreferredSourceType() == ReplenishmentSourceType.EITHER
                 && hasSelectableVendor(sku, neededQuantity)) {
             log.info(

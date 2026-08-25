@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -66,6 +67,34 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+/**
+ * Unit tests for {@code ReceivingServiceImpl}, including characterisation coverage for
+ * {@code crossDockLineToWorkorder} (S3776 remediation, cognitive complexity 18) added ahead of
+ * splitting it into named helpers.
+ *
+ * <p><b>Deliberately-uncovered branches in {@code crossDockLineToWorkorder}</b>, left untested
+ * rather than faked because no reachable state produces them:
+ *
+ * <ul>
+ *   <li>The {@code RECEIVED_OVER} arm of its status three-way branch is dead code: the method's
+ *       own earlier guard throws {@code IllegalArgumentException} whenever {@code
+ *       cumulativeReceivedQuantity > expectedQuantity}, so by the time the status is computed
+ *       {@code cumulativeReceivedQuantity <= expectedQuantity} always holds and the comparison
+ *       can only be zero or negative. (The refactor delegates this comparison to the existing
+ *       {@code statusFor} helper, which legitimately reaches {@code RECEIVED_OVER} from {@code
+ *       receiveItemsIntoStaging}'s unguarded call site — see {@code
+ *       receiveItemsIntoStaging_overReceipt_overageVariance} — so the arm stays exercised
+ *       there even though this method can never select it.)</li>
+ *   <li>The {@code null} fallbacks for {@code existingReceivedQuantity} and {@code
+ *       expectedQuantity} (defensive {@code != null ? … : …} ternaries) are unreachable through
+ *       this service: every {@code ReceivingLine} it hands out is built by {@code
+ *       buildLinesFromDocument} with {@code receivedQuantity(BigDecimal.ZERO)}, and {@code
+ *       requireUsableLine} rejects any source document line whose {@code expectedQuantity} is
+ *       null or non-positive before a {@code ReceivingLine} is ever created from it. Constructing
+ *       a line with a null quantity by hand would exercise a state the production code never
+ *       produces, not the guard's real job.</li>
+ * </ul>
+ */
 @ExtendWith(MockitoExtension.class)
 class ReceivingServiceImplTest {
 
@@ -1176,6 +1205,178 @@ class ReceivingServiceImplTest {
         assertThat(issueEntry.getFromLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
         assertThat(issueEntry.getQuantityAfter()).isEqualByComparingTo("4");
         assertThat(issueEntry.getChangeInQuantity()).isEqualByComparingTo("-10");
+    }
+
+    /**
+     * The request can name a lineId this session does not have (a stale UI, a typo'd id); that
+     * must 404 rather than post ledger entries against a line that does not exist.
+     */
+    @Test
+    void crossDockLineToWorkorder_lineNotInSession_throwsNotFoundException() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID otherLineId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+
+        CrossDockRequest request = new CrossDockRequest("WO-001", "wol-1", new BigDecimal("1"), null);
+
+        ReceivingSessionNotFoundException exception = assertThrows(
+                ReceivingSessionNotFoundException.class,
+                () -> receivingService.crossDockLineToWorkorder(sessionId, otherLineId, request, "actor-user"));
+
+        assertThat(exception.getMessage()).contains("Receiving line not found in session");
+        verify(workorderValidationService, never()).getWorkorderLineValidation(any(), any());
+    }
+
+    /**
+     * A session settles only once EVERY line has; cross-docking one line of a multi-line session
+     * must leave the session IN_PROGRESS while its sibling line is still EXPECTED.
+     */
+    @Test
+    void crossDockLineToWorkorder_otherLineStillExpected_sessionStaysInProgress() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID otherLineId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingLine otherLine = ReceivingLine.builder()
+                .lineId(otherLineId)
+                .productId("PROD-002")
+                .expectedQuantity(new BigDecimal("5"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line, otherLine)))
+                .build();
+        line.setSession(session);
+        otherLine.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+
+        CrossDockRequest request =
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
+
+        CrossDockResponse result = receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
+
+        assertThat(result.getSessionStatus()).isEqualTo(ReceivingSessionStatus.IN_PROGRESS.name());
+        assertThat(session.getStatus()).isEqualTo(ReceivingSessionStatus.IN_PROGRESS);
+    }
+
+    /**
+     * odoo-parity E2 (#1042): a request-supplied lot number is the one stamped on BOTH paired
+     * ledger entries and (trimmed) keyed back onto the line, so the funnel's per-lot row nets to
+     * zero and the lot's status reconciler can mark it CONSUMED once the workorder consumes it.
+     */
+    @Test
+    void crossDockLineToWorkorder_requestLotNumber_stampsTrimmedLotOnLineAndBothLedgerEntries() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lotId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(lotCaptureService.resolveReceiptLot(eq("PROD-001"), eq("  LOT-A  "), any()))
+                .thenReturn(lotId);
+
+        CrossDockRequest request =
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null, "  LOT-A  ");
+
+        receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
+
+        assertThat(line.getLotNumber()).isEqualTo("LOT-A");
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService, times(2)).post(ledgerCaptor.capture());
+        assertThat(ledgerCaptor.getAllValues())
+                .allSatisfy(entry -> assertThat(entry.getLotId()).isEqualTo(lotId));
+    }
+
+    /**
+     * A blank (not null) request lot number is treated as absent — the fallback is the lot
+     * already keyed on the receiving line from its original receipt, not a refusal.
+     */
+    @Test
+    void crossDockLineToWorkorder_blankRequestLotNumber_fallsBackToLinesExistingLotNumber() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lotId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .lotNumber("LOT-ORIGINAL")
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
+                .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
+        when(lotCaptureService.resolveReceiptLot(eq("PROD-001"), eq("LOT-ORIGINAL"), any()))
+                .thenReturn(lotId);
+
+        CrossDockRequest request =
+                new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null, "   ");
+
+        receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
+
+        assertThat(line.getLotNumber()).isEqualTo("LOT-ORIGINAL");
+        verify(lotCaptureService).resolveReceiptLot("PROD-001", "LOT-ORIGINAL", null);
     }
 
     @Test

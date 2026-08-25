@@ -155,34 +155,65 @@ public class PartReturnServiceImpl implements PartReturnService {
                 .orElseThrow(() -> new WarrantyNotFoundException(
                         PART_RETURN_NOT_FOUND_CODE, "Part return not found: " + partReturnId));
         PartReturnStatus current = partReturn.getStatus();
+        requireTransitionable(partReturnId, current);
+
+        boolean enteredShipped = applyStatusTransition(partReturnId, partReturn, request, current);
+        applyDetailUpdates(partReturn, request);
+        applyShippedAtCorrection(partReturn, request, enteredShipped);
+
+        bumpClaimAggregateVersion(loadClaim(partReturn.getClaimId()));
+        PartReturn saved = partReturnRepository.save(partReturn);
+
+        if (enteredShipped) {
+            publishShipped(saved);
+        }
+        claimSnapshotPublisher.publish(saved.getClaimId());
+        return PartReturnResponse.from(saved);
+    }
+
+    /** Terminal states (RECEIVED_BY_VENDOR/SCRAPPED/CLOSED, PRD §3.8) accept no further updates. */
+    private static void requireTransitionable(UUID partReturnId, PartReturnStatus current) {
         if (LEGAL_MOVES.getOrDefault(current, Set.of()).isEmpty()) {
             throw new IllegalClaimStateException(
                     TERMINAL_CODE,
                     "Part return " + partReturnId + " is terminal (" + current + ") and can no longer be changed",
                     "No further transitions are possible from " + current + ".");
         }
+    }
 
+    /**
+     * Applies a requested status move, when one was requested and differs from the current
+     * status: validates the move against {@code LEGAL_MOVES} and its disposition gate, then
+     * stamps {@code shippedAt} on entry to SHIPPED.
+     *
+     * @return whether this call moved the part return into SHIPPED, so the caller emits the
+     *     {@code warranty.part-return.shipped} event once the row is saved
+     */
+    private boolean applyStatusTransition(
+            UUID partReturnId, PartReturn partReturn, PartReturnUpdateRequest request, PartReturnStatus current) {
+        if (request.status() == null || request.status() == current) {
+            return false;
+        }
+        PartReturnStatus target = request.status();
+        if (!LEGAL_MOVES.getOrDefault(current, Set.of()).contains(target)) {
+            throw new IllegalClaimStateException(
+                    ILLEGAL_TRANSITION_CODE,
+                    "Part return " + partReturnId + " cannot move " + current + " -> " + target,
+                    "Legal transitions from " + current + ": " + LEGAL_MOVES.getOrDefault(current, Set.of()) + ".");
+        }
         PartReturnDisposition effectiveDisposition =
                 request.disposition() != null ? request.disposition() : partReturn.getDisposition();
-        boolean enteredShipped = false;
-        Instant now = Instant.now(clock);
-
-        if (request.status() != null && request.status() != current) {
-            PartReturnStatus target = request.status();
-            if (!LEGAL_MOVES.getOrDefault(current, Set.of()).contains(target)) {
-                throw new IllegalClaimStateException(
-                        ILLEGAL_TRANSITION_CODE,
-                        "Part return " + partReturnId + " cannot move " + current + " -> " + target,
-                        "Legal transitions from " + current + ": " + LEGAL_MOVES.getOrDefault(current, Set.of()) + ".");
-            }
-            requireDispositionFor(target, effectiveDisposition, partReturnId);
-            partReturn.setStatus(target);
-            if (target == PartReturnStatus.SHIPPED) {
-                enteredShipped = true;
-                partReturn.setShippedAt(request.shippedAt() != null ? request.shippedAt() : now);
-            }
+        requireDispositionFor(target, effectiveDisposition, partReturnId);
+        partReturn.setStatus(target);
+        if (target != PartReturnStatus.SHIPPED) {
+            return false;
         }
+        partReturn.setShippedAt(request.shippedAt() != null ? request.shippedAt() : Instant.now(clock));
+        return true;
+    }
 
+    /** Detail-only edits: RMA/carrier/tracking/hold-note, plus disposition when not already applied above. */
+    private static void applyDetailUpdates(PartReturn partReturn, PartReturnUpdateRequest request) {
         if (request.disposition() != null) {
             partReturn.setDisposition(request.disposition());
         }
@@ -198,18 +229,14 @@ public class PartReturnServiceImpl implements PartReturnService {
         if (request.holdLocationNote() != null) {
             partReturn.setHoldLocationNote(request.holdLocationNote());
         }
+    }
+
+    /** Correcting the recorded ship time on an already-shipped return (not a fresh SHIPPED move). */
+    private static void applyShippedAtCorrection(
+            PartReturn partReturn, PartReturnUpdateRequest request, boolean enteredShipped) {
         if (request.shippedAt() != null && !enteredShipped && partReturn.getShippedAt() != null) {
-            // Correcting the recorded ship time on an already-shipped return.
             partReturn.setShippedAt(request.shippedAt());
         }
-        bumpClaimAggregateVersion(loadClaim(partReturn.getClaimId()));
-        PartReturn saved = partReturnRepository.save(partReturn);
-
-        if (enteredShipped) {
-            publishShipped(saved);
-        }
-        claimSnapshotPublisher.publish(saved.getClaimId());
-        return PartReturnResponse.from(saved);
     }
 
     @Override

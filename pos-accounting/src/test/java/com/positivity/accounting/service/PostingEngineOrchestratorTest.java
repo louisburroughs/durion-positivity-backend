@@ -199,6 +199,39 @@ class PostingEngineOrchestratorTest {
         }
 
         @Test
+        @DisplayName("Should reprocess (not return a broken success) when key is marked processed but no reference was"
+                + " persisted")
+        void shouldReprocessWhenKeyProcessedButNoExistingReference() {
+            // A key can be marked processed by an earlier attempt that was interrupted before it
+            // persisted the final posting reference (e.g. crashed between registerKey and save). The
+            // engine must not hand back a "success" with a null reference — it falls through to a
+            // fresh evaluation and posts for real.
+            when(idempotencyService.isKeyProcessed(anyString())).thenReturn(true);
+            assertThat(testEvent.getFinalPostingReferenceId()).isNull();
+
+            PostingResult evaluationResult = PostingResult.success(testJournalEntry, testMappingVersion);
+            when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
+                    .thenReturn(evaluationResult);
+
+            JournalEntry createdEntry = new JournalEntry();
+            createdEntry.setJournalEntryId(testJournalEntryId);
+            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PostingResult result = orchestrator.processEvent(testEvent, testMappingVersion, testUserId, false);
+
+            // Then - full processing happened, not the idempotent-shortcut result
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getEvaluationDetails()).doesNotContainEntry("idempotent", true);
+            verify(postingRuleEvaluator).evaluateEvent(testEvent, testMappingVersion);
+            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(idempotencyService).registerKey(anyString(), eq(testEventId));
+        }
+
+        @Test
         @DisplayName("Should proceed with processing when idempotency key not found")
         void shouldProceedWhenIdempotencyKeyNotFound() {
             // Given

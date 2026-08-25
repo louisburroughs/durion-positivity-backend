@@ -149,71 +149,101 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
         List<CycleCountSchedule> due =
                 scheduleRepository.findByActiveTrueAndNextDueDateLessThanEqualOrderByNextDueDateAsc(today);
 
-        int plansCreated = 0;
-        int plansSkippedExisting = 0;
+        ScheduleRunTally tally = new ScheduleRunTally();
         for (CycleCountSchedule schedule : due) {
-            if (!schedule.isAutoCreatePlan()) {
-                // View-only schedule: it surfaces via the due view (listSchedules
-                // dueOnly=true); nothing is created and nextDueDate stays put so
-                // it remains visible until someone acts on it.
-                continue;
-            }
-
-            int frequencyDays = schedule.getFrequencyDays();
-            if (frequencyDays < 1) {
-                // Corrupt row: advancing by a non-positive frequency would never terminate.
-                log.error(
-                        "Cycle count schedule {} has a non-positive frequencyDays={}; skipping it",
-                        schedule.getScheduleId(),
-                        frequencyDays);
-                continue;
-            }
-
-            LocalDate dueDate = schedule.getNextDueDate();
-            int boundariesCleared = 0;
-            while (!dueDate.isAfter(today) && boundariesCleared < MAX_CATCH_UP_BOUNDARIES_PER_PASS) {
-                if (planRepository.existsByScheduleIdAndDueDate(schedule.getScheduleId(), dueDate)) {
-                    plansSkippedExisting++;
-                } else {
-                    planService.createScheduledPlan(
-                            schedule.getScheduleId(),
-                            schedule.getLocationId(),
-                            schedule.getZoneId() == null ? List.of() : List.of(schedule.getZoneId()),
-                            dueDate,
-                            SCHEDULER_ACTOR);
-                    plansCreated++;
-                }
-                dueDate = dueDate.plusDays(frequencyDays);
-                boundariesCleared++;
-            }
-
-            // Advance in the same transaction as the plan creation, past every boundary this pass
-            // cleared, so a completed pass leaves the schedule not-due for the dates it handled.
-            schedule.setNextDueDate(dueDate);
-            scheduleRepository.save(schedule);
-
-            if (!dueDate.isAfter(today)) {
-                log.warn(
-                        "Cycle count schedule {} hit the per-pass catch-up ceiling of {}; next due date is {}"
-                                + " and the remaining boundaries are left for the next pass",
-                        schedule.getScheduleId(),
-                        MAX_CATCH_UP_BOUNDARIES_PER_PASS,
-                        dueDate);
-            }
+            processDueSchedule(schedule, today, tally);
         }
 
         if (!due.isEmpty()) {
             log.info(
                     "Cycle count schedule pass: schedulesDue={} plansCreated={} plansSkippedExisting={}",
                     due.size(),
-                    plansCreated,
-                    plansSkippedExisting);
+                    tally.plansCreated,
+                    tally.plansSkippedExisting);
         }
         return CycleCountScheduleRunResultResponse.builder()
                 .schedulesDue(due.size())
-                .plansCreated(plansCreated)
-                .plansSkippedExisting(plansSkippedExisting)
+                .plansCreated(tally.plansCreated)
+                .plansSkippedExisting(tally.plansSkippedExisting)
                 .build();
+    }
+
+    /**
+     * Clears every boundary one due schedule has crossed (up to the catch-up ceiling), creating
+     * or counting plans against {@code tally} and advancing {@code nextDueDate} past whatever
+     * this pass handled. A view-only schedule or a corrupt non-positive frequency is left
+     * untouched instead.
+     */
+    private void processDueSchedule(
+            @NonNull CycleCountSchedule schedule, @NonNull LocalDate today, @NonNull ScheduleRunTally tally) {
+        if (!schedule.isAutoCreatePlan()) {
+            // View-only schedule: it surfaces via the due view (listSchedules
+            // dueOnly=true); nothing is created and nextDueDate stays put so
+            // it remains visible until someone acts on it.
+            return;
+        }
+
+        int frequencyDays = schedule.getFrequencyDays();
+        if (frequencyDays < 1) {
+            // Corrupt row: advancing by a non-positive frequency would never terminate.
+            log.error(
+                    "Cycle count schedule {} has a non-positive frequencyDays={}; skipping it",
+                    schedule.getScheduleId(),
+                    frequencyDays);
+            return;
+        }
+
+        LocalDate nextDueDate = clearCrossedBoundaries(schedule, frequencyDays, today, tally);
+
+        // Advance in the same transaction as the plan creation, past every boundary this pass
+        // cleared, so a completed pass leaves the schedule not-due for the dates it handled.
+        schedule.setNextDueDate(nextDueDate);
+        scheduleRepository.save(schedule);
+
+        if (!nextDueDate.isAfter(today)) {
+            log.warn(
+                    "Cycle count schedule {} hit the per-pass catch-up ceiling of {}; next due date is {}"
+                            + " and the remaining boundaries are left for the next pass",
+                    schedule.getScheduleId(),
+                    MAX_CATCH_UP_BOUNDARIES_PER_PASS,
+                    nextDueDate);
+        }
+    }
+
+    /**
+     * Creates a plan for every boundary crossed (counting one already covered by an existing
+     * plan instead), stopping at the catch-up ceiling, and returns the due date the schedule
+     * should advance to.
+     */
+    private LocalDate clearCrossedBoundaries(
+            @NonNull CycleCountSchedule schedule,
+            int frequencyDays,
+            @NonNull LocalDate today,
+            @NonNull ScheduleRunTally tally) {
+        LocalDate dueDate = schedule.getNextDueDate();
+        int boundariesCleared = 0;
+        while (!dueDate.isAfter(today) && boundariesCleared < MAX_CATCH_UP_BOUNDARIES_PER_PASS) {
+            if (planRepository.existsByScheduleIdAndDueDate(schedule.getScheduleId(), dueDate)) {
+                tally.plansSkippedExisting++;
+            } else {
+                planService.createScheduledPlan(
+                        schedule.getScheduleId(),
+                        schedule.getLocationId(),
+                        schedule.getZoneId() == null ? List.of() : List.of(schedule.getZoneId()),
+                        dueDate,
+                        SCHEDULER_ACTOR);
+                tally.plansCreated++;
+            }
+            dueDate = dueDate.plusDays(frequencyDays);
+            boundariesCleared++;
+        }
+        return dueDate;
+    }
+
+    /** Mutable per-pass counters {@link #runDueSchedules()} reports on {@code CycleCountScheduleRunResultResponse}. */
+    private static final class ScheduleRunTally {
+        private int plansCreated;
+        private int plansSkippedExisting;
     }
 
     private CycleCountSchedule require(UUID scheduleId) {
