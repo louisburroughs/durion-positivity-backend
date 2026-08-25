@@ -111,7 +111,7 @@ class SourceDocumentResolverTest {
     }
 
     @Test
-    @DisplayName("an order the projection does not hold reports lines unavailable, not not-found (#1492)")
+    @DisplayName("an order the projection does not hold reports lines unavailable rather than NOT_FOUND (#1492)")
     void unprojectedOrderReportsLinesUnavailable() {
         when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.empty());
 
