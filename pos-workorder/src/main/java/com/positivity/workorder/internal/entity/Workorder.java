@@ -18,6 +18,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -154,6 +155,17 @@ public class Workorder {
         return status == WorkorderStatus.CANCELLED
                 || (status == WorkorderStatus.COMPLETED && !Boolean.TRUE.equals(isReopened));
     }
+
+    /**
+     * The fact-envelope aggregate version (#1486). JPA optimistic-lock counter that strictly
+     * increments on every committed mutation, so it can never tie the way the retired
+     * {@code Instant.now(clock).toEpochMilli()} emission-timestamp convention could when two
+     * mutations landed in the same millisecond. Seeded from wall-clock millis at migration time
+     * by V21 so the published sequence continues above every version consumers already hold.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     public Workorder(UUID id) {
         this.id = id;

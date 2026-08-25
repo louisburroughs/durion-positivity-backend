@@ -3,6 +3,7 @@ package com.positivity.workorder.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,6 +20,7 @@ import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.service.WorkorderFactPublisher;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +47,7 @@ class WorkorderFactPublisherTest {
     private final WorkorderRepository workorderRepository = mock(WorkorderRepository.class);
     private final WorkorderPartRepository workorderPartRepository = mock(WorkorderPartRepository.class);
     private final WorkorderServiceRepository workorderServiceRepository = mock(WorkorderServiceRepository.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
 
     private WorkorderFactPublisher publisher;
 
@@ -52,7 +55,11 @@ class WorkorderFactPublisherTest {
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         publisher = new WorkorderFactPublisher(
-                writerProvider, workorderRepository, workorderPartRepository, workorderServiceRepository);
+                writerProvider,
+                workorderRepository,
+                workorderPartRepository,
+                workorderServiceRepository,
+                entityManager);
         TransactionSynchronizationManager.initSynchronization();
     }
 
@@ -78,6 +85,7 @@ class WorkorderFactPublisherTest {
                 .id(workorderId)
                 .workorderNumber("WO-2026-1001")
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .version(3L)
                 .build();
         WorkorderPart part = WorkorderPart.builder()
                 .id(UUID.randomUUID())
@@ -91,12 +99,17 @@ class WorkorderFactPublisherTest {
         publisher.markChanged(workorderId);
         fireBeforeCommit();
 
+        // Flushed once before assembling any payload, so the pending @Version increment from this
+        // transaction's mutations is already reflected in the emitted fact (#1486).
+        verify(entityManager, times(1)).flush();
+
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         verify(writer, times(1))
                 .publish(
                         eq(WorkorderUpdatedV1.EVENT_TYPE),
                         eq(WorkorderUpdatedV1.SCHEMA_VERSION),
                         eq(workorderId),
+                        eq(3L),
                         payloadCaptor.capture());
         WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
         assertThat(fact.workorderNumber()).isEqualTo("WO-2026-1001");
@@ -114,5 +127,6 @@ class WorkorderFactPublisherTest {
         fireBeforeCommit();
 
         verify(writer, never()).publish(any(), anyInt(), any(), any());
+        verify(writer, never()).publish(any(), anyInt(), any(), anyLong(), any());
     }
 }

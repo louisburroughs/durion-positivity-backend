@@ -23,6 +23,7 @@ import com.positivity.customer.service.CustomerInteractionService;
 import com.positivity.customer.service.MarketingConsentService;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -106,6 +107,9 @@ class PartyServiceImplBillingAndDuplicatesTest {
     @Mock
     private CustomerInteractionService customerInteractionService;
 
+    @Mock
+    private EntityManager entityManager;
+
     private PartyServiceImpl service;
 
     @BeforeEach
@@ -121,7 +125,8 @@ class PartyServiceImplBillingAndDuplicatesTest {
                 outboxEventWriter,
                 customerFactPublisher,
                 marketingConsentService,
-                customerInteractionService);
+                customerInteractionService,
+                entityManager);
         when(outboxEventWriter.getIfAvailable()).thenReturn(writer);
         when(customerFactPublisher.eventsTopic()).thenReturn(TOPIC);
     }
@@ -130,6 +135,9 @@ class PartyServiceImplBillingAndDuplicatesTest {
         CommercialParty party = new CommercialParty();
         party.setPartyId(PARTY_ID);
         party.setLegalName(legalName);
+        // Deliberately distinct from NOW's epoch millis, so a test asserting on the retired
+        // emission-millis convention would fail loudly rather than passing by coincidence (#1486).
+        party.setVersion(7L);
         return party;
     }
 
@@ -187,8 +195,10 @@ class PartyServiceImplBillingAndDuplicatesTest {
             assertThat(envelope.eventType()).isEqualTo(BillingRulesUpdatedV1.EVENT_TYPE);
             assertThat(envelope.aggregateId()).isEqualTo(PARTY_ID);
             assertThat(envelope.sourceService()).isEqualTo("pos-customer");
-            // CommercialParty carries no optimistic-lock version, so the update timestamp stands in.
-            assertThat(envelope.aggregateVersion()).isEqualTo(NOW.toEpochMilli());
+            // billingRules is @Embedded on the party row, so the flush below picks up the pending
+            // update and the fact carries CommercialParty's @Version (#1486), not a wall clock.
+            verify(entityManager).flush();
+            assertThat(envelope.aggregateVersion()).isEqualTo(7L);
 
             BillingRulesUpdatedV1 payload = (BillingRulesUpdatedV1) envelope.payload();
             assertThat(payload.partyId()).isEqualTo(PARTY_ID);

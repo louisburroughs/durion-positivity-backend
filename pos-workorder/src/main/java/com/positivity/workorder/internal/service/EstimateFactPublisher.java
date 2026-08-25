@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import jakarta.persistence.EntityManager;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,6 +26,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * per touched estimate is emitted at {@code beforeCommit} from the final persisted state. First
  * consumer: pos-order's {@code ext_estimate} replica feeding source-document import (spec R7.1).
  * No-op when Kafka publishing is disabled.
+ *
+ * <p>{@code Estimate} carries a JPA {@code @Version} named {@code aggregateVersion} (#1486) — not
+ * the plain {@code version} field, which is an unrelated business revision counter — and the
+ * envelope's {@code aggregateVersion} is that counter: it strictly increments on every committed
+ * mutation, so — unlike the retired {@code Instant.now(clock)}-stamped emission timestamp — two
+ * mutations landing in the same millisecond can never tie. Migration V21 seeded it from wall-clock
+ * millis at migration time, so the published sequence continues above every version consumers
+ * already hold. The persistence context is flushed before reading it, so the increment Hibernate
+ * is about to apply is already reflected in the emitted fact. A mutation that only touches
+ * {@code estimate_item} rows without dirtying the {@code estimate} row itself must dirty it first
+ * (bumping {@code updatedAt}) before calling {@link #markChanged(UUID)}, or the flush here has no
+ * pending {@code @Version} increment to pick up.
  */
 @Slf4j
 @Component
@@ -36,6 +49,7 @@ public class EstimateFactPublisher {
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
+    private final EntityManager entityManager;
 
     /** Mark an estimate as changed in the current transaction; one fact is emitted at commit. */
     public void markChanged(@NonNull UUID estimateId) {
@@ -72,6 +86,11 @@ public class EstimateFactPublisher {
         if (writer == null || pending == null) {
             return;
         }
+        // Flushed before reading aggregateVersion: mutations from this transaction are still
+        // pending in the persistence context, and flushing here forces Hibernate to apply every
+        // pending @Version increment so each emitted fact carries the version its row is about to
+        // commit as, not the one it held before this write (#1486).
+        entityManager.flush();
         for (UUID estimateId : pending) {
             Estimate estimate = estimateRepository.findById(estimateId).orElse(null);
             if (estimate == null) {
@@ -95,7 +114,12 @@ public class EstimateFactPublisher {
                     items,
                     estimate.getCreatedAt(),
                     estimate.getUpdatedAt());
-            writer.publish(EstimateUpdatedV1.EVENT_TYPE, EstimateUpdatedV1.SCHEMA_VERSION, estimateId, payload);
+            writer.publish(
+                    EstimateUpdatedV1.EVENT_TYPE,
+                    EstimateUpdatedV1.SCHEMA_VERSION,
+                    estimateId,
+                    estimate.getAggregateVersion(),
+                    payload);
         }
     }
 

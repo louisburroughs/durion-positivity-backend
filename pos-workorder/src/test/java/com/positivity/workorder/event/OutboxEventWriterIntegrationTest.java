@@ -94,6 +94,28 @@ class OutboxEventWriterIntegrationTest {
     }
 
     @Test
+    @DisplayName("The explicit-version overload stamps the given aggregateVersion, not emission millis")
+    void explicitVersionOverloadStampsGivenVersion() {
+        // #1486: WorkorderUpdatedV1/EstimateUpdatedV1 are version-guarded and must carry the
+        // entity's flushed @Version rather than the emission-timestamp millis the four-argument
+        // overload stamps.
+        writer.publish(
+                "workorder.work-session.started.v1",
+                WorkSessionStartedEvent.SCHEMA_VERSION,
+                SAMPLE_ID,
+                7L,
+                workSessionStarted());
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        List<OutboxEvent> rows = repository.findTop100ByPublishedAtIsNullOrderByIdAsc();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().getPayload()).contains("\"aggregateVersion\":7");
+
+        repository.deleteAll();
+    }
+
+    @Test
     @DisplayName("No outbox row survives when the business transaction rolls back")
     void discardsRowOnRollback() {
         writer.publish(

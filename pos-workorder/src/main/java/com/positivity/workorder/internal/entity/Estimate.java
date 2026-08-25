@@ -17,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -135,6 +136,23 @@ public class Estimate {
     // Version tracking for estimate revisions
     @Builder.Default
     private Integer version = 1;
+
+    /**
+     * The fact-envelope aggregate version (#1486). JPA optimistic-lock counter that strictly
+     * increments on every committed mutation, so it can never tie the way the retired
+     * {@code Instant.now(clock).toEpochMilli()} emission-timestamp convention could when two
+     * mutations landed in the same millisecond. Seeded from wall-clock millis at migration time
+     * by V21 so the published sequence continues above every version consumers already hold.
+     *
+     * <p>Named {@code aggregateVersion} rather than the plain {@code version} the sibling entities
+     * use: this class already has a {@code version} column, an ordinary (non-optimistic-lock)
+     * integer that tracks estimate revisions as a business concept and is unrelated to this fact's
+     * concurrency counter. Reusing that column for {@code @Version} would corrupt the revision
+     * count with Hibernate's own increments.
+     */
+    @Version
+    @Column(name = "aggregate_version", nullable = false)
+    private long aggregateVersion;
 
     // CRM reference IDs — immutable point-in-time snapshot (CAP-094 Story #93)
     @Column(length = 36, updatable = false)

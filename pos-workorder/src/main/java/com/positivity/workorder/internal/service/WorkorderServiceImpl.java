@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
@@ -643,6 +644,14 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (status != part.getStatus()) {
             part.setStatus(status);
             workorderPartRepository.save(part);
+            // This write only touches the workorder_part row; dirty the workorder row itself so the
+            // publisher's flush has a pending @Version increment to pick up (#1486). Fail fast on a
+            // missing row — silently skipping would emit the fact under an unchanged version.
+            Workorder workorder = workorderRepository
+                    .findById(workorderId)
+                    .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+            workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
+            workorderRepository.save(workorder);
             workorderFactPublisher.markChanged(workorderId);
             log.info("Part {} on workorder {} marked COMPLETED by {}", partId, workorderId, actorId);
         }

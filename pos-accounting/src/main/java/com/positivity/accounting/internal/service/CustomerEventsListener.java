@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.entity.ExtCustomerBillingRules;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ExtCustomerBillingRulesRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -27,11 +28,19 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Currently materializes {@code customer.billing-rules.updated} into
  * {@code ext_customer_billing_rules}; other event types are ignored. Idempotent via
- * {@code processed_events} (same transaction as the replica upsert), and stale events (envelope
- * {@code aggregateVersion} at or below the replica's) are skipped so out-of-order redelivery
- * cannot regress the replica. Transient DB errors propagate to the container error handler for
- * retry/DLQ; malformed payloads are logged and skipped (poison messages must not block the
- * partition).
+ * {@code processed_events} (same transaction as the replica upsert). Transient DB errors propagate
+ * to the container error handler for retry/DLQ; malformed payloads are logged and skipped (poison
+ * messages must not block the partition).
+ *
+ * <p>The stale guard is {@link ReplicaVersionGuard} (#1486): pos-customer's party
+ * {@code aggregateVersion} strictly advances, so a held row is stale only when its version is
+ * strictly greater than the incoming fact's — an equal version applies, both because it is an
+ * idempotent no-op for live traffic and because it is what would let a future
+ * regenerate-from-state replay repair a replica that holds the version number but wrong or missing
+ * data. An incoming {@code aggregateVersion} of 0 is legitimate only for a brand-new party (a
+ * fresh {@code @Version} row starts at 0), where no replica row exists yet and the guard is never
+ * consulted — the fact lands. Once a replica holds any higher version, an incoming 0 can only be a
+ * legacy or malformed envelope, and treating it as stale is the safer read.
  */
 @Slf4j
 @Component
@@ -118,7 +127,16 @@ public class CustomerEventsListener {
 
         ExtCustomerBillingRules existing =
                 billingRulesRepository.findById(partyId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion && aggregateVersion > 0) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — the
+        // party's aggregateVersion strictly advances, so equal means identical content, and a
+        // future replay would resend the held version deliberately to repair a replica with wrong
+        // or missing rows. The old `&& aggregateVersion > 0` carve-out let a legacy version-0
+        // envelope always apply, no matter how far ahead the held replica already was. A version-0
+        // fact is legitimate only for a brand-new party (a fresh @Version row starts at 0), and
+        // then no replica row exists so this guard is never consulted; against a replica already
+        // holding a higher version, a 0 can only be legacy/malformed, and letting the plain >
+        // comparison treat it as stale is the safer behavior.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
                     "Skipping stale billing-rules event partyId={} eventVersion={} replicaVersion={}",
                     partyId,

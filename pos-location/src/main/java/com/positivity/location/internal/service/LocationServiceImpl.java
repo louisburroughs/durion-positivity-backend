@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.location.internal.dto.HolidayClosureRequest;
 import com.positivity.location.internal.dto.LocationDescendantResponseDTO;
 import com.positivity.location.internal.dto.LocationParentResponseDTO;
@@ -27,7 +28,6 @@ import com.positivity.location.internal.repository.LocationTypeRepository;
 import com.positivity.location.service.LocationService;
 import java.time.Clock;
 import java.time.DateTimeException;
-import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -427,7 +427,7 @@ public class LocationServiceImpl implements LocationService {
         // @Version increment to apply — the fact would carry changed parentRefs under an unchanged
         // aggregateVersion, breaking the strictly-advancing contract (#1486). Dirty the child
         // first, the same convention catalog's attribute-table mutations follow.
-        child.setUpdatedAt(Instant.now(clock));
+        child.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(child.getUpdatedAt(), clock));
         locationRepository.saveAndFlush(child);
         locationFactPublisher.locationChanged(child);
         return saved;

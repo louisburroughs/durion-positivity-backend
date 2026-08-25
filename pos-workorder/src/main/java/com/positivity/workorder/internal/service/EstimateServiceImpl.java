@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
@@ -919,6 +920,11 @@ public class EstimateServiceImpl implements EstimateService {
 
         item.validate();
         EstimateItem saved = estimateItemRepository.save(item);
+        // This write only touches the estimate_item row; dirty the estimate row itself so the
+        // publisher's flush has a pending @Version increment to pick up (#1486) — a clean row
+        // leaves the emitted fact carrying the new item under an unchanged aggregateVersion.
+        estimate.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(estimate.getUpdatedAt(), clock));
+        estimateRepository.save(estimate);
         estimateFactPublisher.markChanged(estimateId);
 
         log.info(
@@ -970,6 +976,11 @@ public class EstimateServiceImpl implements EstimateService {
         item.validate();
 
         EstimateItem saved = estimateItemRepository.save(item);
+        // This write only touches the estimate_item row; dirty the estimate row itself so the
+        // publisher's flush has a pending @Version increment to pick up (#1486) — a clean row
+        // leaves the emitted fact carrying the revised item under an unchanged aggregateVersion.
+        estimate.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(estimate.getUpdatedAt(), clock));
+        estimateRepository.save(estimate);
         estimateFactPublisher.markChanged(estimateId);
 
         log.info("Updated item {} on estimate {}", itemId, estimateId);
@@ -1067,6 +1078,11 @@ public class EstimateServiceImpl implements EstimateService {
         // Soft delete
         item.setDeleted(true);
         estimateItemRepository.save(item);
+        // This write only touches the estimate_item row; dirty the estimate row itself so the
+        // publisher's flush has a pending @Version increment to pick up (#1486) — a clean row
+        // leaves the emitted fact carrying the removed item under an unchanged aggregateVersion.
+        estimate.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(estimate.getUpdatedAt(), clock));
+        estimateRepository.save(estimate);
         estimateFactPublisher.markChanged(estimateId);
 
         log.info("Deleted (soft) item {} from estimate {}", itemId, estimateId);

@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
@@ -171,6 +172,11 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Update part totals
         part.setQuantityIssued(part.getQuantityIssued().add(quantity));
         workorderPartRepository.save(part);
+        // This write only touches workorder_part; dirty the workorder row itself so the publisher's
+        // flush has a pending @Version increment to pick up (#1486) — a clean row leaves the
+        // emitted fact carrying stale part totals under an unchanged aggregateVersion.
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
+        workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Register idempotency key if provided
@@ -329,7 +335,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -366,6 +374,11 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Update part totals
         part.setQuantityConsumed(newConsumed);
         workorderPartRepository.save(part);
+        // This write only touches workorder_part; dirty the workorder row itself so the publisher's
+        // flush has a pending @Version increment to pick up (#1486) — a clean row leaves the
+        // emitted fact carrying stale part totals under an unchanged aggregateVersion.
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
+        workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Register idempotency key if provided
@@ -421,7 +434,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -465,6 +480,11 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Update part totals
         part.setQuantityReturned(part.getQuantityReturned().add(quantity));
         workorderPartRepository.save(part);
+        // This write only touches workorder_part; dirty the workorder row itself so the publisher's
+        // flush has a pending @Version increment to pick up (#1486) — a clean row leaves the
+        // emitted fact carrying stale part totals under an unchanged aggregateVersion.
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
+        workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(part.getWorkorder().getId());
 
         // Register idempotency key if provided

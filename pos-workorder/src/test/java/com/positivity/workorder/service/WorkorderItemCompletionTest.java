@@ -13,14 +13,19 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -38,8 +43,14 @@ class WorkorderItemCompletionTest {
     @Mock
     private WorkorderPartRepository workorderPartRepository;
 
+    @Mock
+    private WorkorderRepository workorderRepository;
+
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
+
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2026-08-25T12:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
     private WorkorderServiceImpl service;
@@ -110,12 +121,17 @@ class WorkorderItemCompletionTest {
     @Test
     void completePartItem_marksOpenPartCompleted() {
         when(workorderPartRepository.findById(ITEM)).thenReturn(Optional.of(part(WorkorderItemStatus.OPEN, WORKORDER)));
+        when(workorderRepository.findById(WORKORDER))
+                .thenReturn(Optional.of(Workorder.builder().id(WORKORDER).build()));
 
         WorkorderItemCompletionResponse res = service.completePartItem(WORKORDER, ITEM, "tech");
 
         assertThat(res.getStatus()).isEqualTo(WorkorderItemStatus.COMPLETED);
         assertThat(res.getItemType()).isEqualTo(WorkorderItemCompletionResponse.ItemType.PART);
         verify(workorderPartRepository).save(any());
+        // Dirties the workorder row itself (#1486) so the publisher's flush has a pending @Version
+        // increment to pick up — this write only touches workorder_part.
+        verify(workorderRepository).save(any());
     }
 
     @Test

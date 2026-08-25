@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.workorder.EstimateUpdatedV1;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.order.internal.entity.ExtEstimate;
@@ -35,6 +36,14 @@ import tools.jackson.databind.ObjectMapper;
  * approved prices. Same consumer contract as the other replica listeners: idempotent via
  * {@code processed_events}, stale envelopes skipped, transient DB errors rethrown, malformed
  * payloads logged and skipped.
+ *
+ * <p>The stale guard on {@code WorkorderUpdatedV1}'s and {@code EstimateUpdatedV1}'s
+ * {@code aggregateVersion} is {@link ReplicaVersionGuard} (#1486): pos-workorder's {@code Workorder}
+ * and {@code Estimate} each carry a JPA {@code @Version} that strictly advances, so a held row is
+ * stale only when its version is strictly greater than the incoming fact's — an equal version
+ * applies, both because it is an idempotent no-op for live traffic and because it is what would let
+ * a future regenerate-from-state replay repair a replica that holds the version number but wrong or
+ * missing rows.
  */
 @Slf4j
 @Component
@@ -112,7 +121,10 @@ public class WorkorderEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtWorkorder existing = extWorkorderRepository.findById(workorderId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — workorder's
+        // aggregateVersion strictly advances, so equal means identical content, and a future replay
+        // would resend the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug("Skipping stale workorder event for {}", workorderId);
             return;
         }
@@ -164,7 +176,10 @@ public class WorkorderEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
         ExtEstimate existing = extEstimateRepository.findById(estimateId).orElse(null);
-        if (existing != null && existing.getAggregateVersion() >= aggregateVersion) {
+        // Strictly-newer-only skip: equal versions APPLY (#1486, ReplicaVersionGuard) — estimate's
+        // aggregateVersion strictly advances, so equal means identical content, and a future replay
+        // would resend the held version deliberately to repair a replica with wrong or missing rows.
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug("Skipping stale estimate event for {}", estimateId);
             return;
         }

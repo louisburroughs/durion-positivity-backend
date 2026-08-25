@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -77,6 +78,9 @@ class WorkorderPartAdjustmentServiceImplTest {
     @Mock
     private PartQuantityDivisibilityService partQuantityDivisibilityService;
 
+    @Mock
+    private WorkorderRepository workorderRepository;
+
     private WorkorderPartAdjustmentServiceImpl service;
 
     @BeforeEach
@@ -87,6 +91,7 @@ class WorkorderPartAdjustmentServiceImplTest {
                 idempotencyService,
                 workorderFactPublisher,
                 partQuantityDivisibilityService,
+                workorderRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         UsernamePasswordAuthenticationToken token =
@@ -110,6 +115,7 @@ class WorkorderPartAdjustmentServiceImplTest {
             }
             return event;
         });
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder(WORKORDER_ID)));
     }
 
     @AfterEach

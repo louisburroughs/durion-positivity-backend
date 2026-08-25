@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartAdjustmentEventResponse;
 import com.positivity.workorder.internal.entity.WorkOrderPartSubstitution;
@@ -11,6 +12,7 @@ import com.positivity.workorder.internal.enums.SubstitutionStatus;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderSubstitutionService;
 import java.math.BigDecimal;
@@ -48,6 +50,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
     private final IdempotencyService idempotencyService;
     private final WorkorderFactPublisher workorderFactPublisher;
     private final ObjectMapper objectMapper;
+    private final WorkorderRepository workorderRepository;
 
     public WorkorderSubstitutionServiceImpl(
             WorkorderPartRepository workorderPartRepository,
@@ -56,6 +59,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             IdempotencyService idempotencyService,
             ObjectMapper objectMapper,
             WorkorderFactPublisher workorderFactPublisher,
+            WorkorderRepository workorderRepository,
             Clock clock) {
         this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
@@ -64,6 +68,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
         this.workorderFactPublisher = workorderFactPublisher;
+        this.workorderRepository = workorderRepository;
     }
 
     @Override
@@ -125,6 +130,14 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
             originalPart.setOriginalProductId(originalProductReference);
         }
         workorderPartRepository.save(originalPart);
+        // This substitution only touches workorder_part rows; dirty the workorder row itself so the
+        // publisher's flush has a pending @Version increment to pick up (#1486) — a clean row
+        // leaves the emitted fact carrying the new substitution under an unchanged aggregateVersion.
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new NoSuchElementException("Workorder not found: " + workorderId));
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
+        workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorderId);
 
         WorkorderPart substitutePart = WorkorderPart.builder()
