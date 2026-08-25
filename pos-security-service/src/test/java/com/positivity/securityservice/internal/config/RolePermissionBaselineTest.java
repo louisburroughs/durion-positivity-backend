@@ -223,10 +223,13 @@ class RolePermissionBaselineTest {
                 .isNotEmpty();
         assertThat(granted)
                 .as("SYSTEM_ADMINISTRATOR may hold security:*, MCP administration and the assistant "
-                        + "entrypoints only — never domain authority")
+                        + "entrypoints only — never domain authority, except image:image:store "
+                        + "(2026-08 §2 decision 3, docs/rbac-permission-role-audit-2026-08.md: image "
+                        + "upload is a deliberate grant to both admin roles)")
                 .allMatch(permission -> permission.startsWith("security:")
                         || permission.startsWith("mcp:")
-                        || permission.startsWith("nlti:"));
+                        || permission.startsWith("nlti:")
+                        || permission.equals("image:image:store"));
         assertThat(granted).containsAll(MCP_ADMINISTRATION);
 
         // ADMIN is the all-domain role; SYSTEM_ADMINISTRATOR must stay strictly narrower.

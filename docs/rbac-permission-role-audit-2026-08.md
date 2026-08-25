@@ -2,8 +2,10 @@
 
 Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on this branch**
 (migrations V24–V27 plus code/seed changes; see the §7 status column). Headline drift
-after execution: required-but-ungranted 112 → 93, granted-but-unenforced 77 → 64,
-unreachable operations 229 → 199, roles 16 → 17 (CONTROLLER). The +14 in dead bits is
+after execution: required-but-ungranted 112 → 69, granted-but-unenforced 77 → 64,
+unreachable operations 229 → 141, roles 16 → 17 (CONTROLLER). The second wave
+(marketing, supplier, image, money-movement grants per §2 decisions 1–3 and 5) is
+seed-only — purely additive, no revocation migration needed. The +14 in dead bits is
 the retired codes keeping their permanent bit indexes, as designed. (The audit script
 now excludes the `AUTHENTICATED` sentinel from its required-set computations — Copilot
 review on PR #1515; the pre-execution counts in the tables below predate that and
@@ -170,7 +172,7 @@ based on each role's documented job function in the seed header.
 | SYSTEM_ADMINISTRATOR | `workorder:events:replay`, `people:compliance:view`, `supplier:audit:read`, `supplier:transmission:read/resolve` |
 | *nobody obvious* | `order:order:charge_on_account`, `inventory:valuation:adjust`, `marketing:*`, `supplier:*` imports — see decisions below (`accounting:period:hard_lock`/`override` are now CONTROLLER's, per §6) |
 
-### Decisions needed (decisions 1–5 recorded 2026-08-25)
+### Decisions needed (decisions 1–5 recorded 2026-08-25; 1, 2, 3 and 5 implemented in the seed)
 
 1. ~~**Marketing**~~ — **decided**: the marketing surface (all 9 codes: campaigns,
    templates, stats) belongs to **ACCOUNT_MANAGER**, consistent with its §6
