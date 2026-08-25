@@ -932,6 +932,52 @@ class SalesOrderCartLifecycleTest {
         }
 
         @Test
+        @DisplayName(
+                "merges a re-imported line already linked to the same source without overwriting its source metadata")
+        void mergesWithoutOverwritingMetadataWhenAlreadyLinkedToSameSource() {
+            // Re-linking the same estimate (e.g. after it was amended) must still merge quantity
+            // by SKU+price, but since the line is already attributed to this source, its original
+            // sourceLineId must be preserved rather than stomped by whichever source line happened
+            // to match on this pass.
+            SalesOrder order = order(SalesOrderStatus.DRAFT);
+            SalesOrderLine existing = line(order, "SKU-A", 1);
+            existing.setUnitPrice(new BigDecimal("30.0000"));
+            existing.setSourceType(SourceType.ESTIMATE);
+            existing.setSourceId("EST-1");
+            existing.setSourceLineId("L-ORIGINAL");
+            givenOrder(order);
+            when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, "EST-1"))
+                    .thenReturn(List.of(sourceLine("SKU-A", 2, "30.00", "L1")));
+
+            service.linkSource(ORDER_ID, "ESTIMATE", "EST-1");
+
+            assertThat(order.getLines()).hasSize(1);
+            assertThat(existing.getQuantity()).isEqualTo(3);
+            assertThat(existing.getSourceLineId()).isEqualTo("L-ORIGINAL");
+        }
+
+        @Test
+        @DisplayName("adds a separate line when an existing SKU+price match is linked to a different source")
+        void doesNotMergeWhenExistingLineLinkedToDifferentSource() {
+            // A line already attributed to another source document must not silently absorb
+            // quantity from an unrelated source, even when SKU and price happen to match.
+            SalesOrder order = order(SalesOrderStatus.DRAFT);
+            SalesOrderLine existing = line(order, "SKU-A", 1);
+            existing.setUnitPrice(new BigDecimal("30.0000"));
+            existing.setSourceType(SourceType.WORKORDER);
+            existing.setSourceId("WO-OTHER");
+            existing.setSourceLineId("WO-L1");
+            givenOrder(order);
+            when(sourceDocumentPort.fetchLines(SourceType.ESTIMATE, "EST-1"))
+                    .thenReturn(List.of(sourceLine("SKU-A", 2, "30.00", "L1")));
+
+            service.linkSource(ORDER_ID, "ESTIMATE", "EST-1");
+
+            assertThat(order.getLines()).hasSize(2);
+            assertThat(existing.getQuantity()).isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("adds a separate line when the price differs")
         void doesNotMergeAtDifferentPrice() {
             SalesOrder order = order(SalesOrderStatus.DRAFT);

@@ -304,64 +304,90 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
         orderStateMachine.requireEditable(order);
+        requireCustomerForWorkorderLink(order, type);
 
-        if (order.getCustomerId() == null && SourceType.WORKORDER.equals(type)) {
-            throw new IllegalStateException(
-                    "Cannot link source: a customer must be assigned to this cart before linking a WORKORDER source");
-        }
-
-        Set<String> alreadyLinkedKeys = order.getLines().stream()
-                .filter(l -> sourceId.equals(l.getSourceId()))
-                .map(l -> l.getSourceId() + "|" + l.getSourceLineId())
-                .collect(Collectors.toSet());
-
+        Set<String> alreadyLinkedKeys = alreadyLinkedSourceKeys(order, sourceId);
         List<SourceDocumentLine> sourceLines = sourceDocumentPort.fetchLines(type, sourceId);
 
         for (SourceDocumentLine sourceLine : sourceLines) {
-            String linkKey = sourceId + "|" + sourceLine.sourceLineId();
-            if (alreadyLinkedKeys.contains(linkKey)) {
+            if (alreadyLinkedKeys.contains(sourceId + "|" + sourceLine.sourceLineId())) {
                 continue;
             }
-
-            boolean merged = false;
-            for (SalesOrderLine existingLine : order.getLines()) {
-                if (existingLine.getItemSku().equals(sourceLine.itemSku())
-                        && existingLine.getUnitPrice().compareTo(sourceLine.unitPrice()) == 0
-                        && (existingLine.getSourceId() == null || sourceId.equals(existingLine.getSourceId()))) {
-                    existingLine.setQuantity(existingLine.getQuantity() + sourceLine.quantity());
-                    if (existingLine.getSourceId() == null) {
-                        existingLine.setSourceType(type);
-                        existingLine.setSourceId(sourceId);
-                        existingLine.setSourceLineId(sourceLine.sourceLineId());
-                    }
-                    salesOrderLineRepository.save(existingLine);
-                    merged = true;
-                    break;
-                }
-            }
-
-            if (!merged) {
-                SalesOrderLine newLine = SalesOrderLine.builder()
-                        .order(order)
-                        .itemSku(sourceLine.itemSku())
-                        .itemDescription(sourceLine.itemDescription())
-                        .quantity(sourceLine.quantity())
-                        .unitPrice(sourceLine.unitPrice().setScale(4, RoundingMode.HALF_UP))
-                        // Spec R7.1: approved source prices are contractual — never repriced.
-                        .priceSource(PriceSource.SOURCE_DOCUMENT)
-                        .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
-                        .sourceType(type)
-                        .sourceId(sourceId)
-                        .sourceLineId(sourceLine.sourceLineId())
-                        .returnable(sourceLine.returnable())
-                        .build();
-                SalesOrderLine savedNewLine = salesOrderLineRepository.save(newLine);
-                order.getLines().add(savedNewLine);
+            if (!mergeIntoMatchingLine(order, sourceLine, type, sourceId)) {
+                order.getLines().add(createSourceLine(order, sourceLine, type, sourceId));
             }
         }
 
         recomputeAfterMutation(order);
         return toSummary(salesOrderRepository.save(order));
+    }
+
+    /**
+     * Spec R7.2: a WORKORDER source carries customer-specific pricing/warranty terms, so it may
+     * only be linked once the cart has an assigned customer.
+     */
+    private void requireCustomerForWorkorderLink(SalesOrder order, SourceType type) {
+        if (order.getCustomerId() == null && SourceType.WORKORDER.equals(type)) {
+            throw new IllegalStateException(
+                    "Cannot link source: a customer must be assigned to this cart before linking a WORKORDER source");
+        }
+    }
+
+    /** Source-line keys already linked to this order under {@code sourceId}, for dedup on replay. */
+    private Set<String> alreadyLinkedSourceKeys(SalesOrder order, String sourceId) {
+        return order.getLines().stream()
+                .filter(l -> sourceId.equals(l.getSourceId()))
+                .map(l -> l.getSourceId() + "|" + l.getSourceLineId())
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Merges {@code sourceLine} into the first existing line with the same SKU and price (Spec
+     * R7.1: approved source prices are contractual, so quantities are combined only on an exact
+     * price match) that is either unattributed or already attributed to this same source. Returns
+     * {@code true} when a merge occurred.
+     */
+    private boolean mergeIntoMatchingLine(
+            SalesOrder order, SourceDocumentLine sourceLine, SourceType type, String sourceId) {
+        for (SalesOrderLine existingLine : order.getLines()) {
+            if (!isMergeCandidate(existingLine, sourceLine, sourceId)) {
+                continue;
+            }
+            existingLine.setQuantity(existingLine.getQuantity() + sourceLine.quantity());
+            if (existingLine.getSourceId() == null) {
+                existingLine.setSourceType(type);
+                existingLine.setSourceId(sourceId);
+                existingLine.setSourceLineId(sourceLine.sourceLineId());
+            }
+            salesOrderLineRepository.save(existingLine);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isMergeCandidate(SalesOrderLine existingLine, SourceDocumentLine sourceLine, String sourceId) {
+        return existingLine.getItemSku().equals(sourceLine.itemSku())
+                && existingLine.getUnitPrice().compareTo(sourceLine.unitPrice()) == 0
+                && (existingLine.getSourceId() == null || sourceId.equals(existingLine.getSourceId()));
+    }
+
+    private SalesOrderLine createSourceLine(
+            SalesOrder order, SourceDocumentLine sourceLine, SourceType type, String sourceId) {
+        SalesOrderLine newLine = SalesOrderLine.builder()
+                .order(order)
+                .itemSku(sourceLine.itemSku())
+                .itemDescription(sourceLine.itemDescription())
+                .quantity(sourceLine.quantity())
+                .unitPrice(sourceLine.unitPrice().setScale(4, RoundingMode.HALF_UP))
+                // Spec R7.1: approved source prices are contractual — never repriced.
+                .priceSource(PriceSource.SOURCE_DOCUMENT)
+                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                .sourceType(type)
+                .sourceId(sourceId)
+                .sourceLineId(sourceLine.sourceLineId())
+                .returnable(sourceLine.returnable())
+                .build();
+        return salesOrderLineRepository.save(newLine);
     }
 
     @Override
