@@ -225,7 +225,8 @@ class CustomerFactPublisherTest {
         person.setVersion(9L);
         Instant before = person.getUpdatedAt();
         when(personPartyRepository.findByPersonId(personId)).thenReturn(Optional.of(person));
-        when(personDirectoryService.fetchPersonIdentitiesQuietly(Set.of(personId))).thenReturn(Map.of());
+        when(personDirectoryService.fetchPersonIdentitiesQuietly(Set.of(personId)))
+                .thenReturn(Map.of());
 
         publisher.personReplicaChanged(personId);
 

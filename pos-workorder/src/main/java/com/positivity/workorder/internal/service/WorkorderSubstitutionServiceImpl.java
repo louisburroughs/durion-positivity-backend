@@ -132,8 +132,9 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         // This substitution only touches workorder_part rows; dirty the workorder row itself so the
         // publisher's flush has a pending @Version increment to pick up (#1486) — a clean row
         // leaves the emitted fact carrying the new substitution under an unchanged aggregateVersion.
-        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow(() -> new NoSuchElementException(
-                "Workorder not found: " + workorderId));
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new NoSuchElementException("Workorder not found: " + workorderId));
         workorder.setUpdatedAt(Instant.now(clock));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorderId);

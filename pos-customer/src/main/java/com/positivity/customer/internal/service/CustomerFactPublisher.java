@@ -441,7 +441,13 @@ public class CustomerFactPublisher {
             int schemaVersion,
             @NonNull UUID aggregateId,
             Object payload) {
-        publish(writer, eventType, schemaVersion, aggregateId, payload, Instant.now(clock).toEpochMilli());
+        publish(
+                writer,
+                eventType,
+                schemaVersion,
+                aggregateId,
+                payload,
+                Instant.now(clock).toEpochMilli());
     }
 
     /** {@code @Version}-backed {@code aggregateVersion} (#1486) — party-updated and -deleted. */

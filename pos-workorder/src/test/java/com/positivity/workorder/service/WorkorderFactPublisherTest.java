@@ -55,7 +55,11 @@ class WorkorderFactPublisherTest {
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         publisher = new WorkorderFactPublisher(
-                writerProvider, workorderRepository, workorderPartRepository, workorderServiceRepository, entityManager);
+                writerProvider,
+                workorderRepository,
+                workorderPartRepository,
+                workorderServiceRepository,
+                entityManager);
         TransactionSynchronizationManager.initSynchronization();
     }
 

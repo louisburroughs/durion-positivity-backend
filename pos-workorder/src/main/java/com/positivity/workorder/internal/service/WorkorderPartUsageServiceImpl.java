@@ -334,8 +334,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        Workorder workorder =
-                workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -432,8 +433,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        Workorder workorder =
-                workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
