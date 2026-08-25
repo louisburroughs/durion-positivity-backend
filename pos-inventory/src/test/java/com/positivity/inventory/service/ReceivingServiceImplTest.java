@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -28,7 +29,7 @@ import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedE
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
-import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
+import com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
@@ -37,8 +38,8 @@ import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
-import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.service.SourceDocumentResolver;
+import com.positivity.inventory.internal.service.StagingLocationResolver;
 import com.positivity.inventory.internal.service.UomConversionService;
 import com.positivity.inventory.internal.service.UomConversionServiceImpl;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
@@ -53,6 +54,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -63,7 +65,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ReceivingServiceImplTest {
@@ -92,7 +93,7 @@ class ReceivingServiceImplTest {
     private SourceDocumentResolver sourceDocumentResolver;
 
     @Mock
-    private SiteDefaultsService siteDefaultsService;
+    private StagingLocationResolver stagingLocationResolver;
 
     @Mock
     private WorkorderValidationService workorderValidationService;
@@ -125,6 +126,11 @@ class ReceivingServiceImplTest {
 
     @InjectMocks
     private ReceivingServiceImpl receivingService;
+
+    @BeforeEach
+    void stubDefaultStagingLocation() {
+        lenient().when(stagingLocationResolver.resolveStagingLocationId()).thenReturn(STAGING_LOCATION_ID);
+    }
 
     @AfterEach
     void clearSecurityContext() {
@@ -172,14 +178,15 @@ class ReceivingServiceImplTest {
     }
 
     @Test
-    void createReceivingSession_sourceDocumentNotFound() {
+    void createReceivingSession_sourceDocumentLinesUnavailable() {
         when(sourceDocumentResolver.resolve(any(), any()))
-                .thenThrow(new SourceDocumentNotFoundException("No purchase order PO-999 in pos-order"));
+                .thenThrow(new SourceDocumentLinesUnavailableException(
+                        "Purchase order PO-999 has not replicated its lines into pos-inventory yet"));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-999", "MANUAL");
 
         assertThrows(
-                SourceDocumentNotFoundException.class,
+                SourceDocumentLinesUnavailableException.class,
                 () -> receivingService.createReceivingSession(request, "test-user"));
     }
 
@@ -488,14 +495,15 @@ class ReceivingServiceImplTest {
     }
 
     @Test
-    void createReceivingSession_sourceDocumentWithNoLines_throwsNotFound() {
+    void createReceivingSession_sourceDocumentNotProjected_throwsLinesUnavailable() {
         when(sourceDocumentResolver.resolve(any(), any()))
-                .thenThrow(new SourceDocumentNotFoundException("No purchase order PO-123 has been projected"));
+                .thenThrow(new SourceDocumentLinesUnavailableException(
+                        "Purchase order PO-123 has not replicated its lines into pos-inventory yet"));
 
         CreateReceivingSessionRequest request = new CreateReceivingSessionRequest("PO-123", "MANUAL");
 
         assertThrows(
-                SourceDocumentNotFoundException.class,
+                SourceDocumentLinesUnavailableException.class,
                 () -> receivingService.createReceivingSession(request, "test-user"));
     }
 
@@ -623,10 +631,9 @@ class ReceivingServiceImplTest {
     void receiveItemsIntoStaging_ledgerEntryUsesSiteDefaultStagingLocationWhenConfigured() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID siteDefaultStagingLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        ReflectionTestUtils.setField(receivingService, "configuredSiteId", siteId.toString());
+        when(stagingLocationResolver.resolveStagingLocationId()).thenReturn(siteDefaultStagingLocationId);
 
         ReceivingLine line = ReceivingLine.builder()
                 .lineId(lineId)
@@ -644,8 +651,6 @@ class ReceivingServiceImplTest {
         line.setSession(session);
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(siteDefaultsService.getDefaultStagingLocationId(siteId))
-                .thenReturn(Optional.of(siteDefaultStagingLocationId));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))
                 .thenReturn(new BigDecimal("7"));

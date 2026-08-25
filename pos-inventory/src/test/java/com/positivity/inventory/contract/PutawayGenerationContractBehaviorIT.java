@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
+import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
+import com.positivity.inventory.internal.exception.ReceiptNotStagedException;
 import com.positivity.inventory.service.PutawayGenerationService;
 import java.time.Clock;
 import java.time.Instant;
@@ -245,6 +247,75 @@ class PutawayGenerationContractBehaviorIT extends BaseContractIntegrationTest {
                         .content(requestBody))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$[0].status").value("REQUIRES_LOCATION_SELECTION"));
+    }
+
+    // ─── AC8: Receipt not staged blocks generation → 422 ──────────────────────
+
+    /**
+     * Verifies that when the source receipt's stock landed directly on hand rather than at the
+     * staging location, the service throws {@link ReceiptNotStagedException} and the controller
+     * returns 422 with error code {@code RECEIPT_NOT_STAGED}.
+     *
+     * Issue: #1496
+     */
+    @Test
+    @DisplayName("AC8: receipt not staged returns 422 with RECEIPT_NOT_STAGED error code")
+    void generatePutawayTasks_receiptNotStaged_returns422WithReceiptNotStagedErrorCode() throws Exception {
+        UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID directOnHandLocation = UUID.fromString("00000000-0000-0000-0000-0000000000f0");
+        UUID stagingLocation = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        when(putawayGenerationService.generateTasksForReceipt(any(GeneratePutawayTasksRequest.class)))
+                .thenThrow(new ReceiptNotStagedException(receiptId, directOnHandLocation, stagingLocation));
+
+        String requestBody = objectMapper.writeValueAsString(objectMapper
+                .createObjectNode()
+                .put("sourceReceiptId", receiptId.toString())
+                .put(
+                        "productId",
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .put("quantity", 5));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("RECEIPT_NOT_STAGED"));
+    }
+
+    // ─── AC9: Resolved destination invalid for SKU blocks generation → 422 ────
+
+    /**
+     * Verifies that when the resolved destination fails the same compatibility check execution
+     * uses, the service throws {@link LocationNotValidForSkuException} and the controller returns
+     * 422 with error code {@code LOCATION_NOT_VALID_FOR_SKU}.
+     *
+     * Issue: #1496
+     */
+    @Test
+    @DisplayName("AC9: destination invalid for SKU returns 422 with LOCATION_NOT_VALID_FOR_SKU error code")
+    void generatePutawayTasks_destinationInvalidForSku_returns422WithLocationNotValidErrorCode() throws Exception {
+        String receiptId =
+                UUID.fromString("00000000-0000-0000-0000-000000000001").toString();
+        UUID destinationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        when(putawayGenerationService.generateTasksForReceipt(any(GeneratePutawayTasksRequest.class)))
+                .thenThrow(new LocationNotValidForSkuException(
+                        destinationId, "PROD-001", "SKU is not configured in replenishment policies"));
+
+        String requestBody = objectMapper.writeValueAsString(objectMapper
+                .createObjectNode()
+                .put("sourceReceiptId", receiptId)
+                .put(
+                        "productId",
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .put("quantity", 5));
+
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/putaway/tasks/generate"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("LOCATION_NOT_VALID_FOR_SKU"));
     }
 
     // ─── AC5: Get available tasks ─────────────────────────────────────────────

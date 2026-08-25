@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
+import com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
@@ -50,6 +51,15 @@ import org.springframework.transaction.annotation.Transactional;
  * dropped. An order whose lines are all closed reads as already received rather than as an empty
  * session. Only {@link PurchaseOrderUpdatedV1#OPEN_SUPPLY_STATUSES} can be received against: a
  * DRAFT order has not been committed to and a CANCELLED one never will be.
+ *
+ * <h2>Not found vs. not yet replicated (#1492)</h2>
+ *
+ * The header and its lines are projected atomically, so a missing {@code ext_purchase_order} row
+ * could mean either that replication has not caught up yet or that the id names no order at all —
+ * and, per ADR-0044, this module cannot call pos-order to tell the two apart. A source document id
+ * this module could never parse as a purchase order UUID is reported as not found outright; a
+ * well-formed UUID absent from the projection is reported as unavailable, not missing, leaving the
+ * caller to retry.
  */
 @Slf4j
 @Service
@@ -67,7 +77,11 @@ public class SourceDocumentResolver {
      * Resolves the still-expected lines of {@code sourceDocumentId}.
      *
      * @throws UnsupportedSourceDocumentTypeException when the type is not {@link SourceDocumentType#PO}
-     * @throws SourceDocumentNotFoundException when no such order has been projected
+     * @throws SourceDocumentNotFoundException when {@code sourceDocumentId} cannot even parse as a
+     *     purchase order identifier
+     * @throws SourceDocumentLinesUnavailableException when {@code sourceDocumentId} is a well-formed
+     *     purchase order id absent from the projection — not yet replicated, or unknown; this module
+     *     cannot tell which
      * @throws SourceDocumentAlreadyReceivedException when the order has nothing left to receive
      * @throws InvalidPoReferenceException when the order is not in a receivable status
      */
@@ -80,8 +94,8 @@ public class SourceDocumentResolver {
         UUID poId = parsePurchaseOrderId(sourceDocumentId);
         ExtPurchaseOrderReplica order = purchaseOrderRepository
                 .findById(poId)
-                .orElseThrow(() -> new SourceDocumentNotFoundException(
-                        "No purchase order " + sourceDocumentId + " has been projected into pos-inventory"));
+                .orElseThrow(() -> new SourceDocumentLinesUnavailableException(
+                        "Purchase order " + sourceDocumentId + " has not replicated its lines into pos-inventory yet"));
 
         String status = order.getStatus();
         if (isReceivedStatus(status)) {
@@ -126,7 +140,8 @@ public class SourceDocumentResolver {
 
     /**
      * A source document id that is not a purchase-order UUID names no order this module could ever
-     * hold, so it is reported the same way an unknown one is.
+     * hold, projected or not — a genuine not-found, unlike a well-formed id absent from the
+     * projection (#1492).
      */
     private static UUID parsePurchaseOrderId(String sourceDocumentId) {
         try {

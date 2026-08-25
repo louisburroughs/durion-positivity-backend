@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.dto.receiving.ReceivingLineResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
+import com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.service.ReceivingService;
 import java.math.BigDecimal;
@@ -37,7 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
  * <li>ADR-0011: gateway security — authenticated gateway headers and
  * required receiving authorities</li>
  * <li>ADR-0017: HTTP response codes — 201 for creation, 400 for invalid input,
- * 404 for not-found</li>
+ * 404 for not-found, 409 when the purchase-order projection has not caught up (#1492)</li>
  * <li>ADR-0018: actor identity resolved from gateway auth context
  * ({@code X-User-Id} preferred, {@code X-User} fallback)</li>
  * </ul>
@@ -159,20 +160,49 @@ class ReceivingSessionContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.status").value("OPEN"));
     }
 
-    // ─── AC3: POST with non-existing PO → 404 ────────────────────────────────
+    // ─── AC3: POST with a PO absent from the projection → 409 ────────────────
 
     /**
-     * Verifies that requesting a receiving session for a PO that does not exist
-     * returns 404 with an error message, per story #35 AC3 and ADR-0017.
+     * Verifies that requesting a receiving session for a purchase order id absent from the
+     * projection returns 409 SOURCE_DOCUMENT_LINES_UNAVAILABLE with a non-empty
+     * {@code nextAction}, per issue #1492: this module cannot tell replication lag from an
+     * unknown purchase order id, so it asks the caller to retry.
      *
-     * Issue: #35
+     * Issue: #1492
      */
     @Test
-    @DisplayName("AC3: POST /receiving/sessions with non-existent PO returns 404 with error message")
-    void createReceivingSession_withNonExistentPO_returns404() throws Exception {
-        // Issue #35: unknown source document must yield 404 per ADR-0017
+    @DisplayName("AC3: POST /receiving/sessions with a PO absent from the projection returns 409 with nextAction")
+    void createReceivingSession_withUnprojectedPO_returns409() throws Exception {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000999");
         when(receivingService.createReceivingSession(any(), any()))
-                .thenThrow(new SourceDocumentNotFoundException("Source document PO-999 not found"));
+                .thenThrow(new SourceDocumentLinesUnavailableException(
+                        "Purchase order " + poId + " has not replicated its lines into pos-inventory yet"));
+
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("sourceDocumentId", poId.toString());
+        body.put("entryMethod", "MANUAL");
+
+        mockMvc.perform(withReceivingAuth(post("/v1/inventory/receiving/sessions"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SOURCE_DOCUMENT_LINES_UNAVAILABLE"))
+                .andExpect(jsonPath("$.nextAction").isNotEmpty());
+    }
+
+    /**
+     * A source document id that cannot even parse as a purchase order identifier names no order
+     * this module could ever hold, so it remains a genuine 404 (issue #1492 scopes the 409 to
+     * well-formed ids absent from the projection).
+     *
+     * Issue: #1492
+     */
+    @Test
+    @DisplayName("AC3: POST /receiving/sessions with a non-PO source document id returns 404")
+    void createReceivingSession_withNonPoSourceDocumentId_returns404() throws Exception {
+        when(receivingService.createReceivingSession(any(), any()))
+                .thenThrow(new SourceDocumentNotFoundException(
+                        "Source document id PO-999 is not a purchase order identifier"));
 
         ObjectNode body = objectMapper.createObjectNode();
         body.put("sourceDocumentId", "PO-999");
