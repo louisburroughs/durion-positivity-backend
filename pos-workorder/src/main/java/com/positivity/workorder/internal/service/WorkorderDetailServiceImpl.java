@@ -13,6 +13,7 @@ import com.positivity.workorder.internal.repository.TechnicianAssignmentReposito
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderDetailService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -116,7 +117,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
 
     private WorkorderCapabilities calculateCapabilities(Set<String> authorities) {
         return WorkorderCapabilities.builder()
-                .canStart(authorities.contains("workorder:workorder:start"))
+                .canStart(authorities.contains(WorkorderPermissions.WORKORDER_START))
                 .canApprove(authorities.contains("workorder:workorder:approve"))
                 .canAssignTechnician(authorities.contains("workorder:workorder:assign-technician"))
                 .canRecordLabor(authorities.contains("workorder:labor:add"))

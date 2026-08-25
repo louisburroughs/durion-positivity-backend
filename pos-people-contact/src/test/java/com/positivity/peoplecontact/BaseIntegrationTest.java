@@ -66,8 +66,7 @@ public abstract class BaseIntegrationTest {
             "people:timeException:create",
             "people:timeException:view",
             "people:timeException:acknowledge",
-            "people:timeException:resolve",
-            "people:time:export:read");
+            "people:timeException:resolve");
 
     protected static final String TEST_CORRELATION_ID = "people-test-correlation-id";
 

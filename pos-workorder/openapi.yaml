@@ -5561,12 +5561,12 @@ paths:
           description: Work already started
       security:
       - bearerAuth:
-        - workorder:start
+        - workorder:workorder:start
       summary: Start Workorder Execution and Lock Context
       tags:
       - Operational Context
       x-required-permissions:
-      - workorder:start
+      - workorder:workorder:start
   /v1/workorders/{workorderId}/suggestSubstitutes:
     post:
       description: 'Suggests substitute parts for a workorder by returning the active substitute links of the part named in the request, ordered by ascending priority.

@@ -129,8 +129,7 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
                 .findById(exceptionId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
 
-        boolean allowed = permissions != null
-                && (permissions.contains("people:timeException:resolve") || permissions.contains("admin"));
+        boolean allowed = permissions != null && permissions.contains("people:timeException:resolve");
         if (!allowed) {
             try {
                 TimeEntryAudit audit = new TimeEntryAudit();

@@ -14,6 +14,7 @@ import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
@@ -239,11 +240,12 @@ class TimeEntryExceptionIntakeTest {
         }
 
         @Test
-        void acceptsTheAdminPermissionAsWellAsTheSpecificOne() {
+        void acceptsTheSpecificResolvePermission() {
             com.positivity.people.internal.entity.TimeEntryException open = entity(ExceptionStatus.OPEN);
             when(exceptionRepository.findById(EXCEPTION_ID)).thenReturn(Optional.of(open));
 
-            service.resolveException(EXCEPTION_ID, Set.of("admin"), "fixed", null, "corr-1");
+            service.resolveException(
+                    EXCEPTION_ID, Set.of(PeoplePermissions.TIMEEXCEPTION_RESOLVE), "fixed", null, "corr-1");
 
             assertThat(open.getStatus()).isEqualTo(ExceptionStatus.RESOLVED);
             assertThat(open.getResolvedBy()).isEqualTo(ACTOR);
@@ -256,7 +258,8 @@ class TimeEntryExceptionIntakeTest {
             com.positivity.people.internal.entity.TimeEntryException open = entity(ExceptionStatus.OPEN);
             when(exceptionRepository.findById(EXCEPTION_ID)).thenReturn(Optional.of(open));
 
-            service.resolveException(EXCEPTION_ID, Set.of("admin"), null, "WAIVED", null);
+            service.resolveException(
+                    EXCEPTION_ID, Set.of(PeoplePermissions.TIMEEXCEPTION_RESOLVE), null, "WAIVED", null);
 
             assertThat(open.getStatus()).isEqualTo(ExceptionStatus.WAIVED);
         }
@@ -266,7 +269,8 @@ class TimeEntryExceptionIntakeTest {
             com.positivity.people.internal.entity.TimeEntryException open = entity(ExceptionStatus.OPEN);
             when(exceptionRepository.findById(EXCEPTION_ID)).thenReturn(Optional.of(open));
 
-            service.resolveException(EXCEPTION_ID, Set.of("admin"), null, "NOT_A_STATUS", null);
+            service.resolveException(
+                    EXCEPTION_ID, Set.of(PeoplePermissions.TIMEEXCEPTION_RESOLVE), null, "NOT_A_STATUS", null);
 
             assertThat(open.getStatus()).isEqualTo(ExceptionStatus.RESOLVED);
         }
@@ -275,7 +279,8 @@ class TimeEntryExceptionIntakeTest {
         void failsWhenTheExceptionDoesNotExist() {
             when(exceptionRepository.findById(EXCEPTION_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.resolveException(EXCEPTION_ID, Set.of("admin"), null, null, null))
+            assertThatThrownBy(() -> service.resolveException(
+                            EXCEPTION_ID, Set.of(PeoplePermissions.TIMEEXCEPTION_RESOLVE), null, null, null))
                     .isInstanceOf(EntityNotFoundException.class);
             assertThatThrownBy(() -> service.actionException(EXCEPTION_ID, ExceptionStatus.ACKNOWLEDGED, null, null))
                     .isInstanceOf(EntityNotFoundException.class);

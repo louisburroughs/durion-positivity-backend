@@ -928,13 +928,11 @@ paths:
           description: Dependent service unavailable
       security:
       - bearerAuth:
-        - people:time:export:read
         - accounting:time:export
       summary: List Approved Time For Accounting Export
       tags:
       - People Reports API
       x-required-permissions:
-      - people:time:export:read
       - accounting:time:export
   /v1/people/reports/attendanceJobtimeDiscrepancy:
     get:
@@ -1047,13 +1045,11 @@ paths:
           description: Dependent service unavailable
       security:
       - bearerAuth:
-        - people:time:export:read
         - accounting:time:export
       summary: Get Attendance Versus Job Time Discrepancy Report
       tags:
       - People Reports API
       x-required-permissions:
-      - people:time:export:read
       - accounting:time:export
   /v1/people/staffing/assignments:
     get:
