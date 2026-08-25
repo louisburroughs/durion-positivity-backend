@@ -425,3 +425,43 @@ All six flags are decided; the chart above reflects them:
 | 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | thresholds |
 | 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | no |
 | 9 | Remove dead authorities: literal `"admin"` check, `ACCOUNTING_ADMIN`/`AR_MANAGER` alternates, `people:time:export:read` alternate | small | no |
+| 10 | Seed dummy users for the roles that currently have none (see below) so every persona is exercisable under its own login | small | customer-persona mechanics only |
+
+### Task 10 — dummy users for unrepresented roles
+
+`R__seed_security_operational_data.sql` seeds 17 employees covering 8 roles;
+`R__seed_reference_security.sql` adds `admin.alpha` (ADMIN, GLOBAL scope). That leaves
+**7 of the 16 seeded roles with no user at all** — their grants (and every §6 change
+touching them) cannot be exercised under a real login, which is exactly how #1494 and
+#1512 stayed invisible. Proposed additions, continuing the existing UUID sequence and
+dev password hash:
+
+| User id (suffix) | Username | Role |
+| --- | --- | --- |
+| `…012` | `victor.hale` | GENERAL_MANAGER |
+| `…013` | `nina.alvarez` | MANAGER |
+| `…014` | `doug.freeman` | SHOP_MANAGER |
+| `…015` | `felicia.grant` | INVENTORY_MANAGER |
+| `…016` | `raymond.chu` | INVENTORY_CONTROLLER |
+| `…017` | `walter.simmons` | CUSTOMER |
+| `…018` | `lena.fischer` | SELF_SERVICE_CUSTOMER |
+| `…019` | `margaret.olsen` | CONTROLLER (once the §6 migration creates the role) |
+
+Implementation notes:
+
+- Same pattern as the existing block: `users` insert + name-resolved `user_roles`
+  insert, `ON CONFLICT` idempotent; update the file's "17 employees across 8 roles"
+  header comment.
+- INVENTORY_MANAGER vs INVENTORY_CONTROLLER hold identical permission sets by design
+  (#1373) — location vs global reach lives in `role_assignments.scope_type`. To make the
+  distinction testable, give `felicia.grant` a location-scoped `role_assignments` row
+  and `raymond.chu` a GLOBAL one, mirroring how `admin.alpha` is assigned.
+- **Open mechanic (the one flag):** `walter.simmons` / `lena.fischer` are
+  external-facing personas. Seeding them as plain `users` rows exercises the RBAC path,
+  but the real customer flow may go through self-registration /
+  `ExtCustomerPersonIdentity`; decide whether plain seeded users are representative
+  enough for the integration suite or whether these two should be created through the
+  self-registration flow instead.
+- Per ADR-0043/#714, users without a `person_id` get no `personId` claim; the existing
+  17 operational users are seeded without one, so follow that precedent unless a
+  persona's flow needs it (timekeeping flows for MANAGER-tier roles may).
