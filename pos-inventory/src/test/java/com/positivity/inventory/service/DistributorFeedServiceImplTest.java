@@ -149,6 +149,175 @@ class DistributorFeedServiceImplTest {
         assertThat(exception.getRawPayload()).contains("distributorSku=SKU-1");
     }
 
+    @Test
+    void processFeed_normalizesSameDayLeadTimeToZeroZero() {
+        DistributorFeedItemDto item = baseItemBuilder()
+                .rawLeadTime("same day")
+                .rawShipFromRegion("US")
+                .build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(0);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(0);
+    }
+
+    @Test
+    void processFeed_normalizesTPlusLeadTime() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime("T+5").rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(5);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(5);
+    }
+
+    @Test
+    void processFeed_normalizesDayUnitRangeWithoutHourConversion() {
+        DistributorFeedItemDto item = baseItemBuilder()
+                .rawLeadTime("2-5 days")
+                .rawShipFromRegion("US")
+                .build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(2);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(5);
+    }
+
+    @Test
+    void processFeed_normalizesSingleHourValueByCeilingToDays() {
+        DistributorFeedItemDto item = baseItemBuilder()
+                .rawLeadTime("36 hours")
+                .rawShipFromRegion("US")
+                .build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        // 36 hours ceils to 2 days ((36 + 23) / 24 == 2).
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(2);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(2);
+    }
+
+    @Test
+    void processFeed_normalizesSingleDayUnitValueWithoutHourConversion() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime("5 days").rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(5);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(5);
+    }
+
+    @Test
+    void processFeed_normalizesPlainRangeWithoutUnit() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime("2-5").rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(2);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(5);
+    }
+
+    @Test
+    void processFeed_normalizesPlainSingleValueWithoutUnit() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime("7").rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isEqualTo(7);
+        assertThat(saved.getLeadTimeDaysMax()).isEqualTo(7);
+    }
+
+    @Test
+    void processFeed_treatsNullLeadTimeAsUnboundedRatherThanAnException() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime(null).rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        verify(exceptionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isNull();
+        assertThat(saved.getLeadTimeDaysMax()).isNull();
+    }
+
+    @Test
+    void processFeed_treatsBlankLeadTimeAsUnboundedRatherThanAnException() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime("   ").rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        verify(exceptionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isNull();
+        assertThat(saved.getLeadTimeDaysMax()).isNull();
+    }
+
+    @Test
+    void processFeed_acceptsCfaAsAQualitativeAliasOfBackorder() {
+        DistributorFeedItemDto item =
+                baseItemBuilder().rawLeadTime("CFA").rawShipFromRegion("US").build();
+
+        when(normalizedRepository.findByDistributorIdAndDistributorSku("D1", "SKU-1"))
+                .thenReturn(Optional.empty());
+
+        service.processFeed(List.of(item));
+
+        verify(normalizedRepository).save(normalizedCaptor.capture());
+        DistributorNormalizedInventory saved = normalizedCaptor.getValue();
+        assertThat(saved.getLeadTimeDaysMin()).isNull();
+        assertThat(saved.getLeadTimeDaysMax()).isNull();
+    }
+
     private DistributorFeedItemDto.DistributorFeedItemDtoBuilder baseItemBuilder() {
         return DistributorFeedItemDto.builder()
                 .productId(UUID.fromString("00000000-0000-0000-0000-000000000001"))

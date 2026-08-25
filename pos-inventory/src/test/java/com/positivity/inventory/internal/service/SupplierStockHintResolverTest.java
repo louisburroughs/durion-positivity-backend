@@ -228,6 +228,37 @@ class SupplierStockHintResolverTest {
     }
 
     @Test
+    @DisplayName("a blank EAN is treated the same as no EAN at all")
+    void blank_ean_is_not_resolvable() {
+        SupplierStockHint hint = pending("   ");
+        backlog(hint);
+
+        SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
+
+        assertThat(result.notResolvable()).isEqualTo(1);
+        assertThat(hint.getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.NOT_RESOLVABLE);
+        // Settled without ever consulting the replica.
+        verify(productCodes, never()).count();
+    }
+
+    @Test
+    @DisplayName("the replica-seeded check runs once per pass, not once per hint")
+    void replica_seeded_check_is_cached_across_the_batch() {
+        SupplierStockHint first = pending("4012345678901");
+        SupplierStockHint second = pending("4012345678902");
+        backlog(first, second);
+        when(productCodes.count()).thenReturn(1L);
+        when(productCodes.findByCodeTypeAndCode(eq("EAN"), any())).thenReturn(List.of());
+
+        SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
+
+        assertThat(result.attempted()).isEqualTo(2);
+        assertThat(result.unresolved()).isEqualTo(2);
+        // Evaluated once for the whole pass, not once per EAN-carrying hint.
+        verify(productCodes, org.mockito.Mockito.times(1)).count();
+    }
+
+    @Test
     @DisplayName("the scheduled entry point never lets a failed pass escalate")
     void scheduled_pass_swallows_failures() {
         when(hints.findByResolutionStatusOrderByFetchedAtAsc(any(), any(Limit.class)))

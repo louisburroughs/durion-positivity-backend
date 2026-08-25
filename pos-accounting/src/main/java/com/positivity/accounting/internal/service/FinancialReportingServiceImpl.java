@@ -789,91 +789,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction = new HashMap<>();
 
-        // --- Invoice side (accrual): tax bucketed by the invoice's finalization period
-        // ---
-        List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant);
-        List<UUID> invoiceIds =
-                invoices.stream().map(ExtInvoice::getInvoiceId).distinct().toList();
-        List<ExtInvoiceTax> invoiceTaxRows =
-                invoiceIds.isEmpty() ? List.of() : extInvoiceTaxRepository.findByInvoiceIdIn(invoiceIds);
-
-        for (ExtInvoiceTax row : invoiceTaxRows) {
-            JurisdictionAccumulator acc = accumulatorFor(byJurisdiction, row);
-            if (row.isExempt()) {
-                acc.exemptBase = acc.exemptBase.add(nullSafe(row.getTaxableBase()));
-                String reason = row.getExemptionReasonCode();
-                if (reason != null && !reason.isBlank()) {
-                    acc.exemptionReasons.add(reason);
-                }
-            } else {
-                acc.taxableBase = acc.taxableBase.add(nullSafe(row.getTaxableBase()));
-                acc.taxCollectedGross = acc.taxCollectedGross.add(nullSafe(row.getTaxAmount()));
-            }
-        }
-
-        // --- Credit side (accrual): reversals bucketed by the credit's POSTING period,
-        // whatever status the credit now carries (issue #997 — a later APPLIED/VOIDED
-        // transition does not remove the Dr 2200 entry, so dropping it here would show
-        // up
-        // as GL drift). Attribution comes from the credit's own frozen per-jurisdiction
-        // breakdown (issue #996), falling back to the pro-rata allocator for credits
-        // issued before that breakdown existed. ---
-        BigDecimal unattributedCredits = BigDecimal.ZERO;
-        List<CreditMemo> credits = creditMemoRepository.findByStatusNotAndPostedTimestampBetween(
-                CreditMemoStatus.DRAFT, startInstant, endInstant);
-        if (!credits.isEmpty()) {
-            List<UUID> originalInvoiceIds = credits.stream()
-                    .map(CreditMemo::getOriginalInvoiceId)
-                    .distinct()
-                    .toList();
-            Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice =
-                    extInvoiceTaxRepository.findByInvoiceIdIn(originalInvoiceIds).stream()
-                            .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
-
-            List<UUID> creditMemoIds =
-                    credits.stream().map(CreditMemo::getCreditMemoId).toList();
-            Map<UUID, List<CreditMemoTax>> attributionByCredit =
-                    creditMemoTaxRepository.findByCreditMemoIdIn(creditMemoIds).stream()
-                            .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
-
-            for (CreditMemo credit : credits) {
-                unattributedCredits = unattributedCredits.add(netCreditAcrossJurisdictions(
-                        credit, attributionByCredit, taxByOriginalInvoice, byJurisdiction, false));
-            }
-        }
-
-        // --- Void side (issue #997 symmetry): a void posts a reversing Cr 2200 entry
-        // in the
-        // period it happens, so the report restores the reversed tax per jurisdiction
-        // in that
-        // same period (negative creditsNetted). The memo's original posting-period
-        // contribution
-        // above is untouched — no retroactive restatement; a memo posted and voided in
-        // the same
-        // period contributes net zero. ---
-        List<CreditMemo> voids = creditMemoRepository.findByStatusAndVoidedTimestampBetween(
-                CreditMemoStatus.VOIDED, startInstant, endInstant);
-        if (!voids.isEmpty()) {
-            List<UUID> voidInvoiceIds = voids.stream()
-                    .map(CreditMemo::getOriginalInvoiceId)
-                    .distinct()
-                    .toList();
-            Map<UUID, List<ExtInvoiceTax>> taxByVoidInvoice =
-                    extInvoiceTaxRepository.findByInvoiceIdIn(voidInvoiceIds).stream()
-                            .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
-            Map<UUID, List<CreditMemoTax>> attributionByVoid =
-                    creditMemoTaxRepository
-                            .findByCreditMemoIdIn(voids.stream()
-                                    .map(CreditMemo::getCreditMemoId)
-                                    .toList())
-                            .stream()
-                            .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
-
-            for (CreditMemo voided : voids) {
-                unattributedCredits = unattributedCredits.subtract(netCreditAcrossJurisdictions(
-                        voided, attributionByVoid, taxByVoidInvoice, byJurisdiction, true));
-            }
-        }
+        accumulateInvoiceTax(byJurisdiction, startInstant, endInstant);
+        BigDecimal unattributedCredits = accumulatePostedCredits(byJurisdiction, startInstant, endInstant)
+                .subtract(accumulateVoidedCredits(byJurisdiction, startInstant, endInstant));
 
         // --- Rows ordered state -> county -> city -> special, then by code ---
         List<TaxLiabilityRow> rows = byJurisdiction.entrySet().stream()
@@ -912,6 +830,114 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .totalNetTax(totalNetTax)
                 .reconciliation(reconciliation)
                 .build();
+    }
+
+    /**
+     * Buckets invoice-side (accrual) tax collected in the period into {@code byJurisdiction},
+     * finalization-period tax bucketed by whether each row is exempt or taxable.
+     */
+    private void accumulateInvoiceTax(
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction, Instant startInstant, Instant endInstant) {
+        List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant);
+        List<UUID> invoiceIds =
+                invoices.stream().map(ExtInvoice::getInvoiceId).distinct().toList();
+        List<ExtInvoiceTax> invoiceTaxRows =
+                invoiceIds.isEmpty() ? List.of() : extInvoiceTaxRepository.findByInvoiceIdIn(invoiceIds);
+
+        for (ExtInvoiceTax row : invoiceTaxRows) {
+            applyInvoiceTaxRow(byJurisdiction, row);
+        }
+    }
+
+    /** Adds one invoice tax row to its jurisdiction's exempt or taxable running totals. */
+    private static void applyInvoiceTaxRow(
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction, ExtInvoiceTax row) {
+        JurisdictionAccumulator acc = accumulatorFor(byJurisdiction, row);
+        if (row.isExempt()) {
+            acc.exemptBase = acc.exemptBase.add(nullSafe(row.getTaxableBase()));
+            String reason = row.getExemptionReasonCode();
+            if (reason != null && !reason.isBlank()) {
+                acc.exemptionReasons.add(reason);
+            }
+        } else {
+            acc.taxableBase = acc.taxableBase.add(nullSafe(row.getTaxableBase()));
+            acc.taxCollectedGross = acc.taxCollectedGross.add(nullSafe(row.getTaxAmount()));
+        }
+    }
+
+    /**
+     * Nets credit memos posted (any status but DRAFT) in the period into {@code byJurisdiction}
+     * (issue #997 — a later APPLIED/VOIDED transition does not remove the Dr 2200 entry, so
+     * dropping it here would show up as GL drift). Attribution comes from the credit's own frozen
+     * per-jurisdiction breakdown (issue #996), falling back to the pro-rata allocator for credits
+     * issued before that breakdown existed.
+     *
+     * @return the portion of posted-credit tax that could not be attributed to a jurisdiction
+     */
+    private BigDecimal accumulatePostedCredits(
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction, Instant startInstant, Instant endInstant) {
+        List<CreditMemo> credits = creditMemoRepository.findByStatusNotAndPostedTimestampBetween(
+                CreditMemoStatus.DRAFT, startInstant, endInstant);
+        if (credits.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        List<UUID> originalInvoiceIds = credits.stream()
+                .map(CreditMemo::getOriginalInvoiceId)
+                .distinct()
+                .toList();
+        Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice =
+                extInvoiceTaxRepository.findByInvoiceIdIn(originalInvoiceIds).stream()
+                        .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
+
+        List<UUID> creditMemoIds =
+                credits.stream().map(CreditMemo::getCreditMemoId).toList();
+        Map<UUID, List<CreditMemoTax>> attributionByCredit =
+                creditMemoTaxRepository.findByCreditMemoIdIn(creditMemoIds).stream()
+                        .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
+
+        BigDecimal unattributed = BigDecimal.ZERO;
+        for (CreditMemo credit : credits) {
+            unattributed = unattributed.add(netCreditAcrossJurisdictions(
+                    credit, attributionByCredit, taxByOriginalInvoice, byJurisdiction, false));
+        }
+        return unattributed;
+    }
+
+    /**
+     * Restores tax reversed by credit memos voided in the period into {@code byJurisdiction}
+     * (issue #997 symmetry): a void posts a reversing Cr 2200 entry in the period it happens, so
+     * that period's report must restore the reversed tax (negative creditsNetted) rather than
+     * leave it as unexplained GL drift. The memo's original posting-period contribution is
+     * untouched — no retroactive restatement; a memo posted and voided in the same period
+     * contributes net zero.
+     *
+     * @return the portion of voided-credit tax that could not be attributed to a jurisdiction
+     */
+    private BigDecimal accumulateVoidedCredits(
+            Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction, Instant startInstant, Instant endInstant) {
+        List<CreditMemo> voids = creditMemoRepository.findByStatusAndVoidedTimestampBetween(
+                CreditMemoStatus.VOIDED, startInstant, endInstant);
+        if (voids.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        List<UUID> voidInvoiceIds =
+                voids.stream().map(CreditMemo::getOriginalInvoiceId).distinct().toList();
+        Map<UUID, List<ExtInvoiceTax>> taxByVoidInvoice =
+                extInvoiceTaxRepository.findByInvoiceIdIn(voidInvoiceIds).stream()
+                        .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
+        Map<UUID, List<CreditMemoTax>> attributionByVoid =
+                creditMemoTaxRepository
+                        .findByCreditMemoIdIn(
+                                voids.stream().map(CreditMemo::getCreditMemoId).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
+
+        BigDecimal unattributed = BigDecimal.ZERO;
+        for (CreditMemo voided : voids) {
+            unattributed = unattributed.add(
+                    netCreditAcrossJurisdictions(voided, attributionByVoid, taxByVoidInvoice, byJurisdiction, true));
+        }
+        return unattributed;
     }
 
     /**

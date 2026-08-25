@@ -134,32 +134,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
 
         Map<SummaryKey, SummaryDelta> deltas = new LinkedHashMap<>();
         for (InventoryLedgerEntry entry : saved) {
-            SummaryDelta delta = deltaFor(entry);
-            if (delta != null) {
-                // Lot-agnostic row first (pre-E1 behavior), then the additional per-lot row for
-                // lot-tagged entries — same deltas on both (odoo-parity E1, #1038).
-                deltas.merge(
-                        new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null), delta, SummaryDelta::plus);
-                if (entry.getLotId() != null) {
-                    deltas.merge(
-                            new SummaryKey(entry.getStockItemId(), entry.getLocationId(), entry.getLotId()),
-                            delta,
-                            SummaryDelta::plus);
-                }
-            }
-            SummaryDelta transitDelta = outboundInTransitDeltaFor(entry);
-            if (transitDelta != null) {
-                deltas.merge(
-                        new SummaryKey(entry.getStockItemId(), entry.getToLocationId(), null),
-                        transitDelta,
-                        SummaryDelta::plus);
-                if (entry.getLotId() != null) {
-                    deltas.merge(
-                            new SummaryKey(entry.getStockItemId(), entry.getToLocationId(), entry.getLotId()),
-                            transitDelta,
-                            SummaryDelta::plus);
-                }
-            }
+            accumulateSummaryDeltas(entry, deltas);
         }
 
         Map<SummaryKey, InventoryStockSummary> lockedRows = new LinkedHashMap<>();
@@ -181,17 +156,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
 
         // odoo-parity E2 (#1042): after the per-lot rows are current, reconcile the
         // ACTIVE <-> CONSUMED status of every lot this batch moved stock for.
-        Set<UUID> touchedLotIds = new LinkedHashSet<>();
-        for (InventoryLedgerEntry entry : saved) {
-            if (entry.getLotId() != null
-                    && entry.getEventType() != null
-                    && entry.getEventType().affectsOnHand()) {
-                touchedLotIds.add(entry.getLotId());
-            }
-        }
-        if (!touchedLotIds.isEmpty()) {
-            lotStatusReconciler.reconcile(touchedLotIds);
-        }
+        reconcileTouchedLots(saved);
 
         // odoo-parity E4 (#1050): enforce the serial=quantity invariant and enumerate/consume the
         // named serial units for every SERIAL-tracked, on-hand-affecting entry in this batch. A
@@ -202,6 +167,55 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         triggerBackorderResolution(saved);
 
         return saved;
+    }
+
+    /**
+     * Folds one entry's on-hand/allocation/reservation delta and its outbound in-transit delta
+     * (if any) into the batch's running per-key totals — lot-agnostic row first (pre-E1
+     * behavior), then the additional per-lot row for lot-tagged entries, same deltas on both
+     * (odoo-parity E1, #1038).
+     */
+    private void accumulateSummaryDeltas(InventoryLedgerEntry entry, Map<SummaryKey, SummaryDelta> deltas) {
+        SummaryDelta delta = deltaFor(entry);
+        if (delta != null) {
+            mergeDelta(deltas, entry.getStockItemId(), entry.getLocationId(), entry.getLotId(), delta);
+        }
+        SummaryDelta transitDelta = outboundInTransitDeltaFor(entry);
+        if (transitDelta != null) {
+            mergeDelta(deltas, entry.getStockItemId(), entry.getToLocationId(), entry.getLotId(), transitDelta);
+        }
+    }
+
+    /** Merges {@code delta} into the lot-agnostic key, plus the per-lot key when {@code lotId} is set. */
+    private static void mergeDelta(
+            Map<SummaryKey, SummaryDelta> deltas,
+            String stockItemId,
+            @Nullable UUID locationId,
+            @Nullable UUID lotId,
+            SummaryDelta delta) {
+        deltas.merge(new SummaryKey(stockItemId, locationId, null), delta, SummaryDelta::plus);
+        if (lotId != null) {
+            deltas.merge(new SummaryKey(stockItemId, locationId, lotId), delta, SummaryDelta::plus);
+        }
+    }
+
+    /** Hands every lot this batch raised or lowered on-hand for to the status reconciler. */
+    private void reconcileTouchedLots(List<InventoryLedgerEntry> saved) {
+        Set<UUID> touchedLotIds = new LinkedHashSet<>();
+        for (InventoryLedgerEntry entry : saved) {
+            if (touchesLotOnHand(entry)) {
+                touchedLotIds.add(entry.getLotId());
+            }
+        }
+        if (!touchedLotIds.isEmpty()) {
+            lotStatusReconciler.reconcile(touchedLotIds);
+        }
+    }
+
+    private static boolean touchesLotOnHand(InventoryLedgerEntry entry) {
+        return entry.getLotId() != null
+                && entry.getEventType() != null
+                && entry.getEventType().affectsOnHand();
     }
 
     /**

@@ -547,31 +547,38 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             if (suspensionReason(policy, now) != null) {
                 continue;
             }
-            Projection projection = project(policy);
-            int suggestedQuantity = projection.triggered() ? quantityToReplenish(policy, projection, null) : 0;
-            LocalDate deadline = projection.triggered() ? deadlineFor(projection) : null;
-            needs.add(ReplenishmentNeedResponse.builder()
-                    .policyId(
-                            policy.getPolicyId() != null ? policy.getPolicyId().toString() : null)
-                    .itemSKU(policy.getItemSKU())
-                    .locationId(policy.getLocationId())
-                    .onHand(projection.onHand())
-                    .projectedAvailable(projection.projectedAvailable())
-                    .leadHorizonDate(LocalDate.ofInstant(projection.leadHorizon(), ZoneOffset.UTC)
-                            .toString())
-                    .leadTimeSource(projection.leadTime().source().name())
-                    .minimumQuantity(policy.getMinimumQuantity() != null ? policy.getMinimumQuantity() : 0)
-                    .maximumQuantity(policy.getMaximumQuantity() != null ? policy.getMaximumQuantity() : 0)
-                    .wouldTrigger(projection.triggered())
-                    .suggestedQuantity(suggestedQuantity)
-                    .deadlineDate(deadline != null ? deadline.toString() : null)
-                    .preferredSourceType(
-                            policy.getPreferredSourceType() != null
-                                    ? policy.getPreferredSourceType().name()
-                                    : ReplenishmentSourceType.EITHER.name())
-                    .build());
+            needs.add(needResponse(policy, project(policy)));
         }
         return needs;
+    }
+
+    /** One report row: the policy's current projection plus what a scan would do with it right now. */
+    private ReplenishmentNeedResponse needResponse(ReplenishmentPolicy policy, Projection projection) {
+        int suggestedQuantity = projection.triggered() ? quantityToReplenish(policy, projection, null) : 0;
+        LocalDate deadline = projection.triggered() ? deadlineFor(projection) : null;
+        return ReplenishmentNeedResponse.builder()
+                // No null fallback: policyId is the repository-loaded @Id, and the response
+                // declares it REQUIRED — emitting null would violate the schema, not honour it.
+                .policyId(policy.getPolicyId().toString())
+                .itemSKU(policy.getItemSKU())
+                .locationId(policy.getLocationId())
+                .onHand(projection.onHand())
+                .projectedAvailable(projection.projectedAvailable())
+                .leadHorizonDate(LocalDate.ofInstant(projection.leadHorizon(), ZoneOffset.UTC)
+                        .toString())
+                .leadTimeSource(projection.leadTime().source().name())
+                // No null fallback: project() (called for every policy this method reaches)
+                // already unboxed minimumQuantity, so it cannot be null by this line.
+                .minimumQuantity(policy.getMinimumQuantity())
+                .maximumQuantity(policy.getMaximumQuantity() != null ? policy.getMaximumQuantity() : 0)
+                .wouldTrigger(projection.triggered())
+                .suggestedQuantity(suggestedQuantity)
+                .deadlineDate(deadline != null ? deadline.toString() : null)
+                .preferredSourceType(
+                        policy.getPreferredSourceType() != null
+                                ? policy.getPreferredSourceType().name()
+                                : ReplenishmentSourceType.EITHER.name())
+                .build();
     }
 
     /**

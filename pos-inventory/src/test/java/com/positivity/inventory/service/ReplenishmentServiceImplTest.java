@@ -676,4 +676,122 @@ class ReplenishmentServiceImplTest {
         org.mockito.Mockito.verify(replenishmentTaskRepository, org.mockito.Mockito.never())
                 .save(any());
     }
+
+    // ─── getReplenishmentNeeds (odoo-parity F3/F6, issue #1041) ────
+
+    @Test
+    void getReplenishmentNeeds_skipsSuspendedPolicies() {
+        ReplenishmentPolicy suspended = ReplenishmentPolicy.builder()
+                .policyId(UUID.fromString("00000000-0000-0000-0000-0000000000d1"))
+                .locationId(LOC_01)
+                .itemSKU("SKU-SUSPENDED")
+                .minimumQuantity(5)
+                .maximumQuantity(20)
+                .active(Boolean.FALSE)
+                .build();
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(suspended));
+
+        List<com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse> needs =
+                replenishmentService.getReplenishmentNeeds();
+
+        assertTrue(needs.isEmpty());
+    }
+
+    /**
+     * Not-triggered vector: {@code projectedAvailable >= minimumQuantity} so the report reads
+     * {@code wouldTrigger=false}, {@code suggestedQuantity=0} and no deadline — pinning that
+     * {@link ReplenishmentServiceImpl#quantityToReplenish} and the deadline calculator are never
+     * invoked for a policy that isn't below minimum. Also exercises the defensive
+     * {@code maximumQuantity == null} fallback (response reads 0): reachable here because the
+     * not-triggered branch skips the only code path that unboxes it.
+     */
+    @Test
+    void getReplenishmentNeeds_notTriggered_reportsZeroQuantityAndNoDeadline() {
+        ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
+                .policyId(UUID.fromString("00000000-0000-0000-0000-0000000000d2"))
+                .locationId(LOC_01)
+                .itemSKU("SKU-AT-MIN")
+                .minimumQuantity(5)
+                .maximumQuantity(null)
+                .build();
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-AT-MIN", LOC_01, 5);
+
+        List<com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse> needs =
+                replenishmentService.getReplenishmentNeeds();
+
+        assertEquals(1, needs.size());
+        com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse need = needs.getFirst();
+        assertEquals(false, need.isWouldTrigger());
+        assertEquals(0, need.getSuggestedQuantity());
+        assertEquals(0, need.getMaximumQuantity());
+        assertNotNull(need.getPolicyId());
+        assertEquals(null, need.getDeadlineDate());
+        org.mockito.Mockito.verify(stockoutDeadlineCalculator, org.mockito.Mockito.never())
+                .stockoutDeadline(any(), any(), any(), any(), any());
+    }
+
+    /** Triggered vector: below-minimum policy reports a positive suggested quantity and the stockout deadline. */
+    @Test
+    void getReplenishmentNeeds_triggered_reportsSuggestedQuantityAndDeadline() {
+        ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
+                .policyId(UUID.fromString("00000000-0000-0000-0000-0000000000d3"))
+                .locationId(LOC_01)
+                .itemSKU("SKU-BELOW-MIN")
+                .minimumQuantity(5)
+                .maximumQuantity(20)
+                .preferredSourceType(com.positivity.inventory.internal.enums.ReplenishmentSourceType.PURCHASE)
+                .build();
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-BELOW-MIN", LOC_01, 3);
+        java.time.LocalDate deadline = java.time.LocalDate.parse("2024-01-10");
+        when(stockoutDeadlineCalculator.stockoutDeadline(any(), any(), any(), any(), any()))
+                .thenReturn(deadline);
+
+        List<com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse> needs =
+                replenishmentService.getReplenishmentNeeds();
+
+        assertEquals(1, needs.size());
+        com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse need = needs.getFirst();
+        assertTrue(need.isWouldTrigger());
+        assertEquals(17, need.getSuggestedQuantity()); // max 20 - projected 3
+        assertEquals("2024-01-10", need.getDeadlineDate());
+        assertEquals("PURCHASE", need.getPreferredSourceType());
+    }
+
+    /**
+     * Defensive-default vector: a policy read back with no persisted id and no preferred source
+     * type still maps to a report row — {@code policyId=null} and
+     * {@code preferredSourceType=EITHER}. {@code minimumQuantity} has no equivalent null vector:
+     * {@link ReplenishmentServiceImpl#project} unconditionally unboxes it via
+     * {@code BigDecimal.valueOf} before the report row is ever built, so that fallback branch in
+     * the mapping code is unreachable from any policy this method can evaluate.
+     */
+    @Test
+    void getReplenishmentNeeds_missingSourceType_fallsBackToEither() {
+        // policyId is deliberately set: a policy reaching this method is repository-loaded, so
+        // its @Id is never null, and the response declares policyId REQUIRED. Only the
+        // preferredSourceType fallback is a reachable default (a row predating the column).
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-00000000000d");
+        ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
+                .policyId(policyId)
+                .locationId(LOC_01)
+                .itemSKU("SKU-NO-SRC")
+                .minimumQuantity(5)
+                .maximumQuantity(20)
+                // Overrides the entity's own @Builder.Default (EITHER) to reach the
+                // response-mapping fallback directly.
+                .preferredSourceType(null)
+                .build();
+        when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
+        givenOnHand("SKU-NO-SRC", LOC_01, 5);
+
+        List<com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse> needs =
+                replenishmentService.getReplenishmentNeeds();
+
+        assertEquals(1, needs.size());
+        com.positivity.inventory.internal.dto.replenishment.ReplenishmentNeedResponse need = needs.getFirst();
+        assertEquals(policyId.toString(), need.getPolicyId());
+        assertEquals("EITHER", need.getPreferredSourceType());
+    }
 }

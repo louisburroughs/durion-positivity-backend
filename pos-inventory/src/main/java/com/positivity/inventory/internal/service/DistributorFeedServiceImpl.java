@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -127,29 +128,58 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         }
     }
 
+    private static final LeadTimeNormalizationResult LEAD_TIME_UNBOUNDED =
+            new LeadTimeNormalizationResult(true, null, null);
+    private static final LeadTimeNormalizationResult LEAD_TIME_SAME_DAY = new LeadTimeNormalizationResult(true, 0, 0);
+    private static final LeadTimeNormalizationResult LEAD_TIME_UNPARSABLE =
+            new LeadTimeNormalizationResult(false, null, null);
+
     private LeadTimeNormalizationResult normalizeLeadTime(String rawLeadTime) {
         if (rawLeadTime == null || rawLeadTime.isBlank()) {
-            return new LeadTimeNormalizationResult(true, null, null);
+            return LEAD_TIME_UNBOUNDED;
         }
 
         String normalized = rawLeadTime.trim();
         String normalizedUpper = normalized.toUpperCase(Locale.ROOT);
 
+        LeadTimeNormalizationResult qualitative = qualitativeLeadTime(normalizedUpper);
+        if (qualitative != null) {
+            return qualitative;
+        }
+
+        LeadTimeNormalizationResult numeric = numericLeadTime(normalized);
+        return numeric != null ? numeric : LEAD_TIME_UNPARSABLE;
+    }
+
+    /**
+     * The two fixed-vocabulary CAP-170 phrasings — vendor-stated "no promised date" and
+     * "ships today" — or {@code null} when {@code normalizedUpper} matches neither.
+     */
+    private @Nullable LeadTimeNormalizationResult qualitativeLeadTime(String normalizedUpper) {
         // Qualitative values accepted by CAP-170 policy; no numeric day bounds
         // available.
         if (normalizedUpper.equals("BACKORDER")
                 || normalizedUpper.equals("CALL FOR AVAILABILITY")
                 || normalizedUpper.equals("CALL")
                 || normalizedUpper.equals("CFA")) {
-            return new LeadTimeNormalizationResult(true, null, null);
+            return LEAD_TIME_UNBOUNDED;
         }
 
         if (normalizedUpper.equals("SAME DAY")
                 || normalizedUpper.equals("SAMEDAY")
                 || normalizedUpper.equals("TODAY")) {
-            return new LeadTimeNormalizationResult(true, 0, 0);
+            return LEAD_TIME_SAME_DAY;
         }
 
+        return null;
+    }
+
+    /**
+     * The numeric lead-time spellings, tried in the same order as before the split: T-plus,
+     * ranged-with-unit, single-with-unit, ranged-plain, single-plain. {@code null} when
+     * {@code normalized} matches none of them.
+     */
+    private @Nullable LeadTimeNormalizationResult numericLeadTime(String normalized) {
         Matcher tPlusMatcher = LEAD_TIME_T_PLUS_PATTERN.matcher(normalized);
         if (tPlusMatcher.matches()) {
             int days = Integer.parseInt(tPlusMatcher.group(1));
@@ -160,22 +190,18 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
         if (rangeWithUnitMatcher.matches()) {
             int min = Integer.parseInt(rangeWithUnitMatcher.group(1));
             int max = Integer.parseInt(rangeWithUnitMatcher.group(2));
-            String unit = rangeWithUnitMatcher.group(3).toLowerCase(Locale.ROOT);
-            if (unit.startsWith("hour") || unit.equals("hr") || unit.equals("hrs")) {
-                return new LeadTimeNormalizationResult(true, hoursToDaysCeil(min), hoursToDaysCeil(max));
-            }
-            return new LeadTimeNormalizationResult(true, min, max);
+            String unit = rangeWithUnitMatcher.group(3);
+            return isHourUnit(unit)
+                    ? new LeadTimeNormalizationResult(true, hoursToDaysCeil(min), hoursToDaysCeil(max))
+                    : new LeadTimeNormalizationResult(true, min, max);
         }
 
         Matcher singleWithUnitMatcher = LEAD_TIME_SINGLE_WITH_UNIT_PATTERN.matcher(normalized);
         if (singleWithUnitMatcher.matches()) {
             int value = Integer.parseInt(singleWithUnitMatcher.group(1));
-            String unit = singleWithUnitMatcher.group(2).toLowerCase(Locale.ROOT);
-            if (unit.startsWith("hour") || unit.equals("hr") || unit.equals("hrs")) {
-                int days = hoursToDaysCeil(value);
-                return new LeadTimeNormalizationResult(true, days, days);
-            }
-            return new LeadTimeNormalizationResult(true, value, value);
+            String unit = singleWithUnitMatcher.group(2);
+            int days = isHourUnit(unit) ? hoursToDaysCeil(value) : value;
+            return new LeadTimeNormalizationResult(true, days, days);
         }
 
         Matcher rangeMatcher = LEAD_TIME_RANGE_PATTERN.matcher(normalized);
@@ -190,7 +216,13 @@ public class DistributorFeedServiceImpl implements DistributorFeedService {
             return new LeadTimeNormalizationResult(true, value, value);
         }
 
-        return new LeadTimeNormalizationResult(false, null, null);
+        return null;
+    }
+
+    /** Whether a matched lead-time unit (case-insensitive) names hours rather than days. */
+    private static boolean isHourUnit(String unit) {
+        String lower = unit.toLowerCase(Locale.ROOT);
+        return lower.startsWith("hour") || lower.equals("hr") || lower.equals("hrs");
     }
 
     private int hoursToDaysCeil(int hours) {
