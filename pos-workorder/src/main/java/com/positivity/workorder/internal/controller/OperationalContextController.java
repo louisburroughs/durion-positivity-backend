@@ -108,8 +108,8 @@ public class OperationalContextController {
     @PostMapping("/{workorderId}/start")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:start"})
-    @PreAuthorize("hasAuthority('" + WorkorderPermissions.START + "')")
+            scopes = {"workorder:workorder:start"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_START + "')")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @Operation(
             operationId = "startWorkorder",

@@ -44,6 +44,25 @@ import org.junit.jupiter.api.Test;
  * <p>This is a pure parse of the migration, so it runs in {@code test} without a database.
  * {@code RolePermissionSeedIT} covers what only a real Postgres can prove (the SQL applies,
  * re-applies without duplicating, and rejects unknown names).
+ *
+ * <p><b>2026-08 ACCOUNT_MANAGER / CONTROLLER rescope.</b> Per #1499/#1512 (docs/rbac-permission-
+ * role-audit-2026-08.md §6, decided 2026-08-25), ACCOUNT_MANAGER was narrowed to a
+ * customer-accounts (AR) role and its accounting-management grants — chart of accounts, journal
+ * entries, GL/posting-category/mapping-key/default-mapping configuration, posting rules,
+ * accounting events, exports and AP — moved to the newly created CONTROLLER role ({@code
+ * V24__seed_controller_role.sql}, revoked from ACCOUNT_MANAGER by {@code
+ * V25__rescope_account_manager_to_customer_accounts.sql}). Six dead codes (accounting:ap:approve,
+ * accounting:ap:reject and the accounting:mapping:* family) were retired at the same time. {@code
+ * role-authority-legacy-baseline.tsv} was edited deliberately to match: the moved codes'
+ * ACCOUNT_MANAGER rows were relabeled to CONTROLLER (the no-regression floor moves with the role
+ * that now owns the capability) and the six retired codes' rows were deleted outright. A future
+ * reader diffing this fixture against git history should read this as intentional, not drift.
+ * The same rescope also re-points two other superseded families (§2 finding 1 and §3 of the same
+ * audit): {@code workorder:start} rows were relabeled to {@code workorder:workorder:start}
+ * (deduped against ADMIN, which already held the surviving code), and {@code shop:location:view}
+ * / {@code shop:bay:view} rows were relabeled to {@code location:read} / {@code
+ * location:bay:read} (with LOCATION_MANAGER's {@code shop:location/bay:create/edit} rows
+ * relabeled to {@code location:write} / {@code location:bay:manage}).
  */
 @DisplayName("role_permissions baseline seed")
 class RolePermissionBaselineTest {
@@ -79,9 +98,14 @@ class RolePermissionBaselineTest {
      * ever creates. Both {@code user_roles} and {@code role_assignments} are foreign-keyed to
      * {@code roles(id)}, so no user could hold one — they were unreachable branches, and their
      * grants are deliberately not carried into the baseline.
+     *
+     * <p>CONTROLLER is deliberately absent from this set as of the 2026-08 ACCOUNT_MANAGER /
+     * CONTROLLER rescope (#1499/#1512, docs/rbac-permission-role-audit-2026-08.md §6): {@code
+     * V24__seed_controller_role.sql} now creates it, so it is reachable and this baseline grants
+     * it the accounting-management authority {@code V25} revokes from ACCOUNT_MANAGER.
      */
     private static final Set<String> UNREACHABLE_LEGACY_ROLES =
-            Set.of("ACCOUNTANT", "AP_CLERK", "CONTROLLER", "CSR", "FLEET_MANAGER", "GL_ANALYST");
+            Set.of("ACCOUNTANT", "AP_CLERK", "CSR", "FLEET_MANAGER", "GL_ANALYST");
 
     /**
      * The two unratified "Candidate Roles v0" that {@code V3__seed_candidate_roles.sql}
@@ -217,8 +241,8 @@ class RolePermissionBaselineTest {
     void dispatcher_isScopedToSchedulingAndDispatch() {
         assertThat(seededGrants.get("DISPATCHER"))
                 .containsExactlyInAnyOrder(
-                        "shop:location:view",
-                        "shop:bay:view",
+                        "location:read",
+                        "location:bay:read",
                         "shop:bay:assign",
                         "shop:schedule:view",
                         "shop:schedule:edit",
@@ -441,8 +465,8 @@ class RolePermissionBaselineTest {
                         + "assignments and audit review. There is no shop audit permission "
                         + "in pos-shop-manager's manifest, so audit review is not granted.")
                 .contains(
-                        "shop:location:view",
-                        "shop:bay:view",
+                        "location:read",
+                        "location:bay:read",
                         "shop:bay:assign",
                         "shop:schedule:view",
                         "shop:schedule:edit",

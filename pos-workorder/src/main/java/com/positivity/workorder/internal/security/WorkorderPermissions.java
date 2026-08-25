@@ -113,9 +113,6 @@ public final class WorkorderPermissions {
     /** View parts on workorder. */
     public static final String PARTS_VIEW = "workorder:parts:view";
 
-    /** Start workorder. */
-    public static final String START = "workorder:start";
-
     /** Approve timeEntry. */
     public static final String TIMEENTRY_APPROVE = "workorder:timeEntry:approve";
 
@@ -145,6 +142,16 @@ public final class WorkorderPermissions {
 
     /** Reopen completed workorders. */
     public static final String WORKORDER_REOPEN_COMPLETED = "workorder:workorder:reopen_completed";
+
+    /**
+     * Start workorder.
+     *
+     * <p>Formerly split-brain with {@code workorder:start} (bit 284): the endpoint enforced the
+     * latter while the detail-response capability flag checked this code, so a technician could
+     * start a workorder while the UI reported they couldn't. This is the sole survivor —
+     * {@code workorder:start} is retired (see the 2026-08 RBAC audit, §2 finding 1 / §7 task 2).
+     */
+    public static final String WORKORDER_START = "workorder:workorder:start";
 
     /** View workorders. */
     public static final String WORKORDER_VIEW = "workorder:workorder:view";
