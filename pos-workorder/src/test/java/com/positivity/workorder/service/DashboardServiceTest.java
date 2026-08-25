@@ -184,6 +184,131 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // AC-4b (edge cases): each guard in the PTO-overlap range check must be
+    // independently false-able, or a data gap/adjacent-PTO record would be
+    // misread as covering the dispatch date.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-4b (edge): PTO block missing a start date is skipped without conflict or crash")
+    void getDashboard_ptoBlockMissingStart_noOverlapConflict() {
+        // Arrange — a data gap (start never recorded) must not NPE the range check nor
+        // be misread as covering the date.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-050", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        Instant dayEnd = TEST_DATE.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-050")
+                .firstName("Ivy")
+                .lastName("Chen")
+                .currentStatus("AVAILABLE")
+                .pto(List.of(PtoBlock.builder()
+                        .ptoId("PTO-50")
+                        .start(null)
+                        .end(dayEnd)
+                        .ptoType("ANNUAL")
+                        .build()))
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert: should not throw; no start date means the overlap can't be
+        // established
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_PTO_OVERLAP".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("AC-4b (edge): PTO block missing an end date is skipped without conflict or crash")
+    void getDashboard_ptoBlockMissingEnd_noOverlapConflict() {
+        // Arrange — an open-ended PTO record (end never recorded) can't be tested for
+        // overlap either; same defensive skip as a missing start.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-051", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        Instant dayStart = TEST_DATE.atStartOfDay().toInstant(ZoneOffset.UTC);
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-051")
+                .firstName("Jax")
+                .lastName("Reid")
+                .currentStatus("AVAILABLE")
+                .pto(List.of(PtoBlock.builder()
+                        .ptoId("PTO-51")
+                        .start(dayStart)
+                        .end(null)
+                        .ptoType("ANNUAL")
+                        .build()))
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_PTO_OVERLAP".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("AC-4b (edge): PTO block that already ended before the dispatch date raises no overlap")
+    void getDashboard_ptoBlockEndedBeforeDate_noOverlapConflict() {
+        // Arrange — PTO taken last week must not bleed into today's overlap check.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-052", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        Instant dayStart = TEST_DATE.atStartOfDay().toInstant(ZoneOffset.UTC);
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-052")
+                .firstName("Kim")
+                .lastName("Park")
+                .currentStatus("AVAILABLE")
+                .pto(List.of(PtoBlock.builder()
+                        .ptoId("PTO-52")
+                        .start(dayStart.minusSeconds(7 * 86400))
+                        .end(dayStart.minusSeconds(86400))
+                        .ptoType("ANNUAL")
+                        .build()))
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_PTO_OVERLAP".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("AC-4b (edge): PTO block starting after the dispatch date raises no overlap")
+    void getDashboard_ptoBlockStartsAfterDate_noOverlapConflict() {
+        // Arrange — PTO booked for next week must not bleed backward into today.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-053", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        Instant dayEnd = TEST_DATE.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-053")
+                .firstName("Lena")
+                .lastName("Ortiz")
+                .currentStatus("AVAILABLE")
+                .pto(List.of(PtoBlock.builder()
+                        .ptoId("PTO-53")
+                        .start(dayEnd.plusSeconds(86400))
+                        .end(dayEnd.plusSeconds(7 * 86400))
+                        .ptoType("ANNUAL")
+                        .build()))
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_PTO_OVERLAP".equals(c.getConflictType()));
+    }
+
+    // -----------------------------------------------------------------------
     // AC-6: Break overlap <15 min → ConflictEntry WARNING, message contains "break"
     // -----------------------------------------------------------------------
 
@@ -392,6 +517,99 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // AC-3b (edge cases): the skill-mismatch scan must tolerate a mechanic who
+    // never resolved from the availability service and must actually complete
+    // its cert-by-cert scan when nothing is missing.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-3b (edge): mechanic assigned to a cert-requiring job but absent from availability is skipped")
+    void getDashboard_certRequiredButMechanicMissingFromAvailability_noSkillConflict() {
+        // Arrange — the workorder names a mechanic the People replica has no record for
+        // (e.g. mid-transfer). There is nothing to compare certs against, so the scan
+        // must skip rather than NPE or flag a mismatch.
+        Workorder wo = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-070\"]")
+                .requiredCertifications("[\"BRAKE_CERT\"]")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_SKILL_MISMATCH".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("AC-3b (edge): mechanic with no certifications on file is flagged for a required certification")
+    void getDashboard_mechanicWithNullCertifications_returnsSkillMismatchWarning() {
+        // Arrange — the mechanic resolved from People but carries no certifications
+        // list at all (never populated), which must be read the same as holding none
+        // of the required certs, not skipped as a data gap.
+        Workorder wo = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-071\"]")
+                .requiredCertifications("[\"BRAKE_CERT\"]")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        PersonAvailability mechanicNoCerts = PersonAvailability.builder()
+                .personId("MECH-071")
+                .firstName("Priya")
+                .lastName("Rao")
+                .currentStatus("AVAILABLE")
+                .certifications(null)
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanicNoCerts))
+                        .build());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts()).anySatisfy(conflict -> {
+            assertThat(conflict.getConflictType()).isEqualTo("MECHANIC_SKILL_MISMATCH");
+            assertThat(conflict.getAffectedResourceId()).isEqualTo("MECH-071");
+        });
+    }
+
+    @Test
+    @DisplayName("AC-3b (edge): mechanic holding every required certification raises no skill mismatch")
+    void getDashboard_mechanicHoldingAllRequiredCertifications_noSkillConflict() {
+        // Arrange — the positive case: the scan must run to completion across every
+        // required cert without flagging anything when they are all present.
+        Workorder wo = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[\"MECH-072\"]")
+                .requiredCertifications("[\"BRAKE_CERT\",\"ALIGNMENT_CERT\"]")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        PersonAvailability fullyCertified = PersonAvailability.builder()
+                .personId("MECH-072")
+                .firstName("Quinn")
+                .lastName("Ellis")
+                .currentStatus("AVAILABLE")
+                .certifications(List.of("BRAKE_CERT", "ALIGNMENT_CERT"))
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(fullyCertified))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_SKILL_MISMATCH".equals(c.getConflictType()));
+    }
+
+    // -----------------------------------------------------------------------
     // Null availability response → treated as empty people list
     // -----------------------------------------------------------------------
 
@@ -552,6 +770,91 @@ class DashboardServiceTest {
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
         // Assert: no MECHANIC_BREAK_OVERLAP (break too far away)
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_BREAK_OVERLAP".equals(c.getConflictType()));
+    }
+
+    // -----------------------------------------------------------------------
+    // AC-6 (edge cases): each guard in the break-overlap compound check must be
+    // independently false-able, or stale/partial break data would be misread as
+    // an active near-term return.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("AC-6 (edge): breakInfo present but mechanic is not currently on break raises no overlap")
+    void getDashboard_breakInfoPresentButNotOnBreak_noOverlapConflict() {
+        // Arrange — the break record can outlive the break itself (last-known state);
+        // onBreak=false must gate the warning off even though breakInfo != null.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-060", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-060")
+                .firstName("Milo")
+                .lastName("Diaz")
+                .currentStatus("AVAILABLE")
+                .breakInfo(BreakInfo.builder()
+                        .onBreak(false)
+                        .expectedReturn(Instant.now(TEST_CLOCK).plusSeconds(600))
+                        .build())
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_BREAK_OVERLAP".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("AC-6 (edge): on break with no expected-return estimate raises no overlap")
+    void getDashboard_onBreakWithNoExpectedReturn_noOverlapConflict() {
+        // Arrange — a break just started, before dispatch/people-ops records when the
+        // mechanic expects to be back. Proximity can't be judged, so no warning.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-061", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-061")
+                .firstName("Nora")
+                .lastName("Singh")
+                .currentStatus("ON_BREAK")
+                .breakInfo(
+                        BreakInfo.builder().onBreak(true).expectedReturn(null).build())
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+        assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_BREAK_OVERLAP".equals(c.getConflictType()));
+    }
+
+    @Test
+    @DisplayName("AC-6 (edge): expected return already in the past raises no overlap")
+    void getDashboard_expectedReturnAlreadyPast_noOverlapConflict() {
+        // Arrange — stale ON_BREAK status where the expected return time has already
+        // elapsed (the mechanic should already be back); not a forward-looking overlap.
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-062", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        PersonAvailability mechanic = PersonAvailability.builder()
+                .personId("MECH-062")
+                .firstName("Omar")
+                .lastName("Nasser")
+                .currentStatus("ON_BREAK")
+                .breakInfo(BreakInfo.builder()
+                        .onBreak(true)
+                        .expectedReturn(Instant.now(TEST_CLOCK).minusSeconds(300))
+                        .build())
+                .build();
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(mechanic))
+                        .build());
+
+        // Act + Assert
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
         assertThat(response.getConflicts()).noneMatch(c -> "MECHANIC_BREAK_OVERLAP".equals(c.getConflictType()));
     }
 

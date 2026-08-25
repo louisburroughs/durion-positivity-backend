@@ -84,6 +84,22 @@ class EdiwheelB40PricatCodecTest {
 
             assertThat(spec.queryParams().keySet()).containsExactly("buyerParty", "agencyCode");
         }
+
+        @Test
+        void omitsABlankAgencyCode() {
+            // A stated-but-blank agency code is not the same as an absent one to the JSON reader,
+            // but it must still be omitted from the query.
+            SupplierRequestSpec spec = codec.buildRequest(new PartyContext("30012456", "  ", null), null);
+
+            assertThat(spec.queryParams()).doesNotContainKey("agencyCode");
+        }
+
+        @Test
+        void omitsABlankEanFilter() {
+            SupplierRequestSpec spec = codec.buildRequest(new PartyContext("30012456", "91", null), "   ");
+
+            assertThat(spec.queryParams()).doesNotContainKey("ean");
+        }
     }
 
     @Nested
@@ -218,6 +234,179 @@ class EdiwheelB40PricatCodecTest {
             assertThat(document.rejectedLines())
                     .singleElement()
                     .satisfies(line -> assertThat(line.detail()).contains("countryCode"));
+        }
+
+        @Test
+        void rejectsALineWhenOnlyCurrencyIsMissing() {
+            // The market-scope check is an OR of two absences; a country with no currency must be
+            // rejected the same as the reverse.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","errorCode":"0"},
+                     "articles":[{"pos":1,"ean":"3528709999083","grossPrice":"10.00","grossPriceValidFrom":"20260101"}]}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.entries()).isEmpty();
+            assertThat(document.rejectedLines())
+                    .singleElement()
+                    .satisfies(line -> assertThat(line.detail()).contains("currency"));
+        }
+
+        @Test
+        void rejectsABodyThatDecodesToNoDocument() {
+            // A JSON literal "null" is readable per Jackson but is not a catalog document; nothing
+            // downstream must confuse that with an empty catalog.
+            assertThatThrownBy(() -> codec.decode("null"))
+                    .isInstanceOf(PricatDecodeException.class)
+                    .hasMessageContaining("decoded to no document");
+        }
+
+        @Test
+        void toleratesADocumentWithNoEnvelopeHeaderAtAll() {
+            // No envelopeHeader block at all - every header-derived fact must degrade to null rather
+            // than throwing at the vendor.
+            String body = """
+                    {"articles":[]}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.documentId()).isNull();
+            assertThat(document.documentDate()).isNull();
+            assertThat(document.countryCode()).isNull();
+            assertThat(document.currency()).isNull();
+            assertThat(document.linesFetched()).isZero();
+        }
+
+        @Test
+        void treatsAMissingArticlesArrayAsAnEmptyCatalogNotAFailure() {
+            // The articles key can be absent entirely, distinct from an explicit empty array; both
+            // must read as "nothing to import" rather than throw.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","currency":"SEK","errorCode":"0"}}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.entries()).isEmpty();
+            assertThat(document.linesFetched()).isZero();
+        }
+
+        @Test
+        void treatsANullArticleEntryAsARejectedLineNotACrash() {
+            // A vendor emitting a literal null inside the articles array is a different failure mode
+            // from an article that fails to parse; the line count is still accounted for.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[null]}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.entries()).isEmpty();
+            assertThat(document.rejectedLines()).singleElement().satisfies(line -> {
+                assertThat(line.positionNumber()).isNull();
+                assertThat(line.detail()).isEqualTo("null article line");
+            });
+            assertThat(document.linesFetched()).isEqualTo(1);
+        }
+
+        @Test
+        void rejectsALineWithNoPriceAndNoValidityDateAtAllAndNoDocumentDateEither() {
+            // Neither price carries a validity date, and the document header states none either: the
+            // line has no effective date whatsoever and must be rejected rather than silently dated.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[{"pos":1,"ean":"3528709999083"}]}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.entries()).isEmpty();
+            assertThat(document.rejectedLines())
+                    .singleElement()
+                    .satisfies(line -> assertThat(line.detail()).contains("no effective date"));
+        }
+
+        @Test
+        void fallsBackToTheDocumentDateWhenNeitherPriceStatesAValidityDate() throws IOException {
+            // Both prices are stated but neither carries its own validity date; the document date is
+            // the last fallback before the line is unusable.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","date":"20260301","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[{"pos":1,"ean":"3528709999083","grossPrice":"10.00","netValue":"9.00"}]}
+                    """;
+
+            SupplierPriceCatalogEntry entry = codec.decode(body).entries().getFirst();
+
+            assertThat(entry.effectiveFrom()).isEqualTo(LocalDate.of(2026, 3, 1));
+        }
+
+        @Test
+        void rejectsANullBody() {
+            assertThatThrownBy(() -> codec.decode(null)).isInstanceOf(PricatDecodeException.class);
+        }
+
+        @Test
+        void rejectsALineWithAnUnparseableValidityDate() {
+            // A validity date that will not parse as yyyyMMdd is a different failure from a missing
+            // one: it is a vendor format change, and must reject the line rather than silently drop
+            // the date.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[{"pos":1,"ean":"3528709999083","grossPrice":"10.00","grossPriceValidFrom":"not-a-date"}]}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.entries()).isEmpty();
+            assertThat(document.rejectedLines())
+                    .singleElement()
+                    .satisfies(line -> assertThat(line.detail()).contains("not a yyyyMMdd date"));
+        }
+
+        @Test
+        void treatsAnUnparseableDocumentDateAsDescriptiveOnly() {
+            // A header date that will not parse in either accepted form must not fail a whole
+            // catalog: per-line validity dates carry the effective-dating contract.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","date":"NOT-A-DATE","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[]}
+                    """;
+
+            PricatDocument document = codec.decode(body);
+
+            assertThat(document.documentDate()).isNull();
+        }
+
+        @Test
+        void fallsBackToANetValidityDateStatedWithNoNetPriceWhenGrossStatesNeitherEither() {
+            // An unusual vendor shape: a net validity date is present but no net price is, and the
+            // gross side states neither a price nor a date. The net date is still the last fallback
+            // before the document date.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[{"pos":1,"ean":"3528709999083","netValueValidFrom":"20260401"}]}
+                    """;
+
+            SupplierPriceCatalogEntry entry = codec.decode(body).entries().getFirst();
+
+            assertThat(entry.effectiveFrom()).isEqualTo(LocalDate.of(2026, 4, 1));
+        }
+
+        @Test
+        void fallsBackToTheGrossValidityDateWhenANetPriceIsStatedWithNoValidityDateOfItsOwn() {
+            // A net price with no validity date of its own must not borrow the document date ahead
+            // of a gross validity date that is actually stated.
+            String body = """
+                    {"envelopeHeader":{"documentId":"D1","countryCode":"SE","currency":"SEK","errorCode":"0"},
+                     "articles":[{"pos":1,"ean":"3528709999083","netValue":"9.00","grossPrice":"10.00","grossPriceValidFrom":"20260215"}]}
+                    """;
+
+            SupplierPriceCatalogEntry entry = codec.decode(body).entries().getFirst();
+
+            assertThat(entry.effectiveFrom()).isEqualTo(LocalDate.of(2026, 2, 15));
         }
     }
 }

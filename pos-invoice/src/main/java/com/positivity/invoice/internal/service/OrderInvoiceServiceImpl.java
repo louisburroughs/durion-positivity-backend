@@ -76,19 +76,50 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
 
         // Settlement-path dedupe (spec R7.2): a workorder-linked order tenders the workorder's
         // existing invoice instead of creating a duplicate financial document.
-        if (request.getWorkorderId() != null) {
-            Invoice workorderInvoice = invoiceRepository
-                    .findByWorkorderId(request.getWorkorderId())
-                    .orElse(null);
-            if (workorderInvoice != null) {
-                if (workorderInvoice.getOrderId() == null) {
-                    workorderInvoice.setOrderId(request.getOrderId());
-                    workorderInvoice = invoiceRepository.save(workorderInvoice);
-                }
-                return toResponse(workorderInvoice, true);
-            }
+        Invoice workorderInvoice = findWorkorderDedupeInvoice(request);
+        if (workorderInvoice != null) {
+            return toResponse(workorderInvoice, true);
         }
 
+        Invoice saved = saveWithInvoiceNumber(buildDraftInvoice(request));
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
+        log.info("Created invoice {} for order {}", saved.getId(), request.getOrderId());
+
+        // Story E4 (deposit take): register the deposit as a dedicated credit against its source,
+        // idempotent on the taking orderId.
+        registerDepositIfPresent(request);
+
+        // Story E4 (settlement): draw down any deposit credits held against this settlement's
+        // workorder, recording the application-audit chain and reducing what the customer owes.
+        BigDecimal depositApplied = applyWorkorderDepositCredits(saved);
+        return toResponse(saved, false, depositApplied);
+    }
+
+    /**
+     * Resolves the workorder-settlement dedupe (spec R7.2): when the order fronts a workorder
+     * that already has an invoice, that invoice is tendered instead of creating a duplicate — its
+     * orderId is stamped in if this is the first order to settle it.
+     */
+    @Nullable
+    private Invoice findWorkorderDedupeInvoice(@NonNull OrderInvoiceCreationRequest request) {
+        if (request.getWorkorderId() == null) {
+            return null;
+        }
+        Invoice workorderInvoice =
+                invoiceRepository.findByWorkorderId(request.getWorkorderId()).orElse(null);
+        if (workorderInvoice == null) {
+            return null;
+        }
+        if (workorderInvoice.getOrderId() == null) {
+            workorderInvoice.setOrderId(request.getOrderId());
+            workorderInvoice = invoiceRepository.save(workorderInvoice);
+        }
+        return workorderInvoice;
+    }
+
+    /** Assembles a new DRAFT invoice (header + line items) from the order's authoritative figures. */
+    @NonNull
+    private static Invoice buildDraftInvoice(@NonNull OrderInvoiceCreationRequest request) {
         Invoice invoice = new Invoice();
         invoice.setOrderId(request.getOrderId());
         invoice.setWorkorderId(request.getWorkorderId());
@@ -102,40 +133,45 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         invoice.setAdjustmentsAmount(BigDecimal.ZERO);
 
         for (OrderInvoiceLineItem line : request.getLines()) {
-            InvoiceItem item = new InvoiceItem();
-            String description = line.getDescription();
-            item.setDescription(description == null || description.isBlank() ? "Order line item" : description.trim());
-            item.setQuantity(money(line.getQuantity(), BigDecimal.ONE));
-            item.setUnitPrice(money(line.getUnitPrice(), BigDecimal.ZERO));
-            item.setLineTotal(money(line.getAmount(), BigDecimal.ZERO));
-            item.setType(line.getType());
-            invoice.addItem(item);
+            invoice.addItem(buildLineItem(line));
         }
 
         invoice.setSubtotal(money(request.getSubtotal(), BigDecimal.ZERO));
         invoice.setTax(money(request.getTaxAmount(), BigDecimal.ZERO));
         invoice.setTotal(money(request.getTotalAmount(), BigDecimal.ZERO));
+        return invoice;
+    }
 
+    @NonNull
+    private static InvoiceItem buildLineItem(@NonNull OrderInvoiceLineItem line) {
+        InvoiceItem item = new InvoiceItem();
+        String description = line.getDescription();
+        item.setDescription(description == null || description.isBlank() ? "Order line item" : description.trim());
+        item.setQuantity(money(line.getQuantity(), BigDecimal.ONE));
+        item.setUnitPrice(money(line.getUnitPrice(), BigDecimal.ZERO));
+        item.setLineTotal(money(line.getAmount(), BigDecimal.ZERO));
+        item.setType(line.getType());
+        return item;
+    }
+
+    /** Persists the invoice, stamping a generated invoice number if persistence didn't supply one. */
+    @NonNull
+    private Invoice saveWithInvoiceNumber(@NonNull Invoice invoice) {
         Invoice saved = invoiceRepository.save(invoice);
         if (saved.getInvoiceNumber() == null || saved.getInvoiceNumber().isBlank()) {
             saved.setInvoiceNumber(generateInvoiceNumber(saved));
             saved = invoiceRepository.save(saved);
         }
-        invoiceEventPublisher.publishInvoiceUpdated(saved);
-        log.info("Created invoice {} for order {}", saved.getId(), request.getOrderId());
+        return saved;
+    }
 
-        // Story E4 (deposit take): register the deposit as a dedicated credit against its source,
-        // idempotent on the taking orderId.
-        registerDepositIfPresent(request);
-
-        // Story E4 (settlement): draw down any deposit credits held against this settlement's
-        // workorder, recording the application-audit chain and reducing what the customer owes.
-        BigDecimal depositApplied = BigDecimal.ZERO;
-        if (saved.getWorkorderId() != null) {
-            depositApplied = depositCreditService.applyAvailableCredits(
-                    DepositSourceType.WORKORDER, saved.getWorkorderId(), saved.getId(), saved.getTotal());
+    @NonNull
+    private BigDecimal applyWorkorderDepositCredits(@NonNull Invoice saved) {
+        if (saved.getWorkorderId() == null) {
+            return BigDecimal.ZERO;
         }
-        return toResponse(saved, false, depositApplied);
+        return depositCreditService.applyAvailableCredits(
+                DepositSourceType.WORKORDER, saved.getWorkorderId(), saved.getId(), saved.getTotal());
     }
 
     private void registerDepositIfPresent(@NonNull OrderInvoiceCreationRequest request) {

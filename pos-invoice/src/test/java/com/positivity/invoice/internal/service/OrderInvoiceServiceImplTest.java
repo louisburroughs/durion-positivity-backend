@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.service.model.CreateDepositCommand;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceLineItem;
 import com.positivity.shared.dto.OrderInvoiceResponse;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -33,6 +38,11 @@ import org.mockito.quality.Strictness;
 /**
  * Unit tests for the from-order invoice creation path (order parity story C2, #1070): assembly
  * from the order's authoritative figures, orderId idempotency, and workorder dedupe (spec R7.2).
+ *
+ * <p>Not exercised here: the {@code invoice.getId() == null} fallback branch inside {@code
+ * generateInvoiceNumber} (picks a fresh UUID v7 instead of the persisted id). It guards against a
+ * save() that returns without an id, which the UUID v7 id-generation strategy never does in
+ * practice — reaching it would require faking a broken repository, not a real scenario.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -131,6 +141,57 @@ class OrderInvoiceServiceImplTest {
     }
 
     @Test
+    @DisplayName("OIS-E4c: a zero or negative depositAmount is not treated as a deposit take")
+    void depositAmountZero_doesNotRegisterCredit() {
+        OrderInvoiceCreationRequest zeroDeposit = request(null);
+        zeroDeposit.setDepositAmount(BigDecimal.ZERO);
+
+        service.createInvoiceForOrder(zeroDeposit);
+
+        verify(depositCreditService, never()).createDeposit(any());
+    }
+
+    @Test
+    @DisplayName("OIS-E4d: a deposit amount without a source type is rejected before any deposit is recorded")
+    void depositAmountWithoutSourceType_rejected() {
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositAmount(new BigDecimal("50.00"));
+        depositTake.setDepositSourceId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("depositSourceType");
+    }
+
+    @Test
+    @DisplayName("OIS-E4e: a deposit amount without a source id is rejected before any deposit is recorded")
+    void depositAmountWithoutSourceId_rejected() {
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositAmount(new BigDecimal("50.00"));
+        depositTake.setDepositSourceType("WORKORDER");
+
+        assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("depositSourceId");
+    }
+
+    @Test
+    @DisplayName("OIS-E4f: a deposit taken on an anonymous counter sale carries no party id on the credit")
+    void depositTake_anonymousCustomer_omitsCustomerId() {
+        OrderInvoiceCreationRequest anonymousDeposit = request(null);
+        anonymousDeposit.setCustomerId(null);
+        anonymousDeposit.setDepositAmount(new BigDecimal("50.00"));
+        anonymousDeposit.setDepositSourceType("ORDER");
+        anonymousDeposit.setDepositSourceId(ORDER_ID);
+
+        service.createInvoiceForOrder(anonymousDeposit);
+
+        ArgumentCaptor<CreateDepositCommand> cmd = ArgumentCaptor.forClass(CreateDepositCommand.class);
+        verify(depositCreditService).createDeposit(cmd.capture());
+        assertThat(cmd.getValue().partyId()).isNull();
+    }
+
+    @Test
     @DisplayName("OIS-001: creates a DRAFT invoice carrying the order's authoritative figures")
     void createsInvoiceFromOrder() {
         OrderInvoiceResponse response = service.createInvoiceForOrder(request(null));
@@ -193,6 +254,103 @@ class OrderInvoiceServiceImplTest {
     }
 
     @Test
+    @DisplayName("OIS-004b: workorder dedupe when the invoice already carries the orderId does not resave it")
+    void workorderDedupe_orderIdAlreadySet_doesNotResave() {
+        Invoice workorderInvoice = new Invoice();
+        workorderInvoice.setId(UUID.randomUUID());
+        workorderInvoice.setWorkorderId(WORKORDER_ID);
+        workorderInvoice.setOrderId(ORDER_ID);
+        workorderInvoice.setInvoiceNumber("INV-WO");
+        workorderInvoice.setStatus(InvoiceStatus.DRAFT);
+        when(invoiceRepository.findByWorkorderId(WORKORDER_ID)).thenReturn(Optional.of(workorderInvoice));
+
+        OrderInvoiceResponse response = service.createInvoiceForOrder(request(WORKORDER_ID));
+
+        assertThat(response.isExisting()).isTrue();
+        assertThat(response.getInvoiceId()).isEqualTo(workorderInvoice.getId());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("OIS-021: a null or blank line description falls back to a generic label")
+    void lineDescriptionFallback_nullOrBlank_usesGenericLabel() {
+        OrderInvoiceCreationRequest request = request(null);
+        request.setLines(List.of(
+                OrderInvoiceLineItem.builder()
+                        .orderLineId(UUID.randomUUID())
+                        .description(null)
+                        .quantity(new BigDecimal("1"))
+                        .unitPrice(new BigDecimal("40.00"))
+                        .amount(new BigDecimal("40.00"))
+                        .type("PART")
+                        .build(),
+                OrderInvoiceLineItem.builder()
+                        .orderLineId(UUID.randomUUID())
+                        .description("   ")
+                        .quantity(new BigDecimal("1"))
+                        .unitPrice(new BigDecimal("60.00"))
+                        .amount(new BigDecimal("60.00"))
+                        .type("LABOR")
+                        .build()));
+
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(request);
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice savedWithItems = captor.getAllValues().get(0);
+        assertThat(savedWithItems.getItems()).hasSize(2);
+        assertThat(savedWithItems.getItems())
+                .allSatisfy(item -> assertThat(item.getDescription()).isEqualTo("Order line item"));
+    }
+
+    @Test
+    @DisplayName("OIS-020: an invoice number already stamped by persistence is never regenerated")
+    void invoiceNumberAlreadyPresent_notRegenerated() {
+        // doAnswer (not when(...).thenAnswer(...)) — re-stubbing via when() would invoke the
+        // setUp() stub's answer for real while recording this call, NPE-ing on its null arg.
+        org.mockito.Mockito.doAnswer(inv -> {
+                    Invoice invoice = inv.getArgument(0);
+                    if (invoice.getId() == null) {
+                        invoice.setId(UUID.randomUUID());
+                    }
+                    invoice.setInvoiceNumber("INV-PRESET-0001");
+                    return invoice;
+                })
+                .when(invoiceRepository)
+                .save(any());
+
+        OrderInvoiceResponse response = service.createInvoiceForOrder(request(null));
+
+        assertThat(response.getInvoiceNumber()).isEqualTo("INV-PRESET-0001");
+        verify(invoiceRepository, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("OIS-020b: a blank (non-null) invoice number is regenerated, same as a missing one")
+    void invoiceNumberBlank_isRegenerated() {
+        // doAnswer, not when(...).thenAnswer(...) — re-stubbing via when() would invoke the
+        // setUp() stub's answer for real while recording this call, NPE-ing on its null arg.
+        org.mockito.Mockito.doAnswer(inv -> {
+                    Invoice invoice = inv.getArgument(0);
+                    if (invoice.getId() == null) {
+                        invoice.setId(UUID.randomUUID());
+                    }
+                    if (invoice.getInvoiceNumber() == null) {
+                        invoice.setInvoiceNumber("   ");
+                    }
+                    return invoice;
+                })
+                .when(invoiceRepository)
+                .save(any());
+
+        OrderInvoiceResponse response = service.createInvoiceForOrder(request(null));
+
+        assertThat(response.getInvoiceNumber()).isNotBlank();
+        assertThat(response.getInvoiceNumber()).startsWith("INV-");
+        verify(invoiceRepository, times(2)).save(any());
+    }
+
+    @Test
     @DisplayName("OIS-005: missing orderId / empty lines / negative total are rejected")
     void invalidRequests_rejected() {
         OrderInvoiceCreationRequest noOrder = request(null);
@@ -246,6 +404,72 @@ class OrderInvoiceServiceImplTest {
     }
 
     @Test
+    @DisplayName("OIS-008b: cancel with an AUTHORIZED (not yet captured) payment is rejected the same way")
+    void cancelInvoice_withAuthorizedPayment_rejected() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        com.positivity.invoice.internal.entity.PaymentIntent intent =
+                new com.positivity.invoice.internal.entity.PaymentIntent();
+        intent.setStatus(com.positivity.invoice.internal.enums.PaymentIntentStatus.AUTHORIZED);
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of(intent));
+
+        assertThatThrownBy(() -> service.cancelInvoice(invoice.getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("payments");
+    }
+
+    @Test
+    @DisplayName("OIS-008c: cancel with a PENDING gateway call in flight is rejected the same way")
+    void cancelInvoice_withPendingPayment_rejected() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        com.positivity.invoice.internal.entity.PaymentIntent intent =
+                new com.positivity.invoice.internal.entity.PaymentIntent();
+        intent.setStatus(com.positivity.invoice.internal.enums.PaymentIntentStatus.PENDING);
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of(intent));
+
+        assertThatThrownBy(() -> service.cancelInvoice(invoice.getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("payments");
+    }
+
+    @Test
+    @DisplayName("OIS-008d: a VOIDED payment intent never moved money, so it does not block cancellation")
+    void cancelInvoice_withVoidedPaymentOnly_stillCancels() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        invoice.setInvoiceNumber("INV-3");
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        com.positivity.invoice.internal.entity.PaymentIntent intent =
+                new com.positivity.invoice.internal.entity.PaymentIntent();
+        intent.setStatus(com.positivity.invoice.internal.enums.PaymentIntentStatus.VOIDED);
+        when(paymentIntentRepository.findByInvoice_Id(invoice.getId())).thenReturn(List.of(intent));
+
+        OrderInvoiceResponse response = service.cancelInvoice(invoice.getId());
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.CANCELLED.name());
+    }
+
+    @Test
+    @DisplayName("OIS-008e: cancel on a non-DRAFT, non-CANCELLED invoice (e.g. FINALIZED) is rejected")
+    void cancelInvoice_finalized_throwsInvalidInvoiceStateException() {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.FINALIZED);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+
+        assertThatThrownBy(() -> service.cancelInvoice(invoice.getId()))
+                .isInstanceOf(InvalidInvoiceStateException.class);
+
+        verifyNoInteractions(paymentIntentRepository);
+    }
+
+    @Test
     @DisplayName("OIS-006: internally inconsistent figures are rejected cent-exact")
     void inconsistentTotals_rejected() {
         OrderInvoiceCreationRequest badLineSum = request(null);
@@ -260,5 +484,37 @@ class OrderInvoiceServiceImplTest {
         assertThatThrownBy(() -> service.createInvoiceForOrder(badTotal))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("totalAmount");
+    }
+
+    @Test
+    @DisplayName("OIS-022: a missing subtotal, taxAmount, or totalAmount is rejected up front")
+    void missingRequiredTotals_rejected() {
+        OrderInvoiceCreationRequest missingSubtotal = request(null);
+        missingSubtotal.setSubtotal(null);
+        assertThatThrownBy(() -> service.createInvoiceForOrder(missingSubtotal))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required");
+
+        OrderInvoiceCreationRequest missingTax = request(null);
+        missingTax.setTaxAmount(null);
+        assertThatThrownBy(() -> service.createInvoiceForOrder(missingTax))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required");
+
+        OrderInvoiceCreationRequest missingTotal = request(null);
+        missingTotal.setTotalAmount(null);
+        assertThatThrownBy(() -> service.createInvoiceForOrder(missingTotal))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("required");
+    }
+
+    @Test
+    @DisplayName("OIS-023: a null lines list is rejected the same as an empty one")
+    void nullLines_rejected() {
+        OrderInvoiceCreationRequest noLines = request(null);
+        noLines.setLines(null);
+        assertThatThrownBy(() -> service.createInvoiceForOrder(noLines))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least one line");
     }
 }

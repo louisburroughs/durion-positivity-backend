@@ -261,51 +261,81 @@ public class DashboardServiceImpl implements DashboardService {
                 continue;
             }
 
-            if ("ON_JOB".equals(personAvailability.getCurrentStatus())) {
-                conflicts.add(ConflictEntry.builder()
-                        .conflictType("CLOCK_OUT_MISMATCH")
-                        .severity(WARNING)
-                        .message(
-                                MECHANIC_PREFIX + mechanicId + " is clocked in for another job and has not clocked out")
-                        .affectedResourceId(personAvailability.getPersonId())
-                        .build());
-            }
+            detectClockOutMismatch(mechanicId, personAvailability, conflicts);
+            detectPtoOverlap(mechanicId, personAvailability, dayStart, dayEnd, conflicts);
+            detectBreakOverlap(mechanicId, personAvailability, now, fifteenMinFromNow, conflicts);
+        }
+    }
 
-            if (personAvailability.getPto() != null) {
-                for (PtoBlock pto : personAvailability.getPto()) {
-                    if (pto.getStart() != null
-                            && pto.getEnd() != null
-                            && pto.getStart().isBefore(dayEnd)
-                            && pto.getEnd().isAfter(dayStart)) {
-                        conflicts.add(ConflictEntry.builder()
-                                .conflictType("MECHANIC_PTO_OVERLAP")
-                                .severity(BLOCKING)
-                                .message(MECHANIC_PREFIX + mechanicId + " has PTO on this date")
-                                .affectedResourceId(mechanicId)
-                                .build());
-                        break;
-                    }
-                }
-            }
+    private void detectClockOutMismatch(
+            String mechanicId, PersonAvailability personAvailability, List<ConflictEntry> conflicts) {
+        if ("ON_JOB".equals(personAvailability.getCurrentStatus())) {
+            conflicts.add(ConflictEntry.builder()
+                    .conflictType("CLOCK_OUT_MISMATCH")
+                    .severity(WARNING)
+                    .message(MECHANIC_PREFIX + mechanicId + " is clocked in for another job and has not clocked out")
+                    .affectedResourceId(personAvailability.getPersonId())
+                    .build());
+        }
+    }
 
-            BreakInfo breakInfo = personAvailability.getBreakInfo();
-            // AC-6: Break overlap — expects return within 15 min of query time.
-            // Note: workorder scheduled start time is not yet in the data model
-            // (scheduledDate only).
-            // This uses query-time proximity as a proxy until scheduled start is added.
-            if (breakInfo != null
-                    && breakInfo.isOnBreak()
-                    && breakInfo.getExpectedReturn() != null
-                    && breakInfo.getExpectedReturn().isAfter(now)
-                    && breakInfo.getExpectedReturn().isBefore(fifteenMinFromNow)) {
+    private void detectPtoOverlap(
+            String mechanicId,
+            PersonAvailability personAvailability,
+            Instant dayStart,
+            Instant dayEnd,
+            List<ConflictEntry> conflicts) {
+        if (personAvailability.getPto() == null) {
+            return;
+        }
+        for (PtoBlock pto : personAvailability.getPto()) {
+            if (ptoOverlapsDate(pto, dayStart, dayEnd)) {
                 conflicts.add(ConflictEntry.builder()
-                        .conflictType("MECHANIC_BREAK_OVERLAP")
-                        .severity(WARNING)
-                        .message("Job overlaps with expected break time for mechanic " + mechanicId)
+                        .conflictType("MECHANIC_PTO_OVERLAP")
+                        .severity(BLOCKING)
+                        .message(MECHANIC_PREFIX + mechanicId + " has PTO on this date")
                         .affectedResourceId(mechanicId)
                         .build());
+                break;
             }
         }
+    }
+
+    private boolean ptoOverlapsDate(PtoBlock pto, Instant dayStart, Instant dayEnd) {
+        return pto.getStart() != null
+                && pto.getEnd() != null
+                && pto.getStart().isBefore(dayEnd)
+                && pto.getEnd().isAfter(dayStart);
+    }
+
+    /**
+     * AC-6: Break overlap — expects return within 15 min of query time. Note: workorder scheduled
+     * start time is not yet in the data model (scheduledDate only). This uses query-time
+     * proximity as a proxy until scheduled start is added.
+     */
+    private void detectBreakOverlap(
+            String mechanicId,
+            PersonAvailability personAvailability,
+            Instant now,
+            Instant fifteenMinFromNow,
+            List<ConflictEntry> conflicts) {
+        if (!isReturningSoonFromBreak(personAvailability.getBreakInfo(), now, fifteenMinFromNow)) {
+            return;
+        }
+        conflicts.add(ConflictEntry.builder()
+                .conflictType("MECHANIC_BREAK_OVERLAP")
+                .severity(WARNING)
+                .message("Job overlaps with expected break time for mechanic " + mechanicId)
+                .affectedResourceId(mechanicId)
+                .build());
+    }
+
+    private boolean isReturningSoonFromBreak(BreakInfo breakInfo, Instant now, Instant fifteenMinFromNow) {
+        return breakInfo != null
+                && breakInfo.isOnBreak()
+                && breakInfo.getExpectedReturn() != null
+                && breakInfo.getExpectedReturn().isAfter(now)
+                && breakInfo.getExpectedReturn().isBefore(fifteenMinFromNow);
     }
 
     private void detectLocationMismatch(
@@ -349,25 +379,41 @@ public class DashboardServiceImpl implements DashboardService {
             if (requiredCerts.isEmpty()) {
                 continue;
             }
-            for (String mechanicId : parseMechanicIds(wo.getMechanicIds())) {
-                PeopleAvailabilityResponse.PersonAvailability pa = availabilityByPersonId.get(mechanicId);
-                if (pa == null) {
-                    continue;
-                }
-                List<String> mechanicCerts = pa.getCertifications() != null ? pa.getCertifications() : List.of();
-                for (String required : requiredCerts) {
-                    if (!mechanicCerts.contains(required)) {
-                        conflicts.add(ConflictEntry.builder()
-                                .conflictType("MECHANIC_SKILL_MISMATCH")
-                                .severity(WARNING)
-                                .message(MECHANIC_PREFIX + mechanicId + " is missing required certification: "
-                                        + required)
-                                .affectedResourceId(mechanicId)
-                                .build());
-                        break;
-                    }
-                }
+            detectMissingCertificationsForWorkorder(wo, requiredCerts, availabilityByPersonId, conflicts);
+        }
+    }
+
+    private void detectMissingCertificationsForWorkorder(
+            Workorder wo,
+            List<String> requiredCerts,
+            Map<String, PeopleAvailabilityResponse.PersonAvailability> availabilityByPersonId,
+            List<ConflictEntry> conflicts) {
+        for (String mechanicId : parseMechanicIds(wo.getMechanicIds())) {
+            PeopleAvailabilityResponse.PersonAvailability pa = availabilityByPersonId.get(mechanicId);
+            if (pa == null) {
+                continue;
+            }
+            String missingCert = firstMissingCertification(pa, requiredCerts);
+            if (missingCert != null) {
+                conflicts.add(ConflictEntry.builder()
+                        .conflictType("MECHANIC_SKILL_MISMATCH")
+                        .severity(WARNING)
+                        .message(MECHANIC_PREFIX + mechanicId + " is missing required certification: " + missingCert)
+                        .affectedResourceId(mechanicId)
+                        .build());
             }
         }
+    }
+
+    /** First required certification the mechanic's profile does not list, or {@code null} if it holds them all. */
+    private String firstMissingCertification(
+            PeopleAvailabilityResponse.PersonAvailability pa, List<String> requiredCerts) {
+        List<String> mechanicCerts = pa.getCertifications() != null ? pa.getCertifications() : List.of();
+        for (String required : requiredCerts) {
+            if (!mechanicCerts.contains(required)) {
+                return required;
+            }
+        }
+        return null;
     }
 }

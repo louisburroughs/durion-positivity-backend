@@ -443,6 +443,44 @@ class PaymentReversalServiceImplTest {
     }
 
     /**
+     * voidPayment: a PaymentIntent carrying no Invoice at all (data integrity gap, not just a
+     * mismatched id) must fail the same way as a mismatched invoice — never NPE past the guard.
+     */
+    @Test
+    void voidPayment_intentHasNoInvoice_throwsPaymentIntentNotFoundException() {
+        PaymentIntent pi = authorizedPaymentIntent();
+        pi.setInvoice(null);
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                .isInstanceOf(PaymentIntentNotFoundException.class);
+
+        verify(paymentGatewayPort, never()).voidRemainder(any());
+    }
+
+    /**
+     * AC4: a missing authorizedAt must not be treated as "always outside the window" — the void
+     * still proceeds to the gateway leg instead of being blocked by an unknown timestamp.
+     */
+    @Test
+    void voidPayment_noAuthorizedAt_skipsWindowCheck() {
+        PaymentIntent pi = authorizedPaymentIntent();
+        pi.setCreatedAt(null);
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        GatewayPaymentResult successResult = org.mockito.Mockito.mock(GatewayPaymentResult.class);
+        when(successResult.isSuccessful()).thenReturn(true);
+        when(paymentGatewayPort.voidRemainder(any(GatewayVoidRequest.class))).thenReturn(successResult);
+        when(paymentIntentRepository.save(any(PaymentIntent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatCode(() -> paymentReversalServiceImpl.voidPayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                .doesNotThrowAnyException();
+        verify(paymentGatewayPort).voidRemainder(any(GatewayVoidRequest.class));
+    }
+
+    /**
      * voidPayment: gateway returns isSuccessful=false → PaymentGatewayException.
      * Also exercises the PaymentGatewayException(String) constructor.
      */
@@ -535,6 +573,44 @@ class PaymentReversalServiceImplTest {
         assertThat(captor.getValue().getCompletedAt()).isNull();
     }
 
+    /**
+     * refundPayment: a PaymentIntent carrying no Invoice at all must fail the same way as a
+     * mismatched invoice — never NPE past the guard.
+     */
+    @Test
+    void refundPayment_intentHasNoInvoice_throwsPaymentIntentNotFoundException() {
+        PaymentIntent pi = capturedPaymentIntent();
+        pi.setInvoice(null);
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.OTHER, null, null))
+                .isInstanceOf(PaymentIntentNotFoundException.class);
+
+        verifyNoInteractions(refundRecordRepository, paymentGatewayPort);
+    }
+
+    /**
+     * AC4: a missing capturedAt must not be treated as "always outside the window" — the refund
+     * still proceeds to the gateway leg instead of being blocked by an unknown timestamp.
+     */
+    @Test
+    void refundPayment_noCapturedAt_skipsWindowCheck() {
+        PaymentIntent pi = capturedPaymentIntent();
+        pi.setCreatedAt(null);
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
+
+        GatewayPaymentResult successResult = successResult();
+        when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatCode(() -> paymentReversalServiceImpl.refundPayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.OTHER, null, null))
+                .doesNotThrowAnyException();
+        verify(paymentGatewayPort).refund(any(GatewayRefundRequest.class));
+    }
+
     // -------------------------------------------------------------------------
     // Issue #922 — refundPayment replay dedupe on externalReference
     // -------------------------------------------------------------------------
@@ -606,6 +682,54 @@ class PaymentReversalServiceImplTest {
         assertThat(result.getStatus()).isEqualTo(RefundStatus.COMPLETED);
         verify(paymentGatewayPort).refund(any(GatewayRefundRequest.class));
         verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
+    /**
+     * #922: a prior COMPLETED refund with a DIFFERENT externalReference must not short-circuit
+     * this refund — only an exact reference match is treated as a replay.
+     */
+    @Test
+    void refundPayment_existingNonFailedDifferentReference_notReplayed_proceedsNormally() {
+        PaymentIntent pi = capturedPaymentIntent();
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        RefundRecord priorDifferentRef = new RefundRecord();
+        priorDifferentRef.setAmount(BigDecimal.valueOf(50_00, 2));
+        priorDifferentRef.setStatus(RefundStatus.COMPLETED);
+        priorDifferentRef.setExternalReference("WC-2026-OTHER");
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of(priorDifferentRef));
+
+        GatewayPaymentResult successResult = successResult();
+        when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        paymentReversalServiceImpl.refundPayment(
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.OTHER, null, "WC-2026-NEW");
+
+        verify(paymentGatewayPort).refund(any(GatewayRefundRequest.class));
+        verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
+    /**
+     * A whitespace-only externalReference is not a real reference — it must collapse to null
+     * rather than being persisted (and later matched against) as if the caller supplied one.
+     */
+    @Test
+    void refundPayment_blankExternalReference_normalizesToNull() {
+        PaymentIntent pi = capturedPaymentIntent();
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+        when(refundRecordRepository.findByPaymentIntent_Id(PAYMENT_INTENT_ID)).thenReturn(List.of());
+
+        GatewayPaymentResult successResult = successResult();
+        when(paymentGatewayPort.refund(any(GatewayRefundRequest.class))).thenReturn(successResult);
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ArgumentCaptor<RefundRecord> captor = ArgumentCaptor.forClass(RefundRecord.class);
+        paymentReversalServiceImpl.refundPayment(
+                INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100_00, 2), RefundReason.OTHER, null, "   ");
+
+        verify(refundRecordRepository).save(captor.capture());
+        assertThat(captor.getValue().getExternalReference()).isNull();
     }
 
     // -------------------------------------------------------------------------
@@ -765,6 +889,82 @@ class PaymentReversalServiceImplTest {
 
         assertThat(result.getRefundId()).isEqualTo(existing.getId());
         verify(refundRecordRepository, never()).save(any());
+    }
+
+    /**
+     * A FAILED refund never moved money, so it must not count against the invoice total —
+     * otherwise a single failed attempt would permanently lock out the customer's real refund.
+     */
+    @Test
+    void refundInvoiceStandalone_excludesFailedRefundsFromCumulativeTotal() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+
+        RefundRecord failedPrior = new RefundRecord();
+        failedPrior.setAmount(BigDecimal.valueOf(450_00, 2));
+        failedPrior.setStatus(RefundStatus.FAILED);
+        when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(failedPrior));
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // If the FAILED 450 counted, 200 would exceed the 50 remaining and throw.
+        paymentReversalServiceImpl.refundInvoiceStandalone(
+                INVOICE_ID, BigDecimal.valueOf(200_00, 2), RefundReason.OTHER, null, null);
+
+        verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
+    /**
+     * The standalone replay guard must ignore a payment-anchored record even when its
+     * externalReference matches — a gateway-backed refund is never a standalone replay candidate.
+     */
+    @Test
+    void refundInvoiceStandalone_paymentAnchoredRecordSameReference_isNotReplayed() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+
+        RefundRecord paymentAnchored = new RefundRecord();
+        paymentAnchored.setId(UUID.fromString("00000000-0000-7000-8000-000000000061"));
+        paymentAnchored.setPaymentIntent(capturedPaymentIntent());
+        paymentAnchored.setInvoice(invoice);
+        paymentAnchored.setAmount(BigDecimal.valueOf(50_00, 2));
+        paymentAnchored.setStatus(RefundStatus.COMPLETED);
+        paymentAnchored.setExternalReference("WC-2026-000099");
+        when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(paymentAnchored));
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundInvoiceStandalone(
+                INVOICE_ID, BigDecimal.valueOf(50_00, 2), RefundReason.OTHER, null, "WC-2026-000099");
+
+        assertThat(result.getRefundId()).isNotEqualTo(paymentAnchored.getId());
+        verify(refundRecordRepository).save(any(RefundRecord.class));
+    }
+
+    /**
+     * A FAILED standalone record stays retryable — the same externalReference must proceed to a
+     * new record instead of replaying the failure.
+     */
+    @Test
+    void refundInvoiceStandalone_failedRecordSameReference_notReplayed_savesNewRecord() {
+        withAuthorities("ISSUE_MANUAL_REFUND");
+        Invoice invoice = invoiceWithTotal(BigDecimal.valueOf(500_00, 2));
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice));
+
+        RefundRecord failed = new RefundRecord();
+        failed.setId(UUID.fromString("00000000-0000-7000-8000-000000000062"));
+        failed.setInvoice(invoice);
+        failed.setAmount(BigDecimal.valueOf(50_00, 2));
+        failed.setStatus(RefundStatus.FAILED);
+        failed.setExternalReference("WC-2026-000098");
+        when(refundRecordRepository.findByInvoice_Id(INVOICE_ID)).thenReturn(List.of(failed));
+        when(refundRecordRepository.save(any(RefundRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RefundPaymentResult result = paymentReversalServiceImpl.refundInvoiceStandalone(
+                INVOICE_ID, BigDecimal.valueOf(50_00, 2), RefundReason.OTHER, null, "WC-2026-000098");
+
+        assertThat(result.getRefundId()).isNotEqualTo(failed.getId());
+        verify(refundRecordRepository).save(any(RefundRecord.class));
     }
 
     /** Party-anchored standalone refund: no invoice in the system, anchored to the party id. */

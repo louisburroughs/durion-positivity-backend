@@ -115,6 +115,32 @@ public class EdiwheelB21StockReportCodec implements SupplierAdapterCodec {
      */
     @NonNull
     public SupplierStockSnapshot decode(@Nullable String body) {
+        StockReportB21Wire.StockReport report = parseDocument(body);
+        StockReportB21Wire.EnvelopeHeader header = report.envelopeHeader();
+        requireNoVendorError(header);
+
+        String documentId = header == null ? null : trimToNull(header.documentId());
+        LocalDate issuedOn = header == null ? null : parseDate(header.issueDate());
+        Instant issuedAt = issuedOn == null ? null : parseInstant(issuedOn, header.issueTime());
+
+        List<StockReportB21Wire.Line> wireLines = report.lineLevel() == null ? List.of() : report.lineLevel();
+        DecodedLines decoded = decodeLines(wireLines);
+
+        return new SupplierStockSnapshot(
+                documentId,
+                issuedOn,
+                issuedAt,
+                report.buyerParty() == null ? null : trimToNull(report.buyerParty()),
+                decoded.lines(),
+                decoded.rejected(),
+                wireLines.size());
+    }
+
+    /**
+     * Parses the raw body into a document, or fails with the specific reason a caller needs to
+     * distinguish an empty response from a malformed one from a syntactically valid non-document.
+     */
+    private StockReportB21Wire.@NonNull StockReport parseDocument(@Nullable String body) {
         if (body == null || body.isBlank()) {
             throw new StockReportDecodeException("Stock report response body was empty");
         }
@@ -127,20 +153,25 @@ public class EdiwheelB21StockReportCodec implements SupplierAdapterCodec {
         if (report == null) {
             throw new StockReportDecodeException("Stock report response body decoded to no document");
         }
+        return report;
+    }
 
-        StockReportB21Wire.EnvelopeHeader header = report.envelopeHeader();
+    /**
+     * A document-level error is a vendor rejection, not an empty warehouse. Treating it as a
+     * snapshot would publish "no stock reported" for an entire market.
+     */
+    private void requireNoVendorError(StockReportB21Wire.@Nullable EnvelopeHeader header) {
         String errorCode = header == null ? null : trimToNull(header.errorCode());
         if (errorCode != null && !"0".equals(errorCode)) {
-            // A document-level error is a vendor rejection, not an empty warehouse. Treating it as
-            // a snapshot would publish "no stock reported" for an entire market.
             throw new StockReportDecodeException("Stock report carries vendor error code " + errorCode);
         }
+    }
 
-        String documentId = header == null ? null : trimToNull(header.documentId());
-        LocalDate issuedOn = header == null ? null : parseDate(header.issueDate());
-        Instant issuedAt = issuedOn == null ? null : parseInstant(issuedOn, header.issueTime());
+    /** The reported lines split into what mapped cleanly and what a line-level failure rejected. */
+    private record DecodedLines(
+            List<SupplierStockSnapshot.Line> lines, List<SupplierStockSnapshot.RejectedLine> rejected) {}
 
-        List<StockReportB21Wire.Line> wireLines = report.lineLevel() == null ? List.of() : report.lineLevel();
+    private DecodedLines decodeLines(List<StockReportB21Wire.Line> wireLines) {
         List<SupplierStockSnapshot.Line> lines = new ArrayList<>(wireLines.size());
         List<SupplierStockSnapshot.RejectedLine> rejected = new ArrayList<>();
 
@@ -155,15 +186,7 @@ public class EdiwheelB21StockReportCodec implements SupplierAdapterCodec {
                 rejected.add(new SupplierStockSnapshot.RejectedLine(trimToNull(wireLine.lineId()), e.getMessage()));
             }
         }
-
-        return new SupplierStockSnapshot(
-                documentId,
-                issuedOn,
-                issuedAt,
-                report.buyerParty() == null ? null : trimToNull(report.buyerParty()),
-                lines,
-                rejected,
-                wireLines.size());
+        return new DecodedLines(lines, rejected);
     }
 
     private SupplierStockSnapshot.Line toLine(StockReportB21Wire.Line wireLine) {
