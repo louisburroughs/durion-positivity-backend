@@ -89,8 +89,7 @@ class CustomerEventsListenerTest {
         return billingRulesEnvelope(creditLimit, creditHold, poRequired, 2);
     }
 
-    private static String billingRulesEnvelope(
-            String creditLimit, String creditHold, String poRequired, long version) {
+    private static String billingRulesEnvelope(String creditLimit, String creditHold, String poRequired, long version) {
         return """
                 {"eventId":"evt-2","eventType":"%s","aggregateVersion":%d,
                  "payload":{"partyId":"%s","paymentTerms":"NET30","creditLimit":%s,
