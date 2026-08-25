@@ -349,10 +349,24 @@ public class LocationServiceImpl implements LocationService {
         return all.toString();
     }
 
+    /**
+     * Deletes a location and emits the {@code location.location.deleted} tombstone.
+     *
+     * <p>Loads the row before deleting it so the fact can be versioned from its final
+     * {@code @Version} (#1486) — the tombstone publisher needs the entity, not just the id. An id
+     * that resolves to nothing has no state to version and no delete to announce, so this is now a
+     * silent no-op for a missing location; previously {@code deleteById} was itself a no-op on a
+     * missing row (Spring Data does not throw), but the fact was still published unconditionally,
+     * so a caller retrying a delete for an id that never existed produced a tombstone every time.
+     */
     @Transactional
     public void deleteLocation(UUID id) {
-        locationRepository.deleteById(id);
-        locationFactPublisher.locationDeleted(id);
+        Location location = locationRepository.findById(id).orElse(null);
+        if (location == null) {
+            return;
+        }
+        locationRepository.delete(location);
+        locationFactPublisher.locationDeleted(location);
     }
 
     @Transactional

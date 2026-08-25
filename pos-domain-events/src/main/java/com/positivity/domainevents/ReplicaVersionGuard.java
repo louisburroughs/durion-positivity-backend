@@ -3,7 +3,7 @@ package com.positivity.domainevents;
 /**
  * The platform's canonical staleness rule for a replica {@code aggregateVersion} guard (#1486).
  * It applies to every topic whose publisher guarantees a strictly-advancing version — as of
- * #1486 that is catalog, vehicle, invoice, and warranty facts; see "Event Replication:
+ * #1486 that is catalog, vehicle, invoice, warranty, and location facts; see "Event Replication:
  * aggregateVersion Semantics" in {@code docs/ARCHITECTURE_GUIDE.md} for the per-topic survey.
  *
  * <p>pos-catalog's {@code aggregateVersion}, for example, is a JPA {@code @Version}-backed
@@ -24,9 +24,9 @@ package com.positivity.domainevents;
  *
  * <p>Every consumer stale guard on a strictly-advancing topic must use this class rather than
  * re-deriving the comparison, so the rule stays in exactly one place. Consumers of topics whose
- * publishers still stamp wall-clock millis (workorder, customer, location facts) are explicitly
- * out of scope until those publishers adopt the {@code @Version}-flush pattern — see the
- * architecture guide section above.
+ * publishers still stamp wall-clock millis (workorder, customer facts) are explicitly out of
+ * scope until those publishers adopt the {@code @Version}-flush pattern — see the architecture
+ * guide section above.
  */
 public final class ReplicaVersionGuard {
 

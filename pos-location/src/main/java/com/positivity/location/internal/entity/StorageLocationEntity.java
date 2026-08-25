@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -89,6 +90,18 @@ public class StorageLocationEntity {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /**
+     * JPA optimistic-lock counter, also published as the {@code location.storage-location.updated}
+     * envelope's {@code aggregateVersion} (#1486): it strictly increments on every committed
+     * mutation, replacing the retired {@code Instant.now(clock)}-stamped emission timestamp that
+     * could tie when two mutations landed in the same millisecond. Migration V6 seeded it from
+     * wall-clock millis at migration time, not {@code updated_at}, so the published sequence
+     * continues above every version consumers already hold.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     @PrePersist
     void onCreate() {

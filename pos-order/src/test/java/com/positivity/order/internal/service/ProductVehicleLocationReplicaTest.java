@@ -279,7 +279,7 @@ class ProductVehicleLocationReplicaTest {
         }
 
         @Test
-        @DisplayName("ignores a snapshot no newer than the replica it already holds")
+        @DisplayName("ignores a snapshot strictly older than the replica it already holds")
         void staleSnapshotIsIgnored() {
             ExtLocation existing = new ExtLocation();
             existing.setLocationId(LOCATION_ID);
@@ -289,6 +289,25 @@ class ProductVehicleLocationReplicaTest {
             listener().onLocationEvent(envelope(5));
 
             verify(extLocationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("applies a snapshot at the same version as the replica it already holds (#1486)")
+        void snapshotAtTheSameVersionIsApplied() {
+            // Load-bearing: pos-location's aggregateVersion strictly advances, so an equal version
+            // means identical content, and a future regenerate-from-state replay would deliberately
+            // resend a fact at the held version to repair a replica with wrong or missing rows.
+            // Skipping on equal (the old `>=` guard) would silently turn that into a no-op (#1486).
+            ExtLocation existing = new ExtLocation();
+            existing.setLocationId(LOCATION_ID);
+            existing.setAggregateVersion(6);
+            when(extLocationRepository.findById(LOCATION_ID)).thenReturn(Optional.of(existing));
+
+            listener().onLocationEvent(envelope(6));
+
+            ArgumentCaptor<ExtLocation> captor = ArgumentCaptor.forClass(ExtLocation.class);
+            verify(extLocationRepository).save(captor.capture());
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(6);
         }
     }
 }

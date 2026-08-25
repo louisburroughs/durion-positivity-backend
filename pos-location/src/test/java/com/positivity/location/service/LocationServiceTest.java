@@ -3,6 +3,7 @@ package com.positivity.location.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -544,12 +545,28 @@ class LocationServiceTest {
     }
 
     @Test
-    void deleteLocation_existingId_delegatesToRepository() {
+    void deleteLocation_existingId_deletesAndPublishesTombstone() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location location = Location.builder().id(id).build();
+        when(locationRepository.findById(id)).thenReturn(Optional.of(location));
 
         locationService.deleteLocation(id);
 
-        verify(locationRepository).deleteById(id);
+        verify(locationRepository).delete(location);
+        verify(locationFactPublisher).locationDeleted(location);
+    }
+
+    @Test
+    @DisplayName("a delete for an id nothing resolves to is a no-op — no delete, no fact (#1486)")
+    void deleteLocation_missingId_deletesNothingAndEmitsNoFact() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(locationRepository.findById(id)).thenReturn(Optional.empty());
+
+        locationService.deleteLocation(id);
+
+        verify(locationRepository, never()).delete(any());
+        verify(locationRepository, never()).deleteById(any());
+        verify(locationFactPublisher, never()).locationDeleted(any());
     }
 
     @Test

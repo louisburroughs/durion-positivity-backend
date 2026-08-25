@@ -304,20 +304,18 @@ already satisfies the strictly-advancing contract:
 | `warranty.events.v1` | pos-warranty `WarrantyClaim` `@Version`, flushed and force-incremented on otherwise-clean mutations | Yes | Yes — pos-accounting's `>=` flipped in #1486 |
 | `workorder.events.v1` | `Instant.now(clock)` epoch millis; `Workorder` has no `@Version` | **No** | Scoped out — see below |
 | `customer.events.v1` | `Instant.now(clock)` epoch millis; party entities carry no optimistic-lock version | **No** | Scoped out — see below |
-| `location.events.v1` | `Instant.now(clock)` epoch millis — `Location` *has* an unused `@Version` the publisher ignores | **No** | Scoped out — see below |
+| `location.events.v1` | pos-location `Location`/`StorageLocationEntity` `@Version`, flushed before emit, seeded at migration time from wall-clock millis (#1486 follow-up) | Yes | Yes — pos-order's `>=` flipped |
 
-**Scoped out, and why:** the `>=` guards consuming `workorder.events.v1`,
-`customer.events.v1`, and `location.events.v1` (pos-order's workorder/customer/location
-listeners, pos-accounting's customer listener) keep their skip-on-equal behavior for now.
-Those publishers still stamp wall-clock millis, so their versions can tie or even invert
-across instances; a `>=` guard at least fails closed on a tie, and none of those topics has a
-regenerate-from-current-state replay whose repairs the guard could be blocking (their
-`OutboxReplayServiceImpl` re-sends existing outbox rows under the original `eventId`, which
-consumers drop by idempotency regardless of any version guard). Adopting the rule on such a
-topic means fixing its publisher first — the `@Version`-flush pattern above; for
-`location.events.v1` that is one line, since the column already exists — and only then moving
-its consumers to `ReplicaVersionGuard`. Doing it in the other order reintroduces the
-same-millisecond race #1486 closed.
+**Scoped out, and why:** the `>=` guards consuming `workorder.events.v1` and
+`customer.events.v1` (pos-order's workorder/customer listeners, pos-accounting's customer
+listener) keep their skip-on-equal behavior for now. Those publishers still stamp wall-clock
+millis, so their versions can tie or even invert across instances; a `>=` guard at least fails
+closed on a tie, and neither topic has a regenerate-from-current-state replay whose repairs the
+guard could be blocking (their `OutboxReplayServiceImpl` re-sends existing outbox rows under
+the original `eventId`, which consumers drop by idempotency regardless of any version guard).
+Adopting the rule on such a topic means fixing its publisher first — the `@Version`-flush
+pattern above — and only then moving its consumers to `ReplicaVersionGuard`. Doing it in the
+other order reintroduces the same-millisecond race #1486 closed.
 
 ---
 
