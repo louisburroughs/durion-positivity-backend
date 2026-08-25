@@ -212,41 +212,47 @@ public class PartyRelationshipServiceImpl implements PartyRelationshipService {
 
         // Map to response DTOs
         List<GetCommercialAccountContactsResponse.ContactWithRole> contacts = relationships.stream()
-                .map(rel -> {
-                    PersonParty person = rel.getToPerson();
-                    PersonDirectoryService.PersonIdentity identity =
-                            person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
-
-                    // Email/phone/name from pos-people (sole source of truth, ADR-0015 I2; issue #684).
-                    String email = identity != null && !identity.emails().isEmpty()
-                            ? identity.emails().get(0)
-                            : null;
-                    String phone = identity != null && !identity.phones().isEmpty()
-                            ? identity.phones().get(0)
-                            : null;
-                    String displayName =
-                            identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
-
-                    return GetCommercialAccountContactsResponse.ContactWithRole.builder()
-                            .relationshipId(rel.getPartyRelationshipId())
-                            .individualId(person.getPersonId())
-                            .roles(rel.getRoles())
-                            .isPrimaryBilling(rel.isPrimaryBillingContact())
-                            .status(rel.isActive(today) ? "ACTIVE" : "INACTIVE")
-                            .effectiveFrom(rel.getEffectiveStartDate())
-                            .effectiveTo(rel.getEffectiveEndDate())
-                            .individual(GetCommercialAccountContactsResponse.IndividualDetails.builder()
-                                    .displayName(displayName)
-                                    .email(email)
-                                    .phone(phone)
-                                    .build())
-                            .build();
-                })
+                .map(rel -> toContactWithRole(rel, identities, today))
                 .toList();
 
         return GetCommercialAccountContactsResponse.builder()
                 .commercialAccountId(String.valueOf(partyId))
                 .contacts(contacts)
+                .build();
+    }
+
+    /**
+     * One relationship as a contact row: the relationship itself (roles, billing flag, dates) is
+     * local truth; name, email and phone come from pos-people (sole source of truth, ADR-0015 I2;
+     * issue #684) and degrade to null — never to "" — when the directory has nothing.
+     */
+    private static GetCommercialAccountContactsResponse.ContactWithRole toContactWithRole(
+            PartyRelationship rel, Map<UUID, PersonDirectoryService.PersonIdentity> identities, LocalDate today) {
+        PersonParty person = rel.getToPerson();
+        PersonDirectoryService.PersonIdentity identity =
+                person.getPersonId() != null ? identities.get(person.getPersonId()) : null;
+
+        String email = identity != null && !identity.emails().isEmpty()
+                ? identity.emails().get(0)
+                : null;
+        String phone = identity != null && !identity.phones().isEmpty()
+                ? identity.phones().get(0)
+                : null;
+        String displayName = identity != null && !identity.displayName().isBlank() ? identity.displayName() : null;
+
+        return GetCommercialAccountContactsResponse.ContactWithRole.builder()
+                .relationshipId(rel.getPartyRelationshipId())
+                .individualId(person.getPersonId())
+                .roles(rel.getRoles())
+                .isPrimaryBilling(rel.isPrimaryBillingContact())
+                .status(rel.isActive(today) ? "ACTIVE" : "INACTIVE")
+                .effectiveFrom(rel.getEffectiveStartDate())
+                .effectiveTo(rel.getEffectiveEndDate())
+                .individual(GetCommercialAccountContactsResponse.IndividualDetails.builder()
+                        .displayName(displayName)
+                        .email(email)
+                        .phone(phone)
+                        .build())
                 .build();
     }
 

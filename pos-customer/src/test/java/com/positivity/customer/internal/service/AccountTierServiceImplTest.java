@@ -219,6 +219,40 @@ class AccountTierServiceImplTest {
             assertThat(response.getTierScore()).isEqualTo(600);
         }
 
+        @Test
+        @DisplayName("a qualifying contract count is a no-op when the revenue tier already meets it")
+        void contracts_noOpWhenRevenueTierAlreadyMeetsThem() {
+            when(commercialPartyRepository.findById(ACCOUNT_ID))
+                    .thenReturn(Optional.of(party(AccountTier.STANDARD, false)));
+
+            // ENTERPRISE revenue plus 5 contracts: the contract rule qualifies for PLATINUM but
+            // the account already stands higher, so neither tier, score, nor reason may change —
+            // "5+ active contracts" appearing in the reason would misattribute the tier.
+            ResolveAccountTierResponse response = resolve(request()
+                    .annualRevenue(new BigDecimal("2000000"))
+                    .activeContractCount(5)
+                    .build());
+
+            assertThat(response.getRecommendedTier()).isEqualTo(AccountTier.ENTERPRISE);
+            assertThat(response.getTierScore()).isEqualTo(600);
+            assertThat(response.getResolutionReason()).doesNotContain("contracts");
+        }
+
+        @Test
+        @DisplayName("the gold contract rule is likewise a no-op at an equal revenue tier")
+        void contracts_goldRuleNoOpAtEqualTier() {
+            when(commercialPartyRepository.findById(ACCOUNT_ID))
+                    .thenReturn(Optional.of(party(AccountTier.STANDARD, false)));
+
+            ResolveAccountTierResponse response = resolve(request()
+                    .annualRevenue(new BigDecimal("500000"))
+                    .activeContractCount(3)
+                    .build());
+
+            assertThat(response.getRecommendedTier()).isEqualTo(AccountTier.PLATINUM);
+            assertThat(response.getResolutionReason()).doesNotContain("contracts");
+        }
+
         @ParameterizedTest(name = "an age of {0} months alone resolves to {1}")
         @CsvSource({"0, STANDARD", "2, STANDARD", "3, BRONZE", "48, BRONZE"})
         @DisplayName("upgrades an otherwise STANDARD account once it is established")

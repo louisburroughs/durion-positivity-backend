@@ -288,6 +288,61 @@ class PartyRelationshipServiceImplTest {
         }
 
         @Test
+        void treatsAnEmptyRoleListAsNoFilter() {
+            when(partyRepository.existsById(PARTY_ID)).thenReturn(true);
+            when(partyRelationshipRepository.findActiveByFromPartyId(PARTY_ID, TODAY))
+                    .thenReturn(List.of(relationship(Set.of(PartyRelationshipRole.BILLING), null)));
+
+            // An empty list and null both mean "any role": filtering everything out on an empty
+            // list would make a role-less query return no contacts at all.
+            assertThat(service.getContactsForCommercialAccount(PARTY_ID, List.of(), null)
+                            .getContacts())
+                    .hasSize(1);
+        }
+
+        @Test
+        void aContactWithoutACanonicalPersonIdStaysListedWithABlankIdentity() {
+            when(partyRepository.existsById(PARTY_ID)).thenReturn(true);
+            PartyRelationship unlinked = relationship(Set.of(PartyRelationshipRole.BILLING), null);
+            unlinked.getToPerson().setPersonId(null);
+            when(partyRelationshipRepository.findActiveByFromPartyId(PARTY_ID, TODAY))
+                    .thenReturn(List.of(unlinked));
+
+            GetCommercialAccountContactsResponse.ContactWithRole contact = service.getContactsForCommercialAccount(
+                            PARTY_ID, null, null)
+                    .getContacts()
+                    .get(0);
+
+            // The relationship (the role, the billing flag) is local truth and must survive the
+            // missing directory link; only the identity fields go blank.
+            assertThat(contact.getIndividualId()).isNull();
+            assertThat(contact.getIndividual().getDisplayName()).isNull();
+            verify(personDirectoryService).fetchPersonIdentitiesQuietly(Set.of());
+        }
+
+        @Test
+        void anIdentityWithNoContactPointsAndABlankNameYieldsNulls() {
+            when(partyRepository.existsById(PARTY_ID)).thenReturn(true);
+            when(partyRelationshipRepository.findActiveByFromPartyId(PARTY_ID, TODAY))
+                    .thenReturn(List.of(relationship(Set.of(PartyRelationshipRole.BILLING), null)));
+            // A replicated person with no names and no contact points: every derived field must
+            // be null rather than "" or an exception on the empty lists.
+            when(personDirectoryService.fetchPersonIdentitiesQuietly(Set.of(PERSON_ID)))
+                    .thenReturn(Map.of(
+                            PERSON_ID,
+                            new PersonDirectoryService.PersonIdentity(PERSON_ID, null, null, null, List.of())));
+
+            GetCommercialAccountContactsResponse.ContactWithRole contact = service.getContactsForCommercialAccount(
+                            PARTY_ID, null, null)
+                    .getContacts()
+                    .get(0);
+
+            assertThat(contact.getIndividual().getDisplayName()).isNull();
+            assertThat(contact.getIndividual().getEmail()).isNull();
+            assertThat(contact.getIndividual().getPhone()).isNull();
+        }
+
+        @Test
         void acceptsAPersonPartyIdAsWellAsACommercialOne() {
             when(partyRepository.existsById(PARTY_ID)).thenReturn(false);
             when(personRepository.existsById(PARTY_ID)).thenReturn(true);
