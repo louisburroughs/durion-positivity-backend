@@ -994,10 +994,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_EDIT
+        - catalog:product:create
       summary: Create Product Master Record
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:create
   /v1/products/by-code:
     get:
       description: 'Resolves the single product carrying an exact product code under one code scheme, EAN or UPC, which is the deterministic matching step supplier price-catalog ingestion runs before it applies a vendor line to a product.
@@ -2930,10 +2932,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_EDIT
+        - catalog:product:edit
       summary: Update Product Master Record
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:edit
   /v1/products/{productId}/detail:
     get:
       description: 'Returns a consolidated product view for one location: catalog data, location-specific pricing, availability and lead time, with a confidence indicator describing how complete the data is.
@@ -3039,12 +3043,13 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
         - product:lifecycle:update
       summary: Get Product Lifecycle State
       tags:
       - Products API
       x-required-permissions:
+      - catalog:product:view
       - product:lifecycle:update
     put:
       description: 'Transitions a product''s lifecycle state to ACTIVE, INACTIVE or DISCONTINUED with an effective instant; discontinuation is one-way, a DISCONTINUED product can never be reactivated and callers must record a replacement via addProductReplacement instead.
@@ -3117,12 +3122,13 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_EDIT
+        - catalog:product:edit
         - product:lifecycle:update
       summary: Set Product Lifecycle State
       tags:
       - Products API
       x-required-permissions:
+      - catalog:product:edit
       - product:lifecycle:update
   /v1/products/{productId}/msrp:
     get:
@@ -3403,12 +3409,13 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
         - product:lifecycle:update
       summary: List Replacement Products
       tags:
       - Products API
       x-required-permissions:
+      - catalog:product:view
       - product:lifecycle:update
     post:
       description: 'Records a replacement suggestion on a discontinued product, pointing buyers at the product that supersedes it, ordered among other options by priorityOrder.
@@ -3469,12 +3476,13 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_EDIT
+        - catalog:product:edit
         - product:lifecycle:update
       summary: Add Replacement Product
       tags:
       - Products API
       x-required-permissions:
+      - catalog:product:edit
       - product:lifecycle:update
   /v1/products/{productId}/substitutes:
     get:
@@ -3582,10 +3590,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_EDIT
+        - catalog:product:edit
       summary: Set Product Tracking Level
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:edit
   /v1/products/{productId}/uoms:
     get:
       description: 'Returns the product''s unit-of-measure conversion set ordered by UoM code, each entry carrying its type, factor to base and precision scale.

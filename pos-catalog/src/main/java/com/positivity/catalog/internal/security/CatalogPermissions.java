@@ -40,6 +40,17 @@ public final class CatalogPermissions {
     public static final String PRODUCT_DELETE = "catalog:product:delete";
 
     /**
+     * Edit product master data or product-lifecycle write actions gated alongside it.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')} on product master-data writes
+     * (create/update/tracking-level) and on the lifecycle write endpoints that OR it with {@link
+     * #PRODUCT_LIFECYCLE_UPDATE}; see {@link #PRODUCT_VIEW} for the same problem on the read side.
+     * The permission code itself ({@code catalog:product:edit}) was already registered
+     * (bit 13) but had never been wired to an enforcement site in this module.
+     */
+    public static final String PRODUCT_EDIT = "catalog:product:edit";
+
+    /**
      * Read service-type catalog data.
      *
      * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')} on the service-type read
