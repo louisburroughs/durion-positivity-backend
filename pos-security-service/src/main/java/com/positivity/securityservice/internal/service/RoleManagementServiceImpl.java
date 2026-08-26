@@ -106,7 +106,13 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .filter(id -> !alreadyHeld.contains(id))
                 .collect(Collectors.toSet());
 
-        role.setPermissions(permissions);
+        // Mutate the managed collection rather than replacing it. Assigning a new Set
+        // dereferences the persistent collection, and Hibernate answers that by deleting every
+        // join row and re-inserting the survivors — which silently resets granted_at/granted_by
+        // on permissions the role already held. Mutating in place issues targeted inserts and
+        // deletes, so untouched rows keep their provenance.
+        role.getPermissions().retainAll(permissions);
+        role.getPermissions().addAll(permissions);
         role.setLastModifiedBy(getCurrentUsername());
         role.setLastModifiedAt(Instant.now(clock));
 

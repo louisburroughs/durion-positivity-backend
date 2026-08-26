@@ -10,6 +10,9 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
+    # Runs src/test/resources/schema.sql after Hibernate builds the schema, so
+    # migration-only columns can be patched in (#1512). See schema.sql.
+    defer-datasource-initialization: true
     show-sql: false
     properties:
       hibernate:
