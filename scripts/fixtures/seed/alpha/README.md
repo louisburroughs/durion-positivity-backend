@@ -21,18 +21,34 @@ they would for production traffic — none of which happens for direct SQL seeds
   migration; the pipeline is an operator action against the alpha stack, so later
   environments need no gating.
 
-## Running a pack (alpha only)
+## Running the packs (alpha only)
 
-Per domain, in the dependency order below:
+The driver runs every pack in dependency order through the gateway:
 
-1. Upload the CSV to `pos-bulk-loader` (port 8090; file upload or TUS endpoint).
-2. Create a bulk-load job for the file with the matching `domainType` (e.g. `CUSTOMER`)
-   and the target alpha `locationId`.
-3. Launch the job. The loader chunks rows to the owning service's
-   `/v1/{domain}/bulk-ingest` endpoint; per-row failures are reported in the job's
-   review queue without aborting the batch.
-4. Verify: row counts on the owner, `replica_drift_total` flat, expected event volume
-   in pos-event-receiver.
+```bash
+scripts/seed-alpha.py --gateway https://<alpha-gateway> --token "$SEED_BEARER_TOKEN"
+# subset / rehearsal:
+scripts/seed-alpha.py --gateway ... --only customer/person-customers.csv
+scripts/seed-alpha.py --gateway ... --dry-run
+# empty alpha (no locations yet):
+scripts/seed-alpha.py --gateway ... --bootstrap-location
+```
+
+Per pack file it creates a bulk-load job (`POST /bulk-loader/bulk-jobs`), uploads the
+CSV, starts processing, and polls the job to a terminal state, reporting the row
+counters. The token needs `bulkImport:upload:execute` plus the relayed per-domain
+create permissions (`location:write`, `crm:party:create`). Bulk-load jobs require a
+`locationId`: the driver resolves `--location-code` (default `CLT-MAIN-001`) against
+the location roster, and `--bootstrap-location` creates it from `locations.csv` via
+the gateway API when the roster is empty (that row then reports one expected
+duplicate failure in the LOCATION job).
+
+Manual per-domain flow (what the driver automates): upload the CSV to
+`pos-bulk-loader`, create a job with the matching `domainType` and alpha
+`locationId`, launch it, and watch the review queue for per-row failures.
+
+Afterwards, verify: row counts on the owner, `replica_drift_total` flat, expected
+event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
 **location** → people → people-contact → **customer** → vehicle → catalog → price →
