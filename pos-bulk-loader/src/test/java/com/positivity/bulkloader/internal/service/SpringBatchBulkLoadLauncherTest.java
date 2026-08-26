@@ -38,6 +38,9 @@ class SpringBatchBulkLoadLauncherTest {
     Job customerBulkLoadJob;
 
     @Mock
+    Job commercialCustomerBulkLoadJob;
+
+    @Mock
     Job locationBulkLoadJob;
 
     @Mock
@@ -59,6 +62,7 @@ class SpringBatchBulkLoadLauncherTest {
                 jobOperator,
                 catalogBulkLoadJob,
                 customerBulkLoadJob,
+                commercialCustomerBulkLoadJob,
                 locationBulkLoadJob,
                 peopleBulkLoadJob,
                 priceBulkLoadJob,
@@ -98,6 +102,7 @@ class SpringBatchBulkLoadLauncherTest {
                 jobOperator,
                 catalogBulkLoadJob,
                 customerBulkLoadJob,
+                commercialCustomerBulkLoadJob,
                 locationBulkLoadJob,
                 peopleBulkLoadJob,
                 priceBulkLoadJob,
@@ -121,6 +126,7 @@ class SpringBatchBulkLoadLauncherTest {
                 jobOperator,
                 catalogBulkLoadJob,
                 customerBulkLoadJob,
+                commercialCustomerBulkLoadJob,
                 locationBulkLoadJob,
                 peopleBulkLoadJob,
                 priceBulkLoadJob,
@@ -139,12 +145,40 @@ class SpringBatchBulkLoadLauncherTest {
     }
 
     @Test
+    void launch_whenCommercialCustomerDomain_usesCommercialCustomerJob() throws Exception {
+        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
+                bulkLoadAuthorizationContext,
+                jobOperator,
+                catalogBulkLoadJob,
+                customerBulkLoadJob,
+                commercialCustomerBulkLoadJob,
+                locationBulkLoadJob,
+                peopleBulkLoadJob,
+                priceBulkLoadJob,
+                vehicleBulkLoadJob,
+                vehicleFitmentBulkLoadJob);
+        BulkLoadJob job = new BulkLoadJob();
+        job.setId(UUID.fromString("00000000-0000-0000-0000-000000000026"));
+        job.setDomainType(DomainType.COMMERCIAL_CUSTOMER);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000026/commercial-customers.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000036"));
+        job.setOperatorId("operator-commercial");
+
+        when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(jobExecution);
+
+        launcher.launch(job, null);
+
+        verify(jobOperator).start(org.mockito.Mockito.same(commercialCustomerBulkLoadJob), any(JobParameters.class));
+    }
+
+    @Test
     void launch_whenLocationDomain_usesLocationJob() throws Exception {
         SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
                 bulkLoadAuthorizationContext,
                 jobOperator,
                 catalogBulkLoadJob,
                 customerBulkLoadJob,
+                commercialCustomerBulkLoadJob,
                 locationBulkLoadJob,
                 peopleBulkLoadJob,
                 priceBulkLoadJob,
@@ -184,6 +218,7 @@ class SpringBatchBulkLoadLauncherTest {
                 jobOperator,
                 catalogBulkLoadJob,
                 customerBulkLoadJob,
+                commercialCustomerBulkLoadJob,
                 locationBulkLoadJob,
                 peopleBulkLoadJob,
                 priceBulkLoadJob,

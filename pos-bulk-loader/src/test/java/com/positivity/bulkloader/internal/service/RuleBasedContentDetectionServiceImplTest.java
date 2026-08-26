@@ -123,6 +123,31 @@ class RuleBasedContentDetectionServiceImplTest {
     }
 
     @Test
+    void suggestMappings_commercialHeaders_mapsCommercialCustomerFields() {
+        Map<String, String> mappings = service.suggestMappings(
+                List.of(
+                        "legal_name",
+                        "dba",
+                        "tax_id",
+                        "billing_terms",
+                        "contact_first_name",
+                        "contact_last_name",
+                        "contact_email",
+                        "contact_phone"),
+                DomainType.COMMERCIAL_CUSTOMER);
+
+        assertThat(mappings)
+                .containsEntry("legal_name", "legalName")
+                .containsEntry("dba", "displayName")
+                .containsEntry("tax_id", "taxId")
+                .containsEntry("billing_terms", "billingTermsId")
+                .containsEntry("contact_first_name", "contactFirstName")
+                .containsEntry("contact_last_name", "contactLastName")
+                .containsEntry("contact_email", "contactEmail")
+                .containsEntry("contact_phone", "contactPhone");
+    }
+
+    @Test
     void suggestMappings_locationHeaders_mapsLocationFields() {
         Map<String, String> mappings = service.suggestMappings(
                 List.of(

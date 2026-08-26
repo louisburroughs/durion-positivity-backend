@@ -46,6 +46,7 @@ jobs themselves require a valid `locationId`.
 | File | Rows | Target |
 |---|---|---|
 | `person-customers.csv` | 50 individual customers | `POST /v1/customer/bulk-ingest` (`domainType: CUSTOMER`) |
+| `commercial-customers.csv` | 20 commercial accounts, each with a primary contact | `POST /v1/customer/commercial/bulk-ingest` (`domainType: COMMERCIAL_CUSTOMER`) |
 
 Columns: `firstName,lastName,email,phoneNumber,primaryAddress,customerNumber`. Names
 and primary email addresses are joined from the `01960024-*` identity rows in
@@ -60,15 +61,19 @@ person UUIDs — identity flows through the API, which is the point.
 - `preferredContactMethod` is derived (EMAIL when an email is present, else
   PHONE_CALL); the seed's PHONE_CALL/SMS/NONE spread (10/7/6) is not preserved because
   every row has an email.
-- The seed's 20 commercial parties and their primary contacts are **not yet
-  converted**. The endpoint for them now exists —
-  `POST /v1/customer/commercial/bulk-ingest` creates the account (customer number is
-  service-generated; the seed's `CUST-CP-*` numbers are not preserved) and optionally
-  creates + attaches one PRIMARY_CONTACT person per row — but the fixture CSV and a
-  bulk-loader COMMERCIAL job are still to come. The 20 billing-contact persons
-  (`01960026-*`) have no active seed rows in pos-customer since V6 dropped the contact
-  table; whether to model them as BILLING relationships is a conversion-time decision.
+- `commercial-customers.csv` carries the 20 commercial accounts with legal/display
+  names, tax ids, billing terms, and each account's primary contact (name + email,
+  joined from the `01960025-*` identity rows); the ingest path creates the contact
+  person and attaches it with the PRIMARY_CONTACT role. Deltas: `status`
+  (18 ACTIVE / 1 INACTIVE / 1 ON_HOLD) and `tier` (8/5/4/2/1) land as
+  ACTIVE/STANDARD; **all 20 street addresses are dropped** (`createCommercialAccount`
+  has no address input — structured org addresses are a pos-people-contact-fed
+  replica); customer numbers are service-generated, so the seed's `CUST-CP-*` values
+  are not preserved. The 20 billing-contact persons (`01960026-*`) have had no active
+  seed rows in pos-customer since V6 dropped the contact table, so nothing was
+  converted for them; modeling them as BILLING relationships is open follow-up work.
 
-Because coverage is partial, the Flyway seed file (and its
-`scripts/flyway-seed-baseline.txt` line) stays until the commercial half is convertible
-and alpha has been reseeded and verified (`docs/DATA_SEED_STRATEGY.md` §5.4).
+Both halves of the customer seed are now covered. The Flyway seed file (and its
+`scripts/flyway-seed-baseline.txt` line) stays until alpha has been reseeded through
+the pipeline and verified (`docs/DATA_SEED_STRATEGY.md` §5.4); delete both in that
+change.

@@ -135,7 +135,7 @@ replicas.
 | pos-people `R__seed_people_operational_data.sql`, `R__seed_timekeeping_approval_data.sql` | 2 | Seed pipeline (`PersonLoaderStrategy` exists) |
 | pos-people-contact `R__seed_reference_people_contact.sql` | 1 | Keep |
 | pos-people-contact `R__seed_people_contact_operational_data.sql` | 2 | Seed pipeline |
-| pos-customer `R__seed_customer_operational_data.sql` | 2 | **In progress** — individual customers converted to `scripts/fixtures/seed/alpha/customer/`; `POST /v1/customer/commercial/bulk-ingest` now exists for commercial parties + primary contacts (remaining: commercial fixture CSV + a bulk-loader COMMERCIAL job) |
+| pos-customer `R__seed_customer_operational_data.sql` | 2 | **Converted** — individuals and commercial accounts (with primary contacts) in `scripts/fixtures/seed/alpha/customer/`, loadable via the bulk loader (`CUSTOMER`, `COMMERCIAL_CUSTOMER`); file deletion waits on the verified alpha reseed (§5.4) |
 | pos-vehicle-inventory `R__seed_vehicle_inventory_operational_data.sql` | 2 | Seed pipeline (`VehicleLoaderStrategy` exists) |
 | pos-catalog `R__seed_reference_catalog*.sql` (5 files) | 2* | Replicated via `catalog.events.v1` → move to bulk-ingest (`CatalogLoaderStrategy` exists). Interim: keep Flyway **plus a mandatory post-seed products+services `facts/replay`** documented in the alpha bootstrap runbook |
 | pos-shop-manager `R__seed_shop_manager_mechanics.sql` | 2 | **Audit first:** if mechanics are a projection of pos-people events, this file seeds a *replica* by hand — delete it and let the people seed + `PeopleEventsListener` populate it |

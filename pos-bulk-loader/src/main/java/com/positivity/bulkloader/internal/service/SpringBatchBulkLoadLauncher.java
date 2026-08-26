@@ -25,6 +25,7 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
     private final JobOperator jobOperator;
     private final Job catalogBulkLoadJob;
     private final Job customerBulkLoadJob;
+    private final Job commercialCustomerBulkLoadJob;
     private final Job locationBulkLoadJob;
     private final Job peopleBulkLoadJob;
     private final Job priceBulkLoadJob;
@@ -36,6 +37,7 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
             JobOperator jobOperator,
             @Qualifier("catalogBulkLoadJob") Job catalogBulkLoadJob,
             @Qualifier("customerBulkLoadJob") Job customerBulkLoadJob,
+            @Qualifier("commercialCustomerBulkLoadJob") Job commercialCustomerBulkLoadJob,
             @Qualifier("locationBulkLoadJob") Job locationBulkLoadJob,
             @Qualifier("peopleBulkLoadJob") Job peopleBulkLoadJob,
             @Qualifier("priceBulkLoadJob") Job priceBulkLoadJob,
@@ -45,6 +47,7 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
         this.jobOperator = jobOperator;
         this.catalogBulkLoadJob = catalogBulkLoadJob;
         this.customerBulkLoadJob = customerBulkLoadJob;
+        this.commercialCustomerBulkLoadJob = commercialCustomerBulkLoadJob;
         this.locationBulkLoadJob = locationBulkLoadJob;
         this.peopleBulkLoadJob = peopleBulkLoadJob;
         this.priceBulkLoadJob = priceBulkLoadJob;
@@ -91,6 +94,7 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
         return switch (domainType) {
             case CATALOG_PRODUCT -> catalogBulkLoadJob;
             case CUSTOMER -> customerBulkLoadJob;
+            case COMMERCIAL_CUSTOMER -> commercialCustomerBulkLoadJob;
             case LOCATION -> locationBulkLoadJob;
             case PERSON -> peopleBulkLoadJob;
             case BASE_PRICE -> priceBulkLoadJob;

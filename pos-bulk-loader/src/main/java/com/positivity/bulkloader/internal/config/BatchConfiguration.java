@@ -5,6 +5,8 @@ import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
+import com.positivity.bulkloader.internal.domain.CommercialCustomerLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.CommercialCustomerRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
@@ -68,6 +70,7 @@ public class BatchConfiguration {
     private final PlatformTransactionManager transactionManager;
     private final CatalogLoaderStrategy catalogLoaderStrategy;
     private final CustomerLoaderStrategy customerLoaderStrategy;
+    private final CommercialCustomerLoaderStrategy commercialCustomerLoaderStrategy;
     private final LocationLoaderStrategy locationLoaderStrategy;
     private final PersonLoaderStrategy personLoaderStrategy;
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
@@ -320,6 +323,111 @@ public class BatchConfiguration {
             } catch (RestClientException e) {
                 log.error(
                         "customerBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
+                        chunk.size(),
+                        e.getMessage(),
+                        e);
+                throw e;
+            }
+        };
+    }
+
+    @Bean
+    public Job commercialCustomerBulkLoadJob(Step commercialCustomerBulkLoadStep) {
+        return new JobBuilder("commercialCustomerBulkLoadJob", jobRepository)
+                .listener(bulkLoadJobExecutionListener)
+                .start(commercialCustomerBulkLoadStep)
+                .build();
+    }
+
+    @Bean
+    public Step commercialCustomerBulkLoadStep(
+            FlatFileItemReader<CommercialCustomerRecord> commercialCustomerCsvReader,
+            ItemProcessor<CommercialCustomerRecord, CommercialCustomerRecord> commercialCustomerItemProcessor,
+            ItemWriter<CommercialCustomerRecord> commercialCustomerBulkIngestWriter) {
+        return new StepBuilder("commercialCustomerBulkLoadStep", jobRepository)
+                .<CommercialCustomerRecord, CommercialCustomerRecord>chunk(500)
+                .transactionManager(transactionManager)
+                .reader(commercialCustomerCsvReader)
+                .processor(commercialCustomerItemProcessor)
+                .writer(commercialCustomerBulkIngestWriter)
+                .faultTolerant()
+                .skipLimit(Integer.MAX_VALUE)
+                .skip(Exception.class)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public FlatFileItemReader<CommercialCustomerRecord> commercialCustomerCsvReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath) {
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
+
+        BeanWrapperFieldSetMapper<CommercialCustomerRecord> mapper = new BeanWrapperFieldSetMapper<>();
+        mapper.setTargetType(CommercialCustomerRecord.class);
+        return new FlatFileItemReaderBuilder<CommercialCustomerRecord>()
+                .name("commercialCustomerCsvReader")
+                .resource(new FileSystemResource(resolved))
+                .delimited()
+                .names(
+                        "legalName",
+                        "displayName",
+                        "taxId",
+                        "billingTermsId",
+                        "contactFirstName",
+                        "contactLastName",
+                        "contactEmail",
+                        "contactPhone")
+                .fieldSetMapper(mapper)
+                .linesToSkip(1)
+                .build();
+    }
+
+    @Bean
+    public ItemProcessor<CommercialCustomerRecord, CommercialCustomerRecord> commercialCustomerItemProcessor() {
+        return item -> {
+            List<String> errors = commercialCustomerLoaderStrategy.validate(item);
+            if (!errors.isEmpty()) {
+                log.warn("Commercial customer record validation failed: {}", errors);
+                return null;
+            }
+            return item;
+        };
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<CommercialCustomerRecord> commercialCustomerBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + customerServiceId).build();
+        return chunk -> {
+            JobContext context =
+                    resolveJobContext("commercialCustomerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
+            if (context == null) {
+                return;
+            }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
+
+            BulkIngestRequest<CommercialCustomerRecord> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
+
+            try {
+                RestClient.RequestBodySpec requestSpec = client.post()
+                        .uri("/v1/customer/commercial/bulk-ingest")
+                        .header(HEADER_AUTHORITIES, "crm:party:create")
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (RestClientException e) {
+                log.error(
+                        "commercialCustomerBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
                         chunk.size(),
                         e.getMessage(),
                         e);
