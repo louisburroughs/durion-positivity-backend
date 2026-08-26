@@ -596,16 +596,22 @@
       "defaultValue": "/people/v1/people/availability?employeeId={employeeId}"
     },
     {
-      "name": "pos.shopmanager.status-uri-template",
+      "name": "pos.shopmanager.location-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching shop status by shop ID.",
-      "defaultValue": "/shop-manager/v1/shop/{shopId}/status"
+      "description": "URI template for the cross-domain location leg of the shop status composition (a shopId is a locationId).",
+      "defaultValue": "/location/v1/locations/{locationId}"
     },
     {
-      "name": "pos.shopmanager.queue-uri-template",
+      "name": "pos.shopmanager.schedule-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching the service queue for a shop.",
-      "defaultValue": "/shop-manager/v1/shop/{shopId}/queue"
+      "description": "URI template for the schedule-board leg of the shop status/queue compositions (date is required downstream).",
+      "defaultValue": "/shop-manager/v1/schedules/view?locationId={locationId}&date={date}"
+    },
+    {
+      "name": "pos.shopmanager.wip-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the cross-domain open-workorder (WIP) leg of the shop status/queue compositions.",
+      "defaultValue": "/workorder/v1/workexec/wip?locationId={locationId}"
     },
     {
       "name": "pos.shopmanager.search-uri-template",

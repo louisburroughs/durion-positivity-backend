@@ -388,22 +388,52 @@ ReportingFacadeTool.getRevenueReport:
       downstreamPath: "/v1/accounting/reports/financial/aged-receivables?asOfDate={}"
 
 ShopManagerFacadeTool.getShopStatus:
-  verb: GET
-  baseUrlProperty: pos.shopmanager.base-url
-  templateProperty: pos.shopmanager.status-uri-template
-  template: "/shop-manager/v1/shop/{shopId}/status"
-  route: shop-manager
-  downstreamPath: "/v1/shop/{}/status"
-  status: wave3-pending # WS-3.SHOPSTATUS composes schedules/view + workexec/wip + location
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.SHOPSTATUS: the shopId argument IS a locationId. The schedule leg's required date
+  # query param is filled with today's date from the shared Clock bean.
+  legs:
+    location:
+      verb: GET
+      baseUrlProperty: pos.shopmanager.base-url
+      templateProperty: pos.shopmanager.location-uri-template
+      template: "/location/v1/locations/{locationId}"
+      route: location
+      downstreamPath: "/v1/locations/{}"
+    schedule:
+      verb: GET
+      baseUrlProperty: pos.shopmanager.base-url
+      templateProperty: pos.shopmanager.schedule-uri-template
+      template: "/shop-manager/v1/schedules/view?locationId={locationId}&date={date}"
+      route: shop-manager
+      downstreamPath: "/v1/schedules/view?locationId={}&date={}"
+    openWorkorders:
+      verb: GET
+      baseUrlProperty: pos.shopmanager.base-url
+      templateProperty: pos.shopmanager.wip-uri-template
+      template: "/workorder/v1/workexec/wip?locationId={locationId}"
+      route: workorder
+      downstreamPath: "/v1/workexec/wip?locationId={}"
 
 ShopManagerFacadeTool.getShopQueue:
-  verb: GET
-  baseUrlProperty: pos.shopmanager.base-url
-  templateProperty: pos.shopmanager.queue-uri-template
-  template: "/shop-manager/v1/shop/{shopId}/queue"
-  route: shop-manager
-  downstreamPath: "/v1/shop/{}/queue"
-  status: wave3-pending # WS-3.SHOPQUEUE composes workexec/wip + schedules/view
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.SHOPQUEUE: reuses the wip and schedule template properties of getShopStatus.
+  legs:
+    openWorkorders:
+      verb: GET
+      baseUrlProperty: pos.shopmanager.base-url
+      templateProperty: pos.shopmanager.wip-uri-template
+      template: "/workorder/v1/workexec/wip?locationId={locationId}"
+      route: workorder
+      downstreamPath: "/v1/workexec/wip?locationId={}"
+    schedule:
+      verb: GET
+      baseUrlProperty: pos.shopmanager.base-url
+      templateProperty: pos.shopmanager.schedule-uri-template
+      template: "/shop-manager/v1/schedules/view?locationId={locationId}&date={date}"
+      route: shop-manager
+      downstreamPath: "/v1/schedules/view?locationId={}&date={}"
 
 ShopManagerFacadeTool.searchShops:
   verb: GET

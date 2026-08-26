@@ -414,8 +414,14 @@ pos:
     schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/people/v1/people/availability?employeeId={employeeId}}
   shopmanager:
     base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-api-gateway}
-    status-uri-template: ${POS_SHOPMANAGER_STATUS_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/status}
-    queue-uri-template: ${POS_SHOPMANAGER_QUEUE_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/queue}
+    # getShopStatus/getShopQueue composition legs (#1519 WS-3.SHOPSTATUS/WS-3.SHOPQUEUE).
+    # Shops ARE locations, and pos-shop-manager publishes no shop status or queue view, so
+    # the location leg reads the /location route and the open-workorder leg reads the
+    # /workorder workexec WIP board (same gateway host); only the schedule leg is served by
+    # pos-shop-manager itself.
+    location-uri-template: ${POS_SHOPMANAGER_LOCATION_URI_TEMPLATE:/location/v1/locations/{locationId}}
+    schedule-uri-template: ${POS_SHOPMANAGER_SCHEDULE_URI_TEMPLATE:/shop-manager/v1/schedules/view?locationId={locationId}&date={date}}
+    wip-uri-template: ${POS_SHOPMANAGER_WIP_URI_TEMPLATE:/workorder/v1/workexec/wip?locationId={locationId}}
     # Cross-domain: shops ARE locations; the facade fetches the /location roster and filters
     # by name/code in-process (pos-shop-manager publishes no shop directory).
     search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/location/v1/locations}
