@@ -126,6 +126,16 @@ jobs:
         run: |
           python3 scripts/audit-rbac.py --check
 
+      - name: Check MCP facade tool contracts (check-mcp-facade-paths.py)
+        # Fails when a pos-mcp-server facade @Tool would call an endpoint (verb +
+        # gateway-routed path, or the pos-tax direct route) that no module's
+        # openapi.yaml publishes -- the #1519 defect class. Known pre-existing
+        # breaks live in scripts/mcp-facade-paths-baseline.json and are burned
+        # down by the #1519 restoration waves; only NEW breaks fail this step.
+        # Stdlib only, no build, no database.
+        run: |
+          python3 scripts/check-mcp-facade-paths.py --baseline scripts/mcp-facade-paths-baseline.json
+
   pr-comment:
     name: PR Summary Comment
     runs-on: ubuntu-latest
