@@ -399,11 +399,14 @@ registered rows' live descriptions and flags on every service restart).
 
 ## 5. Confounds that cap what this audit can see
 
-1. **139 of 999 operations declare no `x-required-permissions`**: pos-security-service
-   88/88, pos-catalog 37/70, pos-event-receiver 12/12, pos-customer 1, pos-invoice 1,
-   pos-vehicle-inventory 1. These are three unrelated causes, not one gap — see Task 6
-   below for the decomposition and per-case verdicts. Until security-service and catalog
-   emit the extension, "required nowhere" is an upper bound in those two domains.
+1. **22 of 999 operations declare no `x-required-permissions`** (was 139 before task 6):
+   pos-event-receiver 12/12, pos-security-service 6/88, pos-catalog 2/70, pos-customer 1,
+   pos-invoice 1, pos-vehicle-inventory 1. These were three unrelated causes, not one gap
+   — see Task 6 below for the decomposition and per-case verdicts. Every one of the
+   remaining 22 is now accounted for: shared-secret auth, `permitAll()` public endpoints,
+   or the two type-generic catalog operations still blocked on the endpoint-split
+   decision. The "required nowhere" upper-bound caveat no longer applies to
+   security-service or catalog.
 2. **Enforcement outside `@PreAuthorize` is common** — `SecurityContextHelper.hasAuthority`,
    `authorities.contains(...)`, capability flags in DTOs. The script now resolves
    constant references in these calls, but dynamically built strings
@@ -430,28 +433,53 @@ would grant the operation a code that matches no real permission, making it look
 gateable and silently unselectable forever. So "declares nothing" has three distinct
 causes, not one:
 
-| Cause | Count | What it means |
-| --- | --- | --- |
-| Module never runs the customizer | 88 (pos-security-service) | tooling gap — code enforces, contract is mute |
-| `hasRole`/`hasAnyRole` gate, ignored by design | 37 (pos-catalog) + 1 (pos-vehicle-inventory) | mixed — see below |
-| No `@PreAuthorize` applies to any user permission | 12 (pos-event-receiver) + 2 (pos-customer, pos-invoice) | correct silence |
+| Cause | Count when task 6 began | Now | What it means |
+| --- | --- | --- | --- |
+| Module never runs the customizer | 88 (pos-security-service) | **0** | tooling gap — code enforced, contract was mute. Fixed by adding the `pos-security-common` dependency. |
+| `hasRole`/`hasAnyRole` gate, ignored by design | 37 (pos-catalog) + 1 (pos-vehicle-inventory) | **2 + 1** | real gap in catalog (phantom roles, ADMIN-only by accident) — 39 converted to real codes; the 2 left are the type-generic create/update, blocked. pos-vehicle-inventory's is a genuine `ROLE_ADMIN` gate, off-convention but enforced. |
+| `permitAll()` — deliberately public | 6 (pos-security-service) + 2 (pos-customer, pos-invoice) | **8** | correct silence — login/refresh/register/validate-token, a feature-flagged public form, and a signed-token download |
+| No `@PreAuthorize` applies to any user permission | 12 (pos-event-receiver) | **12** | correct silence — shared-secret auth |
 
-**1. pos-security-service (88/88) — tooling gap, being fixed.** The module does not
-depend on `pos-security-common`, so the auto-configured `OperationCustomizer` bean is
-never on its classpath and the extension never fires for *any* of its 88 operations —
-this is an all-or-nothing module-level miss, not 88 individually-unannotated endpoints.
-The code already enforces: 55 handlers carry permission-based `@PreAuthorize`. Contract
-catch-up only; no code change to authorization itself.
+The `permitAll()` row was invisible when this section was first written: pos-security-service
+emitted nothing at all, so its 6 public endpoints were hidden inside the 88.
 
-**2. pos-catalog (37/70) — real gap, being fixed.** These operations are gated on
-`hasRole('CATALOG_VIEW'/'CATALOG_EDIT'/'CATALOG_DELETE')` — role names that appear in no
-migration (§7 task 7's baseline note on `catalog:product:edit` is one concrete instance:
-`CatalogItemController.updateCatalogItem` is still gated on the dead `hasRole('CATALOG_EDIT')`
-phantom role, so nothing actually guards a product edit). Unlike a granted role, a role
-nobody is ever assigned satisfies `hasRole` for no one — the endpoints don't merely lack a
-contract entry, they are unreachable by design intent and reachable in practice only by
-whatever the module's `SecurityConfig` treats as ADMIN-equivalent. The customizer's
-silence here is accidentally hiding a defect, not correctly reporting one.
+**1. pos-security-service (was 88/88, now 6/88) — tooling gap, FIXED.** The module did
+not depend on `pos-security-common`, so the auto-configured `OperationCustomizer` bean
+was never on its classpath and the extension never fired for *any* of its 88 operations
+— an all-or-nothing module-level miss, not 88 individually-unannotated endpoints. The
+code already enforced: 55 handlers carry permission-based `@PreAuthorize`. Adding the
+dependency was verified safe rather than assumed: pos-security-common registers only
+`RequiredPermissionsOpenApiAutoConfiguration` in its `AutoConfiguration.imports`, while
+`GatewaySecurityConfig` and `GatewayAuthoritiesFilter` are plain `@Configuration`
+requiring an explicit `@Import` that this service's component scan never reaches — so
+the token issuer's own filter chain is untouched. 82 of 88 operations now declare their
+codes; the 6 that do not are the `permitAll()` public endpoints. Every newly declared
+code was already granted to some role, so nothing became unreachable.
+
+**2. pos-catalog (was 37/70, now 2/70) — real gap, FIXED except the blocked pair.** These
+operations were gated on `hasRole('CATALOG_VIEW'/'CATALOG_EDIT'/'CATALOG_DELETE')` — role
+names that appear in no migration. Unlike a granted role, a role nobody is ever assigned
+satisfies `hasRole` for no one, so the endpoints were reachable only via the
+`hasRole('ADMIN')` alternate: ADMIN-only by accident, with the `catalog:*` codes granted
+to five roles enforcing nothing. The customizer's silence was accidentally hiding a
+defect, not correctly reporting one.
+
+39 of the 41 gates are now converted. Seven reused codes that already existed — including
+`catalog:product:edit`, which had a bit and a grant but had never been wired to any
+enforcement site. The other 32 needed **16 new codes** (bits 472–487, `CATALOG_VERSION`
+60 → 61, a fleet-coordinated deploy) for resources that had none: guardrail policies,
+location price overrides, non-inventory products, substitution groups, catalog groupings,
+UoM conversions, product UoMs, item-cost reads, tread designs, and fact replay. All 16 are
+granted to ADMIN and nobody else — a faithful mirror of the access the phantom gates
+already permitted, chosen so that enforcing a code granted to no one could not turn an
+accidentally-ADMIN-only endpoint into one reachable by nobody. Widening any of them (the
+UoM, tread-design and non-inventory *reads* being the plausible candidates) is an open
+product decision.
+
+The 2 that remain are `CatalogItemController`'s type-generic create and update
+(`POST|PUT /{type}/{catalogId}`), still blocked on the per-type endpoint-split decision —
+the same question raised by the `deleteCatalogItem` type-conditional, and the same one
+that blocks `catalog:service_type:create/edit`.
 
 **3. pos-event-receiver (12/12) — expected, not a defect.** Verified directly: zero
 `@PreAuthorize` annotations anywhere in the module. Auth is `EventsApiSecurityFilter`

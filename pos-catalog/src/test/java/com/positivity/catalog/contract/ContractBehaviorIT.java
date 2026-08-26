@@ -219,22 +219,34 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("RBAC-013: addReplacementProduct is reachable with catalog:product:edit alone, no ADMIN role")
+    @DisplayName("RBAC-013: the lifecycle transition and addReplacementProduct both run on "
+            + "catalog:product:edit alone, no ADMIN role (product fixtures still need admin: the "
+            + "type-generic create endpoint remains phantom-gated)")
     void testAddReplacementProduct_WithProductEditPermission_NoAdminRole() throws Exception {
         UUID originalProductId = createProductAndReturnId("RBAC-013 Product Original");
         UUID replacementProductId = createProductAndReturnId("RBAC-013 Product Replacement");
 
-        mockMvc.perform(withAuth(put("/v1/products/{productId}/lifecycle", originalProductId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "lifecycleState",
-                                "DISCONTINUED",
-                                "effectiveAt",
-                                java.time.Instant.now().plusSeconds(3600),
-                                "overrideReason",
-                                "End of life",
-                                "changedBy",
-                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))))
+        // Scoped deliberately: passing the broad default authorities here would leave the
+        // converted setLifecycleState gate unexercised and make the test weaker than its name.
+        // Two authorities are needed, and the second is the interesting one:
+        // catalog:product:edit satisfies the @PreAuthorize, but the DISCONTINUED transition
+        // additionally requires product:lifecycle:override_discontinued, checked inside
+        // ProductLifecycleServiceImpl when an overrideReason is supplied. That capability check
+        // is invisible to @PreAuthorize and to the contract, so pinning it here is the only
+        // place the requirement is stated in a test.
+        mockMvc.perform(withAuth(
+                        put("/v1/products/{productId}/lifecycle", originalProductId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(Map.of(
+                                        "lifecycleState",
+                                        "DISCONTINUED",
+                                        "effectiveAt",
+                                        java.time.Instant.now().plusSeconds(3600),
+                                        "overrideReason",
+                                        "End of life",
+                                        "changedBy",
+                                        UUID.fromString("00000000-0000-0000-0000-000000000001")))),
+                        "catalog:product:edit,product:lifecycle:override_discontinued"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(withAuth(
