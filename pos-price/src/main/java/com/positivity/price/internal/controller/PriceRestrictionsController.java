@@ -9,9 +9,11 @@ import com.positivity.price.internal.dto.RestrictionOverrideResponse;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.RestrictionEvaluationService;
 import com.positivity.price.service.RestrictionOverrideService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -62,7 +64,10 @@ public class PriceRestrictionsController {
     @ApiResponse(responseCode = "200", description = "Evaluation results per product.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "503", description = "Restriction evaluation service unavailable (commit path only).")
     @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

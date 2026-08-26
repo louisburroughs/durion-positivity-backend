@@ -131,7 +131,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '500':
           content:
@@ -255,9 +255,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/RestrictionRuleResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
       security:
       - bearerAuth:
@@ -428,7 +426,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionRuleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '404':
           content:
@@ -499,7 +497,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestrictionEvaluationResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Insufficient permissions.
         '503':
           content:
