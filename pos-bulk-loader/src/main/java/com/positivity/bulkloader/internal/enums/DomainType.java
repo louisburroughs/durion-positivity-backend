@@ -5,6 +5,7 @@ public enum DomainType {
     INVENTORY_STOCK_COUNT,
     LOCATION,
     CUSTOMER,
+    COMMERCIAL_CUSTOMER,
     PERSON,
     BASE_PRICE,
     VEHICLE,

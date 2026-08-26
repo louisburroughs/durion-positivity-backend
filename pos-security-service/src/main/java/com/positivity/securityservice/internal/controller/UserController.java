@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.CreateUserRequest;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
@@ -40,7 +41,8 @@ public class UserController {
                     every named role must already exist.
                     Required inputs: username, password, and roles, a non-empty array of existing role names.
                     Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
-                    Returns 400 when the username already exists or a named role is not found.
+                    Returns 409 when the username already exists, and 400 when a field is missing or a named \
+                    role is not found.
                     """)
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
@@ -61,13 +63,10 @@ public class UserController {
                                                                      "password":"Sup3rS3cret!",
                                                                      "roles":["SHOP_MGR"]}
                                                                     """)))
+                    @jakarta.validation.Valid
                     @RequestBody
-                    Map<String, Object> payload) {
-        String username = (String) payload.get("username");
-        String password = (String) payload.get("password");
-        List<?> rolesList = (List<?>) payload.get("roles");
-        Set<String> roles = rolesList.stream().map(Object::toString).collect(Collectors.toSet());
-        UserDto user = userService.createUser(username, password, roles);
+                    CreateUserRequest request) {
+        UserDto user = userService.createUser(request.username(), request.password(), request.roles());
         return ResponseEntity.status(201).body(user);
     }
 
@@ -185,6 +184,38 @@ public class UserController {
                     UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
+            operationId = "linkUserPerson",
+            summary = "Link a User Account to Its Canonical Person",
+            description = """
+                    Requests a PRIMARY link between a user account and a canonical person over the \
+                    people-contact command channel; the users.person_id projection updates asynchronously when \
+                    the confirming link fact arrives.
+                    Use this tool for operator provisioning of accounts created via createUser, which performs \
+                    no identity resolution; do not use selfRegisterUser, which resolves and links its own person.
+                    Preconditions: the caller must hold security:user:edit and the user id must exist; the \
+                    personId is not validated here — an unknown person is rejected by pos-people-contact when \
+                    it processes the command.
+                    Required inputs: the user id as a path parameter and personId in the body.
+                    Emits a SECURITY_USER_PERSON_LINK_REQUEST event and queues the link-create command.
+                    Returns 202 because the link lands asynchronously, and 404 when the user does not exist.
+                    """)
+    @ApiResponse(responseCode = "202", description = "Link command queued; projection updates asynchronously.")
+    @ApiResponse(responseCode = "404", description = "User not found.")
+    @EmitEvent(id = "SECURITY_USER_PERSON_LINK_REQUEST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:user:edit"})
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_EDIT + "')")
+    @PutMapping("/{id}/person-link")
+    public ResponseEntity<Void> linkUserPerson(
+            @PathVariable UUID id,
+            @jakarta.validation.Valid @RequestBody
+                    com.positivity.securityservice.internal.dto.LinkUserPersonRequest request) {
+        userService.requestPersonLink(id, request.personId());
+        return ResponseEntity.accepted().build();
     }
 
     @Operation(

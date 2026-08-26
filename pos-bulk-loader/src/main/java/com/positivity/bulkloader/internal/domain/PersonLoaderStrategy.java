@@ -18,7 +18,8 @@ public class PersonLoaderStrategy implements DomainLoaderStrategy<PersonRecord> 
     @Override
     public PersonRecord mapRow(@NonNull Map<String, String> row) {
         PersonRecord person = new PersonRecord();
-        person.setLegalName(row.get("legalName"));
+        person.setFirstName(row.get("firstName"));
+        person.setLastName(row.get("lastName"));
         person.setPreferredName(row.get("preferredName"));
         person.setEmployeeNumber(row.get("employeeNumber"));
         person.setHireDate(row.get("hireDate"));
@@ -30,8 +31,11 @@ public class PersonLoaderStrategy implements DomainLoaderStrategy<PersonRecord> 
     @Override
     public List<String> validate(@NonNull PersonRecord item) {
         List<String> errors = new ArrayList<>();
-        if (item.getLegalName() == null || item.getLegalName().isBlank()) {
-            errors.add("legalName is required");
+        if (item.getFirstName() == null || item.getFirstName().isBlank()) {
+            errors.add("firstName is required");
+        }
+        if (item.getLastName() == null || item.getLastName().isBlank()) {
+            errors.add("lastName is required");
         }
         if (item.getEmployeeNumber() == null || item.getEmployeeNumber().isBlank()) {
             errors.add("employeeNumber is required");

@@ -128,12 +128,12 @@ class LocationServiceTest {
                 .build();
 
         when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        // First create sees no existing row; the second sees the row the first
+        // persisted (the uq_location_normalized_name constraint backs this check).
+        when(locationRepository.existsByNormalizedName("main street")).thenReturn(false, true);
         when(locationRepository.saveAndFlush(any(Location.class)))
-                .thenReturn(savedLocation(UUID.fromString("00000000-0000-0000-0000-000000000001"), first, locationType))
-                .thenReturn(savedLocation(
-                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        duplicateNameDifferentCase,
-                        locationType));
+                .thenReturn(
+                        savedLocation(UUID.fromString("00000000-0000-0000-0000-000000000001"), first, locationType));
 
         locationService.createLocation(first);
 
@@ -144,6 +144,31 @@ class LocationServiceTest {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
                     assertThat(ex.getReason()).contains("LOCATION_NAME_TAKEN");
                 });
+    }
+
+    @Test
+    void createLocation_mapsPhoneNumberToEntityAndResponse() {
+        LocationRequestDTO request = validRequest("Phone Shop", "PH-001");
+        request.setPhoneNumber("+1-704-555-0142");
+        LocationType locationType = LocationType.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .name("Shop")
+                .build();
+
+        when(locationTypeRepository.findByNameIgnoreCase("Shop")).thenReturn(Optional.of(locationType));
+        when(locationRepository.existsByNormalizedName("phone shop")).thenReturn(false);
+        when(locationRepository.saveAndFlush(any(Location.class))).thenAnswer(invocation -> {
+            Location toSave = invocation.getArgument(0);
+            toSave.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            return toSave;
+        });
+
+        var response = locationService.createLocation(request);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(Location.class);
+        verify(locationRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getPhoneNumber()).isEqualTo("+1-704-555-0142");
+        assertThat(response.getPhoneNumber()).isEqualTo("+1-704-555-0142");
     }
 
     @Test

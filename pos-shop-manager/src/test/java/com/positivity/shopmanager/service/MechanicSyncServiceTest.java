@@ -317,7 +317,7 @@ class MechanicSyncServiceTest {
                 .eventId(null)
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId("HR-5003")
-                .version(1)
+                .version(1L)
                 .occurredAt(Instant.now(FIXED_CLOCK))
                 .build();
 
@@ -435,7 +435,7 @@ class MechanicSyncServiceTest {
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId(personId)
-                .version(1)
+                .version(1L)
                 .occurredAt(Instant.now(FIXED_CLOCK))
                 .payload(null)
                 .build();
@@ -494,8 +494,9 @@ class MechanicSyncServiceTest {
     /**
      * Update path, null payload: a MECHANIC_UPSERTED event for an EXISTING
      * mechanic with a null payload must NOT touch firstName/lastName/hireDate,
-     * but must still bump status/version/lastSyncedAt and run the replace-set
-     * skills step (deleteAll with no re-insert, since there is no skills source).
+     * must bump status/version/lastSyncedAt, and must leave the mechanic's
+     * skill set alone — the people.events.v1 feed never carries skills, so an
+     * event without a skills source is "not sent", not "clear".
      */
     @Test
     void ac1_mechanicUpserted_existingPerson_nullPayload_preservesNameAndHireDate() {
@@ -506,7 +507,7 @@ class MechanicSyncServiceTest {
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId(personId)
-                .version(4)
+                .version(4L)
                 .occurredAt(Instant.now(FIXED_CLOCK))
                 .payload(null)
                 .build();
@@ -527,8 +528,8 @@ class MechanicSyncServiceTest {
         assertThat(captor.getValue().getStatus()).isEqualTo(MechanicStatus.ACTIVE);
         assertThat(captor.getValue().getVersion()).isEqualTo(4);
 
-        // Assert – replace-set still runs its delete, but nothing to re-insert
-        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+        // Assert – no skills source means the skill set is preserved untouched
+        verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
         verify(mechanicSkillRepository, never()).saveAll(any());
     }
 
@@ -556,7 +557,7 @@ class MechanicSyncServiceTest {
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId(personId)
-                .version(4)
+                .version(4L)
                 .occurredAt(Instant.now(FIXED_CLOCK))
                 .payload(payload)
                 .build();
@@ -578,12 +579,12 @@ class MechanicSyncServiceTest {
 
     /**
      * Upsert with payload present but no skills source (skills list null, as
-     * opposed to an empty list): the replace-set step must still delete existing
-     * skills for idempotent re-delivery, but must not attempt to save a skill
-     * list built from a null source.
+     * opposed to an empty list): a null skills list means "not sent" and must
+     * preserve the mechanic's current skill set; only an explicit list (empty
+     * included) replaces it.
      */
     @Test
-    void ac1_mechanicUpserted_payloadPresentSkillsNull_deletesButDoesNotSaveSkills() {
+    void ac1_mechanicUpserted_payloadPresentSkillsNull_preservesSkills() {
         // Arrange
         String personId = "HR-UPD-NOSKILLS-001";
         Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
@@ -597,7 +598,7 @@ class MechanicSyncServiceTest {
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
                 .personId(personId)
-                .version(4)
+                .version(4L)
                 .occurredAt(Instant.now(FIXED_CLOCK))
                 .payload(payload)
                 .build();
@@ -609,11 +610,11 @@ class MechanicSyncServiceTest {
         // Act
         mechanicSyncService.processHrEvent(event);
 
-        // Assert – hireDate from payload applied, but skills step is delete-only
+        // Assert – hireDate from payload applied, skills untouched
         ArgumentCaptor<Mechanic> captor = ArgumentCaptor.forClass(Mechanic.class);
         verify(mechanicRepository).save(captor.capture());
         assertThat(captor.getValue().getHireDate()).isEqualTo(LocalDate.of(2023, 6, 1));
-        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+        verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
         verify(mechanicSkillRepository, never()).saveAll(any());
     }
 
@@ -635,7 +636,7 @@ class MechanicSyncServiceTest {
                 .eventId(eventId)
                 .eventType(null)
                 .personId(personId)
-                .version(1)
+                .version(1L)
                 .occurredAt(Instant.now(FIXED_CLOCK))
                 .build();
 
@@ -652,10 +653,60 @@ class MechanicSyncServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // replaceSkills — operator API entry riding the feed path
+    // -------------------------------------------------------------------------
+
+    /**
+     * replaceSkills routes through processHrEvent as a MECHANIC_SKILLS_UPDATED
+     * event (single write path), replacing the skill set and bumping
+     * version/lastSyncedAt to the synthetic event's now-millis stamp.
+     */
+    @Test
+    void replaceSkills_existingMechanic_replacesViaFeedPath() {
+        String personId = "01960011-0000-7000-8000-000000000005";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mechanicSyncService.replaceSkills(
+                personId,
+                List.of(HrMechanicEvent.Payload.Skill.builder()
+                        .skillCode("T4-BRAKES")
+                        .proficiencyLevel(4)
+                        .build()));
+
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<MechanicSkill>> skillCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(mechanicSkillRepository).saveAll(skillCaptor.capture());
+        assertThat(skillCaptor.getValue()).hasSize(1);
+        assertThat(existing.getVersion()).isEqualTo(Instant.now(FIXED_CLOCK).toEpochMilli());
+        verify(hrIntegrationLogRepository).save(any());
+        verify(mechanicAuditLogRepository).save(any());
+    }
+
+    /** replaceSkills must 404 where the feed path deliberately no-ops. */
+    @Test
+    void replaceSkills_unknownMechanic_throwsNotFound() {
+        when(mechanicRepository.findByPersonId("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(
+                        "missing",
+                        List.of(HrMechanicEvent.Payload.Skill.builder()
+                                .skillCode("T4-BRAKES")
+                                .proficiencyLevel(4)
+                                .build())))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Mechanic not found");
+        verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
+    }
+
+    // -------------------------------------------------------------------------
     // Fixture helpers
     // -------------------------------------------------------------------------
 
-    private HrMechanicEvent buildUpsertEvent(String personId, Integer version, List<SkillPayload> skills) {
+    private HrMechanicEvent buildUpsertEvent(String personId, long version, List<SkillPayload> skills) {
         return HrMechanicEvent.builder()
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_UPSERTED)
@@ -666,7 +717,7 @@ class MechanicSyncServiceTest {
                 .build();
     }
 
-    private HrMechanicEvent buildDeactivateEvent(String personId, Integer version) {
+    private HrMechanicEvent buildDeactivateEvent(String personId, long version) {
         return HrMechanicEvent.builder()
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_DEACTIVATED)
@@ -676,7 +727,7 @@ class MechanicSyncServiceTest {
                 .build();
     }
 
-    private HrMechanicEvent buildSkillsUpdatedEvent(String personId, Integer version, List<SkillPayload> skills) {
+    private HrMechanicEvent buildSkillsUpdatedEvent(String personId, long version, List<SkillPayload> skills) {
         return HrMechanicEvent.builder()
                 .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .eventType(HrEventType.MECHANIC_SKILLS_UPDATED)

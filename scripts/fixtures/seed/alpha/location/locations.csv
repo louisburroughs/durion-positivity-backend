@@ -1,0 +1,6 @@
+name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone
+Charlotte Main Service Center,CLT-MAIN-001,100 Trade Street,,Charlotte,NC,28202,US,,true,Service Center,America/New_York
+South Charlotte Service Center,CLT-SOUTH-001,9801 Rea Road,,Charlotte,NC,28277,US,,true,Service Center,America/New_York
+North Charlotte Service Center,CLT-NORTH-001,1 Gilead Road,,Huntersville,NC,28078,US,,true,Service Center,America/New_York
+Charlotte Mobile Operations Hub,CLT-MOB-HUB-001,,,Charlotte,NC,28206,US,,true,Mobile Unit Base,America/New_York
+Durion Corporate Headquarters,CORP-HQ-001,200 South College Street,,Charlotte,NC,28202,US,,true,Corporate HQ,America/New_York

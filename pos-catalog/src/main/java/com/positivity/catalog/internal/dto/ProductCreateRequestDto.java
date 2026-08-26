@@ -54,4 +54,16 @@ public class ProductCreateRequestDto {
             example = "{\"color\":\"black\"}",
             requiredMode = NOT_REQUIRED)
     private String attributes;
+
+    @Schema(description = "Manufacturer display name", example = "Bosch", requiredMode = NOT_REQUIRED)
+    private String manufacturerName;
+
+    @Schema(description = "Manufacturer brand", example = "Bosch Blue", requiredMode = NOT_REQUIRED)
+    private String manufacturerBrand;
+
+    @Schema(description = "ISO country of origin", example = "DE", requiredMode = NOT_REQUIRED)
+    private String countryOfOrigin;
+
+    @Schema(description = "Product type classification", example = "PART", requiredMode = NOT_REQUIRED)
+    private String type;
 }

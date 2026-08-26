@@ -27,6 +27,10 @@ public class CatalogLoaderStrategy implements DomainLoaderStrategy<CatalogProduc
         catalogProduct.setSubcategoryName(row.get("subcategoryName"));
         catalogProduct.setMpn(row.get("mpn"));
         catalogProduct.setUnitOfMeasure(row.get("unitOfMeasure"));
+        catalogProduct.setManufacturerName(row.get("manufacturerName"));
+        catalogProduct.setManufacturerBrand(row.get("manufacturerBrand"));
+        catalogProduct.setCountryOfOrigin(row.get("countryOfOrigin"));
+        catalogProduct.setType(row.get("type"));
         String priceStr = row.get("price");
         if (priceStr != null && !priceStr.isBlank()) {
             try {

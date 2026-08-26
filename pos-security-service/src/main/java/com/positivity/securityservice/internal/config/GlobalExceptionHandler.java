@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -379,6 +380,22 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(errorResponse("DUPLICATE_ROLE_NAME", ex.getMessage(), HttpStatus.CONFLICT, correlationId));
+    }
+
+    /**
+     * Handles DuplicateUsernameException (operator user provisioning against an
+     * existing username) → 409 Conflict, matching self-registration's conflict
+     * semantics for an already-taken account.
+     */
+    @ExceptionHandler(DuplicateUsernameException.class)
+    public ResponseEntity<ApiError> handleDuplicateUsernameException(
+            DuplicateUsernameException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Duplicate username (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(errorResponse("USER_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT, correlationId));
     }
 
     /**
