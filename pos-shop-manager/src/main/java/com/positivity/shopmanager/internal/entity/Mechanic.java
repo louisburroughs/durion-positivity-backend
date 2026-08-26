@@ -55,8 +55,10 @@ public class Mechanic {
     @Column(name = "termination_date")
     private LocalDate terminationDate;
 
+    // HR-supplied monotonic sync marker (people.events.v1 aggregateVersion is epoch millis),
+    // not a JPA optimistic lock.
     @Column(name = "version")
-    private int version;
+    private long version;
 
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;

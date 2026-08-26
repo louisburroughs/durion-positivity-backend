@@ -59,6 +59,12 @@ public class LocationResponseDTO {
     @Schema(description = "Mailing address of the location", example = "PO Box 100", requiredMode = NOT_REQUIRED)
     private String mailingAddress;
 
+    @Schema(
+            description = "Primary phone number for the location",
+            example = "+1-217-555-0100",
+            requiredMode = NOT_REQUIRED)
+    private String phoneNumber;
+
     @Schema(description = "Whether the location is active", example = "true", requiredMode = REQUIRED)
     private boolean active;
 

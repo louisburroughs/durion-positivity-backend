@@ -81,6 +81,9 @@ class RuleBasedContentDetectionServiceImplTest {
                 .containsEntry("uom", "unitOfMeasure")
                 .containsEntry("list_price", "price");
         // Cost/fee columns that have no catalog target must not be mapped.
+        assertThat(mappings)
+                .containsEntry("brand", "manufacturerBrand")
+                .containsEntry("country_of_origin", "countryOfOrigin");
         assertThat(mappings).doesNotContainKeys("dealer_cost", "map_price", "core_charge", "vendor_id", "notes");
     }
 
@@ -120,5 +123,59 @@ class RuleBasedContentDetectionServiceImplTest {
                 service.suggestMappings(List.of("sku", "supplier_sku", "part_number"), DomainType.CATALOG_PRODUCT);
 
         assertThat(mappings).containsExactly(Map.entry("sku", "sku"));
+    }
+
+    @Test
+    void suggestMappings_commercialHeaders_mapsCommercialCustomerFields() {
+        Map<String, String> mappings = service.suggestMappings(
+                List.of(
+                        "legal_name",
+                        "dba",
+                        "tax_id",
+                        "billing_terms",
+                        "contact_first_name",
+                        "contact_last_name",
+                        "contact_email",
+                        "contact_phone"),
+                DomainType.COMMERCIAL_CUSTOMER);
+
+        assertThat(mappings)
+                .containsEntry("legal_name", "legalName")
+                .containsEntry("dba", "displayName")
+                .containsEntry("tax_id", "taxId")
+                .containsEntry("billing_terms", "billingTermsId")
+                .containsEntry("contact_first_name", "contactFirstName")
+                .containsEntry("contact_last_name", "contactLastName")
+                .containsEntry("contact_email", "contactEmail")
+                .containsEntry("contact_phone", "contactPhone");
+    }
+
+    @Test
+    void suggestMappings_locationHeaders_mapsLocationFields() {
+        Map<String, String> mappings = service.suggestMappings(
+                List.of(
+                        "store_name",
+                        "store_code",
+                        "street_address",
+                        "city",
+                        "state",
+                        "zip",
+                        "country_code",
+                        "phone",
+                        "store_type",
+                        "time_zone"),
+                DomainType.LOCATION);
+
+        assertThat(mappings)
+                .containsEntry("store_name", "name")
+                .containsEntry("store_code", "code")
+                .containsEntry("street_address", "addressLine1")
+                .containsEntry("city", "city")
+                .containsEntry("state", "stateOrProvince")
+                .containsEntry("zip", "postalCode")
+                .containsEntry("country_code", "countryCode")
+                .containsEntry("phone", "phoneNumber")
+                .containsEntry("store_type", "locationTypeName")
+                .containsEntry("time_zone", "timezone");
     }
 }

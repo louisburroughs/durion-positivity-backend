@@ -37,7 +37,7 @@ public class HrMechanicEvent {
     private String personId;
 
     @Schema(description = "Monotonic version of the mechanic record", example = "3", requiredMode = NOT_REQUIRED)
-    private Integer version;
+    private Long version;
 
     @Schema(
             description = "Instant the event occurred in UTC (ISO-8601)",

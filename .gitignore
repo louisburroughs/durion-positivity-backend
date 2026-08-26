@@ -86,3 +86,6 @@ repomix-output.*
 # Python bytecode (e.g. scripts/eval_live.py cache)
 __pycache__/
 *.pyc
+
+# Local credentials written by scripts/seed-alpha.py — never commit
+alpha-seed-credentials.csv

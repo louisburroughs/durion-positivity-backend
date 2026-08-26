@@ -32,7 +32,7 @@
     {
       "fixture_id": "rag-lexical-inventory-codes-receiving-transfer",
       "query": "RECEIVED_SHORT LOST_IN_TRANSIT",
-      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["inventory:purchase_order:view"] },
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["order:purchase_order:view"] },
       "expected": { "doc_ids": ["inventory.codes"], "k": 5 },
       "rag_scope": "inventory",
       "tags": ["positive", "lexical", "exact-code", "bare-token"],

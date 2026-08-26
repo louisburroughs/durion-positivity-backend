@@ -49,7 +49,18 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     "zip",
                     "timezone",
                     "code",
-                    "operating_hours"));
+                    "operating_hours"),
+            DomainType.COMMERCIAL_CUSTOMER,
+            Set.of(
+                    "legal_name",
+                    "company",
+                    "company_name",
+                    "business_name",
+                    "dba",
+                    "tax_id",
+                    "ein",
+                    "billing_terms",
+                    "account_name"));
 
     @Override
     public ContentDetectionResult detect(@NonNull List<String> columnHeaders, @NonNull List<List<String>> sampleRows) {
@@ -140,6 +151,10 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                             "mfg_part_no",
                             "mfg_part_number" -> "mpn";
                     case "uom", "unit_of_measure", "unitofmeasure", "sell_uom" -> "unitOfMeasure";
+                    case "manufacturer", "manufacturer_name", "manufacturername", "mfr", "mfg" -> "manufacturerName";
+                    case "brand", "manufacturer_brand", "manufacturerbrand" -> "manufacturerBrand";
+                    case "country", "country_of_origin", "countryoforigin", "origin" -> "countryOfOrigin";
+                    case "type", "product_type", "item_type" -> "type";
                     default -> null;
                 };
             case INVENTORY_STOCK_COUNT ->
@@ -148,6 +163,18 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     case "qty", QUANTITY_FIELD, "on_hand", "quantity_on_hand" -> QUANTITY_FIELD;
                     case "reason_code", "reason" -> "reasonCode";
                     case "uom", "unit_of_measure" -> "unitOfMeasure";
+                    default -> null;
+                };
+            case COMMERCIAL_CUSTOMER ->
+                switch (normalized) {
+                    case "legal_name", "company", "company_name", "business_name", "account_name" -> "legalName";
+                    case "display_name", "dba", "trade_name" -> "displayName";
+                    case "tax_id", "ein", "tax_number" -> "taxId";
+                    case "billing_terms", "terms", "payment_terms" -> "billingTermsId";
+                    case "contact_first_name", "first_name" -> "contactFirstName";
+                    case "contact_last_name", "last_name" -> "contactLastName";
+                    case "contact_email", "email" -> "contactEmail";
+                    case "contact_phone", "phone", "phone_number" -> "contactPhone";
                     default -> null;
                 };
             case LOCATION ->
@@ -161,6 +188,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     case "country", "country_code" -> "countryCode";
                     case "phone", "phone_number", "telephone" -> "phoneNumber";
                     case "type", "store_type", "location_type" -> "locationTypeName";
+                    case "timezone", "time_zone", "tz" -> "timezone";
                     default -> null;
                 };
             default -> null;

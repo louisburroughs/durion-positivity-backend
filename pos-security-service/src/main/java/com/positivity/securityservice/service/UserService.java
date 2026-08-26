@@ -22,5 +22,12 @@ public interface UserService {
 
     UserDto assignRoles(String username, Set<String> roleNames);
 
+    /**
+     * Request a user→person link via the people-contact command channel (ADR-0043 §2).
+     * The {@code users.person_id} projection updates when the confirming link fact
+     * arrives; callers see it asynchronously. Throws when the user does not exist.
+     */
+    void requestPersonLink(UUID userId, UUID personId);
+
     UserDto updateUser(UUID id, UserUpdateRequest request);
 }

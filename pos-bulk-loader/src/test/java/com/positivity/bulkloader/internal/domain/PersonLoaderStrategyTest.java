@@ -17,36 +17,39 @@ class PersonLoaderStrategyTest {
     @Test
     void mapRow_populatesAllFields() {
         Map<String, String> row = Map.of(
-                "legalName", "John Smith",
+                "firstName", "John",
+                "lastName", "Smith",
                 "preferredName", "Johnny",
-                "employeeNumber", "EMP-001",
+                "employeeNumber", "EMP-0001",
                 "hireDate", "2024-01-15",
-                "primaryEmail", "john@example.com",
-                "primaryPhone", "555-9999");
+                "primaryEmail", "john.smith@example.com",
+                "primaryPhone", "555-1234");
 
         PersonRecord result = strategy.mapRow(row);
 
-        assertThat(result.getLegalName()).isEqualTo("John Smith");
+        assertThat(result.getFirstName()).isEqualTo("John");
+        assertThat(result.getLastName()).isEqualTo("Smith");
         assertThat(result.getPreferredName()).isEqualTo("Johnny");
-        assertThat(result.getEmployeeNumber()).isEqualTo("EMP-001");
+        assertThat(result.getEmployeeNumber()).isEqualTo("EMP-0001");
         assertThat(result.getHireDate()).isEqualTo("2024-01-15");
-        assertThat(result.getPrimaryEmail()).isEqualTo("john@example.com");
-        assertThat(result.getPrimaryPhone()).isEqualTo("555-9999");
+        assertThat(result.getPrimaryEmail()).isEqualTo("john.smith@example.com");
+        assertThat(result.getPrimaryPhone()).isEqualTo("555-1234");
     }
 
     @Test
     void mapRow_handlesMinimalRow() {
         Map<String, String> row = Map.of(
-                "legalName", "Jane Doe",
-                "employeeNumber", "EMP-002",
-                "hireDate", "2025-03-01");
+                "firstName", "Jane",
+                "lastName", "Doe",
+                "employeeNumber", "EMP-0002");
 
         PersonRecord result = strategy.mapRow(row);
 
-        assertThat(result.getLegalName()).isEqualTo("Jane Doe");
-        assertThat(result.getEmployeeNumber()).isEqualTo("EMP-002");
-        assertThat(result.getHireDate()).isEqualTo("2025-03-01");
+        assertThat(result.getFirstName()).isEqualTo("Jane");
+        assertThat(result.getLastName()).isEqualTo("Doe");
+        assertThat(result.getEmployeeNumber()).isEqualTo("EMP-0002");
         assertThat(result.getPreferredName()).isNull();
+        assertThat(result.getHireDate()).isNull();
         assertThat(result.getPrimaryEmail()).isNull();
         assertThat(result.getPrimaryPhone()).isNull();
     }
@@ -56,8 +59,9 @@ class PersonLoaderStrategyTest {
     @Test
     void validate_passesWhenRequiredFieldsPresent() {
         PersonRecord record = new PersonRecord();
-        record.setLegalName("Alice Brown");
-        record.setEmployeeNumber("EMP-003");
+        record.setFirstName("Alice");
+        record.setLastName("Brown");
+        record.setEmployeeNumber("EMP-0003");
 
         List<String> errors = strategy.validate(record);
 
@@ -65,20 +69,34 @@ class PersonLoaderStrategyTest {
     }
 
     @Test
-    void validate_failsWhenLegalNameBlank() {
+    void validate_failsWhenFirstNameBlank() {
         PersonRecord record = new PersonRecord();
-        record.setLegalName("  ");
-        record.setEmployeeNumber("EMP-004");
+        record.setFirstName("  ");
+        record.setLastName("Brown");
+        record.setEmployeeNumber("EMP-0003");
 
         List<String> errors = strategy.validate(record);
 
-        assertThat(errors).anyMatch(e -> e.contains("legalName"));
+        assertThat(errors).anyMatch(e -> e.contains("firstName"));
+    }
+
+    @Test
+    void validate_failsWhenLastNameBlank() {
+        PersonRecord record = new PersonRecord();
+        record.setFirstName("Alice");
+        record.setLastName("");
+        record.setEmployeeNumber("EMP-0003");
+
+        List<String> errors = strategy.validate(record);
+
+        assertThat(errors).anyMatch(e -> e.contains("lastName"));
     }
 
     @Test
     void validate_failsWhenEmployeeNumberBlank() {
         PersonRecord record = new PersonRecord();
-        record.setLegalName("Alice Brown");
+        record.setFirstName("Alice");
+        record.setLastName("Brown");
         record.setEmployeeNumber("");
 
         List<String> errors = strategy.validate(record);

@@ -100,6 +100,9 @@ class ReplicaAndManifestListenerContractTest {
     private ExtPersonReplicaRepository personRepository;
 
     @Mock
+    private com.positivity.shopmanager.service.MechanicSyncService mechanicSyncService;
+
+    @Mock
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @Mock
@@ -177,6 +180,8 @@ class ReplicaAndManifestListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 assignmentRepository,
+                                mechanicSyncService,
+                                personRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(assignmentRepository)

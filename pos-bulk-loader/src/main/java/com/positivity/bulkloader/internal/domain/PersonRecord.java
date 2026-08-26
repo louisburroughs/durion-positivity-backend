@@ -5,7 +5,8 @@ import lombok.Data;
 @Data
 public class PersonRecord {
 
-    private String legalName;
+    private String firstName;
+    private String lastName;
     private String preferredName;
     private String employeeNumber;
     private String hireDate;

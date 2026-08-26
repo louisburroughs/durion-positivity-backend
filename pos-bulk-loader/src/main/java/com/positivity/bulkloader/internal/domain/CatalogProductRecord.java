@@ -15,4 +15,8 @@ public class CatalogProductRecord {
     private BigDecimal price;
     private String mpn;
     private String unitOfMeasure;
+    private String manufacturerName;
+    private String manufacturerBrand;
+    private String countryOfOrigin;
+    private String type;
 }

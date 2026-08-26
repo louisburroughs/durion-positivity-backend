@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -38,7 +39,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserDto createUser(String username, String password, Set<String> roleNames) {
         if (userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
+            throw new DuplicateUsernameException("Username already exists");
         }
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {
@@ -81,6 +82,21 @@ public class UserServiceImpl implements UserService {
                         new com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1(
                                 user.getUsername())));
         userRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional
+    public void requestPersonLink(UUID userId, UUID personId) {
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new com.positivity.securityservice.internal.exception.UserNotFoundException(
+                        "User not found: " + userId));
+        // The link is owned by pos-people-contact (amended ADR-0043 §2): request it over the
+        // command channel; users.person_id is a projection written only by the link-fact
+        // consumer, so this method never touches it directly.
+        peopleContactCommandEmitter.requestLinkCreate(
+                new com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1(
+                        personId, user.getUsername(), "PRIMARY", "Linked by operator"));
     }
 
     @Override

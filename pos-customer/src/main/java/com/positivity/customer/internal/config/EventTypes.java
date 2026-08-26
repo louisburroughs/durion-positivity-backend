@@ -14,11 +14,11 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the customer module.
-     * Total: 37 event types.
+     * Total: 81 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
-                // CustomerController - 4 events
+                // CustomerController - 5 events
                 EventTypeRegistration.write("CUSTOMER_CUSTOMER_CREATE", "Create a new customer")
                         .build(),
                 EventTypeRegistration.write("CUSTOMER_CUSTOMER_UPDATE", "Update an existing customer")
@@ -26,6 +26,9 @@ public final class EventTypes {
                 EventTypeRegistration.write("CUSTOMER_CUSTOMER_DELETE", "Delete an existing customer")
                         .build(),
                 EventTypeRegistration.write("CUSTOMER_BULK_INGEST", "Bulk import customer records")
+                        .build(),
+                EventTypeRegistration.write("CUSTOMER_COMMERCIAL_BULK_INGEST", "Bulk import commercial account records")
+                        .apiVersion("1")
                         .build(),
 
                 // CrmAccountsController - 11 events

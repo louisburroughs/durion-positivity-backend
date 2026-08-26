@@ -74,10 +74,6 @@ public class LocationServiceImpl implements LocationService {
     private final LocationFactPublisher locationFactPublisher;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
-    // Issue CAP-136 #78: lightweight process-level guard used with repository
-    // checks.
-    private final Set<String> recentNormalizedNames = new HashSet<>();
-
     @Transactional(readOnly = true)
     public List<LocationResponseDTO> getAllLocationsDto() {
         return locationRepository.findAll().stream()
@@ -126,16 +122,16 @@ public class LocationServiceImpl implements LocationService {
         validateTimezone(request.getTimezone());
         validateOperatingHours(request.getOperatingHours());
         String normalizedName = normalizeName(request.getName());
-        // Issue CAP-136 #78: conflict on duplicate name.
-        if (locationRepository.existsByNormalizedName(normalizedName)
-                || recentNormalizedNames.contains(normalizedName)) {
+        // Issue CAP-136 #78: conflict on duplicate name. The repository check gives a
+        // friendly fast path; the uq_location_normalized_name constraint (V7) is the
+        // real guard and races surface via toLocationConflictException.
+        if (locationRepository.existsByNormalizedName(normalizedName)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, LOCATION_NAME_TAKEN);
         }
 
         Location location = new Location();
         applyLocationRequest(location, request);
         Location saved = saveLocationInternal(location);
-        recentNormalizedNames.add(normalizedName);
         return toLocationResponse(saved);
     }
 
@@ -154,7 +150,6 @@ public class LocationServiceImpl implements LocationService {
         }
         applyLocationRequest(location, request);
         Location updated = saveLocationInternal(location);
-        recentNormalizedNames.add(normalizedName);
         return Optional.of(toLocationResponse(updated));
     }
 
@@ -181,7 +176,6 @@ public class LocationServiceImpl implements LocationService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, LOCATION_NAME_TAKEN);
             }
             location.setName(patch.getName());
-            recentNormalizedNames.add(normalizedName);
         }
 
         if (patch.getTimezone() != null && !patch.getTimezone().isBlank()) {
@@ -552,6 +546,7 @@ public class LocationServiceImpl implements LocationService {
         location.setPostalCode(request.getPostalCode());
         location.setCountry(request.getCountry());
         location.setMailingAddress(request.getMailingAddress());
+        location.setPhoneNumber(request.getPhoneNumber());
         if (request.getActive() != null) {
             location.setActive(request.getActive());
         } else if (location.getId() == null) {
@@ -686,6 +681,7 @@ public class LocationServiceImpl implements LocationService {
                 .postalCode(location.getPostalCode())
                 .country(location.getCountry())
                 .mailingAddress(location.getMailingAddress())
+                .phoneNumber(location.getPhoneNumber())
                 .active(location.isActive())
                 .responsiblePersonId(location.getResponsiblePersonId())
                 .type(toLocationTypeDto(location.getType()))

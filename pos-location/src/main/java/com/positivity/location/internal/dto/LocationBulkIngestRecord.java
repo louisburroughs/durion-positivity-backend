@@ -49,6 +49,9 @@ public class LocationBulkIngestRecord {
     @Schema(description = "Whether the location is active", example = "true", requiredMode = NOT_REQUIRED)
     private Boolean active;
 
+    @Schema(description = "IANA timezone of the location", example = "America/New_York", requiredMode = NOT_REQUIRED)
+    private String timezone;
+
     @Schema(
             description = "Name of the location type to resolve during ingest",
             example = "STORE",

@@ -36,6 +36,12 @@
       "defaultValue": "customer"
     },
     {
+      "name": "pos.location.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service id for bulk-ingest calls to pos-location (load-balanced, #641).",
+      "defaultValue": "location"
+    },
+    {
       "name": "pos.people.service-id",
       "type": "java.lang.String",
       "description": "Eureka service id for bulk-ingest calls to pos-people (load-balanced, #641).",

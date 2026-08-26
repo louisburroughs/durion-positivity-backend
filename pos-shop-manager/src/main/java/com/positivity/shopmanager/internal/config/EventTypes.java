@@ -37,6 +37,9 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "SHOP_MOBILE_UNIT_DELETE", "Delete a mobile unit from a specific shop location")
                         .build(),
+                EventTypeRegistration.write("SHOP_MECHANIC_SKILLS_REPLACE", "Replace a mechanic's skill set")
+                        .apiVersion("1")
+                        .build(),
 
                 // AppointmentsController - 5 events
                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATE", "Create an appointment")

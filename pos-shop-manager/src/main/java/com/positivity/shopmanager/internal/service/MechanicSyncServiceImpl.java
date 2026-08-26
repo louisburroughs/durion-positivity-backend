@@ -96,15 +96,21 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
 
     /**
      * Applies name/hireDate from an HR payload onto a mechanic, if present. A missing payload
-     * leaves the mechanic untouched; a payload with no hireDate leaves the existing hireDate
-     * untouched (a partial HR update must not clear a field it didn't send).
+     * leaves the mechanic untouched, and each null field leaves the existing value untouched —
+     * a partial HR update must not clear a field it didn't send. The people.events.v1 feed
+     * (PeopleEventsListener) never carries names it didn't resolve, so field-level preservation
+     * is what keeps replays from erasing mechanic data.
      */
     private void applyPayloadFields(Mechanic mechanic, HrMechanicEvent.Payload payload) {
         if (payload == null) {
             return;
         }
-        mechanic.setFirstName(payload.getFirstName());
-        mechanic.setLastName(payload.getLastName());
+        if (payload.getFirstName() != null) {
+            mechanic.setFirstName(payload.getFirstName());
+        }
+        if (payload.getLastName() != null) {
+            mechanic.setLastName(payload.getLastName());
+        }
         if (payload.getHireDate() != null) {
             mechanic.setHireDate(payload.getHireDate());
         }
@@ -123,12 +129,16 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
                 .build();
     }
 
-    /** Deletes the mechanic's current skill set and re-inserts from the event's payload, if any. */
+    /**
+     * Replace-set semantics scoped to events that actually carry skills: a null skills list
+     * means "not sent" and preserves the mechanic's current skill set (the people.events.v1
+     * feed never carries skills), while an explicit empty list clears it.
+     */
     private void replaceMechanicSkills(Mechanic saved, HrMechanicEvent event) {
-        mechanicSkillRepository.deleteAllByMechanicId(saved.getMechanicId());
         if (event.getPayload() == null || event.getPayload().getSkills() == null) {
             return;
         }
+        mechanicSkillRepository.deleteAllByMechanicId(saved.getMechanicId());
         List<MechanicSkill> skills = event.getPayload().getSkills().stream()
                 .map(s -> MechanicSkill.builder()
                         .mechanic(saved)
@@ -167,17 +177,7 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         existing.setLastSyncedAt(Instant.now(clock));
         Mechanic saved = mechanicRepository.save(existing);
 
-        mechanicSkillRepository.deleteAllByMechanicId(saved.getMechanicId());
-        if (event.getPayload() != null && event.getPayload().getSkills() != null) {
-            List<MechanicSkill> skills = event.getPayload().getSkills().stream()
-                    .map(s -> MechanicSkill.builder()
-                            .mechanic(saved)
-                            .skillCode(s.getSkillCode())
-                            .proficiencyLevel(s.getProficiencyLevel())
-                            .build())
-                    .toList();
-            mechanicSkillRepository.saveAll(skills);
-        }
+        replaceMechanicSkills(saved, event);
 
         persistAuditLog(event, beforeState, saved.toString());
         persistIntegrationLog(event);
@@ -192,6 +192,30 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         // A follow-up story will wire the HR client and implement safe reconciliation.
         throw new UnsupportedOperationException(
                 "reconcileFromHr() requires an HR client integration — not yet implemented");
+    }
+
+    /**
+     * Operator skills edits ride the same HR-feed path as everything else that touches
+     * mechanic rows: a synthetic MECHANIC_SKILLS_UPDATED event stamped with a now-millis
+     * version, so dedupe, the stale guard, and both logs apply uniformly and ordering
+     * against in-flight feed events is last-write-wins by timestamp. The existence
+     * pre-check gives the API a 404 where the feed path deliberately no-ops.
+     */
+    @Override
+    @Transactional
+    public void replaceSkills(@NonNull String personId, @NonNull List<HrMechanicEvent.Payload.Skill> skills) {
+        if (mechanicRepository.findByPersonId(personId).isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.NOT_FOUND, "Mechanic not found for person " + personId);
+        }
+        processHrEvent(HrMechanicEvent.builder()
+                .eventId(com.positivity.shared.id.UUIDv7Generator.generate())
+                .eventType(com.positivity.shopmanager.service.enums.HrEventType.MECHANIC_SKILLS_UPDATED)
+                .personId(personId)
+                .version(Instant.now(clock).toEpochMilli())
+                .occurredAt(Instant.now(clock))
+                .payload(HrMechanicEvent.Payload.builder().skills(skills).build())
+                .build());
     }
 
     private void persistAuditLog(HrMechanicEvent event, String beforeState, String afterState) {
