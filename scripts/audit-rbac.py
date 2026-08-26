@@ -46,14 +46,25 @@ PERM_RE = r"[a-z][a-zA-Z0-9_.-]*:[a-zA-Z0-9_.:-]+"
 # ---- constants -> codes -----------------------------------------------------
 const_to_code = {}
 java_files = list(root.glob("pos-*/src/main/java/**/*.java"))
+file_bodies = {f: f.read_text() for f in java_files}
 for f in java_files:
-    for m in re.finditer(r'static final String (\w+)\s*=\s*"(' + PERM_RE + r')"', f.read_text()):
+    for m in re.finditer(r'static final String (\w+)\s*=\s*"(' + PERM_RE + r')"', file_bodies[f]):
         const_to_code.setdefault(m.group(1), set()).add(m.group(2))
+
+# Second pass: alias constants that reference another constant instead of a string
+# literal directly (e.g. `PutawayPermissions.OVERRIDE_LOCATION_CAPACITY =
+# InventoryPermissionRegistry.PUTAWAY_OVERRIDE_LOCATION_CAPACITY;`). One hop is
+# enough here -- the referenced name is already fully resolved by the pass above.
+for f in java_files:
+    for m in re.finditer(r'static final String (\w+)\s*=\s*(?:[A-Za-z_]\w*\.)?(\w+)\s*;', file_bodies[f]):
+        name, ref = m.group(1), m.group(2)
+        if ref in const_to_code:
+            const_to_code.setdefault(name, set()).update(const_to_code[ref])
 
 # ---- C. enforced in code ----------------------------------------------------
 enforced = collections.defaultdict(set)  # perm -> set of file:line
 for f in java_files:
-    body = f.read_text()
+    body = file_bodies[f]
     for m in re.finditer(r'@(?:Pre|Post)Authorize', body):
         chunk = body[m.start():m.start() + 600]
         line = body[:m.start()].count("\n") + 1
@@ -63,9 +74,13 @@ for f in java_files:
             for code in const_to_code.get(cst, ()):
                 enforced[code].add(f"{f}:{line}")
     # non-annotation enforcement: hasAuthority("..."), authorities.contains(...),
-    # including constant-reference arguments
+    # and any other permission-typed call -- .contains(...) plus any call whose
+    # name contains "Permission" or "Authority" (hasAuthority, hasAnyAuthority,
+    # hasPermission, requirePermission, checkPermission, and private helpers like
+    # enforceOverridePermission(...) all match), including constant-reference
+    # arguments.
     for m in re.finditer(
-        r'(?:\.contains|hasAuthority|hasAnyAuthority|hasPermission|requirePermission|checkPermission)'
+        r'(?:\.contains|\w*(?:Permission|Authority)\w*)'
         r'\(\s*([^)]{0,200})\)', body):
         arg = m.group(1)
         line = body[:m.start()].count("\n") + 1
@@ -74,6 +89,18 @@ for f in java_files:
         for cst in re.findall(r'\b([A-Z][A-Z0-9_]{2,})\b', arg):
             for code in const_to_code.get(cst, ()):
                 enforced[code].add(f"{f}:{line} (capability-flag const)")
+    # constant-resolved authority comparison outside a recognized call, e.g.
+    # `.noneMatch(a -> WIP_VIEW_ALL_LOCATIONS.equals(a.getAuthority()))`: a
+    # permission constant compared against a GrantedAuthority's value on a line
+    # that mentions getAuthority/getAuthorities.
+    for lineno, line in enumerate(body.splitlines(), start=1):
+        if "getAuthority" not in line and "getAuthorities" not in line:
+            continue
+        for code in re.findall(r'"(' + PERM_RE + r')"', line):
+            enforced[code].add(f"{f}:{lineno} (authority-comparison)")
+        for cst in re.findall(r'\b([A-Z][A-Z0-9_]{2,})\b', line):
+            for code in const_to_code.get(cst, ()):
+                enforced[code].add(f"{f}:{lineno} (authority-comparison const)")
 
 # ---- B. contract ------------------------------------------------------------
 contract = collections.defaultdict(set)  # perm -> modules

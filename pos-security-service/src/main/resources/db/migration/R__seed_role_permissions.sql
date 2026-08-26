@@ -178,6 +178,46 @@
 --     no PermissionCode bit yet, the latter names no real code.
 --   ADMIN receives every code above it did not already hold, preserving its
 --   strict-superset property.
+-- * 2026-08 task 5 retirement wave (docs/rbac-permission-role-audit-2026-08.md
+--   §3/§5/§7, V28) -- 34 codes granted here but enforced by no endpoint or
+--   capability check are retired (grants only; the permission-definition rows,
+--   bit indexes and permissions.yaml manifest entries all stay -- V25
+--   precedent, bits are permanent). Live successors, for anyone re-deriving
+--   who does what today:
+--   - inventory:purchase_order:view/create/approve -> order:purchase_order:*
+--     (pos-order PurchaseOrderController); inventory:purchase_order:receive
+--     -> inventory:goods_receipt:create / inventory:receiving:complete (not
+--     order:purchase_order:* -- corrected from the §3 table's first pass).
+--   - inventory:on_hand:search -> inventory:availability:read (ADR-0057).
+--   - workorder:invoice:create -> workorder:workorder:generate_invoice.
+--   - order:line:view -> order:order:view (lines are embedded in the order
+--     response; there is no separate line-view endpoint).
+--   - crm:contact:create/edit/delete -> people-contact:person:edit (contact
+--     points live in pos-people-contact, not pos-customer).
+--   - crm:contact_role:view/revoke -> crm:contact:view (roles are inline on
+--     the contact) / crm:contact_role:assign (revocation is a full-set
+--     replace through assign, not a separate revoke endpoint).
+--   - crm:vehicle:search -> the vehicle-inventory search surface
+--     (pos-vehicle-inventory VehicleSearchController); enforcement there is
+--     itself still pending, tracked separately.
+--   - crm:vehicle_party_association:* -> event-driven only
+--     (VehicleEventsListener, ADR-0044 §6); there is no API for this family,
+--     by design.
+--   - crm:vehicle_preference:* -> vehicle-inventory:preferences:manage.
+--   - catalog:category:*/catalog:variant:* -> no such resource exists in
+--     pos-catalog: Category is internal validation data with no CRUD
+--     endpoints, and variants/tread designs are Kafka-written, not
+--     API-mutated.
+--   - catalog:supplier_cost:write -> Kafka-ingest only; the read side
+--     (catalog:supplier_cost:read) stays enforced and stays granted.
+--   - pricing:price_book:* -> no PriceBook resource exists in pos-price.
+--   - pricing:rule:create/delete and pricing:restrictions:edit ->
+--     pricing:restriction:manage (singular resource name). pricing:rule:edit
+--     has no successor -- no edit endpoint exists for pricing rules at all.
+--   Codes named in §3 that are NOT part of this wave because they turned out
+--   to be genuinely enforced (audit-script pattern gap, now fixed) --
+--   workorder:wip:view_all_locations and the two
+--   inventory:putaway:override_* codes -- keep their grants unchanged.
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -784,10 +824,6 @@ FROM (VALUES
     ('ADMIN', 'appointments:view'),
     ('ADMIN', 'bulkImport:status:read'),
     ('ADMIN', 'bulkImport:upload:execute'),
-    ('ADMIN', 'catalog:category:create'),
-    ('ADMIN', 'catalog:category:delete'),
-    ('ADMIN', 'catalog:category:edit'),
-    ('ADMIN', 'catalog:category:view'),
     ('ADMIN', 'catalog:item_cost:update'),
     ('ADMIN', 'catalog:msrp:read'),
     ('ADMIN', 'catalog:msrp:write'),
@@ -801,22 +837,13 @@ FROM (VALUES
     ('ADMIN', 'catalog:service_type:edit'),
     ('ADMIN', 'catalog:service_type:view'),
     ('ADMIN', 'catalog:supplier_cost:read'),
-    ('ADMIN', 'catalog:supplier_cost:write'),
-    ('ADMIN', 'catalog:variant:create'),
-    ('ADMIN', 'catalog:variant:edit'),
-    ('ADMIN', 'catalog:variant:view'),
     ('ADMIN', 'crm:billing_rules:edit'),
     ('ADMIN', 'crm:consent:manage'),
     ('ADMIN', 'crm:consent:view'),
-    ('ADMIN', 'crm:contact:create'),
-    ('ADMIN', 'crm:contact:delete'),
-    ('ADMIN', 'crm:contact:edit'),
     ('ADMIN', 'crm:contact:view'),
     ('ADMIN', 'crm:contact_preference:edit'),
     ('ADMIN', 'crm:contact_preference:view'),
     ('ADMIN', 'crm:contact_role:assign'),
-    ('ADMIN', 'crm:contact_role:revoke'),
-    ('ADMIN', 'crm:contact_role:view'),
     ('ADMIN', 'crm:followup:manage'),
     ('ADMIN', 'crm:followup:view'),
     ('ADMIN', 'crm:inquiry:manage'),
@@ -849,13 +876,7 @@ FROM (VALUES
     ('ADMIN', 'crm:tag:manage'),
     ('ADMIN', 'crm:tag:view'),
     ('ADMIN', 'crm:vehicle:create'),
-    ('ADMIN', 'crm:vehicle:search'),
     ('ADMIN', 'crm:vehicle:view'),
-    ('ADMIN', 'crm:vehicle_party_association:create'),
-    ('ADMIN', 'crm:vehicle_party_association:edit'),
-    ('ADMIN', 'crm:vehicle_party_association:view'),
-    ('ADMIN', 'crm:vehicle_preference:edit'),
-    ('ADMIN', 'crm:vehicle_preference:view'),
     ('ADMIN', 'documents:render'),
     ('ADMIN', 'image:image:store'),
     ('ADMIN', 'inventory:adjustment:approve'),
@@ -880,16 +901,11 @@ FROM (VALUES
     ('ADMIN', 'inventory:location:sync'),
     ('ADMIN', 'inventory:location:view'),
     ('ADMIN', 'inventory:lot:manage'),
-    ('ADMIN', 'inventory:on_hand:search'),
     ('ADMIN', 'inventory:on_hand:view'),
     ('ADMIN', 'inventory:override:part-match'),
     ('ADMIN', 'inventory:pick_list:create'),
     ('ADMIN', 'inventory:pick_list:execute'),
     ('ADMIN', 'inventory:pick_list:view'),
-    ('ADMIN', 'inventory:purchase_order:approve'),
-    ('ADMIN', 'inventory:purchase_order:create'),
-    ('ADMIN', 'inventory:purchase_order:receive'),
-    ('ADMIN', 'inventory:purchase_order:view'),
     ('ADMIN', 'inventory:putaway:claim'),
     ('ADMIN', 'inventory:putaway:execute'),
     ('ADMIN', 'inventory:putaway:generate'),
@@ -959,7 +975,6 @@ FROM (VALUES
     ('ADMIN', 'order:line:delete'),
     ('ADMIN', 'order:line:edit'),
     ('ADMIN', 'order:line:enter_manual_price'),
-    ('ADMIN', 'order:line:view'),
     ('ADMIN', 'order:order:cancel'),
     ('ADMIN', 'order:order:charge_on_account'),
     ('ADMIN', 'order:order:checkout'),
@@ -1022,20 +1037,12 @@ FROM (VALUES
     ('ADMIN', 'pricing:normalization:edit'),
     ('ADMIN', 'pricing:normalization:view'),
     ('ADMIN', 'pricing:override:approve'),
-    ('ADMIN', 'pricing:price_book:create'),
-    ('ADMIN', 'pricing:price_book:delete'),
-    ('ADMIN', 'pricing:price_book:edit'),
-    ('ADMIN', 'pricing:price_book:view'),
     ('ADMIN', 'pricing:promotion:apply'),
     ('ADMIN', 'pricing:promotion:manage'),
     ('ADMIN', 'pricing:promotion:view'),
     ('ADMIN', 'pricing:restriction:manage'),
     ('ADMIN', 'pricing:restriction:override'),
-    ('ADMIN', 'pricing:restrictions:edit'),
     ('ADMIN', 'pricing:restrictions:view'),
-    ('ADMIN', 'pricing:rule:create'),
-    ('ADMIN', 'pricing:rule:delete'),
-    ('ADMIN', 'pricing:rule:edit'),
     ('ADMIN', 'pricing:rule:view'),
     ('ADMIN', 'product:lifecycle:override_discontinued'),
     ('ADMIN', 'product:lifecycle:update'),
@@ -1141,7 +1148,6 @@ FROM (VALUES
     ('ADMIN', 'workorder:fleet_auth:request'),
     ('ADMIN', 'workorder:fleet_auth:resolve'),
     ('ADMIN', 'workorder:financials:view'),
-    ('ADMIN', 'workorder:invoice:create'),
     ('ADMIN', 'workorder:invoice:view'),
     ('ADMIN', 'workorder:labor:add'),
     ('ADMIN', 'workorder:labor:add_on_behalf'),
@@ -1240,7 +1246,6 @@ FROM (VALUES
     ('DISPATCHER', 'workorder:workorder:assign-technician'),
     ('DISPATCHER', 'workorder:workorder:view'),
     ('GENERAL_MANAGER', 'accounting:customer-credit:refund'),
-    ('GENERAL_MANAGER', 'catalog:category:view'),
     ('GENERAL_MANAGER', 'catalog:product:view'),
     ('GENERAL_MANAGER', 'crm:consent:manage'),
     ('GENERAL_MANAGER', 'crm:segment:view'),
@@ -1267,7 +1272,6 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'people:timekeeping:approve'),
     ('GENERAL_MANAGER', 'people:timekeeping:reject'),
     ('GENERAL_MANAGER', 'people:timekeeping:view'),
-    ('GENERAL_MANAGER', 'pricing:price_book:view'),
     ('GENERAL_MANAGER', 'pricing:promotion:apply'),
     ('GENERAL_MANAGER', 'pricing:promotion:manage'),
     ('GENERAL_MANAGER', 'pricing:promotion:view'),
@@ -1290,7 +1294,6 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'workorder:timeEntry:approve'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:reject'),
     ('GENERAL_MANAGER', 'workorder:workorder:delete'),
-    ('INVENTORY_CONTROLLER', 'catalog:category:view'),
     ('INVENTORY_CONTROLLER', 'catalog:item_cost:update'),
     ('INVENTORY_CONTROLLER', 'catalog:product:view'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:approve'),
@@ -1314,7 +1317,6 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'nlti:request:read'),
     ('INVENTORY_CONTROLLER', 'nlti:request:submit'),
     ('INVENTORY_CONTROLLER', 'order:order:view'),
-    ('INVENTORY_CONTROLLER', 'pricing:price_book:view'),
     ('INVENTORY_CONTROLLER', 'pricing:rule:view'),
     ('INVENTORY_CONTROLLER', 'supplier:audit:read'),
     ('INVENTORY_CONTROLLER', 'supplier:invoice:fetch'),
@@ -1328,7 +1330,6 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'supplier:transmission:resolve'),
     ('INVENTORY_CONTROLLER', 'supplier:workorderauth:request'),
     ('INVENTORY_CONTROLLER', 'supplier:workorderauth:review'),
-    ('INVENTORY_LEAD', 'catalog:category:view'),
     ('INVENTORY_LEAD', 'catalog:product:view'),
     ('INVENTORY_LEAD', 'inventory:adjustment:create'),
     ('INVENTORY_LEAD', 'inventory:adjustment:view'),
@@ -1339,7 +1340,6 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'inventory:goods_receipt:create'),
     ('INVENTORY_LEAD', 'inventory:goods_receipt:view'),
     ('INVENTORY_LEAD', 'inventory:issue:parts'),
-    ('INVENTORY_LEAD', 'inventory:on_hand:search'),
     ('INVENTORY_LEAD', 'inventory:on_hand:view'),
     ('INVENTORY_LEAD', 'inventory:putaway:claim'),
     ('INVENTORY_LEAD', 'inventory:putaway:execute'),
@@ -1364,11 +1364,9 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'order:purchase_order:availability_view'),
     ('INVENTORY_LEAD', 'order:purchase_order:create'),
     ('INVENTORY_LEAD', 'order:purchase_order:view'),
-    ('INVENTORY_LEAD', 'pricing:price_book:view'),
     ('INVENTORY_LEAD', 'pricing:rule:view'),
     ('INVENTORY_LEAD', 'supplier:profile:read'),
     ('INVENTORY_LEAD', 'supplier:stock:inquire'),
-    ('INVENTORY_MANAGER', 'catalog:category:view'),
     ('INVENTORY_MANAGER', 'catalog:item_cost:update'),
     ('INVENTORY_MANAGER', 'catalog:product:view'),
     ('INVENTORY_MANAGER', 'inventory:adjustment:approve'),
@@ -1394,7 +1392,6 @@ FROM (VALUES
     ('INVENTORY_MANAGER', 'order:purchase_order:availability_view'),
     ('INVENTORY_MANAGER', 'order:purchase_order:transmit'),
     ('INVENTORY_MANAGER', 'order:purchase_order:view'),
-    ('INVENTORY_MANAGER', 'pricing:price_book:view'),
     ('INVENTORY_MANAGER', 'pricing:rule:view'),
     ('INVENTORY_MANAGER', 'supplier:audit:read'),
     ('INVENTORY_MANAGER', 'supplier:invoice:fetch'),
@@ -1413,7 +1410,6 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'appointments:create'),
     ('LOCATION_MANAGER', 'appointments:reschedule'),
     ('LOCATION_MANAGER', 'appointments:view'),
-    ('LOCATION_MANAGER', 'catalog:category:view'),
     ('LOCATION_MANAGER', 'catalog:product:view'),
     ('LOCATION_MANAGER', 'crm:consent:manage'),
     ('LOCATION_MANAGER', 'crm:segment:view'),
@@ -1421,7 +1417,6 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'crm:tag:assign'),
     ('LOCATION_MANAGER', 'crm:tag:manage'),
     ('LOCATION_MANAGER', 'crm:tag:view'),
-    ('LOCATION_MANAGER', 'crm:vehicle:search'),
     ('LOCATION_MANAGER', 'crm:vehicle:view'),
     ('LOCATION_MANAGER', 'inventory:availability:read'),
     ('LOCATION_MANAGER', 'inventory:pick_list:create'),
@@ -1462,7 +1457,6 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'people:timekeeping:approve'),
     ('LOCATION_MANAGER', 'people:timekeeping:reject'),
     ('LOCATION_MANAGER', 'people:timekeeping:view'),
-    ('LOCATION_MANAGER', 'pricing:price_book:view'),
     ('LOCATION_MANAGER', 'pricing:promotion:apply'),
     ('LOCATION_MANAGER', 'pricing:promotion:manage'),
     ('LOCATION_MANAGER', 'pricing:promotion:view'),
@@ -1507,7 +1501,6 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'workorder:estimate_snapshot:view'),
     ('LOCATION_MANAGER', 'workorder:fleet_auth:resolve'),
     ('LOCATION_MANAGER', 'workorder:financials:view'),
-    ('LOCATION_MANAGER', 'workorder:invoice:create'),
     ('LOCATION_MANAGER', 'workorder:invoice:view'),
     ('LOCATION_MANAGER', 'workorder:labor:add_on_behalf'),
     ('LOCATION_MANAGER', 'workorder:labor:view'),
@@ -1589,7 +1582,6 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'crm:person:create'),
     ('SERVICE_ADVISOR', 'crm:person:read'),
     ('SERVICE_ADVISOR', 'crm:vehicle:create'),
-    ('SERVICE_ADVISOR', 'crm:vehicle:search'),
     ('SERVICE_ADVISOR', 'crm:vehicle:view'),
     ('SERVICE_ADVISOR', 'inventory:availability:read'),
     ('SERVICE_ADVISOR', 'invoice:finalize'),
@@ -1641,7 +1633,6 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'workorder:estimate_snapshot:create'),
     ('SERVICE_ADVISOR', 'workorder:estimate_snapshot:view'),
     ('SERVICE_ADVISOR', 'workorder:fleet_auth:request'),
-    ('SERVICE_ADVISOR', 'workorder:invoice:create'),
     ('SERVICE_ADVISOR', 'workorder:invoice:view'),
     ('SERVICE_ADVISOR', 'workorder:labor:view'),
     ('SERVICE_ADVISOR', 'workorder:parts:view'),
@@ -1834,10 +1825,6 @@ BEGIN
         ('appointments:view'),
         ('bulkImport:status:read'),
         ('bulkImport:upload:execute'),
-        ('catalog:category:create'),
-        ('catalog:category:delete'),
-        ('catalog:category:edit'),
-        ('catalog:category:view'),
         ('catalog:item_cost:update'),
         ('catalog:msrp:read'),
         ('catalog:msrp:write'),
@@ -1851,22 +1838,13 @@ BEGIN
         ('catalog:service_type:edit'),
         ('catalog:service_type:view'),
         ('catalog:supplier_cost:read'),
-        ('catalog:supplier_cost:write'),
-        ('catalog:variant:create'),
-        ('catalog:variant:edit'),
-        ('catalog:variant:view'),
         ('crm:billing_rules:edit'),
         ('crm:consent:manage'),
         ('crm:consent:view'),
-        ('crm:contact:create'),
-        ('crm:contact:delete'),
-        ('crm:contact:edit'),
         ('crm:contact:view'),
         ('crm:contact_preference:edit'),
         ('crm:contact_preference:view'),
         ('crm:contact_role:assign'),
-        ('crm:contact_role:revoke'),
-        ('crm:contact_role:view'),
         ('crm:followup:manage'),
         ('crm:followup:view'),
         ('crm:inquiry:manage'),
@@ -1899,13 +1877,7 @@ BEGIN
         ('crm:tag:manage'),
         ('crm:tag:view'),
         ('crm:vehicle:create'),
-        ('crm:vehicle:search'),
         ('crm:vehicle:view'),
-        ('crm:vehicle_party_association:create'),
-        ('crm:vehicle_party_association:edit'),
-        ('crm:vehicle_party_association:view'),
-        ('crm:vehicle_preference:edit'),
-        ('crm:vehicle_preference:view'),
         ('documents:render'),
         ('image:image:store'),
         ('inventory:adjustment:approve'),
@@ -1930,16 +1902,11 @@ BEGIN
         ('inventory:location:sync'),
         ('inventory:location:view'),
         ('inventory:lot:manage'),
-        ('inventory:on_hand:search'),
         ('inventory:on_hand:view'),
         ('inventory:override:part-match'),
         ('inventory:pick_list:create'),
         ('inventory:pick_list:execute'),
         ('inventory:pick_list:view'),
-        ('inventory:purchase_order:approve'),
-        ('inventory:purchase_order:create'),
-        ('inventory:purchase_order:receive'),
-        ('inventory:purchase_order:view'),
         ('inventory:putaway:claim'),
         ('inventory:putaway:execute'),
         ('inventory:putaway:generate'),
@@ -2009,7 +1976,6 @@ BEGIN
         ('order:line:delete'),
         ('order:line:edit'),
         ('order:line:enter_manual_price'),
-        ('order:line:view'),
         ('order:order:cancel'),
         ('order:order:charge_on_account'),
         ('order:order:checkout'),
@@ -2072,20 +2038,12 @@ BEGIN
         ('pricing:normalization:edit'),
         ('pricing:normalization:view'),
         ('pricing:override:approve'),
-        ('pricing:price_book:create'),
-        ('pricing:price_book:delete'),
-        ('pricing:price_book:edit'),
-        ('pricing:price_book:view'),
         ('pricing:promotion:apply'),
         ('pricing:promotion:manage'),
         ('pricing:promotion:view'),
         ('pricing:restriction:manage'),
         ('pricing:restriction:override'),
-        ('pricing:restrictions:edit'),
         ('pricing:restrictions:view'),
-        ('pricing:rule:create'),
-        ('pricing:rule:delete'),
-        ('pricing:rule:edit'),
         ('pricing:rule:view'),
         ('product:lifecycle:override_discontinued'),
         ('product:lifecycle:update'),
@@ -2192,7 +2150,6 @@ BEGIN
         ('workorder:fleet_auth:request'),
         ('workorder:fleet_auth:resolve'),
         ('workorder:financials:view'),
-        ('workorder:invoice:create'),
         ('workorder:invoice:view'),
         ('workorder:labor:add'),
         ('workorder:labor:add_on_behalf'),
