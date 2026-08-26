@@ -184,9 +184,9 @@ based on each role's documented job function in the seed header.
 2. ~~**Supplier imports**~~ — **decided**: the supplier module belongs to the
    **inventory-control roles — INVENTORY_MANAGER and INVENTORY_CONTROLLER** (which
    hold identical sets by design, #1373; scope differentiates them). All 12 supplier
-   codes go to both, plus ADMIN. Open sub-question: whether INVENTORY_LEAD also gets
-   the read-only pair (`supplier:stock:inquire`, `supplier:profile:read`) per the
-   §2 matrix recommendation.
+   codes go to both, plus ADMIN. The once-open sub-question is resolved by the
+   accepted §2 matrix: INVENTORY_LEAD also holds the read-only pair
+   (`supplier:stock:inquire`, `supplier:profile:read`).
 3. ~~**`image:image:store`**~~ — **decided**: image upload belongs to **both admin
    roles — ADMIN and SYSTEM_ADMINISTRATOR**.
 4. ~~**Period close discipline**~~ — **decided**: a re-created CONTROLLER role owns the

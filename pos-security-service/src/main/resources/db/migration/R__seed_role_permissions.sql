@@ -143,9 +143,9 @@
 --   - Supplier (all 12 codes) -> the inventory-control pair INVENTORY_MANAGER
 --     and INVENTORY_CONTROLLER, which hold identical sets by design (#1373;
 --     location vs. global reach is a role_assignments.scope_type property,
---     not a role_permissions difference), plus ADMIN. INVENTORY_LEAD is
---     deliberately not granted here -- whether it gets the read-only pair
---     (supplier:stock:inquire, supplier:profile:read) is still open.
+--     not a role_permissions difference), plus ADMIN. INVENTORY_LEAD also
+--     holds the read-only pair (supplier:stock:inquire, supplier:profile:read),
+--     granted with the accepted §2 matrix (see the bullet below).
 --   - image:image:store -> both admin roles, ADMIN and SYSTEM_ADMINISTRATOR.
 --   - order:order:charge_on_account and order:session:approve_variance (the
 --     two money-movement escape hatches enforced in service code, #1512 §1b)
