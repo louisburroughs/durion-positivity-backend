@@ -2,8 +2,13 @@
 
 Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on this branch**
 (migrations V24–V27 plus code/seed changes; see the §7 status column). Headline drift
-after execution: required-but-ungranted 112 → 93, granted-but-unenforced 77 → 64,
-unreachable operations 229 → 199, roles 16 → 17 (CONTROLLER). The +14 in dead bits is
+after execution: required-but-ungranted 112 → 2, granted-but-unenforced 77 → 64,
+unreachable contract operations 229 → 0, roles 16 → 17 (CONTROLLER). Waves 2 and 3
+(the §2 decisions and the accepted recommended-grants matrix) are seed-only — purely
+additive, no revocation migration needed. The two remaining required-but-ungranted
+entries are unwirable as-is: `workorder:financials:view` (no PermissionCode bit — needs
+a catalog entry before any grant can reach a JWT) and `people:timeEntry:` (a parser
+artifact of dynamic string construction, not a real code). The +14 in dead bits is
 the retired codes keeping their permanent bit indexes, as designed. (The audit script
 now excludes the `AUTHENTICATED` sentinel from its required-set computations — Copilot
 review on PR #1515; the pre-execution counts in the tables below predate that and
@@ -170,24 +175,40 @@ based on each role's documented job function in the seed header.
 | SYSTEM_ADMINISTRATOR | `workorder:events:replay`, `people:compliance:view`, `supplier:audit:read`, `supplier:transmission:read/resolve` |
 | *nobody obvious* | `order:order:charge_on_account`, `inventory:valuation:adjust`, `marketing:*`, `supplier:*` imports — see decisions below (`accounting:period:hard_lock`/`override` are now CONTROLLER's, per §6) |
 
-### Decisions needed (no defensible default)
+### Decisions needed (decisions 1–5 recorded 2026-08-25; 1, 2, 3 and 5 implemented in the seed)
 
-1. **Marketing**: no role owns campaigns. Grant to GENERAL_MANAGER, or create a
-   MARKETING role? (Roles created outside the seed start with zero grants — the seed
-   header documents this — so a new role means a seed change too.)
-2. **Supplier imports** (`supplier:pricecatalog:import`, `supplier:mktcat:import`,
-   `supplier:invoice:fetch`, `supplier:workorderauth:*`): operator-facing or
-   integration/system identity?
-3. **`image:image:store`**: which identities upload images — human roles, or
-   service-to-service traffic that shouldn't use RBAC at all?
+1. ~~**Marketing**~~ — **decided**: the marketing surface (all 9 codes: campaigns,
+   templates, stats) belongs to **ACCOUNT_MANAGER**, consistent with its §6
+   customer-accounts identity. No new MARKETING role. ADMIN gains the codes too
+   (strict-superset rule).
+2. ~~**Supplier imports**~~ — **decided**: the supplier module belongs to the
+   **inventory-control roles — INVENTORY_MANAGER and INVENTORY_CONTROLLER** (which
+   hold identical sets by design, #1373; scope differentiates them). All 12 supplier
+   codes go to both, plus ADMIN. The once-open sub-question is resolved by the
+   accepted §2 matrix: INVENTORY_LEAD also holds the read-only pair
+   (`supplier:stock:inquire`, `supplier:profile:read`).
+3. ~~**`image:image:store`**~~ — **decided**: image upload belongs to **both admin
+   roles — ADMIN and SYSTEM_ADMINISTRATOR**.
 4. ~~**Period close discipline**~~ — **decided**: a re-created CONTROLLER role owns the
    close cycle and all accounting management; ACCOUNT_MANAGER becomes the
    customer-accounts role. Full mapping in §6; its sub-decisions a–f are also
-   resolved.
-5. **`order:order:charge_on_account`** and **`order:session:approve_variance`**: which
-   manager tier? These gate money movement.
-6. **`invoice:finalize:override` precedent** applies: several of these are deliberate
-   elevation caps — wide grants would defeat their purpose.
+   resolved. Implemented in V24/V25 (PR #1515).
+5. ~~**Money-movement tier**~~ — **decided**: `order:order:charge_on_account` and
+   `order:session:approve_variance` go to **LOCATION_MANAGER, GENERAL_MANAGER and
+   ADMIN**, mirroring the `accounting:customer-credit:refund` holder set (§6
+   decision b) and the `invoice:finalize:override` precedent.
+6. **`invoice:finalize:override` precedent** applies to everything above: several of
+   these codes are deliberate elevation caps — wide grants would defeat their purpose.
+
+**The recommended-grants matrix above was accepted and implemented 2026-08-25**
+(seed-only, additive). Tie-breaks for codes the matrix left unassigned, recorded in the
+seed's POLICY header: warranty settlement and reimbursement management to
+ACCOUNT_MANAGER (customer-accounts money); warranty policy/provider configuration to
+GENERAL_MANAGER; crm segment/suppression management to ACCOUNT_MANAGER (with its
+marketing ownership); `inventory:transfer:view` added to the approver pair so dispatch
+is usable; `inventory:valuation:adjust` CONTROLLER-only, mirroring the
+adjustment-override precedent. Skipped as unwirable: `workorder:financials:view`
+(no bit) and the `people:timeEntry:` artifact.
 
 ---
 
@@ -423,7 +444,7 @@ All six flags are decided; the chart above reflects them:
 
 | # | Action | Effort | Blocked on decision? |
 | --- | --- | --- | --- |
-| 1 | Wire role grants for the remaining required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | yes — §2 decision list (accounting portion DONE via 1a; 94 codes remain) |
+| 1 | Wire role grants for the required-but-ungranted codes | medium | **DONE** — §6 split (1a), §2 decisions 1–3/5, and the accepted §2 matrix; only `workorder:financials:view` (needs a bit) and the `people:timeEntry:` artifact remain |
 | 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split | medium | **DONE** — V24 (CONTROLLER role), V25 (rescope + retire dead accounting codes), seed + guard-fixture updates |
 | 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | **DONE** — `workorder:workorder:start` wins; endpoint + capability flag aligned, V26 migrates grants |
 | 3 | Re-point `shop:location/bay` holders to `location:*` family | small | **DONE** — faithful-mirror grants added, seven dead codes revoked (V27) |
