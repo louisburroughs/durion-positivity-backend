@@ -63,6 +63,12 @@ if check_mode:
 baseline_path = "scripts/rbac-audit-baseline.json"
 if "--baseline" in argv:
     idx = argv.index("--baseline")
+    # Guard the missing-value case: bare `--baseline` (or `--baseline --check`)
+    # would otherwise raise IndexError and bury the real problem in a stack trace
+    # in the CI log.
+    if idx + 1 >= len(argv) or argv[idx + 1].startswith("--"):
+        sys.exit("error: --baseline requires a path, e.g. "
+                 "--baseline scripts/rbac-audit-baseline.json")
     baseline_path = argv[idx + 1]
     del argv[idx:idx + 2]
 output_path = argv[0] if argv else None
@@ -87,6 +93,22 @@ def strip_comments(src):
     out, i, n = [], 0, len(src)
     while i < n:
         c = src[i]
+        if src.startswith('"""', i):
+            # Java text block. Consume through the closing delimiter as one unit.
+            # Treating it as an ordinary literal desynchronises the parser: the
+            # first two quotes read as an empty string, the third opens a new one,
+            # and the quotes inside a JSON example body then flip the in-string
+            # state arbitrarily -- after which real comments may go unstripped (or
+            # a // inside a string may be blanked). This repo has 305 files with
+            # text blocks, several containing URLs with //.
+            out.append('"""')
+            i += 3
+            while i < n and not src.startswith('"""', i):
+                out.append(src[i])
+                i += 1
+            out.append('"""')
+            i += 3
+            continue
         if c == '"' or c == "'":  # string/char literal: copy verbatim
             q = c
             out.append(c)
