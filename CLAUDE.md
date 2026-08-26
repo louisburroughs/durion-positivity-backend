@@ -146,7 +146,7 @@ public ResponseEntity<PriceOverride> createPriceOverride(@RequestBody PriceOverr
 
 Each module also needs a `{Module}EventTypes` registry (`internal/config`) listing every event id with a threshold
 preset (`fastRead`, `search`, `write`, `approval`), plus a `{Module}EventTypeInitializer`
-(`ApplicationRunner`) that PUTs these to `pos-event-receiver` (`pos.events.base-url`, `X-Pos-Events-Secret`/
+(`ApplicationRunner`) that PUTs these to `pos-event-receiver` (`pos.events.base-url`, `X-Events-Api-Secret`/
 `pos.events.api-secret`) at startup, swallowing failures so startup never blocks. Modules using `@EmitEvent` must
 depend on `pos-events`. Full templates: `AGENTS.md`.
 

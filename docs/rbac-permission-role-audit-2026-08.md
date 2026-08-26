@@ -399,10 +399,11 @@ registered rows' live descriptions and flags on every service restart).
 
 ## 5. Confounds that cap what this audit can see
 
-1. **149 of 999 operations declare no `x-required-permissions`**: pos-security-service
-   88/88, pos-catalog 47/70, pos-event-receiver 12/12 (legitimate — shared-secret auth),
-   pos-customer 1, pos-invoice 1, pos-vehicle-inventory 1. Until security-service and
-   catalog emit the extension, "required nowhere" is an upper bound in those domains.
+1. **139 of 999 operations declare no `x-required-permissions`**: pos-security-service
+   88/88, pos-catalog 37/70, pos-event-receiver 12/12, pos-customer 1, pos-invoice 1,
+   pos-vehicle-inventory 1. These are three unrelated causes, not one gap — see Task 6
+   below for the decomposition and per-case verdicts. Until security-service and catalog
+   emit the extension, "required nowhere" is an upper bound in those two domains.
 2. **Enforcement outside `@PreAuthorize` is common** — `SecurityContextHelper.hasAuthority`,
    `authorities.contains(...)`, capability flags in DTOs. The script now resolves
    constant references in these calls, but dynamically built strings
@@ -414,6 +415,102 @@ registered rows' live descriptions and flags on every service restart).
 4. **Live-registry drift** (#1512's marketing/supplier 503s on alpha) is a deployment
    question this repo-only audit cannot settle — worth one `curl` per §1's reproduction
    once the services are up.
+
+### Task 6 — what the `x-required-permissions` gap actually is
+
+**Mechanism.** `RequiredPermissionsOpenApiAutoConfiguration` (`pos-security-common`)
+*derives* the extension from `@PreAuthorize`; it never states permissions independently.
+It reads class- and method-level `@PreAuthorize`, extracts every quoted
+`hasAuthority`/`hasAnyAuthority` argument, and, only when there is no matching call, falls
+back to the `AUTHENTICATED` sentinel — but only for `isAuthenticated()` or a genuinely
+absent `@PreAuthorize`. `hasRole`/`hasAnyRole` arguments are read but discarded, and
+`permitAll()` short-circuits to nothing at all (not even `AUTHENTICATED`): the code
+comment cites the #1102 review — emitting a role name into `x-required-permissions`
+would grant the operation a code that matches no real permission, making it look
+gateable and silently unselectable forever. So "declares nothing" has three distinct
+causes, not one:
+
+| Cause | Count | What it means |
+| --- | --- | --- |
+| Module never runs the customizer | 88 (pos-security-service) | tooling gap — code enforces, contract is mute |
+| `hasRole`/`hasAnyRole` gate, ignored by design | 37 (pos-catalog) + 1 (pos-vehicle-inventory) | mixed — see below |
+| No `@PreAuthorize` applies to any user permission | 12 (pos-event-receiver) + 2 (pos-customer, pos-invoice) | correct silence |
+
+**1. pos-security-service (88/88) — tooling gap, being fixed.** The module does not
+depend on `pos-security-common`, so the auto-configured `OperationCustomizer` bean is
+never on its classpath and the extension never fires for *any* of its 88 operations —
+this is an all-or-nothing module-level miss, not 88 individually-unannotated endpoints.
+The code already enforces: 55 handlers carry permission-based `@PreAuthorize`. Contract
+catch-up only; no code change to authorization itself.
+
+**2. pos-catalog (37/70) — real gap, being fixed.** These operations are gated on
+`hasRole('CATALOG_VIEW'/'CATALOG_EDIT'/'CATALOG_DELETE')` — role names that appear in no
+migration (§7 task 7's baseline note on `catalog:product:edit` is one concrete instance:
+`CatalogItemController.updateCatalogItem` is still gated on the dead `hasRole('CATALOG_EDIT')`
+phantom role, so nothing actually guards a product edit). Unlike a granted role, a role
+nobody is ever assigned satisfies `hasRole` for no one — the endpoints don't merely lack a
+contract entry, they are unreachable by design intent and reachable in practice only by
+whatever the module's `SecurityConfig` treats as ADMIN-equivalent. The customizer's
+silence here is accidentally hiding a defect, not correctly reporting one.
+
+**3. pos-event-receiver (12/12) — expected, not a defect.** Verified directly: zero
+`@PreAuthorize` annotations anywhere in the module. Auth is `EventsApiSecurityFilter`
+(`@Order(1)` `OncePerRequestFilter`), a shared-secret check — **not** the
+`X-Pos-Events-Secret` header CLAUDE.md's shorthand implies; the actual header constant
+(`EventsApiConstants.SECRET_HEADER`) is **`X-Events-Api-Secret`**, matched against
+`pos.events.api-secret` / `POS_EVENTS_API_SECRET` with `MessageDigest.isEqual`. It only
+gates `POST`/`PUT`/`DELETE` under `/v1/events/*` and `/v1/eventTypes/*` (5 of the 12
+operations: `EmitEventController`'s emit, `EventTypeController`'s create/update-by-code/
+update-by-id/delete); the other 7 — all GETs, across `EventSummaryController` and
+`EventTypeController` — and `/actuator/*` skip the filter entirely and take no auth at
+all. If `pos.events.api-secret` is unset the filter self-disables (`securityEnabled=false`)
+and lets every request through, logging only a startup warning — a deploy-config risk,
+not a `x-required-permissions` one. None of this is JWT/permission-bitset authorization,
+so there is nothing for `@PreAuthorize` to say and nothing for the extension to derive:
+the silence is correct. The nuance worth keeping precise: this is **not** network
+isolation. The module is gateway-routed (`Path=/event-receiver/**`,
+`pos-api-gateway/src/main/resources/application.yml:130-135`, `StripPrefix=1`) and its
+spec is in the aggregated Swagger UI (`url: /event-receiver/v3/api-docs`, same file
+line 232) — externally reachable like any other domain service. It is the *auth model*
+(a shared secret, not a user's JWT authorities) that makes user permissions inapplicable,
+not the network path.
+
+**The 3 stragglers — verified individually, not fixed here (out of scope):**
+
+- **pos-customer** — `POST /v1/crm/public/inquiries`
+  (`PublicInquiryController.submit`) — `@PreAuthorize("permitAll()")`. **Legitimate.**
+  Deliberately the module's only unauthenticated write surface (Story #1154), off by
+  default behind `pos.customer.inquiry.public.enabled`, with the class javadoc recording
+  the three external preconditions (edge captcha, a conscious gateway bypass, edge rate
+  limiting) that must hold before it's turned on. No user permission applies to an
+  anonymous submitter; the silence is correct, and matches the class's own comment
+  reasoning, not an oversight.
+- **pos-invoice** — `GET /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download`
+  (`InvoiceArtifactDownloadController.download`) — `@PreAuthorize("permitAll()")`.
+  **Legitimate.** A public PDF download link a browser can't attach an `Authorization`
+  header to; the real guard is a short-lived signed token (minted by
+  `InvoiceArtifactController`, verified in the service layer), not Spring Security. The
+  `permitAll()` and the comment above it are deliberate. Correct silence.
+- **pos-vehicle-inventory** — `POST /v1/vehicle-registry/facts/replay`
+  (`VehicleRegistryController.replayVehicleFacts`) — `@PreAuthorize("hasRole('ADMIN')")`.
+  **Enforced, but not the pos-catalog failure mode — and not user-permission-shaped
+  either.** Traced the whole path: `RoleAuthorityServiceImpl.expandRolesToAuthorities`
+  adds `ROLE_<name>` for every role a user actually holds (unconditionally, not gated on
+  that role having grants); `JwtServiceImpl` carries role names in a separate `roles`
+  claim rather than folding them into `perm_bits` (which only holds `PermissionCode`-shaped
+  strings and would silently drop `ROLE_ADMIN`); the gateway forwards that claim as
+  `X-Roles`; `GatewayAuthoritiesFilter` (`pos-security-common`) concatenates it straight
+  onto the granted-authorities list downstream. So `ROLE_ADMIN` is real and
+  `hasRole('ADMIN')` resolves correctly for genuine admins — unlike pos-catalog's
+  `CATALOG_VIEW`/`CATALOG_EDIT`/`CATALOG_DELETE`, which match a role no migration ever
+  creates. This is the same "hasRole ignored by design" mechanism as pos-catalog producing
+  contract silence, but sitting on a working gate restricting an admin-only replica-repair
+  operation. Not a security gap; is a convention gap worth a follow-up — the platform's
+  own model is code-first `domain:resource:action` permissions, and a role check here is
+  the one place vehicle-inventory departs from it. Migrating to a granted, ADMIN-only
+  permission code (e.g. `vehicle:registry:replay`) would make it contract-visible and
+  auditable by this same script, for visibility only, not because it is currently
+  insecure.
 
 ---
 
@@ -544,9 +641,9 @@ All six flags are decided; the chart above reflects them:
 | 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split | medium | **DONE** — V24 (CONTROLLER role), V25 (rescope + retire dead accounting codes), seed + guard-fixture updates |
 | 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | **DONE** — `workorder:workorder:start` wins; endpoint + capability flag aligned, V26 migrates grants |
 | 3 | Re-point `shop:location/bay` holders to `location:*` family | small | **DONE** — faithful-mirror grants added, seven dead codes revoked (V27) |
-| 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | convention sign-off |
+| 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | **DONE** — manifest schema + registration/entity chain honour `deprecated`/`supersededBy` (both clobber points fixed), 60 retired `PermissionCode` constants annotated `@Deprecated`; DB marking for the 22 placeholder-only codes deferred, recommended approach recorded in §4 |
 | 5 | Triage remaining ~55 ADMIN-only unenforced codes: enforce or retire | medium | **IN PROGRESS** — retirement wave DONE (34 codes, V28); enforcement wave DONE for 15 codes gated across pos-catalog/pos-price/pos-vehicle-inventory/pos-vehicle-fitment, grants paired (seed-only, no migration); 12 codes still deferred (feature not built: crm integration-audit/processing-log/suspense reads, workorder estimate-item/snapshot GETs, people:skill:* feature (3 codes), nlti:request:read status endpoint, catalog:service_type:create/edit endpoint split, pricing:normalization:view) |
-| 6 | Close the `x-required-permissions` gap (security-service, catalog) | medium | no |
+| 6 | Close the `x-required-permissions` gap | medium | **IN PROGRESS** — decomposed into 3 causes (§5 Task 6): pos-security-service (88, tooling gap) and pos-catalog (37, real phantom-role gap) each being fixed by a concurrent effort; pos-event-receiver (12) and the 3 stragglers (pos-customer, pos-invoice, pos-vehicle-inventory) verified as correct silence — no fix needed, one convention note left on vehicle-inventory's `hasRole('ADMIN')` |
 | 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | **DONE** — `--check` mode + `scripts/rbac-audit-baseline.json`, wired into the `validate-permissions` job; see subsection below |
 | 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | no |
 | 9 | Remove dead authorities: literal `"admin"` check, `ACCOUNTING_ADMIN`/`AR_MANAGER` alternates, `people:time:export:read` alternate | small | **DONE** — pos-people, pos-people-contact and pos-accounting code, contracts and tests cleaned |
