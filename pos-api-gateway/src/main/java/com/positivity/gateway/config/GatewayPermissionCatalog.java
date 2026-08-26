@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 60;
+    public static final int CATALOG_VERSION = 61;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -577,7 +577,25 @@ public final class GatewayPermissionCatalog {
         "PERM_inventory:availability:search", // 470
 
         // ── New batch (bits 471–471) ──────────────────────────────────────────
-        "PERM_workorder:financials:view" // 471
+        "PERM_workorder:financials:view", // 471
+
+        // ── New batch (bits 472–487) ──────────────────────────────────────────
+        "PERM_catalog:guardrail_policy:write", // 472
+        "PERM_catalog:location_price_override:read", // 473
+        "PERM_catalog:location_price_override:write", // 474
+        "PERM_catalog:non_inventory:view", // 475
+        "PERM_catalog:substitution_group:view", // 476
+        "PERM_catalog:substitution_group:edit", // 477
+        "PERM_catalog:catalog_grouping:view", // 478
+        "PERM_catalog:catalog_grouping:edit", // 479
+        "PERM_catalog:catalog_grouping:delete", // 480
+        "PERM_catalog:uom_conversion:view", // 481
+        "PERM_catalog:uom_conversion:edit", // 482
+        "PERM_catalog:product_uom:view", // 483
+        "PERM_catalog:product_uom:edit", // 484
+        "PERM_catalog:item_cost:read", // 485
+        "PERM_catalog:tread_design:view", // 486
+        "PERM_catalog:fact:replay" // 487
     };
 
     public static String authorityForBit(int bitIndex) {

@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.SubstitutionGroupCreateRequestDto;
 import com.positivity.catalog.internal.dto.SubstitutionGroupDto;
 import com.positivity.catalog.internal.dto.SubstitutionGroupMemberRequestDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.SubstitutionGroupService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,10 +39,10 @@ public class SubstitutionGroupController {
 
     private final SubstitutionGroupService substitutionGroupService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUBSTITUTION_GROUP_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SUBSTITUTION_GROUP_EDIT})
     @PostMapping
     @Operation(operationId = "createSubstitutionGroup", summary = "Create Substitution Group", description = """
             Creates an empty, named substitution group — a set of mutually interchangeable products in which \
@@ -83,10 +84,10 @@ public class SubstitutionGroupController {
         return ResponseEntity.status(HttpStatus.CREATED).body(substitutionGroupService.createGroup(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUBSTITUTION_GROUP_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SUBSTITUTION_GROUP_VIEW})
     @GetMapping
     @Operation(operationId = "listSubstitutionGroups", summary = "List Substitution Groups", description = """
             Returns every substitution group with its name, notes and member product ids ordered by when \
@@ -110,10 +111,10 @@ public class SubstitutionGroupController {
         return ResponseEntity.ok(substitutionGroupService.listGroups());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUBSTITUTION_GROUP_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SUBSTITUTION_GROUP_VIEW})
     @GetMapping("/{groupId}")
     @Operation(operationId = "getSubstitutionGroup", summary = "Get Substitution Group", description = """
             Returns one substitution group with its name, notes and member product ids ordered by when each \
@@ -138,10 +139,10 @@ public class SubstitutionGroupController {
         return ResponseEntity.ok(substitutionGroupService.getGroup(groupId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUBSTITUTION_GROUP_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SUBSTITUTION_GROUP_EDIT})
     @DeleteMapping("/{groupId}")
     @Operation(operationId = "deleteSubstitutionGroup", summary = "Delete Substitution Group", description = """
             Deletes a substitution group and all of its memberships permanently, freeing every former member \
@@ -163,10 +164,10 @@ public class SubstitutionGroupController {
         return ResponseEntity.noContent().build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUBSTITUTION_GROUP_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SUBSTITUTION_GROUP_EDIT})
     @PostMapping("/{groupId}/members")
     @Operation(operationId = "addSubstitutionGroupMember", summary = "Add Substitution Group Member", description = """
             Adds a product to a substitution group, making it mutually interchangeable with every other \
@@ -210,10 +211,10 @@ public class SubstitutionGroupController {
         return ResponseEntity.ok(substitutionGroupService.addMember(groupId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUBSTITUTION_GROUP_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SUBSTITUTION_GROUP_EDIT})
     @DeleteMapping("/{groupId}/members/{productId}")
     @Operation(
             operationId = "removeSubstitutionGroupMember",

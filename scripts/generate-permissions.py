@@ -421,11 +421,21 @@ def sync_permission_code_java(
 def sync_gateway_catalog_java(
     root: Path, new_perms: list[str], start_bit: int, new_version: int, dry_run: bool
 ) -> None:
-    """Append new AUTHORITY_BY_BIT entries to GatewayPermissionCatalog.java and set CATALOG_VERSION."""
+    """Append new AUTHORITY_BY_BIT entries to GatewayPermissionCatalog.java and set CATALOG_VERSION.
+
+    new_perms must already be in bit order (position i is bit start_bit + i).
+    reconcile_mirror_catalog_java's caller passes an ordered slice of
+    PermissionCode.java's actual (bit, code) pairs; the sync_permission_code_java
+    caller passes an already alphabetically-sorted list. Re-sorting here would
+    silently reassign entries to the wrong bit whenever PermissionCode.java's
+    batch is not itself in alphabetical order (e.g. a batch bit-ordered by
+    controller/feature rather than by name) - PermissionCode.java and this
+    mirror would then decode the same bit to two different permissions.
+    """
     java_path = root / GATEWAY_CATALOG_RELPATH
     text = java_path.read_text(encoding="utf-8")
 
-    sorted_perms = sorted(new_perms)
+    sorted_perms = list(new_perms)
     end_bit = start_bit + len(sorted_perms) - 1
     bar = "─" * 42
     new_lines = [f"\n        // ── New batch (bits {start_bit}–{end_bit}) {bar}"]
@@ -467,11 +477,15 @@ def sync_gateway_catalog_java(
 def sync_downstream_catalog_java(
     root: Path, new_perms: list[str], start_bit: int, new_version: int, dry_run: bool
 ) -> None:
-    """Append new AUTHORITY_BY_BIT entries to DownstreamPermissionCatalog.java and set CATALOG_VERSION."""
+    """Append new AUTHORITY_BY_BIT entries to DownstreamPermissionCatalog.java and set CATALOG_VERSION.
+
+    See sync_gateway_catalog_java: new_perms must already be in bit order, not
+    re-sorted here.
+    """
     java_path = root / DOWNSTREAM_CATALOG_RELPATH
     text = java_path.read_text(encoding="utf-8")
 
-    sorted_perms = sorted(new_perms)
+    sorted_perms = list(new_perms)
     end_bit = start_bit + len(sorted_perms) - 1
     bar = "─" * 42
     new_lines = [f"\n        // ── New batch (bits {start_bit}–{end_bit}) {bar}"]

@@ -80,10 +80,10 @@ public class ItemCostController {
     }
 
     @GetMapping("/{itemId}/costs")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasAuthority('" + CatalogPermissions.ITEM_COST_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", "ROLE_MANAGER", CatalogPermissions.ITEM_COST_READ})
     @Operation(operationId = "getItemCosts", summary = "Get Current Item Costs", description = """
             Returns the item's current standard, average and last known costs in one record.
             Use this tool to read cost values; do not use updateStandardItemCost, which changes the standard \
@@ -104,10 +104,10 @@ public class ItemCostController {
     }
 
     @GetMapping("/{itemId}/costs/audit")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasAuthority('" + CatalogPermissions.ITEM_COST_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", "ROLE_MANAGER", CatalogPermissions.ITEM_COST_READ})
     @Operation(operationId = "getItemCostAuditHistory", summary = "Get Item Cost Audit History", description = """
             Returns every recorded cost change for an item, newest first, each entry naming the cost type \
             changed, old and new value, the actor, the change source and any reason code.

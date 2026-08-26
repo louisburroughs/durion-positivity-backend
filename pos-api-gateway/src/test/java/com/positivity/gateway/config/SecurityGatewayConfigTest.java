@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 60")
+    @DisplayName("CATALOG_VERSION is 61")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(60);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(61);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 471")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 487")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1348,8 +1348,30 @@ class SecurityGatewayConfigTest {
         // code as a capability flag, but it had no bit index, so JwtServiceImpl dropped it from
         // every token and the flag was permanently false for everyone.
         assertThat(GatewayPermissionCatalog.authorityForBit(471)).isEqualTo("PERM_workorder:financials:view");
+        // Catalog phantom-role closure (#1499/#1512 audit, part 2). These 32 endpoints were gated
+        // on hasRole('CATALOG_VIEW'/'CATALOG_EDIT'/'CATALOG_DELETE'), roles that exist in no
+        // migration, so the checks silently collapsed to ADMIN-only. These 16 codes give them real
+        // authorities to enforce.
+        assertThat(GatewayPermissionCatalog.authorityForBit(472)).isEqualTo("PERM_catalog:guardrail_policy:write");
+        assertThat(GatewayPermissionCatalog.authorityForBit(473))
+                .isEqualTo("PERM_catalog:location_price_override:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(474))
+                .isEqualTo("PERM_catalog:location_price_override:write");
+        assertThat(GatewayPermissionCatalog.authorityForBit(475)).isEqualTo("PERM_catalog:non_inventory:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(476)).isEqualTo("PERM_catalog:substitution_group:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(477)).isEqualTo("PERM_catalog:substitution_group:edit");
+        assertThat(GatewayPermissionCatalog.authorityForBit(478)).isEqualTo("PERM_catalog:catalog_grouping:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(479)).isEqualTo("PERM_catalog:catalog_grouping:edit");
+        assertThat(GatewayPermissionCatalog.authorityForBit(480)).isEqualTo("PERM_catalog:catalog_grouping:delete");
+        assertThat(GatewayPermissionCatalog.authorityForBit(481)).isEqualTo("PERM_catalog:uom_conversion:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(482)).isEqualTo("PERM_catalog:uom_conversion:edit");
+        assertThat(GatewayPermissionCatalog.authorityForBit(483)).isEqualTo("PERM_catalog:product_uom:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(484)).isEqualTo("PERM_catalog:product_uom:edit");
+        assertThat(GatewayPermissionCatalog.authorityForBit(485)).isEqualTo("PERM_catalog:item_cost:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(486)).isEqualTo("PERM_catalog:tread_design:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(487)).isEqualTo("PERM_catalog:fact:replay");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(472)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(488)).isNull();
     }
 
     @Test

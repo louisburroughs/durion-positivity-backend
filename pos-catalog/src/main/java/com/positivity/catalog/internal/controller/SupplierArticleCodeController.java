@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.SupplierArticleCodeReplayService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -39,10 +40,10 @@ public class SupplierArticleCodeController {
 
     private final SupplierArticleCodeReplayService supplierArticleCodeReplayService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.FACT_REPLAY + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.FACT_REPLAY})
     @PostMapping("/replay")
     @EmitEvent(id = "CATALOG_SUPPLIER_ARTICLE_CODE_REPLAY", apiVersion = "1")
     @Operation(
