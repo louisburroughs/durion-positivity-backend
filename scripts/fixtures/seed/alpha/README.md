@@ -60,11 +60,14 @@ person UUIDs — identity flows through the API, which is the point.
 - `preferredContactMethod` is derived (EMAIL when an email is present, else
   PHONE_CALL); the seed's PHONE_CALL/SMS/NONE spread (10/7/6) is not preserved because
   every row has an email.
-- The seed's 20 commercial parties, their 20 primary + 20 billing contacts, and the
-  party relationships are **not yet converted** — the bulk-ingest path cannot create
-  commercial accounts. They need either a commercial bulk-ingest wave in pos-customer
-  or scripted gateway API calls before
-  `R__seed_customer_operational_data.sql` can be deleted.
+- The seed's 20 commercial parties and their primary contacts are **not yet
+  converted**. The endpoint for them now exists —
+  `POST /v1/customer/commercial/bulk-ingest` creates the account (customer number is
+  service-generated; the seed's `CUST-CP-*` numbers are not preserved) and optionally
+  creates + attaches one PRIMARY_CONTACT person per row — but the fixture CSV and a
+  bulk-loader COMMERCIAL job are still to come. The 20 billing-contact persons
+  (`01960026-*`) have no active seed rows in pos-customer since V6 dropped the contact
+  table; whether to model them as BILLING relationships is a conversion-time decision.
 
 Because coverage is partial, the Flyway seed file (and its
 `scripts/flyway-seed-baseline.txt` line) stays until the commercial half is convertible
