@@ -47,7 +47,8 @@ public class PermissionServiceImpl implements PermissionService {
             permission.setDescription(definition.getDescription());
             permission.setRegisteredByService(
                     request.getServiceName() != null ? request.getServiceName() : "pos-security-service");
-            permission.setDeprecated(false);
+            permission.setDeprecated(definition.isDeprecated());
+            permission.setSupersededBy(definition.getSupersededBy());
             permission.parsePermissionName();
             Permission saved = permissionRepository.save(permission);
             upsertedPermissions.add(toDto(saved));
@@ -97,6 +98,7 @@ public class PermissionServiceImpl implements PermissionService {
                 .domain(permission.getDomain())
                 .description(permission.getDescription())
                 .deprecated(permission.isDeprecated())
+                .supersededBy(permission.getSupersededBy())
                 .build();
     }
 }

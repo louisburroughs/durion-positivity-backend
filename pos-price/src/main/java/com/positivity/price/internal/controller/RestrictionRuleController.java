@@ -5,9 +5,11 @@ import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
 import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.RestrictionRuleService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -99,16 +101,23 @@ public class RestrictionRuleController {
                     Returns a single sale-restriction rule, active or inactive, identified by its rule id.
                     Use this tool when the rule id is already known, typically from an evaluation result's ruleIds; \
                     use listRestrictionRules instead to browse the active rule set.
-                    Preconditions: the rule must exist; inactive rules remain readable through this operation.
+                    Preconditions: none beyond the pricing:rule:view authority; the rule must also exist, and \
+                    inactive rules remain readable through this operation.
                     Required inputs: ruleId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 404 when no restriction rule exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Restriction rule found.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"pricing:rule:view"})
+    @PreAuthorize("hasAuthority('" + PricingPermissions.RULE_VIEW + "')")
     @GetMapping("/{ruleId}")
     public ResponseEntity<@NonNull RestrictionRuleResponse> getRuleById(@PathVariable @NonNull UUID ruleId) {
         log.info("GET /v1/price/restrictions/rules/{}", ruleId);
@@ -120,15 +129,21 @@ public class RestrictionRuleController {
                     Lists every currently active sale-restriction rule that can affect pricing and sale decisions.
                     Use this tool to review the standing restriction policy; use getRestrictionRuleById instead to \
                     fetch one rule, including deactivated rules, which this listing omits.
-                    Preconditions: none beyond an authenticated caller.
+                    Preconditions: none beyond the pricing:rule:view authority.
                     Required inputs: none; there is no request body, filtering, or paging.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 200 with an empty array when no active restriction rules exist.
                     """)
     @ApiResponse(responseCode = "200", description = "List of restriction rules.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"pricing:rule:view"})
+    @PreAuthorize("hasAuthority('" + PricingPermissions.RULE_VIEW + "')")
     @GetMapping
     public ResponseEntity<@NonNull List<RestrictionRuleResponse>> listRules() {
         log.info("GET /v1/price/restrictions/rules");

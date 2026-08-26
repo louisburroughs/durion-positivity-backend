@@ -1,9 +1,9 @@
-generatedAt: "2026-08-23T21:53:24.976391+00:00"
+generatedAt: "2026-08-26T00:55:58.607722+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 434
-  uniquePermissionCount: 434
+  permissionCount: 436
+  uniquePermissionCount: 436
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -314,7 +314,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 53
+    permissionCount: 55
     permissions:
       - name: "inventory:adjustment:approve"
         description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
@@ -330,6 +330,10 @@ manifests:
         description: "Create an Advance Shipping Notice (ASN)"
       - name: "inventory:asn:view"
         description: "View ASN details and status"
+      - name: "inventory:availability:read"
+        description: "Read availability for a SKU: on-hand net of prior commitments plus forecast, optionally scoped to a location"
+      - name: "inventory:availability:search"
+        description: "Read the per-location availability breakdown, enumerating every location holding the SKU"
       - name: "inventory:cycle_count:complete"
         description: "Complete and submit cycle count results"
       - name: "inventory:cycle_count:initiate"
@@ -1002,8 +1006,6 @@ manifests:
         description: "Consume picked items into workorder via pick facade"
       - name: "workorder:parts:view"
         description: "View parts on workorder"
-      - name: "workorder:start"
-        description: "Start workorder"
       - name: "workorder:timeEntry:approve"
         description: "Approve timeEntry"
       - name: "workorder:timeEntry:reject"
@@ -1036,6 +1038,8 @@ manifests:
         description: "Request or re-request a fleet payment authorization for a workorder"
       - name: "workorder:fleet_auth:resolve"
         description: "Resolve a fleet payment authorization that was refused, by revising scope or cancelling"
+      - name: "workorder:financials:view"
+        description: "View workorder financial detail (cost and margin) on the workorder detail response"
 permissions:
   - name: "accounting:ap:pay"
     description: "Process payments"
@@ -1861,6 +1865,18 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:asn:view"
     description: "View ASN details and status"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:availability:read"
+    description: "Read availability for a SKU: on-hand net of prior commitments plus forecast, optionally scoped to a location"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:availability:search"
+    description: "Read the per-location availability breakdown, enumerating every location holding the SKU"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"
@@ -3485,6 +3501,12 @@ permissions:
     serviceName: "pos-workorder"
     module: "pos-workorder"
     source: "pos-workorder/src/main/resources/permissions.yaml"
+  - name: "workorder:financials:view"
+    description: "View workorder financial detail (cost and margin) on the workorder detail response"
+    domain: "workorder"
+    serviceName: "pos-workorder"
+    module: "pos-workorder"
+    source: "pos-workorder/src/main/resources/permissions.yaml"
   - name: "workorder:fleet_auth:request"
     description: "Request or re-request a fleet payment authorization for a workorder"
     domain: "workorder"
@@ -3547,12 +3569,6 @@ permissions:
     source: "pos-workorder/src/main/resources/permissions.yaml"
   - name: "workorder:parts:view"
     description: "View parts on workorder"
-    domain: "workorder"
-    serviceName: "pos-workorder"
-    module: "pos-workorder"
-    source: "pos-workorder/src/main/resources/permissions.yaml"
-  - name: "workorder:start"
-    description: "Start workorder"
     domain: "workorder"
     serviceName: "pos-workorder"
     module: "pos-workorder"

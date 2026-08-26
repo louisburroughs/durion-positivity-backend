@@ -128,6 +128,32 @@ class PermissionRegistrationSupportTest {
     }
 
     @Test
+    @DisplayName(
+            "carries deprecated and supersededBy from PermissionDefinition through to the PermissionDto sent on the wire")
+    void run_sendsDeprecatedAndSupersededByInRequestBody() {
+        List<PermissionDefinition> permissions = List.of(
+                new PermissionDefinition("catalog:product:view", "View products"),
+                new PermissionDefinition(
+                        "accounting:ap:approve", "Approve accounts payable", true, "accounting:ap:pay"));
+
+        new InlineRegistration(true, permissions).run(null);
+
+        verify(requestBodyUriSpec).body(requestBody.capture());
+        assertThat(requestBody.getValue())
+                .isInstanceOfSatisfying(PermissionRegistrationSupport.PermissionRegistrationRequest.class, request -> {
+                    assertThat(request.permissions())
+                            .extracting(
+                                    PermissionRegistrationSupport.PermissionDto::name,
+                                    PermissionRegistrationSupport.PermissionDto::deprecated,
+                                    PermissionRegistrationSupport.PermissionDto::supersededBy)
+                            .containsExactly(
+                                    org.assertj.core.groups.Tuple.tuple("catalog:product:view", false, null),
+                                    org.assertj.core.groups.Tuple.tuple(
+                                            "accounting:ap:approve", true, "accounting:ap:pay"));
+                });
+    }
+
+    @Test
     @DisplayName("makes no outbound call when registration is disabled")
     void run_whenDisabled_makesNoCall() {
         new InlineRegistration(false, PERMISSIONS).run(null);

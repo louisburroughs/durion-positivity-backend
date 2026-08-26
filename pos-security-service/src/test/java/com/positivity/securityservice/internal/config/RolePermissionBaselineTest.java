@@ -62,7 +62,16 @@ import org.junit.jupiter.api.Test;
  * (deduped against ADMIN, which already held the surviving code), and {@code shop:location:view}
  * / {@code shop:bay:view} rows were relabeled to {@code location:read} / {@code
  * location:bay:read} (with LOCATION_MANAGER's {@code shop:location/bay:create/edit} rows
- * relabeled to {@code location:write} / {@code location:bay:manage}).
+ * relabeled to {@code location:write} / {@code location:bay:manage}). The 2026-08 task 5
+ * retirement wave ({@code V28__retire_unenforced_permission_grants.sql}, docs/rbac-permission-
+ * role-audit-2026-08.md §7) deleted the fixture's 38 rows for the 34 codes it retires outright
+ * (enforced by no endpoint or capability check — ADMIN, plus LOCATION_MANAGER and
+ * SERVICE_ADVISOR for two of them) rather than relabeling them to a successor: these are
+ * deliberate retirements with no role that should keep the capability, not a rename. The
+ * follow-on 2026-08 task 5 enforcement wave (§7 task 5, no versioned migration — seed-only and
+ * purely additive) then paired 15 of the codes gated by pos-catalog/pos-price/pos-vehicle-inventory/
+ * pos-vehicle-fitment's new {@code @PreAuthorize} checks with the role grants their personas need,
+ * adding rows only and touching no legacy-baseline fixture row.
  */
 @DisplayName("role_permissions baseline seed")
 class RolePermissionBaselineTest {

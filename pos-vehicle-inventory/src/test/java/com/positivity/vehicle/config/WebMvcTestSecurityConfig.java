@@ -35,7 +35,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class WebMvcTestSecurityConfig {
 
     private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
-            new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("vehicle-inventory:registry:create"));
+            new SimpleGrantedAuthority("ROLE_ADMIN"),
+            new SimpleGrantedAuthority("vehicle-inventory:registry:view"),
+            new SimpleGrantedAuthority("vehicle-inventory:registry:create"),
+            new SimpleGrantedAuthority("vehicle-inventory:registry:update"),
+            new SimpleGrantedAuthority("vehicle-inventory:registry:delete"),
+            new SimpleGrantedAuthority("vehicle-inventory:search:view"),
+            new SimpleGrantedAuthority("vehicle-inventory:preferences:manage"));
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary

@@ -6,6 +6,7 @@ import com.positivity.vehiclefitment.internal.dto.FilterProductsRequest;
 import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.dto.UpdateHintRequest;
+import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
 import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -64,6 +65,10 @@ public class VehicleApplicabilityHintController {
     @ApiResponse(responseCode = "201", description = "Hint created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @ApiResponse(responseCode = "404", description = "Product not found")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.HINT_CREATE})
     @EmitEvent(id = "VEHICLE_HINT_CREATED", apiVersion = "1")
     @PostMapping
     public ResponseEntity<HintResponse> createHint(
@@ -111,6 +116,10 @@ public class VehicleApplicabilityHintController {
     @ApiResponse(responseCode = "200", description = "Hint updated successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
     @ApiResponse(responseCode = "404", description = "Hint not found")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_UPDATE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.HINT_UPDATE})
     @EmitEvent(id = "VEHICLE_HINT_UPDATED", apiVersion = "1")
     @PutMapping("/{hintId}")
     public ResponseEntity<HintResponse> updateHint(
@@ -155,6 +164,10 @@ public class VehicleApplicabilityHintController {
                     """)
     @ApiResponse(responseCode = "204", description = "Hint deleted successfully")
     @ApiResponse(responseCode = "404", description = "Hint not found")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_DELETE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.HINT_DELETE})
     @EmitEvent(id = "VEHICLE_HINT_DELETED", apiVersion = "1")
     @DeleteMapping("/{hintId}")
     public ResponseEntity<Void> deleteHint(
@@ -179,6 +192,10 @@ public class VehicleApplicabilityHintController {
                     """)
     @ApiResponse(responseCode = "200", description = "Hint retrieved successfully")
     @ApiResponse(responseCode = "404", description = "Hint not found")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.HINT_VIEW})
     @GetMapping("/{hintId}")
     public ResponseEntity<HintResponse> getHint(
             @Parameter(description = "ID of the hint to retrieve") @PathVariable UUID hintId) {
@@ -203,6 +220,10 @@ public class VehicleApplicabilityHintController {
                     Returns 200 with the hint list, which is empty when the product has no hints.
                     """)
     @ApiResponse(responseCode = "200", description = "Hints retrieved successfully")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.HINT_VIEW})
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<HintResponse>> getHintsByProductId(
             @Parameter(description = "ID of the product") @PathVariable UUID productId) {
@@ -231,6 +252,10 @@ public class VehicleApplicabilityHintController {
                     """)
     @ApiResponse(responseCode = "200", description = "Products filtered successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request data")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.CATALOG_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.CATALOG_VIEW})
     @EmitEvent(id = "FITMENT_PRODUCTS_FILTER", apiVersion = "1")
     @PostMapping("/filter-products")
     public ResponseEntity<FilterProductsResponse> filterProducts(

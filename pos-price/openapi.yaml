@@ -95,7 +95,7 @@ paths:
 
         Use this tool only to probe for the future normalization capability; use calculatePriceQuote instead for any real pricing work, since no normalization logic exists yet.
 
-        Preconditions: none; any authenticated caller is accepted.
+        Preconditions: none beyond the pricing:normalization:edit authority.
 
         Required inputs: none are read; the optional JSON body is accepted but ignored.
 
@@ -121,6 +121,18 @@ paths:
               schema:
                 type: object
           description: Invalid request body.
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
         '500':
           content:
             application/json:
@@ -134,12 +146,13 @@ paths:
                 type: object
           description: Not yet implemented.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:normalization:edit
       summary: Normalize Pricing Data
       tags:
       - Price Normalization
       x-required-permissions:
-      - AUTHENTICATED
+      - pricing:normalization:edit
   /v1/price/quotes:
     post:
       description: 'Calculates a contextual unit and extended price for a product by resolving, in order, the base MSRP effective at the pricing instant, then an active location price override that replaces the running price, then a customer tier discount rate applied to the running price.
@@ -211,7 +224,7 @@ paths:
 
         Use this tool to review the standing restriction policy; use getRestrictionRuleById instead to fetch one rule, including deactivated rules, which this listing omits.
 
-        Preconditions: none beyond an authenticated caller.
+        Preconditions: none beyond the pricing:rule:view authority.
 
         Required inputs: none; there is no request body, filtering, or paging.
 
@@ -238,13 +251,20 @@ paths:
                   $ref: '#/components/schemas/RestrictionRuleResponse'
                 type: array
           description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:rule:view
       summary: List All Active Restriction Rules
       tags:
       - Restriction Rules
       x-required-permissions:
-      - AUTHENTICATED
+      - pricing:rule:view
     post:
       description: 'Creates an active sale-restriction rule that blocks or gates a product for a location tag and service tag combination.
 
@@ -372,7 +392,7 @@ paths:
 
         Use this tool when the rule id is already known, typically from an evaluation result''s ruleIds; use listRestrictionRules instead to browse the active rule set.
 
-        Preconditions: the rule must exist; inactive rules remain readable through this operation.
+        Preconditions: none beyond the pricing:rule:view authority; the rule must also exist, and inactive rules remain readable through this operation.
 
         Required inputs: ruleId (UUID) as a path parameter; there is no request body.
 
@@ -402,6 +422,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestrictionRuleResponse'
           description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
         '404':
           content:
             application/json:
@@ -409,19 +435,20 @@ paths:
                 $ref: '#/components/schemas/RestrictionRuleResponse'
           description: Restriction rule not found.
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:rule:view
       summary: Get A Restriction Rule By ID
       tags:
       - Restriction Rules
       x-required-permissions:
-      - AUTHENTICATED
+      - pricing:rule:view
   /v1/price/restrictions:evaluate:
     post:
       description: 'Evaluates each submitted product and context entry against active sale-restriction rules and returns a per-item decision of ALLOW, BLOCK, ALLOW_WITH_OVERRIDE, or RESTRICTION_UNKNOWN.
 
         Use this tool before quoting or selling a product to learn whether the sale is blocked or needs an override; do not use overridePriceRestriction, which records the override itself after a decision of ALLOW_WITH_OVERRIDE.
 
-        Preconditions: none; items with no matching active rule resolve to ALLOW.
+        Preconditions: none beyond the pricing:restrictions:view authority; items with no matching active rule resolve to ALLOW.
 
         Required inputs: items (at least one), each with productId (UUID), locationTag, serviceTag, and context (BROWSE, QUOTE, CHECKOUT, INVOICE_FINALIZE, or COMMIT_SALE); any matching rule with overrideable false forces BLOCK, otherwise matching rules yield ALLOW_WITH_OVERRIDE with the matched ruleIds.
 
@@ -466,6 +493,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestrictionEvaluationResponse'
           description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
         '503':
           content:
             application/json:
@@ -473,12 +506,13 @@ paths:
                 $ref: '#/components/schemas/RestrictionEvaluationResponse'
           description: Restriction evaluation service unavailable (commit path only).
       security:
-      - bearerAuth: []
+      - bearerAuth:
+        - pricing:restrictions:view
       summary: Evaluate Price Restrictions
       tags:
       - Price Restrictions
       x-required-permissions:
-      - AUTHENTICATED
+      - pricing:restrictions:view
   /v1/price/restrictions:override:
     post:
       description: 'Issues an audited, time-boxed override of a sale-restriction rule for a specific transaction and product.

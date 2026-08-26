@@ -138,7 +138,7 @@ paths:
       tags:
       - Vehicle Applicability Hints
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:hint:create
   /v1/vehicle-fitment/hints/filter-products:
     post:
       description: 'Finds product ids whose applicability hints are compatible with a supplied set of vehicle attributes such as make, model and year.
@@ -189,7 +189,7 @@ paths:
       tags:
       - Vehicle Applicability Hints
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:catalog:view
   /v1/vehicle-fitment/hints/product/{productId}:
     get:
       description: 'Returns every vehicle applicability hint recorded for one product, each with its full fitment tag list.
@@ -229,7 +229,7 @@ paths:
       tags:
       - Vehicle Applicability Hints
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:hint:view
   /v1/vehicle-fitment/hints/{hintId}:
     delete:
       description: 'Deletes a vehicle applicability hint together with all fitment tags attached to it, removing those match criteria from product filtering.
@@ -265,7 +265,7 @@ paths:
       tags:
       - Vehicle Applicability Hints
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:hint:delete
     get:
       description: 'Returns one vehicle applicability hint, including its productId, fitment tags and audit fields.
 
@@ -308,7 +308,7 @@ paths:
       tags:
       - Vehicle Applicability Hints
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:hint:view
     put:
       description: 'Replaces the full set of fitment tags on an existing vehicle applicability hint; the previous tags are deleted and the submitted list becomes the hint''s only tags.
 
@@ -375,7 +375,7 @@ paths:
       tags:
       - Vehicle Applicability Hints
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:hint:update
   /v1/vehicle-fitment/makes/{manufacturerId}:
     get:
       description: 'Returns all vehicle makes recorded for one manufacturer, served from a local cache of the NHTSA vPIC registry.
@@ -416,7 +416,7 @@ paths:
       tags:
       - Vehicle Fitment API
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:catalog:view
   /v1/vehicle-fitment/manufacturers:
     get:
       description: 'Returns the list of vehicle manufacturers known to the fitment service, served from a local cache of the NHTSA vPIC registry.
@@ -448,7 +448,7 @@ paths:
       tags:
       - Vehicle Fitment API
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:catalog:view
   /v1/vehicle-fitment/models/{makeId}:
     get:
       description: 'Returns all vehicle models recorded for one make, served from a local cache of the NHTSA vPIC registry.
@@ -489,7 +489,7 @@ paths:
       tags:
       - Vehicle Fitment API
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:catalog:view
   /v1/vehicle-fitment/vehicle-types/{makeId}:
     get:
       description: 'Returns the vehicle types, meaning body classes such as Passenger Car or Truck, recorded for one make, served from a local cache of the NHTSA vPIC registry.
@@ -530,7 +530,7 @@ paths:
       tags:
       - Vehicle Fitment API
       x-required-permissions:
-      - AUTHENTICATED
+      - vehicle-fitment:catalog:view
 components:
   schemas:
     BulkIngestRequestFitmentBulkIngestRecord:

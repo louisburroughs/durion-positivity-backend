@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehicleSearchService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -179,6 +180,27 @@ class VehicleSearchControllerWebMvcTest {
     @DisplayName("rejects an unauthenticated request")
     void unauthenticatedRequestIsRejected() throws Exception {
         mockMvc.perform(get(PATH).param("q", "HONDA")).andExpect(status().isUnauthorized());
+
+        verify(searchService, never()).search(any());
+    }
+
+    @Test
+    @DisplayName("registry:view does not open search (Task-5, decisions k/l)")
+    void registryViewAuthorityDoesNotOpenSearch() throws Exception {
+        // Distinct permission from vehicle-inventory:registry:view, which is a plausible authority
+        // for the same operator to hold: a copy-paste onto the wrong constant would let it through.
+        mockMvc.perform(get(PATH)
+                        .param("q", "HONDA")
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_VIEW))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post(PATH)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_VIEW)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"HONDA\"}"))
+                .andExpect(status().isForbidden());
 
         verify(searchService, never()).search(any());
     }

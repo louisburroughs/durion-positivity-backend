@@ -222,6 +222,14 @@ def write_permissions_yaml(
         desc = p.get("description", "") or ""
         lines.append(f"  - name: {yaml_double_quoted(p['name'])}")
         lines.append(f"    description: {yaml_double_quoted(desc)}")
+        # Optional deprecation metadata: only emitted when present, so untouched
+        # manifests stay byte-identical. Stable field order: name, description,
+        # deprecated, supersededBy.
+        if p.get("deprecated"):
+            lines.append("    deprecated: true")
+        superseded_by = p.get("supersededBy")
+        if superseded_by:
+            lines.append(f"    supersededBy: {yaml_double_quoted(superseded_by)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -237,23 +245,37 @@ def process_module(
     service_name: str = existing.get("serviceName", module_path.name)
     version: str = str(existing.get("version", "1.0"))
 
-    existing_descs: dict[str, str] = {
-        e["name"]: e.get("description", "")
+    # Full existing entry metadata (description + optional deprecated/supersededBy),
+    # keyed by name, so a later merge can't silently drop deprecation info that was
+    # hand-added or carried from a previous sync.
+    existing_entries: dict[str, dict] = {
+        e["name"]: e
         for e in existing.get("permissions", [])
         if isinstance(e, dict) and "name" in e
     }
 
     own_perms, cross_perms = scan_module(module_path, domain, const_map)
 
-    added = own_perms - existing_descs.keys()
+    added = own_perms - existing_entries.keys()
     # Additive-only: never remove existing entries. Permissions may be enforced
     # via programmatic authority checks (e.g. authorities.contains()) that are
     # invisible to static @PreAuthorize scanning.
-    merged_perms = {**{name: default_description(name) for name in own_perms}, **existing_descs}
+    merged_entries = {
+        **{name: {"name": name, "description": default_description(name)} for name in own_perms},
+        **existing_entries,
+    }
     changed = bool(added)
 
     new_permissions = sorted(
-        [{"name": name, "description": desc} for name, desc in merged_perms.items()],
+        [
+            {
+                "name": name,
+                "description": entry.get("description", "") or "",
+                "deprecated": bool(entry.get("deprecated", False)),
+                "supersededBy": entry.get("supersededBy"),
+            }
+            for name, entry in merged_entries.items()
+        ],
         key=lambda p: p["name"],
     )
 

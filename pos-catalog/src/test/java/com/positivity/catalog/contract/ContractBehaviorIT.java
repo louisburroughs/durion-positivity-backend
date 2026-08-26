@@ -85,6 +85,62 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
+    @DisplayName("RBAC-001: getProductById is reachable with catalog:product:view alone, no ADMIN role")
+    void testGetProductById_WithProductViewPermission_NoAdminRole() throws Exception {
+        UUID productId = createProductAndReturnId("RBAC-001 Product");
+
+        mockMvc.perform(withAuth(get("/v1/products/{productId}", productId), "catalog:product:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(productId.toString()));
+    }
+
+    @Test
+    @DisplayName("RBAC-002: getProductById rejects the retired CATALOG_VIEW role with no ADMIN or real permission")
+    void testGetProductById_WithDeadCatalogViewRole_Forbidden() throws Exception {
+        UUID productId = createProductAndReturnId("RBAC-002 Product");
+
+        mockMvc.perform(withAuth(get("/v1/products/{productId}", productId), "ROLE_CATALOG_VIEW"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("RBAC-003: searchCatalogServices is reachable with catalog:service_type:view alone, no ADMIN role")
+    void testSearchServices_WithServiceTypeViewPermission_NoAdminRole() throws Exception {
+        mockMvc.perform(withAuth(
+                        get("/v1/products/services/search").param("q", "anything"), "catalog:service_type:view"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("RBAC-004: deleteCatalogItem removes a product with catalog:product:delete alone, no ADMIN role")
+    void testDeleteCatalogItem_Product_WithProductDeletePermission_NoAdminRole() throws Exception {
+        UUID productId = createProductAndReturnId("RBAC-004 Product");
+
+        mockMvc.perform(withAuth(
+                        delete("/v1/catalog-items/{type}/{catalogId}", "product", productId), "catalog:product:delete"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("RBAC-005: deleteCatalogItem does not let catalog:product:delete reach a service delete")
+    void testDeleteCatalogItem_Service_WithProductDeletePermission_Forbidden() throws Exception {
+        UUID serviceId = createServiceAndReturnId("RBAC-005 Service");
+
+        mockMvc.perform(withAuth(
+                        delete("/v1/catalog-items/{type}/{catalogId}", "service", serviceId), "catalog:product:delete"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("RBAC-006: deleteCatalogItem still deletes a service via ADMIN, unchanged pending permission")
+    void testDeleteCatalogItem_Service_WithAdminRole_Deletes() throws Exception {
+        UUID serviceId = createServiceAndReturnId("RBAC-006 Service");
+
+        mockMvc.perform(withAuth(delete("/v1/catalog-items/{type}/{catalogId}", "service", serviceId), "ROLE_ADMIN"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
     @DisplayName("CP-010: Create active location override within auto-approval threshold")
     void testCreateLocationOverride_ActiveWithinThreshold() throws Exception {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -528,6 +584,22 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                 "shortDescription", name + " short description",
                 "longDescription", name + " long description",
                 "sku", "SKU-" + UUID.randomUUID()));
+    }
+
+    private UUID createServiceAndReturnId(String name) throws Exception {
+        MvcResult result = mockMvc.perform(withAuth(post("/v1/catalog-items/{type}", "service"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", name,
+                                "shortDescription", name + " short description",
+                                "longDescription", name + " long description"))))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response =
+                objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+        return UUID.fromString((String) response.get("id"));
     }
 
     private String guardrailPolicyPayload(

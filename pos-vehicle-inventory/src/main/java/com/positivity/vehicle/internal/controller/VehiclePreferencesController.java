@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceMapper;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehiclePreferencesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -77,6 +78,10 @@ public class VehiclePreferencesController {
             description = "Preferences found and returned",
             content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
     @ApiResponse(responseCode = "404", description = "No preferences found for this vehicle")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.PREFERENCES_MANAGE})
     @GetMapping
     public ResponseEntity<VehicleCarePreferenceResponse> getPreferences(
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {
@@ -120,6 +125,10 @@ public class VehiclePreferencesController {
             content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
     @ApiResponse(responseCode = "404", description = "Vehicle not found")
     @ApiResponse(responseCode = "400", description = "Invalid preference data")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.PREFERENCES_MANAGE})
     @PutMapping
     @EmitEvent(id = "VEHICLE_PREFERENCES_UPSERT", apiVersion = "1")
     public ResponseEntity<VehicleCarePreferenceResponse> upsertPreferences(
@@ -182,6 +191,10 @@ public class VehiclePreferencesController {
             description = "Preferences merged successfully",
             content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
     @ApiResponse(responseCode = "404", description = "No existing preferences to merge into")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.PREFERENCES_MANAGE})
     @PatchMapping
     @EmitEvent(id = "VEHICLE_PREFERENCES_MERGE", apiVersion = "1")
     public ResponseEntity<VehicleCarePreferenceResponse> mergePreferences(
@@ -226,6 +239,10 @@ public class VehiclePreferencesController {
     @ApiResponse(
             responseCode = "204",
             description = "Preferences deleted, or no preference document existed (idempotent delete)")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.PREFERENCES_MANAGE})
     @DeleteMapping
     @EmitEvent(id = "VEHICLE_PREFERENCES_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deletePreferences(@Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {

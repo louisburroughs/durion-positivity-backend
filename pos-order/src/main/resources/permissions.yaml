@@ -22,6 +22,8 @@ permissions:
     description: "Check out with ON_ACCOUNT tender: charge a validated commercial customer's account"
   - name: "order:line:view"
     description: "View order lines"
+    deprecated: true
+    supersededBy: "order:order:view"
   - name: "order:line:create"
     description: "Add order lines"
   - name: "order:line:edit"

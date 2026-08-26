@@ -200,7 +200,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
             try {
                 // Convert to the format expected by pos-security-service
                 List<PermissionDto> permissionDtos = permissions.stream()
-                        .map(p -> new PermissionDto(p.name(), p.description()))
+                        .map(p -> new PermissionDto(p.name(), p.description(), p.deprecated(), p.supersededBy()))
                         .toList();
 
                 PermissionRegistrationRequest request =
@@ -273,5 +273,5 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
     /**
      * Permission definition DTO (matches pos-security-service DTO).
      */
-    public record PermissionDto(String name, String description) {}
+    public record PermissionDto(String name, String description, boolean deprecated, String supersededBy) {}
 }

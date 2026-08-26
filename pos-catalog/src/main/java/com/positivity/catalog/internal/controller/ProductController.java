@@ -334,10 +334,10 @@ public class ProductController {
         return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW})
     @GetMapping("/search")
     @Operation(operationId = "searchCatalogProducts", summary = "Search Catalog Products", description = """
             Searches products with an optional free-text query over name and description plus exact \
@@ -542,10 +542,10 @@ public class ProductController {
         return ResponseEntity.ok(productMasterDataService.updateTrackingLevel(productId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW})
     @GetMapping("/{productId}")
     @Operation(operationId = "getProductById", summary = "Get a Product by ID", description = """
             Returns the full product record including identity codes, manufacturer data, category, dimensions, \
@@ -637,10 +637,10 @@ public class ProductController {
         return ResponseEntity.ok(productFactReplayService.replayPage(afterProductId, updatedSince, limit));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW})
     @GetMapping("/by-code")
     @EmitEvent(id = "CATALOG_PRODUCT_CODE_LOOKUP", apiVersion = "1")
     @Operation(operationId = "findProductByCode", summary = "Find a Product by Exact EAN or UPC", description = """
@@ -697,10 +697,10 @@ public class ProductController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW})
     @GetMapping("/name/{name}")
     @Operation(operationId = "listProductsByName", summary = "List Products by Exact Name", description = """
             Returns every product whose name equals the supplied value exactly; this is a whole-name match, \
@@ -721,10 +721,10 @@ public class ProductController {
         return catalogService.getProductsByName(name);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW})
     @GetMapping("/{productId}/detail")
     @Operation(operationId = "getProductDetailView", summary = "Get Product Detail With Pricing", description = """
             Returns a consolidated product view for one location: catalog data, location-specific pricing, \
@@ -770,10 +770,10 @@ public class ProductController {
         return ResponseEntity.ok(productDetail);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SERVICE_TYPE_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SERVICE_TYPE_VIEW})
     @GetMapping("/services/search")
     @Operation(operationId = "searchCatalogServices", summary = "Search Catalog Services", description = """
             Searches services by a case-insensitive substring of the service name, ordered by name, sized for \
@@ -806,10 +806,10 @@ public class ProductController {
         return ResponseEntity.ok(catalogService.searchServices(q, limit));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SERVICE_TYPE_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SERVICE_TYPE_VIEW})
     @GetMapping("/services/{serviceId}")
     @Operation(operationId = "getServiceById", summary = "Get a Service by ID", description = """
             Returns one catalog service record with its name, short description and long description.
@@ -833,10 +833,10 @@ public class ProductController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SERVICE_TYPE_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.SERVICE_TYPE_VIEW})
     @GetMapping("/services/name/{name}")
     @Operation(operationId = "listServicesByName", summary = "List Services by Exact Name", description = """
             Returns every catalog service whose name equals the supplied value exactly; this is a whole-name \
@@ -1079,10 +1079,10 @@ public class ProductController {
                 .body(productLifecycleService.addReplacement(productId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW})
     @GetMapping("/{productId}/substitutes")
     @Operation(operationId = "getPartSubstitutes", summary = "Get Substitute Parts", description = """
             Returns the full product records of a product's recorded replacements, resolved from its \

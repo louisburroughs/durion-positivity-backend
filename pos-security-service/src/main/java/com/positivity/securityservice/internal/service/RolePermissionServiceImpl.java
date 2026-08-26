@@ -136,6 +136,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 .domain(permission.getDomain())
                 .description(permission.getDescription())
                 .deprecated(permission.isDeprecated())
+                .supersededBy(permission.getSupersededBy())
                 .build();
     }
 }

@@ -48,6 +48,8 @@ permissions:
     description: "Manage lot"
   - name: "inventory:on_hand:search"
     description: "Search inventory across multiple locations"
+    deprecated: true
+    supersededBy: "inventory:availability:read"
   - name: "inventory:on_hand:view"
     description: "View on-hand inventory levels at locations"
   - name: "inventory:override:part-match"
@@ -60,6 +62,7 @@ permissions:
     description: "View pick lists and pick tasks"
   - name: "inventory:purchase_order:receive"
     description: "Record receipts against an approved purchase order"
+    deprecated: true
   - name: "inventory:putaway:claim"
     description: "Claim a putaway task for execution"
   - name: "inventory:putaway:execute"

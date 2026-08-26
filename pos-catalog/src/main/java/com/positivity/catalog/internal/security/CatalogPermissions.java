@@ -23,6 +23,30 @@ public final class CatalogPermissions {
     /** Create a product in the catalog. */
     public static final String PRODUCT_CREATE = "catalog:product:create";
 
+    /**
+     * Read product catalog data.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}, which named a role nobody
+     * has ever been granted — the endpoints it guarded were reachable only through {@code ADMIN}.
+     */
+    public static final String PRODUCT_VIEW = "catalog:product:view";
+
+    /**
+     * Delete a product from the catalog.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_DELETE')} on product deletes; see
+     * {@link #PRODUCT_VIEW} for the same problem on the read side.
+     */
+    public static final String PRODUCT_DELETE = "catalog:product:delete";
+
+    /**
+     * Read service-type catalog data.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')} on the service-type read
+     * endpoints; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String SERVICE_TYPE_VIEW = "catalog:service_type:view";
+
     /** Read the manufacturer's suggested retail price carried on a catalog product. */
     public static final String MSRP_READ = "catalog:msrp:read";
 

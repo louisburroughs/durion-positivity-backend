@@ -1,18 +1,43 @@
 # RBAC Permission / Role Audit — August 2026
 
-Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on this branch**
-(migrations V24–V27 plus code/seed changes; see the §7 status column). Headline drift
-after execution: required-but-ungranted 112 → 2, granted-but-unenforced 77 → 64,
-unreachable contract operations 229 → 0, roles 16 → 17 (CONTROLLER). Waves 2 and 3
-(the §2 decisions and the accepted recommended-grants matrix) are seed-only — purely
-additive, no revocation migration needed. The two remaining required-but-ungranted
-entries are unwirable as-is: `workorder:financials:view` (no PermissionCode bit — needs
-a catalog entry before any grant can reach a JWT) and `people:timeEntry:` (a parser
-artifact of dynamic string construction, not a real code). The +14 in dead bits is
-the retired codes keeping their permanent bit indexes, as designed. (The audit script
-now excludes the `AUTHENTICATED` sentinel from its required-set computations — Copilot
-review on PR #1515; the pre-execution counts in the tables below predate that and
-include it as one entry in required-but-ungranted / unregistered / no-bit.)
+Status: **partially executed — tasks 1a, 2, 3, 5 (retirement wave + enforcement wave),
+9 and 10 are implemented on this branch** (migrations V24–V28 plus code/seed changes;
+see the §7 status column). Headline drift after execution: required-but-ungranted
+112 → 2, granted-but-unenforced 77 → 64 → 27 → 12 (V28's task-5 retirement wave revokes
+the grants for 34 confirmed-unenforced codes; the task-5 enforcement wave then landed
+live `@PreAuthorize` gates on 15 of the remaining 27 in pos-catalog/pos-price/
+pos-vehicle-inventory/pos-vehicle-fitment and paired the role grants those gates need —
+seed-only, no versioned migration, ADMIN already held every one so the code-level
+count moved but no operation went unreachable; see §3), unreachable contract
+operations 229 → 0, roles 16 → 17 (CONTROLLER), dead bits (bit assigned, neither
+granted nor required) 12 → 26 → 60 — the +34 is exactly V28's retired codes landing
+there, as designed: their permission-definition rows and `PermissionCode` bit indexes
+stay forever, only the grants retire. Waves 2 and 3 (the §2 decisions and the accepted
+recommended-grants matrix) are seed-only — purely additive, no revocation migration
+needed. The last real gap is closed: `workorder:financials:view` received
+PermissionCode bit 471
+(CATALOG_VERSION 59 → 60 — **a fleet-coordinated deploy**: the strict `perm_ver` check
+means every service must carry the new catalog before tokens minted at 60 circulate) and
+is granted to the manager trio, CONTROLLER and ADMIN. The only remaining
+required-but-ungranted entry is `people:timeEntry:`, a parser artifact of dynamic string
+construction, not a real code. (The audit script now excludes the `AUTHENTICATED`
+sentinel from its required-set computations — Copilot review on PR #1515; the
+pre-execution counts in the tables below predate that and include it as one entry in
+required-but-ungranted / unregistered / no-bit.) `scripts/audit-rbac.py` also gained two
+enforcement-detection patterns for task 5 (§3): it now resolves a permission constant
+compared directly against a `GrantedAuthority` (`X.equals(a.getAuthority())`, as seen in
+`WipController`) and calls to any permission-typed private helper (any `\w*(?:Permission|
+Authority)\w*(...)` call, not just the fixed `hasAuthority`/`hasPermission`/... list),
+which reclassifies `workorder:wip:view_all_locations` and the two
+`inventory:putaway:override_*` codes from granted-but-unenforced to genuinely enforced —
+they are not part of the retirement wave. A third fix reads each
+`@PreAuthorize`/`@PostAuthorize` argument with balanced-paren matching instead of a
+fixed 600-character window: the window swept in whatever followed the annotation, so an
+ALL-CAPS token in an `@EmitEvent` id or javadoc line was scored as enforcement whenever
+it matched a permission-constant name elsewhere in the repo. That is how
+`VehicleSearchController`'s `@EmitEvent(id = "VEHICLE_SEARCH")` made the retired
+`crm:vehicle:search` look required-but-ungranted; the endpoints are gated on
+`vehicle-inventory:search:view` throughout.
 One product decision was recorded and mapped in §6: **ACCOUNT_MANAGER becomes
 a customer-accounts (AR-facing) role, and a re-created CONTROLLER role takes all
 accounting management permissions**, including the loose (currently ungranted) ones.
@@ -115,7 +140,8 @@ them work:
   `accounting:time:export` (`PeopleReportsController`), which has a bit but is itself
   granted to no role.
 - `workorder:financials:view` — capability flag in `WorkorderDetailServiceImpl.java:124`;
-  permanently false for everyone.
+  permanently false for everyone. *(Fixed post-audit: bit 471 assigned, catalog v60,
+  granted to LOCATION_MANAGER, GENERAL_MANAGER, MANAGER, CONTROLLER, ADMIN.)*
 - `ACCOUNTING_ADMIN`, `AR_MANAGER` — **role names used as authorities** in
   `PaymentApplicationController.java:251` (`hasAnyAuthority(...)`). Neither role exists —
   no migration creates either name. Dead alternates —
@@ -220,10 +246,23 @@ catalog. None are marked deprecated anywhere — the `PermissionCode` javadoc pr
 
 | Superseded (bit) | Superseded by | Evidence | Still granted to |
 | --- | --- | --- | --- |
-| `inventory:on_hand:search` (65) | `inventory:availability:read` | ADR-0057, #1497, #1499 | ADMIN, INVENTORY_LEAD |
-| `inventory:purchase_order:create/view/approve/receive` (71–74) | `order:purchase_order:*` | seed header, tracked on #1438 | ADMIN |
+| `inventory:on_hand:search` (65) | `inventory:availability:read` | ADR-0057, #1497, #1499 | nobody (grants retired by V28, task 5) |
+| `inventory:purchase_order:create/view/approve` (71, 72, 73) | `order:purchase_order:*` | seed header, tracked on #1438 | nobody (grants retired by V28, task 5) |
+| `inventory:purchase_order:receive` (74) | `inventory:goods_receipt:create` / `inventory:receiving:complete` | **correction (task 5):** not `order:purchase_order:*` like its create/view/approve siblings — receipt confirmation lives in the goods-receipt/receiving surface, not the PO surface | nobody (grants retired by V28, task 5) |
 | `shop:location:view/create/edit/deactivate`, `shop:bay:view/create/edit` | `location:read/write`, `location:bay:manage` (pos-location); scheduling stayed as `shop:schedule:*`/`shop:bay:assign` | pos-shop-manager contract enforces none of them; pos-location enforces the new family | ADMIN, DISPATCHER, SERVICE_ADVISOR, SHOP_MANAGER, LOCATION_MANAGER |
 | `crm:vehicle:edit` (45), `crm:vehicle:deactivate` (46) | `vehicle-inventory:registry:update/delete` | ADR-0044 §6; `CrmPermissionRegistry.java:59` comment says "retired" | nobody (dead bits only) |
+| `crm:contact:create/edit/delete` (34–36) | `people-contact:person:edit` | contact points live in pos-people-contact, not pos-customer | nobody (grants retired by V28, task 5) |
+| `crm:contact_role:view/revoke` (37, 39) | `crm:contact:view` (roles are inline on the contact) / `crm:contact_role:assign` (revocation is a full-set replace, not a separate revoke endpoint) | no separate role-view or role-revoke endpoint exists | nobody (grants retired by V28, task 5) |
+| `crm:vehicle:search` (43) | vehicle-inventory search (`pos-vehicle-inventory` `VehicleSearchController`) | ADR-0044 §6; enforcement on the new side is itself still pending | nobody (grants retired by V28, task 5) |
+| `crm:vehicle_party_association:view/create/edit` (47–49) | event-driven only (`VehicleEventsListener`) | ADR-0044 §6; no API for this family, by design | nobody (grants retired by V28, task 5) |
+| `crm:vehicle_preference:view/edit` (50–51) | `vehicle-inventory:preferences:manage` | ADR-0044 §6 | nobody (grants retired by V28, task 5) |
+| `workorder:invoice:create` (208) | `workorder:workorder:generate_invoice` | pos-workorder contract | nobody (grants retired by V28, task 5) |
+| `order:line:view` (107) | `order:order:view` | lines are embedded in the order response; there is no separate line-view endpoint | nobody (grants retired by V28, task 5) |
+| `catalog:category:*` (17–20), `catalog:variant:*` (24–26) | no such resource exists | Category is internal validation data with no CRUD endpoints; variants/tread designs are Kafka-written, not API-mutated | nobody (grants retired by V28, task 5) |
+| `catalog:supplier_cost:write` (228) | Kafka-ingest only | the read side `catalog:supplier_cost:read` stays enforced and stays granted | nobody (grants retired by V28, task 5) |
+| `pricing:price_book:*` (126–129) | no such resource exists | no PriceBook resource exists in pos-price | nobody (grants retired by V28, task 5) |
+| `pricing:rule:create/delete` (135, 137), `pricing:restrictions:edit` (133) | `pricing:restriction:manage` (singular resource name) | pos-price contract | nobody (grants retired by V28, task 5) |
+| `pricing:rule:edit` (136) | none | no edit endpoint exists for pricing rules at all | nobody (grants retired by V28, task 5) |
 | `people:userLink:view/write` (237–238) | `people-contact:userLink:view/write` (358–359) | module split | nobody (dead bits only) |
 | `people:person:view/create/edit/delete` (233–236) | `people:employee:*` (116–119) | pos-people manifest registers only `employee` | nobody (dead bits only) |
 | `people:role:view/assign/revoke` (120–122) | security-service role management (`security:*`) | no people-module role endpoints exist | nobody (dead bits only) |
@@ -235,14 +274,45 @@ catalog. None are marked deprecated anywhere — the `PermissionCode` javadoc pr
 | `accounting:mapping:view/create/edit/deactivate` | `accounting:gl-mapping:*` / `mapping-key:*` / `default-mapping:*` | nothing enforces the old family | ADMIN, ACCOUNT_MANAGER (+ASSOCIATE view) |
 | `AUTHENTICATED` floor for MCP domains | explicit domain codes | seed §3 note: only domains lacking a real code remain on the floor | n/a (sentinel) |
 
-The remaining ~55 ADMIN-only granted-but-unenforced codes (full list in the script
-output: `catalog:*` CRUD, `pricing:*` CRUD, `crm:contact*`/`vehicle_*` views,
-`vehicle-fitment:*`, `vehicle-inventory:*`, `people:skill:*`, `order:line:view`,
-`workorder:wip:view_all_locations`, putaway overrides, `inventory:override:part-match`)
-are **not** confirmed superseded — they are the #1494 shape: defined and granted, waiting
-for enforcement that never got wired, in modules with large `x-required-permissions`
-gaps (see §5). Triage each as *enforce it* or *retire it*; `catalog:product:view` is a
-verified true positive (#1499: no product-view constant exists in pos-catalog at all).
+**Task 5 retirement wave (V28) update:** of the ~55 remaining ADMIN-only(-ish)
+granted-but-unenforced codes this section originally pointed at, 34 are confirmed
+supersessions or dead-resource codes and are retired above. Two more —
+`workorder:wip:view_all_locations` and the two `inventory:putaway:override_*`
+codes — turn out to be genuinely enforced: `scripts/audit-rbac.py` missed them because
+(a) `WipController.java` compares a permission constant against a `GrantedAuthority`
+directly (`.noneMatch(a -> WIP_VIEW_ALL_LOCATIONS.equals(a.getAuthority()))`) rather than
+calling `hasAuthority`/`.contains`, and (b) `PutawayValidationServiceImpl` enforces the two
+override codes through a private helper, `enforceOverridePermission(...)`, whose name the
+script's capability-flag call list never included. Both gaps are fixed (see the
+paragraph below); these three codes are **not** part of the retirement wave and keep
+their grants unchanged.
+
+**Task 5 enforcement wave update:** of the 27 codes named in the previous paragraph's
+snapshot, 15 now carry live `@PreAuthorize` gates — landed in pos-catalog
+(`catalog:product:view`, `catalog:service_type:view`), pos-price
+(`pricing:restrictions:view`, `pricing:normalization:edit`; `pricing:rule:view` was
+already correctly gated and held its holder set unchanged), pos-vehicle-inventory
+(`vehicle-inventory:registry:view/create/update/delete`,
+`vehicle-inventory:search:view`, `vehicle-inventory:preferences:manage`) and
+pos-vehicle-fitment (`vehicle-fitment:catalog:view`, `vehicle-fitment:hint:view/create/
+update/delete`) — with the paired role grants added to the seed so the personas that
+already used these endpoints (SERVICE_ADVISOR, TECHNICIAN, the manager/inventory
+roles) don't 403 under the new gates; `catalog:product:delete`,
+`vehicle-inventory:registry:delete` and `pricing:normalization:edit` stay ADMIN-only
+elevation caps, unchanged. `inventory:override:part-match` also dropped off this list —
+it was always enforced (`SecurityContextHelper.hasAuthority`, matching the script's
+existing detection patterns), it just hadn't been reclassified in this doc's snapshot
+until this fresh audit run.
+
+The remaining 12 granted-but-unenforced codes (matches `scripts/audit-rbac.py`'s
+`granted_unrequired` output exactly, 2026-08-26 run): `catalog:service_type:create`,
+`catalog:service_type:edit`, `crm:integration:audit`, `crm:processing_log:view`,
+`crm:suspense:view`, `nlti:request:read`, `people:skill:assign`, `people:skill:edit`,
+`people:skill:view`, `pricing:normalization:view`, `workorder:estimate_item:view`,
+`workorder:estimate_snapshot:view`. These are **not** confirmed superseded — they are
+the #1494 shape: defined and granted, waiting for enforcement that never got wired, in
+modules with large `x-required-permissions` gaps (see §5). Triage each as *enforce it*
+or *retire it* — deferred, no decision yet (§7).
 
 ---
 
@@ -277,6 +347,32 @@ The two gaps:
    (`permissions.yaml`) has no `deprecated` field to carry the truth.
 2. **Nothing consumes the flag.** No API sets it, no seed/tooling reads it, and no
    `PermissionCode` constant is `@Deprecated`.
+
+**Status (2026-08-26): implemented.** Steps 1 and 2 are done — the manifest schema,
+registration chain, entity column (V29) and both registration paths now carry
+`deprecated`/`supersededBy` (a second clobber was found in
+`PermissionRegistryServiceImpl`, whose update path compared only the description and so
+never propagated the flag either), and all 60 retired codes are annotated `@Deprecated`
+with 38 manifest entries marked. Step 3's grant revocations already shipped as V25–V28.
+
+**Deferred: database marking for the 22 placeholder-only codes.** Those codes appear in
+no `permissions.yaml`, so no service re-registers them and the registration channel
+never fires. Their rows come from two places — 15 from `R__seed_reference_security.sql`
+(machine-generated by `durion/scripts/seed-generator`; **never hand-edit, a
+regeneration would silently revert it**) and 7 only from the fallback bulk INSERT in
+`R__seed_role_permissions.sql` — and both insert with bare `ON CONFLICT DO NOTHING`,
+so the rows land at the `deprecated=false` default permanently. The obvious fix is
+wrong in both directions: a versioned `V30 UPDATE` matches zero rows on a fresh
+database, because Flyway runs repeatable seeds *after* versioned migrations and the
+rows do not exist yet; while baking the flag into the row-creation VALUES fixes only
+fresh databases, since `DO NOTHING` no-ops where the row already exists.
+Recommended instead: append one narrow, unconditional
+`UPDATE permissions SET deprecated = true, superseded_by = ... WHERE name IN (…)`
+to the **end of `R__seed_role_permissions.sql`**. It runs after both origin points,
+plain UPDATEs are idempotent, and a checksum change re-runs the whole file — so it
+fixes fresh and already-migrated databases alike, without turning the existing
+`ON CONFLICT DO NOTHING` into `DO UPDATE` (which would risk clobbering legitimately
+registered rows' live descriptions and flags on every service restart).
 
 **Recommended retirement convention** (applies to every §3 row):
 
@@ -449,7 +545,7 @@ All six flags are decided; the chart above reflects them:
 | 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | **DONE** — `workorder:workorder:start` wins; endpoint + capability flag aligned, V26 migrates grants |
 | 3 | Re-point `shop:location/bay` holders to `location:*` family | small | **DONE** — faithful-mirror grants added, seven dead codes revoked (V27) |
 | 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | convention sign-off |
-| 5 | Triage remaining ~55 ADMIN-only unenforced codes: enforce or retire | medium | per-code |
+| 5 | Triage remaining ~55 ADMIN-only unenforced codes: enforce or retire | medium | **IN PROGRESS** — retirement wave DONE (34 codes, V28); enforcement wave DONE for 15 codes gated across pos-catalog/pos-price/pos-vehicle-inventory/pos-vehicle-fitment, grants paired (seed-only, no migration); 12 codes still deferred (feature not built: crm integration-audit/processing-log/suspense reads, workorder estimate-item/snapshot GETs, people:skill:* feature (3 codes), nlti:request:read status endpoint, catalog:service_type:create/edit endpoint split, pricing:normalization:view) |
 | 6 | Close the `x-required-permissions` gap (security-service, catalog) | medium | no |
 | 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | thresholds |
 | 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | no |

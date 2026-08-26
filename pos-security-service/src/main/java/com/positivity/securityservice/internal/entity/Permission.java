@@ -48,6 +48,13 @@ public class Permission {
     private boolean deprecated;
 
     /**
+     * Name of the permission that replaces this one, if any. May be null even when
+     * {@code deprecated} is true — some retired codes have no successor.
+     */
+    @Column(name = "superseded_by", length = 255)
+    private String supersededBy;
+
+    /**
      * The domain this permission belongs to (e.g., pricing, inventory, security)
      */
     @Column(nullable = false, length = 50)

@@ -17,8 +17,21 @@ package com.positivity.vehiclefitment.internal.security;
  * without a manual bit assignment.
  */
 public final class VehicleFitmentPermissions {
+    /** View vehicle applicability hints. */
+    public static final String HINT_VIEW = "vehicle-fitment:hint:view";
+
     /** Create vehicle applicability hints. */
     public static final String HINT_CREATE = "vehicle-fitment:hint:create";
+
+    /** Update vehicle applicability hints. */
+    public static final String HINT_UPDATE = "vehicle-fitment:hint:update";
+
+    /** Delete vehicle applicability hints. */
+    public static final String HINT_DELETE = "vehicle-fitment:hint:delete";
+
+    /** View vehicle fitment catalog data (manufacturers, makes, models, vehicle types) and run the
+     * read-only vehicle-to-product fitment match. */
+    public static final String CATALOG_VIEW = "vehicle-fitment:catalog:view";
 
     private VehicleFitmentPermissions() {
         // Utility class - prevent instantiation

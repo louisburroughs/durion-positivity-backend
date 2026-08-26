@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehicleFactReplayService;
 import com.positivity.vehicle.service.VehicleService;
 import jakarta.persistence.EntityNotFoundException;
@@ -262,5 +263,47 @@ class VehicleRegistryControllerWebMvcTest {
         mockMvc.perform(get(PATH + "/" + VEHICLE_ID)).andExpect(status().isUnauthorized());
 
         verify(vehicleService, never()).getVehicle(any());
+    }
+
+    @Test
+    @DisplayName("registry:view alone does not open create, update or delete (Task-5, decisions k/l)")
+    void viewAuthorityAloneDoesNotOpenMutations() throws Exception {
+        // Each of these is a plausible authority for the same operator to hold, since view opens
+        // every read on this controller. A copy-paste between adjacent @PreAuthorize strings would
+        // let one of these mutations through unnoticed by a positive test alone.
+        mockMvc.perform(post(PATH)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_VIEW)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_BODY))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put(PATH + "/" + VEHICLE_ID)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_VIEW)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"unitNumber\":\"UNIT-002\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete(PATH + "/" + VEHICLE_ID)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_VIEW))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(vehicleService);
+    }
+
+    @Test
+    @DisplayName("registry:update does not open reads (Task-5, decisions k/l)")
+    void updateAuthorityDoesNotOpenReads() throws Exception {
+        mockMvc.perform(get(PATH + "/" + VEHICLE_ID)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_UPDATE))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get(PATH + "/vin/" + VIN)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_UPDATE))
+                .andExpect(status().isForbidden());
     }
 }

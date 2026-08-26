@@ -42,7 +42,7 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
 
     @Override
     protected String defaultAuthorities() {
-        return "pricing:view";
+        return "pricing:rule:view";
     }
 
     @Test
@@ -102,6 +102,17 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
     }
 
     @Test
+    @DisplayName("getRuleById_withoutViewAuthority_returns403")
+    void getRuleById_withoutViewAuthority_returns403() throws Exception {
+        UUID ruleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        mockMvc.perform(get("/v1/price/restrictions/rules/{ruleId}", ruleId)
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:manage"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("listRules_authenticated_returns200")
     void listRules_authenticated_returns200() throws Exception {
         when(restrictionRuleService.listRules()).thenReturn(List.of(activeRuleResponse()));
@@ -109,6 +120,15 @@ class RestrictionRuleControllerTest extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(get("/v1/price/restrictions/rules")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+    }
+
+    @Test
+    @DisplayName("listRules_withoutViewAuthority_returns403")
+    void listRules_withoutViewAuthority_returns403() throws Exception {
+        mockMvc.perform(get("/v1/price/restrictions/rules")
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:manage"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
