@@ -152,13 +152,39 @@ CustomerFacadeTool.searchCustomers:
   downstreamPath: "/v1/crm/accounts/parties?name={}"
 
 CustomerFacadeTool.getCustomerHistory:
-  verb: GET
-  baseUrlProperty: pos.customer.base-url
-  templateProperty: pos.customer.history-uri-template
-  template: "/customer/v1/customers/{customerId}/history"
-  route: customer
-  downstreamPath: "/v1/customers/{}/history"
-  status: wave3-pending # WS-3.CUSTHIST composes snapshot + interactions + invoices + workorders
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.CUSTHIST: the customerId argument IS the CRM partyId. All legs are optional —
+  # any authorized subset still yields a useful history.
+  legs:
+    snapshot:
+      verb: GET
+      baseUrlProperty: pos.customer.base-url
+      templateProperty: pos.customer.snapshot-uri-template
+      template: "/customer/v1/crm/snapshot/party/{partyId}"
+      route: customer
+      downstreamPath: "/v1/crm/snapshot/party/{}"
+    interactions:
+      verb: GET
+      baseUrlProperty: pos.customer.base-url
+      templateProperty: pos.customer.interactions-uri-template
+      template: "/customer/v1/crm/parties/{partyId}/interactions"
+      route: customer
+      downstreamPath: "/v1/crm/parties/{}/interactions"
+    invoices:
+      verb: GET
+      baseUrlProperty: pos.customer.base-url
+      templateProperty: pos.customer.invoices-uri-template
+      template: "/invoice/v1/invoices/items/search?partyId={partyId}"
+      route: invoice
+      downstreamPath: "/v1/invoices/items/search?partyId={}"
+    workorders:
+      verb: GET
+      baseUrlProperty: pos.customer.base-url
+      templateProperty: pos.customer.workorders-uri-template
+      template: "/workorder/v1/workorders/search?customerId={partyId}"
+      route: workorder
+      downstreamPath: "/v1/workorders/search?customerId={}"
 
 EventsFacadeTool.getEventTypes:
   verb: GET

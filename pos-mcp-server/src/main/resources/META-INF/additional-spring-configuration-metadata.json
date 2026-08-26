@@ -386,10 +386,28 @@
       "defaultValue": "/customer/v1/customers/search?q={query}"
     },
     {
-      "name": "pos.customer.history-uri-template",
+      "name": "pos.customer.snapshot-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching customer history.",
-      "defaultValue": "/customer/v1/customers/{customerId}/history"
+      "description": "URI template for the CRM snapshot leg of the customer history composition.",
+      "defaultValue": "/customer/v1/crm/snapshot/party/{partyId}"
+    },
+    {
+      "name": "pos.customer.interactions-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the interaction-timeline leg of the customer history composition.",
+      "defaultValue": "/customer/v1/crm/parties/{partyId}/interactions"
+    },
+    {
+      "name": "pos.customer.invoices-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the cross-domain invoice-lines leg of the customer history composition.",
+      "defaultValue": "/invoice/v1/invoices/items/search?partyId={partyId}"
+    },
+    {
+      "name": "pos.customer.workorders-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the cross-domain workorder leg of the customer history composition.",
+      "defaultValue": "/workorder/v1/workorders/search?customerId={partyId}"
     },
     {
       "name": "pos.event-receiver.event-types-uri-template",

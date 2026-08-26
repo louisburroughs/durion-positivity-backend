@@ -343,7 +343,14 @@ pos:
     base-url: ${POS_CUSTOMER_BASE_URL:http://pos-api-gateway}
     customer-uri-template: ${POS_CUSTOMER_URI_TEMPLATE:/customer/v1/crm/accounts/parties/{partyId}}
     search-uri-template: ${POS_CUSTOMER_SEARCH_URI_TEMPLATE:/customer/v1/crm/accounts/parties?name={query}}
-    history-uri-template: ${POS_CUSTOMER_HISTORY_URI_TEMPLATE:/customer/v1/customers/{customerId}/history}
+    # getCustomerHistory composition legs (#1519 WS-3.CUSTHIST). The invoice and workorder
+    # legs cross domains on purpose: pos-customer holds no billing or repair history, so the
+    # facade reads the /invoice and /workorder gateway routes (same gateway host) for the
+    # customer's invoice lines and workorders.
+    snapshot-uri-template: ${POS_CUSTOMER_SNAPSHOT_URI_TEMPLATE:/customer/v1/crm/snapshot/party/{partyId}}
+    interactions-uri-template: ${POS_CUSTOMER_INTERACTIONS_URI_TEMPLATE:/customer/v1/crm/parties/{partyId}/interactions}
+    invoices-uri-template: ${POS_CUSTOMER_INVOICES_URI_TEMPLATE:/invoice/v1/invoices/items/search?partyId={partyId}}
+    workorders-uri-template: ${POS_CUSTOMER_WORKORDERS_URI_TEMPLATE:/workorder/v1/workorders/search?customerId={partyId}}
   event-receiver:
     base-url: ${POS_EVENT_RECEIVER_BASE_URL:http://pos-api-gateway}
     event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/event-receiver/v1/eventTypes/active}
