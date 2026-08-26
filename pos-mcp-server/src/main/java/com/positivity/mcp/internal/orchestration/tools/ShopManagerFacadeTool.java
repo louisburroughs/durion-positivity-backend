@@ -47,12 +47,13 @@ public class ShopManagerFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search shops by name, region, status, or manager")
-    public String searchShops(@ToolParam(description = "Search query for shops") @NonNull String query) {
-        return restClient
-                .get()
-                .uri(shopSearchUriTemplate, Map.of("query", query))
-                .retrieve()
-                .body(String.class);
+    @Tool(
+            description = "Search shops by name or code. Shops are locations: this lists the location roster "
+                    + "and applies a case-insensitive contains-filter on the name and code fields; region, "
+                    + "status, or manager are not searchable.")
+    public String searchShops(@ToolParam(description = "Shop name or code (or part of it)") @NonNull String query) {
+        String locations =
+                restClient.get().uri(shopSearchUriTemplate).retrieve().body(String.class);
+        return locations == null ? null : FacadeJsonSupport.filterLocationsByNameOrCode(locations, query);
     }
 }

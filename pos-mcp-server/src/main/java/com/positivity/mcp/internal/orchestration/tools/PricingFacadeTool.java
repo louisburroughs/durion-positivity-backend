@@ -14,18 +14,21 @@ public class PricingFacadeTool {
 
     private final RestClient restClient;
     private final String skuPriceUriTemplate;
-    private final String pricingSearchUriTemplate;
+    private final String promotionByCodeUriTemplate;
+    private final String priceRestrictionsUriTemplate;
     private final String priceListUriTemplate;
 
     public PricingFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.pricing.base-url}") @NonNull String baseUrl,
             @Value("${pos.pricing.sku-price-uri-template}") @NonNull String skuPriceUriTemplate,
-            @Value("${pos.pricing.search-uri-template}") @NonNull String pricingSearchUriTemplate,
+            @Value("${pos.pricing.promotion-by-code-uri-template}") @NonNull String promotionByCodeUriTemplate,
+            @Value("${pos.pricing.price-restrictions-uri-template}") @NonNull String priceRestrictionsUriTemplate,
             @Value("${pos.pricing.price-list-uri-template}") @NonNull String priceListUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.skuPriceUriTemplate = skuPriceUriTemplate;
-        this.pricingSearchUriTemplate = pricingSearchUriTemplate;
+        this.promotionByCodeUriTemplate = promotionByCodeUriTemplate;
+        this.priceRestrictionsUriTemplate = priceRestrictionsUriTemplate;
         this.priceListUriTemplate = priceListUriTemplate;
     }
 
@@ -38,20 +41,30 @@ public class PricingFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search pricing data by SKU, description, or pricing rule")
-    public String searchPricing(@ToolParam(description = "Search query for pricing") @NonNull String query) {
+    @Tool(
+            description = "Look up a promotion offer by its exact promo code. There is no free-text promotion "
+                    + "search — the code must match exactly.")
+    public String getPromotionByCode(@ToolParam(description = "The exact promotion code") @NonNull String promoCode) {
         return restClient
                 .get()
-                .uri(pricingSearchUriTemplate, Map.of("query", query))
+                .uri(promotionByCodeUriTemplate, Map.of("promoCode", promoCode))
                 .retrieve()
                 .body(String.class);
     }
 
-    @Tool(description = "Get a full price list by price list ID")
-    public String getPriceList(@ToolParam(description = "The price list ID") @NonNull String priceListId) {
+    @Tool(description = "List all price restriction rules (price floors, ceilings, and sale eligibility rules)")
+    public String listPriceRestrictions() {
+        return restClient.get().uri(priceRestrictionsUriTemplate).retrieve().body(String.class);
+    }
+
+    @Tool(
+            description = "Get a price book by its price book id (UUID), served by the catalog domain "
+                    + "(the system of record for price books). There is no price book list — the id must be "
+                    + "known.")
+    public String getPriceList(@ToolParam(description = "The price book id (UUID)") @NonNull String priceBookId) {
         return restClient
                 .get()
-                .uri(priceListUriTemplate, Map.of("priceListId", priceListId))
+                .uri(priceListUriTemplate, Map.of("priceBookId", priceBookId))
                 .retrieve()
                 .body(String.class);
     }

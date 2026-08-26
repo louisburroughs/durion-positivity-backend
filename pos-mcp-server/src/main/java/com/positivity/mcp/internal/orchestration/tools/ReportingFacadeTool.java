@@ -29,17 +29,24 @@ public class ReportingFacadeTool {
         this.revenueReportUriTemplate = revenueReportUriTemplate;
     }
 
-    @Tool(description = "Get a sales report for a requested period")
-    public String getSalesReport(@ToolParam(description = "Reporting period identifier") @NonNull String period) {
+    @Tool(
+            description = "Get the sales report (income statement) for a period. period must be a calendar "
+                    + "month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. 2026); it is "
+                    + "mapped onto the report's start/end date range.")
+    public String getSalesReport(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
+        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
         return restClient
                 .get()
-                .uri(salesReportUriTemplate, Map.of("period", period))
+                .uri(salesReportUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
                 .retrieve()
                 .body(String.class);
     }
 
-    @Tool(description = "Get an inventory report for a specific location")
-    public String getInventoryReport(@ToolParam(description = "The location ID") @NonNull String locationId) {
+    @Tool(
+            description = "Get the inventory rollup report for a location by location id (UUID). The rollup "
+                    + "aggregates a parent location's child sites — for a bare site with no children it is "
+                    + "empty; use the location's on-hand inventory inquiry for site-level stock instead.")
+    public String getInventoryReport(@ToolParam(description = "The location id (UUID)") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(inventoryReportUriTemplate, Map.of("locationId", locationId))
