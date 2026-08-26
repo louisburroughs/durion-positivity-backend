@@ -329,7 +329,11 @@ pos:
     base-url: ${POS_ACCOUNTING_BASE_URL:http://pos-api-gateway}
     account-balance-uri-template: ${POS_ACCOUNTING_ACCOUNT_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/gl-accounts/{glAccountId}/balance}
     general-ledger-uri-template: ${POS_ACCOUNTING_GENERAL_LEDGER_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/general-ledger?startDate={startDate}&endDate={endDate}}
-    financial-summary-uri-template: ${POS_ACCOUNTING_FINANCIAL_SUMMARY_URI_TEMPLATE:/accounting/v1/accounting/summary/{period}}
+    # getFinancialSummary composition legs (#1519 WS-3.FINSUM).
+    income-statement-uri-template: ${POS_ACCOUNTING_INCOME_STATEMENT_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}}
+    balance-sheet-uri-template: ${POS_ACCOUNTING_BALANCE_SHEET_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/balance-sheet?asOfDate={asOfDate}}
+    # The trial-balance as-of query param is `asOf` — unlike the sibling reports' `asOfDate`.
+    trial-balance-uri-template: ${POS_ACCOUNTING_TRIAL_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/trial-balance?asOf={asOf}}
   catalog:
     base-url: ${POS_CATALOG_BASE_URL:http://pos-api-gateway}
     product-uri-template: ${POS_CATALOG_PRODUCT_URI_TEMPLATE:/catalog/v1/products/{productId}}
@@ -386,7 +390,9 @@ pos:
     sales-report-uri-template: ${POS_REPORTING_SALES_REPORT_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}}
     # Cross-domain: pos-inventory serves the location rollup report.
     inventory-report-uri-template: ${POS_REPORTING_INVENTORY_REPORT_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/inventory-rollup}
-    revenue-report-uri-template: ${POS_REPORTING_REVENUE_REPORT_URI_TEMPLATE:/accounting/v1/reporting/revenue/{period}}
+    # getRevenueReport composition leg (#1519 WS-3.REPORTS); the income-statement leg reuses
+    # sales-report-uri-template above.
+    aged-receivables-uri-template: ${POS_REPORTING_AGED_RECEIVABLES_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/aged-receivables?asOfDate={asOfDate}}
   security:
     users:
       base-url: ${POS_SECURITY_USERS_BASE_URL:http://pos-api-gateway}

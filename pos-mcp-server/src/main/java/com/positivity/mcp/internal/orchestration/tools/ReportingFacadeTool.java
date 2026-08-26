@@ -15,18 +15,18 @@ public class ReportingFacadeTool {
     private final RestClient restClient;
     private final String salesReportUriTemplate;
     private final String inventoryReportUriTemplate;
-    private final String revenueReportUriTemplate;
+    private final String agedReceivablesUriTemplate;
 
     public ReportingFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.reporting.base-url}") @NonNull String baseUrl,
             @Value("${pos.reporting.sales-report-uri-template}") @NonNull String salesReportUriTemplate,
             @Value("${pos.reporting.inventory-report-uri-template}") @NonNull String inventoryReportUriTemplate,
-            @Value("${pos.reporting.revenue-report-uri-template}") @NonNull String revenueReportUriTemplate) {
+            @Value("${pos.reporting.aged-receivables-uri-template}") @NonNull String agedReceivablesUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.salesReportUriTemplate = salesReportUriTemplate;
         this.inventoryReportUriTemplate = inventoryReportUriTemplate;
-        this.revenueReportUriTemplate = revenueReportUriTemplate;
+        this.agedReceivablesUriTemplate = agedReceivablesUriTemplate;
     }
 
     @Tool(
@@ -54,12 +54,28 @@ public class ReportingFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Get a revenue report for a requested period")
-    public String getRevenueReport(@ToolParam(description = "Reporting period identifier") @NonNull String period) {
-        return restClient
-                .get()
-                .uri(revenueReportUriTemplate, Map.of("period", period))
-                .retrieve()
-                .body(String.class);
+    @Tool(
+            description = "Get a composed revenue report for a period. period must be a calendar month in "
+                    + "YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. 2026). Returns a "
+                    + "JSON envelope with two sections: incomeStatement (the period's income statement — its "
+                    + "revenue lines are the earned revenue) and agedReceivables (per-customer open invoice "
+                    + "balances bucketed by days past due, as of the period's end date — the revenue not yet "
+                    + "collected). A failed or unauthorized aged-receivables section degrades only itself; "
+                    + "the top-level status is degraded when the income statement is unavailable.")
+    public String getRevenueReport(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
+        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+        return ToolComposition.named("revenueReport")
+                .call("incomeStatement", () -> restClient
+                        .get()
+                        .uri(salesReportUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
+                        .retrieve()
+                        .body(String.class))
+                .require("incomeStatement")
+                .call("agedReceivables", () -> restClient
+                        .get()
+                        .uri(agedReceivablesUriTemplate, Map.of("asOfDate", range.endDate()))
+                        .retrieve()
+                        .body(String.class))
+                .render();
     }
 }

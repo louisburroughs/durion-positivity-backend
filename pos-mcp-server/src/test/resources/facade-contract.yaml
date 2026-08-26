@@ -20,10 +20,11 @@
 #                     ADR-0021 pos-tax direct call, or NONE for no HTTP call
 #   downstreamPath    path after the gateway's StripPrefix=1 (or after the direct base-url
 #                     path), URI params normalized to {}
-#   status            wave3-pending = still the pre-#1519 template; repointed by a Wave 3
-#                     composition workset. Absent = contract is live and correct.
-# Methods removed from the surface (Events.getEventHistory #1521, Hr.searchEmployees #1523)
-# have no entry.
+#   legs              composition tools only (verb: COMPOSITE): one sub-entry per downstream
+#                     call, keyed by the ToolComposition leg name, each carrying its own verb,
+#                     baseUrlProperty, templateProperty, template, route and downstreamPath.
+# Methods removed from the surface (Events.getEventHistory #1521, Hr.searchEmployees #1523,
+# Tax.getTaxRate #1522) have no entry.
 
 AccountingFacadeTool.getAccountBalance:
   verb: GET
@@ -43,13 +44,32 @@ AccountingFacadeTool.getGeneralLedger:
   # optional query param appended by the tool when provided: accountId
 
 AccountingFacadeTool.getFinancialSummary:
-  verb: GET
-  baseUrlProperty: pos.accounting.base-url
-  templateProperty: pos.accounting.financial-summary-uri-template
-  template: "/accounting/v1/accounting/summary/{period}"
-  route: accounting
-  downstreamPath: "/v1/accounting/summary/{}"
-  status: wave3-pending # WS-3.FINSUM composes income-statement + balance-sheet + trial-balance
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.FINSUM: period (YYYY-MM | YYYY) maps to startDate/endDate; the point-in-time reports
+  # use the period's end date. Note the trial-balance as-of param is `asOf`, not `asOfDate`.
+  legs:
+    incomeStatement:
+      verb: GET
+      baseUrlProperty: pos.accounting.base-url
+      templateProperty: pos.accounting.income-statement-uri-template
+      template: "/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}"
+      route: accounting
+      downstreamPath: "/v1/accounting/reports/financial/income-statement?startDate={}&endDate={}"
+    balanceSheet:
+      verb: GET
+      baseUrlProperty: pos.accounting.base-url
+      templateProperty: pos.accounting.balance-sheet-uri-template
+      template: "/accounting/v1/accounting/reports/financial/balance-sheet?asOfDate={asOfDate}"
+      route: accounting
+      downstreamPath: "/v1/accounting/reports/financial/balance-sheet?asOfDate={}"
+    trialBalance:
+      verb: GET
+      baseUrlProperty: pos.accounting.base-url
+      templateProperty: pos.accounting.trial-balance-uri-template
+      template: "/accounting/v1/accounting/reports/financial/trial-balance?asOf={asOf}"
+      route: accounting
+      downstreamPath: "/v1/accounting/reports/financial/trial-balance?asOf={}"
 
 AdminFacadeTool.getSystemStatus:
   verb: NONE
@@ -320,13 +340,26 @@ ReportingFacadeTool.getInventoryReport:
   # Cross-domain: inventory serves the rollup; parent-location semantics (empty for a bare site).
 
 ReportingFacadeTool.getRevenueReport:
-  verb: GET
-  baseUrlProperty: pos.reporting.base-url
-  templateProperty: pos.reporting.revenue-report-uri-template
-  template: "/accounting/v1/reporting/revenue/{period}"
-  route: accounting
-  downstreamPath: "/v1/reporting/revenue/{}"
-  status: wave3-pending # WS-3.REPORTS composes income-statement revenue lines + aged receivables
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.REPORTS: revenue = income-statement revenue lines over the period plus the
+  # aged-receivables exposure as of the period's end date. The income-statement leg reuses
+  # the getSalesReport template property.
+  legs:
+    incomeStatement:
+      verb: GET
+      baseUrlProperty: pos.reporting.base-url
+      templateProperty: pos.reporting.sales-report-uri-template
+      template: "/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}"
+      route: accounting
+      downstreamPath: "/v1/accounting/reports/financial/income-statement?startDate={}&endDate={}"
+    agedReceivables:
+      verb: GET
+      baseUrlProperty: pos.reporting.base-url
+      templateProperty: pos.reporting.aged-receivables-uri-template
+      template: "/accounting/v1/accounting/reports/financial/aged-receivables?asOfDate={asOfDate}"
+      route: accounting
+      downstreamPath: "/v1/accounting/reports/financial/aged-receivables?asOfDate={}"
 
 ShopManagerFacadeTool.getShopStatus:
   verb: GET

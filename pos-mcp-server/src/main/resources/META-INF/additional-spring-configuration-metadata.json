@@ -338,10 +338,22 @@
       "defaultValue": "/accounting/v1/accounting/journal-entries/search?q={query}"
     },
     {
-      "name": "pos.accounting.financial-summary-uri-template",
+      "name": "pos.accounting.income-statement-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching financial summary by period from the accounting service.",
-      "defaultValue": "/accounting/v1/accounting/summary/{period}"
+      "description": "URI template for the income-statement leg of the financial summary composition.",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}"
+    },
+    {
+      "name": "pos.accounting.balance-sheet-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the balance-sheet leg of the financial summary composition.",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/balance-sheet?asOfDate={asOfDate}"
+    },
+    {
+      "name": "pos.accounting.trial-balance-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the trial-balance leg of the financial summary composition (as-of param is asOf, not asOfDate).",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/trial-balance?asOf={asOf}"
     },
     {
       "name": "pos.catalog.product-uri-template",
@@ -500,10 +512,10 @@
       "defaultValue": "/accounting/v1/reporting/inventory/{locationId}"
     },
     {
-      "name": "pos.reporting.revenue-report-uri-template",
+      "name": "pos.reporting.aged-receivables-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching a revenue report for a given period.",
-      "defaultValue": "/accounting/v1/reporting/revenue/{period}"
+      "description": "URI template for the aged-receivables leg of the revenue report composition.",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/aged-receivables?asOfDate={asOfDate}"
     },
     {
       "name": "pos.security.users.base-url",
