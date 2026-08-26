@@ -130,7 +130,7 @@ replicas.
 | pos-price `R__seed_reference_price.sql` | 1 | Keep (verify nothing in it is published on a topic) |
 | pos-inventory `R__seed_reference_inventory.sql` | 1 | Keep (same verification) |
 | pos-location `R__seed_location_1_reference.sql` | 1 | Keep |
-| pos-location `R__seed_location_2_operational_data.sql` | 2 | **In progress** — the 5 location rows converted to `scripts/fixtures/seed/alpha/location/` (LOCATION loader job wired, timezone now ingestable); storage locations, bays, mobile units, and parent edges still need a scripted gateway pass or their own ingest wave |
+| pos-location `R__seed_location_2_operational_data.sql` | 2 | **Converted** — locations (LOCATION loader job), plus API packs for storage locations (uniform realistic garage mix, 34 per site), bays (21), and mobile units (9). Intentionally dropped: MU capabilities/coverage rules, travel-buffer refs, parent edges, staging/quarantine back-references. Deletion waits on the §5.4 reseed |
 | pos-people `R__seed_reference_people.sql` | 1 | Keep |
 | pos-people `R__seed_people_operational_data.sql` | 2 | **Converted** — employees-only since #875; `scripts/fixtures/seed/alpha/people/` (bulk employees + API-pack staffing assignments); ext replica bootstraps deliberately dropped (replicas hydrate from events); deletion waits on the verified alpha reseed (§5.4) |
 | pos-people `R__seed_timekeeping_approval_data.sql` | 2 | Seed pipeline (pending) |

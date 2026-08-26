@@ -48,6 +48,9 @@ FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixture
 PACK_FILES = [
     ("security/users.csv", "@security-users", None),
     ("location/locations.csv", "LOCATION", None),
+    ("location/storage-locations.csv", "@storage-locations", None),
+    ("location/bays.csv", "@location-bays", None),
+    ("location/mobile-units.csv", "@mobile-units", None),
     ("people/employees.csv", "PERSON", None),
     ("people/staffing-assignments.csv", "@staffing-assignments", None),
     ("customer/person-customers.csv", "CUSTOMER", None),
@@ -266,9 +269,125 @@ def run_security_users(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def location_id_map(gateway):
+    _, roster = gateway.get("/location/locations")
+    return {loc["code"]: loc["id"] for loc in roster or []}
+
+
+def read_fixture_rows(relative_path):
+    with open(os.path.join(FIXTURE_ROOT, relative_path), newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
+def run_location_bays(gateway, relative_path, _location_id):
+    """API pack: create service bays per location (409 by name = already there)."""
+    location_ids = location_id_map(gateway)
+    created, skipped, failures = 0, 0, 0
+    for row in read_fixture_rows(relative_path):
+        location_id = location_ids.get(row["locationCode"])
+        if location_id is None:
+            print(f"  WARN: bay {row['name']}: location {row['locationCode']} not found")
+            failures += 1
+            continue
+        status_code, _ = gateway.post_json(
+            f"/location/locations/{location_id}/bays",
+            {
+                "name": row["name"],
+                "bayType": row["bayType"],
+                "capacity": {"maxConcurrentVehicles": int(row["maxConcurrentVehicles"])},
+            },
+            allow_error=True,
+        )
+        if status_code == 201:
+            created += 1
+        elif status_code == 409:
+            skipped += 1
+        else:
+            print(f"  WARN: bay {row['locationCode']}/{row['name']}: HTTP {status_code}")
+            failures += 1
+    print(f"  bays: created={created} already-existed={skipped} failures={failures}")
+    return failures == 0
+
+
+def run_mobile_units(gateway, relative_path, _location_id):
+    """API pack: create mobile units; no server-side name dedupe, so existing
+    names (from the paged list) are skipped for idempotent re-runs."""
+    location_ids = location_id_map(gateway)
+    _, page = gateway.get("/location/mobile-units?size=200", allow_error=True)
+    existing = {unit["name"] for unit in (page or {}).get("content", [])}
+    created, skipped, failures = 0, 0, 0
+    for row in read_fixture_rows(relative_path):
+        if row["name"] in existing:
+            skipped += 1
+            continue
+        base_location_id = location_ids.get(row["baseLocationCode"])
+        if base_location_id is None:
+            print(f"  WARN: mobile unit {row['name']}: location {row['baseLocationCode']} not found")
+            failures += 1
+            continue
+        status_code, _ = gateway.post_json(
+            "/location/mobile-units",
+            {"name": row["name"], "baseLocationId": base_location_id, "status": row["status"]},
+            allow_error=True,
+        )
+        if 200 <= status_code < 300:
+            created += 1
+        else:
+            print(f"  WARN: mobile unit {row['name']}: HTTP {status_code}")
+            failures += 1
+    print(f"  mobile units: created={created} already-existed={skipped} failures={failures}")
+    return failures == 0
+
+
+def run_storage_locations(gateway, relative_path, _location_id):
+    """API pack: create the storage topology per location. Rows are processed in
+    fixture order so parents (shelves) exist before their bins; existing names
+    (from the site's paged list) are skipped and reused for parent resolution,
+    making re-runs converge."""
+    location_ids = location_id_map(gateway)
+    created, skipped, failures = 0, 0, 0
+    by_location = {}
+    for row in read_fixture_rows(relative_path):
+        by_location.setdefault(row["locationCode"], []).append(row)
+
+    for code, rows in by_location.items():
+        site_id = location_ids.get(code)
+        if site_id is None:
+            print(f"  WARN: storage for {code}: location not found — {len(rows)} row(s) skipped")
+            failures += len(rows)
+            continue
+        _, page = gateway.get(f"/location/locations/{site_id}/storage-locations?size=500", allow_error=True)
+        name_to_id = {sl["name"]: sl["id"] for sl in (page or {}).get("content", [])}
+        for row in rows:
+            if row["name"] in name_to_id:
+                skipped += 1
+                continue
+            body = {"name": row["name"], "type": row["type"]}
+            if row["parentName"]:
+                parent_id = name_to_id.get(row["parentName"])
+                if parent_id is None:
+                    print(f"  WARN: storage {code}/{row['name']}: parent {row['parentName']} unresolved")
+                    failures += 1
+                    continue
+                body["parentStorageLocationId"] = parent_id
+            status_code, response = gateway.post_json(
+                f"/location/locations/{site_id}/storage-locations", body, allow_error=True)
+            if 200 <= status_code < 300 and response:
+                name_to_id[row["name"]] = response.get("id")
+                created += 1
+            else:
+                print(f"  WARN: storage {code}/{row['name']}: HTTP {status_code}")
+                failures += 1
+    print(f"  storage locations: created={created} already-existed={skipped} failures={failures}")
+    return failures == 0
+
+
 API_PACKS = {
     "@staffing-assignments": run_staffing_assignments,
     "@security-users": run_security_users,
+    "@location-bays": run_location_bays,
+    "@mobile-units": run_mobile_units,
+    "@storage-locations": run_storage_locations,
 }
 
 

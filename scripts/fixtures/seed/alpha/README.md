@@ -191,6 +191,9 @@ for Flyway-seeded catalogs is not needed for pipeline-loaded products.
 | File | Rows | Target |
 |---|---|---|
 | `locations.csv` | 5 sites (3 service centers, mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
+| `storage-locations.csv` | 170 (34 per site: 2 floors, 2 cages, 6 shelves, 24 bins under the parts shelves) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order) |
+| `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
+| `mobile-units.csv` | 9 mobile units | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
 
 Columns: `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 Location types resolve by name (created on the fly if missing, though the reference
@@ -202,11 +205,13 @@ provides one).
 
 **Known deltas / not yet converted:**
 
-- Only the `location` table rows are covered. The seed's storage locations (14, with
-  staging/quarantine hierarchy and location back-references), ~21 bays, 3 mobile
-  units (+capabilities, coverage rules), and the 4 `location_parent` hierarchy edges
-  have no bulk-ingest path — they are managed through pos-location's own APIs (bays,
-  mobile units, storage locations, `POST /v1/locations/{id}/parents`) and need a
-  scripted gateway pass or their own ingest wave.
-- The seed file stays until that remainder is converted and alpha is reseeded and
-  verified (§5.4).
+- The storage mix is deliberately uniform across all 5 sites (a richer, realistic
+  garage topology replacing the seed's thinner ad-hoc spread); the seed's
+  staging/quarantine **back-references on the location row**
+  (`default_staging_location_id`/`default_quarantine_location_id`) are not set —
+  no API writes them today.
+- Mobile-unit **capabilities and coverage rules** are intentionally dropped (bays
+  and mobile units suffice for alpha), as are the mobile units'
+  `travel_buffer_policy_id` references and the 4 `location_parent` hierarchy
+  edges (`POST /v1/locations/{id}/parents` exists if wanted later).
+- The seed file stays until alpha is reseeded and verified (§5.4).
