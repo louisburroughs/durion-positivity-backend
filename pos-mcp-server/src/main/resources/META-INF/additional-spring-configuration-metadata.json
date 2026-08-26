@@ -626,16 +626,22 @@
       "defaultValue": "/shop-manager/v1/shop/search?q={query}"
     },
     {
-      "name": "pos.tax.tax-rate-uri-template",
+      "name": "pos.tax.gateway-base-url",
       "type": "java.lang.String",
-      "description": "URI template for fetching tax rates for a given location.",
-      "defaultValue": "/rates/{locationId}"
+      "description": "Gateway base URL for the tax facade legs pos-tax does not serve (location lookup, accounting tax-liability summary).",
+      "defaultValue": "http://pos-api-gateway"
+    },
+    {
+      "name": "pos.tax.location-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the gateway location-lookup leg of the tax calculation composition.",
+      "defaultValue": "/location/v1/locations/{locationId}"
     },
     {
       "name": "pos.tax.tax-calculate-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for calculating tax on a given amount and location.",
-      "defaultValue": "/calculate?amount={amount}&locationId={locationId}"
+      "description": "URI template for the direct pos-tax calculation POST (ADR-0021); the request body carries the line item and destination address.",
+      "defaultValue": "/calculate"
     },
     {
       "name": "pos.tax.tax-summary-uri-template",

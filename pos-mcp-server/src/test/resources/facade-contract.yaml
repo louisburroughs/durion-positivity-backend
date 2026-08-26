@@ -457,27 +457,32 @@ ShopManagerFacadeTool.searchShops:
   downstreamPath: "/v1/locations"
   # Cross-domain: shops are locations; the facade applies the name/code contains-filter.
 
-TaxFacadeTool.getTaxRate:
-  verb: GET
-  baseUrlProperty: pos.tax.base-url
-  templateProperty: pos.tax.tax-rate-uri-template
-  template: "/rates/{locationId}"
-  route: DIRECT
-  downstreamPath: "/v1/tax/rates/{}"
-  status: wave3-pending # DEFERRED #1522; method + template removed in WS-3.TAXCALC
-
 TaxFacadeTool.calculateTax:
-  verb: GET
-  baseUrlProperty: pos.tax.base-url
-  templateProperty: pos.tax.tax-calculate-uri-template
-  template: "/calculate?amount={amount}&locationId={locationId}"
-  route: DIRECT
-  downstreamPath: "/v1/tax/calculate?amount={}&locationId={}"
-  status: wave3-pending # WS-3.TAXCALC composes location lookup + POST /v1/tax/calculate
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.TAXCALC: the gateway location lookup supplies the destination address that the
+  # ADR-0021 direct POST to pos-tax requires (nested destinationAddress, never the legacy
+  # flat address fields). A location without a usable address degrades the tax leg without
+  # calling pos-tax.
+  legs:
+    location:
+      verb: GET
+      baseUrlProperty: pos.tax.gateway-base-url
+      templateProperty: pos.tax.location-uri-template
+      template: "/location/v1/locations/{locationId}"
+      route: location
+      downstreamPath: "/v1/locations/{}"
+    tax:
+      verb: POST
+      baseUrlProperty: pos.tax.base-url
+      templateProperty: pos.tax.tax-calculate-uri-template
+      template: "/calculate"
+      route: DIRECT
+      downstreamPath: "/v1/tax/calculate"
 
 TaxFacadeTool.getTaxSummary:
   verb: GET
-  baseUrlProperty: pos.tax.summary-base-url
+  baseUrlProperty: pos.tax.gateway-base-url
   templateProperty: pos.tax.tax-summary-uri-template
   template: "/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}"
   route: accounting

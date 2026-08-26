@@ -434,11 +434,12 @@ pos:
     # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration.
     # pos-tax listens on 8091 (no port-80 mapping), so the port is required (#641).
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091/v1/tax}
-    # getTaxSummary is served by pos-accounting's tax-liability report via the gateway, not by
-    # the direct pos-tax client — hence its own gateway base-url.
-    summary-base-url: ${POS_TAX_SUMMARY_BASE_URL:http://pos-api-gateway}
-    tax-rate-uri-template: ${POS_TAX_RATE_URI_TEMPLATE:/rates/{locationId}}
-    tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate?amount={amount}&locationId={locationId}}
+    # Gateway base-url for the legs pos-tax does not serve: getTaxSummary reads
+    # pos-accounting's tax-liability report, and calculateTax's address lookup reads the
+    # /location route (#1519 WS-3.TAXCALC).
+    gateway-base-url: ${POS_TAX_GATEWAY_BASE_URL:http://pos-api-gateway}
+    location-uri-template: ${POS_TAX_LOCATION_URI_TEMPLATE:/location/v1/locations/{locationId}}
+    tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate}
     tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-api-gateway}

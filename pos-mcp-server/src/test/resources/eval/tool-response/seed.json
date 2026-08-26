@@ -792,7 +792,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
-      "notes": "TaxFacadeTool.getTaxRate(location)."
+      "notes": "TaxFacadeTool.calculateTax(amount, location) estimates jurisdiction tax; a standalone rate lookup is deferred (#1522)."
     },
     {
       "fixture_id": "compliance-part-taxable-state",
@@ -801,7 +801,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
-      "notes": "getTaxRate / calculateTax for the jurisdiction."
+      "notes": "calculateTax for the jurisdiction."
     },
     {
       "fixture_id": "compliance-sales-tax-filing-june",
