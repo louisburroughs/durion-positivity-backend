@@ -38,7 +38,9 @@ public class MechanicSkillController {
                     Required inputs: personId as a path parameter and skills, a non-empty array where each entry \
                     has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
                     Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the \
-                    HR-feed sync version is not touched.
+                    edit rides the HR-feed path as a synthetic skills event stamped with the current \
+                    timestamp, advancing the sync version so ordering against in-flight feed events is \
+                    last-write-wins.
                     Returns 204 on success, 404 when no mechanic exists for the person, and 400 when the body is \
                     invalid.
                     """)

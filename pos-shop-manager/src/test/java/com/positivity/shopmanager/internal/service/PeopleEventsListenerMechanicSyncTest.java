@@ -127,6 +127,28 @@ class PeopleEventsListenerMechanicSyncTest {
         verify(assignmentRepository).save(any());
     }
 
+    @Test
+    void staleTechnicianAssignment_skipsReplicaAndMechanicSync() {
+        when(assignmentRepository.findById(UUID.fromString("01990000-0000-7000-8000-00000000000a")))
+                .thenReturn(Optional.of(ExtStaffingAssignmentReplica.builder()
+                        .assignmentId(UUID.fromString("01990000-0000-7000-8000-00000000000a"))
+                        .employeeId(UUID.fromString("01990000-0000-7000-8000-00000000000b"))
+                        .personId(PERSON_ID)
+                        .locationId(UUID.fromString("01990000-0000-7000-8000-00000000000c"))
+                        .role("TECHNICIAN")
+                        .primary(true)
+                        .status("ACTIVE")
+                        .aggregateVersion(1756200000001L) // strictly newer than the event
+                        .updatedAt(Instant.now(clock))
+                        .build()));
+
+        listener.onPeopleEvent(assignmentEvent("TECHNICIAN", "ACTIVE"));
+
+        verifyNoInteractions(mechanicSyncService);
+        verify(assignmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(processedEventRepository).save(any());
+    }
+
     // ─── staffing assignment → mechanic deactivation ─────────────────────────
 
     @Test

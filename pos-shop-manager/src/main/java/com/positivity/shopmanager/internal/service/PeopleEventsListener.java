@@ -131,21 +131,24 @@ public class PeopleEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtStaffingAssignmentReplica existing =
                 assignmentReplicaRepository.findById(payload.assignmentId()).orElse(null);
-        if (existing == null || existing.getAggregateVersion() <= aggregateVersion) {
-            assignmentReplicaRepository.save(ExtStaffingAssignmentReplica.builder()
-                    .assignmentId(payload.assignmentId())
-                    .employeeId(payload.employeeId())
-                    .personId(payload.personId())
-                    .locationId(payload.locationId())
-                    .role(payload.role())
-                    .primary(payload.primary())
-                    .status(payload.status())
-                    .effectiveFrom(payload.effectiveFrom())
-                    .effectiveTo(payload.effectiveTo())
-                    .aggregateVersion(aggregateVersion)
-                    .updatedAt(Instant.now(clock))
-                    .build());
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            // Stale snapshot: neither the replica nor the mechanic projection may move
+            // backwards — skip both, matching the stale-guard intent end to end.
+            return;
         }
+        assignmentReplicaRepository.save(ExtStaffingAssignmentReplica.builder()
+                .assignmentId(payload.assignmentId())
+                .employeeId(payload.employeeId())
+                .personId(payload.personId())
+                .locationId(payload.locationId())
+                .role(payload.role())
+                .primary(payload.primary())
+                .status(payload.status())
+                .effectiveFrom(payload.effectiveFrom())
+                .effectiveTo(payload.effectiveTo())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
         syncMechanicFromAssignment(payload, aggregateVersion, eventId);
     }
 
