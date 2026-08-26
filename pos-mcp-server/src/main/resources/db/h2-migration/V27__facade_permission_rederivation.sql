@@ -1,0 +1,18 @@
+-- V27: H2 dev/test twin of pg V37 (facade permission re-derivation, #1519 Wave 4).
+--
+-- Deliberately a no-op, following the pattern of V26 (twin of pg V34): the tool-registry
+-- tables (mcp_tool, mcp_tool_permission) exist only in the Postgres chain — created by
+-- pg V3/V17 and seeded by pg V4/V18/V29/V35/V36, now re-derived by pg V37. The H2 chain
+-- has never had a twin for any of them (this directory contains no CREATE for those tables),
+-- and they are not JPA entities (ToolMetadataRepositoryImpl reads them through JdbcTemplate),
+-- so Hibernate's H2 ddl-auto does not create them either. Executing the pg V37 statements
+-- here would fail on "table not found" rather than seed anything.
+--
+-- The net facade permission state after pg V37 is asserted offline by
+-- FacadeToolPermissionSeedTest, which parses V18/V29/V35/V36/V37 and checks the result
+-- against the Wave 4 derivation table.
+--
+-- The file is kept (instead of omitted) so the pg-to-H2 version mapping stays explicit and a
+-- future change that adds the tool-registry tables to H2 has an obvious place to notice the
+-- divergence. (Note: pg V35/V36 have no H2 twins — the mapping jumps from V26=pg V34 to
+-- V27=pg V37; both skipped migrations touch only the Postgres-only mcp_tool_permission table.)
