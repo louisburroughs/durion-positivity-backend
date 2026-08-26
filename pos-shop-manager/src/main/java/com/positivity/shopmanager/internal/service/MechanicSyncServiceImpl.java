@@ -194,6 +194,30 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
                 "reconcileFromHr() requires an HR client integration — not yet implemented");
     }
 
+    /**
+     * Operator skills edits ride the same HR-feed path as everything else that touches
+     * mechanic rows: a synthetic MECHANIC_SKILLS_UPDATED event stamped with a now-millis
+     * version, so dedupe, the stale guard, and both logs apply uniformly and ordering
+     * against in-flight feed events is last-write-wins by timestamp. The existence
+     * pre-check gives the API a 404 where the feed path deliberately no-ops.
+     */
+    @Override
+    @Transactional
+    public void replaceSkills(@NonNull String personId, @NonNull List<HrMechanicEvent.Payload.Skill> skills) {
+        if (mechanicRepository.findByPersonId(personId).isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.NOT_FOUND, "Mechanic not found for person " + personId);
+        }
+        processHrEvent(HrMechanicEvent.builder()
+                .eventId(com.positivity.shared.id.UUIDv7Generator.generate())
+                .eventType(com.positivity.shopmanager.service.enums.HrEventType.MECHANIC_SKILLS_UPDATED)
+                .personId(personId)
+                .version(Instant.now(clock).toEpochMilli())
+                .occurredAt(Instant.now(clock))
+                .payload(HrMechanicEvent.Payload.builder().skills(skills).build())
+                .build());
+    }
+
     private void persistAuditLog(HrMechanicEvent event, String beforeState, String afterState) {
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         mechanicAuditLogRepository.save(MechanicAuditLog.builder()

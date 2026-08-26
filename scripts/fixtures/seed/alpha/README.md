@@ -120,6 +120,23 @@ roster, then `createStaffingAssignment` — employees and locations must load fi
   (user links) are pos-security-service data and out of scope here.
 - The seed file stays until the alpha reseed is verified (§5.4).
 
+### `shop-manager/` — from `pos-shop-manager R__seed_shop_manager_mechanics.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `mechanic-skills.csv` | 23 skills across 7 technicians | gateway API pack (`PUT /shop-manager/mechanics/by-person/{personId}/skills` per mechanic) |
+
+Skills are the seed's one piece of genuine shop-manager data (proficiency/ASE codes
+exist nowhere else); the mechanic *rows* themselves are projected from TECHNICIAN
+staffing assignments over Kafka and are not seeded. The endpoint routes the edit
+through the same HR-feed path as the projection (a synthetic
+MECHANIC_SKILLS_UPDATED event), so dedupe/stale-guard/audit apply uniformly and
+each PUT replace-sets the mechanic's skills — re-runs converge. **Ordering:** the
+pack runs after the staffing assignments, but mechanics materialize
+asynchronously from Kafka; a 404 means the projection hasn't caught up — re-run
+this pack alone (`--only shop-manager/mechanic-skills.csv`) once it has. Delta:
+the seed's `certified_date` is not carried (the skill payload has no such field).
+
 ### `vehicle/` — from `pos-vehicle-inventory R__seed_vehicle_inventory_operational_data.sql`
 
 | File | Rows | Target |

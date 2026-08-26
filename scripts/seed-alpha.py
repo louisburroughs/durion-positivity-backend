@@ -53,6 +53,7 @@ PACK_FILES = [
     ("location/mobile-units.csv", "@mobile-units", None),
     ("people/employees.csv", "PERSON", None),
     ("people/staffing-assignments.csv", "@staffing-assignments", None),
+    ("shop-manager/mechanic-skills.csv", "@mechanic-skills", None),
     ("customer/person-customers.csv", "CUSTOMER", None),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER", None),
     ("vehicle/vehicles.csv", "VEHICLE", "vehicles"),
@@ -97,6 +98,9 @@ class Gateway:
 
     def post_json(self, path, body, allow_error=False):
         return self._request("POST", path, body=body, allow_error=allow_error)
+
+    def put_json(self, path, body, allow_error=False):
+        return self._request("PUT", path, body=body, allow_error=allow_error)
 
     def post_multipart_file(self, path, field_name, file_name, file_bytes):
         boundary = uuid.uuid4().hex
@@ -382,8 +386,45 @@ def run_storage_locations(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_mechanic_skills(gateway, relative_path, _location_id):
+    """API pack: replace-set each mechanic's skills via pos-shop-manager.
+
+    Runs after the staffing assignments: mechanics are projected from ACTIVE
+    TECHNICIAN assignments over Kafka, so a 404 here usually means the
+    projection has not caught up yet — re-run this pack once it has. Each PUT
+    replaces the full skill set, so re-runs converge."""
+    rows = read_fixture_rows(relative_path)
+    by_employee = {}
+    for row in rows:
+        by_employee.setdefault(row["employeeNumber"], []).append(
+            {"skillCode": row["skillCode"], "proficiencyLevel": int(row["proficiencyLevel"])})
+
+    updated, failures = 0, 0
+    for employee_number, skills in by_employee.items():
+        status_code, identity = gateway.get(
+            f"/people/employees/by-number/{urllib.parse.quote(employee_number)}", allow_error=True)
+        person_id = (identity or {}).get("personId") if status_code == 200 else None
+        if person_id is None:
+            print(f"  WARN: {employee_number}: employee not found — skills skipped")
+            failures += 1
+            continue
+        status_code, _ = gateway.put_json(
+            f"/shop-manager/mechanics/by-person/{person_id}/skills", {"skills": skills}, allow_error=True)
+        if status_code == 204:
+            updated += 1
+        elif status_code == 404:
+            print(f"  WARN: {employee_number}: mechanic projection not there yet — re-run after the feed catches up")
+            failures += 1
+        else:
+            print(f"  WARN: {employee_number}: HTTP {status_code}")
+            failures += 1
+    print(f"  mechanic skills: updated={updated} failures={failures} of {len(by_employee)} mechanics")
+    return failures == 0
+
+
 API_PACKS = {
     "@staffing-assignments": run_staffing_assignments,
+    "@mechanic-skills": run_mechanic_skills,
     "@security-users": run_security_users,
     "@location-bays": run_location_bays,
     "@mobile-units": run_mobile_units,

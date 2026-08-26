@@ -653,6 +653,56 @@ class MechanicSyncServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // replaceSkills — operator API entry riding the feed path
+    // -------------------------------------------------------------------------
+
+    /**
+     * replaceSkills routes through processHrEvent as a MECHANIC_SKILLS_UPDATED
+     * event (single write path), replacing the skill set and bumping
+     * version/lastSyncedAt to the synthetic event's now-millis stamp.
+     */
+    @Test
+    void replaceSkills_existingMechanic_replacesViaFeedPath() {
+        String personId = "01960011-0000-7000-8000-000000000005";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mechanicSyncService.replaceSkills(
+                personId,
+                List.of(HrMechanicEvent.Payload.Skill.builder()
+                        .skillCode("T4-BRAKES")
+                        .proficiencyLevel(4)
+                        .build()));
+
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<MechanicSkill>> skillCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(mechanicSkillRepository).saveAll(skillCaptor.capture());
+        assertThat(skillCaptor.getValue()).hasSize(1);
+        assertThat(existing.getVersion()).isEqualTo(Instant.now(FIXED_CLOCK).toEpochMilli());
+        verify(hrIntegrationLogRepository).save(any());
+        verify(mechanicAuditLogRepository).save(any());
+    }
+
+    /** replaceSkills must 404 where the feed path deliberately no-ops. */
+    @Test
+    void replaceSkills_unknownMechanic_throwsNotFound() {
+        when(mechanicRepository.findByPersonId("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(
+                        "missing",
+                        List.of(HrMechanicEvent.Payload.Skill.builder()
+                                .skillCode("T4-BRAKES")
+                                .proficiencyLevel(4)
+                                .build())))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Mechanic not found");
+        verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
+    }
+
+    // -------------------------------------------------------------------------
     // Fixture helpers
     // -------------------------------------------------------------------------
 
