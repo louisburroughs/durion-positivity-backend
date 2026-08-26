@@ -106,3 +106,5 @@ permissions:
     description: "Request or re-request a fleet payment authorization for a workorder"
   - name: "workorder:fleet_auth:resolve"
     description: "Resolve a fleet payment authorization that was refused, by revising scope or cancelling"
+  - name: "workorder:financials:view"
+    description: "View workorder financial detail (cost and margin) on the workorder detail response"

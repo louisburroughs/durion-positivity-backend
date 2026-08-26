@@ -5,10 +5,12 @@ Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on thi
 after execution: required-but-ungranted 112 → 2, granted-but-unenforced 77 → 64,
 unreachable contract operations 229 → 0, roles 16 → 17 (CONTROLLER). Waves 2 and 3
 (the §2 decisions and the accepted recommended-grants matrix) are seed-only — purely
-additive, no revocation migration needed. The two remaining required-but-ungranted
-entries are unwirable as-is: `workorder:financials:view` (no PermissionCode bit — needs
-a catalog entry before any grant can reach a JWT) and `people:timeEntry:` (a parser
-artifact of dynamic string construction, not a real code). The +14 in dead bits is
+additive, no revocation migration needed. The last real gap is closed:
+`workorder:financials:view` received PermissionCode bit 471 (CATALOG_VERSION 59 → 60 —
+**a fleet-coordinated deploy**: the strict `perm_ver` check means every service must
+carry the new catalog before tokens minted at 60 circulate) and is granted to the
+manager trio, CONTROLLER and ADMIN. The only remaining required-but-ungranted entry is
+`people:timeEntry:`, a parser artifact of dynamic string construction, not a real code. The +14 in dead bits is
 the retired codes keeping their permanent bit indexes, as designed. (The audit script
 now excludes the `AUTHENTICATED` sentinel from its required-set computations — Copilot
 review on PR #1515; the pre-execution counts in the tables below predate that and
@@ -115,7 +117,8 @@ them work:
   `accounting:time:export` (`PeopleReportsController`), which has a bit but is itself
   granted to no role.
 - `workorder:financials:view` — capability flag in `WorkorderDetailServiceImpl.java:124`;
-  permanently false for everyone.
+  permanently false for everyone. *(Fixed post-audit: bit 471 assigned, catalog v60,
+  granted to LOCATION_MANAGER, GENERAL_MANAGER, MANAGER, CONTROLLER, ADMIN.)*
 - `ACCOUNTING_ADMIN`, `AR_MANAGER` — **role names used as authorities** in
   `PaymentApplicationController.java:251` (`hasAnyAuthority(...)`). Neither role exists —
   no migration creates either name. Dead alternates —

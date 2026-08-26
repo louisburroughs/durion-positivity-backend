@@ -625,13 +625,14 @@ public enum PermissionCode {
     // ── Inventory (new) ────────────────────────────────────────────────────────
     // Cross-location availability: the per-location breakdown, split from the
     // scope-limited read at bit 311 (ADR-0057, #1494).
-    INVENTORY__AVAILABILITY__SEARCH(470, "inventory:availability:search");
+    INVENTORY__AVAILABILITY__SEARCH(470, "inventory:availability:search"),
+    WORKORDER__FINANCIALS__VIEW(471, "workorder:financials:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 59;
+    public static final int CATALOG_VERSION = 60;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
