@@ -138,6 +138,33 @@ never had them); the fixed `vehicle_id`s are regenerated.
 
 The seed file stays until the alpha reseed is verified (§5.4).
 
+### `catalog/` — from `pos-catalog R__seed_reference_catalog_2_products.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `products.csv` | 500 products (12 categories) | `POST /v1/catalog/bulk-ingest` (`domainType: CATALOG_PRODUCT`) |
+
+Headers use the ingest record's field names directly, so the catalog job's flexible
+reader maps them 1:1. Each successful row publishes a product fact on
+`catalog.events.v1`, hydrating the ext_catalog replicas (marketing, warranty,
+inventory, supplier) live — the post-seed `facts/replay` step the runbook requires
+for Flyway-seeded catalogs is not needed for pipeline-loaded products.
+
+**Deltas / not yet converted:**
+
+- The ingest record is Wave 1: `categoryName`/`subcategoryName` are carried in the
+  CSV but ignored (products land uncategorized until category-by-name resolution
+  lands), and **manufacturer id/name/brand, country of origin, and product type are
+  not expressible at all** — warranty/supplier replicas that read manufacturer data
+  from product facts will lack it until a bulk-ingest wave adds those fields.
+- `upc` and `description` are blank (the seed never had UPCs; description defaults
+  to the name server-side); `price` is blank (pricing is a separate seed).
+- Categories/subcategories (`R__seed_reference_catalog.sql`), services (file 3 — no
+  ingest path; `facts/replay` exists), pricing (file 4: `item_cost`,
+  `product_msrp`), and `product_uom` (file 5) are **not converted** and their seed
+  files stay. The products file itself stays until the alpha reseed is verified
+  (§5.4).
+
 ### `location/` — from `pos-location R__seed_location_2_operational_data.sql`
 
 | File | Rows | Target |

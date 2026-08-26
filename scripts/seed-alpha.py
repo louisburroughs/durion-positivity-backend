@@ -52,6 +52,7 @@ PACK_FILES = [
     ("customer/person-customers.csv", "CUSTOMER", None),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER", None),
     ("vehicle/vehicles.csv", "VEHICLE", "vehicles"),
+    ("catalog/products.csv", "CATALOG_PRODUCT", None),
 ]
 
 POLL_INTERVAL_SECONDS = 5
