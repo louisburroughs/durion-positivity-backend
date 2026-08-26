@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -66,8 +67,8 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
                     + " WHERE role_id = :roleId AND permission_id IN (:permissionIds)",
             nativeQuery = true)
     int recordGrantProvenance(
-            @Param("roleId") UUID roleId,
-            @Param("permissionIds") Collection<UUID> permissionIds,
-            @Param("grantedBy") String grantedBy,
-            @Param("grantedAt") Instant grantedAt);
+            @Param("roleId") @NonNull UUID roleId,
+            @Param("permissionIds") @NonNull Collection<UUID> permissionIds,
+            @Param("grantedBy") @NonNull String grantedBy,
+            @Param("grantedAt") @NonNull Instant grantedAt);
 }
