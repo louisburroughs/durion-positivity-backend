@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -71,6 +72,15 @@ class VehicleFacadeToolTest {
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchVehicles rejects queries shorter than 3 characters without calling downstream")
+    void searchVehicles_rejectsShortQuery() {
+        assertThatThrownBy(() -> tool.searchVehicles("  ab "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least 3 characters");
+        mockServer.verify();
     }
 
     @Test

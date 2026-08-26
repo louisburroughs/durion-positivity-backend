@@ -72,6 +72,25 @@ final class FacadeJsonSupport {
         return write(invoices, json);
     }
 
+    /**
+     * Project a workorder payload down to its identity and lifecycle status. Payloads that do not
+     * parse as an object carrying a {@code status} field (error envelopes, unexpected shapes) pass
+     * through unchanged so the model still sees the downstream answer.
+     */
+    static @NonNull String workorderStatusProjection(@NonNull String json) {
+        JsonNode root = readTree(json);
+        if (root == null || !root.isObject() || text(root, "status") == null) {
+            return json;
+        }
+        ObjectNode projected = MAPPER.createObjectNode();
+        copyIfPresent(root, projected, "workorderId", "id", "workorderNumber", "status");
+        try {
+            return MAPPER.writeValueAsString(projected);
+        } catch (JsonProcessingException exception) {
+            return json;
+        }
+    }
+
     private static JsonNode readTree(String json) {
         try {
             return MAPPER.readTree(json);

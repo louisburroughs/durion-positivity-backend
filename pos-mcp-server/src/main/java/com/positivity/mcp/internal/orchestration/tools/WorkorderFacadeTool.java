@@ -49,12 +49,14 @@ public class WorkorderFacadeTool {
 
     @Tool(
             description = "Get the current lifecycle status of a workorder by workorder id (UUID). Fetches the "
-                    + "workorder and reports its status field; use getWorkorder for the full record.")
+                    + "workorder and returns just its identity and status fields; use getWorkorder for the full "
+                    + "record.")
     public String getWorkorderStatus(@ToolParam(description = "The workorder id (UUID)") @NonNull String workorderId) {
-        return restClient
+        String body = restClient
                 .get()
                 .uri(workorderStatusUriTemplate, Map.of("workorderId", workorderId))
                 .retrieve()
                 .body(String.class);
+        return FacadeJsonSupport.workorderStatusProjection(body);
     }
 }

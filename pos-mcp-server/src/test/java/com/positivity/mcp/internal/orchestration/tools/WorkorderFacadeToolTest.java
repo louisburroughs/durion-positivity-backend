@@ -79,11 +79,31 @@ class WorkorderFacadeToolTest {
                 .expect(requestTo(BASE_URL + entry.expand(Map.of("workorderId", WORKORDER_ID))))
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess(
-                        "{\"id\":\"" + WORKORDER_ID + "\",\"status\":\"IN_PROGRESS\"}", MediaType.APPLICATION_JSON));
+                        "{\"id\":\"" + WORKORDER_ID + "\",\"status\":\"IN_PROGRESS\",\"lineItems\":[{\"sku\":\"X\"}]}",
+                        MediaType.APPLICATION_JSON));
 
         String result = tool.getWorkorderStatus(WORKORDER_ID);
 
         mockServer.verify();
-        assertThat(result).isNotEmpty().contains("IN_PROGRESS");
+        assertThat(result)
+                .isNotEmpty()
+                .contains("IN_PROGRESS")
+                .contains(WORKORDER_ID)
+                .doesNotContain("lineItems");
+    }
+
+    @Test
+    @DisplayName("getWorkorderStatus passes an unparseable or status-less body through unchanged")
+    void getWorkorderStatus_passesThroughWhenNoStatusField() {
+        FacadeContractManifest.Entry entry = contract("getWorkorderStatus");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("workorderId", WORKORDER_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"error\":\"boom\"}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getWorkorderStatus(WORKORDER_ID);
+
+        mockServer.verify();
+        assertThat(result).isEqualTo("{\"error\":\"boom\"}");
     }
 }

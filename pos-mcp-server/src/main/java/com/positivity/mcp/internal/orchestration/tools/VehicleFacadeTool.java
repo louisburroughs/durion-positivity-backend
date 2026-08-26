@@ -42,13 +42,20 @@ public class VehicleFacadeTool {
 
     @Tool(
             description = "Search vehicles by VIN, make, model, year, or plate. The query must be at least 3 "
-                    + "characters (6 when it looks like a VIN fragment).")
+                    + "characters; the vehicle service additionally requires 6 characters for VIN-shaped "
+                    + "fragments.")
     public String searchVehicles(
             @ToolParam(description = "Search query, minimum 3 characters (6 for VIN fragments)") @NonNull
                     String query) {
+        String trimmed = query.trim();
+        if (trimmed.length() < 3) {
+            throw new IllegalArgumentException(
+                    "Search query '" + trimmed + "' is too short: at least 3 characters required"
+                            + " (VIN-shaped fragments need 6, enforced by the vehicle service)");
+        }
         return restClient
                 .get()
-                .uri(vehicleSearchUriTemplate, Map.of("query", query))
+                .uri(vehicleSearchUriTemplate, Map.of("query", trimmed))
                 .retrieve()
                 .body(String.class);
     }
