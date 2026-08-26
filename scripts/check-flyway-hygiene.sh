@@ -7,6 +7,23 @@ errors=0
 modules_with_migrations=0
 enforce_ddl_auto_update_check="${ENFORCE_DDL_AUTO_UPDATE_CHECK:-false}"
 
+# Seed-file baseline (docs/DATA_SEED_STRATEGY.md §2/§5): every R__seed_*.sql
+# must be classified in scripts/flyway-seed-baseline.txt. New seed files fail
+# until deliberately added there; deleted seed files must drop their line.
+seed_baseline_file="$(dirname "$0")/flyway-seed-baseline.txt"
+declare -A seed_baseline_tier=()
+declare -A seed_baseline_matched=()
+tier2_remaining=0
+if [[ -f "$seed_baseline_file" ]]; then
+  while read -r entry tier _; do
+    [[ -z "$entry" || "$entry" == \#* ]] && continue
+    seed_baseline_tier[$entry]="${tier:-tier1}"
+  done < "$seed_baseline_file"
+else
+  echo "ERROR: seed baseline file not found: $seed_baseline_file"
+  errors=$((errors + 1))
+fi
+
 has_pattern() {
   local pattern="$1"
   local file="$2"
@@ -49,6 +66,19 @@ for module_dir in pos-*; do
       errors=$((errors + 1))
     fi
 
+    if [[ "$base" == R__seed_* ]]; then
+      seed_key="$module_name/$base"
+      if [[ -n "${seed_baseline_tier[$seed_key]:-}" ]]; then
+        seed_baseline_matched[$seed_key]=1
+        if [[ "${seed_baseline_tier[$seed_key]}" == "tier2" ]]; then
+          tier2_remaining=$((tier2_remaining + 1))
+        fi
+      else
+        echo "ERROR: $module_name has unclassified seed migration $base — new Flyway seed files are only allowed for service-private, environment-invariant data (docs/DATA_SEED_STRATEGY.md §2). If it qualifies, add '$seed_key tier1' to scripts/flyway-seed-baseline.txt; otherwise load the data through the owning service's API instead."
+        errors=$((errors + 1))
+      fi
+    fi
+
     if [[ "$base" =~ ^V([0-9]+(_[0-9]+)*)__ ]]; then
       version="${BASH_REMATCH[1]}"
       if [[ -n "${version_seen[$version]:-}" ]]; then
@@ -82,6 +112,17 @@ for module_dir in pos-*; do
   done
 
 done
+
+for seed_key in "${!seed_baseline_tier[@]}"; do
+  if [[ -z "${seed_baseline_matched[$seed_key]:-}" ]]; then
+    echo "ERROR: stale seed baseline entry '$seed_key' — the file no longer exists; remove its line from scripts/flyway-seed-baseline.txt"
+    errors=$((errors + 1))
+  fi
+done
+
+if [[ $tier2_remaining -gt 0 ]]; then
+  echo "NOTE: $tier2_remaining tier2 seed file(s) remain pending conversion to the API-driven seed pipeline (docs/DATA_SEED_STRATEGY.md §5)."
+fi
 
 if [[ $modules_with_migrations -eq 0 ]]; then
   echo "No modules with db/migration SQL files were found."
