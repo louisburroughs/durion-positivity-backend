@@ -327,34 +327,33 @@ springdoc:
 pos:
   accounting:
     base-url: ${POS_ACCOUNTING_BASE_URL:http://pos-api-gateway}
-    account-balance-uri-template: ${POS_ACCOUNTING_ACCOUNT_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/accounts/{accountId}/balance}
-    journal-entries-search-uri-template: ${POS_ACCOUNTING_JOURNAL_ENTRIES_SEARCH_URI_TEMPLATE:/accounting/v1/accounting/journal-entries/search?q={query}}
+    account-balance-uri-template: ${POS_ACCOUNTING_ACCOUNT_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/gl-accounts/{glAccountId}/balance}
+    general-ledger-uri-template: ${POS_ACCOUNTING_GENERAL_LEDGER_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/general-ledger?startDate={startDate}&endDate={endDate}}
     financial-summary-uri-template: ${POS_ACCOUNTING_FINANCIAL_SUMMARY_URI_TEMPLATE:/accounting/v1/accounting/summary/{period}}
   catalog:
     base-url: ${POS_CATALOG_BASE_URL:http://pos-api-gateway}
-    product-uri-template: ${POS_CATALOG_PRODUCT_URI_TEMPLATE:/catalog/v1/catalog/products/{productId}}
-    search-uri-template: ${POS_CATALOG_SEARCH_URI_TEMPLATE:/catalog/v1/catalog/search?q={query}}
-    category-uri-template: ${POS_CATALOG_CATEGORY_URI_TEMPLATE:/catalog/v1/catalog/categories/{category}}
+    product-uri-template: ${POS_CATALOG_PRODUCT_URI_TEMPLATE:/catalog/v1/products/{productId}}
+    search-uri-template: ${POS_CATALOG_SEARCH_URI_TEMPLATE:/catalog/v1/products/search?q={query}}
+    category-uri-template: ${POS_CATALOG_CATEGORY_URI_TEMPLATE:/catalog/v1/products/search?category={category}}
   customer:
     base-url: ${POS_CUSTOMER_BASE_URL:http://pos-api-gateway}
-    customer-uri-template: ${POS_CUSTOMER_URI_TEMPLATE:/customer/v1/customers/{customerId}}
-    search-uri-template: ${POS_CUSTOMER_SEARCH_URI_TEMPLATE:/customer/v1/customers/search?q={query}}
+    customer-uri-template: ${POS_CUSTOMER_URI_TEMPLATE:/customer/v1/crm/accounts/parties/{partyId}}
+    search-uri-template: ${POS_CUSTOMER_SEARCH_URI_TEMPLATE:/customer/v1/crm/accounts/parties?name={query}}
     history-uri-template: ${POS_CUSTOMER_HISTORY_URI_TEMPLATE:/customer/v1/customers/{customerId}/history}
   event-receiver:
     base-url: ${POS_EVENT_RECEIVER_BASE_URL:http://pos-api-gateway}
-    event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/event-receiver/v1/events/eventTypes}
-    search-uri-template: ${POS_EVENT_RECEIVER_SEARCH_URI_TEMPLATE:/event-receiver/v1/events/events/summary?q={query}}
-    history-uri-template: ${POS_EVENT_RECEIVER_HISTORY_URI_TEMPLATE:/event-receiver/v1/events/events/summary?entityId={entityId}}
+    event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/event-receiver/v1/eventTypes/active}
+    summary-uri-template: ${POS_EVENT_RECEIVER_SUMMARY_URI_TEMPLATE:/event-receiver/v1/events/summary/{window}}
   inventory:
     base-url: ${POS_INVENTORY_BASE_URL:http://pos-api-gateway}
-    stock-uri-template: ${POS_INVENTORY_STOCK_URI_TEMPLATE:/inventory/v1/inventory/stock/{sku}}
-    search-uri-template: ${POS_INVENTORY_SEARCH_URI_TEMPLATE:/inventory/v1/inventory/search?q={query}}
-    location-stock-uri-template: ${POS_INVENTORY_LOCATION_STOCK_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/stock}
+    stock-uri-template: ${POS_INVENTORY_STOCK_URI_TEMPLATE:/inventory/v1/inventory/availability/by-sku?productSku={productSku}}
+    search-uri-template: ${POS_INVENTORY_SEARCH_URI_TEMPLATE:/inventory/v1/inventory/availability/by-sku?productSku={productSku}}
+    location-stock-uri-template: ${POS_INVENTORY_LOCATION_STOCK_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/inventory-inquiry}
   invoice:
     base-url: ${POS_INVOICE_BASE_URL:http://pos-api-gateway}
     invoice-uri-template: ${POS_INVOICE_URI_TEMPLATE:/invoice/v1/invoices/{invoiceId}}
     search-uri-template: ${POS_INVOICE_SEARCH_URI_TEMPLATE:/invoice/v1/invoices/search?q={query}}
-    customer-invoices-uri-template: ${POS_INVOICE_CUSTOMER_INVOICES_URI_TEMPLATE:/invoice/v1/invoices/customer/{customerId}}
+    customer-invoices-uri-template: ${POS_INVOICE_CUSTOMER_INVOICES_URI_TEMPLATE:/invoice/v1/invoices/items/search?partyId={customerId}}
   nlti:
     session:
       ttl-hours: 24
@@ -364,21 +363,28 @@ pos:
   location:
     base-url: ${POS_LOCATION_BASE_URL:http://pos-api-gateway}
     location-uri-template: ${POS_LOCATION_URI_TEMPLATE:/location/v1/locations/{locationId}}
-    search-uri-template: ${POS_LOCATION_SEARCH_URI_TEMPLATE:/location/v1/locations/search?q={query}}
-    inventory-uri-template: ${POS_LOCATION_INVENTORY_URI_TEMPLATE:/location/v1/locations/{locationId}/inventory}
+    # Zero-parameter roster; the facade filters by name/code in-process (the paged roster
+    # endpoint would truncate a scan).
+    search-uri-template: ${POS_LOCATION_SEARCH_URI_TEMPLATE:/location/v1/locations}
+    # Cross-domain: pos-location publishes no inventory view, so the location facade reads the
+    # /inventory gateway route (same gateway host) for a location's inventory inquiry.
+    inventory-uri-template: ${POS_LOCATION_INVENTORY_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/inventory-inquiry}
   order:
     base-url: ${POS_ORDER_BASE_URL:http://pos-api-gateway}
-    order-uri-template: ${POS_ORDER_URI_TEMPLATE:/order/v1/orders/{orderId}}
-    search-uri-template: ${POS_ORDER_SEARCH_URI_TEMPLATE:/order/v1/orders/search?q={query}}
+    order-uri-template: ${POS_ORDER_URI_TEMPLATE:/order/v1/orders/carts/{orderId}}
+    list-uri-template: ${POS_ORDER_LIST_URI_TEMPLATE:/order/v1/orders/carts}
   pricing:
     base-url: ${POS_PRICING_BASE_URL:http://pos-api-gateway}
     sku-price-uri-template: ${POS_PRICING_SKU_PRICE_URI_TEMPLATE:/price/v1/pricing/sku/{sku}}
-    search-uri-template: ${POS_PRICING_SEARCH_URI_TEMPLATE:/price/v1/pricing/search?q={query}}
-    price-list-uri-template: ${POS_PRICING_PRICE_LIST_URI_TEMPLATE:/price/v1/pricing/lists/{priceListId}}
+    promotion-by-code-uri-template: ${POS_PRICING_PROMOTION_BY_CODE_URI_TEMPLATE:/price/v1/promotions/offers/by-code/{promoCode}}
+    price-restrictions-uri-template: ${POS_PRICING_PRICE_RESTRICTIONS_URI_TEMPLATE:/price/v1/price/restrictions/rules}
+    # Cross-domain per ADR-0054: catalog is the system of record for price books.
+    price-list-uri-template: ${POS_PRICING_PRICE_LIST_URI_TEMPLATE:/catalog/v1/products/price-books/{priceBookId}}
   reporting:
     base-url: ${POS_REPORTING_BASE_URL:http://pos-api-gateway}
-    sales-report-uri-template: ${POS_REPORTING_SALES_REPORT_URI_TEMPLATE:/accounting/v1/reporting/sales/{period}}
-    inventory-report-uri-template: ${POS_REPORTING_INVENTORY_REPORT_URI_TEMPLATE:/accounting/v1/reporting/inventory/{locationId}}
+    sales-report-uri-template: ${POS_REPORTING_SALES_REPORT_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}}
+    # Cross-domain: pos-inventory serves the location rollup report.
+    inventory-report-uri-template: ${POS_REPORTING_INVENTORY_REPORT_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/inventory-rollup}
     revenue-report-uri-template: ${POS_REPORTING_REVENUE_REPORT_URI_TEMPLATE:/accounting/v1/reporting/revenue/{period}}
   security:
     users:
@@ -389,33 +395,36 @@ pos:
     audit-search-uri-template: ${POS_SECURITY_AUDIT_SEARCH_URI_TEMPLATE:/security-service/v1/audit/events?eventType={query}}
   hr:
     employee-base-url: ${POS_HR_EMPLOYEE_BASE_URL:http://pos-api-gateway}
-    people-base-url: ${POS_HR_PEOPLE_BASE_URL:http://pos-api-gateway}
     availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://pos-api-gateway}
     employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/people/v1/people/employees/{employeeId}}
-    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:/people/v1/people?q={query}}
     schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/people/v1/people/availability?employeeId={employeeId}}
   shopmanager:
     base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-api-gateway}
     status-uri-template: ${POS_SHOPMANAGER_STATUS_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/status}
     queue-uri-template: ${POS_SHOPMANAGER_QUEUE_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/queue}
-    search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/shop-manager/v1/shop/search?q={query}}
+    # Cross-domain: shops ARE locations; the facade fetches the /location roster and filters
+    # by name/code in-process (pos-shop-manager publishes no shop directory).
+    search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/location/v1/locations}
   tax:
     # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration.
     # pos-tax listens on 8091 (no port-80 mapping), so the port is required (#641).
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091/v1/tax}
+    # getTaxSummary is served by pos-accounting's tax-liability report via the gateway, not by
+    # the direct pos-tax client — hence its own gateway base-url.
+    summary-base-url: ${POS_TAX_SUMMARY_BASE_URL:http://pos-api-gateway}
     tax-rate-uri-template: ${POS_TAX_RATE_URI_TEMPLATE:/rates/{locationId}}
     tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate?amount={amount}&locationId={locationId}}
-    tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/summary/{period}}
+    tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-api-gateway}
-    vehicle-uri-template: ${POS_VEHICLE_URI_TEMPLATE:/customer/v1/vehicles/{vehicleId}}
-    search-uri-template: ${POS_VEHICLE_SEARCH_URI_TEMPLATE:/customer/v1/vehicles/search?q={query}}
-    customer-vehicles-uri-template: ${POS_VEHICLE_CUSTOMER_VEHICLES_URI_TEMPLATE:/customer/v1/vehicles/customer/{customerId}}
+    vehicle-uri-template: ${POS_VEHICLE_URI_TEMPLATE:/vehicle-inventory/v1/vehicle-registry/{vehicleId}}
+    search-uri-template: ${POS_VEHICLE_SEARCH_URI_TEMPLATE:/vehicle-inventory/v1/vehicles/search?q={query}}
+    customer-vehicles-uri-template: ${POS_VEHICLE_CUSTOMER_VEHICLES_URI_TEMPLATE:/customer/v1/crm/{customerId}/vehicles}
   workorder:
     base-url: ${POS_WORKORDER_BASE_URL:http://pos-api-gateway}
     workorder-uri-template: ${POS_WORKORDER_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
     search-uri-template: ${POS_WORKORDER_SEARCH_URI_TEMPLATE:/workorder/v1/workorders/search?q={query}}
-    status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}/status}
+    status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
   show-actuator: true
 
 logging:
