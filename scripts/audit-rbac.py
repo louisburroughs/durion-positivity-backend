@@ -29,6 +29,20 @@ Run from the repo root; no build, no database:
 
   python3 scripts/audit-rbac.py [output.json]
 
+CI gate mode -- fail on NEW authorization drift, tolerate the documented
+backlog (see docs/rbac-permission-role-audit-2026-08.md §7 task 7):
+
+  python3 scripts/audit-rbac.py --check [--baseline PATH]
+
+--check evaluates five defect classes against scripts/rbac-audit-baseline.json
+(override with --baseline): required_ungranted, granted_unrequired,
+required_no_bit, granted_no_bit, unreachable_op_count. Any code in those first
+four flags that is not listed in the baseline is new drift and fails the
+build; unreachable_op_count fails on any value > 0 (never baselined -- it
+should always be zero). A baselined code that no longer drifts is also a
+failure ("stale baseline") -- the baseline is meant to shrink, not just grow.
+required_unregistered and catalog_dead are informational only and never gate.
+
 Known limitations (see docs/rbac-permission-role-audit-2026-08.md):
   - x-required-permissions alternates are treated as OR (mirrors
     hasAnyAuthority); complex and() expressions are not modelled.
@@ -39,14 +53,76 @@ Known limitations (see docs/rbac-permission-role-audit-2026-08.md):
 """
 import re, pathlib, collections, json, sys
 
+# ---- argv -------------------------------------------------------------------
+# Minimal manual parsing (no argparse elsewhere in this script): positional
+# output path for normal mode, or --check [--baseline PATH] for the CI gate.
+argv = sys.argv[1:]
+check_mode = "--check" in argv
+if check_mode:
+    argv.remove("--check")
+baseline_path = "scripts/rbac-audit-baseline.json"
+if "--baseline" in argv:
+    idx = argv.index("--baseline")
+    baseline_path = argv[idx + 1]
+    del argv[idx:idx + 2]
+output_path = argv[0] if argv else None
+
 root = pathlib.Path(".")
 
 PERM_RE = r"[a-z][a-zA-Z0-9_.-]*:[a-zA-Z0-9_.:-]+"
 
+# ---- comment stripping ------------------------------------------------------
+def strip_comments(src):
+    """Blank out // and /* */ comments, preserving every offset and newline.
+
+    Enforcement is scanned by regex, and javadoc quotes annotations for
+    illustration -- RoleAuthorityServiceImpl's class javadoc contains
+    `@PreAuthorize("hasAuthority(\'crm:party:view\')")` as an EXAMPLE, and
+    TaxServiceClient has `// @PreAuthorize(\'tax:calculate\')` describing another
+    module's gate. Scoring prose as enforcement is the same false-positive class
+    as the @EmitEvent-id bug (see the balanced-paren note below), so comments are
+    blanked before scanning. Offsets are preserved (comment characters become
+    spaces, newlines kept) so reported line numbers stay correct.
+    """
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == '"' or c == "'":  # string/char literal: copy verbatim
+            q = c
+            out.append(c)
+            i += 1
+            while i < n:
+                out.append(src[i])
+                if src[i] == "\\" and i + 1 < n:   # escape: copy the pair
+                    i += 1
+                    if i < n:
+                        out.append(src[i])
+                elif src[i] == q:
+                    i += 1
+                    break
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and src[i + 1] == "/":
+            while i < n and src[i] != "\n":
+                out.append(" ")
+                i += 1
+            continue
+        if c == "/" and i + 1 < n and src[i + 1] == "*":
+            while i < n and not (src[i] == "*" and i + 1 < n and src[i + 1] == "/"):
+                out.append("\n" if src[i] == "\n" else " ")
+                i += 1
+            out.append("  ")          # the closing */
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 # ---- constants -> codes -----------------------------------------------------
 const_to_code = {}
 java_files = list(root.glob("pos-*/src/main/java/**/*.java"))
-file_bodies = {f: f.read_text() for f in java_files}
+file_bodies = {f: strip_comments(f.read_text()) for f in java_files}
 for f in java_files:
     for m in re.finditer(r'static final String (\w+)\s*=\s*"(' + PERM_RE + r')"', file_bodies[f]):
         const_to_code.setdefault(m.group(1), set()).add(m.group(2))
@@ -85,6 +161,14 @@ for f in java_files:
         chunk = body[m.end():end if end is not None else m.end()]
         line = body[:m.start()].count("\n") + 1
         for code in re.findall(r'"(' + PERM_RE + r')"', chunk):
+            enforced[code].add(f"{f}:{line}")
+        # SpEL string literals are SINGLE-quoted inside the Java string, so a code
+        # written inline -- `hasAnyAuthority('workorder:parts:add', ...)` in
+        # SubstituteLinkController, or the deliberate cross-module literal in
+        # PurchaseSuggestionController -- is invisible to the double-quoted scan
+        # above. Missing those reads as "enforced nowhere", the exact false
+        # positive this audit exists to avoid.
+        for code in re.findall(r"'(" + PERM_RE + r")'", chunk):
             enforced[code].add(f"{f}:{line}")
         for cst in re.findall(r'\b([A-Z][A-Z0-9_]{2,})\b', chunk):
             for code in const_to_code.get(cst, ()):
@@ -242,4 +326,78 @@ out = {
     "catalog_dead": {p: catalog[p] for p in flag_catalog_dead},
     "unreachable_ops": {m: v for m, v in sorted(unreachable_ops.items())},
 }
-json.dump(out, open(sys.argv[1], "w") if len(sys.argv) > 1 else sys.stdout, indent=1)
+
+if not check_mode:
+    json.dump(out, open(output_path, "w") if output_path else sys.stdout, indent=1)
+    sys.exit(0)
+
+# ---- --check: CI gate --------------------------------------------------------
+# Fails on NEW drift in the four bit/wiring defect classes below (each is a
+# distinct #1494/#1499/#1512-style bug), and on a STALE baseline entry (a
+# baselined code that no longer drifts -- the baseline must shrink, not just
+# accumulate). unreachable_op_count is never baselined: any value > 0 fails.
+# required_unregistered / catalog_dead are informational only, see module
+# docstring.
+baseline_file = pathlib.Path(baseline_path)
+if not baseline_file.exists():
+    print(f"GATE ERROR: baseline file not found: {baseline_path}", file=sys.stderr)
+    sys.exit(1)
+baseline = json.loads(baseline_file.read_text())
+
+gated = {
+    "required_ungranted": flag_required_ungranted,
+    "granted_unrequired": flag_granted_unrequired,
+    "required_no_bit": flag_required_no_bit,
+    "granted_no_bit": flag_granted_no_bit,
+}
+failed = False
+
+for category, current in gated.items():
+    current_set = set(current)
+    baselined = baseline.get(category, {})
+    new_drift = sorted(c for c in current_set if c not in baselined)
+    stale = sorted(c for c in baselined if c not in current_set)
+
+    if new_drift:
+        failed = True
+        print(f"\nNEW DRIFT -- {category} ({len(new_drift)} not in baseline):")
+        for code in new_drift:
+            if category == "required_ungranted":
+                info = out["required_ungranted"][code]
+                where = info["enforced_at"] or info["contract_modules"]
+            elif category == "granted_unrequired":
+                where = sorted(grants[code])
+            elif category == "required_no_bit":
+                where = sorted(enforced.get(code, []))[:3] or sorted(contract.get(code, []))
+            else:  # granted_no_bit
+                where = sorted(grants[code])
+            print(f"  - {code}  [{category}]" + (f"  ({where})" if where else ""))
+
+    if stale:
+        failed = True
+        print(f"\nSTALE BASELINE -- {category}: baseline entries that no longer drift -- "
+              f"delete these lines from {baseline_path} ({len(stale)}):")
+        for code in stale:
+            print(f"  - {code}: {baselined[code]}")
+
+unreachable_op_count = out["counts"]["unreachable_op_count"]
+if unreachable_op_count > 0:
+    failed = True
+    print(f"\nNEW DRIFT -- unreachable_op_count ({unreachable_op_count}, never baselined, must be 0):")
+    for mod, ops in sorted(unreachable_ops.items()):
+        for path, method, perms in ops:
+            print(f"  - {mod}: {method.upper()} {path}  requires {perms}")
+
+print("\n-- informational only, not gated (see docs/rbac-permission-role-audit-2026-08.md §5) --")
+print(f"  required_unregistered: {len(flag_required_unregistered)}")
+print(f"  catalog_dead: {len(flag_catalog_dead)}")
+
+if failed:
+    print(f"\nFAIL: new authorization drift and/or a stale baseline entry -- see above.")
+    print(f"Fix the drift, or add/remove a baseline entry with a reason: {baseline_path}")
+    print(f"Background: docs/rbac-permission-role-audit-2026-08.md (§7, task 7)")
+    sys.exit(1)
+
+print(f"\nOK: no new authorization drift (baseline: {sum(len(baseline.get(c, {})) for c in gated)} accepted "
+      f"exceptions across {len(gated)} categories, 0 unreachable ops).")
+sys.exit(0)
