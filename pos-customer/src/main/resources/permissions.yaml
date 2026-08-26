@@ -10,10 +10,16 @@ permissions:
     description: "View per-channel marketing consent and the consent-change audit trail"
   - name: "crm:contact:create"
     description: "Add new contact point (email/phone) to a party"
+    deprecated: true
+    supersededBy: "people-contact:person:edit"
   - name: "crm:contact:delete"
     description: "Remove contact point from a party"
+    deprecated: true
+    supersededBy: "people-contact:person:edit"
   - name: "crm:contact:edit"
     description: "Edit contact point details"
+    deprecated: true
+    supersededBy: "people-contact:person:edit"
   - name: "crm:contact:view"
     description: "View contact points (email, phone) for a party"
   - name: "crm:contact_preference:edit"
@@ -24,8 +30,12 @@ permissions:
     description: "Assign roles (BILLING, APPROVER, DRIVER) to contacts"
   - name: "crm:contact_role:revoke"
     description: "Revoke a role assignment from a contact"
+    deprecated: true
+    supersededBy: "crm:contact_role:assign"
   - name: "crm:contact_role:view"
     description: "View assigned roles for contacts on an account"
+    deprecated: true
+    supersededBy: "crm:contact:view"
   - name: "crm:followup:manage"
     description: "Manage followup"
   - name: "crm:followup:view"
@@ -92,15 +102,24 @@ permissions:
     description: "Associate a vehicle VIN with a party"
   - name: "crm:vehicle:search"
     description: "Search vehicles by VIN, unit #, or plate"
+    deprecated: true
+    supersededBy: "vehicle-inventory:search:view"
   - name: "crm:vehicle:view"
     description: "View vehicle records (VIN, unit #, description, plate)"
   - name: "crm:vehicle_party_association:create"
     description: "Associate party to vehicle"
+    deprecated: true
   - name: "crm:vehicle_party_association:edit"
     description: "Adjust effective dates for associations"
+    deprecated: true
   - name: "crm:vehicle_party_association:view"
     description: "View party associations for a vehicle"
+    deprecated: true
   - name: "crm:vehicle_preference:edit"
     description: "Update vehicle care preferences"
+    deprecated: true
+    supersededBy: "vehicle-inventory:preferences:manage"
   - name: "crm:vehicle_preference:view"
     description: "View vehicle care preferences"
+    deprecated: true
+    supersededBy: "vehicle-inventory:preferences:manage"

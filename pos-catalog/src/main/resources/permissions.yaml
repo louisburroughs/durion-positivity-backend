@@ -4,12 +4,16 @@ version: "1.0"
 permissions:
   - name: "catalog:category:create"
     description: "Create product categories"
+    deprecated: true
   - name: "catalog:category:delete"
     description: "Delete product categories"
+    deprecated: true
   - name: "catalog:category:edit"
     description: "Edit product categories"
+    deprecated: true
   - name: "catalog:category:view"
     description: "View product categories"
+    deprecated: true
   - name: "catalog:item_cost:update"
     description: "Update item cost"
   - name: "catalog:msrp:read"
@@ -38,12 +42,16 @@ permissions:
     description: "View supplier item cost structures"
   - name: "catalog:supplier_cost:write"
     description: "Create, update, and delete supplier item cost structures"
+    deprecated: true
   - name: "catalog:variant:create"
     description: "Create product variants"
+    deprecated: true
   - name: "catalog:variant:edit"
     description: "Edit product variants"
+    deprecated: true
   - name: "catalog:variant:view"
     description: "View product variants"
+    deprecated: true
   - name: "product:lifecycle:override_discontinued"
     description: "Override discontinued lifecycle restrictions"
   - name: "product:lifecycle:update"

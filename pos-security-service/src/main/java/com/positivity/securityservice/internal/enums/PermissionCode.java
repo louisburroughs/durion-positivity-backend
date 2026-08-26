@@ -11,7 +11,9 @@ import java.util.stream.Stream;
  * <p>
  * Bit indexes are permanent and MUST never be reused or reassigned.
  * To retire a permission, mark it {@code @Deprecated} — never remove or
- * renumber.
+ * renumber. See {@code docs/rbac-permission-role-audit-2026-08.md} §3 for the
+ * record of which codes were retired and why, and §4 for the retirement
+ * convention this annotation implements.
  */
 @SuppressWarnings("java:S115")
 public enum PermissionCode {
@@ -36,15 +38,35 @@ public enum PermissionCode {
     CATALOG__PRODUCT__DELETE(14, "catalog:product:delete"),
     PRODUCT__LIFECYCLE__UPDATE(15, "product:lifecycle:update"),
     PRODUCT__LIFECYCLE__OVERRIDE_DISCONTINUED(16, "product:lifecycle:override_discontinued"),
+    /**
+     * No successor. Category is internal validation data with no CRUD
+     * endpoints in pos-catalog. Audit doc §3.
+     */
+    @Deprecated
     CATALOG__CATEGORY__VIEW(17, "catalog:category:view"),
+    /** @deprecated see {@link #CATALOG__CATEGORY__VIEW} */
+    @Deprecated
     CATALOG__CATEGORY__CREATE(18, "catalog:category:create"),
+    /** @deprecated see {@link #CATALOG__CATEGORY__VIEW} */
+    @Deprecated
     CATALOG__CATEGORY__EDIT(19, "catalog:category:edit"),
+    /** @deprecated see {@link #CATALOG__CATEGORY__VIEW} */
+    @Deprecated
     CATALOG__CATEGORY__DELETE(20, "catalog:category:delete"),
     CATALOG__SERVICE_TYPE__VIEW(21, "catalog:service_type:view"),
     CATALOG__SERVICE_TYPE__CREATE(22, "catalog:service_type:create"),
     CATALOG__SERVICE_TYPE__EDIT(23, "catalog:service_type:edit"),
+    /**
+     * No successor. Variants/tread designs are Kafka-written, not mutated
+     * through an API. Audit doc §3.
+     */
+    @Deprecated
     CATALOG__VARIANT__VIEW(24, "catalog:variant:view"),
+    /** @deprecated see {@link #CATALOG__VARIANT__VIEW} */
+    @Deprecated
     CATALOG__VARIANT__CREATE(25, "catalog:variant:create"),
+    /** @deprecated see {@link #CATALOG__VARIANT__VIEW} */
+    @Deprecated
     CATALOG__VARIANT__EDIT(26, "catalog:variant:edit"),
 
     // ── CRM ──────────────────────────────────────────────────────────────────
@@ -55,23 +77,77 @@ public enum PermissionCode {
     CRM__PARTY__DEACTIVATE(31, "crm:party:deactivate"),
     CRM__PARTY__MERGE(32, "crm:party:merge"),
     CRM__CONTACT__VIEW(33, "crm:contact:view"),
+    /**
+     * Superseded by {@link #PEOPLE_CONTACT__PERSON__EDIT}. Contact points
+     * live in pos-people-contact, not pos-customer. Audit doc §3.
+     */
+    @Deprecated
     CRM__CONTACT__CREATE(34, "crm:contact:create"),
+    /** @deprecated see {@link #CRM__CONTACT__CREATE} */
+    @Deprecated
     CRM__CONTACT__EDIT(35, "crm:contact:edit"),
+    /** @deprecated see {@link #CRM__CONTACT__CREATE} */
+    @Deprecated
     CRM__CONTACT__DELETE(36, "crm:contact:delete"),
+    /**
+     * Superseded by {@link #CRM__CONTACT__VIEW} — roles are inline on the
+     * contact response; no separate role-view endpoint exists. Audit doc §3.
+     */
+    @Deprecated
     CRM__CONTACT_ROLE__VIEW(37, "crm:contact_role:view"),
     CRM__CONTACT_ROLE__ASSIGN(38, "crm:contact_role:assign"),
+    /**
+     * Superseded by {@link #CRM__CONTACT_ROLE__ASSIGN} — revocation is a
+     * full-set replace via assign, not a separate revoke endpoint. Audit doc §3.
+     */
+    @Deprecated
     CRM__CONTACT_ROLE__REVOKE(39, "crm:contact_role:revoke"),
     CRM__CONTACT_PREFERENCE__VIEW(40, "crm:contact_preference:view"),
     CRM__CONTACT_PREFERENCE__EDIT(41, "crm:contact_preference:edit"),
     CRM__VEHICLE__VIEW(42, "crm:vehicle:view"),
+    /**
+     * Superseded by {@link #VEHICLE_INVENTORY__SEARCH__VIEW}
+     * ({@code vehicle-inventory:search:view}, pos-vehicle-inventory
+     * VehicleSearchController). ADR-0044 §6; audit doc §3.
+     */
+    @Deprecated
     CRM__VEHICLE__SEARCH(43, "crm:vehicle:search"),
     CRM__VEHICLE__CREATE(44, "crm:vehicle:create"),
+    /**
+     * Superseded by {@link #VEHICLE_INVENTORY__REGISTRY__UPDATE}
+     * ({@code vehicle-inventory:registry:update}). ADR-0044 §6;
+     * {@code CrmPermissionRegistry.java} marks this retired.
+     */
+    @Deprecated
     CRM__VEHICLE__EDIT(45, "crm:vehicle:edit"),
+    /**
+     * Superseded by {@link #VEHICLE_INVENTORY__REGISTRY__DELETE}
+     * ({@code vehicle-inventory:registry:delete}). ADR-0044 §6;
+     * {@code CrmPermissionRegistry.java} marks this retired.
+     */
+    @Deprecated
     CRM__VEHICLE__DEACTIVATE(46, "crm:vehicle:deactivate"),
+    /**
+     * No successor. This family is event-driven only
+     * ({@code VehicleEventsListener}) — no API exists for it, by design.
+     * ADR-0044 §6; audit doc §3.
+     */
+    @Deprecated
     CRM__VEHICLE_PARTY_ASSOCIATION__CREATE(47, "crm:vehicle_party_association:create"),
+    /** @deprecated see {@link #CRM__VEHICLE_PARTY_ASSOCIATION__CREATE} */
+    @Deprecated
     CRM__VEHICLE_PARTY_ASSOCIATION__VIEW(48, "crm:vehicle_party_association:view"),
+    /** @deprecated see {@link #CRM__VEHICLE_PARTY_ASSOCIATION__CREATE} */
+    @Deprecated
     CRM__VEHICLE_PARTY_ASSOCIATION__EDIT(49, "crm:vehicle_party_association:edit"),
+    /**
+     * Superseded by {@link #VEHICLE_INVENTORY__PREFERENCES__MANAGE}
+     * ({@code vehicle-inventory:preferences:manage}). ADR-0044 §6.
+     */
+    @Deprecated
     CRM__VEHICLE_PREFERENCE__VIEW(50, "crm:vehicle_preference:view"),
+    /** @deprecated see {@link #CRM__VEHICLE_PREFERENCE__VIEW} */
+    @Deprecated
     CRM__VEHICLE_PREFERENCE__EDIT(51, "crm:vehicle_preference:edit"),
     CRM__PROCESSING_LOG__VIEW(52, "crm:processing_log:view"),
     CRM__SUSPENSE__VIEW(53, "crm:suspense:view"),
@@ -90,15 +166,43 @@ public enum PermissionCode {
     INVENTORY__CYCLE_COUNT__VIEW(62, "inventory:cycle_count:view"),
     INVENTORY__CYCLE_COUNT__COMPLETE(63, "inventory:cycle_count:complete"),
     INVENTORY__ON_HAND__VIEW(64, "inventory:on_hand:view"),
+    /**
+     * Superseded by {@link #INVENTORY__AVAILABILITY__READ}
+     * ({@code inventory:availability:read}). ADR-0057, #1497, #1499;
+     * audit doc §3.
+     */
+    @Deprecated
     INVENTORY__ON_HAND__SEARCH(65, "inventory:on_hand:search"),
     INVENTORY__RECEIVING__CREATE(66, "inventory:receiving:create"),
     INVENTORY__RECEIVING__VIEW(67, "inventory:receiving:view"),
     INVENTORY__RECEIVING__COMPLETE(68, "inventory:receiving:complete"),
     INVENTORY__ISSUE__PARTS(69, "inventory:issue:parts"),
     INVENTORY__OVERRIDE__PART_MATCH(70, "inventory:override:part-match"),
+    /**
+     * Superseded by {@link #ORDER__PURCHASE_ORDER__CREATE}
+     * ({@code order:purchase_order:create}). Seed header; tracked on #1438.
+     */
+    @Deprecated
     INVENTORY__PURCHASE_ORDER__CREATE(71, "inventory:purchase_order:create"),
+    /**
+     * Superseded by {@link #ORDER__PURCHASE_ORDER__VIEW}
+     * ({@code order:purchase_order:view}). Seed header; tracked on #1438.
+     */
+    @Deprecated
     INVENTORY__PURCHASE_ORDER__VIEW(72, "inventory:purchase_order:view"),
+    /**
+     * Superseded by {@link #ORDER__PURCHASE_ORDER__APPROVE}
+     * ({@code order:purchase_order:approve}). Seed header; tracked on #1438.
+     */
+    @Deprecated
     INVENTORY__PURCHASE_ORDER__APPROVE(73, "inventory:purchase_order:approve"),
+    /**
+     * No 1:1 successor, unlike its create/view/approve siblings: receiving
+     * stayed in pos-inventory as {@link #INVENTORY__GOODS_RECEIPT__CREATE}
+     * and {@link #INVENTORY__RECEIVING__COMPLETE}, not the
+     * {@code order:purchase_order:*} family. Audit doc §3.
+     */
+    @Deprecated
     INVENTORY__PURCHASE_ORDER__RECEIVE(74, "inventory:purchase_order:receive"),
     INVENTORY__ASN__CREATE(75, "inventory:asn:create"),
     INVENTORY__ASN__VIEW(76, "inventory:asn:view"),
@@ -106,6 +210,12 @@ public enum PermissionCode {
     INVENTORY__GOODS_RECEIPT__VIEW(78, "inventory:goods_receipt:view"),
     INVENTORY__GOODS_RECEIPT__OVERRIDE(79, "inventory:goods_receipt:override"),
     INVENTORY__ALLOCATIONS__REALLOCATE(80, "inventory:allocations:reallocate"),
+    /**
+     * Superseded by {@link #INVENTORY__SHORTAGE__RESOLVE}
+     * ({@code inventory:shortage:resolve}) — singular rename; only the
+     * singular family is enforced/granted. Audit doc §3.
+     */
+    @Deprecated
     INVENTORY__SHORTAGES__RESOLVE(81, "inventory:shortages:resolve"),
 
     // ── Invoice ──────────────────────────────────────────────────────────────
@@ -141,6 +251,11 @@ public enum PermissionCode {
     ORDER__ORDER__CREATE(104, "order:order:create"),
     ORDER__ORDER__EDIT(105, "order:order:edit"),
     ORDER__ORDER__CANCEL(106, "order:order:cancel"),
+    /**
+     * Superseded by {@link #ORDER__ORDER__VIEW} — lines are embedded in the
+     * order response; there is no separate line-view endpoint. Audit doc §3.
+     */
+    @Deprecated
     ORDER__LINE__VIEW(107, "order:line:view"),
     ORDER__LINE__CREATE(108, "order:line:create"),
     ORDER__LINE__EDIT(109, "order:line:edit"),
@@ -156,25 +271,68 @@ public enum PermissionCode {
     PEOPLE__EMPLOYEE__CREATE(117, "people:employee:create"),
     PEOPLE__EMPLOYEE__EDIT(118, "people:employee:edit"),
     PEOPLE__EMPLOYEE__DEACTIVATE(119, "people:employee:deactivate"),
+    /**
+     * Superseded by {@link #SECURITY__ROLE__VIEW} — no people-module role
+     * endpoints exist; role management lives in pos-security-service.
+     * Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__ROLE__VIEW(120, "people:role:view"),
+    /**
+     * Superseded by {@link #SECURITY__ROLE__ASSIGN}. Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__ROLE__ASSIGN(121, "people:role:assign"),
+    /**
+     * No successor — {@code security:role} has no revoke action. Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__ROLE__REVOKE(122, "people:role:revoke"),
     PEOPLE__SKILL__VIEW(123, "people:skill:view"),
     PEOPLE__SKILL__ASSIGN(124, "people:skill:assign"),
     PEOPLE__SKILL__EDIT(125, "people:skill:edit"),
 
     // ── Pricing ──────────────────────────────────────────────────────────────
+    /**
+     * No successor. No PriceBook resource exists in pos-price. Audit doc §3.
+     */
+    @Deprecated
     PRICING__PRICE_BOOK__VIEW(126, "pricing:price_book:view"),
+    /** @deprecated see {@link #PRICING__PRICE_BOOK__VIEW} */
+    @Deprecated
     PRICING__PRICE_BOOK__CREATE(127, "pricing:price_book:create"),
+    /** @deprecated see {@link #PRICING__PRICE_BOOK__VIEW} */
+    @Deprecated
     PRICING__PRICE_BOOK__EDIT(128, "pricing:price_book:edit"),
+    /** @deprecated see {@link #PRICING__PRICE_BOOK__VIEW} */
+    @Deprecated
     PRICING__PRICE_BOOK__DELETE(129, "pricing:price_book:delete"),
     PRICING__NORMALIZATION__VIEW(130, "pricing:normalization:view"),
     PRICING__NORMALIZATION__EDIT(131, "pricing:normalization:edit"),
     PRICING__RESTRICTIONS__VIEW(132, "pricing:restrictions:view"),
+    /**
+     * Superseded by {@link #PRICING__RESTRICTION__MANAGE}
+     * ({@code pricing:restriction:manage}, singular resource name).
+     * Audit doc §3.
+     */
+    @Deprecated
     PRICING__RESTRICTIONS__EDIT(133, "pricing:restrictions:edit"),
     PRICING__RULE__VIEW(134, "pricing:rule:view"),
+    /**
+     * Superseded by {@link #PRICING__RESTRICTION__MANAGE}
+     * ({@code pricing:restriction:manage}, singular resource name).
+     * Audit doc §3.
+     */
+    @Deprecated
     PRICING__RULE__CREATE(135, "pricing:rule:create"),
+    /**
+     * No successor — no edit endpoint exists for pricing rules at all.
+     * Audit doc §3.
+     */
+    @Deprecated
     PRICING__RULE__EDIT(136, "pricing:rule:edit"),
+    /** @deprecated see {@link #PRICING__RULE__CREATE} */
+    @Deprecated
     PRICING__RULE__DELETE(137, "pricing:rule:delete"),
 
     // ── Security ─────────────────────────────────────────────────────────────
@@ -191,12 +349,39 @@ public enum PermissionCode {
     SECURITY__USER__DELETE(148, "security:user:delete"),
 
     // ── Shop ─────────────────────────────────────────────────────────────────
+    /**
+     * Superseded by {@link #LOCATION__READ} ({@code location:read},
+     * pos-location). pos-shop-manager's contract enforces none of the
+     * {@code shop:location:*}/{@code shop:bay:*} codes. Audit doc §3.
+     */
+    @Deprecated
     SHOP__LOCATION__VIEW(149, "shop:location:view"),
+    /**
+     * Superseded by {@link #LOCATION__WRITE} ({@code location:write},
+     * pos-location). Audit doc §3.
+     */
+    @Deprecated
     SHOP__LOCATION__CREATE(150, "shop:location:create"),
+    /** @deprecated see {@link #SHOP__LOCATION__CREATE} */
+    @Deprecated
     SHOP__LOCATION__EDIT(151, "shop:location:edit"),
+    /** @deprecated see {@link #SHOP__LOCATION__CREATE} */
+    @Deprecated
     SHOP__LOCATION__DEACTIVATE(152, "shop:location:deactivate"),
+    /**
+     * Superseded by {@link #LOCATION__BAY__READ} ({@code location:bay:read},
+     * pos-location). Audit doc §3.
+     */
+    @Deprecated
     SHOP__BAY__VIEW(153, "shop:bay:view"),
+    /**
+     * Superseded by {@link #LOCATION__BAY__MANAGE}
+     * ({@code location:bay:manage}, pos-location). Audit doc §3.
+     */
+    @Deprecated
     SHOP__BAY__CREATE(154, "shop:bay:create"),
+    /** @deprecated see {@link #SHOP__BAY__CREATE} */
+    @Deprecated
     SHOP__BAY__EDIT(155, "shop:bay:edit"),
     SHOP__BAY__ASSIGN(156, "shop:bay:assign"),
     SHOP__SCHEDULE__VIEW(157, "shop:schedule:view"),
@@ -260,6 +445,12 @@ public enum PermissionCode {
     WORKORDER__APPROVAL_CONFIG__EDIT(205, "workorder:approval_config:edit"),
     WORKORDER__APPROVAL_CONFIG__DELETE(206, "workorder:approval_config:delete"),
     WORKORDER__INVOICE__VIEW(207, "workorder:invoice:view"),
+    /**
+     * Superseded by {@link #WORKORDER__WORKORDER__GENERATE_INVOICE}
+     * ({@code workorder:workorder:generate_invoice}). pos-workorder
+     * contract; audit doc §3.
+     */
+    @Deprecated
     WORKORDER__INVOICE__CREATE(208, "workorder:invoice:create"),
     WORKORDER__LABOR__VIEW(209, "workorder:labor:view"),
     WORKORDER__LABOR__ADD(210, "workorder:labor:add"),
@@ -286,6 +477,12 @@ public enum PermissionCode {
 
     // ── Catalog (batch 2) ────────────────────────────────────────────────────
     CATALOG__SUPPLIER_COST__READ(227, "catalog:supplier_cost:read"),
+    /**
+     * No successor — supplier cost is Kafka-ingest only. The read side
+     * {@link #CATALOG__SUPPLIER_COST__READ} stays enforced and stays
+     * granted. Audit doc §3.
+     */
+    @Deprecated
     CATALOG__SUPPLIER_COST__WRITE(228, "catalog:supplier_cost:write"),
     CATALOG__MSRP__READ(229, "catalog:msrp:read"),
     CATALOG__MSRP__WRITE(230, "catalog:msrp:write"),
@@ -293,11 +490,40 @@ public enum PermissionCode {
     CATALOG__PRICE_BOOK__WRITE(232, "catalog:price_book:write"),
 
     // ── People (batch 3) ─────────────────────────────────────────────────────
+    /**
+     * Superseded by {@link #PEOPLE__EMPLOYEE__VIEW} — the pos-people
+     * manifest registers only {@code employee}, not {@code person}.
+     * Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__PERSON__VIEW(233, "people:person:view"),
+    /** @deprecated see {@link #PEOPLE__EMPLOYEE__CREATE} */
+    @Deprecated
     PEOPLE__PERSON__CREATE(234, "people:person:create"),
+    /** @deprecated see {@link #PEOPLE__EMPLOYEE__EDIT} */
+    @Deprecated
     PEOPLE__PERSON__EDIT(235, "people:person:edit"),
+    /**
+     * INFERRED successor {@link #PEOPLE__EMPLOYEE__DEACTIVATE} — employee
+     * has no delete action, only deactivate; no supersededBy mapping is
+     * recorded for this one in the manifest layer, since deactivate is not
+     * a literal 1:1 match for delete. Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__PERSON__DELETE(236, "people:person:delete"),
+    /**
+     * Superseded by {@code people-contact:userLink:view} (bit 358,
+     * {@link #PEOPLE_CONTACT__USER_LINK__VIEW}) — module split.
+     * Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__USER_LINK__VIEW(237, "people:userLink:view"),
+    /**
+     * Superseded by {@code people-contact:userLink:write} (bit 359,
+     * {@link #PEOPLE_CONTACT__USER_LINK__WRITE}) — module split.
+     * Audit doc §3.
+     */
+    @Deprecated
     PEOPLE__USER_LINK__WRITE(238, "people:userLink:write"),
 
     // ── Bulk Import ──────────────────────────────────────────────────────────
@@ -336,13 +562,33 @@ public enum PermissionCode {
     WORKORDER__PARTS__CONSUME(261, "workorder:parts:consume"),
 
     // ── Accounting (batch 3) ─────────────────────────────────────────────────
+    /**
+     * Superseded by {@link #ACCOUNTING__AP__PAY} — the only AP action
+     * pos-accounting actually enforces. Audit doc §3.
+     */
+    @Deprecated
     ACCOUNTING__AP__APPROVE(262, "accounting:ap:approve"),
+    /** @deprecated see {@link #ACCOUNTING__AP__APPROVE} */
+    @Deprecated
     ACCOUNTING__AP__REJECT(263, "accounting:ap:reject"),
     ACCOUNTING__COA__DEACTIVATE(264, "accounting:coa:deactivate"),
     ACCOUNTING__JE__REVERSE(265, "accounting:je:reverse"),
+    /**
+     * No 1:1 successor — the mapping surface split into a family:
+     * {@link #ACCOUNTING__GL_MAPPING__CREATE gl-mapping},
+     * {@link #ACCOUNTING__MAPPING_KEY__VIEW mapping-key}, and
+     * {@link #ACCOUNTING__DEFAULT_MAPPING__VIEW default-mapping}. Audit doc §3.
+     */
+    @Deprecated
     ACCOUNTING__MAPPING__VIEW(266, "accounting:mapping:view"),
+    /** @deprecated see {@link #ACCOUNTING__MAPPING__VIEW} */
+    @Deprecated
     ACCOUNTING__MAPPING__CREATE(267, "accounting:mapping:create"),
+    /** @deprecated see {@link #ACCOUNTING__MAPPING__VIEW} */
+    @Deprecated
     ACCOUNTING__MAPPING__EDIT(268, "accounting:mapping:edit"),
+    /** @deprecated see {@link #ACCOUNTING__MAPPING__VIEW} */
+    @Deprecated
     ACCOUNTING__MAPPING__DEACTIVATE(269, "accounting:mapping:deactivate"),
     ACCOUNTING__POSTING_RULES__VIEW(270, "accounting:posting_rules:view"),
     ACCOUNTING__POSTING_RULES__CREATE(271, "accounting:posting_rules:create"),
@@ -362,6 +608,14 @@ public enum PermissionCode {
     WORKORDER__ESTIMATE__PROMOTE(281, "workorder:estimate:promote"),
     WORKORDER__WORKORDER__ASSIGN_TECHNICIAN(282, "workorder:workorder:assign-technician"),
     WORKORDER__WORKORDER__GENERATE_INVOICE(283, "workorder:workorder:generate_invoice"),
+    /**
+     * Split-brain with {@link #WORKORDER__WORKORDER__START} (bit 180):
+     * both are enforced in different places (the start endpoint checks this
+     * one; the detail-response capability flag checks the other).
+     * {@code workorder:workorder:start} wins per the
+     * {@code domain:resource:action} convention. Audit doc §2 fix 1, §3.
+     */
+    @Deprecated
     WORKORDER__START(284, "workorder:start"),
     // ── Accounting (new) ───────────────────────────────────────────────────────
     ACCOUNTING__CREDIT_MEMO__CREATE(285, "accounting:credit-memo:create"),

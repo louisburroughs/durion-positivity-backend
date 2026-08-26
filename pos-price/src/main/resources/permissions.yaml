@@ -10,12 +10,16 @@ permissions:
     description: "View price normalization rules"
   - name: "pricing:price_book:create"
     description: "Create price books"
+    deprecated: true
   - name: "pricing:price_book:delete"
     description: "Delete price books"
+    deprecated: true
   - name: "pricing:price_book:edit"
     description: "Edit price books"
+    deprecated: true
   - name: "pricing:price_book:view"
     description: "View price books"
+    deprecated: true
   - name: "pricing:promotion:apply"
     description: "Apply promotion"
   - name: "pricing:promotion:manage"
@@ -28,13 +32,20 @@ permissions:
     description: "Override restriction"
   - name: "pricing:restrictions:edit"
     description: "Edit price restrictions"
+    deprecated: true
+    supersededBy: "pricing:restriction:manage"
   - name: "pricing:restrictions:view"
     description: "View price restrictions"
   - name: "pricing:rule:create"
     description: "Create pricing rules"
+    deprecated: true
+    supersededBy: "pricing:restriction:manage"
   - name: "pricing:rule:delete"
     description: "Delete pricing rules"
+    deprecated: true
+    supersededBy: "pricing:restriction:manage"
   - name: "pricing:rule:edit"
     description: "Edit pricing rules"
+    deprecated: true
   - name: "pricing:rule:view"
     description: "View pricing rules"

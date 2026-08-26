@@ -4,18 +4,32 @@ version: "1.0"
 permissions:
   - name: "shop:location:view"
     description: "View shop/location details"
+    deprecated: true
+    supersededBy: "location:read"
   - name: "shop:location:create"
     description: "Create shop/location"
+    deprecated: true
+    supersededBy: "location:write"
   - name: "shop:location:edit"
     description: "Edit shop/location"
+    deprecated: true
+    supersededBy: "location:write"
   - name: "shop:location:deactivate"
     description: "Deactivate shop/location"
+    deprecated: true
+    supersededBy: "location:write"
   - name: "shop:bay:view"
     description: "View service bays"
+    deprecated: true
+    supersededBy: "location:bay:read"
   - name: "shop:bay:create"
     description: "Create service bays"
+    deprecated: true
+    supersededBy: "location:bay:manage"
   - name: "shop:bay:edit"
     description: "Edit service bays"
+    deprecated: true
+    supersededBy: "location:bay:manage"
   - name: "shop:bay:assign"
     description: "Assign work to bays"
   - name: "shop:technician:view"

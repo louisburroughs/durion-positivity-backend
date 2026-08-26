@@ -58,6 +58,8 @@ permissions:
     description: "Re-emit published domain events from the outbox (replica seeding and drift repair)"
   - name: "workorder:invoice:create"
     description: "Create workorder invoices"
+    deprecated: true
+    supersededBy: "workorder:workorder:generate_invoice"
   - name: "workorder:invoice:view"
     description: "View workorder invoices"
   - name: "workorder:labor:add"
