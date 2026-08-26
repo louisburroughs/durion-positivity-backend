@@ -246,12 +246,58 @@ def join_path(base_path, template):
     return base_path + "/" + template
 
 
+def expansion_annotations(root):
+    """Enum-valued path params, declared as a comment line directly above the template:
+
+        # facade-checker: expand window=lastHour|lastDay|lastWeek
+        summary-uri-template: ${...:/event-receiver/v1/events/summary/{window}}
+
+    The checker then requires EVERY listed expansion to be published, instead of
+    wildcard-matching the segment (wildcards would re-admit the false-pass class
+    this script exists to catch). Keyed by property leaf name; applied only when
+    the template actually contains the annotated {param}."""
+    out = {}
+    yml = root / "pos-mcp-server/src/main/resources/application.yml"
+    lines = yml.read_text().splitlines()
+    for i, line in enumerate(lines[:-1]):
+        m = re.match(r"\s*#\s*facade-checker:\s*expand\s+([A-Za-z0-9_]+)=([A-Za-z0-9_|]+)\s*$", line)
+        if not m:
+            continue
+        prop = re.match(r"\s*([A-Za-z0-9-]+):", lines[i + 1])
+        if prop:
+            out.setdefault(prop.group(1), {})[m.group(1)] = m.group(2).split("|")
+    return out
+
+
+def expanded_ok(rec, ann_by_leaf, published, verb):
+    """True when every enum expansion of the downstream path is published (with verb)."""
+    leaf = rec["property"].rsplit(".", 1)[-1]
+    ann = ann_by_leaf.get(leaf)
+    if not ann:
+        return False
+    raw = rec["downstream"].split("?")[0]
+    params = re.findall(r"\{([^}]+)\}", raw)
+    expandable = [q for q in params if q in ann]
+    if not expandable:
+        return False
+    concretes = [raw]
+    for q in expandable:
+        concretes = [c.replace("{" + q + "}", v) for c in concretes for v in ann[q]]
+    module_pub = published.get(rec["module"], {})
+    for c in concretes:
+        verbs = module_pub.get(normalise(c))
+        if verbs is None or (verb is not None and verb not in verbs):
+            return False
+    return True
+
+
 def evaluate(root, profile):
     pos = flatten(load_pos_block(root, profile))
     calls = facade_calls(root)
     routes = gateway_routes(root)
     modules = service_modules(root)
     published = module_paths(root)
+    annotations = expansion_annotations(root)
 
     ok, breaks, skipped = [], [], []
     for key in sorted(k for k in pos if k.endswith("uri-template")):
@@ -291,6 +337,9 @@ def evaluate(root, profile):
 
         want = normalise(rec["downstream"])
         verbs = published.get(module, {}).get(want)
+        if verbs is None and expanded_ok(rec, annotations, published, verb):
+            ok.append(rec)
+            continue
         if verbs is None:
             others = sorted(m for m, ps in published.items() if m != module and want in ps)
             detail = f"{module}/openapi.yaml does not publish {want}"

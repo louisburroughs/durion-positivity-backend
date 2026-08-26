@@ -2,15 +2,6 @@
   "comment": "Known-broken pos-mcp-server facade templates (#1519). Defect inventory, not an approval: entries are removed as Waves 2-3 repoint each tool.",
   "profile": "alpha",
   "unresolved": {
-    "pos.accounting.account-balance-uri-template": {
-      "template": "/accounting/v1/accounting/accounts/{accountId}/balance",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-accounting",
-      "downstream": "/v1/accounting/accounts/{accountId}/balance",
-      "kind": "path-not-published",
-      "detail": "pos-accounting/openapi.yaml does not publish /v1/accounting/accounts/{}/balance"
-    },
     "pos.accounting.financial-summary-uri-template": {
       "template": "/accounting/v1/accounting/summary/{period}",
       "base_url": "http://pos-api-gateway",
@@ -19,51 +10,6 @@
       "downstream": "/v1/accounting/summary/{period}",
       "kind": "path-not-published",
       "detail": "pos-accounting/openapi.yaml does not publish /v1/accounting/summary/{}"
-    },
-    "pos.accounting.journal-entries-search-uri-template": {
-      "template": "/accounting/v1/accounting/journal-entries/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-accounting",
-      "downstream": "/v1/accounting/journal-entries/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-accounting/openapi.yaml does not publish /v1/accounting/journal-entries/search"
-    },
-    "pos.catalog.category-uri-template": {
-      "template": "/catalog/v1/catalog/categories/{category}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-catalog",
-      "downstream": "/v1/catalog/categories/{category}",
-      "kind": "path-not-published",
-      "detail": "pos-catalog/openapi.yaml does not publish /v1/catalog/categories/{}"
-    },
-    "pos.catalog.product-uri-template": {
-      "template": "/catalog/v1/catalog/products/{productId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-catalog",
-      "downstream": "/v1/catalog/products/{productId}",
-      "kind": "path-not-published",
-      "detail": "pos-catalog/openapi.yaml does not publish /v1/catalog/products/{}"
-    },
-    "pos.catalog.search-uri-template": {
-      "template": "/catalog/v1/catalog/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-catalog",
-      "downstream": "/v1/catalog/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-catalog/openapi.yaml does not publish /v1/catalog/search"
-    },
-    "pos.customer.customer-uri-template": {
-      "template": "/customer/v1/customers/{customerId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-customer",
-      "downstream": "/v1/customers/{customerId}",
-      "kind": "path-not-published",
-      "detail": "pos-customer/openapi.yaml does not publish /v1/customers/{}"
     },
     "pos.customer.history-uri-template": {
       "template": "/customer/v1/customers/{customerId}/history",
@@ -74,141 +20,6 @@
       "kind": "path-not-published",
       "detail": "pos-customer/openapi.yaml does not publish /v1/customers/{}/history"
     },
-    "pos.customer.search-uri-template": {
-      "template": "/customer/v1/customers/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-customer",
-      "downstream": "/v1/customers/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-customer/openapi.yaml does not publish /v1/customers/search"
-    },
-    "pos.event-receiver.event-types-uri-template": {
-      "template": "/event-receiver/v1/events/eventTypes",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-event-receiver",
-      "downstream": "/v1/events/eventTypes",
-      "kind": "path-not-published",
-      "detail": "pos-event-receiver/openapi.yaml does not publish /v1/events/eventTypes"
-    },
-    "pos.event-receiver.history-uri-template": {
-      "template": "/event-receiver/v1/events/events/summary?entityId={entityId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-event-receiver",
-      "downstream": "/v1/events/events/summary?entityId={entityId}",
-      "kind": "path-not-published",
-      "detail": "pos-event-receiver/openapi.yaml does not publish /v1/events/events/summary"
-    },
-    "pos.event-receiver.search-uri-template": {
-      "template": "/event-receiver/v1/events/events/summary?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-event-receiver",
-      "downstream": "/v1/events/events/summary?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-event-receiver/openapi.yaml does not publish /v1/events/events/summary"
-    },
-    "pos.hr.search-uri-template": {
-      "template": "/people/v1/people?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-people",
-      "downstream": "/v1/people?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-people/openapi.yaml does not publish /v1/people (published by pos-people-contact -- different route)"
-    },
-    "pos.inventory.location-stock-uri-template": {
-      "template": "/inventory/v1/inventory/locations/{locationId}/stock",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-inventory",
-      "downstream": "/v1/inventory/locations/{locationId}/stock",
-      "kind": "path-not-published",
-      "detail": "pos-inventory/openapi.yaml does not publish /v1/inventory/locations/{}/stock"
-    },
-    "pos.inventory.search-uri-template": {
-      "template": "/inventory/v1/inventory/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-inventory",
-      "downstream": "/v1/inventory/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-inventory/openapi.yaml does not publish /v1/inventory/search"
-    },
-    "pos.inventory.stock-uri-template": {
-      "template": "/inventory/v1/inventory/stock/{sku}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-inventory",
-      "downstream": "/v1/inventory/stock/{sku}",
-      "kind": "path-not-published",
-      "detail": "pos-inventory/openapi.yaml does not publish /v1/inventory/stock/{}"
-    },
-    "pos.invoice.customer-invoices-uri-template": {
-      "template": "/invoice/v1/invoices/customer/{customerId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-invoice",
-      "downstream": "/v1/invoices/customer/{customerId}",
-      "kind": "path-not-published",
-      "detail": "pos-invoice/openapi.yaml does not publish /v1/invoices/customer/{}"
-    },
-    "pos.location.inventory-uri-template": {
-      "template": "/location/v1/locations/{locationId}/inventory",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-location",
-      "downstream": "/v1/locations/{locationId}/inventory",
-      "kind": "path-not-published",
-      "detail": "pos-location/openapi.yaml does not publish /v1/locations/{}/inventory"
-    },
-    "pos.location.search-uri-template": {
-      "template": "/location/v1/locations/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-location",
-      "downstream": "/v1/locations/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-location/openapi.yaml does not publish /v1/locations/search"
-    },
-    "pos.order.order-uri-template": {
-      "template": "/order/v1/orders/{orderId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-order",
-      "downstream": "/v1/orders/{orderId}",
-      "kind": "path-not-published",
-      "detail": "pos-order/openapi.yaml does not publish /v1/orders/{}"
-    },
-    "pos.order.search-uri-template": {
-      "template": "/order/v1/orders/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-order",
-      "downstream": "/v1/orders/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-order/openapi.yaml does not publish /v1/orders/search"
-    },
-    "pos.pricing.price-list-uri-template": {
-      "template": "/price/v1/pricing/lists/{priceListId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-price",
-      "downstream": "/v1/pricing/lists/{priceListId}",
-      "kind": "path-not-published",
-      "detail": "pos-price/openapi.yaml does not publish /v1/pricing/lists/{}"
-    },
-    "pos.pricing.search-uri-template": {
-      "template": "/price/v1/pricing/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-price",
-      "downstream": "/v1/pricing/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-price/openapi.yaml does not publish /v1/pricing/search"
-    },
     "pos.pricing.sku-price-uri-template": {
       "template": "/price/v1/pricing/sku/{sku}",
       "base_url": "http://pos-api-gateway",
@@ -217,15 +28,6 @@
       "downstream": "/v1/pricing/sku/{sku}",
       "kind": "path-not-published",
       "detail": "pos-price/openapi.yaml does not publish /v1/pricing/sku/{}"
-    },
-    "pos.reporting.inventory-report-uri-template": {
-      "template": "/accounting/v1/reporting/inventory/{locationId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-accounting",
-      "downstream": "/v1/reporting/inventory/{locationId}",
-      "kind": "path-not-published",
-      "detail": "pos-accounting/openapi.yaml does not publish /v1/reporting/inventory/{}"
     },
     "pos.reporting.revenue-report-uri-template": {
       "template": "/accounting/v1/reporting/revenue/{period}",
@@ -236,15 +38,6 @@
       "kind": "path-not-published",
       "detail": "pos-accounting/openapi.yaml does not publish /v1/reporting/revenue/{}"
     },
-    "pos.reporting.sales-report-uri-template": {
-      "template": "/accounting/v1/reporting/sales/{period}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-accounting",
-      "downstream": "/v1/reporting/sales/{period}",
-      "kind": "path-not-published",
-      "detail": "pos-accounting/openapi.yaml does not publish /v1/reporting/sales/{}"
-    },
     "pos.shopmanager.queue-uri-template": {
       "template": "/shop-manager/v1/shop/{shopId}/queue",
       "base_url": "http://pos-api-gateway",
@@ -253,15 +46,6 @@
       "downstream": "/v1/shop/{shopId}/queue",
       "kind": "path-not-published",
       "detail": "pos-shop-manager/openapi.yaml does not publish /v1/shop/{}/queue"
-    },
-    "pos.shopmanager.search-uri-template": {
-      "template": "/shop-manager/v1/shop/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-shop-manager",
-      "downstream": "/v1/shop/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-shop-manager/openapi.yaml does not publish /v1/shop/search"
     },
     "pos.shopmanager.status-uri-template": {
       "template": "/shop-manager/v1/shop/{shopId}/status",
@@ -289,51 +73,6 @@
       "downstream": "/v1/tax/rates/{locationId}",
       "kind": "path-not-published",
       "detail": "pos-tax/openapi.yaml does not publish /v1/tax/rates/{}"
-    },
-    "pos.tax.tax-summary-uri-template": {
-      "template": "/summary/{period}",
-      "base_url": "http://pos-tax:8091/v1/tax",
-      "method": "get",
-      "module": "pos-tax",
-      "downstream": "/v1/tax/summary/{period}",
-      "kind": "path-not-published",
-      "detail": "pos-tax/openapi.yaml does not publish /v1/tax/summary/{}"
-    },
-    "pos.vehicle.customer-vehicles-uri-template": {
-      "template": "/customer/v1/vehicles/customer/{customerId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-customer",
-      "downstream": "/v1/vehicles/customer/{customerId}",
-      "kind": "path-not-published",
-      "detail": "pos-customer/openapi.yaml does not publish /v1/vehicles/customer/{}"
-    },
-    "pos.vehicle.search-uri-template": {
-      "template": "/customer/v1/vehicles/search?q={query}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-customer",
-      "downstream": "/v1/vehicles/search?q={query}",
-      "kind": "path-not-published",
-      "detail": "pos-customer/openapi.yaml does not publish /v1/vehicles/search (published by pos-vehicle-inventory -- different route)"
-    },
-    "pos.vehicle.vehicle-uri-template": {
-      "template": "/customer/v1/vehicles/{vehicleId}",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-customer",
-      "downstream": "/v1/vehicles/{vehicleId}",
-      "kind": "path-not-published",
-      "detail": "pos-customer/openapi.yaml does not publish /v1/vehicles/{}"
-    },
-    "pos.workorder.status-uri-template": {
-      "template": "/workorder/v1/workorders/{workorderId}/status",
-      "base_url": "http://pos-api-gateway",
-      "method": "get",
-      "module": "pos-workorder",
-      "downstream": "/v1/workorders/{workorderId}/status",
-      "kind": "path-not-published",
-      "detail": "pos-workorder/openapi.yaml does not publish /v1/workorders/{}/status"
     }
   }
 }

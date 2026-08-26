@@ -343,6 +343,7 @@ pos:
   event-receiver:
     base-url: ${POS_EVENT_RECEIVER_BASE_URL:http://pos-api-gateway}
     event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/event-receiver/v1/eventTypes/active}
+    # facade-checker: expand window=lastHour|lastDay|lastWeek
     summary-uri-template: ${POS_EVENT_RECEIVER_SUMMARY_URI_TEMPLATE:/event-receiver/v1/events/summary/{window}}
   inventory:
     base-url: ${POS_INVENTORY_BASE_URL:http://pos-api-gateway}
