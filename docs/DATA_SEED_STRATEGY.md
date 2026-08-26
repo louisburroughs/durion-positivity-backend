@@ -132,7 +132,8 @@ replicas.
 | pos-location `R__seed_location_1_reference.sql` | 1 | Keep |
 | pos-location `R__seed_location_2_operational_data.sql` | 2 | **In progress** — the 5 location rows converted to `scripts/fixtures/seed/alpha/location/` (LOCATION loader job wired, timezone now ingestable); storage locations, bays, mobile units, and parent edges still need a scripted gateway pass or their own ingest wave |
 | pos-people `R__seed_reference_people.sql` | 1 | Keep |
-| pos-people `R__seed_people_operational_data.sql`, `R__seed_timekeeping_approval_data.sql` | 2 | Seed pipeline (`PersonLoaderStrategy` exists) |
+| pos-people `R__seed_people_operational_data.sql` | 2 | **Converted** — employees-only since #875; `scripts/fixtures/seed/alpha/people/` (bulk employees + API-pack staffing assignments); ext replica bootstraps deliberately dropped (replicas hydrate from events); deletion waits on the verified alpha reseed (§5.4) |
+| pos-people `R__seed_timekeeping_approval_data.sql` | 2 | Seed pipeline (pending) |
 | pos-people-contact `R__seed_reference_people_contact.sql` | 1 | Keep |
 | pos-people-contact `R__seed_people_contact_operational_data.sql` | 2 | Seed pipeline |
 | pos-customer `R__seed_customer_operational_data.sql` | 2 | **Converted** — individuals and commercial accounts (with primary contacts) in `scripts/fixtures/seed/alpha/customer/`, loadable via the bulk loader (`CUSTOMER`, `COMMERCIAL_CUSTOMER`); file deletion waits on the verified alpha reseed (§5.4) |

@@ -473,7 +473,8 @@ class BatchConfigurationWriterTest {
     @Test
     void peopleBulkIngestWriter_happyPath_postsChunk() {
         PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+        employee.setFirstName("Jane");
+        employee.setLastName("Smith");
         employee.setEmployeeNumber("EMP-001");
         employee.setHireDate("2020-01-01");
 
@@ -498,7 +499,8 @@ class BatchConfigurationWriterTest {
     @Test
     void peopleBulkIngestWriter_nullJobId_skipsChunk() {
         PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+        employee.setFirstName("Jane");
+        employee.setLastName("Smith");
 
         ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
                 restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
@@ -510,7 +512,8 @@ class BatchConfigurationWriterTest {
     @Test
     void peopleBulkIngestWriter_nullLocationId_skipsChunk() {
         PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+        employee.setFirstName("Jane");
+        employee.setLastName("Smith");
 
         ItemWriter<PersonRecord> writer =
                 batchConfiguration.peopleBulkIngestWriter(restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
@@ -710,7 +713,8 @@ class BatchConfigurationWriterTest {
         when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
 
         PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+        employee.setFirstName("Jane");
+        employee.setLastName("Smith");
 
         ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
                 restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
@@ -790,7 +794,8 @@ class BatchConfigurationWriterTest {
     @Test
     void peopleBulkIngestWriter_skipsChunk_onMalformedJobId() {
         PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+        employee.setFirstName("Jane");
+        employee.setLastName("Smith");
 
         ItemWriter<PersonRecord> writer = batchConfiguration.peopleBulkIngestWriter(
                 restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
@@ -897,7 +902,8 @@ class BatchConfigurationWriterTest {
     @Test
     void peopleBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
         PersonRecord employee = new PersonRecord();
-        employee.setLegalName("Jane Smith");
+        employee.setFirstName("Jane");
+        employee.setLastName("Smith");
         employee.setEmployeeNumber("EMP-001");
         employee.setHireDate("2020-01-01");
 

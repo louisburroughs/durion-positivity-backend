@@ -47,6 +47,8 @@ FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixture
 # transform applied to the fixture bytes.
 PACK_FILES = [
     ("location/locations.csv", "LOCATION", None),
+    ("people/employees.csv", "PERSON", None),
+    ("people/staffing-assignments.csv", "@staffing-assignments", None),
     ("customer/person-customers.csv", "CUSTOMER", None),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER", None),
     ("vehicle/vehicles.csv", "VEHICLE", "vehicles"),
@@ -62,7 +64,7 @@ class Gateway:
         self.token = token
         self.api_version = api_version
 
-    def _request(self, method, path, body=None, content_type=None):
+    def _request(self, method, path, body=None, content_type=None, allow_error=False):
         url = self.base_url + path
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -79,14 +81,17 @@ class Gateway:
                 payload = response.read()
                 return response.status, json.loads(payload) if payload else None
         except urllib.error.HTTPError as error:
+            if allow_error:
+                error.read()
+                return error.code, None
             detail = error.read().decode("utf-8", errors="replace")
             raise SystemExit(f"ERROR: {method} {url} -> HTTP {error.code}: {detail[:500]}") from error
 
-    def get(self, path):
-        return self._request("GET", path)
+    def get(self, path, allow_error=False):
+        return self._request("GET", path, allow_error=allow_error)
 
-    def post_json(self, path, body):
-        return self._request("POST", path, body=body)
+    def post_json(self, path, body, allow_error=False):
+        return self._request("POST", path, body=body, allow_error=allow_error)
 
     def post_multipart_file(self, path, field_name, file_name, file_bytes):
         boundary = uuid.uuid4().hex
@@ -152,6 +157,61 @@ def transform_vehicles(gateway, file_bytes):
 
 
 TRANSFORMS = {"vehicles": transform_vehicles}
+
+
+def run_staffing_assignments(gateway, relative_path, _location_id):
+    """API pack: replay employee location assignments row by row.
+
+    No bulk endpoint exists for staffing assignments; each row resolves
+    employeeNumber -> personId (getEmployeeByNumber) and locationCode -> id
+    (roster), then POSTs createStaffingAssignment. Employees must be loaded
+    first (the PERSON pack precedes this one)."""
+    _, roster = gateway.get("/location/locations")
+    location_ids = {loc["code"]: loc["id"] for loc in roster or []}
+    person_ids = {}
+    effective_from = time.strftime("%Y-%m-%d")
+
+    csv_path = os.path.join(FIXTURE_ROOT, relative_path)
+    with open(csv_path, newline="") as fh:
+        rows = list(csv.DictReader(fh))
+
+    success = 0
+    failures = 0
+    for row in rows:
+        employee_number = row["employeeNumber"]
+        if employee_number not in person_ids:
+            status_code, identity = gateway.get(
+                f"/people/employees/by-number/{urllib.parse.quote(employee_number)}", allow_error=True)
+            person_ids[employee_number] = (identity or {}).get("personId") if status_code == 200 else None
+        person_id = person_ids[employee_number]
+        location_id = location_ids.get(row["locationCode"])
+        if person_id is None or location_id is None:
+            missing = "employee" if person_id is None else f"location {row['locationCode']}"
+            print(f"  WARN: {employee_number}: {missing} not found — assignment skipped")
+            failures += 1
+            continue
+        status_code, _ = gateway.post_json(
+            "/people/staffing/assignments",
+            {
+                "personId": person_id,
+                "locationId": location_id,
+                "role": row["role"],
+                "primary": row["primary"].lower() == "true",
+                "effectiveFrom": effective_from,
+            },
+            allow_error=True,
+        )
+        if 200 <= status_code < 300:
+            success += 1
+        else:
+            print(f"  WARN: {employee_number} -> {row['locationCode']} {row['role']}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  assignments: success={success} failures={failures} of {len(rows)}")
+    return failures == 0
+
+
+API_PACKS = {"@staffing-assignments": run_staffing_assignments}
 
 
 def resolve_location_id(gateway, location_code):
@@ -274,7 +334,10 @@ def main():
     all_ok = True
     for path, domain, transform_name in selected:
         print(f"pack {path} -> {domain}")
-        all_ok = run_pack_file(gateway, path, domain, transform_name, location_id, args.poll_timeout) and all_ok
+        if domain in API_PACKS:
+            all_ok = API_PACKS[domain](gateway, path, location_id) and all_ok
+        else:
+            all_ok = run_pack_file(gateway, path, domain, transform_name, location_id, args.poll_timeout) and all_ok
 
     print("done" if all_ok else "done with failures — inspect the review queue / job counters above")
     return 0 if all_ok else 1

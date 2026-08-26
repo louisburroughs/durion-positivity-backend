@@ -94,6 +94,32 @@ Both halves of the customer seed are now covered. The Flyway seed file (and its
 the pipeline and verified (`docs/DATA_SEED_STRATEGY.md` §5.4); delete both in that
 change.
 
+### `people/` — from `pos-people R__seed_people_operational_data.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `employees.csv` | 39 employees (all staff — the seed has been employees-only since #875) | `POST /v1/people/bulk-ingest` (`domainType: PERSON`) |
+| `staffing-assignments.csv` | 39 role/location assignments | gateway API pack (`POST /people/staffing/assignments` per row) |
+
+The people seed contains no customers: customer/contact identities moved to the
+pos-people-contact seed under #875, and this file holds the 39 staff (`EMP-0001`–
+`EMP-0039`), their location assignments, and dev-only `ext_*` replica bootstraps.
+Employees load through `createEmployee` (status forced ACTIVE, **STRICT duplicate
+policy** on employee number/email/phone — this pack genuinely converges on re-run),
+publishing the identity upsert command and `people.employee.updated` fact per row.
+Assignments have no bulk endpoint, so the driver replays them as an API pack:
+`employeeNumber → personId` via `getEmployeeByNumber`, `locationCode → id` via the
+roster, then `createStaffingAssignment` — employees and locations must load first.
+
+**Deltas / not converted:**
+
+- `hireDate` is fixed at `2024-01-15` (the seed used `CURRENT_DATE`).
+- The seed's `ext_people_contact_person` / `ext_people_contact_user_link` replica
+  bootstraps are deliberately **not** converted — replicas hydrate from the identity
+  events the ingest path publishes, which is the point of the pipeline. Usernames
+  (user links) are pos-security-service data and out of scope here.
+- The seed file stays until the alpha reseed is verified (§5.4).
+
 ### `vehicle/` — from `pos-vehicle-inventory R__seed_vehicle_inventory_operational_data.sql`
 
 | File | Rows | Target |

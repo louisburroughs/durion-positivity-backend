@@ -583,7 +583,14 @@ public class BatchConfiguration {
                 .name("peopleCsvReader")
                 .resource(new FileSystemResource(resolved))
                 .delimited()
-                .names("legalName", "preferredName", "employeeNumber", "hireDate", "primaryEmail", "primaryPhone")
+                .names(
+                        "firstName",
+                        "lastName",
+                        "preferredName",
+                        "employeeNumber",
+                        "hireDate",
+                        "primaryEmail",
+                        "primaryPhone")
                 .fieldSetMapper(mapper)
                 .linesToSkip(1)
                 .build();
