@@ -13,6 +13,7 @@ import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.service.RolePermissionService;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -70,11 +71,21 @@ public class RolePermissionServiceImpl implements RolePermissionService {
             return permissionRepository.save(created);
         });
 
-        role.getPermissions().add(permission);
+        boolean newGrant = role.getPermissions().add(permission);
         Role savedRole = roleRepository.save(role);
 
+        String actor = getCurrentActor();
+        Instant grantedAt = Instant.now(clock);
+
+        // #1512: stamp provenance onto the join-table row itself. The audit event below is
+        // fire-and-forget; the row is what a later investigator queries. Only for a genuinely
+        // new grant — re-granting an existing permission must not overwrite who first made it.
+        if (newGrant) {
+            roleRepository.recordGrantProvenance(roleId, List.of(permission.getId()), actor, grantedAt);
+        }
+
         applicationEventPublisher.publishEvent(
-                new RolePermissionGrantAuditEvent(this, getCurrentActor(), roleId, permissionKey, Instant.now(clock)));
+                new RolePermissionGrantAuditEvent(this, actor, roleId, permissionKey, grantedAt));
 
         return toRoleDto(savedRole);
     }

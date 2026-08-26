@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import com.positivity.securityservice.internal.repository.RoleRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -115,7 +117,9 @@ class RolePermissionServiceImplTest {
             role.setId(roleId);
             role.setPermissions(new java.util.HashSet<>());
 
+            UUID permissionId = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
             Permission permission = new Permission();
+            permission.setId(permissionId);
             permission.setName(permissionKey);
 
             when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
@@ -126,6 +130,8 @@ class RolePermissionServiceImplTest {
 
             assertThat(result.getPermissions()).extracting("name").contains(permissionKey);
             verify(applicationEventPublisher).publishEvent(any());
+            // #1512: the grant row itself records who made it, not just the audit event.
+            verify(roleRepository).recordGrantProvenance(eq(roleId), eq(List.of(permissionId)), any(), any());
         }
 
         @Test
@@ -140,7 +146,12 @@ class RolePermissionServiceImplTest {
 
             when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
             when(permissionRepository.findByName(permissionKey)).thenReturn(Optional.empty());
-            when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            // Mirrors JPA: a persisted permission comes back with a generated identifier.
+            when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> {
+                Permission saved = invocation.getArgument(0);
+                saved.setId(UUID.fromString("00000000-0000-0000-0000-0000000000a2"));
+                return saved;
+            });
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             RoleDto result = sut.grantPermission(roleId, permissionKey);

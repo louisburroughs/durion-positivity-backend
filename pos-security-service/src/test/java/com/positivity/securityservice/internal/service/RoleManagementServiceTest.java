@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -302,7 +303,9 @@ class RoleManagementServiceTest {
             Role role = new Role();
             role.setId(ROLE_ID);
             role.setPermissions(new HashSet<>());
+            UUID permissionId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
             Permission perm = new Permission();
+            perm.setId(permissionId);
             perm.setName(permissionKey);
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(permissionRepository.findByName(permissionKey)).thenReturn(Optional.of(perm));
@@ -314,6 +317,9 @@ class RoleManagementServiceTest {
             assertThat(role.getLastModifiedBy()).isEqualTo("rbac-admin");
             assertThat(role.getLastModifiedAt()).isEqualTo(Instant.now(TEST_CLOCK));
             verify(roleRepository).save(role);
+            // #1512: the grant row records the actor, not only the role's lastModifiedBy.
+            verify(roleRepository)
+                    .recordGrantProvenance(eq(ROLE_ID), eq(List.of(permissionId)), eq("rbac-admin"), any());
         }
 
         /**

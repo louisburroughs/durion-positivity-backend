@@ -97,13 +97,26 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             permissions.add(permission);
         }
 
+        // #1512: only the permissions this call adds get stamped. Ones the role already held
+        // keep their original grantor — re-submitting a list is not re-granting what was in it.
+        Set<UUID> alreadyHeld =
+                role.getPermissions().stream().map(Permission::getId).collect(Collectors.toSet());
+        Set<UUID> newlyGranted = permissions.stream()
+                .map(Permission::getId)
+                .filter(id -> !alreadyHeld.contains(id))
+                .collect(Collectors.toSet());
+
         role.setPermissions(permissions);
         role.setLastModifiedBy(getCurrentUsername());
         role.setLastModifiedAt(Instant.now(clock));
 
         log.info("Updated permissions for role {}: {} permissions assigned", role.getName(), permissions.size());
 
-        return toRoleDto(roleRepository.save(role));
+        RoleDto dto = toRoleDto(roleRepository.save(role));
+        if (!newlyGranted.isEmpty()) {
+            roleRepository.recordGrantProvenance(role.getId(), newlyGranted, getCurrentUsername(), Instant.now(clock));
+        }
+        return dto;
     }
 
     /**
@@ -331,10 +344,14 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .findByName(permissionKey)
                 .orElseThrow(() -> new PermissionNotFoundException(
                         "Permission not found: " + permissionKey + ". It must be registered first."));
-        role.getPermissions().add(permission);
+        boolean newGrant = role.getPermissions().add(permission);
         role.setLastModifiedBy(getCurrentUsername());
         role.setLastModifiedAt(Instant.now(clock));
         roleRepository.save(role);
+        if (newGrant) {
+            roleRepository.recordGrantProvenance(
+                    roleId, List.of(permission.getId()), getCurrentUsername(), Instant.now(clock));
+        }
     }
 
     @Override
