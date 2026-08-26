@@ -184,6 +184,7 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     case "country", "country_code" -> "countryCode";
                     case "phone", "phone_number", "telephone" -> "phoneNumber";
                     case "type", "store_type", "location_type" -> "locationTypeName";
+                    case "timezone", "time_zone", "tz" -> "timezone";
                     default -> null;
                 };
             default -> null;

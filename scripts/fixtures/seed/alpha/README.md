@@ -77,3 +77,28 @@ Both halves of the customer seed are now covered. The Flyway seed file (and its
 `scripts/flyway-seed-baseline.txt` line) stays until alpha has been reseeded through
 the pipeline and verified (`docs/DATA_SEED_STRATEGY.md` §5.4); delete both in that
 change.
+
+### `location/` — from `pos-location R__seed_location_2_operational_data.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `locations.csv` | 5 sites (3 service centers, mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
+
+Columns: `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
+Location types resolve by name (created on the fly if missing, though the reference
+seed provides them); timezones are validated by the service (invalid → per-row
+failure). Note the run-order chicken-and-egg: bulk-load jobs require a `locationId`,
+so the very first location load in an empty alpha needs one location created via the
+gateway API first (or use that location's id once the reference/security bootstrap
+provides one).
+
+**Known deltas / not yet converted:**
+
+- Only the `location` table rows are covered. The seed's storage locations (14, with
+  staging/quarantine hierarchy and location back-references), ~21 bays, 3 mobile
+  units (+capabilities, coverage rules), and the 4 `location_parent` hierarchy edges
+  have no bulk-ingest path — they are managed through pos-location's own APIs (bays,
+  mobile units, storage locations, `POST /v1/locations/{id}/parents`) and need a
+  scripted gateway pass or their own ingest wave.
+- The seed file stays until that remainder is converted and alpha is reseeded and
+  verified (§5.4).

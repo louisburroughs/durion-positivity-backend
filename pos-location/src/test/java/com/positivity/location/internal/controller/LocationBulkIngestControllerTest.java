@@ -76,6 +76,7 @@ class LocationBulkIngestControllerTest {
         locRecord.setName("Main Store");
         locRecord.setCode("STORE-001");
         locRecord.setPhoneNumber("+1-217-555-0100");
+        locRecord.setTimezone("America/New_York");
 
         BulkIngestRequest<LocationBulkIngestRecord> request = new BulkIngestRequest<>();
         request.setJobId(JOB_ID);
@@ -97,6 +98,8 @@ class LocationBulkIngestControllerTest {
         org.mockito.Mockito.verify(locationService).createLocation(captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getPhoneNumber())
                 .isEqualTo("+1-217-555-0100");
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getTimezone())
+                .isEqualTo("America/New_York");
     }
 
     @Test

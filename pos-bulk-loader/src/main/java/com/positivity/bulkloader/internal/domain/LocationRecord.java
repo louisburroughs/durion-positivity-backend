@@ -15,4 +15,5 @@ public class LocationRecord {
     private String phoneNumber;
     private String active;
     private String locationTypeName;
+    private String timezone;
 }

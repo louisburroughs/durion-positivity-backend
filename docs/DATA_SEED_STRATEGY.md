@@ -130,7 +130,7 @@ replicas.
 | pos-price `R__seed_reference_price.sql` | 1 | Keep (verify nothing in it is published on a topic) |
 | pos-inventory `R__seed_reference_inventory.sql` | 1 | Keep (same verification) |
 | pos-location `R__seed_location_1_reference.sql` | 1 | Keep |
-| pos-location `R__seed_location_2_operational_data.sql` | 2 | Seed pipeline — pos-location already exposes `POST /v1/locations/bulk-ingest`; **gap:** pos-bulk-loader has no LOCATION loader strategy/job yet |
+| pos-location `R__seed_location_2_operational_data.sql` | 2 | **In progress** — the 5 location rows converted to `scripts/fixtures/seed/alpha/location/` (LOCATION loader job wired, timezone now ingestable); storage locations, bays, mobile units, and parent edges still need a scripted gateway pass or their own ingest wave |
 | pos-people `R__seed_reference_people.sql` | 1 | Keep |
 | pos-people `R__seed_people_operational_data.sql`, `R__seed_timekeeping_approval_data.sql` | 2 | Seed pipeline (`PersonLoaderStrategy` exists) |
 | pos-people-contact `R__seed_reference_people_contact.sql` | 1 | Keep |

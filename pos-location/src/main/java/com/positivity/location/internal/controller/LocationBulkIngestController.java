@@ -52,6 +52,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                          "postalCode":"62704",
                          "countryCode":"US",
                          "phoneNumber":"+1-217-555-0100",
+                         "timezone":"America/Chicago",
                          "active":true,
                          "locationTypeName":"STORE"}]}
             """;
@@ -143,6 +144,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
         request.setPostalCode(ingestRecord.getPostalCode());
         request.setCountry(ingestRecord.getCountryCode());
         request.setPhoneNumber(ingestRecord.getPhoneNumber());
+        request.setTimezone(ingestRecord.getTimezone());
         request.setActive(ingestRecord.getActive() == null ? Boolean.TRUE : ingestRecord.getActive());
         request.setType(LocationTypeDTO.builder()
                 .name(firstNonBlank(ingestRecord.getLocationTypeName(), DEFAULT_LOCATION_TYPE_NAME))

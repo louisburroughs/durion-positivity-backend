@@ -159,7 +159,8 @@ class RuleBasedContentDetectionServiceImplTest {
                         "zip",
                         "country_code",
                         "phone",
-                        "store_type"),
+                        "store_type",
+                        "time_zone"),
                 DomainType.LOCATION);
 
         assertThat(mappings)
@@ -171,6 +172,7 @@ class RuleBasedContentDetectionServiceImplTest {
                 .containsEntry("zip", "postalCode")
                 .containsEntry("country_code", "countryCode")
                 .containsEntry("phone", "phoneNumber")
-                .containsEntry("store_type", "locationTypeName");
+                .containsEntry("store_type", "locationTypeName")
+                .containsEntry("time_zone", "timezone");
     }
 }

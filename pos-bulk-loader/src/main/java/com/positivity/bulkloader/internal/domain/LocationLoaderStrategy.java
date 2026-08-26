@@ -29,6 +29,7 @@ public class LocationLoaderStrategy implements DomainLoaderStrategy<LocationReco
         item.setPhoneNumber(row.get("phoneNumber"));
         item.setActive(row.get("active"));
         item.setLocationTypeName(row.get("locationTypeName"));
+        item.setTimezone(row.get("timezone"));
         return item;
     }
 

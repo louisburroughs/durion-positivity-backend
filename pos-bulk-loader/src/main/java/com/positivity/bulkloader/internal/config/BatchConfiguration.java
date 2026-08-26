@@ -484,7 +484,8 @@ public class BatchConfiguration {
                         "countryCode",
                         "phoneNumber",
                         "active",
-                        "locationTypeName")
+                        "locationTypeName",
+                        "timezone")
                 .fieldSetMapper(mapper)
                 .linesToSkip(1)
                 .build();
@@ -1044,7 +1045,8 @@ public class BatchConfiguration {
                     item.getCountryCode(),
                     item.getPhoneNumber(),
                     parseLocationActive(item),
-                    item.getLocationTypeName()));
+                    item.getLocationTypeName(),
+                    item.getTimezone()));
         }
         return payloads;
     }
@@ -1161,7 +1163,8 @@ public class BatchConfiguration {
             String countryCode,
             String phoneNumber,
             Boolean active,
-            String locationTypeName) {}
+            String locationTypeName,
+            String timezone) {}
 
     private record VehicleWriterPayload(
             UUID accountId,
