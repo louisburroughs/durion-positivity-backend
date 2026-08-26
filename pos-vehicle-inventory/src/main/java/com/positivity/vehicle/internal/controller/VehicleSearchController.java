@@ -3,6 +3,7 @@ package com.positivity.vehicle.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehicleSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -65,6 +66,10 @@ public class VehicleSearchController {
             description = "Search results returned",
             content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid search query")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.SEARCH_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.SEARCH_VIEW})
     @PostMapping
     @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
     public ResponseEntity<SearchVehiclesResponse> search(
@@ -108,6 +113,10 @@ public class VehicleSearchController {
             description = "Search results returned",
             content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid search query")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.SEARCH_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.SEARCH_VIEW})
     @GetMapping
     @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
     public ResponseEntity<SearchVehiclesResponse> searchByQuery(

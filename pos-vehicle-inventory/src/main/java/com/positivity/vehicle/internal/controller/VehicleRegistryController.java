@@ -5,6 +5,7 @@ import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.dto.VehicleFactReplayResultDto;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehicleFactReplayService;
 import com.positivity.vehicle.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -94,6 +95,10 @@ public class VehicleRegistryController {
                     """)
     @ApiResponse(responseCode = "201", description = "Vehicle created successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid vehicle request.")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_CREATE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.REGISTRY_CREATE})
     @EmitEvent(id = "VEHICLE_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<VehicleResponse> createVehicle(
@@ -130,6 +135,10 @@ public class VehicleRegistryController {
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.REGISTRY_VIEW})
     @GetMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> getVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId) {
@@ -153,6 +162,10 @@ public class VehicleRegistryController {
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.REGISTRY_VIEW})
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleResponse> getVehicleByVin(
             @Parameter(description = "Vehicle VIN", required = true) @PathVariable @NotBlank @Size(min = 17, max = 17)
@@ -183,6 +196,10 @@ public class VehicleRegistryController {
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid vehicle request.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_UPDATE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.REGISTRY_UPDATE})
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> updateVehicle(
@@ -222,6 +239,10 @@ public class VehicleRegistryController {
                     """)
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_DELETE + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleInventoryPermissions.REGISTRY_DELETE})
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/{vehicleId}")
     public ResponseEntity<Void> deleteVehicle(

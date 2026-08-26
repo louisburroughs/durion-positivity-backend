@@ -17,8 +17,23 @@ package com.positivity.vehicle.internal.security;
  * without a manual bit assignment.
  */
 public final class VehicleInventoryPermissions {
+    /** View vehicle registry records. */
+    public static final String REGISTRY_VIEW = "vehicle-inventory:registry:view";
+
     /** Create vehicle registry records. */
     public static final String REGISTRY_CREATE = "vehicle-inventory:registry:create";
+
+    /** Update vehicle registry records. */
+    public static final String REGISTRY_UPDATE = "vehicle-inventory:registry:update";
+
+    /** Delete (deactivate) vehicle registry records. */
+    public static final String REGISTRY_DELETE = "vehicle-inventory:registry:delete";
+
+    /** Search vehicle inventory records. */
+    public static final String SEARCH_VIEW = "vehicle-inventory:search:view";
+
+    /** Manage (read, upsert, merge, delete) vehicle care preferences. */
+    public static final String PREFERENCES_MANAGE = "vehicle-inventory:preferences:manage";
 
     private VehicleInventoryPermissions() {
         // Utility class - prevent instantiation

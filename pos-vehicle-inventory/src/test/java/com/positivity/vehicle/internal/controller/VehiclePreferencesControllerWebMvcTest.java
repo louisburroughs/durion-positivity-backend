@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehiclePreferencesService;
 import java.util.Map;
 import java.util.Optional;
@@ -197,6 +198,19 @@ class VehiclePreferencesControllerWebMvcTest {
     @DisplayName("rejects an unauthenticated request")
     void unauthenticatedRequestIsRejected() throws Exception {
         mockMvc.perform(get(PATH)).andExpect(status().isUnauthorized());
+
+        verify(preferencesService, never()).getPreferences(any());
+    }
+
+    @Test
+    @DisplayName("registry:view does not open preferences (Task-5, decisions k/l)")
+    void registryViewAuthorityDoesNotOpenPreferences() throws Exception {
+        // vehicle-inventory:registry:view is a plausible authority for the same operator to hold,
+        // since it opens the registry record itself; preferences:manage is deliberately separate.
+        mockMvc.perform(get(PATH)
+                        .header(AUTH, BEARER)
+                        .header("X-Authorities", VehicleInventoryPermissions.REGISTRY_VIEW))
+                .andExpect(status().isForbidden());
 
         verify(preferencesService, never()).getPreferences(any());
     }

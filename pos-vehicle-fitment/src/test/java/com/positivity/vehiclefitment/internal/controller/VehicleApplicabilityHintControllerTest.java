@@ -16,6 +16,7 @@ import com.positivity.vehiclefitment.internal.dto.FilterProductsResponse;
 import com.positivity.vehiclefitment.internal.dto.FitmentTagDto;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.entity.TagType;
+import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
 import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -53,6 +54,23 @@ class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest
 
     @MockitoBean
     private VehicleApplicabilityHintService hintService;
+
+    /**
+     * Task-5 (decisions k/l) added method-level {@code @PreAuthorize(hasAuthority(...))} gates to
+     * every endpoint on this controller; the base class's {@code "*"} default is a literal gateway
+     * authority string, not a wildcard the security filter expands, so it no longer opens any of
+     * them. Grant exactly the codes this controller now enforces.
+     */
+    @Override
+    protected String defaultAuthorities() {
+        return String.join(
+                ",",
+                VehicleFitmentPermissions.HINT_VIEW,
+                VehicleFitmentPermissions.HINT_CREATE,
+                VehicleFitmentPermissions.HINT_UPDATE,
+                VehicleFitmentPermissions.HINT_DELETE,
+                VehicleFitmentPermissions.CATALOG_VIEW);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // VAH-C001: unauthenticated request must be rejected with 401
@@ -250,6 +268,42 @@ class VehicleApplicabilityHintControllerTest extends BaseContractIntegrationTest
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validCreateHintBody(UUID.randomUUID()))))
                 .andExpect(status().isNotFound());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // VAH-C009: each hint-mutation action is gated on its own authority (Task-5, decision l)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * VAH-C009: a caller holding only {@code hint:view} — a plausible authority for the same
+     * operator to hold, since it opens every read on this controller — must still be refused
+     * create, update and delete, which each require their own authority. A copy-paste between
+     * these adjacent {@code @PreAuthorize} strings would let one of these through unnoticed by a
+     * positive test alone.
+     *
+     * Issue: Task-5 (decisions k/l)
+     */
+    @Test
+    @DisplayName("VAH-C009: hint:view alone does not open create, update or delete")
+    void VAH_C009_viewAuthorityAloneDoesNotOpenMutations() throws Exception {
+        mockMvc.perform(post("/v1/vehicle-fitment/hints")
+                        .header("Authorization", "Bearer test")
+                        .header("X-Authorities", VehicleFitmentPermissions.HINT_VIEW)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreateHintBody(TEST_PRODUCT_ID)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/v1/vehicle-fitment/hints/{hintId}", TEST_HINT_ID)
+                        .header("Authorization", "Bearer test")
+                        .header("X-Authorities", VehicleFitmentPermissions.HINT_VIEW)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateHintBody()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/v1/vehicle-fitment/hints/{hintId}", TEST_HINT_ID)
+                        .header("Authorization", "Bearer test")
+                        .header("X-Authorities", VehicleFitmentPermissions.HINT_VIEW))
+                .andExpect(status().isForbidden());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

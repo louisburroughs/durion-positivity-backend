@@ -5,6 +5,7 @@ import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
 import com.positivity.vehiclefitment.internal.dto.ModelResponse;
 import com.positivity.vehiclefitment.internal.dto.VehicleFitmentMapper;
 import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
+import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +46,10 @@ public class VehicleFitmentController {
                     cannot be fetched or parsed.
                     """)
     @ApiResponse(responseCode = "200", description = "List of manufacturers returned successfully.")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.CATALOG_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.CATALOG_VIEW})
     @GetMapping("/manufacturers")
     public List<ManufacturerResponse> getManufacturers() {
         return vehicleFitmentService.getManufacturers().stream()
@@ -66,6 +71,10 @@ public class VehicleFitmentController {
                     refresh fails, because the not-found case is not currently mapped to 404.
                     """)
     @ApiResponse(responseCode = "200", description = "List of makes returned successfully.")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.CATALOG_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.CATALOG_VIEW})
     @GetMapping("/makes/{manufacturerId}")
     public List<MakeResponse> getMakesByManufacturer(
             @Parameter(description = "ID of the manufacturer", example = "00e0c0f0-0000-0000-0000-000000000000")
@@ -89,6 +98,10 @@ public class VehicleFitmentController {
                     refresh fails, because the not-found case is not currently mapped to 404.
                     """)
     @ApiResponse(responseCode = "200", description = "List of models returned successfully.")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.CATALOG_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.CATALOG_VIEW})
     @GetMapping("/models/{makeId}")
     public List<ModelResponse> getModelsByMake(
             @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable
@@ -111,6 +124,10 @@ public class VehicleFitmentController {
                     refresh fails, because the not-found case is not currently mapped to 404.
                     """)
     @ApiResponse(responseCode = "200", description = "List of vehicle types returned successfully.")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.CATALOG_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {VehicleFitmentPermissions.CATALOG_VIEW})
     @GetMapping("/vehicle-types/{makeId}")
     public List<VehicleTypeResponse> getVehicleTypesForMake(
             @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable
