@@ -500,10 +500,16 @@
       "defaultValue": "http://pos-api-gateway"
     },
     {
-      "name": "pos.pricing.sku-price-uri-template",
+      "name": "pos.pricing.product-search-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching the price of a specific SKU.",
-      "defaultValue": "/price/v1/pricing/sku/{sku}"
+      "description": "URI template for the detailed catalog search leg of the SKU price composition (sku= filter, detailed=true carries the active MSRP).",
+      "defaultValue": "/catalog/v1/products/search?sku={sku}&detailed=true"
+    },
+    {
+      "name": "pos.pricing.effective-price-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the optional location effective-price leg of the SKU price composition.",
+      "defaultValue": "/catalog/v1/products/pricing/effective-price/{locationId}/{productId}"
     },
     {
       "name": "pos.pricing.search-uri-template",

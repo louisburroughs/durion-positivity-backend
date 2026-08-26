@@ -314,13 +314,26 @@ OrderFacadeTool.listOrders:
   # optional query params appended by the tool when provided: status, clerkId, terminalId
 
 PricingFacadeTool.getPriceForSku:
-  verb: GET
-  baseUrlProperty: pos.pricing.base-url
-  templateProperty: pos.pricing.sku-price-uri-template
-  template: "/price/v1/pricing/sku/{sku}"
-  route: price
-  downstreamPath: "/v1/pricing/sku/{}"
-  status: wave3-pending # WS-3.PRICE-SKU composes catalog MSRP + optional effective price
+  verb: COMPOSITE
+  route: COMPOSITE
+  # WS-3.PRICE-SKU: dependent-leg flow. The catalog search (detailed=true carries the active
+  # MSRP) runs first and its productId feeds the optional effective-price leg, which is only
+  # declared when a locationId is supplied. Zero matches short-circuit to a not_found JSON.
+  legs:
+    product:
+      verb: GET
+      baseUrlProperty: pos.pricing.base-url
+      templateProperty: pos.pricing.product-search-uri-template
+      template: "/catalog/v1/products/search?sku={sku}&detailed=true"
+      route: catalog
+      downstreamPath: "/v1/products/search?sku={}&detailed=true"
+    effectivePrice:
+      verb: GET
+      baseUrlProperty: pos.pricing.base-url
+      templateProperty: pos.pricing.effective-price-uri-template
+      template: "/catalog/v1/products/pricing/effective-price/{locationId}/{productId}"
+      route: catalog
+      downstreamPath: "/v1/products/pricing/effective-price/{}/{}"
 
 PricingFacadeTool.getPromotionByCode:
   verb: GET

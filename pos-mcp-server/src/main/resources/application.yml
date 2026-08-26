@@ -387,7 +387,12 @@ pos:
     list-uri-template: ${POS_ORDER_LIST_URI_TEMPLATE:/order/v1/orders/carts}
   pricing:
     base-url: ${POS_PRICING_BASE_URL:http://pos-api-gateway}
-    sku-price-uri-template: ${POS_PRICING_SKU_PRICE_URI_TEMPLATE:/price/v1/pricing/sku/{sku}}
+    # getPriceForSku composition legs (#1519 WS-3.PRICE-SKU). Cross-domain per ADR-0054:
+    # catalog owns MSRP and location effective prices. The search leg needs its own property
+    # (not pos.catalog.search-uri-template) because it filters by sku= with detailed=true,
+    # not by q=.
+    product-search-uri-template: ${POS_PRICING_PRODUCT_SEARCH_URI_TEMPLATE:/catalog/v1/products/search?sku={sku}&detailed=true}
+    effective-price-uri-template: ${POS_PRICING_EFFECTIVE_PRICE_URI_TEMPLATE:/catalog/v1/products/pricing/effective-price/{locationId}/{productId}}
     promotion-by-code-uri-template: ${POS_PRICING_PROMOTION_BY_CODE_URI_TEMPLATE:/price/v1/promotions/offers/by-code/{promoCode}}
     price-restrictions-uri-template: ${POS_PRICING_PRICE_RESTRICTIONS_URI_TEMPLATE:/price/v1/price/restrictions/rules}
     # Cross-domain per ADR-0054: catalog is the system of record for price books.
