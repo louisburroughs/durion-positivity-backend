@@ -5,23 +5,29 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
- * Unit tests for {@link AccountingFacadeTool}: verifies RestClient call shapes.
+ * Unit tests for {@link AccountingFacadeTool}. Expected verbs and URIs derive from
+ * {@code facade-contract.yaml} (#1519 WS-0.3), never from literals duplicating the configuration.
  */
 class AccountingFacadeToolTest {
 
     private static final String BASE_URL = "http://api-gateway";
+    private static final String GL_ACCOUNT_ID = "01960003-0000-7000-8000-000000000001";
 
     private MockRestServiceServer mockServer;
     private AccountingFacadeTool tool;
+
+    private static FacadeContractManifest.Entry contract(String toolMethod) {
+        return FacadeContractManifest.entry("AccountingFacadeTool." + toolMethod);
+    }
 
     @BeforeEach
     void setUp() {
@@ -30,34 +36,54 @@ class AccountingFacadeToolTest {
         tool = new AccountingFacadeTool(
                 builder,
                 BASE_URL,
-                "/accounting/v1/accounting/accounts/{accountId}/balance",
-                "/accounting/v1/accounting/journal-entries/search?q={query}",
-                "/accounting/v1/accounting/summary/{period}");
+                contract("getAccountBalance").template(),
+                contract("getGeneralLedger").template(),
+                contract("getFinancialSummary").template());
     }
 
     @Test
-    @DisplayName("getAccountBalance sends GET /accounts/{accountId}/balance and returns body")
+    @DisplayName("getAccountBalance sends GET /gl-accounts/{glAccountId}/balance and returns body")
     void getAccountBalance_sendsGetToBalanceEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getAccountBalance");
         mockServer
-                .expect(requestTo(BASE_URL + "/accounting/v1/accounting/accounts/ACC-001/balance"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"accountId\":\"ACC-001\",\"balance\":1000.00}", MediaType.APPLICATION_JSON));
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("glAccountId", GL_ACCOUNT_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"glAccountId\":\"" + GL_ACCOUNT_ID + "\",\"balance\":1000.00}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getAccountBalance("ACC-001");
+        String result = tool.getAccountBalance(GL_ACCOUNT_ID);
 
         mockServer.verify();
-        assertThat(result).isNotEmpty().contains("ACC-001");
+        assertThat(result).isNotEmpty().contains(GL_ACCOUNT_ID);
     }
 
     @Test
-    @DisplayName("searchJournalEntries sends GET /journal-entries/search?q={query} and returns body")
-    void searchJournalEntries_sendsGetToSearchEndpoint() {
+    @DisplayName("getGeneralLedger without accountId sends GET general-ledger?startDate&endDate")
+    void getGeneralLedger_withoutAccount_sendsDateRangeOnly() {
+        FacadeContractManifest.Entry entry = contract("getGeneralLedger");
         mockServer
-                .expect(requestTo(BASE_URL + "/accounting/v1/accounting/journal-entries/search?q=revenue"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"entries\":[]}", MediaType.APPLICATION_JSON));
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-01-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchJournalEntries("revenue");
+        String result = tool.getGeneralLedger("2026-01-01", "2026-01-31", null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getGeneralLedger with accountId appends the optional accountId query param")
+    void getGeneralLedger_withAccount_appendsAccountId() {
+        FacadeContractManifest.Entry entry = contract("getGeneralLedger");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-01-31"))
+                        + "&accountId=" + GL_ACCOUNT_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getGeneralLedger("2026-01-01", "2026-01-31", GL_ACCOUNT_ID);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -66,9 +92,10 @@ class AccountingFacadeToolTest {
     @Test
     @DisplayName("getFinancialSummary sends GET /summary/{period} and returns body")
     void getFinancialSummary_sendsGetToSummaryEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getFinancialSummary");
         mockServer
-                .expect(requestTo(BASE_URL + "/accounting/v1/accounting/summary/2025-Q1"))
-                .andExpect(method(HttpMethod.GET))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("period", "2025-Q1"))))
+                .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"period\":\"2025-Q1\"}", MediaType.APPLICATION_JSON));
 
         String result = tool.getFinancialSummary("2025-Q1");
