@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 59")
+    @DisplayName("CATALOG_VERSION is 60")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(59);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(60);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 470")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 471")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1344,8 +1344,12 @@ class SecurityGatewayConfigTest {
         // on_hand:search splits from on_hand:view: bit 311 answers "can this be promised (here)",
         // this one additionally enumerates every location holding the SKU.
         assertThat(GatewayPermissionCatalog.authorityForBit(470)).isEqualTo("PERM_inventory:availability:search");
+        // Workorder cost/margin detail (#1499/#1512 audit). WorkorderDetailServiceImpl checked this
+        // code as a capability flag, but it had no bit index, so JwtServiceImpl dropped it from
+        // every token and the flag was permanently false for everyone.
+        assertThat(GatewayPermissionCatalog.authorityForBit(471)).isEqualTo("PERM_workorder:financials:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(471)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(472)).isNull();
     }
 
     @Test
