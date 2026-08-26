@@ -86,6 +86,21 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void requestPersonLink(UUID userId, UUID personId) {
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new com.positivity.securityservice.internal.exception.UserNotFoundException(
+                        "User not found: " + userId));
+        // The link is owned by pos-people-contact (amended ADR-0043 §2): request it over the
+        // command channel; users.person_id is a projection written only by the link-fact
+        // consumer, so this method never touches it directly.
+        peopleContactCommandEmitter.requestLinkCreate(
+                new com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1(
+                        personId, user.getUsername(), "PRIMARY", "Linked by operator"));
+    }
+
+    @Override
+    @Transactional
     public UserDto assignRoles(String username, Set<String> roleNames) {
         User user = userRepository
                 .findByUsername(username)

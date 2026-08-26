@@ -169,12 +169,22 @@ that want stable demo logins. Passwords travel plaintext over TLS and are
 bcrypt-hashed server-side; an existing username (409) counts as already
 provisioned. This retires the seed's shared committed bcrypt hash.
 
-**Deltas / not converted:** the seed's single scoped `role_assignments` row
-(INVENTORY_CONTROLLER) is not replayed — the endpoint writes direct `user_roles`
-only; and `user_person_links` (usernames → persons, in the pos-people-contact
-seed) has no admin link path yet — self-registration is the only flow that emits
-the link command. Both are recorded follow-ups; the seed file stays until the
-alpha reseed is verified (§5.4).
+| `user-person-links.csv` | 16 user→person links (employee accounts) | gateway API pack (`PUT /security-service/users/{id}/person-link` per row) |
+
+The links pack runs after the employees pack: usernames resolve to user ids via
+the user directory, employee numbers to person ids via `getEmployeeByNumber`, and
+each `PUT` queues the people-contact link command — `users.person_id` is a
+projection that lands asynchronously when the link fact returns (verify with a
+later `GET /security-service/users`). Re-runs re-queue the same link, which the
+consumer upserts by username. The two customer personas (`walter.simmons`,
+`lena.fischer`) have no employee identity and are not linked (same as the seed).
+
+**Deltas:** the seed's single scoped `role_assignments` row (INVENTORY_CONTROLLER
+for raymond.chu) is deliberately not replayed — the same role is already attached
+directly in `users.csv` and effective roles are the union of both, so the scoped
+row added no authority; the scoped-assignment mechanism itself remains
+exercisable via `PUT /v1/users/{userId}/roles/{roleId}`. The seed file stays
+until the alpha reseed is verified (§5.4).
 
 ### `catalog/` — from `pos-catalog R__seed_reference_catalog_2_products.sql`
 

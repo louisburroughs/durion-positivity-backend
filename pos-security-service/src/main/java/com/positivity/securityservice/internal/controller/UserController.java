@@ -187,6 +187,38 @@ public class UserController {
     }
 
     @Operation(
+            operationId = "linkUserPerson",
+            summary = "Link a User Account to Its Canonical Person",
+            description = """
+                    Requests a PRIMARY link between a user account and a canonical person over the \
+                    people-contact command channel; the users.person_id projection updates asynchronously when \
+                    the confirming link fact arrives.
+                    Use this tool for operator provisioning of accounts created via createUser, which performs \
+                    no identity resolution; do not use selfRegisterUser, which resolves and links its own person.
+                    Preconditions: the caller must hold security:user:edit and the user id must exist; the \
+                    personId is not validated here — an unknown person is rejected by pos-people-contact when \
+                    it processes the command.
+                    Required inputs: the user id as a path parameter and personId in the body.
+                    Emits a SECURITY_USER_PERSON_LINK_REQUEST event and queues the link-create command.
+                    Returns 202 because the link lands asynchronously, and 404 when the user does not exist.
+                    """)
+    @ApiResponse(responseCode = "202", description = "Link command queued; projection updates asynchronously.")
+    @ApiResponse(responseCode = "404", description = "User not found.")
+    @EmitEvent(id = "SECURITY_USER_PERSON_LINK_REQUEST", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:user:edit"})
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_EDIT + "')")
+    @PutMapping("/{id}/person-link")
+    public ResponseEntity<Void> linkUserPerson(
+            @PathVariable UUID id,
+            @jakarta.validation.Valid @RequestBody
+                    com.positivity.securityservice.internal.dto.LinkUserPersonRequest request) {
+        userService.requestPersonLink(id, request.personId());
+        return ResponseEntity.accepted().build();
+    }
+
+    @Operation(
             operationId = "assignUserRolesByUsername",
             summary = "Replace a User's Direct Role Set",
             description = """

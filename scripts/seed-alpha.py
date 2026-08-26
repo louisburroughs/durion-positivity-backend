@@ -53,6 +53,7 @@ PACK_FILES = [
     ("location/mobile-units.csv", "@mobile-units", None),
     ("people/employees.csv", "PERSON", None),
     ("people/staffing-assignments.csv", "@staffing-assignments", None),
+    ("security/user-person-links.csv", "@user-person-links", None),
     ("shop-manager/mechanic-skills.csv", "@mechanic-skills", None),
     ("customer/person-customers.csv", "CUSTOMER", None),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER", None),
@@ -422,10 +423,48 @@ def run_mechanic_skills(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_user_person_links(gateway, relative_path, _location_id):
+    """API pack: link user accounts to their canonical persons.
+
+    Runs after the employees pack: usernames resolve to user ids via the user
+    directory, employee numbers to person ids via getEmployeeByNumber, then
+    PUT /users/{id}/person-link queues the people-contact link command (the
+    users.person_id projection lands asynchronously). Re-runs re-queue the
+    same link, which the link consumer upserts by username."""
+    _, users = gateway.get("/security-service/users")
+    user_ids = {u["username"]: u["id"] for u in users or []}
+
+    queued, failures = 0, 0
+    for row in read_fixture_rows(relative_path):
+        user_id = user_ids.get(row["username"])
+        if user_id is None:
+            print(f"  WARN: link {row['username']}: user not found")
+            failures += 1
+            continue
+        status_code, identity = gateway.get(
+            f"/people/employees/by-number/{urllib.parse.quote(row['employeeNumber'])}", allow_error=True)
+        person_id = (identity or {}).get("personId") if status_code == 200 else None
+        if person_id is None:
+            print(f"  WARN: link {row['username']}: employee {row['employeeNumber']} not found")
+            failures += 1
+            continue
+        status_code, _ = gateway._request(
+            "PUT", f"/security-service/users/{user_id}/person-link", body={"personId": person_id}, allow_error=True)
+        if 200 <= status_code < 300:
+            queued += 1
+        else:
+            print(f"  WARN: link {row['username']}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  user-person links: queued={queued} failures={failures}")
+    return failures == 0
+
+
 API_PACKS = {
     "@staffing-assignments": run_staffing_assignments,
     "@mechanic-skills": run_mechanic_skills,
     "@security-users": run_security_users,
+    "@user-person-links": run_user_person_links,
     "@location-bays": run_location_bays,
     "@mobile-units": run_mobile_units,
     "@storage-locations": run_storage_locations,

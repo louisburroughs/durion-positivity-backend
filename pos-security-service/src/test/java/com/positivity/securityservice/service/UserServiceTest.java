@@ -52,6 +52,9 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private com.positivity.securityservice.internal.service.PeopleContactCommandEmitter peopleContactCommandEmitter;
+
     @InjectMocks
     private UserServiceImpl userService;
 
@@ -93,6 +96,34 @@ class UserServiceTest {
         UserDto result = userService.assignRoles("alice", Set.of("ADMIN"));
 
         assertThat(result.getRoles()).contains("ADMIN");
+    }
+
+    @Test
+    void requestPersonLink_emitsLinkCreateCommandWithUsername() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        User user = new User();
+        user.setUsername("alice");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        userService.requestPersonLink(userId, personId);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1.class);
+        verify(peopleContactCommandEmitter).requestLinkCreate(captor.capture());
+        assertThat(captor.getValue().personId()).isEqualTo(personId);
+        assertThat(captor.getValue().username()).isEqualTo("alice");
+        assertThat(captor.getValue().linkType()).isEqualTo("PRIMARY");
+    }
+
+    @Test
+    void requestPersonLink_unknownUser_throwsNotFound() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                        userService.requestPersonLink(userId, UUID.fromString("00000000-0000-0000-0000-000000000002")))
+                .isInstanceOf(com.positivity.securityservice.internal.exception.UserNotFoundException.class);
     }
 
     @Test

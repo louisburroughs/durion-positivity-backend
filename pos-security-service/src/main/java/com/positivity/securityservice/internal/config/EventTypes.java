@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 32 event types.
+     * Total: 33 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -90,6 +90,10 @@ public final class EventTypes {
                 EventTypeRegistration.write("SECURITY_USER_UPDATE", "Update an existing user account")
                         .build(),
                 EventTypeRegistration.write("SECURITY_USER_DELETE", "Delete a user account")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_USER_PERSON_LINK_REQUEST", "Request a user-person link via people-contact")
+                        .apiVersion("1")
                         .build(),
                 EventTypeRegistration.write("SECURITY_USER_ASSIGN_ROLES", "Assign roles to a user")
                         .build(),

@@ -149,6 +149,61 @@ class UserControllerTest {
         }
     }
 
+    @Nested
+    @DisplayName("PUT /v1/users/{id}/person-link")
+    class LinkUserPerson {
+
+        private static final String LINK_PATH = "/v1/users/01990000-0000-7000-8000-000000000001/person-link";
+        private static final String LINK_BODY = """
+                {"personId":"01960011-0000-7000-8000-000000000001"}""";
+
+        @Test
+        void withAuthority_returns202() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(LINK_PATH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(LINK_BODY)
+                            .with(user("admin-user").authorities(() -> "security:user:edit")))
+                    .andExpect(status().isAccepted());
+
+            org.mockito.Mockito.verify(userService)
+                    .requestPersonLink(
+                            UUID.fromString("01990000-0000-7000-8000-000000000001"),
+                            UUID.fromString("01960011-0000-7000-8000-000000000001"));
+        }
+
+        @Test
+        void unknownUser_returns404() throws Exception {
+            org.mockito.Mockito.doThrow(new com.positivity.securityservice.internal.exception.UserNotFoundException(
+                            "User not found"))
+                    .when(userService)
+                    .requestPersonLink(any(), any());
+
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(LINK_PATH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(LINK_BODY)
+                            .with(user("admin-user").authorities(() -> "security:user:edit")))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void missingPersonId_returns400() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(LINK_PATH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}")
+                            .with(user("admin-user").authorities(() -> "security:user:edit")))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void withoutAuthority_returns403() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(LINK_PATH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(LINK_BODY)
+                            .with(user("viewer-user").roles("VIEWER")))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
     @TestConfiguration
     @EnableWebSecurity
     @EnableMethodSecurity(prePostEnabled = true)

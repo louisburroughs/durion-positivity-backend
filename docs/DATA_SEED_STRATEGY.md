@@ -124,7 +124,7 @@ replicas.
 | File | Tier | Action |
 |---|---|---|
 | pos-security-service `R__seed_role_permissions.sql`, `R__seed_reference_security.sql` | 1 | Keep in Flyway |
-| pos-security-service `R__seed_security_operational_data.sql` | 2 | **Converted** — `scripts/fixtures/seed/alpha/security/users.csv` (usernames + roles only) driven through the hardened `POST /v1/users`; passwords are generated at run time and land in a local gitignored file, retiring the committed shared bcrypt hash. Remaining: the scoped `role_assignments` row and `user_person_links`; deletion waits on the verified alpha reseed (§5.4) |
+| pos-security-service `R__seed_security_operational_data.sql` | 2 | **Converted** — `scripts/fixtures/seed/alpha/security/users.csv` (usernames + roles only) driven through the hardened `POST /v1/users`; passwords are generated at run time and land in a local gitignored file, retiring the committed shared bcrypt hash. User→person links replay via the new `PUT /v1/users/{id}/person-link` (people-contact command channel); the scoped `role_assignments` row is deliberately not replayed (authorization-redundant with the direct role). Deletion waits on the verified alpha reseed (§5.4) |
 | pos-accounting `R__seed_reference_accounting.sql`, `V3__seed_labor_overhead_mapping.sql` | 1 | Keep |
 | pos-invoice `R__seed_reference_invoice.sql` | 1 | Keep |
 | pos-price `R__seed_reference_price.sql` | 1 | Keep (verify nothing in it is published on a topic) |
