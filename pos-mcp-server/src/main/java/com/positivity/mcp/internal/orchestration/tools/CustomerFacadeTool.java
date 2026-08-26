@@ -73,26 +73,34 @@ public class CustomerFacadeTool {
             @ToolParam(description = "The customer's party id (UUID)") @NonNull String customerId) {
         Map<String, String> uriParams = Map.of("partyId", customerId);
         return ToolComposition.named("customerHistory")
-                .call("snapshot", () -> restClient
-                        .get()
-                        .uri(snapshotUriTemplate, uriParams)
-                        .retrieve()
-                        .body(String.class))
-                .call("interactions", () -> restClient
-                        .get()
-                        .uri(interactionsUriTemplate, uriParams)
-                        .retrieve()
-                        .body(String.class))
-                .call("invoices", () -> restClient
-                        .get()
-                        .uri(invoicesUriTemplate, uriParams)
-                        .retrieve()
-                        .body(String.class))
-                .call("workorders", () -> restClient
-                        .get()
-                        .uri(workordersUriTemplate, uriParams)
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "snapshot",
+                        () -> restClient
+                                .get()
+                                .uri(snapshotUriTemplate, uriParams)
+                                .retrieve()
+                                .body(String.class))
+                .call(
+                        "interactions",
+                        () -> restClient
+                                .get()
+                                .uri(interactionsUriTemplate, uriParams)
+                                .retrieve()
+                                .body(String.class))
+                .call(
+                        "invoices",
+                        () -> restClient
+                                .get()
+                                .uri(invoicesUriTemplate, uriParams)
+                                .retrieve()
+                                .body(String.class))
+                .call(
+                        "workorders",
+                        () -> restClient
+                                .get()
+                                .uri(workordersUriTemplate, uriParams)
+                                .retrieve()
+                                .body(String.class))
                 .render();
     }
 }

@@ -82,24 +82,30 @@ public class AccountingFacadeTool {
             @ToolParam(description = "Accounting period: YYYY-MM or YYYY") @NonNull String period) {
         ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
         return ToolComposition.named("financialSummary")
-                .call("incomeStatement", () -> restClient
-                        .get()
-                        .uri(
-                                incomeStatementUriTemplate,
-                                Map.of("startDate", range.startDate(), "endDate", range.endDate()))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "incomeStatement",
+                        () -> restClient
+                                .get()
+                                .uri(
+                                        incomeStatementUriTemplate,
+                                        Map.of("startDate", range.startDate(), "endDate", range.endDate()))
+                                .retrieve()
+                                .body(String.class))
                 .require("incomeStatement")
-                .call("balanceSheet", () -> restClient
-                        .get()
-                        .uri(balanceSheetUriTemplate, Map.of("asOfDate", range.endDate()))
-                        .retrieve()
-                        .body(String.class))
-                .call("trialBalance", () -> restClient
-                        .get()
-                        .uri(trialBalanceUriTemplate, Map.of("asOf", range.endDate()))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "balanceSheet",
+                        () -> restClient
+                                .get()
+                                .uri(balanceSheetUriTemplate, Map.of("asOfDate", range.endDate()))
+                                .retrieve()
+                                .body(String.class))
+                .call(
+                        "trialBalance",
+                        () -> restClient
+                                .get()
+                                .uri(trialBalanceUriTemplate, Map.of("asOf", range.endDate()))
+                                .retrieve()
+                                .body(String.class))
                 .render();
     }
 }

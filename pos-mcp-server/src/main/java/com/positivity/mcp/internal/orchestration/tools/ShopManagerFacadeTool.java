@@ -53,22 +53,28 @@ public class ShopManagerFacadeTool {
     public String getShopStatus(@ToolParam(description = "The shop's location id (UUID)") @NonNull String shopId) {
         String today = LocalDate.now(clock).toString();
         return ToolComposition.named("shopStatus")
-                .call("location", () -> restClient
-                        .get()
-                        .uri(locationUriTemplate, Map.of("locationId", shopId))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "location",
+                        () -> restClient
+                                .get()
+                                .uri(locationUriTemplate, Map.of("locationId", shopId))
+                                .retrieve()
+                                .body(String.class))
                 .require("location")
-                .call("schedule", () -> restClient
-                        .get()
-                        .uri(scheduleUriTemplate, Map.of("locationId", shopId, "date", today))
-                        .retrieve()
-                        .body(String.class))
-                .call("openWorkorders", () -> restClient
-                        .get()
-                        .uri(wipUriTemplate, Map.of("locationId", shopId))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "schedule",
+                        () -> restClient
+                                .get()
+                                .uri(scheduleUriTemplate, Map.of("locationId", shopId, "date", today))
+                                .retrieve()
+                                .body(String.class))
+                .call(
+                        "openWorkorders",
+                        () -> restClient
+                                .get()
+                                .uri(wipUriTemplate, Map.of("locationId", shopId))
+                                .retrieve()
+                                .body(String.class))
                 .render();
     }
 
@@ -81,17 +87,21 @@ public class ShopManagerFacadeTool {
     public String getShopQueue(@ToolParam(description = "The shop's location id (UUID)") @NonNull String shopId) {
         String today = LocalDate.now(clock).toString();
         return ToolComposition.named("shopQueue")
-                .call("openWorkorders", () -> restClient
-                        .get()
-                        .uri(wipUriTemplate, Map.of("locationId", shopId))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "openWorkorders",
+                        () -> restClient
+                                .get()
+                                .uri(wipUriTemplate, Map.of("locationId", shopId))
+                                .retrieve()
+                                .body(String.class))
                 .require("openWorkorders")
-                .call("schedule", () -> restClient
-                        .get()
-                        .uri(scheduleUriTemplate, Map.of("locationId", shopId, "date", today))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "schedule",
+                        () -> restClient
+                                .get()
+                                .uri(scheduleUriTemplate, Map.of("locationId", shopId, "date", today))
+                                .retrieve()
+                                .body(String.class))
                 .render();
     }
 

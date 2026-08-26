@@ -119,8 +119,8 @@ class ReportingFacadeToolTest {
         FacadeContractManifest.Entry incomeStatement = revenue.leg("incomeStatement");
         FacadeContractManifest.Entry agedReceivables = revenue.leg("agedReceivables");
         mockServer
-                .expect(requestTo(BASE_URL
-                        + incomeStatement.expand(Map.of("startDate", "2026-05-01", "endDate", "2026-05-31"))))
+                .expect(requestTo(
+                        BASE_URL + incomeStatement.expand(Map.of("startDate", "2026-05-01", "endDate", "2026-05-31"))))
                 .andExpect(method(incomeStatement.httpMethod()))
                 .andRespond(withSuccess("{\"revenue\":[{\"line\":\"Sales\"}]}", MediaType.APPLICATION_JSON));
         mockServer
@@ -154,7 +154,8 @@ class ReportingFacadeToolTest {
         FacadeContractManifest.Entry revenue = contract("getRevenueReport");
         mockServer
                 .expect(requestTo(BASE_URL
-                        + revenue.leg("incomeStatement").expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
+                        + revenue.leg("incomeStatement")
+                                .expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
                 .andRespond(withSuccess("{\"revenue\":[]}", MediaType.APPLICATION_JSON));
         mockServer
                 .expect(requestTo(BASE_URL + revenue.leg("agedReceivables").expand(Map.of("asOfDate", "2026-12-31"))))

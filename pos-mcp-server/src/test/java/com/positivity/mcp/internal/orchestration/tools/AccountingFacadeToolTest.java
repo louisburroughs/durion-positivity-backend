@@ -115,8 +115,8 @@ class AccountingFacadeToolTest {
         FacadeContractManifest.Entry balanceSheet = summary.leg("balanceSheet");
         FacadeContractManifest.Entry trialBalance = summary.leg("trialBalance");
         mockServer
-                .expect(requestTo(BASE_URL
-                        + incomeStatement.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-03-31"))))
+                .expect(requestTo(
+                        BASE_URL + incomeStatement.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-03-31"))))
                 .andExpect(method(incomeStatement.httpMethod()))
                 .andRespond(withSuccess("{\"revenue\":1000}", MediaType.APPLICATION_JSON));
         mockServer
@@ -133,9 +133,17 @@ class AccountingFacadeToolTest {
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("financialSummary");
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
-        assertThat(envelope.get("sections").get("incomeStatement").get("data").get("revenue").asInt())
+        assertThat(envelope.get("sections")
+                        .get("incomeStatement")
+                        .get("data")
+                        .get("revenue")
+                        .asInt())
                 .isEqualTo(1000);
-        assertThat(envelope.get("sections").get("balanceSheet").get("data").get("assets").asInt())
+        assertThat(envelope.get("sections")
+                        .get("balanceSheet")
+                        .get("data")
+                        .get("assets")
+                        .asInt())
                 .isEqualTo(5000);
         assertThat(envelope.get("sections").get("trialBalance").get("status").asText())
                 .isEqualTo("ok");
@@ -150,7 +158,8 @@ class AccountingFacadeToolTest {
         FacadeContractManifest.Entry summary = contract("getFinancialSummary");
         mockServer
                 .expect(requestTo(BASE_URL
-                        + summary.leg("incomeStatement").expand(Map.of("startDate", "2026-03-01", "endDate", "2026-03-31"))))
+                        + summary.leg("incomeStatement")
+                                .expand(Map.of("startDate", "2026-03-01", "endDate", "2026-03-31"))))
                 .andRespond(withSuccess("{\"revenue\":1000}", MediaType.APPLICATION_JSON));
         mockServer
                 .expect(requestTo(BASE_URL + summary.leg("balanceSheet").expand(Map.of("asOfDate", "2026-03-31"))))
@@ -180,7 +189,8 @@ class AccountingFacadeToolTest {
         FacadeContractManifest.Entry summary = contract("getFinancialSummary");
         mockServer
                 .expect(requestTo(BASE_URL
-                        + summary.leg("incomeStatement").expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
+                        + summary.leg("incomeStatement")
+                                .expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
                 .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
         mockServer
                 .expect(requestTo(BASE_URL + summary.leg("balanceSheet").expand(Map.of("asOfDate", "2026-12-31"))))

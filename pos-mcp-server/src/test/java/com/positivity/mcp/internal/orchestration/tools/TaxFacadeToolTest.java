@@ -74,7 +74,8 @@ class TaxFacadeToolTest {
     void calculateTax_postsSynthesizedLineItemWithDestinationAddress() {
         FacadeContractManifest.Entry calculate = contract("calculateTax");
         gatewayMockServer
-                .expect(requestTo(GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .expect(requestTo(
+                        GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
                 .andExpect(method(calculate.leg("location").httpMethod()))
                 .andRespond(withSuccess(LOCATION_BODY, MediaType.APPLICATION_JSON));
         directMockServer
@@ -101,9 +102,17 @@ class TaxFacadeToolTest {
         gatewayMockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("taxCalculation");
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
-        assertThat(envelope.get("sections").get("location").get("data").get("id").asText())
+        assertThat(envelope.get("sections")
+                        .get("location")
+                        .get("data")
+                        .get("id")
+                        .asText())
                 .isEqualTo(LOCATION_ID);
-        assertThat(envelope.get("sections").get("tax").get("data").get("totalTax").asText())
+        assertThat(envelope.get("sections")
+                        .get("tax")
+                        .get("data")
+                        .get("totalTax")
+                        .asText())
                 .isEqualTo("11.05");
         assertThat(envelope.get("sources")).extracting(JsonNode::asText).containsExactly("location", "tax");
     }
@@ -113,7 +122,8 @@ class TaxFacadeToolTest {
     void calculateTax_locationWithoutAddress_degradesWithoutCallingPosTax() {
         FacadeContractManifest.Entry calculate = contract("calculateTax");
         gatewayMockServer
-                .expect(requestTo(GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .expect(requestTo(
+                        GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
                 .andRespond(withSuccess(
                         "{\"id\":\"" + LOCATION_ID + "\",\"name\":\"Warehouse\"}", MediaType.APPLICATION_JSON));
 
@@ -135,7 +145,8 @@ class TaxFacadeToolTest {
     void calculateTax_nonIsoCountry_degradesWithoutCallingPosTax() {
         FacadeContractManifest.Entry calculate = contract("calculateTax");
         gatewayMockServer
-                .expect(requestTo(GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .expect(requestTo(
+                        GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
                 .andRespond(withSuccess(
                         "{\"id\":\"" + LOCATION_ID + "\",\"postalCode\":\"62704\",\"country\":\"United States\"}",
                         MediaType.APPLICATION_JSON));
@@ -154,7 +165,8 @@ class TaxFacadeToolTest {
     void calculateTax_forbiddenLocation_rendersNotAuthorized() {
         FacadeContractManifest.Entry calculate = contract("calculateTax");
         gatewayMockServer
-                .expect(requestTo(GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .expect(requestTo(
+                        GATEWAY_BASE_URL + calculate.leg("location").expand(Map.of("locationId", LOCATION_ID))))
                 .andRespond(withStatus(HttpStatus.FORBIDDEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("{\"secret\":\"FORBIDDEN-PAYLOAD\"}"));

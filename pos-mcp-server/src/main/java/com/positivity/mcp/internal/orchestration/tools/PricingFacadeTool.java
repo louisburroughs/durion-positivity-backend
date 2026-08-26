@@ -96,9 +96,8 @@ public class PricingFacadeTool {
         if (locationId != null && !locationId.isBlank()) {
             composition.call("effectivePrice", () -> {
                 if (productId.isBlank()) {
-                    throw new ToolComposition.LegFailure(
-                            "The catalog search row for SKU " + sku + " carries no productId; "
-                                    + "the location effective price cannot be looked up");
+                    throw new ToolComposition.LegFailure("The catalog search row for SKU " + sku
+                            + " carries no productId; " + "the location effective price cannot be looked up");
                 }
                 return restClient
                         .get()
@@ -125,8 +124,7 @@ public class PricingFacadeTool {
 
     private static @NonNull String condensedProduct(@NonNull JsonNode product) {
         ObjectNode summary = MAPPER.createObjectNode();
-        for (String field :
-                new String[] {"productId", "sku", "name", "lifecycleState", "msrpAmount", "msrpCurrency"}) {
+        for (String field : new String[] {"productId", "sku", "name", "lifecycleState", "msrpAmount", "msrpCurrency"}) {
             summary.set(field, product.path(field).isMissingNode() ? NullNode.getInstance() : product.get(field));
         }
         return write(summary);
@@ -136,8 +134,10 @@ public class PricingFacadeTool {
         ObjectNode notFound = MAPPER.createObjectNode();
         notFound.put("status", "not_found");
         notFound.put("sku", sku);
-        notFound.put("message", "No catalog product matches SKU '" + sku + "' (the match is exact, "
-                + "case-insensitive); no price is available");
+        notFound.put(
+                "message",
+                "No catalog product matches SKU '" + sku + "' (the match is exact, "
+                        + "case-insensitive); no price is available");
         return write(notFound);
     }
 

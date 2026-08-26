@@ -99,13 +99,15 @@ public class TaxFacadeTool {
             });
         } else {
             String requestBody = calculationRequest(taxableAmount, java.util.Objects.requireNonNull(location));
-            composition.call("tax", () -> restClient
-                    .post()
-                    .uri(taxCalculateUriTemplate)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .body(String.class));
+            composition.call(
+                    "tax",
+                    () -> restClient
+                            .post()
+                            .uri(taxCalculateUriTemplate)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(requestBody)
+                            .retrieve()
+                            .body(String.class));
         }
         return composition.require("tax").render();
     }
@@ -180,8 +182,7 @@ public class TaxFacadeTool {
         lineItem.put("quantity", 1);
         lineItem.put("unitPrice", taxableAmount);
         ObjectNode destination = request.putObject("destinationAddress");
-        destination.put(
-                "countryCode", location.path("country").asText().toUpperCase(java.util.Locale.ROOT));
+        destination.put("countryCode", location.path("country").asText().toUpperCase(java.util.Locale.ROOT));
         destination.put("postalCode", location.path("postalCode").asText());
         putIfPresent(destination, "regionCode", location.path("state"));
         putIfPresent(destination, "city", location.path("city"));

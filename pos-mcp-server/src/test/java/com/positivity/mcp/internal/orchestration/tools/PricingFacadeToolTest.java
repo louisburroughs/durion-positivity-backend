@@ -104,7 +104,11 @@ class PricingFacadeToolTest {
 
         mockServer.verify();
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
-        assertThat(envelope.get("sections").get("product").get("data").get("msrpAmount").asText())
+        assertThat(envelope.get("sections")
+                        .get("product")
+                        .get("data")
+                        .get("msrpAmount")
+                        .asText())
                 .isEqualTo("99.99");
         assertThat(envelope.get("sections")
                         .get("effectivePrice")
@@ -112,9 +116,7 @@ class PricingFacadeToolTest {
                         .get("effectivePrice")
                         .asText())
                 .isEqualTo("94.50");
-        assertThat(envelope.get("sources"))
-                .extracting(JsonNode::asText)
-                .containsExactly("product", "effectivePrice");
+        assertThat(envelope.get("sources")).extracting(JsonNode::asText).containsExactly("product", "effectivePrice");
     }
 
     @Test
@@ -171,7 +173,11 @@ class PricingFacadeToolTest {
 
         mockServer.verify();
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
-        assertThat(envelope.get("sections").get("product").get("data").get("msrpAmount").asText())
+        assertThat(envelope.get("sections")
+                        .get("product")
+                        .get("data")
+                        .get("msrpAmount")
+                        .asText())
                 .isEqualTo("99.99");
         assertThat(envelope.get("sections").get("effectivePrice").get("status").asText())
                 .isEqualTo("error");

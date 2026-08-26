@@ -88,7 +88,11 @@ class ShopManagerFacadeToolTest {
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("shopStatus");
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
-        assertThat(envelope.get("sections").get("location").get("data").get("name").asText())
+        assertThat(envelope.get("sections")
+                        .get("location")
+                        .get("data")
+                        .get("name")
+                        .asText())
                 .isEqualTo("Downtown Garage");
         assertThat(envelope.get("sections").get("schedule").get("status").asText())
                 .isEqualTo("ok");
@@ -162,9 +166,7 @@ class ShopManagerFacadeToolTest {
                         .get("workorderId")
                         .asText())
                 .isEqualTo("WO-9");
-        assertThat(envelope.get("sources"))
-                .extracting(JsonNode::asText)
-                .containsExactly("openWorkorders", "schedule");
+        assertThat(envelope.get("sources")).extracting(JsonNode::asText).containsExactly("openWorkorders", "schedule");
     }
 
     @Test

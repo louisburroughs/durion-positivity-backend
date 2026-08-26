@@ -116,7 +116,11 @@ class CustomerFacadeToolTest {
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("customerHistory");
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
-        assertThat(envelope.get("sections").get("snapshot").get("data").get("partyId").asText())
+        assertThat(envelope.get("sections")
+                        .get("snapshot")
+                        .get("data")
+                        .get("partyId")
+                        .asText())
                 .isEqualTo(PARTY_ID);
         assertThat(envelope.get("sections")
                         .get("interactions")

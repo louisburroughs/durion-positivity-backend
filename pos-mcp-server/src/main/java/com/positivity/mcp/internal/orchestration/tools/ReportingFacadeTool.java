@@ -62,20 +62,27 @@ public class ReportingFacadeTool {
                     + "balances bucketed by days past due, as of the period's end date — the revenue not yet "
                     + "collected). A failed or unauthorized aged-receivables section degrades only itself; "
                     + "the top-level status is degraded when the income statement is unavailable.")
-    public String getRevenueReport(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
+    public String getRevenueReport(
+            @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
         ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
         return ToolComposition.named("revenueReport")
-                .call("incomeStatement", () -> restClient
-                        .get()
-                        .uri(salesReportUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "incomeStatement",
+                        () -> restClient
+                                .get()
+                                .uri(
+                                        salesReportUriTemplate,
+                                        Map.of("startDate", range.startDate(), "endDate", range.endDate()))
+                                .retrieve()
+                                .body(String.class))
                 .require("incomeStatement")
-                .call("agedReceivables", () -> restClient
-                        .get()
-                        .uri(agedReceivablesUriTemplate, Map.of("asOfDate", range.endDate()))
-                        .retrieve()
-                        .body(String.class))
+                .call(
+                        "agedReceivables",
+                        () -> restClient
+                                .get()
+                                .uri(agedReceivablesUriTemplate, Map.of("asOfDate", range.endDate()))
+                                .retrieve()
+                                .body(String.class))
                 .render();
     }
 }
