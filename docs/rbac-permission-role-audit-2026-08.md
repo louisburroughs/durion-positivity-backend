@@ -547,10 +547,73 @@ All six flags are decided; the chart above reflects them:
 | 4 | Deprecation convention (manifest flag + honor it + `@Deprecated` enum entries) and apply to every §3 row; retire grants via versioned migration | medium | convention sign-off |
 | 5 | Triage remaining ~55 ADMIN-only unenforced codes: enforce or retire | medium | **IN PROGRESS** — retirement wave DONE (34 codes, V28); enforcement wave DONE for 15 codes gated across pos-catalog/pos-price/pos-vehicle-inventory/pos-vehicle-fitment, grants paired (seed-only, no migration); 12 codes still deferred (feature not built: crm integration-audit/processing-log/suspense reads, workorder estimate-item/snapshot GETs, people:skill:* feature (3 codes), nlti:request:read status endpoint, catalog:service_type:create/edit endpoint split, pricing:normalization:view) |
 | 6 | Close the `x-required-permissions` gap (security-service, catalog) | medium | no |
-| 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | thresholds |
+| 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | **DONE** — `--check` mode + `scripts/rbac-audit-baseline.json`, wired into the `validate-permissions` job; see subsection below |
 | 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | no |
 | 9 | Remove dead authorities: literal `"admin"` check, `ACCOUNTING_ADMIN`/`AR_MANAGER` alternates, `people:time:export:read` alternate | small | **DONE** — pos-people, pos-people-contact and pos-accounting code, contracts and tests cleaned |
 | 10 | Seed dummy users for the roles that currently have none (see below) so every persona is exercisable under its own login | small | **DONE** — 8 users seeded (…012–…019); felicia.grant's LOCATION-scoped assignment deferred until a location fixture exists; customer-persona flag still open |
+
+### Task 7 — CI gate on `scripts/audit-rbac.py`
+
+Implements §4 step 4: fail CI when a *new* instance of the #1494/#1499/#1512 defect
+class appears, without re-litigating the already-triaged backlog every PR.
+
+**Two detector fixes landed with the gate**, because a gate is only as good as the
+scanner under it:
+
+1. **Comments are now stripped before scanning.** Enforcement is found by regex, and
+   javadoc quotes annotations for illustration — `SecurityContextHelper`'s class javadoc
+   contains `hasAuthority("catalog:product:edit")` as a usage EXAMPLE, and
+   `TaxServiceClient` has a `//` comment describing pos-tax's gate. Both were being
+   scored as real enforcement. This is the same false-positive class as the
+   `@EmitEvent`-id bug found on PR #1516, from a different direction.
+2. **SpEL single-quoted literals are now read.** A code written inline —
+   `hasAnyAuthority('workorder:parts:add', 'workorder:workorder:edit')` in
+   `SubstituteLinkController`, or the deliberate cross-module literal in
+   `PurchaseSuggestionController` — sits in single quotes *inside* the Java string, so
+   the double-quoted scan never saw it. Three codes were enforced-but-invisible.
+
+**The comment fix exposed a 13th unenforced code**: `catalog:product:edit` is granted to
+ADMIN, declared in pos-catalog's manifest, and holds bit 13 — but its only "enforcement"
+was that javadoc example. The real endpoint, `CatalogItemController.updateCatalogItem`
+(`PUT /{type}/{catalogId}`), is still gated on the dead `hasRole('CATALOG_EDIT')`
+phantom role, so nothing actually guards a product edit. It is baselined in the same
+deferred bucket as `catalog:service_type:create/edit`: gating the type-generic
+create/update endpoint per type needs the endpoint-split decision (§7 task 5), which is
+the same open question the `deleteCatalogItem` type-conditional flagged.
+
+- **Run it**: `python3 scripts/audit-rbac.py --check` (wired into the existing
+  `validate-permissions` job in `.github/workflows/pr-checks.yml`, after the permission
+  catalog sync check — same concern, Python setup already paid for). Exits `1` on new
+  drift or a stale baseline entry, `0` when clean. `scripts/audit-rbac.py [out.json]`
+  (no `--check`) still just writes the full report, unchanged.
+- **Gates the build** — any of these codes not already listed in
+  `scripts/rbac-audit-baseline.json` fails the run, naming the code and where it was
+  seen:
+  - `required_ungranted` — required by an endpoint/code check, granted to no role
+    (#1512: a feature nobody can reach).
+  - `granted_unrequired` — granted to a role, enforced nowhere (#1499: a false claim
+    about what a role can do).
+  - `required_no_bit` — required but missing from `PermissionCode`, so
+    `JwtServiceImpl` silently drops it from every token (the
+    `workorder:financials:view` class).
+  - `granted_no_bit` — granted but missing a bit index; same trap, other side.
+  - `unreachable_op_count` — contract operations no seeded role can reach. Never
+    baselined: any value above 0 fails, full stop.
+  - A **stale baseline entry** (listed but no longer actually drifting) also fails,
+    under a "delete these lines" heading — the baseline is meant to shrink, not
+    accumulate.
+- **Informational only, never gates**: `required_unregistered` (legitimately includes
+  cross-domain enforcement — a module enforcing a code another module owns — so gating
+  it would be noise) and `catalog_dead`. Both are printed as counts at the end.
+- **The baseline** (`scripts/rbac-audit-baseline.json`) holds today's known backlog:
+  the `people:timeEntry:` dynamic-string artifact (§5 point 2) and the 12 unbuilt-feature
+  codes from task 5. Each entry is `code -> reason string`, not a bare list, so adding
+  one is a reviewable act with a stated justification.
+- **To legitimately add an entry**: either fix the drift (grant it, enforce it, add the
+  bit, or retire the code per §4's convention), or — if it's a genuine, currently-accepted
+  gap — add it to the baseline with a one-line reason and say why in the PR description.
+  Silently widening the baseline to make a PR pass without a stated reason defeats the
+  point of the gate.
 
 ### Task 10 — dummy users for unrepresented roles
 
