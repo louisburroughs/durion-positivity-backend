@@ -227,61 +227,61 @@
       "name": "pos.inventory.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for inventory tools.",
-      "defaultValue": "http://pos-inventory/v1/inventory"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.order.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for order tools.",
-      "defaultValue": "http://pos-order/v1/orders"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.customer.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for customer tools.",
-      "defaultValue": "http://pos-customer/v1/customers"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.catalog.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for catalog tools.",
-      "defaultValue": "http://pos-catalog/v1/catalog"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.workorder.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for workorder tools.",
-      "defaultValue": "http://pos-workorder/v1/workorders"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.invoice.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for invoice tools.",
-      "defaultValue": "http://pos-invoice/v1/invoices"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.accounting.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for accounting tools.",
-      "defaultValue": "http://pos-accounting/v1/accounting"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.reporting.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for reporting tools.",
-      "defaultValue": "http://pos-accounting/v1/reporting"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.location.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for location tools.",
-      "defaultValue": "http://pos-location/v1/locations"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.shopmanager.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for shop manager tools.",
-      "defaultValue": "http://pos-shop-manager/v1/shop"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.tax.base-url",
@@ -293,25 +293,13 @@
       "name": "pos.vehicle.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for vehicle tools.",
-      "defaultValue": "http://pos-customer/v1/vehicles"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.event-receiver.base-url",
       "type": "java.lang.String",
       "description": "Facade base URL for event receiver tools.",
-      "defaultValue": "http://pos-event-receiver/v1/events"
-    },
-    {
-      "name": "pos.hr.base-url",
-      "type": "java.lang.String",
-      "description": "Facade base URL for HR tools.",
-      "defaultValue": "http://pos-people/v1/hr"
-    },
-    {
-      "name": "pos.admin.base-url",
-      "type": "java.lang.String",
-      "description": "Facade base URL for admin tools.",
-      "defaultValue": "http://pos-security-service/v1/admin"
+      "defaultValue": "http://pos-api-gateway"
     },
     {
       "name": "pos.show-actuator",
@@ -328,14 +316,14 @@
     {
       "name": "pos.accounting.account-balance-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching account balance from the accounting service.",
-      "defaultValue": "/accounting/v1/accounting/accounts/{accountId}/balance"
+      "description": "URI template for fetching a GL account balance from the accounting service (the id is the GL account UUID).",
+      "defaultValue": "/accounting/v1/accounting/gl-accounts/{glAccountId}/balance"
     },
     {
-      "name": "pos.accounting.journal-entries-search-uri-template",
+      "name": "pos.accounting.general-ledger-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching journal entries in the accounting service.",
-      "defaultValue": "/accounting/v1/accounting/journal-entries/search?q={query}"
+      "description": "URI template for the general-ledger report backing journal-entry queries (optional accountId appended by the tool).",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/general-ledger?startDate={startDate}&endDate={endDate}"
     },
     {
       "name": "pos.accounting.income-statement-uri-template",
@@ -359,31 +347,31 @@
       "name": "pos.catalog.product-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching a single product from the catalog service.",
-      "defaultValue": "/catalog/v1/catalog/products/{productId}"
+      "defaultValue": "/catalog/v1/products/{productId}"
     },
     {
       "name": "pos.catalog.search-uri-template",
       "type": "java.lang.String",
       "description": "URI template for searching the product catalog.",
-      "defaultValue": "/catalog/v1/catalog/search?q={query}"
+      "defaultValue": "/catalog/v1/products/search?q={query}"
     },
     {
       "name": "pos.catalog.category-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching products by category from the catalog service.",
-      "defaultValue": "/catalog/v1/catalog/categories/{category}"
+      "description": "URI template for fetching products by category (category filter on the product search).",
+      "defaultValue": "/catalog/v1/products/search?category={category}"
     },
     {
       "name": "pos.customer.customer-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching a single customer record.",
-      "defaultValue": "/customer/v1/customers/{customerId}"
+      "defaultValue": "/customer/v1/crm/accounts/parties/{partyId}"
     },
     {
       "name": "pos.customer.search-uri-template",
       "type": "java.lang.String",
       "description": "URI template for searching customers.",
-      "defaultValue": "/customer/v1/customers/search?q={query}"
+      "defaultValue": "/customer/v1/crm/accounts/parties?name={query}"
     },
     {
       "name": "pos.customer.snapshot-uri-template",
@@ -413,37 +401,31 @@
       "name": "pos.event-receiver.event-types-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching registered event types from the event receiver.",
-      "defaultValue": "/event-receiver/v1/events/eventTypes"
+      "defaultValue": "/event-receiver/v1/eventTypes/active"
     },
     {
-      "name": "pos.event-receiver.search-uri-template",
+      "name": "pos.event-receiver.summary-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching event summaries in the event receiver.",
-      "defaultValue": "/event-receiver/v1/events/events/summary?q={query}"
-    },
-    {
-      "name": "pos.event-receiver.history-uri-template",
-      "type": "java.lang.String",
-      "description": "URI template for fetching event history by entity ID from the event receiver.",
-      "defaultValue": "/event-receiver/v1/events/events/summary?entityId={entityId}"
+      "description": "URI template for the event summary window (lastHour, lastDay, or lastWeek; validated in the tool).",
+      "defaultValue": "/event-receiver/v1/events/summary/{window}"
     },
     {
       "name": "pos.inventory.stock-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching stock level by SKU from the inventory service.",
-      "defaultValue": "/inventory/v1/inventory/stock/{sku}"
+      "description": "URI template for fetching stock availability by SKU from the inventory service.",
+      "defaultValue": "/inventory/v1/inventory/availability/by-sku?productSku={productSku}"
     },
     {
       "name": "pos.inventory.search-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching inventory items.",
-      "defaultValue": "/inventory/v1/inventory/search?q={query}"
+      "description": "URI template for searching inventory availability by SKU (optional locationId and sourceType appended by the tool).",
+      "defaultValue": "/inventory/v1/inventory/availability/by-sku?productSku={productSku}"
     },
     {
       "name": "pos.inventory.location-stock-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching stock levels at a specific location.",
-      "defaultValue": "/inventory/v1/inventory/locations/{locationId}/stock"
+      "description": "URI template for the inventory inquiry at a specific location.",
+      "defaultValue": "/inventory/v1/inventory/locations/{locationId}/inventory-inquiry"
     },
     {
       "name": "pos.invoice.invoice-uri-template",
@@ -460,8 +442,8 @@
     {
       "name": "pos.invoice.customer-invoices-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching all invoices for a specific customer.",
-      "defaultValue": "/invoice/v1/invoices/customer/{customerId}"
+      "description": "URI template for fetching a customer's invoice line items (de-duplicated by owning invoice in the facade).",
+      "defaultValue": "/invoice/v1/invoices/items/search?partyId={customerId}"
     },
     {
       "name": "pos.location.location-uri-template",
@@ -472,26 +454,26 @@
     {
       "name": "pos.location.search-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching locations.",
-      "defaultValue": "/location/v1/locations/search?q={query}"
+      "description": "URI template for the zero-parameter location roster; the facade filters by name/code in-process.",
+      "defaultValue": "/location/v1/locations"
     },
     {
       "name": "pos.location.inventory-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching inventory at a specific location.",
-      "defaultValue": "/location/v1/locations/{locationId}/inventory"
+      "description": "URI template for the inventory inquiry at a specific location (cross-domain /inventory route).",
+      "defaultValue": "/inventory/v1/inventory/locations/{locationId}/inventory-inquiry"
     },
     {
       "name": "pos.order.order-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching a single order.",
-      "defaultValue": "/order/v1/orders/{orderId}"
+      "defaultValue": "/order/v1/orders/carts/{orderId}"
     },
     {
-      "name": "pos.order.search-uri-template",
+      "name": "pos.order.list-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching orders.",
-      "defaultValue": "/order/v1/orders/search?q={query}"
+      "description": "URI template for listing orders (optional status, clerkId, and terminalId appended by the tool).",
+      "defaultValue": "/order/v1/orders/carts"
     },
     {
       "name": "pos.pricing.base-url",
@@ -512,28 +494,34 @@
       "defaultValue": "/catalog/v1/products/pricing/effective-price/{locationId}/{productId}"
     },
     {
-      "name": "pos.pricing.search-uri-template",
+      "name": "pos.pricing.promotion-by-code-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching pricing rules.",
-      "defaultValue": "/price/v1/pricing/search?q={query}"
+      "description": "URI template for fetching a promotion offer by its code.",
+      "defaultValue": "/price/v1/promotions/offers/by-code/{promoCode}"
+    },
+    {
+      "name": "pos.pricing.price-restrictions-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for listing price restriction rules.",
+      "defaultValue": "/price/v1/price/restrictions/rules"
     },
     {
       "name": "pos.pricing.price-list-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching a price list by ID.",
-      "defaultValue": "/price/v1/pricing/lists/{priceListId}"
+      "description": "URI template for fetching a price book by ID (catalog is the system of record per ADR-0054).",
+      "defaultValue": "/catalog/v1/products/price-books/{priceBookId}"
     },
     {
       "name": "pos.reporting.sales-report-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching a sales report for a given period.",
-      "defaultValue": "/accounting/v1/reporting/sales/{period}"
+      "description": "URI template for the income-statement report backing the sales report (the tool maps its period argument onto the date range).",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}"
     },
     {
       "name": "pos.reporting.inventory-report-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching an inventory report for a given location.",
-      "defaultValue": "/accounting/v1/reporting/inventory/{locationId}"
+      "description": "URI template for the location inventory-rollup report (served by pos-inventory).",
+      "defaultValue": "/inventory/v1/inventory/locations/{locationId}/inventory-rollup"
     },
     {
       "name": "pos.reporting.aged-receivables-uri-template",
@@ -572,12 +560,6 @@
       "defaultValue": "http://pos-api-gateway"
     },
     {
-      "name": "pos.hr.people-base-url",
-      "type": "java.lang.String",
-      "description": "Base URL for the HR people API (via gateway).",
-      "defaultValue": "http://pos-api-gateway"
-    },
-    {
       "name": "pos.hr.availability-base-url",
       "type": "java.lang.String",
       "description": "Base URL for the HR availability API (via gateway).",
@@ -588,12 +570,6 @@
       "type": "java.lang.String",
       "description": "URI template for fetching an employee record by ID.",
       "defaultValue": "/people/v1/people/employees/{employeeId}"
-    },
-    {
-      "name": "pos.hr.search-uri-template",
-      "type": "java.lang.String",
-      "description": "URI template for searching people/HR records.",
-      "defaultValue": "/people/v1/people?q={query}"
     },
     {
       "name": "pos.hr.schedule-uri-template",
@@ -622,8 +598,8 @@
     {
       "name": "pos.shopmanager.search-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for searching shop manager records.",
-      "defaultValue": "/shop-manager/v1/shop/search?q={query}"
+      "description": "URI template for the cross-domain location roster used to search shops (shops are locations; name/code filter applied in-process).",
+      "defaultValue": "/location/v1/locations"
     },
     {
       "name": "pos.tax.gateway-base-url",
@@ -646,26 +622,26 @@
     {
       "name": "pos.tax.tax-summary-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching a tax summary for a given period.",
-      "defaultValue": "/summary/{period}"
+      "description": "URI template for the accounting tax-liability report backing the tax summary (load-balanced gateway client, not the direct pos-tax client).",
+      "defaultValue": "/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}"
     },
     {
       "name": "pos.vehicle.vehicle-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching a single vehicle record.",
-      "defaultValue": "/customer/v1/vehicles/{vehicleId}"
+      "defaultValue": "/vehicle-inventory/v1/vehicle-registry/{vehicleId}"
     },
     {
       "name": "pos.vehicle.search-uri-template",
       "type": "java.lang.String",
       "description": "URI template for searching vehicle records.",
-      "defaultValue": "/customer/v1/vehicles/search?q={query}"
+      "defaultValue": "/vehicle-inventory/v1/vehicles/search?q={query}"
     },
     {
       "name": "pos.vehicle.customer-vehicles-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching all vehicles belonging to a customer.",
-      "defaultValue": "/customer/v1/vehicles/customer/{customerId}"
+      "defaultValue": "/customer/v1/crm/{customerId}/vehicles"
     },
     {
       "name": "pos.workorder.workorder-uri-template",
@@ -682,8 +658,8 @@
     {
       "name": "pos.workorder.status-uri-template",
       "type": "java.lang.String",
-      "description": "URI template for fetching the status of a specific workorder.",
-      "defaultValue": "/workorder/v1/workorders/{workorderId}/status"
+      "description": "URI template for fetching the status of a specific workorder (same endpoint as the workorder fetch; the response's status field answers the intent).",
+      "defaultValue": "/workorder/v1/workorders/{workorderId}"
     },
     {
       "name": "spring.ai.ollama.base-url",

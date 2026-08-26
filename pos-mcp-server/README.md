@@ -100,8 +100,49 @@ sentinel marks operations available to any authenticated caller.
 
 17 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, Events,
 Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the always-on
-Exa web search. Each maps to backend endpoints via a `@LoadBalanced` RestClient. Permission mappings for these tools
-are seeded by migration `V18` (retargeted by `V35`).
+Exa web search. The facades are the **primary curated natural-language surface** (#1519): the common intents —
+lookup, search, status, and summary per domain — are answerable through facade tools alone, while the
+OpenAPI-discovered operations (next section) complement the long tail. Every `@Tool` method calls a real backend
+endpoint via a `@LoadBalanced` RestClient through the gateway. The one split client is TaxFacadeTool, which uses
+both: a direct (non-load-balanced) RestClient to `pos-tax:8091` for the calculate leg — pos-tax is internal-only and
+unreachable via Eureka or the gateway (ADR-0021, #641) — and a load-balanced gateway client for everything pos-tax
+does not serve (the location lookup feeding the calculation, and the accounting tax-liability report behind
+`getTaxSummary`).
+
+**Composition tools.** Where no single service publishes the resource a facade names (shop status, financial
+summary, price-for-SKU, …), the facade coordinates multiple real service calls (`ToolComposition`) and returns a
+sectioned JSON envelope: `{"composition":..,"status":..,"sections":{..},"sources":[..]}` with `status` `ok` or
+`degraded`. Each downstream leg renders its own section; a failed leg degrades the answer instead of failing the
+tool, and a 401/403 leg renders as `not_authorized` without relaying the downstream response body. The current
+compositions and their legs:
+
+| Tool | Downstream legs |
+| --- | --- |
+| `getFinancialSummary` | accounting income-statement + balance-sheet + trial-balance |
+| `getRevenueReport` | accounting income-statement (revenue lines) + aged-receivables |
+| `getCustomerHistory` | CRM snapshot + interactions + invoice line-item search by `partyId` (de-duped by invoice) + workorder search by customer |
+| `getShopStatus` | location record + shop-manager schedule board + workorder workexec WIP |
+| `getShopQueue` | workorder workexec WIP + shop-manager schedule board |
+| `getPriceForSku` | catalog detailed product search (active MSRP); a supplied `locationId` adds a dependent effective-price leg fed by the first leg's product id |
+| `calculateTax` | gateway location lookup (destination address) + direct pos-tax `POST /v1/tax/calculate` |
+
+**Contract chain.** What keeps the facades honest: every `@Tool` method's verb + path lives in
+`src/test/resources/facade-contract.yaml` (compositions list every leg), and facade tests derive their
+MockRestServiceServer expectations from that manifest — never from string literals duplicating the configuration —
+with `FacadeContractManifestTest` locking each manifest template to its `application.yml` default. Independently,
+`scripts/check-mcp-facade-paths.py` resolves every configured template and manifest entry through the gateway route
+table and validates verb + path against the routed module's `openapi.yaml` (route-aware, verb-checking, with
+enum-expansion annotations for constrained path segments like the event-summary window). The checker runs in CI
+(`.github/workflows/pr-checks.yml`) with `scripts/mcp-facade-paths-baseline.json` gating new breaks — the baseline
+is currently empty, so any new mismatch fails the build.
+
+**Deferred methods.** Three former methods are removed from the surface until their real endpoints ship:
+`getEventHistory` (#1521 — no per-entity event history endpoint), `getTaxRate` (#1522 — pos-tax publishes no rate
+lookup), and `searchEmployees` (#1523 — pos-people publishes no employee list/search).
+
+Permission mappings for these tools are seeded by migration `V18` (retargeted by `V35`/`V36`); the #1519
+re-derivation migration re-derives the seeds against the restored targets above, unioning across every composition
+leg.
 
 The seed mirrors each downstream controller's *declared* authorization, not the product intent of the facade: for
 every backend endpoint a `@Tool` method calls, the merged class + method `@PreAuthorize` is read and
