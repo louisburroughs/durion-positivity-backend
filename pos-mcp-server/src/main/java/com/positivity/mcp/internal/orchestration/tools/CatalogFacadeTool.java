@@ -29,8 +29,10 @@ public class CatalogFacadeTool {
         this.categoryUriTemplate = categoryUriTemplate;
     }
 
-    @Tool(description = "Get product details from the catalog by product ID")
-    public String getProduct(@ToolParam(description = "The product ID") @NonNull String productId) {
+    @Tool(
+            description = "Get catalog product details by product id (UUID). Returns the base product record "
+                    + "without location-specific pricing.")
+    public String getProduct(@ToolParam(description = "The product id (UUID)") @NonNull String productId) {
         return restClient
                 .get()
                 .uri(productUriTemplate, Map.of("productId", productId))
@@ -38,8 +40,8 @@ public class CatalogFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search the catalog by name, SKU, part number, or keyword")
-    public String searchCatalog(@ToolParam(description = "Search query for catalog") @NonNull String query) {
+    @Tool(description = "Search catalog products by free-text query matching name, SKU, part number, or keyword")
+    public String searchCatalog(@ToolParam(description = "Search query for catalog products") @NonNull String query) {
         return restClient
                 .get()
                 .uri(catalogSearchUriTemplate, Map.of("query", query))
@@ -47,7 +49,9 @@ public class CatalogFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Get catalog products filtered by category")
+    @Tool(
+            description = "List catalog products in a category. category is the category name or code used by "
+                    + "the product search's category filter.")
     public String getCatalogByCategory(
             @ToolParam(description = "Catalog category name or code") @NonNull String category) {
         return restClient

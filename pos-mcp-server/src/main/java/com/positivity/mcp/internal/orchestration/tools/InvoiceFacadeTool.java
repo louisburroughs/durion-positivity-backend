@@ -47,12 +47,18 @@ public class InvoiceFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Get invoices linked to a specific customer")
-    public String getInvoicesByCustomer(@ToolParam(description = "The customer ID") @NonNull String customerId) {
-        return restClient
+    @Tool(
+            description = "Get the distinct invoices linked to a customer by party id (UUID). Built from the "
+                    + "customer's newest invoice line items (bounded to the newest 200 lines), de-duplicated by "
+                    + "invoice; each entry carries invoiceId, invoiceNumber, invoiceStatus, invoiceCreatedAt, "
+                    + "and the number of matched lines.")
+    public String getInvoicesByCustomer(
+            @ToolParam(description = "The customer's party id (UUID)") @NonNull String customerId) {
+        String lineRows = restClient
                 .get()
                 .uri(customerInvoicesUriTemplate, Map.of("customerId", customerId))
                 .retrieve()
                 .body(String.class);
+        return lineRows == null ? null : FacadeJsonSupport.distinctInvoicesFromLineRows(lineRows);
     }
 }

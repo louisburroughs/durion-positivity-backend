@@ -5,23 +5,30 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
- * Unit tests for {@link InventoryFacadeTool}: verifies RestClient call shapes.
+ * Unit tests for {@link InventoryFacadeTool}. Expected verbs and URIs derive from
+ * {@code facade-contract.yaml} (#1519 WS-0.3), never from literals duplicating the configuration.
+ * Targets are fixed by ADR-0057 / V36 (availability vs on-hand permission split).
  */
 class InventoryFacadeToolTest {
 
     private static final String BASE_URL = "http://api-gateway";
+    private static final String LOCATION_ID = "01960003-0000-7000-8000-000000000040";
 
     private MockRestServiceServer mockServer;
     private InventoryFacadeTool tool;
+
+    private static FacadeContractManifest.Entry contract(String toolMethod) {
+        return FacadeContractManifest.entry("InventoryFacadeTool." + toolMethod);
+    }
 
     @BeforeEach
     void setUp() {
@@ -30,50 +37,70 @@ class InventoryFacadeToolTest {
         tool = new InventoryFacadeTool(
                 builder,
                 BASE_URL,
-                "/inventory/v1/inventory/stock/{sku}",
-                "/inventory/v1/inventory/search?q={query}",
-                "/inventory/v1/inventory/locations/{locationId}/stock");
+                contract("checkStock").template(),
+                contract("searchInventory").template(),
+                contract("getLocationStock").template());
     }
 
     @Test
-    @DisplayName("checkStock sends GET /stock/{sku} and returns body")
-    void checkStock_sendsGetToStockEndpoint() {
+    @DisplayName("checkStock sends GET /availability/by-sku?productSku={productSku} and returns body")
+    void checkStock_sendsGetToAvailabilityBySku() {
+        FacadeContractManifest.Entry entry = contract("checkStock");
         mockServer
-                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/stock/SKU001"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"sku\":\"SKU001\",\"qty\":42}", MediaType.APPLICATION_JSON));
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("productSku", "SKU-100"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("[{\"productSku\":\"SKU-100\",\"available\":5}]", MediaType.APPLICATION_JSON));
 
-        String result = tool.checkStock("SKU001");
+        String result = tool.checkStock("SKU-100");
 
         mockServer.verify();
-        assertThat(result).contains("SKU001");
+        assertThat(result).isNotEmpty().contains("SKU-100");
     }
 
     @Test
-    @DisplayName("searchInventory sends GET /search?q={query} and returns body")
-    void searchInventory_sendsGetToSearchEndpoint() {
+    @DisplayName("searchInventory without location sends the availability lookup with productSku only")
+    void searchInventory_withoutLocation_sendsProductSkuOnly() {
+        FacadeContractManifest.Entry entry = contract("searchInventory");
         mockServer
-                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/search?q=oil%20filter"))
-                .andExpect(method(HttpMethod.GET))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("productSku", "SKU-100"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("[{\"productSku\":\"SKU-100\"}]", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchInventory("SKU-100", null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchInventory with location appends locationId and sourceType=WAREHOUSE")
+    void searchInventory_withLocation_appendsWarehouseNarrowing() {
+        FacadeContractManifest.Entry entry = contract("searchInventory");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("productSku", "SKU-100"))
+                        + "&locationId=" + LOCATION_ID + "&sourceType=WAREHOUSE"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("[{\"productSku\":\"SKU-100\"}]", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchInventory("SKU-100", LOCATION_ID);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getLocationStock sends GET /locations/{locationId}/inventory-inquiry and returns body")
+    void getLocationStock_sendsGetToInventoryInquiry() {
+        FacadeContractManifest.Entry entry = contract("getLocationStock");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("locationId", LOCATION_ID))))
+                .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchInventory("oil filter");
+        String result = tool.getLocationStock(LOCATION_ID);
 
         mockServer.verify();
-        assertThat(result).contains("items");
-    }
-
-    @Test
-    @DisplayName("getLocationStock sends GET /locations/{locationId}/stock and returns body")
-    void getLocationStock_returnsStockForLocation() {
-        mockServer
-                .expect(requestTo(BASE_URL + "/inventory/v1/inventory/locations/LOC-001/stock"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"locationId\":\"LOC-001\",\"items\":[]}", MediaType.APPLICATION_JSON));
-
-        String result = tool.getLocationStock("LOC-001");
-
-        mockServer.verify();
-        assertThat(result).contains("LOC-001");
+        assertThat(result).isNotEmpty();
     }
 }

@@ -60,8 +60,11 @@ public class AdminFacadeTool {
                 .toString());
     }
 
-    @Tool(description = "Search the administrative audit log with a query string")
-    public String getAuditLog(@ToolParam(description = "Search query for audit log") @NonNull String query) {
+    @Tool(
+            description = "List administrative audit-log events filtered by event type. The audit endpoint "
+                    + "applies only fromDate, toDate, actorId, eventType, and aggregateId filters; this tool "
+                    + "filters by eventType — free-text queries are not supported.")
+    public String getAuditLog(@ToolParam(description = "The audit event type to filter by") @NonNull String query) {
         return auditRestClient
                 .get()
                 .uri(auditSearchUriTemplate, Map.of("query", query))

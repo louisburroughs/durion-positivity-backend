@@ -12,7 +12,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,7 +20,8 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
- * Unit tests for {@link AdminFacadeTool}: verifies RestClient call shapes.
+ * Unit tests for {@link AdminFacadeTool}. Expected verbs and URIs derive from
+ * {@code facade-contract.yaml} (#1519 WS-0.3), never from literals duplicating the configuration.
  */
 class AdminFacadeToolTest {
 
@@ -31,6 +31,10 @@ class AdminFacadeToolTest {
     private MockRestServiceServer mockServer;
     private AdminFacadeTool tool;
 
+    private static FacadeContractManifest.Entry contract(String toolMethod) {
+        return FacadeContractManifest.entry("AdminFacadeTool." + toolMethod);
+    }
+
     @BeforeEach
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
@@ -39,8 +43,8 @@ class AdminFacadeToolTest {
                 builder,
                 BASE_URL,
                 BASE_URL,
-                "/security-service/v1/users/{userId}/permissions",
-                "/security-service/v1/audit/events?eventType={query}");
+                contract("getUserPermissions").template(),
+                contract("getAuditLog").template());
     }
 
     @Test
@@ -49,14 +53,16 @@ class AdminFacadeToolTest {
         String result = tool.getSystemStatus();
 
         assertThat(result).isNotNull().contains("UP");
+        mockServer.verify();
     }
 
     @Test
-    @DisplayName("getUserPermissions sends GET /users/{userId}/roles to security service")
-    void getUserPermissions_sendsGetToRolesEndpoint() {
+    @DisplayName("getUserPermissions sends GET /users/{userId}/permissions to security service")
+    void getUserPermissions_sendsGetToPermissionsEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getUserPermissions");
         mockServer
-                .expect(requestTo(BASE_URL + "/security-service/v1/users/USR-001/permissions"))
-                .andExpect(method(HttpMethod.GET))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("userId", "USR-001"))))
+                .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"userId\":\"USR-001\",\"roles\":[]}", MediaType.APPLICATION_JSON));
 
         String result = tool.getUserPermissions("USR-001");
@@ -66,11 +72,12 @@ class AdminFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getAuditLog sends GET /audit?q={query} to security service")
+    @DisplayName("getAuditLog sends GET /audit/events?eventType={query} to security service")
     void getAuditLog_sendsGetToAuditEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getAuditLog");
         mockServer
-                .expect(requestTo(BASE_URL + "/security-service/v1/audit/events?eventType=login"))
-                .andExpect(method(HttpMethod.GET))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "login"))))
+                .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"entries\":[]}", MediaType.APPLICATION_JSON));
 
         String result = tool.getAuditLog("login");
@@ -82,6 +89,7 @@ class AdminFacadeToolTest {
     @Test
     @DisplayName("getMyPermissions resolves authenticated UUID and calls user permissions endpoint")
     void getMyPermissions_usesAuthenticatedUserId() {
+        FacadeContractManifest.Entry entry = contract("getMyPermissions");
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 "admin.alpha", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
         authentication.setDetails(Map.of(
@@ -91,8 +99,8 @@ class AdminFacadeToolTest {
                 CURRENT_USER_ID));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         mockServer
-                .expect(requestTo(BASE_URL + "/security-service/v1/users/" + CURRENT_USER_ID + "/permissions"))
-                .andExpect(method(HttpMethod.GET))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("userId", CURRENT_USER_ID.toString()))))
+                .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess(
                         "{\"userId\":\"" + CURRENT_USER_ID + "\",\"roles\":[]}", MediaType.APPLICATION_JSON));
 

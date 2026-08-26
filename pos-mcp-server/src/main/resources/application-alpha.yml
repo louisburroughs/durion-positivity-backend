@@ -245,10 +245,8 @@ pos:
     audit-search-uri-template: ${POS_SECURITY_AUDIT_SEARCH_URI_TEMPLATE:/security-service/v1/audit/events?eventType={query}}
   hr:
     employee-base-url: ${POS_HR_EMPLOYEE_BASE_URL:http://pos-api-gateway}
-    people-base-url: ${POS_HR_PEOPLE_BASE_URL:http://pos-api-gateway}
     availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://pos-api-gateway}
     employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/people/v1/people/employees/{employeeId}}
-    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:/people/v1/people?q={query}}
     schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/people/v1/people/availability?employeeId={employeeId}}
   shopmanager:
     base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-api-gateway}

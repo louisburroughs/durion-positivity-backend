@@ -5,23 +5,29 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 /**
- * Unit tests for {@link WorkorderFacadeTool}: verifies RestClient call shapes.
+ * Unit tests for {@link WorkorderFacadeTool}. Expected verbs and URIs derive from
+ * {@code facade-contract.yaml} (#1519 WS-0.3), never from literals duplicating the configuration.
  */
 class WorkorderFacadeToolTest {
 
     private static final String BASE_URL = "http://api-gateway";
+    private static final String WORKORDER_ID = "01960003-0000-7000-8000-0000000000e0";
 
     private MockRestServiceServer mockServer;
     private WorkorderFacadeTool tool;
+
+    private static FacadeContractManifest.Entry contract(String toolMethod) {
+        return FacadeContractManifest.entry("WorkorderFacadeTool." + toolMethod);
+    }
 
     @BeforeEach
     void setUp() {
@@ -30,50 +36,74 @@ class WorkorderFacadeToolTest {
         tool = new WorkorderFacadeTool(
                 builder,
                 BASE_URL,
-                "/workorder/v1/workorders/{workorderId}",
-                "/workorder/v1/workorders/search?q={query}",
-                "/workorder/v1/workorders/{workorderId}/status");
+                contract("getWorkorder").template(),
+                contract("searchWorkorders").template(),
+                contract("getWorkorderStatus").template());
     }
 
     @Test
-    @DisplayName("getWorkorder sends GET /{workorderId} and returns body")
+    @DisplayName("getWorkorder sends GET /workorders/{workorderId} and returns body")
     void getWorkorder_sendsGetToWorkorderEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getWorkorder");
         mockServer
-                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/WO-001"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"id\":\"WO-001\"}", MediaType.APPLICATION_JSON));
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("workorderId", WORKORDER_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"id\":\"" + WORKORDER_ID + "\"}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getWorkorder("WO-001");
+        String result = tool.getWorkorder(WORKORDER_ID);
 
         mockServer.verify();
-        assertThat(result).isNotEmpty().contains("WO-001");
+        assertThat(result).isNotEmpty().contains(WORKORDER_ID);
     }
 
     @Test
-    @DisplayName("searchWorkorders sends GET /search?q={query} and returns body")
+    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} and returns body")
     void searchWorkorders_sendsGetToSearchEndpoint() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
         mockServer
-                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?q=OPEN"))
-                .andExpect(method(HttpMethod.GET))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "brakes"))))
+                .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("OPEN");
+        String result = tool.searchWorkorders("brakes");
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
     }
 
     @Test
-    @DisplayName("getWorkorderStatus sends GET /{workorderId}/status and returns body")
-    void getWorkorderStatus_sendsGetToStatusEndpoint() {
+    @DisplayName("getWorkorderStatus sends GET /workorders/{workorderId} (same endpoint as getWorkorder)")
+    void getWorkorderStatus_sendsGetToWorkorderEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getWorkorderStatus");
         mockServer
-                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/WO-001/status"))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"status\":\"IN_PROGRESS\"}", MediaType.APPLICATION_JSON));
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("workorderId", WORKORDER_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"id\":\"" + WORKORDER_ID + "\",\"status\":\"IN_PROGRESS\",\"lineItems\":[{\"sku\":\"X\"}]}",
+                        MediaType.APPLICATION_JSON));
 
-        String result = tool.getWorkorderStatus("WO-001");
+        String result = tool.getWorkorderStatus(WORKORDER_ID);
 
         mockServer.verify();
-        assertThat(result).isNotEmpty();
+        assertThat(result)
+                .isNotEmpty()
+                .contains("IN_PROGRESS")
+                .contains(WORKORDER_ID)
+                .doesNotContain("lineItems");
+    }
+
+    @Test
+    @DisplayName("getWorkorderStatus passes an unparseable or status-less body through unchanged")
+    void getWorkorderStatus_passesThroughWhenNoStatusField() {
+        FacadeContractManifest.Entry entry = contract("getWorkorderStatus");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("workorderId", WORKORDER_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"error\":\"boom\"}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getWorkorderStatus(WORKORDER_ID);
+
+        mockServer.verify();
+        assertThat(result).isEqualTo("{\"error\":\"boom\"}");
     }
 }

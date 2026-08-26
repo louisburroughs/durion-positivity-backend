@@ -450,7 +450,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["accountant", "accounting"],
-      "notes": "AccountingFacadeTool.searchJournalEntries."
+      "notes": "AccountingFacadeTool.getGeneralLedger (JE lookup goes through the general-ledger report; #1519)."
     },
     {
       "fixture_id": "accountant-ar-balance",
@@ -540,7 +540,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["HrFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["hr-payroll", "schedule"],
-      "notes": "HrFacadeTool.getEmployeeSchedule / searchEmployees by availability."
+      "notes": "HrFacadeTool.getEmployeeSchedule (employee search removed per #1523)."
     },
     {
       "fixture_id": "hr-add-new-hire",
@@ -792,7 +792,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
-      "notes": "TaxFacadeTool.getTaxRate(location)."
+      "notes": "TaxFacadeTool.calculateTax(amount, location) estimates jurisdiction tax; a standalone rate lookup is deferred (#1522)."
     },
     {
       "fixture_id": "compliance-part-taxable-state",
@@ -801,7 +801,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["compliance-tax", "tax"],
-      "notes": "getTaxRate / calculateTax for the jurisdiction."
+      "notes": "calculateTax for the jurisdiction."
     },
     {
       "fixture_id": "compliance-sales-tax-filing-june",
@@ -900,7 +900,7 @@
       "expected": { "outcome": "realistic-response", "tool_ids": ["EventsFacadeTool"] },
       "gap_hypothesis": "n/a",
       "tags": ["it-admin", "events"],
-      "notes": "EventsFacadeTool.searchEvents / getEventHistory (AUTHENTICATED-gated)."
+      "notes": "EventsFacadeTool.getEventSummary (AUTHENTICATED-gated; per-entity history removed per #1521)."
     }
   ]
 }

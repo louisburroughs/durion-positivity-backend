@@ -16,15 +16,24 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * #1115 regression guard: no facade tool may be granted the {@code AUTHENTICATED} pseudo-permission
- * alongside a privileged code. Every authenticated caller holds {@code AUTHENTICATED}, so such a
- * facade would pass the selection-layer permission gate for everyone — offering its privileged
- * operations to the model for any logged-in user.
+ * Facade permission seed guard (#1115, #1519 Wave 4).
  *
- * <p>The facade grants are Postgres-seed data ({@code V18__seed_facade_tool_permissions.sql}, fixed
- * by {@code V29__fix_facade_authenticated_gating.sql}); there is no offline Flyway path for them, so
- * this test asserts the invariant on the net effect of the migration SQL directly. It stays green
- * only while the seed keeps mixed-sensitivity facades off the {@code AUTHENTICATED} floor.
+ * <p>The facade grants are Postgres-seed data with no offline Flyway path (the H2 chain has no
+ * tool-registry tables), so this test asserts on the net effect of the migration SQL directly:
+ * {@code V18} (initial seed) → {@code V29} (AUTHENTICATED removals) → {@code V35} (retarget) →
+ * {@code V36} (ADR-0057 availability code) → {@code V37} (full re-derivation from the real
+ * downstream endpoints after the #1519 Wave 2/3 retargeting; per-tool delete-and-reinsert).
+ *
+ * <p>{@link #EXPECTED} is the Wave 4 derivation table — per tool, the union of the merged
+ * class+method {@code @PreAuthorize} permission codes across every downstream endpoint the tool's
+ * {@code @Tool} methods (and composition legs, per {@code facade-contract.yaml}) call. It is
+ * declared once here so the V37 migration comment and this test cannot drift apart silently: any
+ * edit to the seeded SQL must be mirrored in this table and vice versa.
+ *
+ * <p>It also keeps the #1115 regression guard: no facade may carry the {@code AUTHENTICATED}
+ * pseudo-permission alongside a privileged code — every authenticated caller holds
+ * {@code AUTHENTICATED}, so such a facade would pass the selection-layer permission gate for
+ * everyone (mcp_tool_permission is OR-semantics).
  */
 class FacadeToolPermissionSeedTest {
 
@@ -36,9 +45,78 @@ class FacadeToolPermissionSeedTest {
     // One INSERT block: VALUES ('code'), ('code2') ... WHERE mcp_tool.name = 'ToolName';
     private static final Pattern TOOL_NAME = Pattern.compile("mcp_tool\\.name\\s*=\\s*'([^']+)'");
     private static final Pattern QUOTED_CODE = Pattern.compile("\\('([^']+)'\\)");
+    // V37 per-tool full delete: DELETE FROM mcp_tool_permission WHERE tool_id IN
+    //   (SELECT id FROM mcp_tool WHERE name = 'ToolName');
+    private static final Pattern FULL_DELETE = Pattern.compile(
+            "DELETE\\s+FROM\\s+mcp_tool_permission\\s+WHERE\\s+tool_id\\s+IN\\s*"
+                    + "\\(\\s*SELECT\\s+id\\s+FROM\\s+mcp_tool\\s+WHERE\\s+name\\s*=\\s*'([^']+)'\\s*\\)",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * #1519 Wave 4 derivation table: tool → union of downstream {@code @PreAuthorize} permission
+     * codes (role-only fragments dropped; {@code AUTHENTICATED} only where the tool class has zero
+     * permission-coded guards). Endpoint-by-endpoint citations live in the V37 migration header.
+     */
+    private static final Map<String, Set<String>> EXPECTED = Map.ofEntries(
+            Map.entry("AccountingFacadeTool", Set.of("accounting:coa:view", "reporting:view:financial-statements")),
+            Map.entry("ReportingFacadeTool", Set.of("reporting:view:financial-statements", "inventory:on_hand:view")),
+            Map.entry("CatalogFacadeTool", Set.of("catalog:product:view")),
+            Map.entry(
+                    "CustomerFacadeTool",
+                    Set.of("crm:party:view", "crm:interaction:view", "invoice:manage", "workorder:workorder:view")),
+            Map.entry("EventsFacadeTool", Set.of(AUTHENTICATED)),
+            Map.entry("HrFacadeTool", Set.of("people:employee:view", "people:availability:view")),
+            Map.entry("InventoryFacadeTool", Set.of("inventory:availability:read", "inventory:on_hand:view")),
+            Map.entry("InvoiceFacadeTool", Set.of("invoice:manage")),
+            Map.entry("LocationFacadeTool", Set.of("location:read", "inventory:on_hand:view")),
+            Map.entry("OrderFacadeTool", Set.of("order:order:view")),
+            Map.entry(
+                    "PricingFacadeTool",
+                    Set.of(
+                            "catalog:product:view",
+                            "catalog:location_price_override:read",
+                            "catalog:price_book:read",
+                            "pricing:promotion:view",
+                            "pricing:rule:view")),
+            Map.entry("ShopManagerFacadeTool", Set.of("location:read", "shop:schedule:view", "workorder:wip:view")),
+            Map.entry("TaxFacadeTool", Set.of("tax:calculate", "location:read", "reporting:view:financial-statements")),
+            Map.entry(
+                    "VehicleFacadeTool",
+                    Set.of("vehicle-inventory:registry:view", "vehicle-inventory:search:view", "crm:vehicle:view")),
+            Map.entry("WorkorderFacadeTool", Set.of("workorder:workorder:view")),
+            Map.entry(
+                    "AdminFacadeTool",
+                    Set.of("security:user:view", "security:permission:view", "security:audit:view")));
 
     @Test
-    @DisplayName("no facade grants AUTHENTICATED alongside a privileged permission (net of V18 + V29)")
+    @DisplayName("net facade seed (V18..V37) equals the #1519 Wave 4 derivation table")
+    void netSeedMatchesDerivationTable() throws IOException {
+        Map<String, Set<String>> grants = netGrants();
+
+        assertThat(grants.keySet())
+                .as("tools with permission rows after V37")
+                .containsExactlyInAnyOrderElementsOf(EXPECTED.keySet());
+        EXPECTED.forEach((tool, codes) -> assertThat(grants.get(tool))
+                .as("%s seed must equal the Wave 4 derivation (see V37 header)", tool)
+                .containsExactlyInAnyOrderElementsOf(codes));
+    }
+
+    @Test
+    @DisplayName("V37 re-derives every facade it clears (delete always followed by a reinsert)")
+    void everyClearedToolIsReseeded() throws IOException {
+        String v37 = read("V37__facade_permission_rederivation.sql");
+        Set<String> cleared = parseFullDeletes(v37);
+        Map<String, Set<String>> reinserted = parseSeed(v37);
+
+        assertThat(cleared).isNotEmpty();
+        assertThat(reinserted.keySet())
+                .as("each per-tool DELETE in V37 must be paired with an INSERT of the derived codes")
+                .containsExactlyInAnyOrderElementsOf(cleared);
+        reinserted.values().forEach(codes -> assertThat(codes).isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("no facade grants AUTHENTICATED alongside a privileged permission (#1115)")
     void noFacadeMixesAuthenticatedWithPrivilege() throws IOException {
         Map<String, Set<String>> grants = netGrants();
 
@@ -48,7 +126,7 @@ class FacadeToolPermissionSeedTest {
                 assertThat(codes)
                         .as(
                                 "%s is granted AUTHENTICATED alongside privileged codes %s; gate it on the "
-                                        + "privileged code(s) instead (see V29 / issue #1115)",
+                                        + "privileged code(s) instead (see V29/V37 / issue #1115)",
                                 tool, codes)
                         .containsExactly(AUTHENTICATED);
             }
@@ -56,42 +134,15 @@ class FacadeToolPermissionSeedTest {
     }
 
     @Test
-    @DisplayName("the mixed facades no longer carry AUTHENTICATED after V29")
-    void mixedFacadesLoseAuthenticated() throws IOException {
-        Map<String, Set<String>> grants = netGrants();
-
-        assertThat(grants.get("WorkorderFacadeTool"))
-                .doesNotContain(AUTHENTICATED)
-                .contains("workorder:workorder:view");
-        assertThat(grants.get("AdminFacadeTool"))
-                .doesNotContain(AUTHENTICATED)
-                .contains("security:user:view", "security:permission:view", "security:audit:view");
-        // #1115 under-enumerated: TaxFacadeTool is a third mixed facade (tax:calculate + AUTHENTICATED).
-        assertThat(grants.get("TaxFacadeTool")).doesNotContain(AUTHENTICATED).contains("tax:calculate");
-    }
-
-    @Test
-    @DisplayName("order, pricing, and catalog facades are retargeted to explicit domain permissions")
-    void explicitFacadesUseExplicitPermissions() throws IOException {
-        Map<String, Set<String>> grants = netGrants();
-
-        assertThat(grants.get("OrderFacadeTool")).doesNotContain(AUTHENTICATED).containsExactly("order:order:view");
-        assertThat(grants.get("PricingFacadeTool"))
-                .doesNotContain(AUTHENTICATED)
-                .containsExactlyInAnyOrder("pricing:price_book:view", "pricing:rule:view");
-        assertThat(grants.get("CatalogFacadeTool"))
-                .doesNotContain(AUTHENTICATED)
-                .containsExactlyInAnyOrder("catalog:product:view", "catalog:category:view");
-    }
-
-    @Test
-    @DisplayName("assistant entrypoints alone do not qualify order, pricing, or catalog facades")
-    void assistantOnlyCallerCannotQualifyExplicitFacades() throws IOException {
-        Map<String, Set<String>> grants = netGrants();
-
-        assertThat(intersectsAssistantBaseline(grants.get("OrderFacadeTool"))).isFalse();
-        assertThat(intersectsAssistantBaseline(grants.get("PricingFacadeTool"))).isFalse();
-        assertThat(intersectsAssistantBaseline(grants.get("CatalogFacadeTool"))).isFalse();
+    @DisplayName("assistant entrypoints alone qualify only the deliberately open Events facade")
+    void assistantOnlyCallerQualifiesOnlyEventsFacade() throws IOException {
+        netGrants()
+                .forEach((tool, codes) -> assertThat(intersectsAssistantBaseline(codes))
+                        .as(
+                                "%s must not be reachable on the assistant-entrypoint baseline alone "
+                                        + "(only EventsFacadeTool is AUTHENTICATED-gated by design)",
+                                tool)
+                        .isEqualTo("EventsFacadeTool".equals(tool)));
     }
 
     // ── parsing ───────────────────────────────────────────────────────────────
@@ -114,16 +165,16 @@ class FacadeToolPermissionSeedTest {
     }
 
     /**
-     * Apply the AUTHENTICATED-removal DELETE in V29: strip AUTHENTICATED from every tool named in the
-     * migration's {@code name IN (...)} list. Parsed generically so the guard tracks the migration
-     * rather than a hardcoded tool set.
+     * Apply an AUTHENTICATED-removal DELETE (V29/V35 shape): strip AUTHENTICATED from every tool
+     * named in the migration's {@code name IN (...)} list. Parsed generically so the guard tracks
+     * the migration rather than a hardcoded tool set.
      */
-    private static void applyAuthenticatedDeletes(Map<String, Set<String>> grants, String v29) {
-        if (!v29.toUpperCase(java.util.Locale.ROOT).contains("'" + AUTHENTICATED + "'")) {
+    private static void applyAuthenticatedDeletes(Map<String, Set<String>> grants, String sql) {
+        if (!sql.toUpperCase(java.util.Locale.ROOT).contains("'" + AUTHENTICATED + "'")) {
             return;
         }
         Matcher inList = Pattern.compile("name\\s+IN\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE)
-                .matcher(v29);
+                .matcher(sql);
         if (!inList.find()) {
             return;
         }
@@ -136,11 +187,26 @@ class FacadeToolPermissionSeedTest {
         }
     }
 
+    /** Tool names cleared by V37's per-tool full deletes. */
+    private static Set<String> parseFullDeletes(String sql) {
+        Set<String> tools = new LinkedHashSet<>();
+        Matcher deletes = FULL_DELETE.matcher(sql);
+        while (deletes.find()) {
+            tools.add(deletes.group(1));
+        }
+        return tools;
+    }
+
     private static Map<String, Set<String>> netGrants() throws IOException {
         Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
         applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
-        mergeSeed(grants, read("V35__retarget_facade_authenticated_gating.sql"));
-        applyAuthenticatedDeletes(grants, read("V35__retarget_facade_authenticated_gating.sql"));
+        String v35 = read("V35__retarget_facade_authenticated_gating.sql");
+        mergeSeed(grants, v35);
+        applyAuthenticatedDeletes(grants, v35);
+        mergeSeed(grants, read("V36__inventory_facade_availability_permission.sql"));
+        String v37 = read("V37__facade_permission_rederivation.sql");
+        parseFullDeletes(v37).forEach(grants::remove);
+        mergeSeed(grants, v37);
         return grants;
     }
 

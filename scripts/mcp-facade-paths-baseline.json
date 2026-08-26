@@ -1,0 +1,5 @@
+{
+  "comment": "Known-broken pos-mcp-server facade templates (#1519). Defect inventory, not an approval: entries are removed as Waves 2-3 repoint each tool.",
+  "profile": "alpha",
+  "unresolved": {}
+}

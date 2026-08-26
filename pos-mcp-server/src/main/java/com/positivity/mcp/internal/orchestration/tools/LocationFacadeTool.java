@@ -38,17 +38,20 @@ public class LocationFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search locations by name, city, code, or attributes")
-    public String searchLocations(@ToolParam(description = "Search query for locations") @NonNull String query) {
-        return restClient
-                .get()
-                .uri(locationSearchUriTemplate, Map.of("query", query))
-                .retrieve()
-                .body(String.class);
+    @Tool(
+            description = "Search locations by name or code. The match is a case-insensitive contains-filter "
+                    + "on the location's name and code fields; city or other attributes are not searched.")
+    public String searchLocations(
+            @ToolParam(description = "Location name or code (or part of it)") @NonNull String query) {
+        String locations =
+                restClient.get().uri(locationSearchUriTemplate).retrieve().body(String.class);
+        return locations == null ? null : FacadeJsonSupport.filterLocationsByNameOrCode(locations, query);
     }
 
-    @Tool(description = "Get inventory context for a specific location")
-    public String getLocationInventory(@ToolParam(description = "The location ID") @NonNull String locationId) {
+    @Tool(
+            description = "Get the on-hand inventory inquiry for a location by location id (UUID): per-product "
+                    + "on-hand stock at that site, served by the inventory domain.")
+    public String getLocationInventory(@ToolParam(description = "The location id (UUID)") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(locationInventoryUriTemplate, Map.of("locationId", locationId))

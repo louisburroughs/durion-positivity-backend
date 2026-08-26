@@ -43,10 +43,8 @@ pos:
     audit-search-uri-template: ${POS_SECURITY_AUDIT_SEARCH_URI_TEMPLATE:/events?eventType={query}}
   hr:
     employee-base-url: ${POS_HR_EMPLOYEE_BASE_URL:http://localhost:8085/v1/people/employees}
-    people-base-url: ${POS_HR_PEOPLE_BASE_URL:http://localhost:8085/v1/people}
     availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://localhost:8085/v1/people}
     employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/{employeeId}}
-    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:?q={query}}
     schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/availability?employeeId={employeeId}}
 
 # ADR-0046: developer-only DEBUG loggers moved out of application.yml
