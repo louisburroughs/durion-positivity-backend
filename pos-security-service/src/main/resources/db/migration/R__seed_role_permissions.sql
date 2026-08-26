@@ -218,6 +218,33 @@
 --   to be genuinely enforced (audit-script pattern gap, now fixed) --
 --   workorder:wip:view_all_locations and the two
 --   inventory:putaway:override_* codes -- keep their grants unchanged.
+-- * 2026-08 task 5 enforcement wave (docs/rbac-permission-role-audit-2026-08.md
+--   §7 task 5, decided 2026-08-26) -- purely additive, no revocations. 15 codes
+--   across pos-catalog, pos-price, pos-vehicle-inventory and pos-vehicle-fitment
+--   went from bare isAuthenticated()/dead phantom-role checks to live
+--   @PreAuthorize gates on specific permission codes; these grants are what
+--   keep the personas that already used those endpoints working under the new
+--   gates. catalog:product:view/catalog:service_type:view widen to SERVICE_ADVISOR
+--   and TECHNICIAN (parts/service lookup while estimating), joining the
+--   existing GENERAL_MANAGER/INVENTORY_*/LOCATION_MANAGER/ADMIN holders.
+--   pricing:restrictions:view widens to the full price-family set
+--   (GENERAL_MANAGER, INVENTORY_CONTROLLER, INVENTORY_LEAD, INVENTORY_MANAGER,
+--   LOCATION_MANAGER) plus SERVICE_ADVISOR for checkout/quoting-shaped
+--   evaluation. vehicle-inventory:search:view/registry:update/
+--   preferences:manage go to SERVICE_ADVISOR and LOCATION_MANAGER (VIN/plate
+--   lookup and counter corrections at onboarding). vehicle-fitment:catalog:view
+--   and vehicle-fitment:hint:view go to the broad parts-lookup read set
+--   (SERVICE_ADVISOR, TECHNICIAN, INVENTORY_LEAD, INVENTORY_MANAGER,
+--   INVENTORY_CONTROLLER, LOCATION_MANAGER, GENERAL_MANAGER, MANAGER) since the
+--   manufacturer/make/model chain and filterProducts back every parts lookup;
+--   vehicle-fitment:hint:update/delete/create (fitment-data maintenance) go
+--   only to INVENTORY_MANAGER and INVENTORY_CONTROLLER. Three elevation caps
+--   stay ADMIN-only by design and are unchanged by this wave:
+--   catalog:product:delete (hard delete), vehicle-inventory:registry:delete
+--   (deactivation cap, mirrors crm:party:deactivate) and
+--   pricing:normalization:edit. pricing:rule:view and
+--   vehicle-inventory:registry:view/registry:create already carried the
+--   correct holder set from earlier waves and needed no new grants.
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -1247,6 +1274,7 @@ FROM (VALUES
     ('DISPATCHER', 'workorder:workorder:view'),
     ('GENERAL_MANAGER', 'accounting:customer-credit:refund'),
     ('GENERAL_MANAGER', 'catalog:product:view'),
+    ('GENERAL_MANAGER', 'catalog:service_type:view'),
     ('GENERAL_MANAGER', 'crm:consent:manage'),
     ('GENERAL_MANAGER', 'crm:segment:view'),
     ('GENERAL_MANAGER', 'crm:suppression:view'),
@@ -1275,11 +1303,14 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'pricing:promotion:apply'),
     ('GENERAL_MANAGER', 'pricing:promotion:manage'),
     ('GENERAL_MANAGER', 'pricing:promotion:view'),
+    ('GENERAL_MANAGER', 'pricing:restrictions:view'),
     ('GENERAL_MANAGER', 'pricing:rule:view'),
     ('GENERAL_MANAGER', 'reporting:view:financial-statements'),
     ('GENERAL_MANAGER', 'security:permission:view'),
     ('GENERAL_MANAGER', 'security:role:assign'),
     ('GENERAL_MANAGER', 'security:role:view'),
+    ('GENERAL_MANAGER', 'vehicle-fitment:catalog:view'),
+    ('GENERAL_MANAGER', 'vehicle-fitment:hint:view'),
     ('GENERAL_MANAGER', 'warranty:claim:cancel'),
     ('GENERAL_MANAGER', 'warranty:claim:close'),
     ('GENERAL_MANAGER', 'warranty:claim:decide'),
@@ -1296,6 +1327,7 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'workorder:workorder:delete'),
     ('INVENTORY_CONTROLLER', 'catalog:item_cost:update'),
     ('INVENTORY_CONTROLLER', 'catalog:product:view'),
+    ('INVENTORY_CONTROLLER', 'catalog:service_type:view'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:approve'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:create'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:override'),
@@ -1317,6 +1349,7 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'nlti:request:read'),
     ('INVENTORY_CONTROLLER', 'nlti:request:submit'),
     ('INVENTORY_CONTROLLER', 'order:order:view'),
+    ('INVENTORY_CONTROLLER', 'pricing:restrictions:view'),
     ('INVENTORY_CONTROLLER', 'pricing:rule:view'),
     ('INVENTORY_CONTROLLER', 'supplier:audit:read'),
     ('INVENTORY_CONTROLLER', 'supplier:invoice:fetch'),
@@ -1330,7 +1363,13 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'supplier:transmission:resolve'),
     ('INVENTORY_CONTROLLER', 'supplier:workorderauth:request'),
     ('INVENTORY_CONTROLLER', 'supplier:workorderauth:review'),
+    ('INVENTORY_CONTROLLER', 'vehicle-fitment:catalog:view'),
+    ('INVENTORY_CONTROLLER', 'vehicle-fitment:hint:create'),
+    ('INVENTORY_CONTROLLER', 'vehicle-fitment:hint:delete'),
+    ('INVENTORY_CONTROLLER', 'vehicle-fitment:hint:update'),
+    ('INVENTORY_CONTROLLER', 'vehicle-fitment:hint:view'),
     ('INVENTORY_LEAD', 'catalog:product:view'),
+    ('INVENTORY_LEAD', 'catalog:service_type:view'),
     ('INVENTORY_LEAD', 'inventory:adjustment:create'),
     ('INVENTORY_LEAD', 'inventory:adjustment:view'),
     ('INVENTORY_LEAD', 'inventory:asn:create'),
@@ -1364,11 +1403,15 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'order:purchase_order:availability_view'),
     ('INVENTORY_LEAD', 'order:purchase_order:create'),
     ('INVENTORY_LEAD', 'order:purchase_order:view'),
+    ('INVENTORY_LEAD', 'pricing:restrictions:view'),
     ('INVENTORY_LEAD', 'pricing:rule:view'),
     ('INVENTORY_LEAD', 'supplier:profile:read'),
     ('INVENTORY_LEAD', 'supplier:stock:inquire'),
+    ('INVENTORY_LEAD', 'vehicle-fitment:catalog:view'),
+    ('INVENTORY_LEAD', 'vehicle-fitment:hint:view'),
     ('INVENTORY_MANAGER', 'catalog:item_cost:update'),
     ('INVENTORY_MANAGER', 'catalog:product:view'),
+    ('INVENTORY_MANAGER', 'catalog:service_type:view'),
     ('INVENTORY_MANAGER', 'inventory:adjustment:approve'),
     ('INVENTORY_MANAGER', 'inventory:adjustment:create'),
     ('INVENTORY_MANAGER', 'inventory:adjustment:view'),
@@ -1392,6 +1435,7 @@ FROM (VALUES
     ('INVENTORY_MANAGER', 'order:purchase_order:availability_view'),
     ('INVENTORY_MANAGER', 'order:purchase_order:transmit'),
     ('INVENTORY_MANAGER', 'order:purchase_order:view'),
+    ('INVENTORY_MANAGER', 'pricing:restrictions:view'),
     ('INVENTORY_MANAGER', 'pricing:rule:view'),
     ('INVENTORY_MANAGER', 'supplier:audit:read'),
     ('INVENTORY_MANAGER', 'supplier:invoice:fetch'),
@@ -1405,12 +1449,18 @@ FROM (VALUES
     ('INVENTORY_MANAGER', 'supplier:transmission:resolve'),
     ('INVENTORY_MANAGER', 'supplier:workorderauth:request'),
     ('INVENTORY_MANAGER', 'supplier:workorderauth:review'),
+    ('INVENTORY_MANAGER', 'vehicle-fitment:catalog:view'),
+    ('INVENTORY_MANAGER', 'vehicle-fitment:hint:create'),
+    ('INVENTORY_MANAGER', 'vehicle-fitment:hint:delete'),
+    ('INVENTORY_MANAGER', 'vehicle-fitment:hint:update'),
+    ('INVENTORY_MANAGER', 'vehicle-fitment:hint:view'),
     ('LOCATION_MANAGER', 'accounting:customer-credit:refund'),
     ('LOCATION_MANAGER', 'appointments:cancel'),
     ('LOCATION_MANAGER', 'appointments:create'),
     ('LOCATION_MANAGER', 'appointments:reschedule'),
     ('LOCATION_MANAGER', 'appointments:view'),
     ('LOCATION_MANAGER', 'catalog:product:view'),
+    ('LOCATION_MANAGER', 'catalog:service_type:view'),
     ('LOCATION_MANAGER', 'crm:consent:manage'),
     ('LOCATION_MANAGER', 'crm:segment:view'),
     ('LOCATION_MANAGER', 'crm:suppression:view'),
@@ -1460,6 +1510,7 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'pricing:promotion:apply'),
     ('LOCATION_MANAGER', 'pricing:promotion:manage'),
     ('LOCATION_MANAGER', 'pricing:promotion:view'),
+    ('LOCATION_MANAGER', 'pricing:restrictions:view'),
     ('LOCATION_MANAGER', 'pricing:rule:view'),
     ('LOCATION_MANAGER', 'shop:bay:assign'),
     ('LOCATION_MANAGER', 'shop:schedule:edit'),
@@ -1467,8 +1518,13 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'tax:exemption:manage'),
     ('LOCATION_MANAGER', 'tax:exemption:view'),
     ('LOCATION_MANAGER', 'timekeeping:overlap_override'),
+    ('LOCATION_MANAGER', 'vehicle-fitment:catalog:view'),
+    ('LOCATION_MANAGER', 'vehicle-fitment:hint:view'),
+    ('LOCATION_MANAGER', 'vehicle-inventory:preferences:manage'),
     ('LOCATION_MANAGER', 'vehicle-inventory:registry:create'),
+    ('LOCATION_MANAGER', 'vehicle-inventory:registry:update'),
     ('LOCATION_MANAGER', 'vehicle-inventory:registry:view'),
+    ('LOCATION_MANAGER', 'vehicle-inventory:search:view'),
     ('LOCATION_MANAGER', 'warranty:claim:cancel'),
     ('LOCATION_MANAGER', 'warranty:claim:close'),
     ('LOCATION_MANAGER', 'warranty:claim:decide'),
@@ -1549,6 +1605,8 @@ FROM (VALUES
     ('MANAGER', 'security:permission:view'),
     ('MANAGER', 'security:role:assign'),
     ('MANAGER', 'security:role:view'),
+    ('MANAGER', 'vehicle-fitment:catalog:view'),
+    ('MANAGER', 'vehicle-fitment:hint:view'),
     ('MANAGER', 'warranty:claim:cancel'),
     ('MANAGER', 'warranty:claim:close'),
     ('MANAGER', 'warranty:claim:decide'),
@@ -1569,6 +1627,8 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'appointments:create'),
     ('SERVICE_ADVISOR', 'appointments:reschedule'),
     ('SERVICE_ADVISOR', 'appointments:view'),
+    ('SERVICE_ADVISOR', 'catalog:product:view'),
+    ('SERVICE_ADVISOR', 'catalog:service_type:view'),
     ('SERVICE_ADVISOR', 'crm:consent:view'),
     ('SERVICE_ADVISOR', 'crm:followup:manage'),
     ('SERVICE_ADVISOR', 'crm:followup:view'),
@@ -1602,10 +1662,16 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'order:session:open'),
     ('SERVICE_ADVISOR', 'order:session:view'),
     ('SERVICE_ADVISOR', 'pricing:promotion:view'),
+    ('SERVICE_ADVISOR', 'pricing:restrictions:view'),
     ('SERVICE_ADVISOR', 'shop:schedule:view'),
     ('SERVICE_ADVISOR', 'tax:exemption:view'),
+    ('SERVICE_ADVISOR', 'vehicle-fitment:catalog:view'),
+    ('SERVICE_ADVISOR', 'vehicle-fitment:hint:view'),
+    ('SERVICE_ADVISOR', 'vehicle-inventory:preferences:manage'),
     ('SERVICE_ADVISOR', 'vehicle-inventory:registry:create'),
+    ('SERVICE_ADVISOR', 'vehicle-inventory:registry:update'),
     ('SERVICE_ADVISOR', 'vehicle-inventory:registry:view'),
+    ('SERVICE_ADVISOR', 'vehicle-inventory:search:view'),
     ('SERVICE_ADVISOR', 'warranty:claim:create'),
     ('SERVICE_ADVISOR', 'warranty:claim:submit'),
     ('SERVICE_ADVISOR', 'warranty:claim:view'),
@@ -1696,6 +1762,8 @@ FROM (VALUES
     ('SYSTEM_ADMINISTRATOR', 'supplier:transmission:read'),
     ('SYSTEM_ADMINISTRATOR', 'supplier:transmission:resolve'),
     ('SYSTEM_ADMINISTRATOR', 'workorder:events:replay'),
+    ('TECHNICIAN', 'catalog:product:view'),
+    ('TECHNICIAN', 'catalog:service_type:view'),
     ('TECHNICIAN', 'inventory:availability:read'),
     ('TECHNICIAN', 'inventory:pick_list:execute'),
     ('TECHNICIAN', 'inventory:pick_list:view'),
@@ -1713,6 +1781,8 @@ FROM (VALUES
     ('TECHNICIAN', 'timekeeping:work_session:break_stop'),
     ('TECHNICIAN', 'timekeeping:work_session:create'),
     ('TECHNICIAN', 'timekeeping:work_session:stop'),
+    ('TECHNICIAN', 'vehicle-fitment:catalog:view'),
+    ('TECHNICIAN', 'vehicle-fitment:hint:view'),
     ('TECHNICIAN', 'workorder:change_request:create'),
     ('TECHNICIAN', 'workorder:change_request:view'),
     ('TECHNICIAN', 'workorder:estimate:view'),

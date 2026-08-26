@@ -65,8 +65,24 @@ for f in java_files:
 enforced = collections.defaultdict(set)  # perm -> set of file:line
 for f in java_files:
     body = file_bodies[f]
-    for m in re.finditer(r'@(?:Pre|Post)Authorize', body):
-        chunk = body[m.start():m.start() + 600]
+    for m in re.finditer(r'@(?:Pre|Post)Authorize\s*\(', body):
+        # Read exactly the annotation's own argument expression, balanced-paren.
+        # A fixed-size window instead swept in whatever followed -- @EmitEvent ids,
+        # javadoc prose -- and any ALL-CAPS token there that happened to match a
+        # permission-constant name elsewhere in the repo was scored as enforcement
+        # (e.g. `@EmitEvent(id = "VEHICLE_SEARCH")` under a @PreAuthorize resolved
+        # to pos-customer's VEHICLE_SEARCH = "crm:vehicle:search").
+        depth, i, end = 1, m.end(), None
+        while i < len(body) and i - m.end() < 2000:
+            if body[i] == "(":
+                depth += 1
+            elif body[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+            i += 1
+        chunk = body[m.end():end if end is not None else m.end()]
         line = body[:m.start()].count("\n") + 1
         for code in re.findall(r'"(' + PERM_RE + r')"', chunk):
             enforced[code].add(f"{f}:{line}")
