@@ -1,11 +1,14 @@
 package com.positivity.securityservice.internal.repository;
 
 import com.positivity.securityservice.internal.entity.Role;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -38,4 +41,34 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
      */
     @Query("SELECT DISTINCT p.name FROM Role r JOIN r.permissions p WHERE UPPER(r.name) IN :names")
     Set<String> findPermissionNamesByRoleNames(@Param("names") Collection<String> names);
+
+    /**
+     * Records who granted a role-permission row and when (#1512).
+     *
+     * <p>Native because {@code role_permissions} is mapped as a plain {@code @ManyToMany} join
+     * table on {@link Role#getPermissions()}; Hibernate writes only the two key columns, so the
+     * provenance columns V30 added are unreachable through the entity model. Restructuring the
+     * association into an entity would change how every caller reads grants, for two columns
+     * nothing in the resolution path consults.
+     *
+     * <p>{@code flushAutomatically} matters: the join-table INSERT is still pending in the
+     * persistence context when this runs, and without the flush the UPDATE would match no row.
+     *
+     * <p>Callers must pass only permissions the call actually added. Re-stamping a grant that
+     * was already there would rewrite history: the actor who re-asserted an existing permission
+     * is not the actor who granted it.
+     *
+     * @param permissionIds permissions newly granted to the role in this transaction
+     * @return the number of grant rows stamped
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(
+            value = "UPDATE role_permissions SET granted_at = :grantedAt, granted_by = :grantedBy"
+                    + " WHERE role_id = :roleId AND permission_id IN (:permissionIds)",
+            nativeQuery = true)
+    int recordGrantProvenance(
+            @Param("roleId") @NonNull UUID roleId,
+            @Param("permissionIds") @NonNull Collection<UUID> permissionIds,
+            @Param("grantedBy") @NonNull String grantedBy,
+            @Param("grantedAt") @NonNull Instant grantedAt);
 }
