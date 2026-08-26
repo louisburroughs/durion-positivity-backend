@@ -60,7 +60,8 @@ mcp:
         - id: "accounting.journal-entries"
           source-path: "classpath:rag/accounting-journal-entries-rag.md"
           rag-scope: "accounting"
-          required-permissions: ["accounting:je:view"]
+          # #1525: dual-listed for the reshaped facade JE surface — rationale in application.yml.
+          required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "accounting.financial-statements"
           source-path: "classpath:rag/accounting-financial-statements-rag.md"
           rag-scope: "accounting"
@@ -72,14 +73,16 @@ mcp:
         - id: "accounting.codes"
           source-path: "classpath:rag/accounting-codes-rag.md"
           rag-scope: "accounting"
-          required-permissions: ["accounting:je:view"]
+          # #1525: dual-listed for the reshaped facade JE surface — rationale in application.yml.
+          required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
         - id: "inventory.purchase-orders"
           source-path: "classpath:rag/inventory-purchase-orders-rag.md"
           rag-scope: "inventory"
-          required-permissions: ["inventory:purchase_order:view"]
+          # #1525: retargeted to the live pos-order code — rationale in application.yml.
+          required-permissions: ["order:purchase_order:view"]
         - id: "inventory.receiving"
           source-path: "classpath:rag/inventory-receiving-rag.md"
           rag-scope: "inventory"
@@ -91,7 +94,8 @@ mcp:
         - id: "inventory.codes"
           source-path: "classpath:rag/inventory-codes-rag.md"
           rag-scope: "inventory"
-          required-permissions: ["inventory:purchase_order:view"]
+          # #1525: retargeted to the live pos-order code — rationale in application.yml.
+          required-permissions: ["order:purchase_order:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
@@ -144,7 +148,8 @@ mcp:
         - id: "pricing.guide"
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
-          required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+          # #1525: dead pricing:price_book:view dropped, ADR-0054 successor added — see application.yml.
+          required-permissions: ["pricing:rule:view", "catalog:price_book:read"]
         - id: "pricing.promotions"
           source-path: "classpath:rag/pricing-promotions-rag.md"
           rag-scope: "pricing"
@@ -168,7 +173,8 @@ mcp:
         - id: "crm.customer-vehicle"
           source-path: "classpath:rag/customer-vehicle-guide.md"
           rag-scope: "customer"
-          required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]
+          # #1525: crm:vehicle:search → vehicle-inventory:search:view — see application.yml.
+          required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "vehicle-inventory:search:view", "crm:contact:view"]
         - id: "crm.party-account-model"
           source-path: "classpath:rag/crm-party-account-model-rag.md"
           rag-scope: "customer"

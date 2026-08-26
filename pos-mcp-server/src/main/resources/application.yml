@@ -79,7 +79,10 @@ mcp:
         - id: "accounting.journal-entries"
           source-path: "classpath:rag/accounting-journal-entries-rag.md"
           rag-scope: "accounting"
-          required-permissions: ["accounting:je:view"]
+          # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
+          # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
+          # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
+          required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "accounting.financial-statements"
           source-path: "classpath:rag/accounting-financial-statements-rag.md"
           rag-scope: "accounting"
@@ -91,14 +94,19 @@ mcp:
         - id: "accounting.codes"
           source-path: "classpath:rag/accounting-codes-rag.md"
           rag-scope: "accounting"
-          required-permissions: ["accounting:je:view"]
+          # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
+          # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
+          # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
+          required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
         - id: "inventory.purchase-orders"
           source-path: "classpath:rag/inventory-purchase-orders-rag.md"
           rag-scope: "inventory"
-          required-permissions: ["inventory:purchase_order:view"]
+          # #1525: retargeted from inventory:purchase_order:view, whose grants were retired by the
+          # #1499 sweep (pos-security-service V28) — purchase orders live in pos-order now.
+          required-permissions: ["order:purchase_order:view"]
         - id: "inventory.receiving"
           source-path: "classpath:rag/inventory-receiving-rag.md"
           rag-scope: "inventory"
@@ -110,7 +118,9 @@ mcp:
         - id: "inventory.codes"
           source-path: "classpath:rag/inventory-codes-rag.md"
           rag-scope: "inventory"
-          required-permissions: ["inventory:purchase_order:view"]
+          # #1525: retargeted from inventory:purchase_order:view, whose grants were retired by the
+          # #1499 sweep (pos-security-service V28) — purchase orders live in pos-order now.
+          required-permissions: ["order:purchase_order:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
@@ -124,10 +134,9 @@ mcp:
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
           required-permissions: ["security:permission:view", "security:role:view"]
-        # Gate 5 documents. `required-permissions` is the G5.2 metadata field (not yet bound by
-        # StaticDocEntry — ignored until G5.2 adds the field + permission-aware filter G5.1);
-        # carried here so it is ready and records intent. Permission codes verified against the
-        # service permissions.yaml files.
+        # Gate 5 documents. `required-permissions` is bound by StaticDocEntry (G5.2) and enforced by
+        # the permission-aware RAG filter (G5.1). Permission codes verified against the service
+        # permissions.yaml files and guarded by RagRequiredPermissionSeedTest (#1525).
         - id: "platform.capability-catalog"
           source-path: "classpath:rag/capability-catalog.md"
           rag-scope: "master"
@@ -163,7 +172,10 @@ mcp:
         - id: "pricing.guide"
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
-          required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+          # #1525: pricing:price_book:view dropped (grants retired by #1499/V28; no PriceBook
+          # resource exists in pos-price). Price books moved to catalog per ADR-0054, so the doc's
+          # price-book half is covered by catalog:price_book:read.
+          required-permissions: ["pricing:rule:view", "catalog:price_book:read"]
         - id: "pricing.promotions"
           source-path: "classpath:rag/pricing-promotions-rag.md"
           rag-scope: "pricing"
@@ -187,7 +199,10 @@ mcp:
         - id: "crm.customer-vehicle"
           source-path: "classpath:rag/customer-vehicle-guide.md"
           rag-scope: "customer"
-          required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]
+          # #1525: crm:vehicle:search replaced with vehicle-inventory:search:view — the vehicle
+          # search surface moved to pos-vehicle-inventory and the crm code's grants were retired by
+          # the #1499 sweep (V28); the successor keeps the doc visible to SERVICE_ADVISOR.
+          required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "vehicle-inventory:search:view", "crm:contact:view"]
         - id: "crm.party-account-model"
           source-path: "classpath:rag/crm-party-account-model-rag.md"
           rag-scope: "customer"
