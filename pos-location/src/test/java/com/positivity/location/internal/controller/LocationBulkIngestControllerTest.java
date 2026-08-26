@@ -71,6 +71,35 @@ class LocationBulkIngestControllerTest {
     }
 
     @Test
+    void bulkIngest_mapsPhoneNumberToCreateRequest() throws Exception {
+        LocationBulkIngestRecord locRecord = new LocationBulkIngestRecord();
+        locRecord.setName("Main Store");
+        locRecord.setCode("STORE-001");
+        locRecord.setPhoneNumber("+1-217-555-0100");
+
+        BulkIngestRequest<LocationBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(locRecord));
+
+        LocationResponseDTO locationResponse = new LocationResponseDTO();
+        locationResponse.setId(LOCATION_ID);
+
+        when(locationService.createLocation(any())).thenReturn(locationResponse);
+
+        mockMvc.perform(post("/v1/locations/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(com.positivity.location.internal.dto.LocationRequestDTO.class);
+        org.mockito.Mockito.verify(locationService).createLocation(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getPhoneNumber())
+                .isEqualTo("+1-217-555-0100");
+    }
+
+    @Test
     void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
         LocationBulkIngestRecord locRecord = new LocationBulkIngestRecord();
         locRecord.setName("Duplicate Store");

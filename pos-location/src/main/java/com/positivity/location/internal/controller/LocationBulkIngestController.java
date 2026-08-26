@@ -51,6 +51,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                          "stateOrProvince":"IL",
                          "postalCode":"62704",
                          "countryCode":"US",
+                         "phoneNumber":"+1-217-555-0100",
                          "active":true,
                          "locationTypeName":"STORE"}]}
             """;
@@ -141,6 +142,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
         request.setState(ingestRecord.getStateOrProvince());
         request.setPostalCode(ingestRecord.getPostalCode());
         request.setCountry(ingestRecord.getCountryCode());
+        request.setPhoneNumber(ingestRecord.getPhoneNumber());
         request.setActive(ingestRecord.getActive() == null ? Boolean.TRUE : ingestRecord.getActive());
         request.setType(LocationTypeDTO.builder()
                 .name(firstNonBlank(ingestRecord.getLocationTypeName(), DEFAULT_LOCATION_TYPE_NAME))

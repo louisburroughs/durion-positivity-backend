@@ -74,7 +74,7 @@ public class Location {
 
     private String name;
 
-    @Column(name = "normalized_name")
+    @Column(name = "normalized_name", unique = true)
     private String normalizedName;
     /** Unique immutable business code for this location (e.g. "MAIN-WS-001"). */
     @Column(unique = true)
@@ -138,6 +138,9 @@ public class Location {
     private String postalCode;
     private String country;
     private String mailingAddress;
+
+    @Column(name = "phone_number")
+    private String phoneNumber;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
