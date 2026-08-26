@@ -183,6 +183,8 @@ paths:
 
         Returns 204 when the item is removed, 404 when no item of that type exists for the supplied id, and 400 when the type is not one of the three supported values.
 
+        Authorization: type=product requires catalog:product:delete; type=service or noninventory requires the ADMIN role (unchanged pending a service_type delete permission).
+
         '
       operationId: deleteCatalogItem
       parameters:
@@ -209,10 +211,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_DELETE
+        - catalog:product:delete
       summary: Delete a Catalog Item
       tags:
       - Catalog Items API
+      x-required-permissions:
+      - catalog:product:delete
     put:
       description: 'Replaces a catalog item of the given type with the supplied state; fields omitted from the body are overwritten with null, so this is a full replacement, not a patch.
 
@@ -1052,10 +1056,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
       summary: Find a Product by Exact EAN or UPC
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:view
   /v1/products/facts/replay:
     post:
       description: 'Re-publishes catalog.product.updated facts for one bounded page of products so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
@@ -1293,10 +1299,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
       summary: List Products by Exact Name
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:view
   /v1/products/noninventory/name/{name}:
     get:
       description: 'Returns every non-inventory product whose name equals the supplied value exactly; this is a whole-name match, not a substring search.
@@ -2168,10 +2176,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
       summary: Search Catalog Products
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:view
   /v1/products/services/name/{name}:
     get:
       description: 'Returns every catalog service whose name equals the supplied value exactly; this is a whole-name match, not a substring search.
@@ -2205,10 +2215,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:service_type:view
       summary: List Services by Exact Name
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:service_type:view
   /v1/products/services/search:
     get:
       description: 'Searches services by a case-insensitive substring of the service name, ordered by name, sized for typeahead selection.
@@ -2252,10 +2264,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:service_type:view
       summary: Search Catalog Services
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:service_type:view
   /v1/products/services/{serviceId}:
     get:
       description: 'Returns one catalog service record with its name, short description and long description.
@@ -2296,10 +2310,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:service_type:view
       summary: Get a Service by ID
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:service_type:view
   /v1/products/substitution-groups:
     get:
       description: 'Returns every substitution group with its name, notes and member product ids ordered by when each member joined.
@@ -2840,10 +2856,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
       summary: Get a Product by ID
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:view
     put:
       description: 'Replaces the mutable master-data fields of a product — name, description, unit of measure, manufacturer, category, UPC and attributes — while the SKU stays immutable.
 
@@ -2975,10 +2993,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
       summary: Get Product Detail With Pricing
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:view
   /v1/products/{productId}/lifecycle:
     get:
       description: 'Returns a product''s lifecycle state — ACTIVE, INACTIVE or DISCONTINUED, defaulting to ACTIVE when never set — together with its effective instant, last-change audit fields and ordered replacement options.
@@ -3498,10 +3518,12 @@ paths:
       security:
       - bearerAuth:
         - ROLE_ADMIN
-        - ROLE_CATALOG_VIEW
+        - catalog:product:view
       summary: Get Substitute Parts
       tags:
       - Products API
+      x-required-permissions:
+      - catalog:product:view
   /v1/products/{productId}/tracking-level:
     put:
       description: 'Sets the product''s stock tracking level to NONE, LOT or SERIAL, controlling whether inventory tracks the product per lot or per serial number.

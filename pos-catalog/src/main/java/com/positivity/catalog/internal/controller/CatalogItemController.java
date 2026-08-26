@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CatalogServiceImpl;
 import com.positivity.catalog.service.ServiceFactReplayService;
 import com.positivity.events.EmitEvent;
@@ -146,10 +147,14 @@ public class CatalogItemController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
+    // Product deletes ride catalog:product:delete; service and non-inventory deletes keep the
+    // previous ADMIN-only behavior, pending the service_type:create/edit endpoint-split decision
+    // (deferred) — there is no service-type-scoped delete permission yet.
+    @PreAuthorize("#type.equalsIgnoreCase('product') ? hasAuthority('" + CatalogPermissions.PRODUCT_DELETE
+            + "') : hasRole('ADMIN')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_DELETE"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_DELETE})
     @DeleteMapping("/{type}/{catalogId}")
     @Operation(operationId = "deleteCatalogItem", summary = "Delete a Catalog Item", description = """
             Permanently deletes a product, service or non-inventory product row by id; this is a hard delete \
@@ -164,6 +169,8 @@ public class CatalogItemController {
             the item are not rewritten by this call.
             Returns 204 when the item is removed, 404 when no item of that type exists for the supplied id, and \
             400 when the type is not one of the three supported values.
+            Authorization: type=product requires catalog:product:delete; type=service or noninventory requires \
+            the ADMIN role (unchanged pending a service_type delete permission).
             """)
     @ApiResponse(responseCode = "204", description = "Catalog item deleted successfully")
     @ApiResponse(responseCode = "400", description = "Invalid item type")
