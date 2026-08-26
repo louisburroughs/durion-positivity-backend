@@ -1,0 +1,432 @@
+# Facade contract manifest (#1519 WS-0.3) — the single source of truth for what each
+# facade @Tool method calls.
+#
+# One entry per @Tool method of every *FacadeTool. Facade tests build their
+# MockRestServiceServer expectations from these entries (verb + expanded template) via
+# FacadeContractManifest, never from string literals duplicating the configuration, and
+# FacadeContractManifestTest locks every `template` value to the corresponding
+# application.yml property default. The contract checker (scripts/check-mcp-facade-paths.py)
+# independently validates the same configured templates against the routed modules'
+# openapi.yaml files — closing the loop that made the #1519 failure mode (test encodes the
+# same assumption as the code) possible.
+#
+# Fields:
+#   verb              HTTP method the tool issues (NONE for tools that make no HTTP call)
+#   baseUrlProperty   pos.* property supplying the RestClient base URL
+#   templateProperty  pos.* property supplying the URI template (absent when the tool
+#                     calls the bare base URL)
+#   template          the exact configured template default (must match application.yml)
+#   route             gateway route id serving the path's first segment, or DIRECT for the
+#                     ADR-0021 pos-tax direct call, or NONE for no HTTP call
+#   downstreamPath    path after the gateway's StripPrefix=1 (or after the direct base-url
+#                     path), URI params normalized to {}
+#   status            wave3-pending = still the pre-#1519 template; repointed by a Wave 3
+#                     composition workset. Absent = contract is live and correct.
+# Methods removed from the surface (Events.getEventHistory #1521, Hr.searchEmployees #1523)
+# have no entry.
+
+AccountingFacadeTool.getAccountBalance:
+  verb: GET
+  baseUrlProperty: pos.accounting.base-url
+  templateProperty: pos.accounting.account-balance-uri-template
+  template: "/accounting/v1/accounting/gl-accounts/{glAccountId}/balance"
+  route: accounting
+  downstreamPath: "/v1/accounting/gl-accounts/{}/balance"
+
+AccountingFacadeTool.getGeneralLedger:
+  verb: GET
+  baseUrlProperty: pos.accounting.base-url
+  templateProperty: pos.accounting.general-ledger-uri-template
+  template: "/accounting/v1/accounting/reports/financial/general-ledger?startDate={startDate}&endDate={endDate}"
+  route: accounting
+  downstreamPath: "/v1/accounting/reports/financial/general-ledger?startDate={}&endDate={}"
+  # optional query param appended by the tool when provided: accountId
+
+AccountingFacadeTool.getFinancialSummary:
+  verb: GET
+  baseUrlProperty: pos.accounting.base-url
+  templateProperty: pos.accounting.financial-summary-uri-template
+  template: "/accounting/v1/accounting/summary/{period}"
+  route: accounting
+  downstreamPath: "/v1/accounting/summary/{}"
+  status: wave3-pending # WS-3.FINSUM composes income-statement + balance-sheet + trial-balance
+
+AdminFacadeTool.getSystemStatus:
+  verb: NONE
+  route: NONE
+  downstreamPath: ""
+  # Local constant response; no HTTP call.
+
+AdminFacadeTool.listUsers:
+  verb: GET
+  baseUrlProperty: pos.security.users.base-url
+  template: ""
+  route: security-service
+  downstreamPath: ""
+  # Calls the bare users base URL; the deployment env var (POS_SECURITY_USERS_BASE_URL)
+  # supplies the full users endpoint.
+
+AdminFacadeTool.getUserPermissions:
+  verb: GET
+  baseUrlProperty: pos.security.users.base-url
+  templateProperty: pos.security.user-permissions-path-template
+  template: "/security-service/v1/users/{userId}/permissions"
+  route: security-service
+  downstreamPath: "/v1/users/{}/permissions"
+
+AdminFacadeTool.getMyPermissions:
+  verb: GET
+  baseUrlProperty: pos.security.users.base-url
+  templateProperty: pos.security.user-permissions-path-template
+  template: "/security-service/v1/users/{userId}/permissions"
+  route: security-service
+  downstreamPath: "/v1/users/{}/permissions"
+  # Delegates to getUserPermissions with the authenticated caller's user id.
+
+AdminFacadeTool.getAuditLog:
+  verb: GET
+  baseUrlProperty: pos.security.audit.base-url
+  templateProperty: pos.security.audit-search-uri-template
+  template: "/security-service/v1/audit/events?eventType={query}"
+  route: security-service
+  downstreamPath: "/v1/audit/events?eventType={}"
+
+CatalogFacadeTool.getProduct:
+  verb: GET
+  baseUrlProperty: pos.catalog.base-url
+  templateProperty: pos.catalog.product-uri-template
+  template: "/catalog/v1/products/{productId}"
+  route: catalog
+  downstreamPath: "/v1/products/{}"
+
+CatalogFacadeTool.searchCatalog:
+  verb: GET
+  baseUrlProperty: pos.catalog.base-url
+  templateProperty: pos.catalog.search-uri-template
+  template: "/catalog/v1/products/search?q={query}"
+  route: catalog
+  downstreamPath: "/v1/products/search?q={}"
+
+CatalogFacadeTool.getCatalogByCategory:
+  verb: GET
+  baseUrlProperty: pos.catalog.base-url
+  templateProperty: pos.catalog.category-uri-template
+  template: "/catalog/v1/products/search?category={category}"
+  route: catalog
+  downstreamPath: "/v1/products/search?category={}"
+
+CustomerFacadeTool.getCustomer:
+  verb: GET
+  baseUrlProperty: pos.customer.base-url
+  templateProperty: pos.customer.customer-uri-template
+  template: "/customer/v1/crm/accounts/parties/{partyId}"
+  route: customer
+  downstreamPath: "/v1/crm/accounts/parties/{}"
+
+CustomerFacadeTool.searchCustomers:
+  verb: GET
+  baseUrlProperty: pos.customer.base-url
+  templateProperty: pos.customer.search-uri-template
+  template: "/customer/v1/crm/accounts/parties?name={query}"
+  route: customer
+  downstreamPath: "/v1/crm/accounts/parties?name={}"
+
+CustomerFacadeTool.getCustomerHistory:
+  verb: GET
+  baseUrlProperty: pos.customer.base-url
+  templateProperty: pos.customer.history-uri-template
+  template: "/customer/v1/customers/{customerId}/history"
+  route: customer
+  downstreamPath: "/v1/customers/{}/history"
+  status: wave3-pending # WS-3.CUSTHIST composes snapshot + interactions + invoices + workorders
+
+EventsFacadeTool.getEventTypes:
+  verb: GET
+  baseUrlProperty: pos.event-receiver.base-url
+  templateProperty: pos.event-receiver.event-types-uri-template
+  template: "/event-receiver/v1/eventTypes/active"
+  route: event-receiver
+  downstreamPath: "/v1/eventTypes/active"
+
+EventsFacadeTool.getEventSummary:
+  verb: GET
+  baseUrlProperty: pos.event-receiver.base-url
+  templateProperty: pos.event-receiver.summary-uri-template
+  template: "/event-receiver/v1/events/summary/{window}"
+  route: event-receiver
+  downstreamPath: "/v1/events/summary/{}"
+  # window is validated in the tool: lastHour | lastDay | lastWeek only.
+
+HrFacadeTool.getEmployee:
+  verb: GET
+  baseUrlProperty: pos.hr.employee-base-url
+  templateProperty: pos.hr.employee-uri-template
+  template: "/people/v1/people/employees/{employeeId}"
+  route: people
+  downstreamPath: "/v1/people/employees/{}"
+
+HrFacadeTool.getEmployeeSchedule:
+  verb: GET
+  baseUrlProperty: pos.hr.availability-base-url
+  templateProperty: pos.hr.schedule-uri-template
+  template: "/people/v1/people/availability?employeeId={employeeId}"
+  route: people
+  downstreamPath: "/v1/people/availability?employeeId={}"
+
+InventoryFacadeTool.checkStock:
+  verb: GET
+  baseUrlProperty: pos.inventory.base-url
+  templateProperty: pos.inventory.stock-uri-template
+  template: "/inventory/v1/inventory/availability/by-sku?productSku={productSku}"
+  route: inventory
+  downstreamPath: "/v1/inventory/availability/by-sku?productSku={}"
+
+InventoryFacadeTool.searchInventory:
+  verb: GET
+  baseUrlProperty: pos.inventory.base-url
+  templateProperty: pos.inventory.search-uri-template
+  template: "/inventory/v1/inventory/availability/by-sku?productSku={productSku}"
+  route: inventory
+  downstreamPath: "/v1/inventory/availability/by-sku?productSku={}"
+  # optional query params appended by the tool when a location is given:
+  # locationId + sourceType=WAREHOUSE (the endpoint 400s on locationId without it)
+
+InventoryFacadeTool.getLocationStock:
+  verb: GET
+  baseUrlProperty: pos.inventory.base-url
+  templateProperty: pos.inventory.location-stock-uri-template
+  template: "/inventory/v1/inventory/locations/{locationId}/inventory-inquiry"
+  route: inventory
+  downstreamPath: "/v1/inventory/locations/{}/inventory-inquiry"
+
+InvoiceFacadeTool.getInvoice:
+  verb: GET
+  baseUrlProperty: pos.invoice.base-url
+  templateProperty: pos.invoice.invoice-uri-template
+  template: "/invoice/v1/invoices/{invoiceId}"
+  route: invoice
+  downstreamPath: "/v1/invoices/{}"
+
+InvoiceFacadeTool.searchInvoices:
+  verb: GET
+  baseUrlProperty: pos.invoice.base-url
+  templateProperty: pos.invoice.search-uri-template
+  template: "/invoice/v1/invoices/search?q={query}"
+  route: invoice
+  downstreamPath: "/v1/invoices/search?q={}"
+
+InvoiceFacadeTool.getInvoicesByCustomer:
+  verb: GET
+  baseUrlProperty: pos.invoice.base-url
+  templateProperty: pos.invoice.customer-invoices-uri-template
+  template: "/invoice/v1/invoices/items/search?partyId={customerId}"
+  route: invoice
+  downstreamPath: "/v1/invoices/items/search?partyId={}"
+  # The facade de-duplicates the returned line rows by owning invoice.
+
+LocationFacadeTool.getLocation:
+  verb: GET
+  baseUrlProperty: pos.location.base-url
+  templateProperty: pos.location.location-uri-template
+  template: "/location/v1/locations/{locationId}"
+  route: location
+  downstreamPath: "/v1/locations/{}"
+
+LocationFacadeTool.searchLocations:
+  verb: GET
+  baseUrlProperty: pos.location.base-url
+  templateProperty: pos.location.search-uri-template
+  template: "/location/v1/locations"
+  route: location
+  downstreamPath: "/v1/locations"
+  # Zero-parameter roster fetch; the facade applies a case-insensitive name/code contains-filter.
+
+LocationFacadeTool.getLocationInventory:
+  verb: GET
+  baseUrlProperty: pos.location.base-url
+  templateProperty: pos.location.inventory-uri-template
+  template: "/inventory/v1/inventory/locations/{locationId}/inventory-inquiry"
+  route: inventory
+  downstreamPath: "/v1/inventory/locations/{}/inventory-inquiry"
+  # Cross-domain: same gateway host, /inventory route (pos-location publishes no inventory view).
+
+OrderFacadeTool.getOrder:
+  verb: GET
+  baseUrlProperty: pos.order.base-url
+  templateProperty: pos.order.order-uri-template
+  template: "/order/v1/orders/carts/{orderId}"
+  route: order
+  downstreamPath: "/v1/orders/carts/{}"
+
+OrderFacadeTool.listOrders:
+  verb: GET
+  baseUrlProperty: pos.order.base-url
+  templateProperty: pos.order.list-uri-template
+  template: "/order/v1/orders/carts"
+  route: order
+  downstreamPath: "/v1/orders/carts"
+  # optional query params appended by the tool when provided: status, clerkId, terminalId
+
+PricingFacadeTool.getPriceForSku:
+  verb: GET
+  baseUrlProperty: pos.pricing.base-url
+  templateProperty: pos.pricing.sku-price-uri-template
+  template: "/price/v1/pricing/sku/{sku}"
+  route: price
+  downstreamPath: "/v1/pricing/sku/{}"
+  status: wave3-pending # WS-3.PRICE-SKU composes catalog MSRP + optional effective price
+
+PricingFacadeTool.getPromotionByCode:
+  verb: GET
+  baseUrlProperty: pos.pricing.base-url
+  templateProperty: pos.pricing.promotion-by-code-uri-template
+  template: "/price/v1/promotions/offers/by-code/{promoCode}"
+  route: price
+  downstreamPath: "/v1/promotions/offers/by-code/{}"
+
+PricingFacadeTool.listPriceRestrictions:
+  verb: GET
+  baseUrlProperty: pos.pricing.base-url
+  templateProperty: pos.pricing.price-restrictions-uri-template
+  template: "/price/v1/price/restrictions/rules"
+  route: price
+  downstreamPath: "/v1/price/restrictions/rules"
+
+PricingFacadeTool.getPriceList:
+  verb: GET
+  baseUrlProperty: pos.pricing.base-url
+  templateProperty: pos.pricing.price-list-uri-template
+  template: "/catalog/v1/products/price-books/{priceBookId}"
+  route: catalog
+  downstreamPath: "/v1/products/price-books/{}"
+  # Cross-domain per ADR-0054: price books are catalog's system of record.
+
+ReportingFacadeTool.getSalesReport:
+  verb: GET
+  baseUrlProperty: pos.reporting.base-url
+  templateProperty: pos.reporting.sales-report-uri-template
+  template: "/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}"
+  route: accounting
+  downstreamPath: "/v1/accounting/reports/financial/income-statement?startDate={}&endDate={}"
+  # The tool maps its period argument (YYYY-MM or YYYY) onto the date range.
+
+ReportingFacadeTool.getInventoryReport:
+  verb: GET
+  baseUrlProperty: pos.reporting.base-url
+  templateProperty: pos.reporting.inventory-report-uri-template
+  template: "/inventory/v1/inventory/locations/{locationId}/inventory-rollup"
+  route: inventory
+  downstreamPath: "/v1/inventory/locations/{}/inventory-rollup"
+  # Cross-domain: inventory serves the rollup; parent-location semantics (empty for a bare site).
+
+ReportingFacadeTool.getRevenueReport:
+  verb: GET
+  baseUrlProperty: pos.reporting.base-url
+  templateProperty: pos.reporting.revenue-report-uri-template
+  template: "/accounting/v1/reporting/revenue/{period}"
+  route: accounting
+  downstreamPath: "/v1/reporting/revenue/{}"
+  status: wave3-pending # WS-3.REPORTS composes income-statement revenue lines + aged receivables
+
+ShopManagerFacadeTool.getShopStatus:
+  verb: GET
+  baseUrlProperty: pos.shopmanager.base-url
+  templateProperty: pos.shopmanager.status-uri-template
+  template: "/shop-manager/v1/shop/{shopId}/status"
+  route: shop-manager
+  downstreamPath: "/v1/shop/{}/status"
+  status: wave3-pending # WS-3.SHOPSTATUS composes schedules/view + workexec/wip + location
+
+ShopManagerFacadeTool.getShopQueue:
+  verb: GET
+  baseUrlProperty: pos.shopmanager.base-url
+  templateProperty: pos.shopmanager.queue-uri-template
+  template: "/shop-manager/v1/shop/{shopId}/queue"
+  route: shop-manager
+  downstreamPath: "/v1/shop/{}/queue"
+  status: wave3-pending # WS-3.SHOPQUEUE composes workexec/wip + schedules/view
+
+ShopManagerFacadeTool.searchShops:
+  verb: GET
+  baseUrlProperty: pos.shopmanager.base-url
+  templateProperty: pos.shopmanager.search-uri-template
+  template: "/location/v1/locations"
+  route: location
+  downstreamPath: "/v1/locations"
+  # Cross-domain: shops are locations; the facade applies the name/code contains-filter.
+
+TaxFacadeTool.getTaxRate:
+  verb: GET
+  baseUrlProperty: pos.tax.base-url
+  templateProperty: pos.tax.tax-rate-uri-template
+  template: "/rates/{locationId}"
+  route: DIRECT
+  downstreamPath: "/v1/tax/rates/{}"
+  status: wave3-pending # DEFERRED #1522; method + template removed in WS-3.TAXCALC
+
+TaxFacadeTool.calculateTax:
+  verb: GET
+  baseUrlProperty: pos.tax.base-url
+  templateProperty: pos.tax.tax-calculate-uri-template
+  template: "/calculate?amount={amount}&locationId={locationId}"
+  route: DIRECT
+  downstreamPath: "/v1/tax/calculate?amount={}&locationId={}"
+  status: wave3-pending # WS-3.TAXCALC composes location lookup + POST /v1/tax/calculate
+
+TaxFacadeTool.getTaxSummary:
+  verb: GET
+  baseUrlProperty: pos.tax.summary-base-url
+  templateProperty: pos.tax.tax-summary-uri-template
+  template: "/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}"
+  route: accounting
+  downstreamPath: "/v1/accounting/reports/financial/tax-liability?startDate={}&endDate={}"
+  # Moved off the ADR-0021 direct client: the summary is accounting's tax-liability report.
+
+VehicleFacadeTool.getVehicle:
+  verb: GET
+  baseUrlProperty: pos.vehicle.base-url
+  templateProperty: pos.vehicle.vehicle-uri-template
+  template: "/vehicle-inventory/v1/vehicle-registry/{vehicleId}"
+  route: vehicle-inventory
+  downstreamPath: "/v1/vehicle-registry/{}"
+
+VehicleFacadeTool.searchVehicles:
+  verb: GET
+  baseUrlProperty: pos.vehicle.base-url
+  templateProperty: pos.vehicle.search-uri-template
+  template: "/vehicle-inventory/v1/vehicles/search?q={query}"
+  route: vehicle-inventory
+  downstreamPath: "/v1/vehicles/search?q={}"
+
+VehicleFacadeTool.getVehiclesByCustomer:
+  verb: GET
+  baseUrlProperty: pos.vehicle.base-url
+  templateProperty: pos.vehicle.customer-vehicles-uri-template
+  template: "/customer/v1/crm/{customerId}/vehicles"
+  route: customer
+  downstreamPath: "/v1/crm/{}/vehicles"
+
+WorkorderFacadeTool.getWorkorder:
+  verb: GET
+  baseUrlProperty: pos.workorder.base-url
+  templateProperty: pos.workorder.workorder-uri-template
+  template: "/workorder/v1/workorders/{workorderId}"
+  route: workorder
+  downstreamPath: "/v1/workorders/{}"
+
+WorkorderFacadeTool.searchWorkorders:
+  verb: GET
+  baseUrlProperty: pos.workorder.base-url
+  templateProperty: pos.workorder.search-uri-template
+  template: "/workorder/v1/workorders/search?q={query}"
+  route: workorder
+  downstreamPath: "/v1/workorders/search?q={}"
+
+WorkorderFacadeTool.getWorkorderStatus:
+  verb: GET
+  baseUrlProperty: pos.workorder.base-url
+  templateProperty: pos.workorder.status-uri-template
+  template: "/workorder/v1/workorders/{workorderId}"
+  route: workorder
+  downstreamPath: "/v1/workorders/{}"
+  # Same endpoint as getWorkorder; the response's status field answers the status intent.
