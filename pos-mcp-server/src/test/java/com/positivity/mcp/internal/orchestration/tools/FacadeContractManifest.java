@@ -18,6 +18,10 @@ import org.yaml.snakeyaml.Yaml;
  * whenever the manifest and the tool's actual request disagree.
  * {@link FacadeContractManifestTest} in turn locks every manifest template to the
  * {@code application.yml} property default, closing the manifest-vs-config loop.
+ *
+ * <p>A composition tool (#1519 Wave 3) declares {@code verb: COMPOSITE} plus a {@code legs} map
+ * with one full sub-entry (verb, base-url property, template property, template, route, downstream
+ * path) per downstream call; tests reach them via {@link Entry#leg(String)}.
  */
 final class FacadeContractManifest {
 
@@ -35,11 +39,28 @@ final class FacadeContractManifest {
             String template,
             String route,
             String downstreamPath,
-            String status) {
+            String status,
+            @NonNull Map<String, Entry> legs) {
 
         @NonNull
         HttpMethod httpMethod() {
             return HttpMethod.valueOf(verb);
+        }
+
+        /** True for a composition entry: verb COMPOSITE with one sub-entry per downstream leg. */
+        boolean isComposition() {
+            return !legs.isEmpty();
+        }
+
+        /** The named downstream leg of a composition entry. */
+        @NonNull
+        Entry leg(@NonNull String legName) {
+            Entry leg = legs.get(legName);
+            if (leg == null) {
+                throw new IllegalArgumentException(
+                        "Manifest entry " + key + " has no leg '" + legName + "', only " + legs.keySet());
+            }
+            return leg;
         }
 
         /**
@@ -92,21 +113,31 @@ final class FacadeContractManifest {
             }
             Map<String, Map<String, Object>> raw = new Yaml().load(stream);
             Map<String, Entry> entries = new LinkedHashMap<>();
-            raw.forEach((key, fields) -> entries.put(
-                    key,
-                    new Entry(
-                            key,
-                            required(key, fields, "verb"),
-                            (String) fields.get("baseUrlProperty"),
-                            (String) fields.get("templateProperty"),
-                            (String) fields.get("template"),
-                            required(key, fields, "route"),
-                            (String) fields.get("downstreamPath"),
-                            (String) fields.get("status"))));
+            raw.forEach((key, fields) -> entries.put(key, parse(key, fields)));
             return Map.copyOf(entries);
         } catch (IOException exception) {
             throw new IllegalStateException("Cannot read " + RESOURCE, exception);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Entry parse(String key, Map<String, Object> fields) {
+        Map<String, Entry> legs = new LinkedHashMap<>();
+        Object rawLegs = fields.get("legs");
+        if (rawLegs instanceof Map<?, ?> legMap) {
+            ((Map<String, Map<String, Object>>) legMap)
+                    .forEach((legName, legFields) -> legs.put(legName, parse(key + "#" + legName, legFields)));
+        }
+        return new Entry(
+                key,
+                required(key, fields, "verb"),
+                (String) fields.get("baseUrlProperty"),
+                (String) fields.get("templateProperty"),
+                (String) fields.get("template"),
+                required(key, fields, "route"),
+                (String) fields.get("downstreamPath"),
+                (String) fields.get("status"),
+                Map.copyOf(legs));
     }
 
     private static String required(String key, Map<String, Object> fields, String field) {

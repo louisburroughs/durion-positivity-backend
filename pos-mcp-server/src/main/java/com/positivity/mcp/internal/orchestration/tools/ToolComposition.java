@@ -32,6 +32,8 @@ import org.springframework.web.client.RestClientResponseException;
  *       valid JSON, otherwise as a JSON string
  *   <li>HTTP 401/403 &rarr; {@code {"status":"not_authorized"}} — never retried, and the error
  *       response body is deliberately dropped so a denied leg cannot leak data
+ *   <li>{@link LegFailure} &rarr; {@code {"status":"error","reason":"<its message>"}} — thrown by
+ *       a facade when a leg cannot (or must not) be called, with a message written for the LLM
  *   <li>any other failure &rarr; {@code {"status":"error","reason":"<short reason>"}} with no
  *       stack trace and no response body
  * </ul>
@@ -122,6 +124,12 @@ final class ToolComposition {
             }
             LOGGER.warn("Composition {} leg {} failed with HTTP {}", name, legName, status);
             return false;
+        } catch (LegFailure failure) {
+            // Deliberate, facade-authored failure: the message is written for the caller.
+            section.put("status", "error");
+            section.put("reason", failure.getMessage());
+            LOGGER.warn("Composition {} leg {} failed: {}", name, legName, failure.getMessage());
+            return false;
         } catch (RuntimeException exception) {
             section.put("status", "error");
             section.put("reason", exception.getClass().getSimpleName());
@@ -152,6 +160,19 @@ final class ToolComposition {
 
         private Leg(Supplier<String> downstreamCall) {
             this.downstreamCall = downstreamCall;
+        }
+    }
+
+    /**
+     * Thrown by a leg supplier when the leg cannot (or must not) be executed — e.g. a required
+     * input extracted from an earlier leg is unusable. Unlike a generic {@link RuntimeException},
+     * whose class name alone is rendered, the message of a {@code LegFailure} IS the section's
+     * {@code reason}: write it for the LLM, and never include downstream response bodies.
+     */
+    static final class LegFailure extends RuntimeException {
+
+        LegFailure(@NonNull String message) {
+            super(message);
         }
     }
 }

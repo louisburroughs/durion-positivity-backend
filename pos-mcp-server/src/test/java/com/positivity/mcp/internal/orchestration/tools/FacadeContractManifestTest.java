@@ -50,17 +50,51 @@ class FacadeContractManifestTest {
     void manifestTemplatesMatchConfiguredDefaults() throws IOException {
         Map<String, Object> posBlock = applicationYamlPosBlock();
 
+        FacadeContractManifest.all().forEach((key, entry) -> verifyAgainstConfig(posBlock, entry));
+    }
+
+    private static void verifyAgainstConfig(Map<String, Object> posBlock, FacadeContractManifest.Entry entry) {
+        String key = entry.key();
+        if (entry.templateProperty() != null) {
+            String configured = extractDefault(resolveProperty(posBlock, entry.templateProperty(), key));
+            assertThat(entry.template())
+                    .as("%s: manifest template vs application.yml default of %s", key, entry.templateProperty())
+                    .isEqualTo(configured);
+        }
+        if (entry.baseUrlProperty() != null) {
+            assertThat(resolveProperty(posBlock, entry.baseUrlProperty(), key))
+                    .as("%s: base-url property %s must exist in application.yml", key, entry.baseUrlProperty())
+                    .isNotNull();
+        }
+        entry.legs().values().forEach(leg -> verifyAgainstConfig(posBlock, leg));
+    }
+
+    @Test
+    @DisplayName("composition entries declare COMPOSITE and fully specified legs; simple entries declare none")
+    void compositionEntriesDeclareFullySpecifiedLegs() {
         FacadeContractManifest.all().forEach((key, entry) -> {
-            if (entry.templateProperty() != null) {
-                String configured = extractDefault(resolveProperty(posBlock, entry.templateProperty(), key));
-                assertThat(entry.template())
-                        .as("%s: manifest template vs application.yml default of %s", key, entry.templateProperty())
-                        .isEqualTo(configured);
-            }
-            if (entry.baseUrlProperty() != null) {
-                assertThat(resolveProperty(posBlock, entry.baseUrlProperty(), key))
-                        .as("%s: base-url property %s must exist in application.yml", key, entry.baseUrlProperty())
-                        .isNotNull();
+            if (entry.isComposition()) {
+                assertThat(entry.verb())
+                        .as("%s: a legged entry must use verb COMPOSITE", key)
+                        .isEqualTo("COMPOSITE");
+                entry.legs().forEach((legName, leg) -> {
+                    assertThat(leg.verb())
+                            .as("%s#%s: leg verb must be a concrete HTTP method", key, legName)
+                            .isNotEqualTo("COMPOSITE");
+                    assertThat(leg.templateProperty())
+                            .as("%s#%s: leg must name its template property", key, legName)
+                            .isNotNull();
+                    assertThat(leg.baseUrlProperty())
+                            .as("%s#%s: leg must name its base-url property", key, legName)
+                            .isNotNull();
+                    assertThat(leg.downstreamPath())
+                            .as("%s#%s: leg must state its downstream path", key, legName)
+                            .isNotNull();
+                });
+            } else {
+                assertThat(entry.verb())
+                        .as("%s: COMPOSITE is only valid with legs", key)
+                        .isNotEqualTo("COMPOSITE");
             }
         });
     }

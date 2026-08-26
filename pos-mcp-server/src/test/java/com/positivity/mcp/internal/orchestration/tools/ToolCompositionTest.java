@@ -132,6 +132,26 @@ class ToolCompositionTest {
     }
 
     @Test
+    @DisplayName("a LegFailure leg renders error with the failure message as reason and degrades when required")
+    void legFailure_rendersItsMessageAsReason() {
+        String rendered = ToolComposition.named("taxCalculation")
+                .call("location", () -> "{\"id\":\"LOC-1\"}")
+                .call("tax", () -> {
+                    throw new ToolComposition.LegFailure(
+                            "Location LOC-1 has no usable address (missing postalCode or country); tax not calculated");
+                })
+                .require("tax")
+                .render();
+
+        JsonNode envelope = parse(rendered);
+        JsonNode failed = envelope.get("sections").get("tax");
+        assertThat(failed.get("status").asText()).isEqualTo("error");
+        assertThat(failed.get("reason").asText()).contains("no usable address");
+        assertThat(envelope.get("status").asText()).isEqualTo("degraded");
+        assertThat(envelope.get("sources")).extracting(JsonNode::asText).containsExactly("location");
+    }
+
+    @Test
     @DisplayName("a 404 leg renders error, not not_authorized")
     void notFoundLeg_rendersError() {
         JsonNode section = parse(ToolComposition.named("lookup")
