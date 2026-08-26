@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.CreateUserRequest;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
@@ -40,7 +41,8 @@ public class UserController {
                     every named role must already exist.
                     Required inputs: username, password, and roles, a non-empty array of existing role names.
                     Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
-                    Returns 400 when the username already exists or a named role is not found.
+                    Returns 409 when the username already exists, and 400 when a field is missing or a named \
+                    role is not found.
                     """)
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
@@ -61,13 +63,10 @@ public class UserController {
                                                                      "password":"Sup3rS3cret!",
                                                                      "roles":["SHOP_MGR"]}
                                                                     """)))
+                    @jakarta.validation.Valid
                     @RequestBody
-                    Map<String, Object> payload) {
-        String username = (String) payload.get("username");
-        String password = (String) payload.get("password");
-        List<?> rolesList = (List<?>) payload.get("roles");
-        Set<String> roles = rolesList.stream().map(Object::toString).collect(Collectors.toSet());
-        UserDto user = userService.createUser(username, password, roles);
+                    CreateUserRequest request) {
+        UserDto user = userService.createUser(request.username(), request.password(), request.roles());
         return ResponseEntity.status(201).body(user);
     }
 

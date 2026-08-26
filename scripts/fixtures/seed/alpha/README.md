@@ -138,6 +138,27 @@ never had them); the fixed `vehicle_id`s are regenerated.
 
 The seed file stays until the alpha reseed is verified (§5.4).
 
+### `security/` — from `pos-security-service R__seed_security_operational_data.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `users.csv` | 25 users, 16 roles | gateway API pack (`POST /security-service/users` per row) |
+
+**No password material is committed.** The driver generates a random password per
+user at run time and appends the credentials it created to a local, gitignored
+file (`alpha-seed-credentials.csv`, mode 600 — `--credentials-out` to relocate);
+`--passwords-file` supplies a local `username,password` CSV override for teams
+that want stable demo logins. Passwords travel plaintext over TLS and are
+bcrypt-hashed server-side; an existing username (409) counts as already
+provisioned. This retires the seed's shared committed bcrypt hash.
+
+**Deltas / not converted:** the seed's single scoped `role_assignments` row
+(INVENTORY_CONTROLLER) is not replayed — the endpoint writes direct `user_roles`
+only; and `user_person_links` (usernames → persons, in the pos-people-contact
+seed) has no admin link path yet — self-registration is the only flow that emits
+the link command. Both are recorded follow-ups; the seed file stays until the
+alpha reseed is verified (§5.4).
+
 ### `catalog/` — from `pos-catalog R__seed_reference_catalog_2_products.sql`
 
 | File | Rows | Target |

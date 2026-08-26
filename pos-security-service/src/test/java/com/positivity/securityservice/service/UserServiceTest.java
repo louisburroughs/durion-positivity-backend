@@ -76,7 +76,7 @@ class UserServiceTest {
         when(userRepository.existsByUsername("alice")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.createUser("alice", "secret", roleNames))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(com.positivity.securityservice.internal.exception.DuplicateUsernameException.class)
                 .hasMessageContaining("Username already exists");
     }
 

@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -38,7 +39,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserDto createUser(String username, String password, Set<String> roleNames) {
         if (userRepository.existsByUsername(username)) {
-            throw new IllegalArgumentException("Username already exists");
+            throw new DuplicateUsernameException("Username already exists");
         }
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {

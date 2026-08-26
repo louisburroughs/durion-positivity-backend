@@ -46,6 +46,7 @@ FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixture
 # looks the parties up). The optional third element names a pre-upload
 # transform applied to the fixture bytes.
 PACK_FILES = [
+    ("security/users.csv", "@security-users", None),
     ("location/locations.csv", "LOCATION", None),
     ("people/employees.csv", "PERSON", None),
     ("people/staffing-assignments.csv", "@staffing-assignments", None),
@@ -212,7 +213,63 @@ def run_staffing_assignments(gateway, relative_path, _location_id):
     return failures == 0
 
 
-API_PACKS = {"@staffing-assignments": run_staffing_assignments}
+PASSWORD_OVERRIDES = {}
+CREDENTIALS_OUT = "alpha-seed-credentials.csv"
+
+
+def run_security_users(gateway, relative_path, _location_id):
+    """API pack: provision demo users via POST /security-service/users.
+
+    No password material lives in the fixture: each user's password comes from
+    the --passwords-file override when present, otherwise it is generated here
+    and written to a local (gitignored) credentials file. Passwords travel
+    plaintext over TLS and are bcrypt-hashed server-side; an existing username
+    (409) counts as already provisioned, not a failure."""
+    import secrets
+
+    csv_path = os.path.join(FIXTURE_ROOT, relative_path)
+    with open(csv_path, newline="") as fh:
+        rows = list(csv.DictReader(fh))
+
+    created, skipped, failures = 0, 0, 0
+    generated = []
+    for row in rows:
+        username = row["username"]
+        password = PASSWORD_OVERRIDES.get(username)
+        was_generated = password is None
+        if was_generated:
+            password = secrets.token_urlsafe(14)
+        status_code, _ = gateway.post_json(
+            "/security-service/users",
+            {"username": username, "password": password, "roles": row["roles"].split(";")},
+            allow_error=True,
+        )
+        if status_code == 201:
+            created += 1
+            if was_generated:
+                generated.append((username, password))
+        elif status_code == 409:
+            skipped += 1
+        else:
+            print(f"  WARN: user {username}: HTTP {status_code}")
+            failures += 1
+
+    if generated:
+        fd = os.open(CREDENTIALS_OUT, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        with os.fdopen(fd, "a") as fh:
+            writer = csv.writer(fh)
+            for username, password in generated:
+                writer.writerow([username, password])
+        print(f"  generated credentials for {len(generated)} user(s) -> {CREDENTIALS_OUT} (keep local; gitignored)")
+
+    print(f"  users: created={created} already-existed={skipped} failures={failures} of {len(rows)}")
+    return failures == 0
+
+
+API_PACKS = {
+    "@staffing-assignments": run_staffing_assignments,
+    "@security-users": run_security_users,
+}
 
 
 def resolve_location_id(gateway, location_code):
@@ -300,6 +357,10 @@ def main():
                         help="Run only these pack files (repeatable, e.g. customer/person-customers.csv)")
     parser.add_argument("--poll-timeout", type=int, default=600,
                         help="Seconds to wait for each job to finish (default: 600)")
+    parser.add_argument("--passwords-file", metavar="CSV",
+                        help="Local username,password CSV overriding generated passwords (never commit it)")
+    parser.add_argument("--credentials-out", default="alpha-seed-credentials.csv",
+                        help="Where generated credentials are written (default: alpha-seed-credentials.csv; gitignored)")
     parser.add_argument("--dry-run", action="store_true", help="List planned actions without calling the gateway")
     args = parser.parse_args()
 
@@ -322,6 +383,14 @@ def main():
         parser.error("--token or $SEED_BEARER_TOKEN is required")
 
     gateway = Gateway(args.gateway, args.token)
+
+    global CREDENTIALS_OUT
+    CREDENTIALS_OUT = args.credentials_out
+    if args.passwords_file:
+        with open(args.passwords_file, newline="") as fh:
+            for row in csv.reader(fh):
+                if len(row) >= 2 and row[0] and not row[0].startswith("#"):
+                    PASSWORD_OVERRIDES[row[0]] = row[1]
 
     location_id = args.location_id or resolve_location_id(gateway, args.location_code)
     if location_id is None:
