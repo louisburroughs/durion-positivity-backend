@@ -2,10 +2,13 @@
 
 Status: **partially executed — tasks 1a, 2, 3, 9 and 10 are implemented on this branch**
 (migrations V24–V27 plus code/seed changes; see the §7 status column). Headline drift
-after execution: required-but-ungranted 112 → 69, granted-but-unenforced 77 → 64,
-unreachable operations 229 → 141, roles 16 → 17 (CONTROLLER). The second wave
-(marketing, supplier, image, money-movement grants per §2 decisions 1–3 and 5) is
-seed-only — purely additive, no revocation migration needed. The +14 in dead bits is
+after execution: required-but-ungranted 112 → 2, granted-but-unenforced 77 → 64,
+unreachable contract operations 229 → 0, roles 16 → 17 (CONTROLLER). Waves 2 and 3
+(the §2 decisions and the accepted recommended-grants matrix) are seed-only — purely
+additive, no revocation migration needed. The two remaining required-but-ungranted
+entries are unwirable as-is: `workorder:financials:view` (no PermissionCode bit — needs
+a catalog entry before any grant can reach a JWT) and `people:timeEntry:` (a parser
+artifact of dynamic string construction, not a real code). The +14 in dead bits is
 the retired codes keeping their permanent bit indexes, as designed. (The audit script
 now excludes the `AUTHENTICATED` sentinel from its required-set computations — Copilot
 review on PR #1515; the pre-execution counts in the tables below predate that and
@@ -197,10 +200,15 @@ based on each role's documented job function in the seed header.
 6. **`invoice:finalize:override` precedent** applies to everything above: several of
    these codes are deliberate elevation caps — wide grants would defeat their purpose.
 
-**Still open: the recommended-grants matrix above** (warranty, crm engagement,
-inventory operations, order POS flow, tax, workorder rows) is a per-role starting
-recommendation, not a decision — it needs sign-off (with edits) before the remaining
-required-but-ungranted codes are wired.
+**The recommended-grants matrix above was accepted and implemented 2026-08-25**
+(seed-only, additive). Tie-breaks for codes the matrix left unassigned, recorded in the
+seed's POLICY header: warranty settlement and reimbursement management to
+ACCOUNT_MANAGER (customer-accounts money); warranty policy/provider configuration to
+GENERAL_MANAGER; crm segment/suppression management to ACCOUNT_MANAGER (with its
+marketing ownership); `inventory:transfer:view` added to the approver pair so dispatch
+is usable; `inventory:valuation:adjust` CONTROLLER-only, mirroring the
+adjustment-override precedent. Skipped as unwirable: `workorder:financials:view`
+(no bit) and the `people:timeEntry:` artifact.
 
 ---
 
@@ -436,7 +444,7 @@ All six flags are decided; the chart above reflects them:
 
 | # | Action | Effort | Blocked on decision? |
 | --- | --- | --- | --- |
-| 1 | Wire role grants for the remaining required-but-ungranted codes (per-domain migrations + seed) | medium, splittable per domain | yes — §2 decision list (accounting portion DONE via 1a; 94 codes remain) |
+| 1 | Wire role grants for the required-but-ungranted codes | medium | **DONE** — §6 split (1a), §2 decisions 1–3/5, and the accepted §2 matrix; only `workorder:financials:view` (needs a bit) and the `people:timeEntry:` artifact remain |
 | 1a | Implement the §6 ACCOUNT_MANAGER / CONTROLLER split | medium | **DONE** — V24 (CONTROLLER role), V25 (rescope + retire dead accounting codes), seed + guard-fixture updates |
 | 2 | Fix `workorder:start` vs `workorder:workorder:start` split-brain | small | **DONE** — `workorder:workorder:start` wins; endpoint + capability flag aligned, V26 migrates grants |
 | 3 | Re-point `shop:location/bay` holders to `location:*` family | small | **DONE** — faithful-mirror grants added, seven dead codes revoked (V27) |

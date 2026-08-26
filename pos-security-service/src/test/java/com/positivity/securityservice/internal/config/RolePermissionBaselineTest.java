@@ -162,6 +162,23 @@ class RolePermissionBaselineTest {
                     MCP_ADMINISTRATION.stream(), Stream.of("mcp:tool:view"))
             .collect(Collectors.toUnmodifiableSet());
 
+    /**
+     * Scoped, non-domain exceptions SYSTEM_ADMINISTRATOR may hold outside the security:/mcp:/
+     * nlti: prefixes it is otherwise confined to. Each is a deliberate carve-out, not a domain
+     * grant: image:image:store is the 2026-08 §2 decision 3 image-upload grant shared by both
+     * admin roles; the other five are the 2026-08 §2 recommended-grants matrix (accepted and
+     * implemented 2026-08-25, docs/rbac-permission-role-audit-2026-08.md §2) narrow operational
+     * escape hatches that belong to system administration rather than any single business
+     * domain -- event replay, compliance visibility and supplier transmission triage.
+     */
+    private static final Set<String> SYSTEM_ADMIN_SCOPED_EXCEPTIONS = Set.of(
+            "image:image:store",
+            "workorder:events:replay",
+            "people:compliance:view",
+            "supplier:audit:read",
+            "supplier:transmission:read",
+            "supplier:transmission:resolve");
+
     private static Map<String, Set<String>> seededGrants;
     private static Set<String> definedPermissions;
     private static List<String> rawGrantRows;
@@ -222,14 +239,13 @@ class RolePermissionBaselineTest {
                 .as("SYSTEM_ADMINISTRATOR must carry the security admin surface")
                 .isNotEmpty();
         assertThat(granted)
-                .as("SYSTEM_ADMINISTRATOR may hold security:*, MCP administration and the assistant "
-                        + "entrypoints only — never domain authority, except image:image:store "
-                        + "(2026-08 §2 decision 3, docs/rbac-permission-role-audit-2026-08.md: image "
-                        + "upload is a deliberate grant to both admin roles)")
+                .as("SYSTEM_ADMINISTRATOR may hold security:*, MCP administration, the assistant "
+                        + "entrypoints and the SYSTEM_ADMIN_SCOPED_EXCEPTIONS carve-outs only — "
+                        + "never a broader domain authority")
                 .allMatch(permission -> permission.startsWith("security:")
                         || permission.startsWith("mcp:")
                         || permission.startsWith("nlti:")
-                        || permission.equals("image:image:store"));
+                        || SYSTEM_ADMIN_SCOPED_EXCEPTIONS.contains(permission));
         assertThat(granted).containsAll(MCP_ADMINISTRATION);
 
         // ADMIN is the all-domain role; SYSTEM_ADMINISTRATOR must stay strictly narrower.
