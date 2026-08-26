@@ -81,7 +81,7 @@ mcp:
           rag-scope: "accounting"
           # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
-          # surface was RESHAPEd to the general-ledger report (#1519 Wave 4, V37).
+          # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
           required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "accounting.financial-statements"
           source-path: "classpath:rag/accounting-financial-statements-rag.md"
@@ -96,7 +96,7 @@ mcp:
           rag-scope: "accounting"
           # #1525: dual-listed — accounting:je:view keeps the ACCOUNTING_ASSOCIATE audience on the
           # direct JE endpoints; reporting:view:financial-statements covers facade callers, whose JE
-          # surface was RESHAPEd to the general-ledger report (#1519 Wave 4, V37).
+          # surface was reshaped to the general-ledger report (#1519 Wave 4, V37).
           required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
