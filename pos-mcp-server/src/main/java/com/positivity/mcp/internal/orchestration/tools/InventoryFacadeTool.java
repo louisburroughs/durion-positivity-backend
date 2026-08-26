@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.tool.annotation.Tool;
@@ -29,27 +30,40 @@ public class InventoryFacadeTool {
         this.locationStockUriTemplate = locationStockUriTemplate;
     }
 
-    @Tool(description = "Check current stock level for a product by SKU number")
-    public String checkStock(@ToolParam(description = "The SKU number to look up") @NonNull String sku) {
+    @Tool(
+            description = "Check availability for a product by its exact SKU across the network. Returns "
+                    + "available/on-order quantities for the SKU; 404 when the SKU has no stock records.")
+    public String checkStock(@ToolParam(description = "The exact product SKU") @NonNull String productSku) {
         return restClient
                 .get()
-                .uri(stockUriTemplate, Map.of("sku", sku))
+                .uri(stockUriTemplate, Map.of("productSku", productSku))
                 .retrieve()
                 .body(String.class);
     }
 
-    @Tool(description = "Search inventory by product name or partial SKU")
+    @Tool(
+            description = "Look up availability for an exact product SKU, optionally narrowed to one warehouse "
+                    + "location. This is an exact-SKU lookup, not a free-text search — the SKU must match "
+                    + "exactly. locationId, when given, must be a location UUID.")
     public String searchInventory(
-            @ToolParam(description = "Search term: product name or partial SKU") @NonNull String query) {
-        return restClient
-                .get()
-                .uri(inventorySearchUriTemplate, Map.of("query", query))
-                .retrieve()
-                .body(String.class);
+            @ToolParam(description = "The exact product SKU") @NonNull String productSku,
+            @ToolParam(description = "Optional location id (UUID) to narrow to one warehouse", required = false)
+                    String locationId) {
+        String template = inventorySearchUriTemplate;
+        Map<String, String> uriParams = new HashMap<>();
+        uriParams.put("productSku", productSku);
+        if (locationId != null && !locationId.isBlank()) {
+            // The availability endpoint rejects locationId unless sourceType=WAREHOUSE accompanies it.
+            template = template + "&locationId={locationId}&sourceType=WAREHOUSE";
+            uriParams.put("locationId", locationId);
+        }
+        return restClient.get().uri(template, uriParams).retrieve().body(String.class);
     }
 
-    @Tool(description = "Get stock levels for all products at a specific store location")
-    public String getLocationStock(@ToolParam(description = "Store location ID") @NonNull String locationId) {
+    @Tool(
+            description = "Get the on-hand inventory inquiry for a store location by location id (UUID): "
+                    + "per-product on-hand stock at that site.")
+    public String getLocationStock(@ToolParam(description = "Store location id (UUID)") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(locationStockUriTemplate, Map.of("locationId", locationId))

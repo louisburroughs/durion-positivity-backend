@@ -29,17 +29,23 @@ public class CustomerFacadeTool {
         this.customerHistoryUriTemplate = customerHistoryUriTemplate;
     }
 
-    @Tool(description = "Get customer profile details by customer ID")
-    public String getCustomer(@ToolParam(description = "The customer ID") @NonNull String customerId) {
+    @Tool(
+            description = "Get a customer's identity projection by party id (UUID): display name, type "
+                    + "(commercial or person), and customer number. This is a thin identity payload — it does "
+                    + "not include vehicles, invoices, or interaction history.")
+    public String getCustomer(@ToolParam(description = "The customer's party id (UUID)") @NonNull String partyId) {
         return restClient
                 .get()
-                .uri(customerUriTemplate, Map.of("customerId", customerId))
+                .uri(customerUriTemplate, Map.of("partyId", partyId))
                 .retrieve()
                 .body(String.class);
     }
 
-    @Tool(description = "Search customers by name, phone number, email, or other criteria")
-    public String searchCustomers(@ToolParam(description = "Search query for customers") @NonNull String query) {
+    @Tool(
+            description = "Search the unified customer directory (commercial accounts and individual customers) "
+                    + "by name. The match is case-insensitive contains on the customer name; results are "
+                    + "paginated.")
+    public String searchCustomers(@ToolParam(description = "Customer name (or part of it)") @NonNull String query) {
         return restClient
                 .get()
                 .uri(customerSearchUriTemplate, Map.of("query", query))
