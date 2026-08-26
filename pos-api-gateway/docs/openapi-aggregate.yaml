@@ -1041,6 +1041,10 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1staffing~1assignments
   /v1/people/staffing/assignments/{assignmentId}:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1staffing~1assignments~1{assignmentId}
+  /v1/people/time-periods:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1time-periods
+  /v1/people/time-periods/{timePeriodId}/status:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1time-periods~1{timePeriodId}~1status
   /v1/people/timeEntries/adjustments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1timeEntries~1adjustments
   /v1/people/timeEntries/adjustments/{adjustmentId}/approve:
