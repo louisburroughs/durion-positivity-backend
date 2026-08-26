@@ -190,11 +190,12 @@ for Flyway-seeded catalogs is not needed for pipeline-loaded products.
 
 **Deltas / not yet converted:**
 
-- The ingest record is Wave 1: `categoryName`/`subcategoryName` are carried in the
-  CSV but ignored (products land uncategorized until category-by-name resolution
-  lands), and **manufacturer id/name/brand, country of origin, and product type are
-  not expressible at all** — warranty/supplier replicas that read manufacturer data
-  from product facts will lack it until a bulk-ingest wave adds those fields.
+- The CSV carries `manufacturerName`, `manufacturerBrand`, `countryOfOrigin`, and
+  `type` (Wave 2) — the manufacturer fields also travel on the product fact, so
+  warranty/supplier replicas get them. Still not expressible: `manufacturerId`
+  (there is no manufacturer table; the seed's ids were synthetic and are dropped),
+  and `categoryName`/`subcategoryName` remain carried-but-ignored until
+  category-by-name resolution lands (products land uncategorized).
 - `upc` and `description` are blank (the seed never had UPCs; description defaults
   to the name server-side); `price` is blank (pricing is a separate seed).
 - Categories/subcategories (`R__seed_reference_catalog.sql`), services (file 3 — no

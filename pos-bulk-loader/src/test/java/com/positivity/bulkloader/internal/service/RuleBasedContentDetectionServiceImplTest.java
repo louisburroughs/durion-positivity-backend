@@ -81,6 +81,9 @@ class RuleBasedContentDetectionServiceImplTest {
                 .containsEntry("uom", "unitOfMeasure")
                 .containsEntry("list_price", "price");
         // Cost/fee columns that have no catalog target must not be mapped.
+        assertThat(mappings)
+                .containsEntry("brand", "manufacturerBrand")
+                .containsEntry("country_of_origin", "countryOfOrigin");
         assertThat(mappings).doesNotContainKeys("dealer_cost", "map_price", "core_charge", "vendor_id", "notes");
     }
 

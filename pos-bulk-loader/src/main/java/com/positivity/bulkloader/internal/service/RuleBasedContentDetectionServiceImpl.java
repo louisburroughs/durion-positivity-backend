@@ -151,6 +151,10 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                             "mfg_part_no",
                             "mfg_part_number" -> "mpn";
                     case "uom", "unit_of_measure", "unitofmeasure", "sell_uom" -> "unitOfMeasure";
+                    case "manufacturer", "manufacturer_name", "manufacturername", "mfr", "mfg" -> "manufacturerName";
+                    case "brand", "manufacturer_brand", "manufacturerbrand" -> "manufacturerBrand";
+                    case "country", "country_of_origin", "countryoforigin", "origin" -> "countryOfOrigin";
+                    case "type", "product_type", "item_type" -> "type";
                     default -> null;
                 };
             case INVENTORY_STOCK_COUNT ->

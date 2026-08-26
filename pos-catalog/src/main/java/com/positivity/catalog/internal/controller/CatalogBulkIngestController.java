@@ -52,8 +52,10 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
             CATALOG_INGEST_FAILED while the rest of the batch proceeds.
             Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, \
             unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku \
-            then the name, while price, categoryName and subcategoryName are accepted but ignored in this \
-            wave.
+            then the name. manufacturerName, manufacturerBrand, countryOfOrigin, and type are carried onto \
+            the product (the manufacturer fields also travel on the product fact for replica consumers), \
+            while price, categoryName and subcategoryName are accepted but ignored until pricing and \
+            category-by-name resolution land.
             Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact and \
             invalidates the product-detail cache.
             Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the \
@@ -120,17 +122,13 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
     }
 
     private ProductCreateRequestDto toProductCreateRequest(@NonNull CatalogBulkIngestRecord ingestRecord) {
-        // Wave 1: price, categoryName, and subcategoryName are not yet supported by the
-        // catalog service
-        // (ProductCreateRequestDto has no price or category-name fields in this wave).
-        // These fields will be wired in a future wave once catalog pricing and
-        // category-by-name
-        // resolution are available.
+        // price, categoryName, and subcategoryName are still not supported: catalog
+        // pricing and category-by-name resolution remain future waves.
         if (ingestRecord.getPrice() != null
                 || ingestRecord.getCategoryName() != null
                 || ingestRecord.getSubcategoryName() != null) {
             log.warn(
-                    "CatalogBulkIngestController: price/categoryName/subcategoryName are ignored in Wave 1 — not yet supported by catalog service");
+                    "CatalogBulkIngestController: price/categoryName/subcategoryName are ignored — not yet supported by catalog service");
         }
         ProductCreateRequestDto request = new ProductCreateRequestDto();
         request.setSku(ingestRecord.getSku());
@@ -140,6 +138,10 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
         request.setUnitOfMeasure(firstNonBlank(ingestRecord.getUnitOfMeasure(), DEFAULT_UNIT_OF_MEASURE));
         request.setMpn(
                 firstNonBlank(ingestRecord.getMpn(), firstNonBlank(ingestRecord.getSku(), ingestRecord.getName())));
+        request.setManufacturerName(ingestRecord.getManufacturerName());
+        request.setManufacturerBrand(ingestRecord.getManufacturerBrand());
+        request.setCountryOfOrigin(ingestRecord.getCountryOfOrigin());
+        request.setType(ingestRecord.getType());
         return request;
     }
 

@@ -48,6 +48,10 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setLongDescription(request.getDescription());
         entity.setUnitOfMeasure(request.getUnitOfMeasure());
         entity.setManufacturerId(request.getManufacturerId());
+        entity.setManufacturerName(request.getManufacturerName());
+        entity.setManufacturerBrand(request.getManufacturerBrand());
+        entity.setCountryOfOrigin(request.getCountryOfOrigin());
+        entity.setType(request.getType());
         entity.setSku(request.getSku());
         entity.setManufacturerPartNumber(request.getMpn());
         String upc = ProductCodeNormalizer.normalize(request.getUpc());
