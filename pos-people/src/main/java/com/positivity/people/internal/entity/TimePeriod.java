@@ -11,6 +11,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -27,7 +28,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {
             @Index(name = "idx_time_period_tenant_status", columnList = "tenant_id, status"),
             @Index(name = "idx_time_period_dates", columnList = "start_date, end_date")
-        })
+        },
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uq_time_period_tenant_start",
+                        columnNames = {"tenant_id", "start_date"}))
 public class TimePeriod {
 
     @Id

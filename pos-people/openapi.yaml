@@ -22,6 +22,8 @@ tags:
   name: Work Sessions API
 - description: Time entry adjustments and related APIs
   name: People - TimeEntries
+- description: Pay-period lifecycle management for timekeeping approval
+  name: Time Period Management API
 - description: Identity-compliance reports (ADR-0015 §4)
   name: People Compliance API
 - description: Employee profile and offboarding operations
@@ -1306,6 +1308,125 @@ paths:
       - People - Staffing Assignments
       x-required-permissions:
       - people:employee:edit
+  /v1/people/time-periods:
+    post:
+      description: 'Creates a pay period for a tenant with an inclusive start and end date and an initial lifecycle status.
+
+        Use this tool for corrections and off-grid periods; do not create routine periods manually, the scheduled rollover opens those on the configured cadence instead.
+
+        Preconditions: the range must not overlap any existing period for the tenant, and endDate must not be before startDate.
+
+        Required inputs: a body with tenantId (UUID), startDate, and endDate; status is optional and defaults to OPEN.
+
+        Emits PEOPLE_TIME_PERIOD_CREATE.
+
+        Returns 400 when the range is invalid, and 409 when the range overlaps an existing period.
+
+        '
+      operationId: createTimePeriod
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Biweekly period:
+                description: Biweekly period
+                value:
+                  endDate: 2026-06-14
+                  startDate: 2026-06-01
+                  tenantId: 01960000-0000-7000-8000-000000000001
+            schema:
+              $ref: '#/components/schemas/CreateTimePeriodRequest'
+        description: Tenant, inclusive date range, and optional initial status of the new period.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDto'
+          description: Time period created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDto'
+          description: Invalid date range
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDto'
+          description: Overlapping period exists
+      security:
+      - bearerAuth:
+        - people:timePeriod:create
+      summary: Create Pay Period
+      tags:
+      - Time Period Management API
+      x-required-permissions:
+      - people:timePeriod:create
+  /v1/people/time-periods/{timePeriodId}/status:
+    post:
+      description: 'Moves a pay period to a new lifecycle status along the allowed transitions, including reopening a SUBMISSION_CLOSED period for corrections.
+
+        Use this tool for manual corrections; do not drive routine closure with it, the scheduled rollover advances statuses on the configured cadence instead.
+
+        Preconditions: allowed transitions are OPEN to SUBMISSION_CLOSED or PAYROLL_CLOSED, SUBMISSION_CLOSED to PAYROLL_CLOSED or back to OPEN; PAYROLL_CLOSED is terminal.
+
+        Required inputs: timePeriodId (UUID) path parameter and a body with the target status.
+
+        Emits PEOPLE_TIME_PERIOD_TRANSITION.
+
+        Returns 404 when the period does not exist, and 409 when the transition is not allowed.
+
+        '
+      operationId: transitionTimePeriod
+      parameters:
+      - in: path
+        name: timePeriodId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Close submissions:
+                description: Close submissions
+                value:
+                  status: SUBMISSION_CLOSED
+            schema:
+              $ref: '#/components/schemas/TransitionTimePeriodRequest'
+        description: Target lifecycle status for the period.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDto'
+          description: Time period transitioned
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDto'
+          description: Time period not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimePeriodDto'
+          description: Transition not allowed
+      security:
+      - bearerAuth:
+        - people:timePeriod:transition
+      summary: Transition Pay Period Status
+      tags:
+      - Time Period Management API
+      x-required-permissions:
+      - people:timePeriod:transition
   /v1/people/timeEntries/adjustments:
     post:
       description: 'Creates a PENDING adjustment against a time entry, proposing either replacement start and end timestamps or a signed minutes delta.
@@ -2576,6 +2697,37 @@ components:
       - personId
       - role
       type: object
+    CreateTimePeriodRequest:
+      description: Request to create a pay period for timekeeping approval
+      properties:
+        endDate:
+          description: Last date of the period (inclusive)
+          example: 2026-06-14
+          format: date
+          type: string
+        startDate:
+          description: First date of the period (inclusive)
+          example: 2026-06-01
+          format: date
+          type: string
+        status:
+          description: Initial lifecycle status; defaults to OPEN when omitted
+          enum:
+          - OPEN
+          - SUBMISSION_CLOSED
+          - PAYROLL_CLOSED
+          example: OPEN
+          type: string
+        tenantId:
+          description: Tenant the period belongs to
+          example: 01960000-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+      required:
+      - endDate
+      - startDate
+      - tenantId
+      type: object
     Decision:
       description: An individual decision for a specific time entry
       properties:
@@ -3467,6 +3619,20 @@ components:
       - employeeId
       - sessionStartTime
       - timekeepingEntryId
+      type: object
+    TransitionTimePeriodRequest:
+      description: Request to move a pay period to a new lifecycle status
+      properties:
+        status:
+          description: Target lifecycle status
+          enum:
+          - OPEN
+          - SUBMISSION_CLOSED
+          - PAYROLL_CLOSED
+          example: SUBMISSION_CLOSED
+          type: string
+      required:
+      - status
       type: object
     UpdateEmployeeRequest:
       description: Request to update an existing employee record

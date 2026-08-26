@@ -73,6 +73,18 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   people:
+    # Pay-period grid and rollover (#1527): periods lie on a fixed grid of
+    # period-length-days windows anchored at anchor-date; the daily rollover keeps every
+    # tenant with timekeeping activity covered and advances statuses as dates pass.
+    time-period:
+      period-length-days: ${POS_PEOPLE_TIME_PERIOD_LENGTH_DAYS:14}
+      anchor-date: ${POS_PEOPLE_TIME_PERIOD_ANCHOR_DATE:2026-06-01}
+      submission-close-grace-days: ${POS_PEOPLE_TIME_PERIOD_SUBMISSION_CLOSE_GRACE_DAYS:0}
+      payroll-close-grace-days: ${POS_PEOPLE_TIME_PERIOD_PAYROLL_CLOSE_GRACE_DAYS:7}
+      max-backfill-periods: ${POS_PEOPLE_TIME_PERIOD_MAX_BACKFILL_PERIODS:12}
+      rollover:
+        enabled: ${POS_PEOPLE_TIME_PERIOD_ROLLOVER_ENABLED:true}
+        cron: ${POS_PEOPLE_TIME_PERIOD_ROLLOVER_CRON:0 15 0 * * *}
     reports:
       threshold-cache:
         max-resolution-cache-entries: ${POS_PEOPLE_REPORTS_THRESHOLD_CACHE_MAX_ENTRIES:4096}

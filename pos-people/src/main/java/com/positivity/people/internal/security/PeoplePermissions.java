@@ -62,6 +62,12 @@ public final class PeoplePermissions {
     /** View timeException. */
     public static final String TIMEEXCEPTION_VIEW = "people:timeException:view";
 
+    /** Create pay periods (time periods) for timekeeping approval. */
+    public static final String TIMEPERIOD_CREATE = "people:timePeriod:create";
+
+    /** Transition a pay period's lifecycle status (open, close submissions, close payroll). */
+    public static final String TIMEPERIOD_TRANSITION = "people:timePeriod:transition";
+
     /** Approve timekeeping period entries. */
     public static final String TIMEKEEPING_APPROVE = "people:timekeeping:approve";
 

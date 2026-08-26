@@ -20,7 +20,10 @@ VALUES
         DATE '2026-05-18', DATE '2026-05-31', 'PAYROLL_CLOSED', NOW(), NOW()),
     ('01960030-0000-7000-8000-000000000002'::uuid, '01960000-0000-7000-8000-000000000001'::uuid,
         DATE '2026-06-01', DATE '2026-06-14', 'OPEN', NOW(), NOW())
-ON CONFLICT (time_period_id) DO NOTHING;
+-- No conflict target: the rollover scheduler (#1527) may have already created a period
+-- with the same (tenant_id, start_date) under a different id, which would hit
+-- uq_time_period_tenant_start instead of the primary key.
+ON CONFLICT DO NOTHING;
 
 -- ── PENDING entries in the OPEN period (2026-06-01 .. 2026-06-14) ────────────
 -- 5 employees x 3 daily 8h shifts = 15 entries, all PENDING_APPROVAL.
