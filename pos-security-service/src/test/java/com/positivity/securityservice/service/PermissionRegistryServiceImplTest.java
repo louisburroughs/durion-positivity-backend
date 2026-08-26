@@ -243,6 +243,69 @@ class PermissionRegistryServiceImplTest {
         assertThat(response.getUpdatedPermissions()).isZero();
     }
 
+    // =========================================================
+    // deprecated / supersededBy: restart-survival (gap #1 in the RBAC audit's §4)
+    // =========================================================
+
+    @Test
+    void registerPermissions_deprecatedManifest_survivesReRegistration() {
+        Permission existingPermission = new Permission();
+        existingPermission.setName("accounting:ap:approve");
+        existingPermission.setDescription("Approve accounts payable");
+        existingPermission.setDeprecated(false);
+
+        when(permissionRepository.findByName("accounting:ap:approve")).thenReturn(Optional.of(existingPermission));
+        when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Startup #1: manifest not yet marked deprecated.
+        PermissionRegistrationRequest initialRequest = new PermissionRegistrationRequest(
+                "accounting",
+                "pos-accounting",
+                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                        "accounting:ap:approve", "Approve accounts payable")),
+                "1.0");
+        permissionRegistryService.registerPermissions(initialRequest);
+        assertThat(existingPermission.isDeprecated()).isFalse();
+
+        // Startup #2 ("restart"): manifest now marks the code deprecated with a successor.
+        PermissionRegistrationRequest deprecatedRequest = new PermissionRegistrationRequest(
+                "accounting",
+                "pos-accounting",
+                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                        "accounting:ap:approve", "Approve accounts payable", true, "accounting:ap:pay")),
+                "1.0");
+        PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(deprecatedRequest);
+
+        assertThat(existingPermission.isDeprecated()).isTrue();
+        assertThat(existingPermission.getSupersededBy()).isEqualTo("accounting:ap:pay");
+        assertThat(response.getUpdatedPermissions()).isEqualTo(1);
+    }
+
+    @Test
+    void registerPermissions_nonDeprecatedManifest_clearsPreviouslyDeprecatedFlag() {
+        Permission existingPermission = new Permission();
+        existingPermission.setName("accounting:ap:approve");
+        existingPermission.setDescription("Approve accounts payable");
+        existingPermission.setDeprecated(true);
+        existingPermission.setSupersededBy("accounting:ap:pay");
+
+        when(permissionRepository.findByName("accounting:ap:approve")).thenReturn(Optional.of(existingPermission));
+        when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                "accounting",
+                "pos-accounting",
+                List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                        "accounting:ap:approve", "Approve accounts payable")),
+                "1.0");
+
+        PermissionRegistrationResponse response = permissionRegistryService.registerPermissions(request);
+
+        assertThat(existingPermission.isDeprecated()).isFalse();
+        assertThat(existingPermission.getSupersededBy()).isNull();
+        assertThat(response.getUpdatedPermissions()).isEqualTo(1);
+    }
+
     @Test
     void registerNewPermission_saveThrows_addsErrorAndSkips() {
         // save() throws IllegalArgumentException → caught in registerNewPermission's inner try/catch

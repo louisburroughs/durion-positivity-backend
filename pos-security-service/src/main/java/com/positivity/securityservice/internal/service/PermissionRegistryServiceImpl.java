@@ -125,8 +125,14 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             PermissionRegistrationRequest.PermissionDefinition permDef,
             Permission existing,
             ProcessingCounters counters) {
-        if (!Objects.equals(existing.getDescription(), permDef.getDescription())) {
+        boolean descriptionChanged = !Objects.equals(existing.getDescription(), permDef.getDescription());
+        boolean deprecatedChanged = existing.isDeprecated() != permDef.isDeprecated();
+        boolean supersededByChanged = !Objects.equals(existing.getSupersededBy(), permDef.getSupersededBy());
+
+        if (descriptionChanged || deprecatedChanged || supersededByChanged) {
             existing.setDescription(permDef.getDescription());
+            existing.setDeprecated(permDef.isDeprecated());
+            existing.setSupersededBy(permDef.getSupersededBy());
             existing.setRegisteredByService(request.getServiceName());
             permissionRepository.save(existing);
             log.debug("Updated permission: {}", permDef.getName());
@@ -203,6 +209,8 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
         Permission permission = new Permission();
         permission.setName(permDef.getName());
         permission.setDescription(permDef.getDescription());
+        permission.setDeprecated(permDef.isDeprecated());
+        permission.setSupersededBy(permDef.getSupersededBy());
         permission.setRegisteredByService(request.getServiceName());
         permission.setRegisteredAt(Instant.now(clock));
         return permission;
@@ -260,6 +268,7 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
                 .domain(permission.getDomain())
                 .description(permission.getDescription())
                 .deprecated(permission.isDeprecated())
+                .supersededBy(permission.getSupersededBy())
                 .build();
     }
 }

@@ -27,8 +27,23 @@ import org.jspecify.annotations.NonNull;
  *
  * @param name Permission name in domain:resource:action format
  * @param description Human-readable description
+ * @param deprecated Whether this permission is retired and should no longer be granted
+ * @param supersededBy Name of the permission that replaces this one, if any (may be
+ *                     {@code null} even when {@code deprecated} is {@code true} — some
+ *                     retired codes have no successor)
  */
-public record PermissionDefinition(@NonNull String name, String description) {
+public record PermissionDefinition(@NonNull String name, String description, boolean deprecated, String supersededBy) {
+
+    /**
+     * Backward-compatible convenience constructor for the common non-deprecated case.
+     *
+     * @param name Permission name (e.g., "catalog:product:view")
+     * @param description Human-readable description
+     */
+    public PermissionDefinition(@NonNull String name, String description) {
+        this(name, description, false, null);
+    }
+
     /**
      * Create a permission definition with name and description.
      *

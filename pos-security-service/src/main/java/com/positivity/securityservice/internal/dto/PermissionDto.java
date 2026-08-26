@@ -40,4 +40,10 @@ public class PermissionDto {
 
     @Schema(description = "True when the permission is deprecated", example = "false", requiredMode = REQUIRED)
     boolean deprecated;
+
+    @Schema(
+            description = "Permission name that replaces this one; absent when there is no successor",
+            example = "accounting:ap:pay",
+            requiredMode = NOT_REQUIRED)
+    String supersededBy;
 }

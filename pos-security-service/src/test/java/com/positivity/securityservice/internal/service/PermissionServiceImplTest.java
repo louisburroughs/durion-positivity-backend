@@ -120,6 +120,71 @@ class PermissionServiceImplTest {
             assertThat(result).isEmpty();
             verify(permissionRepository, never()).save(any());
         }
+
+        @Test
+        @DisplayName(
+                "re-registering a manifest with deprecated=true survives a restart (does not get clobbered back to false)")
+        void registerPermissions_deprecatedManifest_survivesReRegistration() {
+            Permission existingPermission = new Permission();
+            existingPermission.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            existingPermission.setName("accounting:ap:approve");
+            existingPermission.setDescription("Approve accounts payable");
+            existingPermission.setDeprecated(false);
+
+            when(permissionRepository.findByName("accounting:ap:approve")).thenReturn(Optional.of(existingPermission));
+            when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Startup #1: manifest not yet marked deprecated.
+            PermissionRegistrationRequest initialRequest = new PermissionRegistrationRequest(
+                    "accounting",
+                    "pos-accounting",
+                    List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                            "accounting:ap:approve", "Approve accounts payable")),
+                    "1.0");
+            sut.registerPermissions(initialRequest);
+            assertThat(existingPermission.isDeprecated()).isFalse();
+
+            // Startup #2 ("restart"): manifest now marks the code deprecated with a successor.
+            PermissionRegistrationRequest deprecatedRequest = new PermissionRegistrationRequest(
+                    "accounting",
+                    "pos-accounting",
+                    List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                            "accounting:ap:approve", "Approve accounts payable", true, "accounting:ap:pay")),
+                    "1.0");
+            var result = sut.registerPermissions(deprecatedRequest);
+
+            assertThat(existingPermission.isDeprecated()).isTrue();
+            assertThat(existingPermission.getSupersededBy()).isEqualTo("accounting:ap:pay");
+            assertThat(result.get(0).isDeprecated()).isTrue();
+            assertThat(result.get(0).getSupersededBy()).isEqualTo("accounting:ap:pay");
+        }
+
+        @Test
+        @DisplayName("re-registering a manifest without deprecated=true clears a previously deprecated permission")
+        void registerPermissions_nonDeprecatedManifest_clearsPreviouslyDeprecatedFlag() {
+            Permission existingPermission = new Permission();
+            existingPermission.setId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+            existingPermission.setName("accounting:ap:approve");
+            existingPermission.setDescription("Approve accounts payable");
+            existingPermission.setDeprecated(true);
+            existingPermission.setSupersededBy("accounting:ap:pay");
+
+            when(permissionRepository.findByName("accounting:ap:approve")).thenReturn(Optional.of(existingPermission));
+            when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PermissionRegistrationRequest request = new PermissionRegistrationRequest(
+                    "accounting",
+                    "pos-accounting",
+                    List.of(new PermissionRegistrationRequest.PermissionDefinition(
+                            "accounting:ap:approve", "Approve accounts payable")),
+                    "1.0");
+
+            var result = sut.registerPermissions(request);
+
+            assertThat(existingPermission.isDeprecated()).isFalse();
+            assertThat(existingPermission.getSupersededBy()).isNull();
+            assertThat(result.get(0).isDeprecated()).isFalse();
+        }
     }
 
     @Nested

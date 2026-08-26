@@ -161,6 +161,70 @@ class PermissionManifestLoaderTest {
     }
 
     @Test
+    @DisplayName("deprecated and supersededBy are optional and default to not-deprecated/absent")
+    void deprecationFieldsAreOptional() throws IOException {
+        var loaded = PermissionManifestLoader.loadFromClasspath(manifest("""
+                domain: crm
+                serviceName: pos-customer
+                permissions:
+                  - name: crm:party:view
+                """));
+
+        PermissionDefinition permission = loaded.permissions().getFirst();
+        assertThat(permission.deprecated()).isFalse();
+        assertThat(permission.supersededBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("a deprecated permission with a successor is parsed with both fields")
+    void deprecatedPermissionWithSuccessorIsParsed() throws IOException {
+        var loaded = PermissionManifestLoader.loadFromClasspath(manifest("""
+                domain: accounting
+                serviceName: pos-accounting
+                permissions:
+                  - name: accounting:ap:approve
+                    description: Approve accounts payable
+                    deprecated: true
+                    supersededBy: accounting:ap:pay
+                """));
+
+        PermissionDefinition permission = loaded.permissions().getFirst();
+        assertThat(permission.deprecated()).isTrue();
+        assertThat(permission.supersededBy()).isEqualTo("accounting:ap:pay");
+    }
+
+    @Test
+    @DisplayName("a deprecated permission may have no successor — some retired codes never had one")
+    void deprecatedPermissionWithoutSuccessorIsParsed() throws IOException {
+        var loaded = PermissionManifestLoader.loadFromClasspath(manifest("""
+                domain: accounting
+                serviceName: pos-accounting
+                permissions:
+                  - name: accounting:mapping:view
+                    description: Superseded mapping view
+                    deprecated: true
+                """));
+
+        PermissionDefinition permission = loaded.permissions().getFirst();
+        assertThat(permission.deprecated()).isTrue();
+        assertThat(permission.supersededBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("a non-boolean deprecated value is dropped rather than coerced")
+    void nonBooleanDeprecatedIsDropped() throws IOException {
+        var loaded = PermissionManifestLoader.loadFromClasspath(manifest("""
+                domain: crm
+                serviceName: pos-customer
+                permissions:
+                  - name: crm:party:view
+                    deprecated: "yes"
+                """));
+
+        assertThat(loaded.permissions().getFirst().deprecated()).isFalse();
+    }
+
+    @Test
     @DisplayName("a manifest that is not on the classpath fails startup")
     void missingManifestFailsStartup() {
         assertThatThrownBy(() -> PermissionManifestLoader.loadFromClasspath("no-such-manifest.yaml"))

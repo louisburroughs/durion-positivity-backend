@@ -81,7 +81,13 @@ public final class PermissionManifestLoader {
         Object descriptionNode = mapEntry.get("description");
         String description = descriptionNode instanceof String value ? value : null;
 
-        return PermissionDefinition.of(name, description);
+        Object deprecatedNode = mapEntry.get("deprecated");
+        boolean deprecated = deprecatedNode instanceof Boolean value && value;
+
+        Object supersededByNode = mapEntry.get("supersededBy");
+        String supersededBy = supersededByNode instanceof String value ? value : null;
+
+        return new PermissionDefinition(name, description, deprecated, supersededBy);
     }
 
     private static String requireString(Map<String, Object> root, String key, String classpathLocation) {
