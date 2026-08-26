@@ -121,4 +121,31 @@ class RuleBasedContentDetectionServiceImplTest {
 
         assertThat(mappings).containsExactly(Map.entry("sku", "sku"));
     }
+
+    @Test
+    void suggestMappings_locationHeaders_mapsLocationFields() {
+        Map<String, String> mappings = service.suggestMappings(
+                List.of(
+                        "store_name",
+                        "store_code",
+                        "street_address",
+                        "city",
+                        "state",
+                        "zip",
+                        "country_code",
+                        "phone",
+                        "store_type"),
+                DomainType.LOCATION);
+
+        assertThat(mappings)
+                .containsEntry("store_name", "name")
+                .containsEntry("store_code", "code")
+                .containsEntry("street_address", "addressLine1")
+                .containsEntry("city", "city")
+                .containsEntry("state", "stateOrProvince")
+                .containsEntry("zip", "postalCode")
+                .containsEntry("country_code", "countryCode")
+                .containsEntry("phone", "phoneNumber")
+                .containsEntry("store_type", "locationTypeName");
+    }
 }

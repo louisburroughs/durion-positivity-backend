@@ -61,6 +61,8 @@ pos:
     service-id: ${POS_CATALOG_SERVICE_ID:catalog}
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
+  location:
+    service-id: ${POS_LOCATION_SERVICE_ID:location}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
   price:

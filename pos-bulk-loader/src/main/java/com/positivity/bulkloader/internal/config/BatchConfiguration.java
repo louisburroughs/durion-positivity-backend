@@ -7,6 +7,8 @@ import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
+import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.LocationRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
@@ -66,6 +68,7 @@ public class BatchConfiguration {
     private final PlatformTransactionManager transactionManager;
     private final CatalogLoaderStrategy catalogLoaderStrategy;
     private final CustomerLoaderStrategy customerLoaderStrategy;
+    private final LocationLoaderStrategy locationLoaderStrategy;
     private final PersonLoaderStrategy personLoaderStrategy;
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
     private final VehicleLoaderStrategy vehicleLoaderStrategy;
@@ -82,6 +85,9 @@ public class BatchConfiguration {
 
     @Value("${pos.customer.service-id:customer}")
     private String customerServiceId;
+
+    @Value("${pos.location.service-id:location}")
+    private String locationServiceId;
 
     @Value("${pos.people.service-id:people}")
     private String peopleServiceId;
@@ -314,6 +320,115 @@ public class BatchConfiguration {
             } catch (RestClientException e) {
                 log.error(
                         "customerBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
+                        chunk.size(),
+                        e.getMessage(),
+                        e);
+                throw e;
+            }
+        };
+    }
+
+    @Bean
+    public Job locationBulkLoadJob(Step locationBulkLoadStep) {
+        return new JobBuilder("locationBulkLoadJob", jobRepository)
+                .listener(bulkLoadJobExecutionListener)
+                .start(locationBulkLoadStep)
+                .build();
+    }
+
+    @Bean
+    public Step locationBulkLoadStep(
+            FlatFileItemReader<LocationRecord> locationCsvReader,
+            ItemProcessor<LocationRecord, LocationRecord> locationItemProcessor,
+            ItemWriter<LocationRecord> locationBulkIngestWriter) {
+        return new StepBuilder("locationBulkLoadStep", jobRepository)
+                .<LocationRecord, LocationRecord>chunk(500)
+                .transactionManager(transactionManager)
+                .reader(locationCsvReader)
+                .processor(locationItemProcessor)
+                .writer(locationBulkIngestWriter)
+                .faultTolerant()
+                .skipLimit(Integer.MAX_VALUE)
+                .skip(Exception.class)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public FlatFileItemReader<LocationRecord> locationCsvReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath) {
+        java.nio.file.Path resolved = resolveStoragePath(storagePath);
+
+        BeanWrapperFieldSetMapper<LocationRecord> mapper = new BeanWrapperFieldSetMapper<>();
+        mapper.setTargetType(LocationRecord.class);
+        return new FlatFileItemReaderBuilder<LocationRecord>()
+                .name("locationCsvReader")
+                .resource(new FileSystemResource(resolved))
+                .delimited()
+                .names(
+                        "name",
+                        "code",
+                        "addressLine1",
+                        "addressLine2",
+                        "city",
+                        "stateOrProvince",
+                        "postalCode",
+                        "countryCode",
+                        "phoneNumber",
+                        "active",
+                        "locationTypeName")
+                .fieldSetMapper(mapper)
+                .linesToSkip(1)
+                .build();
+    }
+
+    @Bean
+    public ItemProcessor<LocationRecord, LocationRecord> locationItemProcessor() {
+        return item -> {
+            List<String> errors = locationLoaderStrategy.validate(item);
+            if (!errors.isEmpty()) {
+                log.warn("Location record validation failed: {}", errors);
+                return null;
+            }
+            return item;
+        };
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<LocationRecord> locationBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + locationServiceId).build();
+        return chunk -> {
+            JobContext context =
+                    resolveJobContext("locationBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
+            if (context == null) {
+                return;
+            }
+            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
+
+            List<LocationWriterPayload> payloads = mapLocationPayloads(chunk.getItems());
+            BulkIngestRequest<LocationWriterPayload> request =
+                    buildBulkIngestRequest(context, sanitizedOperatorId, payloads);
+
+            try {
+                RestClient.RequestBodySpec requestSpec = client.post()
+                        .uri("/v1/locations/bulk-ingest")
+                        .header(HEADER_AUTHORITIES, "location:write")
+                        .header(HEADER_USER, sanitizedOperatorId);
+                applyRelayHeaders(requestSpec);
+                requestSpec
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (RestClientException e) {
+                log.error(
+                        "locationBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
                         chunk.size(),
                         e.getMessage(),
                         e);
@@ -807,6 +922,44 @@ public class BatchConfiguration {
         return request;
     }
 
+    private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {
+        List<LocationWriterPayload> payloads = new ArrayList<>(items.size());
+        for (LocationRecord item : items) {
+            payloads.add(new LocationWriterPayload(
+                    item.getName(),
+                    item.getCode(),
+                    item.getAddressLine1(),
+                    item.getAddressLine2(),
+                    item.getCity(),
+                    item.getStateOrProvince(),
+                    item.getPostalCode(),
+                    item.getCountryCode(),
+                    item.getPhoneNumber(),
+                    parseLocationActive(item),
+                    item.getLocationTypeName()));
+        }
+        return payloads;
+    }
+
+    private Boolean parseLocationActive(LocationRecord item) {
+        String active = item.getActive();
+        if (active == null || active.isBlank()) {
+            // Null lets the ingest endpoint apply its own default (active=true).
+            return null;
+        }
+        if ("true".equalsIgnoreCase(active.trim())) {
+            return Boolean.TRUE;
+        }
+        if ("false".equalsIgnoreCase(active.trim())) {
+            return Boolean.FALSE;
+        }
+        log.warn(
+                "locationBulkIngestWriter: invalid active flag '{}' for code '{}', setting null",
+                active,
+                item.getCode());
+        return null;
+    }
+
     private List<VehicleWriterPayload> mapVehiclePayloads(List<? extends VehicleBulkRecord> items) {
         List<VehicleWriterPayload> payloads = new ArrayList<>(items.size());
         for (VehicleBulkRecord item : items) {
@@ -888,6 +1041,19 @@ public class BatchConfiguration {
     }
 
     private record JobContext(UUID jobId, UUID locationId) {}
+
+    private record LocationWriterPayload(
+            String name,
+            String code,
+            String addressLine1,
+            String addressLine2,
+            String city,
+            String stateOrProvince,
+            String postalCode,
+            String countryCode,
+            String phoneNumber,
+            Boolean active,
+            String locationTypeName) {}
 
     private record VehicleWriterPayload(
             UUID accountId,

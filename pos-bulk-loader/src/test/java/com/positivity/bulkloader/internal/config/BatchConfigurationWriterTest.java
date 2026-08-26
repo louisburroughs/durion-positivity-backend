@@ -17,6 +17,8 @@ import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
+import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.LocationRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
@@ -65,6 +67,9 @@ class BatchConfigurationWriterTest {
     CustomerLoaderStrategy customerLoaderStrategy;
 
     @Mock
+    LocationLoaderStrategy locationLoaderStrategy;
+
+    @Mock
     PersonLoaderStrategy personLoaderStrategy;
 
     @Mock
@@ -109,6 +114,7 @@ class BatchConfigurationWriterTest {
                 transactionManager,
                 catalogLoaderStrategy,
                 customerLoaderStrategy,
+                locationLoaderStrategy,
                 personLoaderStrategy,
                 basePriceLoaderStrategy,
                 vehicleLoaderStrategy,
@@ -251,6 +257,120 @@ class BatchConfigurationWriterTest {
 
         assertThatCode(() -> writer.write(Chunk.of(person))).doesNotThrowAnyException();
         verify(mockRestClient, never()).post();
+    }
+
+    // --- locationBulkIngestWriter ---
+
+    @Test
+    void locationBulkIngestWriter_happyPath_postsChunk() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+        location.setCode("CLT-SOUTH");
+        location.setActive("true");
+
+        ItemWriter<LocationRecord> writer = batchConfiguration.locationBulkIngestWriter(
+                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+        assertThatCode(() -> writer.write(Chunk.of(location))).doesNotThrowAnyException();
+        verify(requestBodyUriSpec).uri("/v1/locations/bulk-ingest");
+        verify(requestBodySpec).header("X-Authorities", "location:write");
+        verify(requestBodySpec).header("X-User", VALID_OPERATOR_ID);
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(requestBodySpec).body(bodyCaptor.capture());
+        assertThat(bodyCaptor.getValue()).isInstanceOf(com.positivity.bulkingest.BulkIngestRequest.class);
+        @SuppressWarnings("unchecked")
+        var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+        assertThat(request.getJobId()).isEqualTo(java.util.UUID.fromString(VALID_JOB_ID));
+        assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
+        assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
+        assertThat(request.getRecords()).hasSize(1);
+        assertThat(request.getRecords().get(0).toString())
+                .contains("name=Charlotte South")
+                .contains("code=CLT-SOUTH")
+                .contains("active=true");
+    }
+
+    @Test
+    void locationBulkIngestWriter_invalidActiveFlag_mapsToNull() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+        location.setCode("CLT-SOUTH");
+        location.setActive("yes-please");
+
+        ItemWriter<LocationRecord> writer = batchConfiguration.locationBulkIngestWriter(
+                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+        assertThatCode(() -> writer.write(Chunk.of(location))).doesNotThrowAnyException();
+        ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(requestBodySpec).body(bodyCaptor.capture());
+        @SuppressWarnings("unchecked")
+        var request = (com.positivity.bulkingest.BulkIngestRequest<Object>) bodyCaptor.getValue();
+        assertThat(request.getRecords().get(0).toString()).contains("active=null");
+    }
+
+    @Test
+    void locationBulkIngestWriter_nullJobId_skipsChunk() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+
+        ItemWriter<LocationRecord> writer = batchConfiguration.locationBulkIngestWriter(
+                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+        assertThatCode(() -> writer.write(Chunk.of(location))).doesNotThrowAnyException();
+        verify(mockRestClient, never()).post();
+    }
+
+    @Test
+    void locationBulkIngestWriter_nullLocationId_skipsChunk() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+
+        ItemWriter<LocationRecord> writer =
+                batchConfiguration.locationBulkIngestWriter(restClientBuilder, VALID_JOB_ID, null, VALID_OPERATOR_ID);
+
+        assertThatCode(() -> writer.write(Chunk.of(location))).doesNotThrowAnyException();
+        verify(mockRestClient, never()).post();
+    }
+
+    @Test
+    void locationBulkIngestWriter_throwsRestClientException_onHttpFailure() {
+        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+        location.setCode("CLT-SOUTH");
+
+        ItemWriter<LocationRecord> writer = batchConfiguration.locationBulkIngestWriter(
+                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+        Chunk<LocationRecord> chunk = Chunk.of(location);
+
+        assertThrows(RestClientException.class, () -> writer.write(chunk));
+    }
+
+    @Test
+    void locationBulkIngestWriter_skipsChunk_onMalformedJobId() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+
+        ItemWriter<LocationRecord> writer = batchConfiguration.locationBulkIngestWriter(
+                restClientBuilder, "not-a-valid-uuid", VALID_LOCATION_ID, VALID_OPERATOR_ID);
+
+        assertThatCode(() -> writer.write(Chunk.of(location))).doesNotThrowAnyException();
+        verifyNoInteractions(mockRestClient);
+    }
+
+    @Test
+    void locationBulkIngestWriter_blankOperatorId_usesServiceFallbackUser() {
+        LocationRecord location = new LocationRecord();
+        location.setName("Charlotte South");
+        location.setCode("CLT-SOUTH");
+
+        ItemWriter<LocationRecord> writer =
+                batchConfiguration.locationBulkIngestWriter(restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, "   ");
+
+        assertThatCode(() -> writer.write(Chunk.of(location))).doesNotThrowAnyException();
+        verify(requestBodySpec).header("X-User", "bulk-loader-service");
+        verify(requestBodySpec).header("X-Authorities", "location:write");
     }
 
     // --- peopleBulkIngestWriter ---
