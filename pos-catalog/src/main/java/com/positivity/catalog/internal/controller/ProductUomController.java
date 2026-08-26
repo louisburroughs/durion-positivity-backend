@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.ProductUomCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUomDto;
 import com.positivity.catalog.internal.dto.ProductUomUpdateRequestDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.ProductUomService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,10 +40,10 @@ public class ProductUomController {
 
     private final ProductUomService productUomService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_UOM_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_UOM_EDIT})
     @PostMapping
     @Operation(operationId = "addProductUom", summary = "Add Product UoM Conversion", description = """
             Adds a unit-of-measure entry to a product's conversion set, binding a UoM code to its factor \
@@ -87,10 +88,10 @@ public class ProductUomController {
         return ResponseEntity.status(HttpStatus.CREATED).body(productUomService.addProductUom(productId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_UOM_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_UOM_VIEW})
     @GetMapping
     @Operation(operationId = "listProductUoms", summary = "List Product UoM Conversions", description = """
             Returns the product's unit-of-measure conversion set ordered by UoM code, each entry carrying its \
@@ -116,10 +117,10 @@ public class ProductUomController {
         return ResponseEntity.ok(productUomService.listProductUoms(productId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_UOM_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_UOM_EDIT})
     @PutMapping("/{uomId}")
     @Operation(operationId = "updateProductUom", summary = "Update Product UoM Conversion", description = """
             Updates the conversion factor, precision scale and optionally the type of one product UoM entry; \
@@ -162,10 +163,10 @@ public class ProductUomController {
         return ResponseEntity.ok(productUomService.updateProductUom(productId, uomId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_UOM_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_UOM_EDIT})
     @DeleteMapping("/{uomId}")
     @Operation(operationId = "deleteProductUom", summary = "Delete Product UoM Conversion", description = """
             Removes one unit-of-measure entry from a product's conversion set permanently; there is no soft \

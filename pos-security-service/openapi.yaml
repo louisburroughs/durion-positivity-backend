@@ -222,6 +222,8 @@ paths:
       summary: Search Audit Events With Filters
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:view
     post:
       description: 'Records an immutable audit event and returns the generated event id and server timestamp.
 
@@ -303,6 +305,8 @@ paths:
       summary: Record an Immutable Audit Event
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:create
   /v1/audit/events/**:
     delete:
       description: 'Rejects every attempt to delete audit events, unconditionally answering 405 Method Not Allowed.
@@ -363,6 +367,8 @@ paths:
       summary: Reject Audit Event Deletion
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:create
     put:
       description: 'Rejects every attempt to modify audit events, unconditionally answering 405 Method Not Allowed.
 
@@ -422,6 +428,8 @@ paths:
       summary: Reject Audit Event Modification
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:create
   /v1/audit/events/{eventId}:
     get:
       description: 'Returns a previously recorded audit event by its event id.
@@ -493,6 +501,8 @@ paths:
       summary: Get One Audit Event by Id
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:view
   /v1/audit/exports:
     post:
       description: 'Submits an asynchronous audit export job and answers 202 Accepted with the job id and an initial PENDING status.
@@ -572,6 +582,8 @@ paths:
       summary: Request an Asynchronous Audit Export
       tags:
       - Audit Exports
+      x-required-permissions:
+      - security:audit:export
   /v1/audit/exports/{jobId}:
     get:
       description: 'Returns the current status of a previously submitted audit export job, including completion time, download URL, and error message when present.
@@ -645,6 +657,8 @@ paths:
       summary: Get Audit Export Job Status
       tags:
       - Audit Exports
+      x-required-permissions:
+      - security:audit:export
   /v1/audit/pricing-snapshots:
     post:
       description: 'Records an immutable pricing snapshot with its ordered rule-evaluation trace and returns the generated snapshot id.
@@ -731,6 +745,8 @@ paths:
       summary: Record an Immutable Pricing Snapshot
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:create
   /v1/audit/pricing-snapshots/{snapshotId}:
     get:
       description: 'Returns an immutable pricing snapshot with its rule-evaluation steps ordered by rule id.
@@ -802,6 +818,8 @@ paths:
       summary: Get One Pricing Snapshot by Id
       tags:
       - Audit
+      x-required-permissions:
+      - security:audit:view
   /v1/auth/internal/token:
     post:
       description: 'Issues a single JWT access token (1-hour expiry) for an existing user''s username on behalf of a trusted internal caller, without checking a password.
@@ -881,6 +899,8 @@ paths:
       summary: Issue Internal JWT Access Token
       tags:
       - JWT API
+      x-required-permissions:
+      - security:token:issue_internal
   /v1/auth/login:
     post:
       description: 'Authenticates a user with username and password and returns a JWT access token (1-hour) and refresh token (7-day) carrying uid, roles, perm_bits, and perm_ver claims.
@@ -1096,6 +1116,8 @@ paths:
       summary: Revoke a JWT Access Token
       tags:
       - JWT API
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/auth/roles:
     get:
       description: 'Extracts the roles claim from a valid JWT token and returns the normalized role names.
@@ -1169,6 +1191,8 @@ paths:
       summary: Extract Roles From JWT Token
       tags:
       - JWT API
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/auth/self-register:
     post:
       description: 'Creates a low-privilege SELF_SERVICE_CUSTOMER account for an anonymous person, resolving or creating a linked person record before any account row is written.
@@ -1318,6 +1342,8 @@ paths:
       summary: Extract Subject From JWT Token
       tags:
       - JWT API
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/auth/token-pair:
     post:
       description: 'Privileged internal endpoint that issues a JWT access token (1-hour) and refresh token (7-day) for an existing user''s username on behalf of a trusted internal caller, embedding uid, roles, perm_bits, and perm_ver claims.
@@ -1398,6 +1424,8 @@ paths:
       summary: Issue Privileged JWT Token Pair
       tags:
       - JWT API
+      x-required-permissions:
+      - security:token:issue_internal
   /v1/auth/user-id:
     get:
       description: 'Extracts the stable user identifier from a valid JWT token''s uid claim (falling back to the legacy userId claim) and returns it as a plain string body.
@@ -1468,6 +1496,8 @@ paths:
       summary: Extract User Id From JWT Token
       tags:
       - JWT API
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/auth/validate:
     get:
       description: 'Checks whether a JWT access token is currently valid by verifying signature, issuer, audience, expiry, Redis revocation status, and presence in the token store.
@@ -1633,6 +1663,8 @@ paths:
       summary: List Registered Permissions
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/catalog-version:
     get:
       description: 'Returns the permission catalog version compiled into this service build and the total number of permission codes in that catalog.
@@ -1773,6 +1805,8 @@ paths:
       summary: Decode Permission Bits for Diagnostics
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/domain/{domain}:
     get:
       description: 'Returns every registered permission for one domain as an unpaged list.
@@ -1846,6 +1880,8 @@ paths:
       summary: List Permissions for One Domain
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/exists/{permissionName}:
     get:
       description: 'Checks whether a permission with the given name is registered in the central registry.
@@ -1917,6 +1953,8 @@ paths:
       summary: Check Whether a Permission Is Registered
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/register:
     post:
       description: 'Registers or updates a module''s permission manifest in the central registry; this is the endpoint every pos module''s permission-registry initializer calls at startup.
@@ -2001,6 +2039,8 @@ paths:
       summary: Register Module Permission Manifest
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:register
   /v1/permissions/registerPermissions:
     post:
       description: 'Registers or updates permissions from an RBAC contract payload, upserting each named permission and returning the resulting permission list.
@@ -2087,6 +2127,8 @@ paths:
       summary: Register Permissions via RBAC Contract
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:register
   /v1/permissions/validate/{permissionName}:
     get:
       description: 'Checks whether a permission name string matches the required domain:resource:action format (or the legacy two-segment domain:action form) without touching the database.
@@ -2158,6 +2200,8 @@ paths:
       summary: Validate Permission Name Format
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/permissions/{id}:
     get:
       description: 'Returns a single registered permission by its UUID identifier, including name, domain, description, and deprecation flag.
@@ -2230,6 +2274,8 @@ paths:
       summary: Get Permission by Identifier
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/roles:
     get:
       description: 'Returns every role in the system with its permission set and audit metadata.
@@ -2297,6 +2343,8 @@ paths:
       summary: List All Roles in the System
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
     post:
       description: 'Creates a new role with the given name and optional description; the role starts with no permissions and no user assignments.
 
@@ -2376,6 +2424,8 @@ paths:
       summary: Create a New Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:create
   /v1/roles/assignments:
     post:
       description: 'Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date window.
@@ -2459,6 +2509,8 @@ paths:
       summary: Create a Scoped Role Assignment
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:assign
   /v1/roles/assignments/user/{userId}:
     get:
       description: 'Returns a user''s role assignments with their scope and effective window, limited to currently effective assignments by default.
@@ -2543,6 +2595,8 @@ paths:
       summary: List a User's Role Assignments
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/roles/assignments/{assignmentId}:
     delete:
       description: 'Revokes a role assignment by setting its effective end date, preserving the row for history.
@@ -2621,6 +2675,8 @@ paths:
       summary: Revoke a Role Assignment by Id
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:assign
   /v1/roles/by-name/{name}:
     get:
       description: 'Returns a single role looked up by its exact name, including its permission set.
@@ -2692,6 +2748,8 @@ paths:
       summary: Get a Single Role by Name
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/roles/check-permission:
     get:
       description: 'Checks whether a user holds a specific permission through a currently effective role assignment whose scope covers the given location.
@@ -2774,6 +2832,8 @@ paths:
       summary: Check One User Permission at a Location
       tags:
       - Role Management
+      x-required-permissions:
+      - security:permission:view
   /v1/roles/permissions:
     put:
       description: 'Replaces a role''s entire permission set with the supplied list of permission names.
@@ -2854,6 +2914,8 @@ paths:
       summary: Replace a Role's Permission Set
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/permissions/user/{userId}:
     get:
       description: 'Returns the union of permissions granted through a user''s currently effective role assignments, served at the legacy /permissions/user/{userId} path.
@@ -2929,6 +2991,8 @@ paths:
       summary: Get User Permissions at Legacy Path
       tags:
       - Role Management
+      x-required-permissions:
+      - security:permission:view
   /v1/roles/{id}:
     delete:
       description: 'Deletes a role by UUID, clearing its permission grants and deleting all of its role assignments in the same transaction.
@@ -2997,6 +3061,8 @@ paths:
       summary: Delete a Role and Its Associations
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:delete
     get:
       description: 'Returns a single role looked up by its UUID, including its permission set and audit metadata.
 
@@ -3068,6 +3134,8 @@ paths:
       summary: Get a Single Role by UUID
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/roles/{roleId}/permissions/grant:
     put:
       description: 'Grants a single permission key to a role, auto-registering the key in the permission registry when it is not yet known.
@@ -3152,6 +3220,8 @@ paths:
       summary: Grant a Permission to a Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/{roleId}/permissions/{permissionKey}:
     delete:
       description: 'Removes a permission key from a role''s grant set.
@@ -3225,6 +3295,8 @@ paths:
       summary: Revoke a Permission From a Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
     put:
       description: 'Adds an already-registered permission, identified by its key in the path, to a role''s grant set.
 
@@ -3297,6 +3369,8 @@ paths:
       summary: Assign a Registered Permission to a Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/{role}/default-permissions:
     get:
       description: 'Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus every permission code granted to that role in role_permissions.
@@ -3368,6 +3442,8 @@ paths:
       summary: Get a Role's Default Authority Expansion
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/self-registration/review-cases:
     get:
       description: 'Returns blocked self-registration review cases, newest first, optionally filtered by status and case type.
@@ -3452,6 +3528,8 @@ paths:
       summary: List Self-Registration Review Cases
       tags:
       - Self-Registration Review API
+      x-required-permissions:
+      - security:user_account_state:view
   /v1/self-registration/review-cases/{caseId}:
     get:
       description: 'Returns the full detail of one blocked self-registration case, including reason codes, CRM match summary, and any linked person or user ids.
@@ -3524,6 +3602,8 @@ paths:
       summary: Get One Self-Registration Review Case
       tags:
       - Self-Registration Review API
+      x-required-permissions:
+      - security:user_account_state:view
   /v1/self-registration/review-cases/{caseId}/resolve:
     post:
       description: 'Marks a blocked self-registration case RESOLVED, recording the resolving operator, timestamp, and resolution notes.
@@ -3608,6 +3688,8 @@ paths:
       summary: Resolve a Self-Registration Review Case
       tags:
       - Self-Registration Review API
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users:
     get:
       description: 'Returns every user account with its id, username, effective role names, and linked personId.
@@ -3675,6 +3757,8 @@ paths:
       summary: List All User Accounts
       tags:
       - User API
+      x-required-permissions:
+      - security:user:view
     post:
       description: 'Creates a user account with a username, a hashed password, and a set of directly attached roles.
 
@@ -3754,6 +3838,8 @@ paths:
       summary: Create a User With Roles
       tags:
       - User API
+      x-required-permissions:
+      - security:user:create
   /v1/users/authorization/decision:
     get:
       description: 'Returns an allow or deny decision for a principal identifier and permission key, evaluated against the principal-role matrix populated by assignPrincipalRole.
@@ -3834,6 +3920,8 @@ paths:
       summary: Get Authorization Decision for a Principal
       tags:
       - Authorization
+      x-required-permissions:
+      - security:authorization:decide
   /v1/users/authorization/person-decision:
     get:
       description: 'Returns an allow or deny decision for the user account linked to a personId, evaluated against that user''s directly assigned roles.
@@ -3915,6 +4003,8 @@ paths:
       summary: Get Authorization Decision for a Person
       tags:
       - Authorization
+      x-required-permissions:
+      - security:authorization:decide
   /v1/users/permissions:
     get:
       description: 'Returns a paged list of registered permissions, optionally filtered to a single domain.
@@ -4012,6 +4102,8 @@ paths:
       summary: List Registered Permissions
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/catalog-version:
     get:
       description: 'Returns the permission catalog version compiled into this service build and the total number of permission codes in that catalog.
@@ -4152,6 +4244,8 @@ paths:
       summary: Decode Permission Bits for Diagnostics
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/domain/{domain}:
     get:
       description: 'Returns every registered permission for one domain as an unpaged list.
@@ -4225,6 +4319,8 @@ paths:
       summary: List Permissions for One Domain
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/exists/{permissionName}:
     get:
       description: 'Checks whether a permission with the given name is registered in the central registry.
@@ -4296,6 +4392,8 @@ paths:
       summary: Check Whether a Permission Is Registered
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/register:
     post:
       description: 'Registers or updates a module''s permission manifest in the central registry; this is the endpoint every pos module''s permission-registry initializer calls at startup.
@@ -4380,6 +4478,8 @@ paths:
       summary: Register Module Permission Manifest
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:register
   /v1/users/permissions/registerPermissions:
     post:
       description: 'Registers or updates permissions from an RBAC contract payload, upserting each named permission and returning the resulting permission list.
@@ -4466,6 +4566,8 @@ paths:
       summary: Register Permissions via RBAC Contract
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:register
   /v1/users/permissions/validate/{permissionName}:
     get:
       description: 'Checks whether a permission name string matches the required domain:resource:action format (or the legacy two-segment domain:action form) without touching the database.
@@ -4537,6 +4639,8 @@ paths:
       summary: Validate Permission Name Format
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/users/permissions/{id}:
     get:
       description: 'Returns a single registered permission by its UUID identifier, including name, domain, description, and deprecation flag.
@@ -4609,6 +4713,8 @@ paths:
       summary: Get Permission by Identifier
       tags:
       - Permission Registry
+      x-required-permissions:
+      - security:permission:view
   /v1/users/principals/{principalId}/roles/{roleId}:
     post:
       description: 'Links a free-form principal identifier to a role in the RBAC principal matrix consulted by getAuthorizationDecision.
@@ -4684,6 +4790,8 @@ paths:
       summary: Assign a Role to a Principal
       tags:
       - Principal Role Management
+      x-required-permissions:
+      - security:role:assign
   /v1/users/roles:
     get:
       description: 'Returns every role in the system with its permission set and audit metadata.
@@ -4751,6 +4859,8 @@ paths:
       summary: List All Roles in the System
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
     post:
       description: 'Creates a new role with the given name and optional description; the role starts with no permissions and no user assignments.
 
@@ -4830,6 +4940,8 @@ paths:
       summary: Create a New Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:create
   /v1/users/roles/assignments:
     post:
       description: 'Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date window.
@@ -4913,6 +5025,8 @@ paths:
       summary: Create a Scoped Role Assignment
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:assign
   /v1/users/roles/assignments/user/{userId}:
     get:
       description: 'Returns a user''s role assignments with their scope and effective window, limited to currently effective assignments by default.
@@ -4997,6 +5111,8 @@ paths:
       summary: List a User's Role Assignments
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/users/roles/assignments/{assignmentId}:
     delete:
       description: 'Revokes a role assignment by setting its effective end date, preserving the row for history.
@@ -5075,6 +5191,8 @@ paths:
       summary: Revoke a Role Assignment by Id
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:assign
   /v1/users/roles/by-name/{name}:
     get:
       description: 'Returns a single role looked up by its exact name, including its permission set.
@@ -5146,6 +5264,8 @@ paths:
       summary: Get a Single Role by Name
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/users/roles/check-permission:
     get:
       description: 'Checks whether a user holds a specific permission through a currently effective role assignment whose scope covers the given location.
@@ -5228,6 +5348,8 @@ paths:
       summary: Check One User Permission at a Location
       tags:
       - Role Management
+      x-required-permissions:
+      - security:permission:view
   /v1/users/roles/permissions:
     put:
       description: 'Replaces a role''s entire permission set with the supplied list of permission names.
@@ -5308,6 +5430,8 @@ paths:
       summary: Replace a Role's Permission Set
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/users/roles/permissions/user/{userId}:
     get:
       description: 'Returns the union of permissions granted through a user''s currently effective role assignments, served at the legacy /permissions/user/{userId} path.
@@ -5383,6 +5507,8 @@ paths:
       summary: Get User Permissions at Legacy Path
       tags:
       - Role Management
+      x-required-permissions:
+      - security:permission:view
   /v1/users/roles/{id}:
     delete:
       description: 'Deletes a role by UUID, clearing its permission grants and deleting all of its role assignments in the same transaction.
@@ -5451,6 +5577,8 @@ paths:
       summary: Delete a Role and Its Associations
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:delete
     get:
       description: 'Returns a single role looked up by its UUID, including its permission set and audit metadata.
 
@@ -5522,6 +5650,8 @@ paths:
       summary: Get a Single Role by UUID
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/users/roles/{roleId}/permissions/grant:
     put:
       description: 'Grants a single permission key to a role, auto-registering the key in the permission registry when it is not yet known.
@@ -5606,6 +5736,8 @@ paths:
       summary: Grant a Permission to a Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/users/roles/{roleId}/permissions/{permissionKey}:
     delete:
       description: 'Removes a permission key from a role''s grant set.
@@ -5679,6 +5811,8 @@ paths:
       summary: Revoke a Permission From a Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
     put:
       description: 'Adds an already-registered permission, identified by its key in the path, to a role''s grant set.
 
@@ -5751,6 +5885,8 @@ paths:
       summary: Assign a Registered Permission to a Role
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/users/roles/{role}/default-permissions:
     get:
       description: 'Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus every permission code granted to that role in role_permissions.
@@ -5822,6 +5958,8 @@ paths:
       summary: Get a Role's Default Authority Expansion
       tags:
       - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/users/{id}:
     delete:
       description: 'Deletes a user account and queues removal of its user-person link so downstream projections follow the account out.
@@ -5892,6 +6030,8 @@ paths:
       summary: Delete a User Account
       tags:
       - User API
+      x-required-permissions:
+      - security:user:delete
     get:
       description: 'Returns a single user account by UUID, including effective role names merged from direct roles and currently active role assignments.
 
@@ -5965,6 +6105,8 @@ paths:
       summary: Get a User Account by Id
       tags:
       - User API
+      x-required-permissions:
+      - security:user:view
     put:
       description: 'Applies a partial update to a user account: username, password, and the direct role set are each replaced only when supplied.
 
@@ -6052,6 +6194,8 @@ paths:
       summary: Partially Update a User Account
       tags:
       - User API
+      x-required-permissions:
+      - security:user:edit
   /v1/users/{id}/account-state:
     get:
       description: 'Returns the administrative account-state flags for a user: enabled, lock, account-expiry, and credential-expiry state with their timestamps, disabling actor, and failed-attempt count.
@@ -6124,6 +6268,8 @@ paths:
       summary: Get a User's Account-State Flags
       tags:
       - Admin Account-State API
+      x-required-permissions:
+      - security:user_account_state:view
   /v1/users/{id}/disable:
     post:
       description: 'Marks a user account as disabled, records the disabling actor and time, and immediately revokes every token issued to the user.
@@ -6192,6 +6338,8 @@ paths:
       summary: Disable a User Account
       tags:
       - Admin Account-State API
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/enable:
     post:
       description: 'Marks a user account as enabled so it is again accepted for sign-in and access checks.
@@ -6260,6 +6408,8 @@ paths:
       summary: Enable a Disabled User Account
       tags:
       - Admin Account-State API
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/expire-account:
     post:
       description: 'Marks a user account as expired, stamping the expiry time and immediately revoking every token issued to the user.
@@ -6328,6 +6478,8 @@ paths:
       summary: Expire a User Account
       tags:
       - Admin Account-State API
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/expire-credentials:
     post:
       description: 'Marks a user''s credentials as expired, stamping the expiry time and immediately revoking every token so a credential reset is required before further use.
@@ -6396,6 +6548,8 @@ paths:
       summary: Expire a User's Credentials
       tags:
       - Admin Account-State API
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{id}/unlock:
     post:
       description: 'Clears the lockout state on a user account, resetting the failed-attempt counter and lock timestamps so the user can authenticate again.
@@ -6464,6 +6618,8 @@ paths:
       summary: Unlock a Locked User Account
       tags:
       - Admin Account-State API
+      x-required-permissions:
+      - security:user_account_state:manage
   /v1/users/{userId}/permissions:
     get:
       description: 'Returns the union of permissions granted through a user''s currently effective role assignments.
@@ -6539,6 +6695,8 @@ paths:
       summary: Get a User's Effective Permissions
       tags:
       - User Role Management
+      x-required-permissions:
+      - security:permission:view
   /v1/users/{userId}/roles/{roleId}:
     delete:
       description: 'Ends the first currently effective assignment of a role for a user by setting its end date to now, preserving the row for history.
@@ -6613,6 +6771,8 @@ paths:
       summary: Revoke a Role From a User
       tags:
       - User Role Management
+      x-required-permissions:
+      - security:role:assign
     put:
       description: 'Creates a GLOBAL-scoped role assignment linking a user to a role, effective immediately with no end date.
 
@@ -6686,6 +6846,8 @@ paths:
       summary: Assign a Role to a User
       tags:
       - User Role Management
+      x-required-permissions:
+      - security:role:assign
   /v1/users/{username}/roles:
     put:
       description: 'Replaces a user''s directly attached role set with the supplied role names, looking the user up by username.
@@ -6772,6 +6934,8 @@ paths:
       summary: Replace a User's Direct Role Set
       tags:
       - User API
+      x-required-permissions:
+      - security:role:assign
 components:
   schemas:
     AccountStateResponse:
@@ -7357,6 +7521,10 @@ components:
     PermissionDefinition:
       description: A single permission definition within a registration manifest
       properties:
+        deprecated:
+          description: Whether this permission is retired and should no longer be granted
+          example: false
+          type: boolean
         description:
           description: Human-readable description of the permission
           example: View timekeeping records
@@ -7364,6 +7532,12 @@ components:
         name:
           description: Permission name in format domain:resource:action
           example: people:timekeeping:view
+          type: string
+        supersededBy:
+          description: Permission name that replaces this one; absent when there is no successor
+          example: accounting:ap:pay
+          maxLength: 255
+          minLength: 0
           type: string
       required:
       - name
@@ -7391,6 +7565,10 @@ components:
         name:
           description: Permission name in format domain:resource:action
           example: people:timekeeping:view
+          type: string
+        supersededBy:
+          description: Permission name that replaces this one; absent when there is no successor
+          example: accounting:ap:pay
           type: string
       required:
       - deprecated

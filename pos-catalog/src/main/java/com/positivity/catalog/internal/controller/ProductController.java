@@ -76,10 +76,10 @@ public class ProductController {
     private final ProductCodeLookupService productCodeLookupService;
     private final ProductFactReplayService productFactReplayService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.GUARDRAIL_POLICY_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.GUARDRAIL_POLICY_WRITE})
     @PostMapping("/pricing/guardrail-policies")
     @Operation(
             operationId = "upsertLocationGuardrailPolicy",
@@ -128,10 +128,10 @@ public class ProductController {
         return ResponseEntity.ok(locationPriceOverrideService.upsertLocationGuardrailPolicy(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.LOCATION_PRICE_OVERRIDE_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.LOCATION_PRICE_OVERRIDE_WRITE})
     @PostMapping("/pricing/location-overrides")
     @Operation(
             operationId = "createLocationPriceOverride",
@@ -187,10 +187,10 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(locationPriceOverrideService.createOverride(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.LOCATION_PRICE_OVERRIDE_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.LOCATION_PRICE_OVERRIDE_READ})
     @GetMapping("/pricing/effective-price/{locationId}/{productId}")
     @Operation(operationId = "getEffectiveLocationPrice", summary = "Get Effective Location Price", description = """
             Resolves the price a location currently charges for a product from its override records: the newest \
@@ -389,10 +389,10 @@ public class ProductController {
         return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_CREATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_CREATE})
     @PostMapping
     @Operation(operationId = "createProduct", summary = "Create Product Master Record", description = """
             Creates a product master record with an immutable SKU, status ACTIVE, and uniqueness enforced on \
@@ -441,10 +441,10 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(productMasterDataService.createProduct(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_EDIT})
     @PutMapping("/{productId}")
     @Operation(operationId = "updateProduct", summary = "Update Product Master Record", description = """
             Replaces the mutable master-data fields of a product — name, description, unit of measure, \
@@ -496,10 +496,10 @@ public class ProductController {
         return ResponseEntity.ok(productMasterDataService.updateProduct(productId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_EDIT})
     @PutMapping("/{productId}/tracking-level")
     @Operation(operationId = "updateProductTrackingLevel", summary = "Set Product Tracking Level", description = """
             Sets the product's stock tracking level to NONE, LOT or SERIAL, controlling whether inventory \
@@ -570,10 +570,10 @@ public class ProductController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.FACT_REPLAY + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.FACT_REPLAY})
     @PostMapping("/facts/replay")
     @EmitEvent(id = "CATALOG_PRODUCT_FACT_REPLAY", apiVersion = "1")
     @Operation(
@@ -857,10 +857,10 @@ public class ProductController {
         return catalogService.getServicesByName(name);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.NON_INVENTORY_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.NON_INVENTORY_VIEW})
     @GetMapping("/noninventory/{productId}")
     @Operation(
             operationId = "getNonInventoryProductById",
@@ -891,10 +891,10 @@ public class ProductController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.NON_INVENTORY_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.NON_INVENTORY_VIEW})
     @GetMapping("/noninventory/name/{name}")
     @Operation(
             operationId = "listNonInventoryProductsByName",
@@ -921,11 +921,11 @@ public class ProductController {
         return catalogService.getNonInventoryProductsByName(name);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('"
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "') or hasAuthority('"
             + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW", "product:lifecycle:update"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW, "product:lifecycle:update"})
     @GetMapping("/{productId}/lifecycle")
     @Operation(operationId = "getProductLifecycle", summary = "Get Product Lifecycle State", description = """
             Returns a product's lifecycle state — ACTIVE, INACTIVE or DISCONTINUED, defaulting to ACTIVE when \
@@ -952,11 +952,11 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.getLifecycle(productId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('"
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_VIEW + "') or hasAuthority('"
             + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW", "product:lifecycle:update"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_VIEW, "product:lifecycle:update"})
     @GetMapping("/{productId}/replacements")
     @Operation(operationId = "listProductReplacements", summary = "List Replacement Products", description = """
             Returns the non-deleted replacement options recorded for a product, ordered by priority, each \
@@ -977,11 +977,11 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.getReplacementProducts(productId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('"
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_EDIT + "') or hasAuthority('"
             + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT", "product:lifecycle:update"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_EDIT, "product:lifecycle:update"})
     @PutMapping("/{productId}/lifecycle")
     @Operation(operationId = "updateProductLifecycle", summary = "Set Product Lifecycle State", description = """
             Transitions a product's lifecycle state to ACTIVE, INACTIVE or DISCONTINUED with an effective \
@@ -1033,11 +1033,11 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.updateLifecycle(productId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('"
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_EDIT + "') or hasAuthority('"
             + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT", "product:lifecycle:update"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.PRODUCT_EDIT, "product:lifecycle:update"})
     @PostMapping("/{productId}/replacements")
     @Operation(operationId = "addProductReplacement", summary = "Add Replacement Product", description = """
             Records a replacement suggestion on a discontinued product, pointing buyers at the product that \

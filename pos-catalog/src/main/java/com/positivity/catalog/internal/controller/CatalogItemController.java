@@ -184,10 +184,10 @@ public class CatalogItemController {
                 : ResponseEntity.notFound().build();
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.FACT_REPLAY + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.FACT_REPLAY})
     @PostMapping("/services/facts/replay")
     @EmitEvent(id = "CATALOG_SERVICE_FACT_REPLAY", apiVersion = "1")
     @Operation(

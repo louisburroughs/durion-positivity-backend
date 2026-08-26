@@ -40,6 +40,17 @@ public final class CatalogPermissions {
     public static final String PRODUCT_DELETE = "catalog:product:delete";
 
     /**
+     * Edit product master data or product-lifecycle write actions gated alongside it.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')} on product master-data writes
+     * (create/update/tracking-level) and on the lifecycle write endpoints that OR it with {@link
+     * #PRODUCT_LIFECYCLE_UPDATE}; see {@link #PRODUCT_VIEW} for the same problem on the read side.
+     * The permission code itself ({@code catalog:product:edit}) was already registered
+     * (bit 13) but had never been wired to an enforcement site in this module.
+     */
+    public static final String PRODUCT_EDIT = "catalog:product:edit";
+
+    /**
      * Read service-type catalog data.
      *
      * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')} on the service-type read
@@ -78,6 +89,126 @@ public final class CatalogPermissions {
      * claimed an inventory permission that no module has ever defined.
      */
     public static final String ITEM_COST_UPDATE = "catalog:item_cost:update";
+
+    /**
+     * Read an item's standard-cost value and its audit history.
+     *
+     * <p>Distinct from {@link #ITEM_COST_UPDATE}, which is write-only and does not cover reads.
+     * Replaces the dead role gate {@code hasRole('CATALOG_VIEW')} (alongside {@code MANAGER}) on
+     * the item-cost read endpoints; see {@link #PRODUCT_VIEW} for the same problem elsewhere in
+     * this module.
+     */
+    public static final String ITEM_COST_READ = "catalog:item_cost:read";
+
+    /**
+     * Create or update the location-scoped guardrail policy that bounds discount, margin and
+     * auto-approval limits for location price overrides.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String GUARDRAIL_POLICY_WRITE = "catalog:guardrail_policy:write";
+
+    /**
+     * Read a location's effective price for a product, resolved from its override records.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String LOCATION_PRICE_OVERRIDE_READ = "catalog:location_price_override:read";
+
+    /**
+     * Create a location-specific price override for a product.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String LOCATION_PRICE_OVERRIDE_WRITE = "catalog:location_price_override:write";
+
+    /**
+     * Read non-inventory products — items sold without stock tracking, such as fees or shop
+     * supplies.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String NON_INVENTORY_VIEW = "catalog:non_inventory:view";
+
+    /**
+     * Read substitution-group membership.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String SUBSTITUTION_GROUP_VIEW = "catalog:substitution_group:view";
+
+    /**
+     * Create, delete or modify membership of a substitution group.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String SUBSTITUTION_GROUP_EDIT = "catalog:substitution_group:edit";
+
+    /**
+     * Read catalog groupings.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String CATALOG_GROUPING_VIEW = "catalog:catalog_grouping:view";
+
+    /**
+     * Create or update a catalog grouping.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String CATALOG_GROUPING_EDIT = "catalog:catalog_grouping:edit";
+
+    /**
+     * Delete a catalog grouping.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_DELETE')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String CATALOG_GROUPING_DELETE = "catalog:catalog_grouping:delete";
+
+    /**
+     * Read unit-of-measure conversion factors.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String UOM_CONVERSION_VIEW = "catalog:uom_conversion:view";
+
+    /**
+     * Create, update or deactivate a unit-of-measure conversion factor.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String UOM_CONVERSION_EDIT = "catalog:uom_conversion:edit";
+
+    /**
+     * Read a product's alternate units of measure.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String PRODUCT_UOM_VIEW = "catalog:product_uom:view";
+
+    /**
+     * Add, update or delete a product's alternate units of measure.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_EDIT')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String PRODUCT_UOM_EDIT = "catalog:product_uom:edit";
+
+    /**
+     * Read a product's tread-design match, or list products still unmatched to one.
+     *
+     * <p>Replaces the dead role gate {@code hasRole('CATALOG_VIEW')}; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String TREAD_DESIGN_VIEW = "catalog:tread_design:view";
+
+    /**
+     * Re-publish catalog facts to seed or repair a downstream replica.
+     *
+     * <p>One code shared by all three fact-replay endpoints — product facts, service facts, and
+     * supplier-article-code facts — since they are the same operational capability held by the
+     * same operator; separate codes per fact type would be catalog sprawl. Replaces the dead role
+     * gate {@code hasRole('CATALOG_EDIT')} on each; see {@link #PRODUCT_VIEW}.
+     */
+    public static final String FACT_REPLAY = "catalog:fact:replay";
 
     // ── Permissions owned by other domains ──────────────────────────────────────────────
     //

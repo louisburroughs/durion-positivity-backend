@@ -880,13 +880,30 @@ public enum PermissionCode {
     // Cross-location availability: the per-location breakdown, split from the
     // scope-limited read at bit 311 (ADR-0057, #1494).
     INVENTORY__AVAILABILITY__SEARCH(470, "inventory:availability:search"),
-    WORKORDER__FINANCIALS__VIEW(471, "workorder:financials:view");
+    WORKORDER__FINANCIALS__VIEW(471, "workorder:financials:view"),
+    // ── Catalog (new) ──────────────────────────────────────────────────────────
+    CATALOG__GUARDRAIL_POLICY__WRITE(472, "catalog:guardrail_policy:write"),
+    CATALOG__LOCATION_PRICE_OVERRIDE__READ(473, "catalog:location_price_override:read"),
+    CATALOG__LOCATION_PRICE_OVERRIDE__WRITE(474, "catalog:location_price_override:write"),
+    CATALOG__NON_INVENTORY__VIEW(475, "catalog:non_inventory:view"),
+    CATALOG__SUBSTITUTION_GROUP__VIEW(476, "catalog:substitution_group:view"),
+    CATALOG__SUBSTITUTION_GROUP__EDIT(477, "catalog:substitution_group:edit"),
+    CATALOG__CATALOG_GROUPING__VIEW(478, "catalog:catalog_grouping:view"),
+    CATALOG__CATALOG_GROUPING__EDIT(479, "catalog:catalog_grouping:edit"),
+    CATALOG__CATALOG_GROUPING__DELETE(480, "catalog:catalog_grouping:delete"),
+    CATALOG__UOM_CONVERSION__VIEW(481, "catalog:uom_conversion:view"),
+    CATALOG__UOM_CONVERSION__EDIT(482, "catalog:uom_conversion:edit"),
+    CATALOG__PRODUCT_UOM__VIEW(483, "catalog:product_uom:view"),
+    CATALOG__PRODUCT_UOM__EDIT(484, "catalog:product_uom:edit"),
+    CATALOG__ITEM_COST__READ(485, "catalog:item_cost:read"),
+    CATALOG__TREAD_DESIGN__VIEW(486, "catalog:tread_design:view"),
+    CATALOG__FACT__REPLAY(487, "catalog:fact:replay");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 60;
+    public static final int CATALOG_VERSION = 61;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

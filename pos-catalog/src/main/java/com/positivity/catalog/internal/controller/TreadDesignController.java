@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.TreadDesignDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.TreadDesignService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -44,10 +45,10 @@ public class TreadDesignController {
 
     private final TreadDesignService treadDesignService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.TREAD_DESIGN_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.TREAD_DESIGN_VIEW})
     @GetMapping("/for-product/{productId}")
     @EmitEvent(id = "CATALOG_TREAD_DESIGN_FOR_PRODUCT", apiVersion = "1")
     @Operation(
@@ -82,10 +83,10 @@ public class TreadDesignController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.TREAD_DESIGN_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.TREAD_DESIGN_VIEW})
     @GetMapping("/unmatched")
     @EmitEvent(id = "CATALOG_TREAD_DESIGN_UNMATCHED_LIST", apiVersion = "1")
     @Operation(

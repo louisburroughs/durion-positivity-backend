@@ -141,6 +141,124 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
+    @DisplayName("RBAC-007: createProduct is reachable with catalog:product:create alone, no ADMIN role")
+    void testCreateProduct_WithProductCreatePermission_NoAdminRole() throws Exception {
+        mockMvc.perform(withAuth(
+                        post("/v1/products")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(productMasterPayload("RBAC-007 Product", "MPN-RBAC-007")),
+                        "catalog:product:create"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("RBAC-008: updateProduct is reachable with catalog:product:edit alone, no ADMIN role")
+    void testUpdateProduct_WithProductEditPermission_NoAdminRole() throws Exception {
+        UUID productId = createMasterProductAndReturnId("RBAC-008 Product", "MPN-RBAC-008");
+
+        mockMvc.perform(withAuth(
+                        put("/v1/products/{productId}", productId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(productUpdatePayload("RBAC-008 Product Updated", "MPN-RBAC-008")),
+                        "catalog:product:edit"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("RBAC-009: updateProduct rejects the retired CATALOG_EDIT role with no ADMIN or real permission")
+    void testUpdateProduct_WithDeadCatalogEditRole_Forbidden() throws Exception {
+        UUID productId = createMasterProductAndReturnId("RBAC-009 Product", "MPN-RBAC-009");
+
+        mockMvc.perform(withAuth(
+                        put("/v1/products/{productId}", productId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(productUpdatePayload("RBAC-009 Product Updated", "MPN-RBAC-009")),
+                        "ROLE_CATALOG_EDIT"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("RBAC-010: updateProductTrackingLevel is reachable with catalog:product:edit alone, no ADMIN role")
+    void testUpdateTrackingLevel_WithProductEditPermission_NoAdminRole() throws Exception {
+        UUID productId = createProductAndReturnId("RBAC-010 Product");
+
+        mockMvc.perform(withAuth(
+                        put("/v1/products/{productId}/tracking-level", productId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(Map.of("trackingLevel", "LOT"))),
+                        "catalog:product:edit"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("RBAC-011: getProductLifecycle is reachable with catalog:product:view alone, no ADMIN role")
+    void testGetProductLifecycle_WithProductViewPermission_NoAdminRole() throws Exception {
+        UUID productId = createProductAndReturnId("RBAC-011 Product");
+
+        mockMvc.perform(withAuth(get("/v1/products/{productId}/lifecycle", productId), "catalog:product:view"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("RBAC-012: setLifecycleState (INACTIVE) is reachable with catalog:product:edit alone, no ADMIN role")
+    void testSetLifecycleState_WithProductEditPermission_NoAdminRole() throws Exception {
+        UUID productId = createProductAndReturnId("RBAC-012 Product");
+
+        mockMvc.perform(withAuth(
+                        put("/v1/products/{productId}/lifecycle", productId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(Map.of(
+                                        "lifecycleState",
+                                        "INACTIVE",
+                                        "effectiveDate",
+                                        java.time.LocalDate.now().plusDays(1),
+                                        "changedBy",
+                                        UUID.fromString("00000000-0000-0000-0000-000000000001")))),
+                        "catalog:product:edit"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("RBAC-013: the lifecycle transition and addReplacementProduct both run on "
+            + "catalog:product:edit alone, no ADMIN role (product fixtures still need admin: the "
+            + "type-generic create endpoint remains phantom-gated)")
+    void testAddReplacementProduct_WithProductEditPermission_NoAdminRole() throws Exception {
+        UUID originalProductId = createProductAndReturnId("RBAC-013 Product Original");
+        UUID replacementProductId = createProductAndReturnId("RBAC-013 Product Replacement");
+
+        // Scoped deliberately: passing the broad default authorities here would leave the
+        // converted setLifecycleState gate unexercised and make the test weaker than its name.
+        // Two authorities are needed, and the second is the interesting one:
+        // catalog:product:edit satisfies the @PreAuthorize, but the DISCONTINUED transition
+        // additionally requires product:lifecycle:override_discontinued, checked inside
+        // ProductLifecycleServiceImpl when an overrideReason is supplied. That capability check
+        // is invisible to @PreAuthorize and to the contract, so pinning it here is the only
+        // place the requirement is stated in a test.
+        mockMvc.perform(withAuth(
+                        put("/v1/products/{productId}/lifecycle", originalProductId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(Map.of(
+                                        "lifecycleState",
+                                        "DISCONTINUED",
+                                        "effectiveAt",
+                                        java.time.Instant.now().plusSeconds(3600),
+                                        "overrideReason",
+                                        "End of life",
+                                        "changedBy",
+                                        UUID.fromString("00000000-0000-0000-0000-000000000001")))),
+                        "catalog:product:edit,product:lifecycle:override_discontinued"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(withAuth(
+                        post("/v1/products/{productId}/replacements", originalProductId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(
+                                        Map.of("replacementProductId", replacementProductId, "priorityOrder", 1))),
+                        "catalog:product:edit"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("CP-010: Create active location override within auto-approval threshold")
     void testCreateLocationOverride_ActiveWithinThreshold() throws Exception {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -576,6 +694,38 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         return objectMapper.writeValueAsString(Map.of(
                 "name", name,
                 "description", description));
+    }
+
+    private UUID createMasterProductAndReturnId(String name, String mpn) throws Exception {
+        MvcResult result = mockMvc.perform(withAuth(post("/v1/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(productMasterPayload(name, mpn))))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response =
+                objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+        return UUID.fromString((String) response.get("id"));
+    }
+
+    private String productMasterPayload(String name, String mpn) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "name",
+                name,
+                "description",
+                name + " description",
+                "unitOfMeasure",
+                "EA",
+                "sku",
+                "SKU-" + UUID.randomUUID(),
+                "mpn",
+                mpn));
+    }
+
+    private String productUpdatePayload(String name, String mpn) throws Exception {
+        return objectMapper.writeValueAsString(
+                Map.of("name", name, "description", name + " updated description", "unitOfMeasure", "EA", "mpn", mpn));
     }
 
     private String catalogProductPayload(String name) throws Exception {

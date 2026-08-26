@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.UomConversionCreateRequestDto;
 import com.positivity.catalog.internal.dto.UomConversionDto;
 import com.positivity.catalog.internal.dto.UomConversionUpdateRequestDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.UomConversionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,10 +38,10 @@ public class UomConversionController {
 
     private final UomConversionService uomConversionService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.UOM_CONVERSION_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.UOM_CONVERSION_EDIT})
     @PostMapping
     @Operation(operationId = "createUomConversion", summary = "Create UoM Conversion", description = """
             Creates a global, directional unit-of-measure conversion stating how many target units one \
@@ -82,10 +83,10 @@ public class UomConversionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(uomConversionService.createConversion(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.UOM_CONVERSION_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.UOM_CONVERSION_VIEW})
     @GetMapping
     @Operation(operationId = "listUomConversions", summary = "List Active UoM Conversions", description = """
             Returns every active unit-of-measure conversion in the global table; deactivated conversions are \
@@ -109,10 +110,10 @@ public class UomConversionController {
         return ResponseEntity.ok(uomConversionService.listActiveConversions());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.UOM_CONVERSION_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.UOM_CONVERSION_VIEW})
     @GetMapping("/{id}")
     @Operation(operationId = "getUomConversionById", summary = "Get UoM Conversion by ID", description = """
             Returns one unit-of-measure conversion with its from and to codes, factor and active flag; \
@@ -134,10 +135,10 @@ public class UomConversionController {
         return ResponseEntity.ok(uomConversionService.getConversion(id));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.UOM_CONVERSION_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.UOM_CONVERSION_EDIT})
     @PutMapping("/{id}")
     @Operation(operationId = "updateUomConversion", summary = "Update UoM Conversion Factor", description = """
             Updates the factor of an existing unit-of-measure conversion; the from and to codes are immutable, \
@@ -178,10 +179,10 @@ public class UomConversionController {
         return ResponseEntity.ok(uomConversionService.updateConversion(id, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.UOM_CONVERSION_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.UOM_CONVERSION_EDIT})
     @DeleteMapping("/{id}")
     @Operation(operationId = "deactivateUomConversion", summary = "Deactivate UoM Conversion", description = """
             Marks a unit-of-measure conversion inactive so it disappears from listUomConversions and from \

@@ -4,7 +4,6 @@
     "people:timeEntry:": "audit-parser artifact: TimeEntryServiceImpl builds the checked string dynamically (\"people:timeEntry:\" + action), so the static scanner records the unresolved prefix as a required-but-ungranted code. The concrete codes it resolves to at runtime are granted; nothing is actually unreachable. See docs SS5 point 2."
   },
   "granted_unrequired": {
-    "catalog:product:edit": "granted to ADMIN, enforced nowhere: CatalogItemController.updateCatalogItem is the type-generic PUT /{type}/{catalogId} still gated on the dead phantom role hasRole('CATALOG_EDIT'), so no real code guards a product edit. Same deferred bucket as catalog:service_type:create/edit -- gating it per type needs the endpoint-split decision (§7 task 5). Surfaced only after the scanner stopped counting a javadoc example in SecurityContextHelper as enforcement.",
     "catalog:service_type:create": "granted to ADMIN, enforced nowhere: catalog:service_type endpoint split (create vs edit) is a deferred decision, not a dead feature -- see §7 task 5.",
     "catalog:service_type:edit": "granted to ADMIN, enforced nowhere: catalog:service_type endpoint split (create vs edit) is a deferred decision -- see §7 task 5.",
     "crm:integration:audit": "granted to ADMIN, enforced nowhere: no controller exposes an integration-audit endpoint in pos-customer -- see §7 task 5.",

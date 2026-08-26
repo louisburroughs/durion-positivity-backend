@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.CatalogDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,10 +34,10 @@ public class CatalogController {
 
     private final CatalogService catalogService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.CATALOG_GROUPING_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.CATALOG_GROUPING_VIEW})
     @GetMapping("/{catalogId}")
     @Operation(operationId = "getCatalogById", summary = "Get a Catalog by ID", description = """
             Returns one named catalog with the ids of the products, services and non-inventory products it groups.
@@ -60,10 +61,10 @@ public class CatalogController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.CATALOG_GROUPING_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.CATALOG_GROUPING_VIEW})
     @GetMapping("/name/{name}")
     @Operation(operationId = "listCatalogsByName", summary = "List Catalogs by Name", description = """
             Returns every catalog whose name contains the supplied fragment, matched case-insensitively.
@@ -83,10 +84,10 @@ public class CatalogController {
         return catalogService.getCatalogsByName(name);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.CATALOG_GROUPING_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.CATALOG_GROUPING_EDIT})
     @PostMapping
     @Operation(operationId = "createCatalog", summary = "Create a New Catalog", description = """
             Creates a named catalog that groups existing products, services and non-inventory products for \
@@ -129,10 +130,10 @@ public class CatalogController {
         return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.addCatalog(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.CATALOG_GROUPING_EDIT + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.CATALOG_GROUPING_EDIT})
     @PutMapping("/{catalogId}")
     @Operation(operationId = "updateCatalog", summary = "Update an Existing Catalog", description = """
             Replaces a catalog's name, description and full membership lists with the supplied values; this is a \
@@ -179,10 +180,10 @@ public class CatalogController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_DELETE')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.CATALOG_GROUPING_DELETE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_DELETE"})
+            scopes = {"ROLE_ADMIN", CatalogPermissions.CATALOG_GROUPING_DELETE})
     @DeleteMapping("/{catalogId}")
     @Operation(operationId = "deleteCatalog", summary = "Delete a Catalog", description = """
             Permanently deletes a catalog grouping; the products, services and non-inventory products it \

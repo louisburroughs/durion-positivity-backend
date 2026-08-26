@@ -206,6 +206,11 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-security-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.jspecify</groupId>
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
