@@ -57,15 +57,15 @@ class PriceRestrictionsControllerTest extends BaseContractIntegrationTest {
     private RestrictionRuleService restrictionRuleService;
 
     /**
-     * Default authorities for evaluate tests — general pricing viewer, NOT the
-     * override authority. Override authority is set explicitly per test where
+     * Default authorities for evaluate tests — the restrictions-view authority, NOT
+     * the override authority. Override authority is set explicitly per test where
      * needed.
      *
      * @return authority string forwarded via {@code X-Authorities} gateway header
      */
     @Override
     protected String defaultAuthorities() {
-        return "pricing:view";
+        return "pricing:restrictions:view";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -202,11 +202,28 @@ class PriceRestrictionsControllerTest extends BaseContractIntegrationTest {
     @Test
     @DisplayName("RRC-007: authenticated without override authority → 403")
     void RRC007_missingOverrideAuthority_returns403() throws Exception {
-        // defaultAuthorities() = "pricing:view" — does NOT include
+        // defaultAuthorities() = "pricing:restrictions:view" — does NOT include
         // pricing:restriction:override
         mockMvc.perform(withGatewayAuth(post("/v1/price/restrictions:override")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validOverrideBody())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * RRC-012: authenticated user lacking {@code pricing:restrictions:view}
+     * authority must be rejected with 403 Forbidden on the evaluate endpoint.
+     *
+     * Issue: #43 (ADR-0017 §403)
+     */
+    @Test
+    @DisplayName("RRC-012: authenticated without restrictions:view authority → 403")
+    void RRC012_missingViewAuthority_returns403() throws Exception {
+        mockMvc.perform(post("/v1/price/restrictions:evaluate")
+                        .header("X-User", "contract-test-user")
+                        .header("X-Authorities", "pricing:restriction:override")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validEvaluateBody()))
                 .andExpect(status().isForbidden());
     }
 

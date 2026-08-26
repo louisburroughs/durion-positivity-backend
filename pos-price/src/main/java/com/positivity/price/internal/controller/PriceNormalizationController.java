@@ -1,6 +1,7 @@
 package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.price.internal.security.PricingPermissions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Price Normalization", description = "Price normalization and standardization operations")
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/v1/price")
 public class PriceNormalizationController {
 
@@ -29,7 +29,7 @@ public class PriceNormalizationController {
                     placeholder that is not yet implemented.
                     Use this tool only to probe for the future normalization capability; use calculatePriceQuote \
                     instead for any real pricing work, since no normalization logic exists yet.
-                    Preconditions: none; any authenticated caller is accepted.
+                    Preconditions: none beyond the pricing:normalization:edit authority.
                     Required inputs: none are read; the optional JSON body is accepted but ignored.
                     Emits a PRICE_NORMALIZATION_NORMALIZE event even though no normalization is performed and no state \
                     changes.
@@ -37,9 +37,14 @@ public class PriceNormalizationController {
                     """)
     @ApiResponse(responseCode = "501", description = "Not yet implemented.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
+    @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
     @ApiResponse(responseCode = "500", description = "Internal server error.")
     @EmitEvent(id = "PRICE_NORMALIZATION_NORMALIZE", apiVersion = "1")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"pricing:normalization:edit"})
+    @PreAuthorize("hasAuthority('" + PricingPermissions.NORMALIZATION_EDIT + "')")
     @PostMapping("/normalize")
     public ResponseEntity<Object> normalizePricing(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

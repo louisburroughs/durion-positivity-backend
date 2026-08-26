@@ -53,6 +53,17 @@ public final class PricingPermissions {
      */
     public static final String RESTRICTION_OVERRIDE = "pricing:restriction:override";
 
+    /** View restriction rules by id or in the active rule listing. */
+    public static final String RULE_VIEW = "pricing:rule:view";
+
+    /** Evaluate products and context against the active restriction rules. */
+    public static final String RESTRICTIONS_VIEW = "pricing:restrictions:view";
+
+    // ── Normalization ───────────────────────────────────────────────────────────────────
+
+    /** Edit price normalization rules. */
+    public static final String NORMALIZATION_EDIT = "pricing:normalization:edit";
+
     private PricingPermissions() {
         // Utility class - prevent instantiation
     }

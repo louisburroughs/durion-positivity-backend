@@ -47,7 +47,8 @@ public class PriceRestrictionsController {
                     Use this tool before quoting or selling a product to learn whether the sale is blocked or needs an \
                     override; do not use overridePriceRestriction, which records the override itself after a decision \
                     of ALLOW_WITH_OVERRIDE.
-                    Preconditions: none; items with no matching active rule resolve to ALLOW.
+                    Preconditions: none beyond the pricing:restrictions:view authority; items with no matching \
+                    active rule resolve to ALLOW.
                     Required inputs: items (at least one), each with productId (UUID), locationTag, serviceTag, and \
                     context (BROWSE, QUOTE, CHECKOUT, INVOICE_FINALIZE, or COMMIT_SALE); any matching rule with \
                     overrideable false forces BLOCK, otherwise matching rules yield ALLOW_WITH_OVERRIDE with the \
@@ -61,10 +62,13 @@ public class PriceRestrictionsController {
     @ApiResponse(responseCode = "200", description = "Evaluation results per product.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
+    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
     @ApiResponse(responseCode = "503", description = "Restriction evaluation service unavailable (commit path only).")
     @EmitEvent(id = "PRICE_RESTRICTIONS_EVALUATE", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
-    @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"pricing:restrictions:view"})
+    @PreAuthorize("hasAuthority('" + PricingPermissions.RESTRICTIONS_VIEW + "')")
     @PostMapping("/restrictions:evaluate")
     public ResponseEntity<RestrictionEvaluationResponse> evaluateRestrictions(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
