@@ -6,7 +6,7 @@ Location hierarchy and physical space management service for the Durion Positivi
 
 - Manage the location hierarchy (parent/child relationships between service sites)
 - Create and configure service bays and mobile unit bays
-- Maintain storage locations within each site
+- Maintain storage locations within each site, including what each one is fit to hold
 - Transfer inventory between storage locations atomically
 - Manage location rosters (which staff are assigned to a location)
 - Define service areas and their coverage rules
@@ -34,7 +34,43 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `GET /v1/bays/{bayId}` — retrieve a bay
 - `POST /v1/locations/{locationId}/bays` — add a bay to a location
 - `GET /v1/locations/{storageLocationId}` — retrieve a storage location
+- `POST /v1/locations/{siteId}/storage-locations` — create a storage location
+- `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
 - `GET /v1/mobile-units:eligible` — eligible mobile units for scheduling
+
+## Storage-location putaway capability (#1514)
+
+A storage location carries two orthogonal descriptions, and they are deliberately independent:
+
+- `type` — where it sits in the site's physical topology (`FLOOR`, `SHELF`, `BIN`, `CAGE`, `TRUCK`).
+  **Unchanged.**
+- `storageCategoryCode` — what it is fit to *hold*: `TIRE_RACK`, `OIL_STORAGE`, `BATTERY_RACK`,
+  `SMALL_PARTS_BIN`, `BULK_FLOOR`, `STAGING`, `QUARANTINE`, `GENERAL`. A tire rack and a bulk pallet
+  area are both `FLOOR` topologically, but only one of them should receive tires, so putaway needed a
+  capability rather than a parallel type hierarchy.
+
+Alongside it, `hazardContainment` (boolean) and `allowNewProduct` (`MIXED`, `SAME_PRODUCT_ONLY`,
+`EMPTY_ONLY`). All three are accepted on create and PATCH, returned on the read paths, and published
+on the existing `StorageLocationUpdatedV1` fact (additive within schema v1, ADR-0044 — no new
+synchronous call). pos-inventory replicates them and routes putaway on them.
+
+`storage_category_code` (V8) stays **nullable** so a row that predates the capability needs no
+backfill, and `StorageCategory.orDefault` resolves null to `GENERAL` on every read path *and before
+publishing*. A consumer therefore never sees null for a location whose fact was published after V8,
+and never has to reimplement the null-means-`GENERAL` rule. `GENERAL` is permissive: it accepts every
+catalog category.
+
+`STAGING` and `QUARANTINE` are putaway *sources*, not destinations — pos-inventory refuses putaway
+into them outright.
+
+`allowNewProduct` is currently **declarative only**: pos-location owns and publishes it and
+pos-inventory replicates it, but no putaway check reads it yet. Set it truthfully anyway — it is the
+model for Odoo's `allow_new_product` policy and the enforcement point is expected to consume it.
+
+**Republishing an existing bin's capability**: the generic `location.outbox.replay-requested` command
+re-queues already-serialized outbox rows, so it cannot carry a field those rows predate. Declaring
+the capability with a PATCH is what publishes a fresh fact. See `docs/OPERATIONS_RUNBOOK.md` →
+"Issue #1514: rehydrating the putaway replica columns".
 
 ## Configuration
 

@@ -578,12 +578,86 @@ Consumers of `catalog.events.v1`, and what a cold replica costs them:
 |---|---|---|
 | `pos-marketing` | `ext_catalog` (products **and** services) | A campaign's `catalogFocusRef` is not verified for a kind with no rows, and blocks scheduling for one the replica knows partially — run **both** replays |
 | `pos-warranty` | `ext_catalog` (products) | Candidate-line product lookup and warranty eligibility have no manufacturer or warranty terms to read |
-| `pos-inventory` | `ext_product_uom` et al. | UoM conversions, tracking level and substitution membership are missing |
+| `pos-inventory` | `ext_product_uom`, `ext_product` et al. | UoM conversions, tracking level and substitution membership are missing; since #1514, so are the product's category and subcategory, which putaway rules match on |
 | `pos-supplier` | `ext_product_code` | PRICAT vendor lines match nothing and quarantine |
 
 A deletion cannot be replayed — a deleted row is gone, so its tombstone exists only in the live
 stream. A freshly seeded replica therefore holds what the catalog currently has, which is what
 resolution needs; it will not learn about items removed before the seed.
+
+#### Issue #1514: rehydrating the putaway replica columns
+
+Category-based putaway matches a received line against the item's catalog category/subcategory and
+against the destination bin's storage class. Both facts live on pos-inventory replicas, and
+`V41__ext_replica_category_and_capability.sql` **adds the columns empty and does not backfill them**.
+Until each owner republishes, category matching has nothing to match on:
+
+| Replica column | Owner | State after V41 | Effect on putaway |
+|---|---|---|---|
+| `ext_product.category_id` / `subcategory_id` | pos-catalog | null | `SUBCATEGORY` and `CATEGORY` putaway rules match nothing; every line falls through to the terminal `ANY` rule |
+| `ext_storage_location.storage_category_code`, `hazard_containment`, `allow_new_product` | pos-location | null | a null code reads as `GENERAL`, which accepts every catalog category, so the compatibility matrix stops discriminating destinations |
+
+Nothing dead-ends in that window — the permissive-null resolution is deliberate, and the containment
+gate still refuses a hazardous item at an uncontained destination because it keys on the *item's*
+class rather than the destination's. What is lost is the routing precision the feature exists to add,
+so rehydrate before relying on it.
+
+**pos-catalog side — a paged replay is sufficient.** The product-fact replay rebuilds each payload
+from the live entity through `CatalogFactPublisher`, so a replayed fact carries `subcategoryId` and
+`subcategory` even though the original emission predated them. Run the products replay from
+"pos-catalog: seeding a catalog replica" above; the services replay is not involved.
+
+```bash
+curl -X POST "https://<gateway>/catalog/v1/products/facts/replay?limit=500" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+```
+
+**pos-location side — the generic outbox replay does NOT work here.** `location.outbox.replay-requested`
+re-queues *already-serialized* outbox rows (`OutboxReplayServiceImpl` → `markForReplaySince`), so it
+re-emits the payload as it was stored — without the capability fields, which did not exist when those
+rows were written. The consumer's stale guard skips only a strictly-newer version, so such a replay
+applies and writes the same nulls back. It is not a repair for this change.
+
+The capability is (re)published by a fresh write through `StorageLocationService`. Declare each bin's
+capability with a PATCH, which both sets the column and republishes the fact:
+
+```bash
+curl -X PATCH "https://<gateway>/location/locations/$SITE_ID/storage-locations/$STORAGE_LOCATION_ID" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1" \
+  -H 'Content-Type: application/json' \
+  -d '{"storageCategoryCode":"BATTERY_RACK","hazardContainment":true}'
+```
+
+Note that re-running the alpha fixture pack is **not** a substitute:
+`scripts/seed-alpha.py run_storage_locations` skips any storage location whose name already exists at
+the site, so it declares capabilities on newly created bins only. Existing bins need the PATCH above
+(or a rebuild of the environment).
+
+**Order matters only in one direction**: the destination side is what the compatibility matrix reads,
+and the item side is what the rules match on. Neither blocks the other, so both can run
+independently, but until *both* have run a receipt routes by the `ANY` rule to a `GENERAL`-reading
+bin — which is exactly the pre-#1514 behaviour.
+
+**Verifying:**
+
+```sql
+-- Before the replay this is 100%. After it, the remainder is the products that are genuinely
+-- unclassified in pos-catalog — check a sample against the catalog before assuming the replay
+-- is incomplete.
+SELECT count(*) FILTER (WHERE category_id IS NULL) AS uncategorized, count(*) AS total
+FROM ext_product;
+
+-- Should reach 0. The publisher resolves an undeclared capability to GENERAL before emitting, so
+-- a null here means "no post-#1514 fact has been seen for this location", never "undeclared".
+SELECT count(*) FROM ext_storage_location WHERE storage_category_code IS NULL;
+```
+
+`pos.inventory.sku-category.resolve-from-replica` is a **separate** flag and defaults **off**. It
+gates only the `SkuCategoryProvider` SPI (costing-method and sourcing-strategy resolution), not
+putaway, which reads the unconditional `SkuCategoryLookup`. Do not turn it on as part of this
+rollout — enabling it makes the `SKU_CATEGORY` scope of `costing_method_config` reachable for the
+first time and would flip matching SKUs off `DEFAULT` costing at their next ledger posting with no
+`cost_method_change_log` row and no revaluation cut-over. Tracked in #1535.
 
 ### Reconciliation manifests and drift detection
 

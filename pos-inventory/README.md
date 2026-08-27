@@ -53,6 +53,11 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `DELETE /v1/inventory/sourcing-strategies/{configId}` — deactivate a sourcing strategy configuration
 - `GET /v1/inventory/lots` — list lot master records (filters: stockItemId, status, lotNumber)
 - `GET /v1/inventory/lots/{lotId}` — lot details with per-location on-hand from the per-lot summary rows
+- `GET /v1/inventory/putaway/rules` — list putaway rules in the order the matcher tries them
+- `GET /v1/inventory/putaway/rules/{ruleId}` — retrieve one putaway rule
+- `POST /v1/inventory/putaway/rules` — create a putaway rule (409 if a second enabled `ANY` rule)
+- `PUT /v1/inventory/putaway/rules/{ruleId}` — full replacement of a putaway rule
+- `DELETE /v1/inventory/putaway/rules/{ruleId}` — delete a putaway rule permanently
 
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
@@ -89,12 +94,51 @@ location suggestion, and (from parity-F5) replenishment source selection via
   `ext_storage_location` parent links plus `ext_location_parent` edges; falls back to FIFO
   without a reference), `HIGHEST_STOCK` (most `onHand - allocated` first). All orderings
   tie-break by ascending location id. LIFO and least-packages are explicit non-goals.
-- **Resolution**: active `SKU_CATEGORY` config (skipped while the catalog replica carries no
-  category — `SkuCategoryProvider` SPI) → active `SITE` config → active `DEFAULT` config →
+- **Resolution**: active `SKU_CATEGORY` config → active `SITE` config → active `DEFAULT` config →
   platform default FIFO. Configuration lives in `sourcing_strategy_config` (V17), administered
   via the `sourcing-strategies` endpoints (`inventory:location:admin`).
+  The `SKU_CATEGORY` scope resolves through the `SkuCategoryProvider` SPI, which is gated by
+  `pos.inventory.sku-category.resolve-from-replica` and **defaults off** — so the scope is skipped
+  and this is a three-step chain in practice. Since #1514 the catalog replica does carry the
+  category, so turning the flag on would make the scope reachable for the first time; that also
+  makes the `SKU_CATEGORY` scope of `costing_method_config` reachable, which would flip matching
+  SKUs off `DEFAULT` costing at their next ledger posting with no `cost_method_change_log` row and
+  no revaluation cut-over. Tracked in #1535 — leave it off until that is resolved. Putaway does
+  **not** go through this SPI; it reads the unconditional `SkuCategoryLookup`.
 - **Audit**: the effective strategy is recorded as `sourcingReason` on pick tasks
   (and, from F5, replenishment tasks) so ops can answer "why this bin".
+
+## Category-based putaway (#1514)
+
+Putaway routes on what the item *is* and on what the destination is *fit to hold*, rather than on
+per-SKU replenishment configuration. Full rules: `pos-inventory/docs/putaway-validation-rules.md`.
+
+- **Rules match per line**, in the strict precedence `SKU > SUBCATEGORY > CATEGORY > ANY`;
+  `priority` only breaks ties within a tier. `putaway_rule.match_type` / `match_value` (V42)
+  replaced the never-read `criteria` JSON column, and matching is on catalog **ids**, never on name
+  snapshots. Rules are managed over `/v1/inventory/putaway/rules`
+  (`inventory:putaway_rule:view` / `inventory:putaway_rule:manage`).
+- **Exactly one enabled `ANY` rule** may exist; it is the terminal fallback that guarantees a
+  brand-new uncategorised SKU never dead-ends, and it replaced a hardcoded default-location UUID no
+  environment ever had. Its absence raises `NO_PUTAWAY_RULE_MATCH` (422) naming the remedy.
+- **Destination eligibility is `storage_compatibility`** (V43): a Flyway matrix of
+  (catalog category or subcategory id) → accepted storage classes, with subcategory rows *replacing*
+  their parent's. `STAGING` and `QUARANTINE` accept nothing — they are putaway sources.
+  `BATTERY_RACK` and `OIL_STORAGE` require the destination to declare `hazard_containment`, and an
+  item whose every accepted class demands containment carries that requirement itself, so it is
+  refused even by a `GENERAL` bin.
+- **A replenishment policy is no longer required for putaway.** Both `(itemSKU, locationId)`
+  policy-row gates are gone, and capacity no longer falls back to summed replenishment maximums:
+  an undeclared capacity is uncapped, a declared zero still refuses. `ReplenishmentPolicy` keeps
+  doing its own job for the restock scan.
+
+**Rollout requirement.** `V41` adds `ext_product.category_id`/`subcategory_id` and
+`ext_storage_location.storage_category_code`/`hazard_containment`/`allow_new_product` **empty, with
+no backfill**. Category matching has nothing to match on until a pos-catalog product-fact replay and
+a pos-location storage-location republish have run — and pos-location's generic outbox replay does
+*not* work for this, because it re-emits stored payloads that predate the fields. See
+`docs/OPERATIONS_RUNBOOK.md` → "Replica seeding and drift repair (replay)" →
+"Issue #1514: rehydrating the putaway replica columns".
 
 ## Counter-sale consumption (order parity H2)
 
@@ -306,6 +350,7 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
 | `POS_INVENTORY_SUPPLIER_HINT_STALENESS_CEILING`      | `PT24H`  | Age past which a supplier hint reads as unknown        |
 | `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED`     | `false`  | Run the EAN resolution sweep against pos-catalog       |
 | `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE`  | `200`    | Hints resolved per pass                                |
+| `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`    | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `costing_method_config` reachable and would change costing (#1535). Putaway does not use this SPI. |
 
 ## Dependencies
 

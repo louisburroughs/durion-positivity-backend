@@ -23,13 +23,20 @@ public interface PutawayValidationService {
      * Validates that the destination location is compatible with the SKU.
      *
      * <p>
-     * Checks:
+     * Checks (issue #1514):
      * <ul>
-     * <li>SKU is allowed in the zone</li>
-     * <li>Temperature class matches</li>
-     * <li>Hazardous/non-hazardous rules</li>
-     * <li>Location is an authorized bin</li>
+     * <li>The destination is the target of an enabled putaway rule</li>
+     * <li>The destination's storage class accepts the item's catalog class, per the
+     * {@code storage_compatibility} matrix — subcategory rows replacing their parent category's</li>
+     * <li>{@code STAGING} and {@code QUARANTINE} destinations are refused: they are putaway
+     * sources</li>
+     * <li>Hazard containment is declared where the matched class, or the item's own class, requires
+     * it</li>
      * </ul>
+     *
+     * <p>
+     * A replenishment policy is <em>not</em> required; temperature class is not consulted. See
+     * {@code pos-inventory/docs/putaway-validation-rules.md}.
      *
      * @param destinationLocationId the destination location to validate
      * @param skuId                 the SKU being put away
