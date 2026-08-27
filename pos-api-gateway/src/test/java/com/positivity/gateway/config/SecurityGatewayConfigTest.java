@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 61")
+    @DisplayName("CATALOG_VERSION is 62")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(61);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(62);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 487")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 489")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1370,8 +1370,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(485)).isEqualTo("PERM_catalog:item_cost:read");
         assertThat(GatewayPermissionCatalog.authorityForBit(486)).isEqualTo("PERM_catalog:tread_design:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(487)).isEqualTo("PERM_catalog:fact:replay");
+        // catalog v62 (#1527): pay-period lifecycle management in pos-people (bits 488-489)
+        assertThat(GatewayPermissionCatalog.authorityForBit(488)).isEqualTo("PERM_people:timePeriod:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(489)).isEqualTo("PERM_people:timePeriod:transition");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(488)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(490)).isNull();
     }
 
     @Test

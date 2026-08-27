@@ -1,9 +1,9 @@
-generatedAt: "2026-08-26T13:13:28.160837+00:00"
+generatedAt: "2026-08-26T20:49:45.174392+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 452
-  uniquePermissionCount: 452
+  permissionCount: 454
+  uniquePermissionCount: 454
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -638,7 +638,7 @@ manifests:
     domain: "people"
     serviceName: "pos-people"
     version: "1.0"
-    permissionCount: 21
+    permissionCount: 23
     permissions:
       - name: "people:availability:view"
         description: "View availability"
@@ -676,6 +676,10 @@ manifests:
         description: "Resolve timeException"
       - name: "people:timeException:view"
         description: "View timeException"
+      - name: "people:timePeriod:create"
+        description: "Create timePeriod"
+      - name: "people:timePeriod:transition"
+        description: "Transition timePeriod"
       - name: "people:timekeeping:approve"
         description: "Approve timekeeping period entries"
       - name: "people:timekeeping:reject"
@@ -2875,6 +2879,18 @@ permissions:
     source: "pos-people/src/main/resources/permissions.yaml"
   - name: "people:timeException:view"
     description: "View timeException"
+    domain: "people"
+    serviceName: "pos-people"
+    module: "pos-people"
+    source: "pos-people/src/main/resources/permissions.yaml"
+  - name: "people:timePeriod:create"
+    description: "Create timePeriod"
+    domain: "people"
+    serviceName: "pos-people"
+    module: "pos-people"
+    source: "pos-people/src/main/resources/permissions.yaml"
+  - name: "people:timePeriod:transition"
+    description: "Transition timePeriod"
     domain: "people"
     serviceName: "pos-people"
     module: "pos-people"
