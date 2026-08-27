@@ -348,7 +348,7 @@ class ReplicaAndManifestListenerContractTest {
 
     // ---------- manifest listeners ----------
 
-    static final List<String> MANIFESTS = List.of("customer", "vehicle", "people-contact");
+    static final List<String> MANIFESTS = List.of("customer", "vehicle", "people-contact", "people");
 
     private record Manifest(String owner, String commandsTopic, Consumer<String> dispatch) {}
 
@@ -372,6 +372,12 @@ class ReplicaAndManifestListenerContractTest {
                 ReflectionTestUtils.setField(listener, "peopleContactCommandsTopic", "people-contact.commands.v1");
                 return new Manifest(
                         PeopleContactEventsListener.OWNER, "people-contact.commands.v1", listener::onManifest);
+            }
+            case "people" -> {
+                PeopleManifestListener listener = new PeopleManifestListener(
+                        processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+                ReflectionTestUtils.setField(listener, "peopleCommandsTopic", "people.commands.v1");
+                return new Manifest(PeopleEventsListener.OWNER, "people.commands.v1", listener::onManifest);
             }
             default -> throw new IllegalArgumentException("Unknown manifest owner in test fixture: " + owner);
         }

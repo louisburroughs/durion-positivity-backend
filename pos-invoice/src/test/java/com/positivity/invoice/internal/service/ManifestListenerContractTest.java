@@ -58,7 +58,7 @@ class ManifestListenerContractTest {
     private static final Instant WINDOW_START = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T09:05:00Z");
 
-    static final List<String> LISTENERS = List.of("customer", "location", "workorder");
+    static final List<String> LISTENERS = List.of("customer", "location", "workorder", "people");
 
     @Mock
     private ProcessedEventRepository processedEventRepository;
@@ -94,12 +94,18 @@ class ManifestListenerContractTest {
                 ReflectionTestUtils.setField(listener, "locationCommandsTopic", "location.commands.v1");
                 return new Listener(LocationEventsListener.OWNER, "location.commands.v1", listener::onManifest);
             }
-            default -> {
+            case "workorder" -> {
                 WorkorderManifestListener listener = new WorkorderManifestListener(
                         processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
                 // Field name is a copy-paste leftover; the @Value key binds the workorder topic.
                 ReflectionTestUtils.setField(listener, "locationCommandsTopic", "workorder.commands.v1");
                 return new Listener(WorkorderEventsListener.OWNER, "workorder.commands.v1", listener::onManifest);
+            }
+            default -> {
+                PeopleManifestListener listener = new PeopleManifestListener(
+                        processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+                ReflectionTestUtils.setField(listener, "peopleCommandsTopic", "people.commands.v1");
+                return new Listener(PeopleEventsListener.OWNER, "people.commands.v1", listener::onManifest);
             }
         }
     }

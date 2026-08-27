@@ -350,7 +350,7 @@ class ReplicaListenerContractTest {
     }
 
     @Test
-    @DisplayName("people: ignores an event type it does not consume, without a dedup row")
+    @DisplayName("people: records but does not replicate an event type it does not consume")
     void peopleIgnoresOtherTypes() {
         new PeopleEventsListener(
                         clock,
@@ -361,8 +361,11 @@ class ReplicaListenerContractTest {
                 .onPeopleEvent("""
                         {"eventId":"evt-9","eventType":"people.staffing-assignment.updated","payload":{}}""");
 
+        // The replica is untouched, but the fact is still recorded: the owner's manifest counts
+        // every event on the topic, so skipping the dedup row here would look like permanent
+        // drift and trigger a replay that can never reconcile (#1537).
         verify(employeeRepository, never()).save(any());
-        verify(processedEventRepository, never()).save(any());
+        verify(processedEventRepository).save(any());
     }
 
     @Test

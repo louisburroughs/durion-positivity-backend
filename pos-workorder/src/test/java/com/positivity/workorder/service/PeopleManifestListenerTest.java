@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.service;
+package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -9,7 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
-import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.workorder.internal.repository.ProcessedEventRepository;
+import com.positivity.workorder.internal.service.PeopleManifestListener;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -25,18 +26,19 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Reconciliation contract of the catalog.manifest.v1 listener (odoo-parity B1, #1033; #1537):
- * recompute count + checksum from processed_events (owner catalog); on drift, increment the metric
- * AND request replay over catalog.commands.v1 — pos-catalog gained a replay-only command listener
- * in #1537, closing the #1023 gap that previously left this module unable to ask for repair.
+ * Unit tests for {@link PeopleManifestListener} (ADR-0044 §4, #1537).
+ *
+ * <p>Reconciles the {@code ext_people_staffing_assignment} replica against the owner's
+ * {@code people.manifest.v1} summary — the previously-inert consumer half of ADR-0044
+ * reconciliation for the staffing feed: {@code pos-people} was already publishing manifests and
+ * handling replay commands, but nothing consumed the former or sent the latter until now.
  */
-class CatalogManifestListenerTest {
+class PeopleManifestListenerTest {
 
-    private static final Instant WINDOW_START = Instant.parse("2026-07-21T10:00:00Z");
-    private static final Instant WINDOW_END = Instant.parse("2026-07-21T11:00:00Z");
+    private static final Instant WINDOW_START = Instant.parse("2026-07-14T10:00:00Z");
+    private static final Instant WINDOW_END = Instant.parse("2026-07-14T11:00:00Z");
     private static final String IN_WINDOW_ID_1 = eventIdAt(WINDOW_START.plusSeconds(60), 1);
     private static final String IN_WINDOW_ID_2 = eventIdAt(WINDOW_START.plusSeconds(120), 2);
-    private static final String COMMANDS_TOPIC = "catalog.commands.v1";
 
     private final ProcessedEventRepository repository = mock(ProcessedEventRepository.class);
 
@@ -49,13 +51,13 @@ class CatalogManifestListenerTest {
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private CatalogManifestListener listener;
+    private PeopleManifestListener listener;
 
     @BeforeEach
     void setUp() {
         when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-        listener = new CatalogManifestListener(repository, kafkaTemplate, objectMapper, meterRegistryProvider);
-        ReflectionTestUtils.setField(listener, "catalogCommandsTopic", COMMANDS_TOPIC);
+        listener = new PeopleManifestListener(repository, kafkaTemplate, objectMapper, meterRegistryProvider);
+        ReflectionTestUtils.setField(listener, "peopleCommandsTopic", "people.commands.v1");
     }
 
     /** UUIDv7-shaped id whose embedded timestamp is {@code at}. */
@@ -68,22 +70,22 @@ class CatalogManifestListenerTest {
         return """
                 {
                   "eventId": "%s",
-                  "eventType": "catalog.reconciliation.manifest",
+                  "eventType": "people.reconciliation.manifest",
                   "schemaVersion": 1,
                   "aggregateId": "00000000-0000-0000-0000-000000000001",
                   "aggregateVersion": 1,
-                  "occurredAtUtc": "2026-07-21T11:05:00Z",
-                  "sourceService": "pos-catalog",
+                  "occurredAtUtc": "2026-07-14T11:05:00Z",
+                  "sourceService": "pos-people",
                   "payload": {
                     "windowStartUtc": "%s",
                     "windowEndUtc": "%s",
                     "eventCount": %d,
                     "eventIdsChecksum": "%s",
-                    "eventTypeCounts": {"catalog.product.updated": %d}
+                    "eventTypeCounts": {"StaffingAssignmentUpdated": %d}
                   }
                 }
                 """.formatted(
-                        eventIdAt(Instant.parse("2026-07-21T11:05:00Z"), 9),
+                        eventIdAt(Instant.parse("2026-07-14T11:05:00Z"), 9),
                         WINDOW_START,
                         WINDOW_END,
                         eventCount,
@@ -94,16 +96,16 @@ class CatalogManifestListenerTest {
     private double driftCount() {
         return meterRegistry
                 .get("replica.drift")
-                .tags("owner", "catalog")
+                .tags("owner", "people")
                 .counter()
                 .count();
     }
 
     @Test
-    @DisplayName("Matching count and checksum → no drift, no replay command")
+    @DisplayName("Matching count and checksum → no drift, no replay request")
     void matchingManifestIsQuiet() {
         List<String> ids = List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2);
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
                 .thenReturn(ids);
 
         listener.onManifest(manifestMessage(2, ReconciliationManifestV1.checksumOf(ids)));
@@ -113,69 +115,73 @@ class CatalogManifestListenerTest {
     }
 
     @Test
-    @DisplayName("Missing event → drift metric AND a replay command is published (#1537)")
-    void missingEventTriggersDriftAndReplay() {
+    @DisplayName("Missing event → drift metric + exactly one replay request for the window")
+    void missingEventTriggersDriftAndReplay() throws Exception {
         // Owner saw two events, we only recorded one.
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(
                 manifestMessage(2, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), anyString(), anyString());
+        ArgumentCaptor<String> command = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate, org.mockito.Mockito.times(1))
+                .send(eq("people.commands.v1"), anyString(), command.capture());
+        JsonNode json = objectMapper.readTree(command.getValue());
+        assertThat(json.path("commandType").stringValue()).isEqualTo("people.outbox.replay-requested");
+        assertThat(json.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
+        assertThat(json.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
     }
 
     @Test
-    @DisplayName("Checksum mismatch at equal counts → drift metric AND a replay command")
-    void checksumMismatchTriggersDriftAndReplay() {
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+    @DisplayName("Same count but different ids (checksum mismatch) → drift")
+    void checksumMismatchTriggersDrift() {
+        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), anyString(), anyString());
+        verify(kafkaTemplate).send(eq("people.commands.v1"), anyString(), anyString());
     }
 
     @Test
-    @DisplayName("Exactly one replay command is published on drift, carrying the window bounds")
-    void replayCommand_carriesWindowBoundsAndIsPublishedOnce() {
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
-                .thenReturn(List.of());
-        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-
-        listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
-
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), key.capture(), body.capture());
-        assertThat(key.getValue()).isEqualTo(WINDOW_START.toString());
-
-        JsonNode command = objectMapper.readTree(body.getValue());
-        assertThat(command.path("commandType").stringValue()).isEqualTo("catalog.outbox.replay-requested");
-        assertThat(command.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
-        assertThat(command.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
-    }
-
-    @Test
-    @DisplayName("Unparseable manifest is dropped without touching the repository or publishing")
+    @DisplayName("Unparseable manifests are dropped without drift or replay")
     void unparseableManifestIsDropped() {
-        listener.onManifest("not-json");
+        listener.onManifest("{not json");
+        listener.onManifest("{\"payload\": {\"windowStartUtc\": \"oops\"}}");
 
-        verify(repository, never()).findEventIdsInRange(anyString(), anyString(), anyString());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
         assertThat(driftCount()).isZero();
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(repository, never()).findEventIdsInRange(anyString(), anyString(), anyString());
     }
 
     @Test
-    @DisplayName("A failed replay publish is swallowed — drift metric already fired, next manifest re-detects")
-    void failedReplayPublishIsSwallowed() {
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+    @DisplayName("A failed replay publish is swallowed — the drift metric still fires")
+    void replayPublishFailureIsSwallowed() {
+        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
                 .thenReturn(List.of());
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("broker down"));
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenThrow(new IllegalStateException("broker down"));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
 
         assertThat(driftCount()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("Redelivering the same manifest is idempotent: same verdict every time")
+    void redeliveryIsIdempotent() {
+        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
+                .thenReturn(List.of(IN_WINDOW_ID_1));
+        String message =
+                manifestMessage(2, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2)));
+
+        listener.onManifest(message);
+        listener.onManifest(message);
+
+        assertThat(driftCount()).isEqualTo(2.0);
+        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(eq("people.commands.v1"), anyString(), anyString());
     }
 }

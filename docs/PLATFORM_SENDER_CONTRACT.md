@@ -74,6 +74,16 @@ these never arrive. `address` (raw, normalized) is REQUIRED on bounce/complaint 
 suppression hand-off can identify what to block; it is relayed to pos-customer and never
 persisted by pos-marketing.
 
+**Producer:** `sender.outcomes.v1` is produced entirely by the external **shared platform
+sender** (the owner named above) — no module in this repository publishes it.
+`pos-marketing`'s `DeliveryOutcomeListener` is the sole consumer. Because the producer lives
+outside this repo, there is no in-repo test that exercises the wire format end-to-end; the
+automated check that keeps the consumer honest against this table is
+`PlatformSenderContractTest`
+(`pos-marketing/src/test/java/com/positivity/marketing/internal/service/PlatformSenderContractTest.java`),
+which drives `DeliveryOutcomeListener` with JSON fixtures built from the field names above and
+pins each row's effect, including the `permanent`/`occurredAt` defaults (issue #1537).
+
 ## 3. Suppression feedback (pos-marketing → pos-customer)
 
 On hard bounce or complaint, `pos-marketing` queues a command on `customer.commands.v1`

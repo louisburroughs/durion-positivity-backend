@@ -36,19 +36,32 @@
     {
       "name": "pos.accounting.kafka.enabled",
       "type": "java.lang.Boolean",
-      "description": "Enable accounting Kafka consumers for payment-cleared events.",
+      "description": "Enable accounting's Kafka consumers.",
       "defaultValue": false
     },
     {
-      "name": "pos.accounting.kafka.payments-topic",
+      "name": "pos.accounting.kafka.workorder-events-topic",
       "type": "java.lang.String",
-      "description": "Kafka topic containing payment-cleared events.",
-      "defaultValue": "payment.cleared.v1"
+      "description": "Workorder fact feed resolving outstanding invoice-regeneration commands (#1537 D1).",
+      "defaultValue": "workorder.events.v1"
     },
     {
-      "name": "pos.accounting.kafka.consumer-group",
+      "name": "pos.accounting.kafka.invoice-manifest-topic",
       "type": "java.lang.String",
-      "description": "Kafka consumer group for accounting payment event consumers."
+      "description": "Invoice replica reconciliation manifest feed (#1537 D2).",
+      "defaultValue": "invoice.manifest.v1"
+    },
+    {
+      "name": "pos.accounting.kafka.invoice-commands-topic",
+      "type": "java.lang.String",
+      "description": "Command topic for requesting invoice-manifest replay (#1537 D2).",
+      "defaultValue": "invoice.commands.v1"
+    },
+    {
+      "name": "pos.accounting.kafka.invoice-manifest-consumer-group",
+      "type": "java.lang.String",
+      "description": "Kafka consumer group id for the invoice-manifest reconciliation listener (#1537 D2).",
+      "defaultValue": "pos-accounting-invoice-manifests"
     },
     {
       "name": "pos.invoice.service-id",

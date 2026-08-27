@@ -57,4 +57,14 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM ExtInvoice i WHERE i.invoiceId = :invoiceId")
     Optional<ExtInvoice> findByIdForUpdate(UUID invoiceId);
+
+    /**
+     * Replicated invoices already linked to the given workorder (issue #1537 F4), used to
+     * capture the pre-existing invoiceId when a regeneration request is published — see {@code
+     * InvoiceRegenerationServiceImpl}.
+     *
+     * @param workorderId owning workorder identifier
+     * @return matching invoices (unordered; callers pick the most recent by {@code updatedAt})
+     */
+    List<ExtInvoice> findByWorkorderId(UUID workorderId);
 }

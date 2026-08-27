@@ -137,12 +137,13 @@ pos:
       workorder-commands-topic: ${POS_INVENTORY_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       # Catalog product replica feed (odoo-parity B1, #1033): base UoM + conversion factors,
       # tracking level, and substitution-group membership from catalog.product.updated v2 facts.
-      # No catalog-commands topic: pos-catalog has no replay-command listener yet (#1023), so
-      # manifest drift is detected (log + replica.drift metric) without requesting replay.
+      # Manifest drift requests replay over catalog-commands-topic (#1537), which pos-catalog's
+      # CatalogCommandListener now consumes — closes the #1023 gap.
       catalog-events-topic: ${POS_INVENTORY_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${POS_INVENTORY_CATALOG_EVENTS_CONSUMER_GROUP:pos-inventory-catalog-events}
       catalog-manifest-topic: ${POS_INVENTORY_CATALOG_MANIFEST_TOPIC:catalog.manifest.v1}
       catalog-manifest-consumer-group: ${POS_INVENTORY_CATALOG_MANIFEST_CONSUMER_GROUP:pos-inventory-catalog-manifests}
+      catalog-commands-topic: ${POS_INVENTORY_CATALOG_COMMANDS_TOPIC:catalog.commands.v1}
       # Warranty part-return quarantine/hold tracking feed (#927)
       warranty-events-topic: ${POS_INVENTORY_WARRANTY_EVENTS_TOPIC:warranty.events.v1}
       warranty-events-consumer-group: ${POS_INVENTORY_WARRANTY_EVENTS_CONSUMER_GROUP:pos-inventory-warranty-events}

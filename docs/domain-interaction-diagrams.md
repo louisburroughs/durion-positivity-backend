@@ -221,7 +221,7 @@ flowchart LR
   INV ==>|E11 inventory.events.v1| ORD
   INV ==>|E12 inventory.events.v1 + manifest| WO
 
-  INVOC ==>|E13 invoice.events.v1; payment topics| ACC
+  INVOC ==>|E13 invoice.events.v1 + manifest; payment topics| ACC
   INVOC ==>|E14 invoice.events.v1| WAR
   INVOC ==>|E15 invoice.events.v1 + manifest| WO
   INVOC ==>|E16 payment.events.v1| ORD
@@ -268,6 +268,7 @@ flowchart LR
   WO ==>|E49 workorder.events.v1| PPL
   WO ==>|E50 workorder.events.v1| SUP
   WO ==>|E51 workorder.events.v1| WAR
+  WO ==>|E61 workorder.events.v1| ACC
 
   LOC ==>|E52 location.events.v1 + manifest| INV
   LOC ==>|E53 location.events.v1 + manifest| INVOC
@@ -275,9 +276,9 @@ flowchart LR
   LOC ==>|E55 location.events.v1 + manifest| PPL
   LOC ==>|E56 location.events.v1 + manifest| WO
 
-  PPL ==>|E57 people.events.v1| INVOC
-  PPL ==>|E58 people.events.v1| SHOP
-  PPL ==>|E59 people.events.v1| WO
+  PPL ==>|E57 people.events.v1 + manifest| INVOC
+  PPL ==>|E58 people.events.v1 + manifest| SHOP
+  PPL ==>|E59 people.events.v1 + manifest| WO
 
   SENDER ==>|E60 sender.outcomes.v1| MKT
 ```
@@ -289,7 +290,7 @@ flowchart LR
 | catalog events and manifest                  | [fact publisher](../pos-catalog/src/main/java/com/positivity/catalog/internal/config/CatalogFactPublisher.java), [manifest publisher](../pos-catalog/src/main/java/com/positivity/catalog/internal/config/ManifestPublisher.java)                                                                                                                                |
 | customer events and manifest                 | [fact publisher](../pos-customer/src/main/java/com/positivity/customer/internal/service/CustomerFactPublisher.java), [manifest publisher](../pos-customer/src/main/java/com/positivity/customer/internal/config/ManifestPublisher.java)                                                                                                                          |
 | inventory events and manifest                | [fact publisher](../pos-inventory/src/main/java/com/positivity/inventory/internal/service/InventoryFactPublisher.java), [manifest publisher](../pos-inventory/src/main/java/com/positivity/inventory/internal/config/ManifestPublisher.java)                                                                                                                     |
-| invoice and payment events; invoice manifest | [invoice publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/InvoiceEventPublisher.java), [settlement publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/SettlementEventPublisher.java), [manifest publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/ManifestPublisher.java) |
+| invoice and payment events; invoice manifest | [invoice publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/InvoiceEventPublisher.java), [settlement publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/SettlementEventPublisher.java), [payment fact publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/PaymentEventPublisher.java), [manifest publisher](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/ManifestPublisher.java) |
 | location events and manifest                 | [fact publisher](../pos-location/src/main/java/com/positivity/location/internal/service/LocationFactPublisher.java), [manifest publisher](../pos-location/src/main/java/com/positivity/location/internal/config/ManifestPublisher.java)                                                                                                                          |
 | marketing events                             | [fact publisher](../pos-marketing/src/main/java/com/positivity/marketing/internal/service/MarketingFactPublisher.java)                                                                                                                                                                                                                                           |
 | order events                                 | [domain publisher](../pos-order/src/main/java/com/positivity/order/internal/config/OrderDomainEventPublisher.java), [purchase-order publisher](../pos-order/src/main/java/com/positivity/order/internal/service/PurchaseOrderFactPublisher.java)                                                                                                                 |
@@ -319,7 +320,7 @@ above.
 | E10 | inventory         | location         | events + manifest                                           | [events](../pos-location/src/main/java/com/positivity/location/internal/service/InventoryEventsListener.java), [manifest](../pos-location/src/main/java/com/positivity/location/internal/service/InventoryManifestListener.java)                                       |
 | E11 | inventory         | order            | `inventory.events.v1`                                       | [listener](../pos-order/src/main/java/com/positivity/order/internal/service/InventoryEventsListener.java)                                                                                                                                                              |
 | E12 | inventory         | workorder        | events + manifest                                           | [events](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/InventoryEventsListener.java), [manifest](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/InventoryManifestListener.java)                                   |
-| E13 | invoice           | accounting       | `invoice.events.v1`, `payment.events.v1`, settlement config | [invoice](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/InvoiceEventsListener.java), [settlement](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/SettlementEventsListener.java)                               |
+| E13 | invoice           | accounting       | events + manifest; `payment.events.v1`, settlement config   | [invoice](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/InvoiceEventsListener.java), [settlement + PaymentSettledV1 receivables](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/SettlementEventsListener.java), [manifest](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/InvoiceManifestListener.java)                               |
 | E14 | invoice           | warranty         | `invoice.events.v1`                                         | [listener](../pos-warranty/src/main/java/com/positivity/warranty/internal/service/InvoiceEventsListener.java)                                                                                                                                                          |
 | E15 | invoice           | workorder        | events + manifest                                           | [events](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/InvoiceEventsListener.java), [manifest](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/InvoiceManifestListener.java)                                       |
 | E16 | invoice           | order            | `payment.events.v1`                                         | [listener](../pos-order/src/main/java/com/positivity/order/internal/service/PaymentEventsListener.java)                                                                                                                                                                |
@@ -363,10 +364,11 @@ above.
 | E54 | location          | order            | `location.events.v1`                                        | [listener](../pos-order/src/main/java/com/positivity/order/internal/service/LocationEventsListener.java)                                                                                                                                                               |
 | E55 | location          | people           | events + manifest                                           | [events](../pos-people/src/main/java/com/positivity/people/internal/service/LocationEventsListener.java), [manifest](../pos-people/src/main/java/com/positivity/people/internal/service/LocationManifestListener.java)                                                 |
 | E56 | location          | workorder        | events + manifest                                           | [events](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/LocationEventsListener.java), [manifest](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/LocationManifestListener.java)                                     |
-| E57 | people            | invoice          | `people.events.v1`                                          | [listener](../pos-invoice/src/main/java/com/positivity/invoice/internal/service/PeopleEventsListener.java)                                                                                                                                                             |
-| E58 | people            | shop-manager     | `people.events.v1`                                          | [listener](../pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/service/PeopleEventsListener.java)                                                                                                                                                    |
-| E59 | people            | workorder        | `people.events.v1`                                          | [listener](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/PeopleReplicaEventsListener.java)                                                                                                                                                  |
+| E57 | people            | invoice          | events + manifest                                            | [events](../pos-invoice/src/main/java/com/positivity/invoice/internal/service/PeopleEventsListener.java), [manifest](../pos-invoice/src/main/java/com/positivity/invoice/internal/service/PeopleManifestListener.java)                                                |
+| E58 | people            | shop-manager     | events + manifest                                            | [events](../pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/service/PeopleEventsListener.java), [manifest](../pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/service/PeopleManifestListener.java)                              |
+| E59 | people            | workorder        | events + manifest                                            | [events](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/PeopleReplicaEventsListener.java), [manifest](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/PeopleManifestListener.java)                                 |
 | E60 | configured sender | marketing        | `sender.outcomes.v1`                                        | [listener](../pos-marketing/src/main/java/com/positivity/marketing/internal/service/DeliveryOutcomeListener.java)                                                                                                                                                      |
+| E61 | workorder         | accounting       | `workorder.events.v1`                                        | [listener](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/WorkorderEventsListener.java)                                                                                                                                                    |
 
 ## Diagram 3: Commands and Results
 
@@ -425,6 +427,12 @@ flowchart LR
   SHOP -->|C25 vehicle.commands.v1; replay| VEH
   WO -->|C26 customer.commands.v1; replay| CUS
   WO -->|C27 location.commands.v1; replay| LOC
+
+  INVOC -->|C28 people.commands.v1; replay| PPL
+  SHOP -->|C29 people.commands.v1; replay| PPL
+  WO -->|C30 people.commands.v1; replay| PPL
+  ACC -->|C31 invoice.commands.v1; replay| INVOC
+  INV -->|C32 catalog.commands.v1; replay| CAT
 ```
 
 ### Command Edge Catalog
@@ -458,14 +466,21 @@ flowchart LR
 | C25 | shop-manager     | vehicle-inventory | `vehicle.commands.v1`        | Reconciliation replay: [manifest listener](../pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/service/VehicleManifestListener.java)                                                                                                                                                        |
 | C26 | workorder        | customer          | `customer.commands.v1`       | Reconciliation replay: [manifest listener](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/CustomerManifestListener.java)                                                                                                                                                            |
 | C27 | workorder        | location          | `location.commands.v1`       | Reconciliation replay: [manifest listener](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/LocationManifestListener.java)                                                                                                                                                            |
+| C28 | invoice          | people            | `people.commands.v1`         | Reconciliation replay, closes the previously-inert people.manifest.v1/people.commands.v1 pair: [manifest listener](../pos-invoice/src/main/java/com/positivity/invoice/internal/service/PeopleManifestListener.java)                                                                                         |
+| C29 | shop-manager     | people            | `people.commands.v1`         | Reconciliation replay, closes the previously-inert people.manifest.v1/people.commands.v1 pair: [manifest listener](../pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/service/PeopleManifestListener.java)                                                                                |
+| C30 | workorder        | people            | `people.commands.v1`         | Reconciliation replay, closes the previously-inert people.manifest.v1/people.commands.v1 pair: [manifest listener](../pos-workorder/src/main/java/com/positivity/workorder/internal/service/PeopleManifestListener.java)                                                                                     |
+| C31 | accounting       | invoice           | `invoice.commands.v1`        | Reconciliation replay: [manifest listener](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/InvoiceManifestListener.java)                                                                                                                                                           |
+| C32 | inventory        | catalog           | `catalog.commands.v1`        | Reconciliation replay, closes the #1023 gap where pos-catalog's replica drift was detectable but not repairable: [manifest listener](../pos-inventory/src/main/java/com/positivity/inventory/internal/service/CatalogManifestListener.java)                                                                  |
 
 The target command listeners are:
 
+- [catalog](../pos-catalog/src/main/java/com/positivity/catalog/internal/config/CatalogCommandListener.java)
 - [customer](../pos-customer/src/main/java/com/positivity/customer/internal/config/CustomerCommandListener.java)
 - [inventory](../pos-inventory/src/main/java/com/positivity/inventory/internal/config/InventoryCommandListener.java)
 - [invoice](../pos-invoice/src/main/java/com/positivity/invoice/internal/config/InvoiceCommandListener.java)
 - [location](../pos-location/src/main/java/com/positivity/location/internal/config/LocationCommandListener.java)
 - [order](../pos-order/src/main/java/com/positivity/order/internal/service/PurchaseOrderCommandListener.java)
+- [people](../pos-people/src/main/java/com/positivity/people/internal/config/PeopleCommandListener.java)
 - [people-contact](../pos-people-contact/src/main/java/com/positivity/peoplecontact/internal/config/PeopleContactCommandListener.java)
 - [supplier](../pos-supplier/src/main/java/com/positivity/supplier/internal/command/service/SupplierCommandListener.java)
 - [vehicle-inventory](../pos-vehicle-inventory/src/main/java/com/positivity/vehicle/internal/config/VehicleCommandListener.java)
@@ -473,13 +488,28 @@ The target command listeners are:
 
 ## Caveats
 
-- `payment.cleared.v1` has an accounting listener, but no qualifying producer
-  was found in this repository. It is not drawn as a module-to-module edge.
 - `sender.outcomes.v1` is drawn from an external sender because the consumer and
   configured sender client exist here, while the sender implementation does not.
+  This is a documented, contracted external topic, not an orphan: the owning
+  contract is [`docs/PLATFORM_SENDER_CONTRACT.md`](PLATFORM_SENDER_CONTRACT.md)
+  and the automated check that keeps it honest is
+  [`PlatformSenderContractTest`](../pos-marketing/src/test/java/com/positivity/marketing/internal/service/PlatformSenderContractTest.java).
 - The customer module contains a second workorder listener whose topic is
   configured without a source-code default. E45 uses the explicit
-  `workorder.events.v1` listener and does not draw a duplicate edge.
+  `workorder.events.v1` listener and does not draw a duplicate edge. This is
+  still true on the evidence date:
+  [`WorkorderEventHandler`](../pos-customer/src/main/java/com/positivity/customer/internal/service/WorkorderEventHandler.java)
+  resolves `${pos.customer.kafka.workorder-events-topic}` with no inline
+  default, and `pos-customer`'s
+  [`application.yml`](../pos-customer/src/main/resources/application.yml)
+  sets it to the legacy, dot-less `workorder-events`, matching no topic this
+  document tracks.
+- pos-catalog's [`CatalogCommandListener`](../pos-catalog/src/main/java/com/positivity/catalog/internal/config/CatalogCommandListener.java)
+  publishes a follow-up `catalog.outbox.replay-requested` command back onto its
+  own `catalog.commands.v1` topic when one reconciliation-replay page is
+  incomplete, chaining itself to convergence. This is a self-edge (origin and
+  target are both pos-catalog), not a domain-to-domain interaction, so it is
+  recorded here rather than drawn as a graph edge or catalog row.
 - Startup registration edges S30-S31 are grouped. The specific registrars are
   discoverable by `PermissionRegistration`, `PermissionInitializer`, and
   `EventTypeInitializer` class names across modules.
@@ -487,3 +517,26 @@ The target command listeners are:
   the production source defaults captured on the evidence date.
 - DLQ routing is operational error handling attached to listeners. It is not a
   module ownership edge and is therefore not drawn.
+
+### Deliberately not changed
+
+- The `pos-warranty` → `pos-invoice` synchronous settlement edge (S01) remains,
+  per **ACCEPTED ADR-0044 amendment 2026-07-22** ("Pos-warranty settlement
+  remains synchronous against pos-invoice"), which supersedes the archived
+  [2026-07-16 model](domain-interaction-diagrams-2026-07-16.md) issue #1537 was
+  originally written against. Its
+  [`DomainWallsTest`](../pos-archunit/src/test/java/com/positivity/archunit/DomainWallsTest.java)
+  grant is deliberately unchanged. Current code evidence agrees this edge is
+  not migratable today:
+  [`InvoiceUpdatedV1`](../pos-domain-events/src/main/java/com/positivity/domainevents/invoice/InvoiceUpdatedV1.java)
+  carries `adjustmentsAmount` as a scalar rollup with no per-entry
+  `externalReference`, and no refund fact exists on `invoice.events.v1` at all
+  — pos-domain-events' `invoice` package defines only `InvoiceUpdatedV1` and
+  `BillingRulesUpdatedV1`.
+- No accounting→invoice command carrying receivable-side state was created.
+  ADR-0044 R6's ownership split — pos-invoice owns the document, pos-accounting
+  owns the receivable — is recorded in
+  [`InvoiceBalanceCalculator`](../pos-accounting/src/main/java/com/positivity/accounting/internal/service/InvoiceBalanceCalculator.java)'s
+  javadoc. Accounting's new invoice-facing edges (E13's `invoice.manifest.v1`
+  consumption, C31's replay command) are reconciliation-only and carry no
+  receivable state.
