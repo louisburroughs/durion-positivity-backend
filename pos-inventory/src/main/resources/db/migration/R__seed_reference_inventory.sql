@@ -11,8 +11,36 @@ VALUES ('4db18cdb-755c-a13b-e253-201f79d997fe'::uuid, '96dd346a-047c-86f5-3c9a-7
 ON CONFLICT (policy_id) DO NOTHING;
 
 -- Putaway rules
-INSERT INTO putaway_rule (rule_id, priority, criteria, destination_location_id, is_enabled, created_at, updated_at)
-VALUES ('6f46541c-937d-397a-076f-63e092cabed6'::uuid, 1, '{"sku_prefix":"OIL-","location_id":"96dd346a-047c-86f5-3c9a-7c8cac53da86"}', '96dd346a-047c-86f5-3c9a-7c8cac53da86'::uuid, TRUE, NOW(), NOW())
+--
+-- #1514: this row used to carry criteria = '{"sku_prefix":"OIL-","location_id":"..."}', a JSON blob
+-- no production code ever read. Because rule selection was findAll...OrderByPriorityAsc().get(0),
+-- the row already applied unconditionally to every line of every receipt, so match_type = 'ANY' is
+-- a faithful statement of what it was always doing rather than a change of behaviour.
+--
+-- It stays here, and stays the only Flyway-seeded rule, because an enabled ANY rule is the terminal
+-- fallback that replaced the hardcoded DEFAULT_LOCATION: it is what guarantees a receipt for a
+-- brand-new uncategorised SKU resolves a destination instead of raising
+-- NoPutawayRuleMatchException. Category- and SKU-specific rules are Tier 2 per
+-- docs/DATA_SEED_STRATEGY.md §2 and enter through POST /v1/inventory/putaway/rules, not through
+-- Flyway. Exactly one enabled ANY rule may exist (the CRUD layer enforces it), so nothing else
+-- should be seeded here with match_type = 'ANY'.
+--
+-- The destination moved from 96dd346a-047c-86f5-3c9a-7c8cac53da86 to
+-- 01960004-0001-7000-8000-000000000003 ('Main Parts Shelf', pos-location
+-- R__seed_location_2_operational_data.sql:94-98). The old value is a site-level location id reused
+-- from the replenishment_policy row above; it is not, and never was, a row in storage_location. That
+-- did not matter while this rule was one of several ways to reach a destination, but it matters now
+-- that the rule IS the terminal fallback: a brand-new uncategorised SKU routed at a non-existent bin
+-- is the same dead end as the removed hardcoded DEFAULT_LOCATION, just with a different fake UUID.
+-- Main Parts Shelf is the seeded general-purpose shelf and the right catch-all for goods no more
+-- specific rule claims.
+--
+-- Note the limit of ON CONFLICT (rule_id) DO NOTHING: it protects this row's id, not the invariant.
+-- An operator who deletes 6f46541c... and creates their own enabled ANY rule through the API will
+-- get this one re-inserted the next time the file's checksum changes, leaving two enabled ANY rules
+-- that the CRUD layer would have refused. Retarget this rule rather than replacing it.
+INSERT INTO putaway_rule (rule_id, priority, match_type, match_value, destination_location_id, is_enabled, created_at, updated_at)
+VALUES ('6f46541c-937d-397a-076f-63e092cabed6'::uuid, 1, 'ANY', NULL, '01960004-0001-7000-8000-000000000003'::uuid, TRUE, NOW(), NOW())
 ON CONFLICT (rule_id) DO NOTHING;
 
 -- Approval thresholds

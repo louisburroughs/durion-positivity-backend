@@ -17,8 +17,10 @@ import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.entity.PutawayTask;
+import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
+import com.positivity.inventory.internal.exception.NoPutawayRuleMatchException;
 import com.positivity.inventory.internal.exception.ReceiptNotStagedException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
@@ -28,9 +30,13 @@ import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.service.ProximitySourcingStrategy;
 import com.positivity.inventory.internal.service.PutawayDestinationResolver;
 import com.positivity.inventory.internal.service.PutawayGenerationServiceImpl;
+import com.positivity.inventory.internal.service.PutawayRuleMatcher;
+import com.positivity.inventory.internal.service.SkuCategoryLookup;
+import com.positivity.inventory.internal.service.SkuCategoryLookup.SkuCategoryRef;
 import com.positivity.inventory.internal.service.StagingLocationResolver;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,8 +48,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PutawayGenerationServiceImplTest {
     private static final UUID DEST_A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-    private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID DEST_B = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID STAGING_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID TIRES_CATEGORY = UUID.fromString("01960030-0000-7000-8000-000000000001");
+    private static final UUID FLUIDS_CATEGORY = UUID.fromString("01960030-0000-7000-8000-000000000007");
+    private static final UUID TIRE_PRODUCT = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0002");
+    private static final UUID OIL_PRODUCT = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0004");
 
     @Mock
     private PutawayRuleRepository putawayRuleRepository;
@@ -66,6 +76,9 @@ class PutawayGenerationServiceImplTest {
     @Mock
     private StagingLocationResolver stagingLocationResolver;
 
+    @Mock
+    private SkuCategoryLookup skuCategoryLookup;
+
     private PutawayGenerationServiceImpl service;
 
     @BeforeEach
@@ -76,12 +89,15 @@ class PutawayGenerationServiceImplTest {
                 proximitySourcingStrategy,
                 putawayValidationService);
         service = new PutawayGenerationServiceImpl(
-                putawayRuleRepository,
+                new PutawayRuleMatcher(putawayRuleRepository, skuCategoryLookup),
                 putawayTaskRepository,
                 goodsReceiptRepository,
                 destinationResolver,
                 stagingLocationResolver,
                 putawayValidationService);
+        lenient()
+                .when(skuCategoryLookup.categoryRefOfAll(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(Map.of());
         lenient()
                 .when(goodsReceiptRepository.findById(any(UUID.class)))
                 .thenAnswer(inv -> Optional.of(receipt(inv.getArgument(0))));
@@ -97,9 +113,8 @@ class PutawayGenerationServiceImplTest {
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                 .quantity(5)
                 .build();
-        PutawayRule rule = new PutawayRule();
-        rule.setDestinationLocationId(DEST_A);
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(anyRule(DEST_A)));
         when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
@@ -123,10 +138,12 @@ class PutawayGenerationServiceImplTest {
                 .build();
         PutawayRule rule = PutawayRule.builder()
                 .priority(1)
+                .matchType(PutawayRuleMatchType.ANY)
                 .destinationLocationId(DEST_A)
                 .destinationStrategy(com.positivity.inventory.internal.enums.PutawayDestinationStrategy.LAST_USED)
                 .build();
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(rule));
         when(putawayTaskRepository
                         .findFirstByProductIdAndStatusAndActualDestinationLocationIdIsNotNullOrderByUpdatedAtDesc(
                                 any(UUID.class), eq(PutawayTaskStatus.COMPLETED)))
@@ -154,10 +171,12 @@ class PutawayGenerationServiceImplTest {
                 .build();
         PutawayRule rule = PutawayRule.builder()
                 .priority(1)
+                .matchType(PutawayRuleMatchType.ANY)
                 .destinationLocationId(DEST_A)
                 .destinationStrategy(com.positivity.inventory.internal.enums.PutawayDestinationStrategy.LAST_USED)
                 .build();
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(rule));
         when(putawayTaskRepository
                         .findFirstByProductIdAndStatusAndActualDestinationLocationIdIsNotNullOrderByUpdatedAtDesc(
                                 any(UUID.class), eq(PutawayTaskStatus.COMPLETED)))
@@ -173,7 +192,10 @@ class PutawayGenerationServiceImplTest {
     }
 
     @Test
-    void generateTasksForReceipt_noRules_createsUnassignedTaskWithDefaultLocation() {
+    void generateTasksForReceipt_noRules_raisesAConfigurationErrorRatherThanRoutingAtAFakeBin() {
+        // Pre-#1514 this produced a task pointing at a hardcoded
+        // 00000000-0000-0000-0000-000000000001 "default location" that no environment has, so the
+        // failure surfaced later at execution against a bin that does not exist.
         GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
                 .sourceReceiptId(
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
@@ -181,15 +203,90 @@ class PutawayGenerationServiceImplTest {
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                 .quantity(5)
                 .build();
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.generateTasksForReceipt(request))
+                .isInstanceOf(NoPutawayRuleMatchException.class);
+
+        verify(putawayTaskRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void generateTasksForReceipt_multipleLines_resolvesADestinationPerLine() {
+        // The regression that proves the old findAll...get(0) bug is gone: one receipt, two lines,
+        // two different bins because the lines are different kinds of thing.
+        UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(receiptId.toString())
+                .lineItems(List.of(
+                        PutawayLineItemRequest.builder()
+                                .productId(TIRE_PRODUCT.toString())
+                                .quantity(4)
+                                .build(),
+                        PutawayLineItemRequest.builder()
+                                .productId(OIL_PRODUCT.toString())
+                                .quantity(12)
+                                .build()))
+                .build();
+
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(categoryRule(1, TIRES_CATEGORY, DEST_A), categoryRule(2, FLUIDS_CATEGORY, DEST_B)));
+        when(skuCategoryLookup.categoryRefOfAll(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(Map.of(
+                        TIRE_PRODUCT.toString(),
+                        new SkuCategoryRef(TIRES_CATEGORY, "Tires & Wheels", null, null),
+                        OIL_PRODUCT.toString(),
+                        new SkuCategoryRef(FLUIDS_CATEGORY, "Fluids & Chemicals", null, null)));
         when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
 
-        assertThat(responses).hasSize(1);
-        PutawayTaskResponse response = responses.get(0);
-        assertThat(response.getStatus()).isEqualTo(PutawayTaskStatus.UNASSIGNED.toString());
-        assertThat(response.getSuggestedDestinationLocationId()).isEqualTo(DEFAULT_LOCATION);
+        assertThat(responses)
+                .extracting(PutawayTaskResponse::getSuggestedDestinationLocationId)
+                .containsExactly(DEST_A, DEST_B);
+    }
+
+    @Test
+    void generateTasksForReceipt_brandNewUncategorisedSku_landsViaTheAnyRule() {
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .productId(TIRE_PRODUCT.toString())
+                .quantity(5)
+                .build();
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(categoryRule(1, FLUIDS_CATEGORY, DEST_B), anyRule(DEST_A)));
+        // The replica has never heard of this product.
+        when(skuCategoryLookup.categoryRefOfAll(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(Map.of());
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.generateTasksForReceipt(request))
+                .singleElement()
+                .extracting(PutawayTaskResponse::getSuggestedDestinationLocationId)
+                .isEqualTo(DEST_A);
+    }
+
+    private static PutawayRule anyRule(UUID destination) {
+        return PutawayRule.builder()
+                .ruleId(UUID.randomUUID())
+                .priority(100)
+                .matchType(PutawayRuleMatchType.ANY)
+                .destinationLocationId(destination)
+                .isEnabled(true)
+                .build();
+    }
+
+    private static PutawayRule categoryRule(int priority, UUID categoryId, UUID destination) {
+        return PutawayRule.builder()
+                .ruleId(UUID.randomUUID())
+                .priority(priority)
+                .matchType(PutawayRuleMatchType.CATEGORY)
+                .matchValue(categoryId.toString())
+                .destinationLocationId(destination)
+                .isEnabled(true)
+                .build();
     }
 
     @Test
@@ -211,7 +308,8 @@ class PutawayGenerationServiceImplTest {
                                 .build()))
                 .build();
 
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(anyRule(DEST_A)));
         when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
@@ -241,8 +339,7 @@ class PutawayGenerationServiceImplTest {
                         .build()))
                 .build();
 
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-
+        // No rule stub: line-item parsing runs before the rule lookup, so this never reaches it.
         assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Provide either lineItems or productId/quantity, not both");
@@ -340,8 +437,6 @@ class PutawayGenerationServiceImplTest {
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                 .build();
 
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-
         assertThatThrownBy(() -> service.generateTasksForReceipt(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Either lineItems or productId/quantity is required");
@@ -378,10 +473,10 @@ class PutawayGenerationServiceImplTest {
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
                 .quantity(5)
                 .build();
-        PutawayRule rule = new PutawayRule();
-        rule.setDestinationLocationId(DEST_A);
-        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc()).thenReturn(List.of(rule));
-        doThrow(new LocationNotValidForSkuException(DEST_A, "sku", "SKU is not configured in replenishment policies"))
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(anyRule(DEST_A)));
+        doThrow(new LocationNotValidForSkuException(
+                        DEST_A, "sku", "OIL_STORAGE does not accept catalog class Tires & Wheels"))
                 .when(putawayValidationService)
                 .validateLocationCompatibility(any(UUID.class), any(String.class));
 

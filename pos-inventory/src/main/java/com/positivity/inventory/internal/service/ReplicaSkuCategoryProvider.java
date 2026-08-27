@@ -26,10 +26,17 @@ import org.springframework.stereotype.Component;
  * {@code cost_method_change_log} row and revaluation cut-over that
  * {@code CostingMethodConfigServiceImpl} requires of a deliberate switch, and timed per SKU by
  * whenever pos-catalog next republishes it. {@code pos.inventory.sku-category.resolve-from-replica}
- * defaults to true because a deployment with no such rows (the expected case — none are seeded) has
- * nothing to protect; setting it to false hands {@link NoOpSkuCategoryProvider} the SPI again and
- * restores the pre-#1514 fall-through, which is the lever an operator needs if a costing method
- * moves unexpectedly. Before enabling this on an environment that has authored SKU_CATEGORY costing
+ * defaults to <strong>false</strong>: costing and sourcing behave exactly as they did before #1514
+ * until someone enables this deliberately, with the audit and revaluation cut-over a costing-method
+ * change requires. Shipping it on would have put an unreviewed financial change inside a putaway
+ * change, staggered per SKU and absent from the change log. While it is false the SPI falls through
+ * to {@link NoOpSkuCategoryProvider} exactly as it did before this class existed, which makes that
+ * class's "fallback" javadoc accurate rather than aspirational.
+ *
+ * <p>The audit and cut-over are tracked in
+ * louisburroughs/durion-positivity-backend#1535, which also asks whether the SKU_CATEGORY costing
+ * scope is wanted at all — it has been inert since it was written. Before enabling this on an
+ * environment that has authored SKU_CATEGORY costing
  * rows, deactivate or migrate them deliberately.
  *
  * <p>The switch covers only this SPI. {@link SkuCategoryLookup}, which the putaway rule matcher
@@ -49,7 +56,7 @@ import org.springframework.stereotype.Component;
         prefix = "pos.inventory.sku-category",
         name = "resolve-from-replica",
         havingValue = "true",
-        matchIfMissing = true)
+        matchIfMissing = false)
 public class ReplicaSkuCategoryProvider implements SkuCategoryProvider {
 
     private final SkuCategoryLookup skuCategoryLookup;

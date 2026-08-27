@@ -178,6 +178,18 @@ public final class EventTypes {
                 EventTypeRegistration.write("INVENTORY_PUTAWAY_TASK_CLAIM", "Claim a putaway task for execution")
                         .build(),
 
+                // PutawayRuleController - 3 events (issue #1514)
+                EventTypeRegistration.write(
+                                "INVENTORY_PUTAWAY_RULE_CREATE",
+                                "Create a putaway rule routing a class of received goods to a destination")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_PUTAWAY_RULE_UPDATE",
+                                "Replace a putaway rule's match criteria, destination, strategy or enabled state")
+                        .build(),
+                EventTypeRegistration.write("INVENTORY_PUTAWAY_RULE_DELETE", "Delete a putaway rule permanently")
+                        .build(),
+
                 // ReplenishmentController - 5 events
                 EventTypeRegistration.write(
                                 "INVENTORY_REPLENISHMENT_POLICY_CREATE",

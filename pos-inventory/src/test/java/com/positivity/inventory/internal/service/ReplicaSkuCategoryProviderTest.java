@@ -92,25 +92,29 @@ class ReplicaSkuCategoryProviderTest {
     }
 
     @Test
-    @DisplayName("By default the replica provider is @Primary, so the SPI resolves the category")
-    void replicaProviderIsPrimaryByDefault() {
+    @DisplayName("By default the SPI stays on the no-op fallback, so costing is unchanged by #1514")
+    void spiDefaultsToTheNoOpFallback() {
+        // Deliberately off by default (#1535): resolving the category makes the SKU_CATEGORY scope of
+        // costing_method_config reachable for the first time, which would change costing method
+        // mid-life, per SKU, with no cost_method_change_log row. A putaway change must not carry that.
         contextRunner().run(context -> {
-            assertThat(context.getBean(SkuCategoryProvider.class)).isInstanceOf(ReplicaSkuCategoryProvider.class);
-            assertThat(context.getBeansOfType(SkuCategoryProvider.class)).hasSize(2);
+            assertThat(context.getBean(SkuCategoryProvider.class)).isInstanceOf(NoOpSkuCategoryProvider.class);
+            assertThat(context.getBeansOfType(ReplicaSkuCategoryProvider.class)).isEmpty();
+            // Putaway must work regardless: its lookup is not behind the flag.
+            assertThat(context.getBean(SkuCategoryLookup.class)).isInstanceOf(ReplicaSkuCategoryLookup.class);
         });
     }
 
     @Test
-    @DisplayName("Switching resolve-from-replica off hands the SPI back to the no-op fallback")
-    void killSwitchRestoresTheNoOpFallback() {
+    @DisplayName("Enabling resolve-from-replica makes the replica provider @Primary for the SPI")
+    void enablingTheFlagHandsTheSpiToTheReplicaProvider() {
         contextRunner()
-                .withPropertyValues("pos.inventory.sku-category.resolve-from-replica=false")
+                .withPropertyValues("pos.inventory.sku-category.resolve-from-replica=true")
                 .run(context -> {
-                    assertThat(context.getBean(SkuCategoryProvider.class)).isInstanceOf(NoOpSkuCategoryProvider.class);
-                    assertThat(context.getBeansOfType(ReplicaSkuCategoryProvider.class))
-                            .isEmpty();
-                    // The lever must not take the putaway matcher's lookup down with it.
-                    assertThat(context.getBean(SkuCategoryLookup.class)).isInstanceOf(ReplicaSkuCategoryLookup.class);
+                    assertThat(context.getBean(SkuCategoryProvider.class))
+                            .isInstanceOf(ReplicaSkuCategoryProvider.class);
+                    assertThat(context.getBeansOfType(SkuCategoryProvider.class))
+                            .hasSize(2);
                 });
     }
 

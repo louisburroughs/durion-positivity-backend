@@ -45,6 +45,8 @@ public class StorageLocationValidationService {
         validation.setExists(true);
         validation.setActive(STATUS_ACTIVE.equalsIgnoreCase(replica.getStatus()));
         validation.setMaxUnitCapacity(replica.getMaxUnitCapacity());
+        validation.setStorageCategoryCode(replica.getStorageCategoryCode());
+        validation.setHazardContainment(replica.getHazardContainment());
         return validation;
     }
 
@@ -56,13 +58,20 @@ public class StorageLocationValidationService {
         return validation;
     }
 
-    /** Validation verdict shape, unchanged from the retired client's contract. */
+    /**
+     * Validation verdict shape. The existence/active/capacity fields are unchanged from the retired
+     * client's contract; {@code storageCategoryCode} and {@code hazardContainment} were added for
+     * #1514 so the putaway compatibility check reads the location's capability from the same replica
+     * accessor rather than opening a second read path to the same row.
+     */
     public static class StorageLocationValidation {
         private UUID storageLocationId;
         private UUID siteId;
         private boolean exists;
         private boolean active;
         private Integer maxUnitCapacity;
+        private String storageCategoryCode;
+        private Boolean hazardContainment;
 
         public UUID getStorageLocationId() {
             return storageLocationId;
@@ -102,6 +111,33 @@ public class StorageLocationValidationService {
 
         public void setMaxUnitCapacity(Integer maxUnitCapacity) {
             this.maxUnitCapacity = maxUnitCapacity;
+        }
+
+        /**
+         * What the location is fit to hold, as pos-location's {@code StorageCategory} code (#1514).
+         * Null means no post-#1514 fact has been seen for this location — pos-location resolves an
+         * undeclared capability to {@code GENERAL} before publishing — and every read path resolves
+         * null the same permissive way.
+         */
+        public String getStorageCategoryCode() {
+            return storageCategoryCode;
+        }
+
+        public void setStorageCategoryCode(String storageCategoryCode) {
+            this.storageCategoryCode = storageCategoryCode;
+        }
+
+        /**
+         * Whether the location provides containment for hazardous goods (#1514). Boxed because null
+         * is a pre-#1514 fact rather than a declared {@code false}; the compatibility check requires
+         * an explicit {@code TRUE}, so both null and false refuse a containment-bearing class.
+         */
+        public Boolean getHazardContainment() {
+            return hazardContainment;
+        }
+
+        public void setHazardContainment(Boolean hazardContainment) {
+            this.hazardContainment = hazardContainment;
         }
     }
 }

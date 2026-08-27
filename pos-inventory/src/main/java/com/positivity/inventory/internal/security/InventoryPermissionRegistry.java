@@ -31,6 +31,8 @@ public class InventoryPermissionRegistry {
 
     private static final String CLARIFICATION_229 = "Clarification #229";
 
+    private static final String ISSUE_1514 = "Issue #1514";
+
     // ==================== ADJUSTMENT PERMISSIONS ====================
 
     /**
@@ -116,6 +118,22 @@ public class InventoryPermissionRegistry {
      */
     public static final String PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY =
             "inventory:putaway:override_location_compatibility";
+
+    // ==================== PUTAWAY RULE PERMISSIONS ====================
+
+    /**
+     * View putaway rule configuration.
+     * Separate from PUTAWAY_VIEW: that grants sight of the generated work, this
+     * grants sight of the routing configuration that produced it.
+     */
+    public static final String PUTAWAY_RULE_VIEW = "inventory:putaway_rule:view";
+
+    /**
+     * Create, replace, and delete putaway rules.
+     * A rule decides which bin a whole class of received goods is routed to, so
+     * this is warehouse configuration authority rather than task-level work.
+     */
+    public static final String PUTAWAY_RULE_MANAGE = "inventory:putaway_rule:manage";
 
     /**
      * Override location capacity limits.
@@ -317,6 +335,14 @@ public class InventoryPermissionRegistry {
                 permission(PUTAWAY_CLAIM, "Claim a putaway task for execution", MEDIUM_RISK),
                 permission(PUTAWAY_EXECUTE, "Execute a putaway task and move inventory into storage", "HIGH"),
 
+                // Putaway rule permissions (2) — issue #1514
+                permission(PUTAWAY_RULE_VIEW, "View putaway rule configuration", "LOW", ISSUE_1514),
+                permission(
+                        PUTAWAY_RULE_MANAGE,
+                        "Create, replace, and delete putaway rules that route received goods to storage locations",
+                        "HIGH",
+                        ISSUE_1514),
+
                 // Putaway override permissions (2)
                 permission(
                         PUTAWAY_OVERRIDE_LOCATION_COMPATIBILITY,
@@ -461,6 +487,13 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> putawayTaskPermissions() {
         return Arrays.asList(PUTAWAY_GENERATE, PUTAWAY_VIEW, PUTAWAY_CLAIM, PUTAWAY_EXECUTE);
+    }
+
+    /**
+     * Putaway rule configuration permissions (issue #1514)
+     */
+    public static List<String> putawayRulePermissions() {
+        return Arrays.asList(PUTAWAY_RULE_VIEW, PUTAWAY_RULE_MANAGE);
     }
 
     /**
