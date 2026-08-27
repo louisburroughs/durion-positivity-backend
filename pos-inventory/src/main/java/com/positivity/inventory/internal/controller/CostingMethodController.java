@@ -219,12 +219,12 @@ public class CostingMethodController {
                     replica should be fully populated first, or the report understates the impact.
                     Required inputs: none; there is no request body, paging or filtering.
                     Emits an INVENTORY_VALUATION_METHOD_SKU_CATEGORY_IMPACT audit event; nothing is changed.
-                    Returns 200 with zero counts when no SKU_CATEGORY configuration exists, meaning the flag \
-                    would change nothing for costing. impactedSkuCount counts changes still pending and is \
-                    computed against the flag's current value, so it reaches zero once the cut-over is \
-                    complete; use categoryMatchedSkuCount for how many SKUs the category step governs. When \
-                    truncated is true the scan hit impactSkuCap and every row-derived count is a lower bound. \
-                    The full cut-over procedure is in docs/OPERATIONS_RUNBOOK.md.
+                    Returns 200 with zero counts when no SKU_CATEGORY configuration exists; impactedSkuCount \
+                    counts changes still pending and is computed against the flag's current value, so it \
+                    reaches zero once the cut-over is complete and categoryMatchedSkuCount is what reports \
+                    how many SKUs the category step governs.
+                    When truncated is true the scan hit impactSkuCap and every row-derived count is a lower \
+                    bound; the full cut-over procedure is in docs/OPERATIONS_RUNBOOK.md.
                     """,
             tags = {"Valuation Methods"})
     @ApiResponse(
