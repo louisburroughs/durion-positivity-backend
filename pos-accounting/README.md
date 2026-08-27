@@ -1,6 +1,6 @@
 # pos-accounting
 
-General-ledger accounting service for the Durion Positivity ETSMS platform. Manages chart of accounts, journal entries, GL posting rules, payment application, AP payments, vendor bills, credit memos, and financial reporting. Consumes payment-cleared events from Kafka and produces posted accounting entries through a transactional outbox pattern.
+General-ledger accounting service for the Durion Positivity ETSMS platform. Manages chart of accounts, journal entries, GL posting rules, payment application, AP payments, vendor bills, credit memos, and financial reporting. Consumes settled-payment facts from `payment.events.v1` and produces posted accounting entries through a transactional outbox pattern.
 
 ## Responsibilities
 
@@ -196,7 +196,6 @@ preserved); a second conflict returns `409 Conflict` and the client should retry
 | `pos.accounting.credit-memo.tax-payable-account-id` | required             | GL account for tax payable reversals     |
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
 | `pos.accounting.kafka.enabled`                      | `false`              | Enable Kafka consumer for payment events |
-| `pos.accounting.kafka.payments-topic`               | `payment.cleared.v1` | Kafka topic for cleared payments         |
 | `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap facts for shrinkage GL posting (#1043) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 

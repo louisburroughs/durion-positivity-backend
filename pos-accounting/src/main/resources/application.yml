@@ -60,7 +60,6 @@ pos:
       ar-account-id: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
     kafka:
       enabled: ${POS_ACCOUNTING_KAFKA_ENABLED:false}
-      payments-topic: ${POS_ACCOUNTING_KAFKA_PAYMENTS_TOPIC:payment.cleared.v1}
       customer-events-topic: ${POS_ACCOUNTING_KAFKA_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       invoice-events-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_EVENTS_TOPIC:invoice.events.v1}
       # Warranty reimbursement expected-credit feed (#927)
@@ -75,7 +74,6 @@ pos:
       # Invoice replica reconciliation manifest + its replay-request command topic (#1537 D2)
       invoice-manifest-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
       invoice-commands-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
-      consumer-group: ${POS_ACCOUNTING_KAFKA_CONSUMER_GROUP:${spring.application.name}-payments}
 
 # Payment Gateway Configuration
 payment:

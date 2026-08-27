@@ -303,7 +303,6 @@ services:
           ["people-contact.events.v1.dlq"]=2592000000
           ["invoice.events.v1"]=604800000
           ["invoice.events.v1.dlq"]=2592000000
-          ["payment.cleared.v1"]=604800000
         )
         for t in "$${!topics[@]}"; do
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists \

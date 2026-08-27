@@ -36,19 +36,8 @@
     {
       "name": "pos.accounting.kafka.enabled",
       "type": "java.lang.Boolean",
-      "description": "Enable accounting Kafka consumers for payment-cleared events.",
+      "description": "Enable accounting's Kafka consumers.",
       "defaultValue": false
-    },
-    {
-      "name": "pos.accounting.kafka.payments-topic",
-      "type": "java.lang.String",
-      "description": "Kafka topic containing payment-cleared events.",
-      "defaultValue": "payment.cleared.v1"
-    },
-    {
-      "name": "pos.accounting.kafka.consumer-group",
-      "type": "java.lang.String",
-      "description": "Kafka consumer group for accounting payment event consumers."
     },
     {
       "name": "pos.invoice.service-id",
