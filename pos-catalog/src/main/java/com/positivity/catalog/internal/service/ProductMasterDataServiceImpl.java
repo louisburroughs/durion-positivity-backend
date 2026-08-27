@@ -20,10 +20,12 @@ import com.positivity.catalog.internal.repository.CategoryRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.SubcategoryRepository;
 import com.positivity.catalog.service.ProductMasterDataService;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -66,8 +68,9 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setAttributes(request.getAttributes());
         entity.setSpecifications(request.getAttributes());
         entity.setStatus(ProductStatus.ACTIVE);
-        entity.setCategory(resolveCategory(request.getCategoryId()));
-        entity.setSubcategory(resolveSubcategory(request.getSubcategoryId()));
+        Subcategory subcategory = resolveSubcategory(request.getSubcategoryId());
+        entity.setSubcategory(subcategory);
+        entity.setCategory(reconcileCategoryPair(resolveCategory(request.getCategoryId()), subcategory));
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
@@ -105,8 +108,9 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setProductCodeType(upc == null ? null : ProductCodeType.UPC);
         entity.setAttributes(request.getAttributes());
         entity.setSpecifications(request.getAttributes());
-        entity.setCategory(resolveCategory(request.getCategoryId()));
-        entity.setSubcategory(resolveSubcategory(request.getSubcategoryId()));
+        Subcategory subcategory = resolveSubcategory(request.getSubcategoryId());
+        entity.setSubcategory(subcategory);
+        entity.setCategory(reconcileCategoryPair(resolveCategory(request.getCategoryId()), subcategory));
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
@@ -180,6 +184,39 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         }
         Optional<Subcategory> subcategory = subcategoryRepository.findById(subcategoryId);
         return subcategory.orElseThrow(() -> new CatalogValidationException("Subcategory not found: " + subcategoryId));
+    }
+
+    /**
+     * Reconciles the category/subcategory pair a write request carries into the single category the product
+     * should hold (issue #1536).
+     *
+     * <p>Since {@code subcategory.category_id} is NOT NULL, a product's category is a function of its
+     * subcategory. A supplied category that disagrees with the subcategory's parent is therefore not a choice
+     * between two valid values — it is a contradiction, and pos-inventory's putaway matcher, which resolves
+     * SKU &gt; SUBCATEGORY &gt; CATEGORY &gt; ANY on each id independently, would route stock on it silently.
+     * A supplied category that is absent is not a contradiction: the parent is derived, which also lets a
+     * bulk-ingest row carry only {@code subcategoryName}.
+     *
+     * @param category the requested category, or {@code null} when the request omitted it
+     * @param subcategory the resolved subcategory, or {@code null} when the request omitted it
+     * @return the category to persist, or {@code null} when the product is deliberately unclassified
+     * @throws CatalogBusinessRuleException when both are supplied but the subcategory is not a child of the
+     *     supplied category
+     */
+    private @Nullable Category reconcileCategoryPair(@Nullable Category category, @Nullable Subcategory subcategory) {
+        if (subcategory == null) {
+            return category;
+        }
+        if (category == null) {
+            return subcategory.getCategory();
+        }
+        if (Objects.equals(subcategory.getCategory().getId(), category.getId())) {
+            return category;
+        }
+        throw new CatalogBusinessRuleException("Subcategory '" + subcategory.getName() + "' belongs to category '"
+                + subcategory.getCategory().getName() + "' ("
+                + subcategory.getCategory().getId() + "), not '"
+                + category.getName() + "' (" + category.getId() + ")");
     }
 
     private ProductDto toDto(ProductEntity entity) {

@@ -45,6 +45,9 @@ class CategoryNameResolverTest {
         Subcategory subcategory = new Subcategory();
         subcategory.setId(id);
         subcategory.setName(name);
+        // #1536: subcategory.category is NOT NULL, so the fixture carries a parent even though this
+        // resolver deliberately never reads it (the pair invariant lives in ProductMasterDataServiceImpl).
+        subcategory.setCategory(category(ELECTRICAL_SYSTEM_ID, "Electrical System"));
         return subcategory;
     }
 

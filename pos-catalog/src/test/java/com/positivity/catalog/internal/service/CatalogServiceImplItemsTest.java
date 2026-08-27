@@ -155,6 +155,8 @@ class CatalogServiceImplItemsTest {
             Subcategory subcategory = new Subcategory();
             subcategory.setId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9b02"));
             subcategory.setName("Passenger");
+            // #1536: a subcategory always has a parent category; keep the fixture faithful to the schema.
+            subcategory.setCategory(category);
             entity.setSubcategory(subcategory);
             DimensionEntity dimension = new DimensionEntity();
             dimension.setId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9b03"));
