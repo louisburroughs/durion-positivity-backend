@@ -3491,7 +3491,7 @@ components:
             maxUnits: 100
           type: object
         hazardContainment:
-          description: Whether the storage location provides spill/hazard containment; required by battery and oil storage capabilities. Defaults to false.
+          description: Whether the storage location provides spill/hazard containment; required by battery and oil storage capabilities. Omit for false.
           example: false
           type: boolean
         name:

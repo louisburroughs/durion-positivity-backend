@@ -120,7 +120,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 // GENERAL, so "never declared" stays distinguishable from an explicit GENERAL;
                 // toResponse resolves it for readers.
                 .storageCategoryCode(request.getStorageCategoryCode())
-                .hazardContainment(request.isHazardContainment())
+                .hazardContainment(Boolean.TRUE.equals(request.getHazardContainment()))
                 .allowNewProduct(AllowNewProductPolicy.orDefault(request.getAllowNewProduct()))
                 .capacity(serializeJson(request.getCapacity(), CAPACITY))
                 .temperature(serializeJson(request.getTemperature(), TEMPERATURE))
