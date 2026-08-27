@@ -1351,6 +1351,8 @@ paths:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates~1{id}
   /v1/tax/mode:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1mode
+  /v1/tax/rates:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1rates
   /v1/tax/transactions/{referenceId}/commit:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1commit
   /v1/tax/transactions/{referenceId}/void:
