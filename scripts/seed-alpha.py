@@ -24,7 +24,9 @@ Usage:
       [--bootstrap-location] [--only customer/person-customers.csv] [--dry-run]
 
 The bearer token needs bulkImport:upload:execute plus the per-domain create
-permissions relayed to downstream services (location:write, crm:party:create).
+permissions relayed to downstream services (location:read, location:write,
+crm:party:create, and — for the putaway-rules pack — catalog:product:view plus
+inventory:putaway_rule:view/inventory:putaway_rule:manage).
 """
 
 import argparse
@@ -59,7 +61,12 @@ PACK_FILES = [
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER", None),
     ("vehicle/vehicles.csv", "VEHICLE", "vehicles"),
     ("catalog/products.csv", "CATALOG_PRODUCT", None),
+    ("inventory/putaway-rules.csv", "@putaway-rules", None),
 ]
+
+# The catalog pack, reused by the putaway-rules pack to resolve category and
+# subcategory names (see catalog_exemplar_skus).
+CATALOG_PRODUCTS_PACK = "catalog/products.csv"
 
 POLL_INTERVAL_SECONDS = 5
 TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED"}
@@ -398,6 +405,208 @@ def run_storage_locations(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def storage_location_ids(gateway, location_ids, cache, location_code):
+    """name -> storage location id for one site, fetched once per site.
+
+    The same site-scoped lookup run_storage_locations uses for parent
+    resolution; here it turns a fixture's (locationCode, name) destination key
+    into the id a putaway rule needs."""
+    if location_code not in cache:
+        cache[location_code] = {}
+        site_id = location_ids.get(location_code)
+        if site_id is None:
+            print(f"  WARN: putaway rules: location {location_code} not found")
+        else:
+            status_code, page = gateway.get(
+                f"/location/locations/{site_id}/storage-locations?size=500", allow_error=True)
+            if status_code != 200:
+                # Reported explicitly: without it every row of this site would blame the
+                # fixture for an unresolved destination when the cause is the token
+                # (location:read) or the location service being down.
+                print(f"  WARN: putaway rules: cannot list {location_code} storage locations"
+                      f" (HTTP {status_code}) — check location:read on the token")
+            else:
+                cache[location_code] = {sl["name"]: sl["id"] for sl in (page or {}).get("content", [])}
+    return cache[location_code]
+
+
+def catalog_exemplar_skus():
+    """A representative SKU per category and per subcategory name, read from the
+    catalog pack.
+
+    pos-catalog exposes no endpoint that lists categories, so a name cannot be
+    resolved to an id directly. What it does expose is a product's *resolved*
+    category and subcategory (`GET /catalog/products/{id}`), and the catalog
+    pack already carries the name-to-SKU mapping that produced them. Reading one
+    loaded product per name back is therefore the resolution the API actually
+    supports, and it keeps the fixtures keyed on business names instead of
+    hardcoding Flyway-seeded uuids into this script."""
+    categories, subcategories = {}, {}
+    for row in read_fixture_rows(CATALOG_PRODUCTS_PACK):
+        sku = (row.get("sku") or "").strip()
+        if not sku:
+            continue
+        category = (row.get("categoryName") or "").strip()
+        subcategory = (row.get("subcategoryName") or "").strip()
+        if category:
+            categories.setdefault(category.lower(), sku)
+        if subcategory:
+            subcategories.setdefault(subcategory.lower(), sku)
+    return {"CATEGORY": categories, "SUBCATEGORY": subcategories}
+
+
+def resolve_catalog_ref(gateway, cache, exemplars, match_type, name):
+    """Resolve a category/subcategory name to its catalog id via an exemplar
+    product, or None (with a WARN naming the cause) when it cannot be resolved.
+
+    Every failure mode is reported rather than defaulted: a rule that silently
+    lost its match value would be authored, accepted and never fire."""
+    key = (match_type, name.lower())
+    if key in cache:
+        return cache[key]
+    cache[key] = None
+
+    if match_type not in exemplars:
+        # SKU rules are legal in the model but this pack resolves classes, not products:
+        # per-SKU slotting is an operator decision, not demo topology. Refuse the row rather
+        # than crash the run, and say what would have to change.
+        print(f"  WARN: {match_type} '{name}': seed-alpha.py resolves CATEGORY and SUBCATEGORY names only")
+        return None
+    sku = exemplars[match_type].get(name.lower())
+    if sku is None:
+        print(f"  WARN: {match_type} '{name}': no product in {CATALOG_PRODUCTS_PACK} carries this name")
+        return None
+    query = urllib.parse.urlencode({"sku": sku, "limit": "1"})
+    status_code, page = gateway.get(f"/catalog/products/search?{query}", allow_error=True)
+    matches = (page or {}).get("data") or []
+    if status_code != 200 or not matches:
+        print(f"  WARN: {match_type} '{name}': exemplar SKU {sku} is not in the catalog yet"
+              f" — load {CATALOG_PRODUCTS_PACK} first")
+        return None
+    status_code, product = gateway.get(f"/catalog/products/{matches[0]['productId']}", allow_error=True)
+    node = (product or {}).get("category" if match_type == "CATEGORY" else "subcategory") or {}
+    ref_id, resolved_name = node.get("id"), (node.get("name") or "").strip()
+    if status_code != 200 or not ref_id:
+        print(f"  WARN: {match_type} '{name}': exemplar {sku} landed unclassified"
+              f" — re-run {CATALOG_PRODUCTS_PACK} so category resolution applies")
+        return None
+    if resolved_name.lower() != name.lower():
+        # The exemplar resolved to a different class than the fixture claims, so
+        # the id is not the one this rule means. Refuse rather than route a whole
+        # catalog class to the wrong bin.
+        print(f"  WARN: {match_type} '{name}': exemplar {sku} resolved to '{resolved_name}' instead")
+        return None
+    cache[key] = ref_id
+    return ref_id
+
+
+def run_putaway_rules(gateway, relative_path, _location_id):
+    """API pack: create the putaway rules that route received lines to a bin
+    (issue #1514).
+
+    Rules are Tier 2 seed data (docs/DATA_SEED_STRATEGY.md §2): they name
+    per-environment storage location ids and have an @EmitEvent audited
+    lifecycle, so they enter through the CRUD endpoint rather than Flyway.
+
+    Nothing in the fixture is a uuid. Each row keys its catalog class by name
+    and its destination by (locationCode, storage-location name), and both are
+    resolved here — the destination against the site's storage-location list,
+    the class against an exemplar product from the catalog pack. Runs last, so
+    both of those are already loaded.
+
+    Re-runs converge: the existing rules are listed up front and a row whose
+    (matchType, matchValue) is already configured is skipped rather than
+    duplicated, as is the endpoint's own 409 (a second enabled ANY rule). Rules
+    are never updated in place — an operator who retuned a priority on alpha
+    keeps it, and a deliberate fixture change is applied by deleting the rule and
+    re-running.
+
+    Skipping is not silent where it changes behaviour: a *disabled* existing rule
+    blocks its fixture row and leaves that class with no reachable rule, and a
+    pre-existing ANY rule may point somewhere the fixture's does not, so both
+    print a WARN naming what to check."""
+    location_ids = location_id_map(gateway)
+    exemplars = catalog_exemplar_skus()
+    ref_cache, storage_cache = {}, {}
+
+    status_code, existing = gateway.get("/inventory/inventory/putaway/rules", allow_error=True)
+    if status_code != 200:
+        print(f"  WARN: putaway rules: cannot list existing rules (HTTP {status_code}) — nothing loaded")
+        return False
+    # matchValue is null for ANY, which the empty string keys consistently with
+    # the fixture's empty matchName column.
+    existing_rules = {
+        (rule.get("matchType"), (rule.get("matchValue") or "").lower()): rule for rule in existing or []
+    }
+
+    created, skipped, failures = 0, 0, 0
+    for row in read_fixture_rows(relative_path):
+        match_type = row["matchType"].strip()
+        match_name = (row.get("matchName") or "").strip()
+        label = f"{match_type} '{match_name}'" if match_name else match_type
+
+        match_value = None
+        if match_type != "ANY":
+            match_value = resolve_catalog_ref(gateway, ref_cache, exemplars, match_type, match_name)
+            if match_value is None:
+                failures += 1
+                continue
+
+        key = (match_type, (match_value or "").lower())
+        if key in existing_rules:
+            # Left alone deliberately (see the docstring), but a *disabled* rule occupying
+            # this tier/class means the fixture's intent is not in effect: the class has no
+            # reachable rule and its lines fall through to the ANY tier — or, for the ANY
+            # rule itself, dead-end. Silence there would report a converged run that is not.
+            if not existing_rules[key].get("isEnabled", True):
+                print(f"  WARN: {label}: an existing but DISABLED rule already holds this tier;"
+                      f" the fixture's rule was not created — enable or delete rule"
+                      f" {existing_rules[key].get('ruleId')}")
+            skipped += 1
+            continue
+
+        location_code = row["locationCode"].strip()
+        destination_name = row["destinationName"].strip()
+        destination_id = storage_location_ids(gateway, location_ids, storage_cache, location_code).get(
+            destination_name)
+        if destination_id is None:
+            print(f"  WARN: {label}: destination {location_code}/{destination_name} unresolved")
+            failures += 1
+            continue
+
+        body = {
+            "priority": int(row["priority"]),
+            "matchType": match_type,
+            "destinationLocationId": destination_id,
+        }
+        if match_value:
+            body["matchValue"] = match_value
+        if row.get("destinationStrategy"):
+            body["destinationStrategy"] = row["destinationStrategy"].strip()
+        if row.get("isEnabled"):
+            body["isEnabled"] = row["isEnabled"].strip().lower() == "true"
+
+        status_code, response = gateway.post_json(
+            "/inventory/inventory/putaway/rules", body, allow_error=True)
+        if 200 <= status_code < 300:
+            existing_rules[key] = response or {"matchType": match_type, "isEnabled": True}
+            created += 1
+        elif status_code == 409:
+            # The endpoint's only 409: an enabled ANY rule already exists. The listing above
+            # normally catches that first, so reaching here means the rule appeared between
+            # the two calls — and the fixture's terminal fallback is NOT what is configured,
+            # which matters because an ANY rule pointing at STAGING refuses every line.
+            print(f"  WARN: {label}: an enabled ANY rule already exists, so this fixture row was"
+                  f" not applied — check where the configured ANY rule points")
+            skipped += 1
+        else:
+            print(f"  WARN: {label}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  putaway rules: created={created} already-existed={skipped} failures={failures}")
+    return failures == 0
+
+
 def run_mechanic_skills(gateway, relative_path, _location_id):
     """API pack: replace-set each mechanic's skills via pos-shop-manager.
 
@@ -479,6 +688,7 @@ API_PACKS = {
     "@location-bays": run_location_bays,
     "@mobile-units": run_mobile_units,
     "@storage-locations": run_storage_locations,
+    "@putaway-rules": run_putaway_rules,
 }
 
 

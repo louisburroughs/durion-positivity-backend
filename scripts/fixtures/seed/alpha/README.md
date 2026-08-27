@@ -304,3 +304,130 @@ undeclared, which the service reports back as `GENERAL`.
   `travel_buffer_policy_id` references and the 4 `location_parent` hierarchy
   edges (`POST /v1/locations/{id}/parents` exists if wanted later).
 - The seed file stays until alpha is reseeded and verified (§5.4).
+
+### `inventory/` — new in #1514 (no Flyway seed to replace)
+
+| File | Rows | Target |
+|---|---|---|
+| `putaway-rules.csv` | 16 rules (12 category rules, 3 subcategory overrides, 1 terminal `ANY`) | gateway API pack (`POST /inventory/inventory/putaway/rules` per row) |
+
+Columns: `priority,matchType,matchName,locationCode,destinationName,destinationStrategy,isEnabled`.
+
+Putaway rules decide which bin a received line is suggested for. They are Tier 2
+(`docs/DATA_SEED_STRATEGY.md` §2), not Flyway: they name per-environment storage
+location ids and they have an `@EmitEvent` audited lifecycle now that the CRUD
+endpoint exists — so a SQL seed would both hardcode ids and skip the audit event.
+The *compatibility matrix* they must agree with is the opposite case (service-private,
+environment-invariant, no lifecycle) and stays in Flyway,
+`pos-inventory V43__storage_compatibility.sql`.
+
+Runs **last**, after `location/` and `catalog/`: every reference is resolved at load
+time against data those packs create.
+
+**Nothing in this file is a uuid.** Each row carries business keys and the driver
+resolves them:
+
+- `matchName` is a catalog **category or subcategory name** (`matchType` says which),
+  matched case-insensitively. pos-catalog exposes no endpoint that lists categories,
+  so the driver resolves a name through an **exemplar product**: it picks the first SKU
+  in `catalog/products.csv` carrying that name, looks it up
+  (`GET /catalog/products/search?sku=…`), reads the product's resolved
+  `category`/`subcategory` id back (`GET /catalog/products/{id}`), and checks the name
+  it got matches the one asked for. An unresolvable name fails that row with a `WARN`
+  naming the cause — it is never defaulted, because a rule that silently lost its match
+  value is authored, accepted and never fires.
+- `locationCode` + `destinationName` are the destination's business key, resolved
+  against the site's storage-location list exactly as `storage-locations.csv` resolves
+  `parentName`.
+- `ANY` rows carry an empty `matchName`; the endpoint requires `matchValue` to be
+  absent for that tier.
+
+Resolution order is `SKU > SUBCATEGORY > CATEGORY > ANY`, then ascending `priority`
+inside a tier, so the file is written in that order and priorities are distinct within
+each tier (ties are broken arbitrarily by the matcher).
+
+Every destination is one the compatibility matrix accepts for that rule's class — a
+rule pointing at a bin the matrix refuses loads cleanly and then fails once per
+received line with `LOCATION_NOT_VALID_FOR_SKU`:
+
+| Rule | Destination | `storageCategoryCode` | Strategy |
+|---|---|---|---|
+| `SUBCATEGORY` Batteries | Battery Rack | `BATTERY_RACK` (containment) | FIXED |
+| `SUBCATEGORY` ATF & Gear Oil | Fluids Shelf | `OIL_STORAGE` (containment) | FIXED |
+| `SUBCATEGORY` Hydraulic Cylinders & Hoses | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `CATEGORY` Tires & Wheels | Tire Rack A | `TIRE_RACK` | FIXED |
+| `CATEGORY` Engine Parts | Bin A-01 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Brake System | Bin A-05 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Electrical System | Bin B-01 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Drivetrain & Transmission | Bin B-05 | `SMALL_PARTS_BIN` | LAST_USED |
+| `CATEGORY` Suspension & Steering | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `CATEGORY` Fluids & Chemicals | Fluids Shelf | `OIL_STORAGE` (containment) | FIXED |
+| `CATEGORY` Filters | Bin C-01 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Exhaust System | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `CATEGORY` HVAC & Climate | Bin C-05 | `SMALL_PARTS_BIN` | LAST_USED |
+| `CATEGORY` Body & Lighting | Parts Shelf C | `GENERAL` | FIXED |
+| `CATEGORY` Heavy Equipment & Hydraulics | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `ANY` (terminal) | Parts Shelf B | `GENERAL` | FIXED |
+
+Three things about that table are load-bearing rather than cosmetic:
+
+- **The three subcategory rules are exactly the three subcategories the matrix
+  overrides.** A subcategory with a matrix override but no rule routes by its *parent
+  category's* rule to a destination the override refuses — `Batteries` would go to a
+  small-parts bin, and the matrix would then refuse acid without a bund. This is the
+  reason `SUBCATEGORY` outranks `CATEGORY` at all. Adding a matrix override means
+  adding a rule here.
+- **The `ANY` destination is `GENERAL`.** An item with no catalog classification is
+  accepted only by `GENERAL` storage, so any other destination would make the terminal
+  fallback refuse the very brand-new SKU it exists to catch.
+- **`CLOSEST_AVAILABLE` is only used on bins that sit under a parts shelf.** The
+  strategy ranks every ACTIVE location at the site by topology hops from its anchor and
+  takes the first with capacity; it does not consult the matrix. An anchor with no
+  parent and no children has nothing to rank, and its overflow degrades to the
+  lowest-id location at the site — so standalone racks and floors use FIXED. Where it
+  is used, the neighbours it would overflow to (the parent shelf at one hop, sibling
+  bins at two) are legal for the same class.
+
+`AlphaFixturePutawayRulesTest` (pos-inventory) parses this CSV, the catalog taxonomy
+seed, `location/storage-locations.csv` and `V43__storage_compatibility.sql` at build
+time and asserts all of the above, so a contradictory rule fails the build instead of a
+reseed.
+
+The pack's token needs `location:read` (the location roster and each site's
+storage-location list), `catalog:product:view` (exemplar resolution), and
+`inventory:putaway_rule:view` plus `inventory:putaway_rule:manage`. Running
+`--only inventory/putaway-rules.csv` with the rule scopes alone gets a 403 on the
+storage-location list; the driver reports that HTTP status rather than blaming the
+fixture for an unresolved destination.
+
+**Known deltas:**
+
+- **All 16 rules target `CLT-MAIN-001`.** A putaway rule has no site scope — the
+  matched rule's `destinationLocationId` is a single bin — so one enabled rule per
+  (tier, class) is all the model allows. Rules for a second site would be
+  lower-priority dead configuration. `locationCode` is a column anyway so the pack
+  says which site it means and can be retargeted by editing one column.
+- **Re-runs converge but never update.** The driver lists the configured rules first
+  and skips a row whose `(matchType, matchValue)` already exists (and treats the
+  endpoint's 409 — a second enabled `ANY` rule — the same way), so a re-run creates
+  nothing. It deliberately does **not** `PUT` the existing rule back to the fixture's
+  values: an operator who retuned a priority or disabled a rule on alpha keeps that.
+  Applying a changed fixture row means deleting the rule (`DELETE
+  /inventory/inventory/putaway/rules/{ruleId}`) and re-running. A **disabled** existing
+  rule blocks its fixture row the same way — which leaves that class with no reachable
+  rule — so the driver emits a `WARN` naming the rule id rather than reporting a clean
+  converged run.
+- **The `SKU` tier is not exercised.** `matchType: SKU` works and the driver would
+  resolve it, but per-SKU slotting is an operator decision about one part, not demo
+  topology; tier precedence itself is covered by `PutawayRuleMatcherTest`. Add rows
+  with `matchType: SKU` and a SKU in `matchName` if alpha ever needs one — the
+  exemplar-product resolution would have to be extended to return the product id
+  directly.
+- **`isEnabled` is `true` on every row.** The column exists because the endpoint has
+  the field and a disabled rule is a legitimate fixture state, but nothing in the alpha
+  topology wants one: a disabled rule is unreachable configuration.
+- **Priorities are spaced by 10** (and `ANY` sits at 1000) so a rule can be inserted
+  between two others without renumbering the file.
+- The fixture assumes the storage capabilities in `location/storage-locations.csv`. If
+  that file's `storageCategoryCode` mapping changes, these rules must be re-checked
+  against the matrix — the build-time test does exactly that.

@@ -1,0 +1,17 @@
+priority,matchType,matchName,locationCode,destinationName,destinationStrategy,isEnabled
+10,SUBCATEGORY,Batteries,CLT-MAIN-001,Battery Rack,FIXED,true
+20,SUBCATEGORY,ATF & Gear Oil,CLT-MAIN-001,Fluids Shelf,FIXED,true
+30,SUBCATEGORY,Hydraulic Cylinders & Hoses,CLT-MAIN-001,Bulk Floor,FIXED,true
+10,CATEGORY,Tires & Wheels,CLT-MAIN-001,Tire Rack A,FIXED,true
+20,CATEGORY,Engine Parts,CLT-MAIN-001,Bin A-01,CLOSEST_AVAILABLE,true
+30,CATEGORY,Brake System,CLT-MAIN-001,Bin A-05,CLOSEST_AVAILABLE,true
+40,CATEGORY,Electrical System,CLT-MAIN-001,Bin B-01,CLOSEST_AVAILABLE,true
+50,CATEGORY,Drivetrain & Transmission,CLT-MAIN-001,Bin B-05,LAST_USED,true
+60,CATEGORY,Suspension & Steering,CLT-MAIN-001,Bulk Floor,FIXED,true
+70,CATEGORY,Fluids & Chemicals,CLT-MAIN-001,Fluids Shelf,FIXED,true
+80,CATEGORY,Filters,CLT-MAIN-001,Bin C-01,CLOSEST_AVAILABLE,true
+90,CATEGORY,Exhaust System,CLT-MAIN-001,Bulk Floor,FIXED,true
+100,CATEGORY,HVAC & Climate,CLT-MAIN-001,Bin C-05,LAST_USED,true
+110,CATEGORY,Body & Lighting,CLT-MAIN-001,Parts Shelf C,FIXED,true
+120,CATEGORY,Heavy Equipment & Hydraulics,CLT-MAIN-001,Bulk Floor,FIXED,true
+1000,ANY,,CLT-MAIN-001,Parts Shelf B,FIXED,true
