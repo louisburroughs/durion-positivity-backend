@@ -9,12 +9,14 @@ import com.positivity.people.service.TimePeriodManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,8 +48,20 @@ public class TimePeriodManagementController {
                     period.
                     """)
     @ApiResponse(responseCode = "201", description = "Time period created")
-    @ApiResponse(responseCode = "400", description = "Invalid date range")
-    @ApiResponse(responseCode = "409", description = "Overlapping period exists")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date range",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Overlapping period exists",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timePeriod:create"})
@@ -86,8 +100,20 @@ public class TimePeriodManagementController {
                     allowed.
                     """)
     @ApiResponse(responseCode = "200", description = "Time period transitioned")
-    @ApiResponse(responseCode = "404", description = "Time period not found")
-    @ApiResponse(responseCode = "409", description = "Transition not allowed")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time period not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Transition not allowed",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timePeriod:transition"})

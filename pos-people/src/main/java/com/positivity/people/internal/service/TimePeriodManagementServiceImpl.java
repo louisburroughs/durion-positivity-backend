@@ -95,6 +95,16 @@ public class TimePeriodManagementServiceImpl implements TimePeriodManagementServ
     // transaction with rollback-only and undo the rest of the pass.
     @Override
     public @NonNull TimePeriodRolloverResult runRollover() {
+        // Fail fast on misconfiguration: periodLengthDays <= 0 would make the grid loop
+        // non-terminating (plusDays(0)), and maxBackfillPeriods < 1 inverts the backfill floor.
+        if (properties.getPeriodLengthDays() <= 0) {
+            throw new IllegalStateException("pos.people.time-period.period-length-days must be positive, was "
+                    + properties.getPeriodLengthDays());
+        }
+        if (properties.getMaxBackfillPeriods() < 1) {
+            throw new IllegalStateException("pos.people.time-period.max-backfill-periods must be at least 1, was "
+                    + properties.getMaxBackfillPeriods());
+        }
         LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
 
         int submissionsClosed = advanceStatuses(

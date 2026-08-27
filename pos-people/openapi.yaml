@@ -1347,15 +1347,15 @@ paths:
           description: Time period created
         '400':
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDto'
+                $ref: '#/components/schemas/ProblemDetail'
           description: Invalid date range
         '409':
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDto'
+                $ref: '#/components/schemas/ProblemDetail'
           description: Overlapping period exists
       security:
       - bearerAuth:
@@ -1409,15 +1409,15 @@ paths:
           description: Time period transitioned
         '404':
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDto'
+                $ref: '#/components/schemas/ProblemDetail'
           description: Time period not found
         '409':
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDto'
+                $ref: '#/components/schemas/ProblemDetail'
           description: Transition not allowed
       security:
       - bearerAuth:

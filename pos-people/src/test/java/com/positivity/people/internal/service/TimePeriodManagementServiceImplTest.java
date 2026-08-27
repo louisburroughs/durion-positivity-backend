@@ -363,6 +363,26 @@ class TimePeriodManagementServiceImplTest {
         }
 
         @Test
+        @DisplayName("fails fast on a non-positive period length instead of looping forever")
+        void rejectsNonPositivePeriodLength() {
+            properties.setPeriodLengthDays(0);
+
+            assertThatThrownBy(() -> service.runRollover())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("period-length-days");
+        }
+
+        @Test
+        @DisplayName("fails fast on a max-backfill-periods below 1")
+        void rejectsInvalidBackfillCap() {
+            properties.setMaxBackfillPeriods(0);
+
+            assertThatThrownBy(() -> service.runRollover())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("max-backfill-periods");
+        }
+
+        @Test
         @DisplayName("swallows a concurrent-create constraint violation and keeps going")
         void toleratesConcurrentCreate() {
             when(timekeepingEntryRepository.findDistinctTenantIds()).thenReturn(List.of(TENANT_ID));
