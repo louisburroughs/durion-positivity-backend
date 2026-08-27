@@ -900,13 +900,15 @@ public enum PermissionCode {
     CATALOG__FACT__REPLAY(487, "catalog:fact:replay"),
     // ── People (new) ───────────────────────────────────────────────────────────
     PEOPLE__TIMEPERIOD__CREATE(488, "people:timePeriod:create"),
-    PEOPLE__TIMEPERIOD__TRANSITION(489, "people:timePeriod:transition");
+    PEOPLE__TIMEPERIOD__TRANSITION(489, "people:timePeriod:transition"),
+    // ── Tax (new) ──────────────────────────────────────────────────────────────
+    TAX__RATES__VIEW(490, "tax:rates:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 62;
+    public static final int CATALOG_VERSION = 63;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

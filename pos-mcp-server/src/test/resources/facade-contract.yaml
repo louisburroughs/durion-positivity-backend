@@ -23,8 +23,9 @@
 #   legs              composition tools only (verb: COMPOSITE): one sub-entry per downstream
 #                     call, keyed by the ToolComposition leg name, each carrying its own verb,
 #                     baseUrlProperty, templateProperty, template, route and downstreamPath.
-# Methods removed from the surface (Events.getEventHistory #1521, Hr.searchEmployees #1523,
-# Tax.getTaxRate #1522) have no entry.
+# Wave 2 restoration (#1519): Events.getEventHistory (#1521), Hr.searchEmployees (#1523), and
+# Tax.getTaxRate (#1522) were previously removed for lacking a real backend endpoint; all three
+# now have one and are back on the surface below.
 
 AccountingFacadeTool.getAccountBalance:
   verb: GET
@@ -203,6 +204,15 @@ EventsFacadeTool.getEventSummary:
   downstreamPath: "/v1/events/summary/{}"
   # window is validated in the tool: lastHour | lastDay | lastWeek only.
 
+EventsFacadeTool.getEventHistory:
+  verb: GET
+  baseUrlProperty: pos.event-receiver.base-url
+  templateProperty: pos.event-receiver.history-uri-template
+  template: "/event-receiver/v1/events?entityId={entityId}"
+  route: event-receiver
+  downstreamPath: "/v1/events?entityId={}"
+  # since/page/size are not exposed by the tool; the endpoint defaults them server-side.
+
 HrFacadeTool.getEmployee:
   verb: GET
   baseUrlProperty: pos.hr.employee-base-url
@@ -218,6 +228,14 @@ HrFacadeTool.getEmployeeSchedule:
   template: "/people/v1/people/availability?employeeId={employeeId}"
   route: people
   downstreamPath: "/v1/people/availability?employeeId={}"
+
+HrFacadeTool.searchEmployees:
+  verb: GET
+  baseUrlProperty: pos.hr.employee-base-url
+  templateProperty: pos.hr.search-uri-template
+  template: "/people/v1/people/employees?q={query}"
+  route: people
+  downstreamPath: "/v1/people/employees?q={}"
 
 InventoryFacadeTool.checkStock:
   verb: GET
@@ -479,6 +497,30 @@ TaxFacadeTool.calculateTax:
       template: "/calculate"
       route: DIRECT
       downstreamPath: "/v1/tax/calculate"
+
+TaxFacadeTool.getTaxRate:
+  verb: COMPOSITE
+  route: COMPOSITE
+  # #1522 restoration: the gateway location lookup supplies the destination address that the
+  # ADR-0021 direct GET to pos-tax /rates requires (countryCode+postalCode always appended;
+  # regionCode/city appended only when the location supplies them). A location without a usable
+  # address degrades the rates leg without calling pos-tax, mirroring calculateTax.
+  legs:
+    location:
+      verb: GET
+      baseUrlProperty: pos.tax.gateway-base-url
+      templateProperty: pos.tax.location-uri-template
+      template: "/location/v1/locations/{locationId}"
+      route: location
+      downstreamPath: "/v1/locations/{}"
+    rates:
+      verb: GET
+      baseUrlProperty: pos.tax.base-url
+      templateProperty: pos.tax.rates-uri-template
+      template: "/rates?countryCode={countryCode}&postalCode={postalCode}"
+      route: DIRECT
+      downstreamPath: "/v1/tax/rates?countryCode={}&postalCode={}"
+      # optional query params appended by the tool when the location supplies them: regionCode, city
 
 TaxFacadeTool.getTaxSummary:
   verb: GET

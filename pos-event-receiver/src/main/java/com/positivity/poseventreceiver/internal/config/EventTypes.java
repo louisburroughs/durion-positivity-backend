@@ -17,7 +17,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the event-receiver module.
-     * Total: 8 event types.
+     * Total: 9 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -45,6 +45,10 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "EVENT_RECEIVER_SUMMARY_LAST_WEEK", "Get event summary for the last week")
+                        .build(),
+
+                // EventQueryController - 1 event
+                EventTypeRegistration.search("EVENT_RECEIVER_EVENT_QUERY", "Query recorded events by entity id")
                         .build());
     }
 }

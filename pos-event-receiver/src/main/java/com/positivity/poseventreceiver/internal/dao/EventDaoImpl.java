@@ -53,7 +53,12 @@ public class EventDaoImpl implements EventDao {
     @Override
     public EmittedEvent saveEmittedEvent(@NonNull EmitEventRequest request) {
         EmittedEvent event = new EmittedEvent(
-                request.id(), request.apiVersion(), request.timestamp(), request.elapsedMs(), request.publishedAt());
+                request.id(),
+                request.apiVersion(),
+                request.timestamp(),
+                request.elapsedMs(),
+                request.publishedAt(),
+                request.entityId());
         return saveEmittedEvent(event);
     }
 

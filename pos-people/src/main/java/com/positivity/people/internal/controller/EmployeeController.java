@@ -5,32 +5,41 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeSummaryDto;
+import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/v1/people/employees")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Employee API", description = "Employee profile and offboarding operations")
 public class EmployeeController {
 
@@ -88,6 +97,37 @@ public class EmployeeController {
                     @NonNull
                     CreateEmployeeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(employeeService.createEmployee(request));
+    }
+
+    @GetMapping
+    @EmitEvent(id = "PEOPLE_EMPLOYEE_SEARCH", apiVersion = "1")
+    @Operation(operationId = "searchEmployees", summary = "Search Employees By Name Or Number", description = """
+                    Returns a paged list of slim employee rows matching a case-insensitive substring search across \
+                    first name, last name, preferred name, and employee number.
+                    Use this tool when listing or typeahead-filtering employees; do not use getEmployee, which \
+                    requires the person id already be known, and do not use getEmployeeByNumber, which resolves \
+                    one exact employee number rather than searching.
+                    Preconditions: none; an empty result set is returned rather than an error when nothing matches.
+                    Required inputs: none are mandatory; q defaults to blank, which lists every employee, page \
+                    defaults to 0, and size defaults to 20 with a maximum of 100.
+                    Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection \
+                    merged in memory from local employment rows and the pos-people-contact identity replica.
+                    Returns 200 with an empty items list and correct totals when the page or query matches nothing.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Employees returned (possibly empty)")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:employee:view"})
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
+    public ResponseEntity<PagedResponse<EmployeeSummaryDto>> searchEmployees(
+            @Parameter(description = "Case-insensitive substring match on name or employee number; blank lists all")
+                    @RequestParam(required = false)
+                    String q,
+            @Parameter(description = "Zero-based page index") @PositiveOrZero @RequestParam(defaultValue = "0")
+                    int page,
+            @Parameter(description = "Page size, up to 100") @Positive @Max(100) @RequestParam(defaultValue = "20")
+                    int size) {
+        return ResponseEntity.ok(employeeService.searchEmployees(q, page, size));
     }
 
     @PutMapping("/{employeeId}")

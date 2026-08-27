@@ -46,7 +46,9 @@ class TestModeTaxProviderTest {
         properties.setTestMode(testMode);
 
         calculator = new TestModeTaxCalculator(
-                properties, FIXED_CLOCK, new ExemptionResolver((c, cert, state, reason, date) -> Optional.empty()));
+                FIXED_CLOCK,
+                new ExemptionResolver((c, cert, state, reason, date) -> Optional.empty()),
+                new TestModeRateResolver(properties));
         provider = new TestModeTaxProvider(calculator);
     }
 

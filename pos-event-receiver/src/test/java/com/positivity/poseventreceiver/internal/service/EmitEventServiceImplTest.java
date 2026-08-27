@@ -53,11 +53,16 @@ class EmitEventServiceImplTest {
 
     private static EmitEventRequest request() {
         return new EmitEventRequest(
-                "ORDER_ORDER_CREATE", "1", 1_730_809_200_000L, 42L, Instant.parse("2026-03-05T21:15:00Z"));
+                "ORDER_ORDER_CREATE", "1", 1_730_809_200_000L, 42L, Instant.parse("2026-03-05T21:15:00Z"), null);
     }
 
     private static EmitEventRequest requestWithId(String id) {
-        return new EmitEventRequest(id, "1", 1L, 0L, Instant.EPOCH);
+        return new EmitEventRequest(id, "1", 1L, 0L, Instant.EPOCH, null);
+    }
+
+    private static EmitEventRequest requestWithEntityId(String entityId) {
+        return new EmitEventRequest(
+                "ORDER_ORDER_CREATE", "1", 1_730_809_200_000L, 42L, Instant.parse("2026-03-05T21:15:00Z"), entityId);
     }
 
     @Nested
@@ -91,7 +96,8 @@ class EmitEventServiceImplTest {
         void receiveEvent_withZeroElapsed_isAccepted() {
             when(eventDao.isPreregistered(anyString())).thenReturn(true);
 
-            EmitEventRequest instantaneous = new EmitEventRequest("ORDER_ORDER_CREATE", "1", 1L, 0L, Instant.EPOCH);
+            EmitEventRequest instantaneous =
+                    new EmitEventRequest("ORDER_ORDER_CREATE", "1", 1L, 0L, Instant.EPOCH, null);
 
             assertThat(sut.receiveEvent(instantaneous)).isTrue();
         }
@@ -181,7 +187,7 @@ class EmitEventServiceImplTest {
         @ValueSource(strings = {"   "})
         @DisplayName("rejects a missing apiVersion")
         void reject_missingApiVersion(String apiVersion) {
-            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", apiVersion, 1L, 0L, Instant.EPOCH);
+            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", apiVersion, 1L, 0L, Instant.EPOCH, null);
 
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> sut.receiveEvent(invalid))
@@ -192,7 +198,7 @@ class EmitEventServiceImplTest {
         @ValueSource(strings = {"v1", "1.0", "one", "-1"})
         @DisplayName("rejects a non-numeric apiVersion")
         void reject_nonNumericApiVersion(String apiVersion) {
-            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", apiVersion, 1L, 0L, Instant.EPOCH);
+            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", apiVersion, 1L, 0L, Instant.EPOCH, null);
 
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> sut.receiveEvent(invalid))
@@ -203,7 +209,7 @@ class EmitEventServiceImplTest {
         @CsvSource({"0, zero is not a valid epoch millisecond", "-1, negative epoch millisecond"})
         @DisplayName("rejects a non-positive timestamp")
         void reject_nonPositiveTimestamp(long timestamp, String why) {
-            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", "1", timestamp, 0L, Instant.EPOCH);
+            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", "1", timestamp, 0L, Instant.EPOCH, null);
 
             assertThatIllegalArgumentException()
                     .as(why)
@@ -214,7 +220,7 @@ class EmitEventServiceImplTest {
         @Test
         @DisplayName("rejects a negative elapsedMs")
         void reject_negativeElapsed() {
-            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", "1", 1L, -1L, Instant.EPOCH);
+            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", "1", 1L, -1L, Instant.EPOCH, null);
 
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> sut.receiveEvent(invalid))
@@ -224,11 +230,65 @@ class EmitEventServiceImplTest {
         @Test
         @DisplayName("rejects a missing publishedAt")
         void reject_missingPublishedAt() {
-            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", "1", 1L, 0L, null);
+            EmitEventRequest invalid = new EmitEventRequest("ORDER_CREATE", "1", 1L, 0L, null, null);
 
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> sut.receiveEvent(invalid))
                     .withMessageContaining("publishedAt is required");
+        }
+    }
+
+    @Nested
+    @DisplayName("entityId")
+    class EntityId {
+
+        @Test
+        @DisplayName("absent entityId is still accepted and stored")
+        void absent_isAccepted() {
+            when(eventDao.isPreregistered("ORDER_ORDER_CREATE")).thenReturn(true);
+
+            assertThat(sut.receiveEvent(request())).isTrue();
+
+            verify(eventDao).saveEmittedEvent(request());
+        }
+
+        @Test
+        @DisplayName("a well-formed entityId is accepted and passed through unchanged")
+        void wellFormed_isAcceptedAndPersisted() {
+            when(eventDao.isPreregistered("ORDER_ORDER_CREATE")).thenReturn(true);
+            EmitEventRequest withEntityId = requestWithEntityId("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+
+            assertThat(sut.receiveEvent(withEntityId)).isTrue();
+
+            verify(eventDao).saveEmittedEvent(withEntityId);
+        }
+
+        @ParameterizedTest(name = "entityId \"[{0}]\" is rejected as blank")
+        @ValueSource(strings = {"", "   "})
+        @DisplayName("rejects a blank (but non-null) entityId")
+        void blank_isRejected(String entityId) {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> sut.receiveEvent(requestWithEntityId(entityId)))
+                    .withMessageContaining("entityId must not be blank");
+        }
+
+        @Test
+        @DisplayName("rejects an entityId longer than 64 characters")
+        void tooLong_isRejected() {
+            String entityId = "e".repeat(65);
+
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> sut.receiveEvent(requestWithEntityId(entityId)))
+                    .withMessageContaining("64 characters");
+        }
+
+        @Test
+        @DisplayName("accepts an entityId of exactly 64 characters")
+        void exactly64Chars_isAccepted() {
+            when(eventDao.isPreregistered("ORDER_ORDER_CREATE")).thenReturn(true);
+            String entityId = "e".repeat(64);
+
+            assertThat(sut.receiveEvent(requestWithEntityId(entityId))).isTrue();
         }
     }
 }

@@ -4,6 +4,8 @@ import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,4 +15,11 @@ public interface EmittedEventRepository extends JpaRepository<EmittedEvent, UUID
     @Query(
             "SELECT e.id, COUNT(e) FROM EmittedEvent e WHERE e.publishedAt >= :since GROUP BY e.id ORDER BY COUNT(e) DESC")
     List<Object[]> countByEventTypeIdSince(@Param("since") Instant since);
+
+    /**
+     * Entity-indexed event lookup for GET /v1/events (issue #1521). Always bound on
+     * publishedAt — the hypertable's partition column — so this never becomes an unbounded
+     * scan; the partial index {@code idx_emitted_event_entity_time} serves exactly this shape.
+     */
+    Page<EmittedEvent> findByEntityIdAndPublishedAtGreaterThanEqual(String entityId, Instant since, Pageable pageable);
 }

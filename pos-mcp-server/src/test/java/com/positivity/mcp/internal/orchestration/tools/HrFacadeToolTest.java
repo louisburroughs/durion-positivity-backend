@@ -16,7 +16,6 @@ import org.springframework.web.client.RestClient;
 /**
  * Unit tests for {@link HrFacadeTool}. Expected verbs and URIs derive from
  * {@code facade-contract.yaml} (#1519 WS-0.3), never from literals duplicating the configuration.
- * Employee search was removed per #1523 (pos-people publishes no list/search endpoint).
  */
 class HrFacadeToolTest {
 
@@ -39,7 +38,8 @@ class HrFacadeToolTest {
                 BASE_URL,
                 BASE_URL,
                 contract("getEmployee").template(),
-                contract("getEmployeeSchedule").template());
+                contract("getEmployeeSchedule").template(),
+                contract("searchEmployees").template());
     }
 
     @Test
@@ -67,6 +67,36 @@ class HrFacadeToolTest {
                 .andRespond(withSuccess("{\"slots\":[]}", MediaType.APPLICATION_JSON));
 
         String result = tool.getEmployeeSchedule(EMPLOYEE_ID);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchEmployees sends GET /people/employees?q={query} and returns body")
+    void searchEmployees_sendsGetToEmployeeSearchEndpoint() {
+        FacadeContractManifest.Entry entry = contract("searchEmployees");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "jane"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"items\":[{\"lastName\":\"Smith\"}]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchEmployees("jane");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("Smith");
+    }
+
+    @Test
+    @DisplayName("searchEmployees treats a null query as blank (lists all employees)")
+    void searchEmployees_nullQuery_sendsBlankQueryParam() {
+        FacadeContractManifest.Entry entry = contract("searchEmployees");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", ""))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchEmployees(null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();

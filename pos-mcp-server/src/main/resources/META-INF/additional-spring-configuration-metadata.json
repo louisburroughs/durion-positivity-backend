@@ -410,6 +410,12 @@
       "defaultValue": "/event-receiver/v1/events/summary/{window}"
     },
     {
+      "name": "pos.event-receiver.history-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for per-entity event history (#1521 restoration); since, page, and size all default server-side.",
+      "defaultValue": "/event-receiver/v1/events?entityId={entityId}"
+    },
+    {
       "name": "pos.inventory.stock-uri-template",
       "type": "java.lang.String",
       "description": "URI template for fetching stock availability by SKU from the inventory service.",
@@ -578,6 +584,12 @@
       "defaultValue": "/people/v1/people/availability?employeeId={employeeId}"
     },
     {
+      "name": "pos.hr.search-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for searching employees by name or employee number (#1523 restoration).",
+      "defaultValue": "/people/v1/people/employees?q={query}"
+    },
+    {
       "name": "pos.shopmanager.location-uri-template",
       "type": "java.lang.String",
       "description": "URI template for the cross-domain location leg of the shop status composition (a shopId is a locationId).",
@@ -624,6 +636,12 @@
       "type": "java.lang.String",
       "description": "URI template for the accounting tax-liability report backing the tax summary (load-balanced gateway client, not the direct pos-tax client).",
       "defaultValue": "/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}"
+    },
+    {
+      "name": "pos.tax.rates-uri-template",
+      "type": "java.lang.String",
+      "description": "URI template for the direct pos-tax rate lookup (ADR-0021, #1522 restoration), relative to pos.tax.base-url; countryCode and postalCode are always appended, regionCode and city only when the resolved location supplies them.",
+      "defaultValue": "/rates?countryCode={countryCode}&postalCode={postalCode}"
     },
     {
       "name": "pos.vehicle.vehicle-uri-template",

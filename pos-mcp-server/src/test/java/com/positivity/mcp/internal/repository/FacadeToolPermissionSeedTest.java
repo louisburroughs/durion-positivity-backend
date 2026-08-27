@@ -22,7 +22,8 @@ import org.junit.jupiter.api.Test;
  * tool-registry tables), so this test asserts on the net effect of the migration SQL directly:
  * {@code V18} (initial seed) → {@code V29} (AUTHENTICATED removals) → {@code V35} (retarget) →
  * {@code V36} (ADR-0057 availability code) → {@code V37} (full re-derivation from the real
- * downstream endpoints after the #1519 Wave 2/3 retargeting; per-tool delete-and-reinsert).
+ * downstream endpoints after the #1519 Wave 2/3 retargeting; per-tool delete-and-reinsert) →
+ * {@code V38} (adds {@code tax:rates:view} to TaxFacadeTool for the restored getTaxRate, #1522).
  *
  * <p>{@link #EXPECTED} is the Wave 4 derivation table — per tool, the union of the merged
  * class+method {@code @PreAuthorize} permission codes across every downstream endpoint the tool's
@@ -79,7 +80,9 @@ class FacadeToolPermissionSeedTest {
                             "pricing:promotion:view",
                             "pricing:rule:view")),
             Map.entry("ShopManagerFacadeTool", Set.of("location:read", "shop:schedule:view", "workorder:wip:view")),
-            Map.entry("TaxFacadeTool", Set.of("tax:calculate", "location:read", "reporting:view:financial-statements")),
+            Map.entry(
+                    "TaxFacadeTool",
+                    Set.of("tax:calculate", "location:read", "reporting:view:financial-statements", "tax:rates:view")),
             Map.entry(
                     "VehicleFacadeTool",
                     Set.of("vehicle-inventory:registry:view", "vehicle-inventory:search:view", "crm:vehicle:view")),
@@ -207,6 +210,9 @@ class FacadeToolPermissionSeedTest {
         String v37 = read("V37__facade_permission_rederivation.sql");
         parseFullDeletes(v37).forEach(grants::remove);
         mergeSeed(grants, v37);
+        String v38 = read("V38__facade_rate_lookup_permission.sql");
+        parseFullDeletes(v38).forEach(grants::remove);
+        mergeSeed(grants, v38);
         return grants;
     }
 

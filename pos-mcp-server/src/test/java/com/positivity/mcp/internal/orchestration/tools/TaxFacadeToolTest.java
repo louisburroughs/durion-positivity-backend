@@ -66,7 +66,8 @@ class TaxFacadeToolTest {
                 GATEWAY_BASE_URL,
                 calculate.leg("tax").template(),
                 calculate.leg("location").template(),
-                contract("getTaxSummary").template());
+                contract("getTaxSummary").template(),
+                contract("getTaxRate").leg("rates").template());
     }
 
     @Test
@@ -227,5 +228,102 @@ class TaxFacadeToolTest {
 
         directMockServer.verify();
         gatewayMockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getTaxRate looks up the location and GETs pos-tax /rates with regionCode and city appended")
+    void getTaxRate_appendsRegionCodeAndCityWhenPresent() {
+        FacadeContractManifest.Entry rates = contract("getTaxRate").leg("rates");
+        gatewayMockServer
+                .expect(requestTo(GATEWAY_BASE_URL
+                        + contract("getTaxRate").leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .andExpect(method(contract("getTaxRate").leg("location").httpMethod()))
+                .andRespond(withSuccess(LOCATION_BODY, MediaType.APPLICATION_JSON));
+        directMockServer
+                .expect(requestTo(DIRECT_BASE_URL
+                        + rates.expand(Map.of("countryCode", "US", "postalCode", "62704"))
+                        + "&regionCode=IL&city=Springfield"))
+                .andExpect(method(rates.httpMethod()))
+                .andRespond(
+                        withSuccess("{\"combinedRate\":0.0850,\"source\":\"TEST_MODE\"}", MediaType.APPLICATION_JSON));
+
+        JsonNode envelope = parse(tool.getTaxRate(LOCATION_ID));
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+        assertThat(envelope.get("composition").asText()).isEqualTo("taxRateLookup");
+        assertThat(envelope.get("status").asText()).isEqualTo("ok");
+        assertThat(envelope.get("sections")
+                        .get("rates")
+                        .get("data")
+                        .get("source")
+                        .asText())
+                .isEqualTo("TEST_MODE");
+        assertThat(envelope.get("sources")).extracting(JsonNode::asText).containsExactly("location", "rates");
+    }
+
+    @Test
+    @DisplayName("getTaxRate omits regionCode and city when the location does not supply them")
+    void getTaxRate_omitsRegionCodeAndCityWhenAbsent() {
+        String locationBody = "{\"id\":\"" + LOCATION_ID + "\",\"postalCode\":\"94103\",\"country\":\"US\"}";
+        FacadeContractManifest.Entry rates = contract("getTaxRate").leg("rates");
+        gatewayMockServer
+                .expect(requestTo(GATEWAY_BASE_URL
+                        + contract("getTaxRate").leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .andRespond(withSuccess(locationBody, MediaType.APPLICATION_JSON));
+        directMockServer
+                .expect(requestTo(DIRECT_BASE_URL + rates.expand(Map.of("countryCode", "US", "postalCode", "94103"))))
+                .andExpect(method(rates.httpMethod()))
+                .andRespond(withSuccess("{\"combinedRate\":0.0725}", MediaType.APPLICATION_JSON));
+
+        JsonNode envelope = parse(tool.getTaxRate(LOCATION_ID));
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+        assertThat(envelope.get("status").asText()).isEqualTo("ok");
+    }
+
+    @Test
+    @DisplayName("getTaxRate degrades without calling pos-tax when the location has no usable address")
+    void getTaxRate_locationWithoutAddress_degradesWithoutCallingPosTax() {
+        gatewayMockServer
+                .expect(requestTo(GATEWAY_BASE_URL
+                        + contract("getTaxRate").leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .andRespond(withSuccess(
+                        "{\"id\":\"" + LOCATION_ID + "\",\"name\":\"Warehouse\"}", MediaType.APPLICATION_JSON));
+
+        JsonNode envelope = parse(tool.getTaxRate(LOCATION_ID));
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+        assertThat(envelope.get("status").asText()).isEqualTo("degraded");
+        assertThat(envelope.get("sections").get("location").get("status").asText())
+                .isEqualTo("ok");
+        JsonNode rates = envelope.get("sections").get("rates");
+        assertThat(rates.get("status").asText()).isEqualTo("error");
+        assertThat(rates.get("reason").asText()).contains("no usable address");
+        assertThat(envelope.get("sources")).extracting(JsonNode::asText).containsExactly("location");
+    }
+
+    @Test
+    @DisplayName("getTaxRate renders a forbidden location lookup as not_authorized without body leak")
+    void getTaxRate_forbiddenLocation_rendersNotAuthorized() {
+        gatewayMockServer
+                .expect(requestTo(GATEWAY_BASE_URL
+                        + contract("getTaxRate").leg("location").expand(Map.of("locationId", LOCATION_ID))))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"secret\":\"FORBIDDEN-PAYLOAD\"}"));
+
+        String rendered = tool.getTaxRate(LOCATION_ID);
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+        assertThat(rendered).doesNotContain("FORBIDDEN-PAYLOAD");
+        JsonNode envelope = parse(rendered);
+        assertThat(envelope.get("status").asText()).isEqualTo("degraded");
+        assertThat(envelope.get("sections").get("location").get("status").asText())
+                .isEqualTo("not_authorized");
+        assertThat(envelope.get("sources")).isEmpty();
     }
 }
