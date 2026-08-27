@@ -15,6 +15,8 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeSummaryDto;
+import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
@@ -598,6 +600,176 @@ class EmployeeServiceImplTest {
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Only ACTIVE employees can be disabled");
+        }
+    }
+
+    @Nested
+    @DisplayName("searchEmployees")
+    class SearchEmployees {
+
+        private static final UUID SMITH_PERSON_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
+        private static final UUID DOE_PERSON_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b02");
+        private static final UUID NO_REPLICA_PERSON_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b03");
+
+        private Employee employeeRow(UUID personId, String employeeNumber, EmployeeStatus status) {
+            return Employee.builder()
+                    .id(UUID.randomUUID())
+                    .personId(personId)
+                    .employeeNumber(employeeNumber)
+                    .status(status)
+                    .build();
+        }
+
+        private ExtPersonReplica replicaRow(UUID personId, String firstName, String lastName, String preferredName) {
+            ExtPersonReplica person = new ExtPersonReplica();
+            person.setPersonId(personId);
+            person.setFirstName(firstName);
+            person.setLastName(lastName);
+            person.setPreferredName(preferredName);
+            return person;
+        }
+
+        private void givenTheDirectory() {
+            Employee smith = employeeRow(SMITH_PERSON_ID, "EMP-0001", EmployeeStatus.ACTIVE);
+            Employee doe = employeeRow(DOE_PERSON_ID, "EMP-0002", EmployeeStatus.ON_LEAVE);
+            Employee noReplica = employeeRow(NO_REPLICA_PERSON_ID, "EMP-0003", EmployeeStatus.ACTIVE);
+            when(employeeRepository.findAll()).thenReturn(List.of(smith, doe, noReplica));
+
+            when(extPersonReplicaRepository.findByPersonIdIn(any()))
+                    .thenReturn(List.of(
+                            replicaRow(SMITH_PERSON_ID, "Jane", "Smith", "Janie"),
+                            replicaRow(DOE_PERSON_ID, "John", "Doe", null)));
+        }
+
+        @Test
+        void aBlankQueryListsEveryEmployee() {
+            givenTheDirectory();
+
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees("  ", 0, 20);
+
+            assertThat(page.items()).hasSize(3);
+            assertThat(page.totalElements()).isEqualTo(3);
+            assertThat(page.totalPages()).isEqualTo(1);
+        }
+
+        @Test
+        void aNullQueryListsEveryEmployee() {
+            givenTheDirectory();
+
+            assertThat(service.searchEmployees(null, 0, 20).items()).hasSize(3);
+        }
+
+        @Test
+        void matchesByLastName() {
+            givenTheDirectory();
+
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("smith", 0, 20).items();
+
+            assertThat(results)
+                    .extracting(EmployeeSummaryDto::getEmployeeNumber)
+                    .containsExactly("EMP-0001");
+        }
+
+        @Test
+        void matchesByPreferredName() {
+            givenTheDirectory();
+
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("Janie", 0, 20).items();
+
+            assertThat(results)
+                    .extracting(EmployeeSummaryDto::getEmployeeNumber)
+                    .containsExactly("EMP-0001");
+        }
+
+        @Test
+        void matchesByEmployeeNumber() {
+            givenTheDirectory();
+
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("0002", 0, 20).items();
+
+            assertThat(results)
+                    .extracting(EmployeeSummaryDto::getEmployeeNumber)
+                    .containsExactly("EMP-0002");
+        }
+
+        @Test
+        void matchingIsCaseInsensitive() {
+            givenTheDirectory();
+
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("DOE", 0, 20).items();
+
+            assertThat(results)
+                    .extracting(EmployeeSummaryDto::getEmployeeNumber)
+                    .containsExactly("EMP-0002");
+        }
+
+        @Test
+        void anEmployeeWithNoReplicaRowIsStillFoundByNumberAndCarriesNullNames() {
+            givenTheDirectory();
+
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees("EMP-0003", 0, 20).items();
+
+            assertThat(results).hasSize(1);
+            EmployeeSummaryDto found = results.get(0);
+            assertThat(found.getEmployeeNumber()).isEqualTo("EMP-0003");
+            assertThat(found.getFirstName()).isNull();
+            assertThat(found.getLastName()).isNull();
+            assertThat(found.isActive()).isTrue();
+        }
+
+        @Test
+        void activeMirrorsTheEmployeeStatus() {
+            givenTheDirectory();
+
+            List<EmployeeSummaryDto> results =
+                    service.searchEmployees(null, 0, 20).items();
+
+            assertThat(results)
+                    .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0001"))
+                    .extracting(EmployeeSummaryDto::isActive)
+                    .containsExactly(true);
+            assertThat(results)
+                    .filteredOn(dto -> dto.getEmployeeNumber().equals("EMP-0002"))
+                    .extracting(EmployeeSummaryDto::isActive)
+                    .containsExactly(false);
+        }
+
+        @Test
+        void pagesTheSortedResultsAndReportsCorrectTotals() {
+            givenTheDirectory();
+
+            // lastName order: Doe, Smith, then the no-replica row (null last name sorts last).
+            PagedResponse<EmployeeSummaryDto> firstPage = service.searchEmployees(null, 0, 2);
+            assertThat(firstPage.items())
+                    .extracting(EmployeeSummaryDto::getEmployeeNumber)
+                    .containsExactly("EMP-0002", "EMP-0001");
+            assertThat(firstPage.totalElements()).isEqualTo(3);
+            assertThat(firstPage.totalPages()).isEqualTo(2);
+
+            PagedResponse<EmployeeSummaryDto> secondPage = service.searchEmployees(null, 1, 2);
+            assertThat(secondPage.items())
+                    .extracting(EmployeeSummaryDto::getEmployeeNumber)
+                    .containsExactly("EMP-0003");
+            assertThat(secondPage.totalElements()).isEqualTo(3);
+            assertThat(secondPage.totalPages()).isEqualTo(2);
+        }
+
+        @Test
+        void anOutOfRangePageReturnsEmptyItemsWithCorrectTotals() {
+            givenTheDirectory();
+
+            PagedResponse<EmployeeSummaryDto> page = service.searchEmployees(null, 5, 20);
+
+            assertThat(page.items()).isEmpty();
+            assertThat(page.totalElements()).isEqualTo(3);
+            assertThat(page.totalPages()).isEqualTo(1);
+            assertThat(page.page()).isEqualTo(5);
+            assertThat(page.size()).isEqualTo(20);
         }
     }
 }

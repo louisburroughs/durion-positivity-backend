@@ -197,6 +197,62 @@ paths:
       x-required-permissions:
       - people:compliance:view
   /v1/people/employees:
+    get:
+      description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number.
+
+        Use this tool when listing or typeahead-filtering employees; do not use getEmployee, which requires the person id already be known, and do not use getEmployeeByNumber, which resolves one exact employee number rather than searching.
+
+        Preconditions: none; an empty result set is returned rather than an error when nothing matches.
+
+        Required inputs: none are mandatory; q defaults to blank, which lists every employee, page defaults to 0, and size defaults to 20 with a maximum of 100.
+
+        Emits a PEOPLE_EMPLOYEE_SEARCH audit event but changes no state; this is a read-only projection merged in memory from local employment rows and the pos-people-contact identity replica.
+
+        Returns 200 with an empty items list and correct totals when the page or query matches nothing.
+
+        '
+      operationId: searchEmployees
+      parameters:
+      - description: Case-insensitive substring match on name or employee number; blank lists all
+        in: query
+        name: q
+        required: false
+        schema:
+          type: string
+      - description: Zero-based page index
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          minimum: 0
+          type: integer
+      - description: Page size, up to 100
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 100
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseEmployeeSummaryDto'
+          description: Employees returned (possibly empty)
+      security:
+      - bearerAuth:
+        - people:employee:view
+      summary: Search Employees By Name Or Number
+      tags:
+      - Employee API
+      x-required-permissions:
+      - people:employee:view
     post:
       description: 'Creates an employee profile: employment attributes (employee number, status, hire date) are stored in the people domain, while identity attributes (names, contact info) are forwarded to pos-people-contact as an upsert command with a server-generated UUIDv7 person id.
 
@@ -2791,6 +2847,48 @@ components:
       - lastName
       - status
       type: object
+    EmployeeSummaryDto:
+      description: Slim employee row for search results
+      properties:
+        active:
+          description: True when the employee is in an ACTIVE employment status
+          example: true
+          type: boolean
+        employeeId:
+          description: Employee record identifier
+          example: 01960011-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        employeeNumber:
+          description: Employee number
+          example: EMP-0001
+          type: string
+        firstName:
+          description: First (given) name, from the identity replica; null when the replica has not caught up
+          example: Jane
+          type: string
+        lastName:
+          description: Last (family) name, from the identity replica; null when the replica has not caught up
+          example: Smith
+          type: string
+        personId:
+          description: Stable person identifier the employee maps to
+          example: 01960011-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        preferredName:
+          description: Preferred name, from the identity replica
+          example: Janie
+          type: string
+        status:
+          description: Employment status
+          example: ACTIVE
+          type: string
+      required:
+      - active
+      - employeeId
+      - personId
+      type: object
     InactivePersonActiveUserResponse:
       description: An active user-person link whose linked person is in an inactive status (ADR-0015 §4 violation)
       properties:
@@ -2827,6 +2925,41 @@ components:
       - linkId
       - personId
       - username
+      type: object
+    PagedResponseEmployeeSummaryDto:
+      description: A page of results
+      properties:
+        items:
+          description: Items on this page
+          items:
+            $ref: '#/components/schemas/EmployeeSummaryDto'
+          type: array
+        page:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        size:
+          description: Requested page size
+          example: 20
+          format: int32
+          type: integer
+        totalElements:
+          description: Total matching items across all pages
+          example: 42
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 3
+          format: int32
+          type: integer
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
       type: object
     PeopleAvailabilityResponse:
       description: Availability of a person at a location for a given date based on staffing assignments

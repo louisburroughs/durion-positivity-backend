@@ -7,6 +7,8 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
+import com.positivity.people.internal.dto.EmployeeSummaryDto;
+import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeOffboardingRetry;
@@ -25,9 +27,14 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -223,6 +230,70 @@ public class EmployeeServiceImpl implements EmployeeService {
                 extPersonReplicaRepository.findById(employeeId).orElse(null);
         return profileFromReplica(employeeId, person, savedEmployee, List.of());
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull PagedResponse<EmployeeSummaryDto> searchEmployees(@Nullable String q, int page, int size) {
+        // Employee counts (shop staff) are far smaller than the customer-directory volumes that
+        // justified the same approach in pos-customer PartyServiceImpl#browseParties (ADR-0026 /
+        // OQ3): load both sides, merge/filter/sort/page in memory rather than joining across
+        // module boundaries in SQL.
+        List<Employee> employees = employeeRepository.findAll();
+        List<UUID> personIds = employees.stream().map(Employee::getPersonId).toList();
+        Map<UUID, ExtPersonReplica> replicasByPersonId = extPersonReplicaRepository.findByPersonIdIn(personIds).stream()
+                .collect(Collectors.toMap(ExtPersonReplica::getPersonId, Function.identity(), (a, b) -> a));
+
+        List<EmployeeSummaryDto> all = employees.stream()
+                .map(employee -> toSummary(employee, replicasByPersonId.get(employee.getPersonId())))
+                .toList();
+
+        List<EmployeeSummaryDto> filtered = all.stream()
+                .filter(summary -> matchesSearch(summary, q))
+                .sorted(SEARCH_COMPARATOR)
+                .toList();
+
+        int total = filtered.size();
+        int fromIndex = (int) Math.min((long) page * size, total);
+        int toIndex = (int) Math.min((long) fromIndex + size, total);
+        List<EmployeeSummaryDto> window = filtered.subList(fromIndex, toIndex);
+
+        int totalPages = size == 0 ? 0 : (int) Math.ceil((double) total / size);
+        return new PagedResponse<>(window, page, size, total, totalPages);
+    }
+
+    private EmployeeSummaryDto toSummary(Employee employee, @Nullable ExtPersonReplica person) {
+        return EmployeeSummaryDto.builder()
+                .employeeId(employee.getId())
+                .personId(employee.getPersonId())
+                .employeeNumber(employee.getEmployeeNumber())
+                .firstName(person != null ? person.getFirstName() : null)
+                .lastName(person != null ? person.getLastName() : null)
+                .preferredName(person != null ? person.getPreferredName() : null)
+                .status(employee.getStatus() != null ? employee.getStatus().name() : null)
+                .active(employee.getStatus() == EmployeeStatus.ACTIVE)
+                .build();
+    }
+
+    private boolean matchesSearch(EmployeeSummaryDto summary, @Nullable String q) {
+        if (q == null || q.isBlank()) {
+            return true;
+        }
+        String needle = q.trim().toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(summary.getFirstName(), needle)
+                || containsIgnoreCase(summary.getLastName(), needle)
+                || containsIgnoreCase(summary.getPreferredName(), needle)
+                || containsIgnoreCase(summary.getEmployeeNumber(), needle);
+    }
+
+    private boolean containsIgnoreCase(@Nullable String value, String lowercaseNeedle) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(lowercaseNeedle);
+    }
+
+    /** lastName, firstName, employeeNumber — null-safe, case-insensitive, nulls last. */
+    private static final Comparator<EmployeeSummaryDto> SEARCH_COMPARATOR = Comparator.comparing(
+                    EmployeeSummaryDto::getLastName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+            .thenComparing(EmployeeSummaryDto::getFirstName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+            .thenComparing(EmployeeSummaryDto::getEmployeeNumber, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
 
     /** Queue the identity attributes as an upsert command toward pos-people-contact. */
     private void requestIdentityUpsert(
