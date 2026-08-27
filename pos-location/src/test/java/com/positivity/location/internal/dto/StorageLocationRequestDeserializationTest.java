@@ -33,8 +33,11 @@ class StorageLocationRequestDeserializationTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    @DisplayName("#1514 - a payload carrying only the required fields is readable")
-    void minimalPayloadIsReadable() {
+    @DisplayName("#1514 - the exact payload the contract tests post is readable")
+    void contractTestPayloadIsReadable() {
+        // Copied verbatim from StorageLocationContractBehaviorIT's create tests, which is what
+        // actually broke. barcode is optional and present here for that reason rather than because
+        // it is required — the point is the payload that turned main red, character for character.
         String json = "{\"name\":\"Floor-New\",\"barcode\":\"BAR-DUP\",\"type\":\"FLOOR\"}";
 
         assertThatCode(() -> objectMapper.readValue(json, StorageLocationRequest.class))
