@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface TimekeepingEntryRepository extends JpaRepository<TimekeepingEntry, UUID> {
 
@@ -14,6 +15,12 @@ public interface TimekeepingEntryRepository extends JpaRepository<TimekeepingEnt
 
     @Query("SELECT DISTINCT t.employeeId FROM TimekeepingEntry t")
     List<UUID> findDistinctEmployeeIds();
+
+    @Query("SELECT DISTINCT t.tenantId FROM TimekeepingEntry t")
+    List<UUID> findDistinctTenantIds();
+
+    @Query("SELECT MIN(t.sessionStartTime) FROM TimekeepingEntry t WHERE t.tenantId = :tenantId")
+    Instant findEarliestSessionStartByTenantId(@Param("tenantId") UUID tenantId);
 
     List<TimekeepingEntry> findByEmployeeIdAndSessionStartTimeGreaterThanEqualAndSessionEndTimeLessThanEqual(
             UUID employeeId, Instant periodStart, Instant periodEnd);

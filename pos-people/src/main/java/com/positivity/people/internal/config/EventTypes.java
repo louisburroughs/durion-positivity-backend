@@ -115,6 +115,13 @@ public final class EventTypes {
                                 "Read approved time rows for accounting export orchestration")
                         .build(),
 
+                // TimePeriodManagementController - 2 events (#1527)
+                EventTypeRegistration.write("PEOPLE_TIME_PERIOD_CREATE", "Create a pay period for timekeeping approval")
+                        .build(),
+                EventTypeRegistration.write(
+                                "PEOPLE_TIME_PERIOD_TRANSITION", "Transition a pay period's lifecycle status")
+                        .build(),
+
                 // PeopleComplianceController - 1 event (#888)
                 EventTypeRegistration.search(
                                 "REPORT_INACTIVE_PERSON_ACTIVE_USER_GENERATED",

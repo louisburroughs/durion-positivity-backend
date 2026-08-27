@@ -1144,11 +1144,11 @@ class SecurityGatewayConfigTest {
     @Test
     @DisplayName("CATALOG_VERSION is 62")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(62);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(63);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 488")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 490")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1370,9 +1370,13 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(485)).isEqualTo("PERM_catalog:item_cost:read");
         assertThat(GatewayPermissionCatalog.authorityForBit(486)).isEqualTo("PERM_catalog:tread_design:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(487)).isEqualTo("PERM_catalog:fact:replay");
-        assertThat(GatewayPermissionCatalog.authorityForBit(488)).isEqualTo("PERM_tax:rates:view");
+        // catalog v62 (#1527): pay-period lifecycle management in pos-people (bits 488-489)
+        assertThat(GatewayPermissionCatalog.authorityForBit(488)).isEqualTo("PERM_people:timePeriod:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(489)).isEqualTo("PERM_people:timePeriod:transition");
+        // catalog v63 (#1522): jurisdiction rate lookup in pos-tax (bit 490)
+        assertThat(GatewayPermissionCatalog.authorityForBit(490)).isEqualTo("PERM_tax:rates:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(489)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(491)).isNull();
     }
 
     @Test
