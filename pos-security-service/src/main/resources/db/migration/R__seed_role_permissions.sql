@@ -1377,6 +1377,7 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'inventory:cycle_count_tolerance:manage'),
     ('INVENTORY_CONTROLLER', 'inventory:location:sync'),
     ('INVENTORY_CONTROLLER', 'inventory:lot:manage'),
+    ('INVENTORY_CONTROLLER', 'inventory:putaway_rule:manage'),
     ('INVENTORY_CONTROLLER', 'inventory:putaway_rule:view'),
     ('INVENTORY_CONTROLLER', 'inventory:replenishment:manage'),
     ('INVENTORY_CONTROLLER', 'inventory:scrap:approve'),

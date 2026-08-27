@@ -61,8 +61,12 @@ public class PutawayController {
                     both forms together.
                     Emits an INVENTORY_PUTAWAY_TASK_GENERATE event; the tasks are created UNASSIGNED and no stock \
                     moves until executePutaway runs.
-                    Returns 404 when the goods receipt does not exist, and 400 when both line forms are supplied, \
-                    neither is supplied, an id is not a valid UUID, or a quantity is below 1.
+                    Returns 404 when the goods receipt does not exist, 400 when both line forms are supplied, \
+                    neither is supplied, an id is not a valid UUID, or a quantity is below 1, and 422 when the \
+                    receipt is not booked into the staging location (RECEIPT_NOT_STAGED), when no enabled rule \
+                    matches a line and no ANY fallback rule exists (NO_PUTAWAY_RULE_MATCH), or when the resolved \
+                    destination is not physically fit for the line's catalog class \
+                    (LOCATION_NOT_VALID_FOR_SKU).
                     """,
             tags = {"Putaway"})
     @ApiResponse(
@@ -76,6 +80,10 @@ public class PutawayController {
     @ApiResponse(
             responseCode = "404",
             description = "Goods receipt not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Receipt not staged, no matching putaway rule, or destination not fit for the SKU",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<PutawayTaskResponse>> generateTasks(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
