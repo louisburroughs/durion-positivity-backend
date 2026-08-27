@@ -5,10 +5,10 @@ import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxJurisdiction;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxCalculationType;
-import com.positivity.tax.common.enums.TaxJurisdictionType;
-import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.ExemptionResolver.LineExemption;
 import com.positivity.tax.internal.service.ExemptionResolver.Outcome;
+import com.positivity.tax.internal.service.TestModeRateResolver.JurisdictionSpec;
+import com.positivity.tax.internal.service.TestModeRateResolver.ResolvedRates;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -17,14 +17,11 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,17 +43,17 @@ public class TestModeTaxCalculator {
 
     private final Clock clock;
 
-    private final TaxProperties properties;
-
     private final ExemptionResolver exemptionResolver;
+
+    private final TestModeRateResolver rateResolver;
 
     /** Stateless, deterministic single-stage rounding reconciler. */
     private final TaxTotalsReconciler reconciler = new TaxTotalsReconciler();
 
-    public TestModeTaxCalculator(TaxProperties properties, Clock clock, ExemptionResolver exemptionResolver) {
+    public TestModeTaxCalculator(Clock clock, ExemptionResolver exemptionResolver, TestModeRateResolver rateResolver) {
         this.clock = clock;
-        this.properties = properties;
         this.exemptionResolver = exemptionResolver;
+        this.rateResolver = rateResolver;
     }
 
     /**
@@ -86,10 +83,11 @@ public class TestModeTaxCalculator {
         // Resolve the applicable rates and per-category exemptions from the destination
         // address + transaction date (story T7), falling back to the effective-dated
         // schedule then flat default rates.
-        ResolvedRates resolvedRates = resolveRates(request, transactionDate);
+        ResolvedRates resolvedRates = rateResolver.resolveRates(
+                request.getStateCode(), request.getCity(), request.getPostalCode(), transactionDate);
 
         // Applicable jurisdictions (type + decimal-fraction rate); rate order is stable.
-        List<JurisdictionSpec> specs = determineJurisdictionSpecs(resolvedRates.rates());
+        List<JurisdictionSpec> specs = rateResolver.determineJurisdictionSpecs(resolvedRates.rates());
 
         // Classify each line's exemption outcome (story T3 + T7 category exemption).
         List<LineExemption> classifications = classifyLines(request, lineItems, resolvedRates, transactionDate);
@@ -171,28 +169,6 @@ public class TestModeTaxCalculator {
     }
 
     /**
-     * Determine applicable tax jurisdictions (type and decimal-fraction rate)
-     * from the supplied effective rates. Emits STATE, then COUNTY, then CITY for
-     * any rate configured greater than zero; the order is stable so the
-     * reconciler's tie-breaking is deterministic.
-     *
-     * @param rates the effective rates map by jurisdiction type code
-     * @return ordered list of jurisdiction specs
-     */
-    @NonNull
-    private List<JurisdictionSpec> determineJurisdictionSpecs(@NonNull Map<String, BigDecimal> rates) {
-        List<JurisdictionSpec> specs = new ArrayList<>();
-        for (TaxJurisdictionType type :
-                List.of(TaxJurisdictionType.STATE, TaxJurisdictionType.COUNTY, TaxJurisdictionType.CITY)) {
-            BigDecimal rate = rates.getOrDefault(type.code(), BigDecimal.ZERO);
-            if (rate.compareTo(BigDecimal.ZERO) > 0) {
-                specs.add(new JurisdictionSpec(type, rate));
-            }
-        }
-        return specs;
-    }
-
-    /**
      * Resolve the transaction date used for effective-dated rate selection.
      * <p>
      * When {@code raw} is {@code null} or blank, the current date is used, derived
@@ -222,183 +198,6 @@ public class TestModeTaxCalculator {
             }
         }
     }
-
-    /**
-     * Select the rates map effective on the given transaction date.
-     * <p>
-     * The chosen entry is the one whose {@code effectiveFrom} is the greatest value
-     * not after {@code transactionDate}. On ties (equal {@code effectiveFrom}) the
-     * first such entry in configured order wins, keeping selection deterministic.
-     * When the schedule is empty, or no entry is effective on or before the
-     * transaction date, the flat {@code defaultRates} map is returned, preserving
-     * prior behavior.
-     *
-     * @param transactionDate the date to resolve rates for
-     * @return the effective rates map by jurisdiction type code
-     */
-    @NonNull
-    private Map<String, BigDecimal> resolveEffectiveRates(@NonNull LocalDate transactionDate) {
-        var testMode = properties.getTestMode();
-        Map<String, BigDecimal> selected = null;
-        LocalDate selectedFrom = null;
-        for (TaxProperties.RateScheduleEntry entry : testMode.getRateSchedule()) {
-            LocalDate from = entry.getEffectiveFrom();
-            if (from == null || entry.getRates() == null) {
-                continue;
-            }
-            // from <= transactionDate
-            if (!from.isAfter(transactionDate) && (selectedFrom == null || from.isAfter(selectedFrom))) {
-                selectedFrom = from;
-                selected = entry.getRates();
-            }
-        }
-        return selected != null ? selected : testMode.getDefaultRates();
-    }
-
-    /**
-     * Resolve the rates and per-category exemptions for a request (story T7).
-     * <p>
-     * Address-driven {@code jurisdictions[]} rules take precedence: among rules whose
-     * {@code match} facets match the destination address and whose {@code effectiveFrom}
-     * is not after the transaction date, the one with the greatest {@code effectiveFrom}
-     * wins (ties broken by most-specific match, then configured order). When no rule
-     * matches, resolution falls back to the effective-dated {@link #resolveEffectiveRates
-     * schedule} then flat default rates, and no categories are exempt.
-     *
-     * @param request         the calculation request
-     * @param transactionDate the resolved transaction date
-     * @return the resolved rates and exempt categories
-     */
-    @NonNull
-    private ResolvedRates resolveRates(@NonNull TaxCalculationRequest request, @NonNull LocalDate transactionDate) {
-        TaxProperties.JurisdictionRule best = null;
-        for (TaxProperties.JurisdictionRule rule : properties.getTestMode().getJurisdictions()) {
-            if (isCandidate(rule, request, transactionDate) && beats(rule, best)) {
-                best = rule;
-            }
-        }
-        if (best != null) {
-            return new ResolvedRates(best.getRates(), normalizedExemptCategories(best));
-        }
-        return new ResolvedRates(resolveEffectiveRates(transactionDate), Set.of());
-    }
-
-    /**
-     * Whether a rule is in the running at all: it must have rates to charge, be effective on the
-     * transaction date, and match the destination address.
-     */
-    private boolean isCandidate(
-            TaxProperties.@NonNull JurisdictionRule rule,
-            @NonNull TaxCalculationRequest request,
-            @NonNull LocalDate transactionDate) {
-        if (rule.getRates() == null || rule.getRates().isEmpty()) {
-            return false;
-        }
-        LocalDate from = rule.getEffectiveFrom();
-        if (from != null && from.isAfter(transactionDate)) {
-            return false;
-        }
-        return matches(rule.getMatch(), request);
-    }
-
-    /**
-     * The precedence order between two candidate rules: most-recently-effective first, then
-     * most-specific match, then configured order — "first wins", so a later rule must strictly
-     * improve on the incumbent to displace it.
-     */
-    private boolean beats(
-            TaxProperties.@NonNull JurisdictionRule challenger, TaxProperties.@Nullable JurisdictionRule incumbent) {
-        if (incumbent == null) {
-            return true;
-        }
-        LocalDate challengerFrom = challenger.getEffectiveFrom();
-        LocalDate incumbentFrom = incumbent.getEffectiveFrom();
-        if (!nullSafeEquals(challengerFrom, incumbentFrom)) {
-            return isAfter(challengerFrom, incumbentFrom);
-        }
-        return specificity(challenger.getMatch()) > specificity(incumbent.getMatch());
-    }
-
-    /** The winning rule's exempt categories, upper-cased, with null and blank entries dropped. */
-    private static Set<String> normalizedExemptCategories(TaxProperties.@NonNull JurisdictionRule rule) {
-        Set<String> exemptCategories = new LinkedHashSet<>();
-        for (String category : rule.getExemptCategories()) {
-            if (category != null && !category.isBlank()) {
-                exemptCategories.add(category.toUpperCase(Locale.ROOT));
-            }
-        }
-        return exemptCategories;
-    }
-
-    /**
-     * Whether a rule's match facets all match the request's destination address. A
-     * {@code null}/blank facet is a wildcard; {@code postalCodePrefix} matches by prefix,
-     * other facets by case-insensitive equality.
-     */
-    private boolean matches(TaxProperties.@Nullable JurisdictionMatch match, @NonNull TaxCalculationRequest request) {
-        if (match == null) {
-            return true;
-        }
-        return facetMatches(match.getStateCode(), request.getStateCode())
-                && facetMatches(match.getCity(), request.getCity())
-                && prefixMatches(match.getPostalCodePrefix(), request.getPostalCode());
-    }
-
-    private boolean facetMatches(@Nullable String expected, @Nullable String actual) {
-        if (expected == null || expected.isBlank()) {
-            return true;
-        }
-        return actual != null && expected.equalsIgnoreCase(actual.trim());
-    }
-
-    private boolean prefixMatches(@Nullable String prefix, @Nullable String actual) {
-        if (prefix == null || prefix.isBlank()) {
-            return true;
-        }
-        return actual != null && actual.trim().startsWith(prefix);
-    }
-
-    /** Count of populated match facets: a more specific match wins ties. */
-    private int specificity(TaxProperties.@Nullable JurisdictionMatch match) {
-        if (match == null) {
-            return 0;
-        }
-        int count = 0;
-        if (match.getStateCode() != null && !match.getStateCode().isBlank()) {
-            count++;
-        }
-        if (match.getCity() != null && !match.getCity().isBlank()) {
-            count++;
-        }
-        if (match.getPostalCodePrefix() != null && !match.getPostalCodePrefix().isBlank()) {
-            count++;
-        }
-        return count;
-    }
-
-    private static boolean nullSafeEquals(@Nullable LocalDate a, @Nullable LocalDate b) {
-        return a == null ? b == null : a.equals(b);
-    }
-
-    /** Treats a {@code null} effectiveFrom (always-effective) as earliest. */
-    private static boolean isAfter(@Nullable LocalDate a, @Nullable LocalDate b) {
-        if (a == null) {
-            return false;
-        }
-        if (b == null) {
-            return true;
-        }
-        return a.isAfter(b);
-    }
-
-    /**
-     * Resolved rates and exempt categories for a request.
-     *
-     * @param rates            rates by jurisdiction type code
-     * @param exemptCategories tax categories (upper-cased) exempt in the resolved jurisdiction
-     */
-    private record ResolvedRates(
-            @NonNull Map<String, BigDecimal> rates, @NonNull Set<String> exemptCategories) {}
 
     /**
      * Build the top-level jurisdiction rows from the reconciler's column totals.
@@ -506,14 +305,4 @@ public class TestModeTaxCalculator {
         }
         return result;
     }
-
-    /**
-     * An applicable jurisdiction with its decimal-fraction rate (e.g. 0.0725 for
-     * 7.25%). Location fields are sourced from the request at build time.
-     *
-     * @param type the jurisdiction type
-     * @param rate the tax rate as a decimal fraction
-     */
-    private record JurisdictionSpec(
-            @NonNull TaxJurisdictionType type, @NonNull BigDecimal rate) {}
 }

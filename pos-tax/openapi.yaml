@@ -372,6 +372,94 @@ paths:
       - Tax
       x-required-permissions:
       - tax:mode:view
+  /v1/tax/rates:
+    get:
+      description: 'Resolves the per-jurisdiction tax rates applicable to a destination address, without calculating
+
+        tax for any line items.
+
+        Use this tool to preview or display the rate breakdown for an address; do not use it to compute
+
+        tax on a cart or invoice, which is calculateTax.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014) — it has no gateway route and
+
+        is reached only by direct in-cluster calls, never through pos-api-gateway.
+
+        Required inputs: countryCode (ISO 3166-1 alpha-2) and postalCode; regionCode and city narrow the
+
+        match further, and asOf (ISO-8601 date) defaults to today.
+
+        No events are emitted and no state changes; components are per-jurisdiction rates as decimal
+
+        fractions (not a blended estimate), and SPECIAL/DISTRICT jurisdiction types appear only when a
+
+        configured rule produces them — today''s test-mode rules emit STATE/COUNTY/CITY.
+
+        Returns 400 when countryCode or postalCode are missing or malformed, and 501 when the configured
+
+        tax provider does not support rate-only lookup (every production provider today; AvaTax
+
+        rate-by-address is a documented follow-up, not yet implemented).
+
+        '
+      operationId: getTaxRates
+      parameters:
+      - in: query
+        name: countryCode
+        required: true
+        schema:
+          minLength: 1
+          type: string
+      - in: query
+        name: postalCode
+        required: true
+        schema:
+          minLength: 1
+          type: string
+      - in: query
+        name: regionCode
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: city
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: asOf
+        required: false
+        schema:
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateLookupResponse'
+          description: Rates resolved successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateLookupResponse'
+          description: Invalid address parameters
+        '501':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateLookupResponse'
+          description: Rate lookup not supported by the active tax provider
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: Look up jurisdiction tax rates
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
   /v1/tax/transactions/{referenceId}/commit:
     post:
       description: 'Commits the provider tax document for a finalized invoice so the recorded tax becomes
@@ -1074,6 +1162,73 @@ components:
       required:
       - referenceId
       - status
+      type: object
+    TaxRateComponent:
+      description: A single per-jurisdiction tax rate, expressed as a decimal fraction
+      properties:
+        jurisdictionType:
+          description: Jurisdiction level the rate applies at
+          enum:
+          - COUNTRY
+          - STATE
+          - PROVINCE
+          - COUNTY
+          - CITY
+          - DISTRICT
+          - SPECIAL
+          type: string
+        rate:
+          description: Tax rate as a decimal fraction (e.g. 0.0725 for 7.25%), not a percentage
+          example: 0.0725
+          type: number
+      required:
+      - jurisdictionType
+      - rate
+      type: object
+    TaxRateLookupResponse:
+      description: Jurisdiction tax rates resolved for a destination address
+      properties:
+        asOf:
+          description: Effective date the rates were resolved for
+          example: 2026-08-27
+          format: date
+          type: string
+        city:
+          description: Locality/city name, when supplied
+          example: San Francisco
+          type: string
+        combinedRate:
+          description: Sum of components[].rate, as a decimal fraction
+          example: 0.085
+          type: number
+        components:
+          description: Per-jurisdiction rates, as decimal fractions, in stable order
+          items:
+            $ref: '#/components/schemas/TaxRateComponent'
+          type: array
+        countryCode:
+          description: Country code in ISO 3166-1 alpha-2 format
+          example: US
+          type: string
+        postalCode:
+          description: Postal/ZIP code
+          example: '94103'
+          type: string
+        regionCode:
+          description: Region/subdivision code, when supplied
+          example: CA
+          type: string
+        source:
+          description: Name of the provider that resolved these rates
+          example: TEST_MODE
+          type: string
+      required:
+      - asOf
+      - combinedRate
+      - components
+      - countryCode
+      - postalCode
+      - source
       type: object
   securitySchemes:
     bearerAuth:
