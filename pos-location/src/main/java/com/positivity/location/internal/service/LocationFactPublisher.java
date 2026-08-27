@@ -7,6 +7,8 @@ import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.location.internal.config.OutboxEventWriter;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -169,6 +171,15 @@ public class LocationFactPublisher {
                 storageLocation.getCapacity(),
                 StorageCapacityJson.extractMaxUnitCapacity(storageLocation.getCapacity()),
                 storageLocation.getTemperature(),
+                // Issue #1514: the capability rides this existing fact additively (ADR-0044 — no
+                // new synchronous call to pos-location). An undeclared capability is resolved to
+                // GENERAL here, the same as on the owner's own read path, so a replica never has
+                // to reimplement the null-means-GENERAL rule.
+                StorageCategory.orDefault(storageLocation.getStorageCategoryCode())
+                        .name(),
+                storageLocation.isHazardContainment(),
+                AllowNewProductPolicy.orDefault(storageLocation.getAllowNewProduct())
+                        .name(),
                 storageLocation.getCreatedAt(),
                 storageLocation.getUpdatedAt());
         publish(

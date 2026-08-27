@@ -4,6 +4,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -47,6 +49,28 @@ public class StorageLocationRequest {
             example = "01960003-0000-7000-8000-000000000001",
             requiredMode = NOT_REQUIRED)
     private UUID parentStorageLocationId;
+
+    @Schema(
+            description = "Putaway capability of the storage location — what it is fit to hold, independent of the"
+                    + " physical type. Omit to leave it undeclared, which reads back as GENERAL (accepts every"
+                    + " catalog category).",
+            example = "TIRE_RACK",
+            requiredMode = NOT_REQUIRED)
+    private StorageCategory storageCategoryCode;
+
+    @Schema(
+            description = "Whether the storage location provides spill/hazard containment; required by battery and"
+                    + " oil storage capabilities. Defaults to false.",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
+    private boolean hazardContainment;
+
+    @Schema(
+            description = "Whether the storage location will take stock of a product it is not already holding."
+                    + " Defaults to MIXED.",
+            example = "MIXED",
+            requiredMode = NOT_REQUIRED)
+    private AllowNewProductPolicy allowNewProduct;
 
     @Schema(
             description = "Capacity attributes of the storage location",

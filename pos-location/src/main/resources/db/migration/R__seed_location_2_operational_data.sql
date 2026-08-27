@@ -632,3 +632,173 @@ VALUES
   ('01960004-0003-7000-8000-000000000022'::uuid, 'Bin C-08', 'BIN', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, '01960004-0003-7000-8000-00000000000a'::uuid, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- =========================================================================
+-- PUTAWAY CAPABILITY (issue #1514, schema from V8__storage_location_capability.sql)
+--
+-- storage_category_code says what a location is fit to *hold*; `type` above
+-- stays physical topology. Both tire racks and bulk pallet areas are FLOOR, so
+-- without the capability there is nothing for a putaway rule to route on.
+--
+-- This whole section is a repeatable-safe fill, in the style the staging /
+-- quarantine back-fill above already uses:
+--   * every INSERT carries ON CONFLICT (id) DO NOTHING and an explicit
+--     capability, so re-running inserts nothing and updates nothing;
+--   * every UPDATE is guarded by "the column is still unset" (or, for the
+--     re-parent, "the old parent is still in place"), so it converges on the
+--     first run and is a no-op on every run after — and never fights an
+--     operator who changed a value by hand.
+-- Because R__ files re-run on checksum change, a guardless UPDATE here would
+-- silently revert live edits on the next unrelated change to this file.
+-- =========================================================================
+
+-- ---- New capability-bearing locations, one pair per service center ----
+-- These exist so the compatibility matrix has both positive and negative cases
+-- to test against: without an OIL_STORAGE and a BATTERY_RACK per site, "Fluids
+-- & Chemicals may not go to a tire rack" is unprovable because there is no
+-- correct destination to compare with.
+--
+-- Ids continue each site's existing 01960004-000N-7000-8000-… sequence from the
+-- first unused suffix past the highest one already taken:
+--   CLT-MAIN  had …0001-…003a plus the tire racks at …0047/…0048 → …0049-…004c
+--   CLT-SOUTH had …0001-…0022                                    → …0023-…0026
+--   CLT-NORTH had …0001-…0022                                    → …0023-…0026
+--
+-- hazard_containment is TRUE for both BATTERY_RACK and OIL_STORAGE: these are
+-- the two containment-bearing capabilities (acid and oil both need a bund), and
+-- the matrix gates them on it.
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id,
+                              storage_category_code, hazard_containment, allow_new_product,
+                              created_at, updated_at)
+VALUES
+  ('01960004-0001-7000-8000-000000000049'::uuid, 'Main Oil Storage', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, NULL, 'OIL_STORAGE', TRUE, 'MIXED', NOW(), NOW()),
+  ('01960004-0001-7000-8000-00000000004a'::uuid, 'Main Battery Rack', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, NULL, 'BATTERY_RACK', TRUE, 'MIXED', NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000023'::uuid, 'South Oil Storage', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, 'OIL_STORAGE', TRUE, 'MIXED', NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000024'::uuid, 'South Battery Rack', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, 'BATTERY_RACK', TRUE, 'MIXED', NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000023'::uuid, 'North Oil Storage', 'FLOOR', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, 'OIL_STORAGE', TRUE, 'MIXED', NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000024'::uuid, 'North Battery Rack', 'SHELF', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, 'BATTERY_RACK', TRUE, 'MIXED', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- ---- Negative-path and mobile-stock locations, one pair per service center ----
+-- The INACTIVE rows make "putaway must refuse a decommissioned destination"
+-- testable; every other seeded storage location is ACTIVE. The TRUCK rows are
+-- the only mobile stock in the seed, so van-inventory paths have somewhere to
+-- land. Both carry GENERAL: the point of these rows is the status and the type,
+-- and giving them a specialised capability would confuse the matrix cases.
+INSERT INTO storage_location (id, name, type, status, site_id, parent_storage_location_id,
+                              storage_category_code, hazard_containment, allow_new_product,
+                              created_at, updated_at)
+VALUES
+  ('01960004-0001-7000-8000-00000000004b'::uuid, 'Main Retired Bin', 'BIN', 'INACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, NULL, 'GENERAL', FALSE, 'MIXED', NOW(), NOW()),
+  ('01960004-0001-7000-8000-00000000004c'::uuid, 'Main Van Stock 01', 'TRUCK', 'ACTIVE', '01960003-0000-7000-8000-000000000001'::uuid, NULL, 'GENERAL', FALSE, 'MIXED', NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000025'::uuid, 'South Retired Bin', 'BIN', 'INACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, 'GENERAL', FALSE, 'MIXED', NOW(), NOW()),
+  ('01960004-0002-7000-8000-000000000026'::uuid, 'South Van Stock 01', 'TRUCK', 'ACTIVE', '01960003-0000-7000-8000-000000000002'::uuid, NULL, 'GENERAL', FALSE, 'MIXED', NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000025'::uuid, 'North Retired Bin', 'BIN', 'INACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, 'GENERAL', FALSE, 'MIXED', NOW(), NOW()),
+  ('01960004-0003-7000-8000-000000000026'::uuid, 'North Van Stock 01', 'TRUCK', 'ACTIVE', '01960003-0000-7000-8000-000000000003'::uuid, NULL, 'GENERAL', FALSE, 'MIXED', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- ---- Detach CLT-MAIN's tire racks from the staging floor ----
+-- Tire Rack A/B were seeded as children of Main Staging Floor, which is wrong on
+-- both counts: a tire rack is not part of staging, and with STAGING refusing
+-- putaway by rule a descendant-scoped destination search would inherit that
+-- refusal. South and North seed their racks with no parent; this brings CLT-MAIN
+-- into line. Guarded on the old parent so it converges and leaves a deliberate
+-- re-parent alone.
+UPDATE storage_location
+SET    parent_storage_location_id = NULL
+WHERE  id IN ('01960004-0001-7000-8000-000000000047'::uuid,
+              '01960004-0001-7000-8000-000000000048'::uuid)
+  AND  parent_storage_location_id = '01960004-0001-7000-8000-000000000001'::uuid;
+
+-- ---- Capability assignment for the already-seeded locations ----
+-- Scoped to the three service centers by site_id so the fill can never reach a
+-- location some other site or test created, and guarded on
+-- storage_category_code IS NULL so it only ever fills in a blank.
+
+-- Staging floors are putaway sources, not destinations.
+UPDATE storage_location
+SET    storage_category_code = 'STAGING'
+WHERE  storage_category_code IS NULL
+  AND  name LIKE '%Staging Floor'
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+-- Quarantine cages likewise: stock leaves them, nothing is put away into them.
+UPDATE storage_location
+SET    storage_category_code = 'QUARANTINE'
+WHERE  storage_category_code IS NULL
+  AND  name LIKE '%Quarantine Cage'
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+-- Tire racks (all sites, including CLT-MAIN's two just detached above).
+UPDATE storage_location
+SET    storage_category_code = 'TIRE_RACK'
+WHERE  storage_category_code IS NULL
+  AND  name LIKE '%Tire Rack%'
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+-- Secured parts cages hold small, high-value parts behind a lock, and the seed
+-- treats them as the site's hazardous-goods store too — hence containment.
+UPDATE storage_location
+SET    storage_category_code = 'SMALL_PARTS_BIN',
+       hazard_containment    = TRUE
+WHERE  storage_category_code IS NULL
+  AND  name LIKE '%Secured Parts Cage'
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+UPDATE storage_location
+SET    storage_category_code = 'BULK_FLOOR'
+WHERE  storage_category_code IS NULL
+  AND  name LIKE '%Bulk Floor'
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+-- Parts shelves and their sections stay permissive: they are the fallback any
+-- unmatched category lands on.
+UPDATE storage_location
+SET    storage_category_code = 'GENERAL'
+WHERE  storage_category_code IS NULL
+  AND  (name LIKE '%Parts Shelf' OR name LIKE 'Shelf Section%')
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+-- Every remaining BIN across the three sites. Runs last so the named cases
+-- above win; the INACTIVE 'Retired Bin' rows were inserted with an explicit
+-- GENERAL, so this guard skips them.
+UPDATE storage_location
+SET    storage_category_code = 'SMALL_PARTS_BIN'
+WHERE  storage_category_code IS NULL
+  AND  type = 'BIN'
+  AND  site_id IN ('01960003-0000-7000-8000-000000000001'::uuid,
+                   '01960003-0000-7000-8000-000000000002'::uuid,
+                   '01960003-0000-7000-8000-000000000003'::uuid);
+
+-- ---- Capacity descriptors on three CLT-MAIN bins ----
+-- Everything else in the seed leaves capacity NULL, which means "uncapped" — so
+-- no capacity path is reachable at all today. These three give the three cases
+-- that matter: room to spare, one unit short of full, and exactly full.
+-- Key shape is StorageCapacityJson's (maxUnitCount = the cap, unitCount = the
+-- current fill); maxUnitCount is the key the owner derives maxUnitCapacity from.
+UPDATE storage_location
+SET    capacity = '{"maxUnitCount": 200, "unitCount": 12}'
+WHERE  id = '01960004-0001-7000-8000-000000000009'::uuid   -- Bin A-01, roomy
+  AND  capacity IS NULL;
+
+UPDATE storage_location
+SET    capacity = '{"maxUnitCount": 50, "unitCount": 49}'
+WHERE  id = '01960004-0001-7000-8000-00000000000a'::uuid   -- Bin A-02, near limit
+  AND  capacity IS NULL;
+
+UPDATE storage_location
+SET    capacity = '{"maxUnitCount": 24, "unitCount": 24}'
+WHERE  id = '01960004-0001-7000-8000-00000000000b'::uuid   -- Bin A-03, full
+  AND  capacity IS NULL;
+

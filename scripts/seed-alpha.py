@@ -348,7 +348,14 @@ def run_storage_locations(gateway, relative_path, _location_id):
     """API pack: create the storage topology per location. Rows are processed in
     fixture order so parents (shelves) exist before their bins; existing names
     (from the site's paged list) are skipped and reused for parent resolution,
-    making re-runs converge."""
+    making re-runs converge.
+
+    Each row also carries its putaway capability (issue #1514):
+    storageCategoryCode says what the location is fit to hold, independent of
+    the physical type, and hazardContainment flags the ones with a spill bund.
+    Both are sent only when the column is populated, so the service applies its
+    own defaults (undeclared capability reads back as GENERAL, containment
+    false) rather than this script guessing them."""
     location_ids = location_id_map(gateway)
     created, skipped, failures = 0, 0, 0
     by_location = {}
@@ -368,6 +375,10 @@ def run_storage_locations(gateway, relative_path, _location_id):
                 skipped += 1
                 continue
             body = {"name": row["name"], "type": row["type"]}
+            if row.get("storageCategoryCode"):
+                body["storageCategoryCode"] = row["storageCategoryCode"]
+            if row.get("hazardContainment"):
+                body["hazardContainment"] = row["hazardContainment"].strip().lower() == "true"
             if row["parentName"]:
                 parent_id = name_to_id.get(row["parentName"])
                 if parent_id is None:

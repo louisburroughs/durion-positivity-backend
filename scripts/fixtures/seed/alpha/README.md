@@ -219,11 +219,11 @@ for Flyway-seeded catalogs is not needed for pipeline-loaded products.
 | File | Rows | Target |
 |---|---|---|
 | `locations.csv` | 5 sites (3 service centers, mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
-| `storage-locations.csv` | 170 (34 per site: 2 floors, 2 cages, 6 shelves, 24 bins under the parts shelves) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order) |
+| `storage-locations.csv` | 185 (37 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order) |
 | `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
 | `mobile-units.csv` | 9 mobile units | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
 
-Columns: `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
+Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 Location types resolve by name (created on the fly if missing, though the reference
 seed provides them); timezones are validated by the service (invalid → per-row
 failure). Note the run-order chicken-and-egg: bulk-load jobs require a `locationId`,
@@ -231,13 +231,54 @@ so the very first location load in an empty alpha needs one location created via
 gateway API first (or use that location's id once the reference/security bootstrap
 provides one).
 
+Columns (`storage-locations.csv`): `locationCode,name,type,parentName,storageCategoryCode,hazardContainment`.
+`type` is the physical topology (FLOOR/SHELF/BIN/CAGE/TRUCK) and is unchanged;
+`storageCategoryCode` is the putaway capability added in #1514 — what the location is
+fit to *hold* — so a rule can route tires to a tire rack and oil to oil storage.
+Both tire racks and bulk pallet areas are FLOOR-or-SHELF topologically, which is why
+the capability cannot be derived from `type`. Values: `TIRE_RACK`, `OIL_STORAGE`,
+`BATTERY_RACK`, `SMALL_PARTS_BIN`, `BULK_FLOOR`, `STAGING`, `QUARANTINE`, `GENERAL`.
+The mapping this fixture uses:
+
+| Row | `type` | `storageCategoryCode` | `hazardContainment` |
+|---|---|---|---|
+| Receiving Dock, Staging Floor | FLOOR | `STAGING` | false |
+| Quarantine Cage, Core Returns Cage | CAGE | `QUARANTINE` | false |
+| Tire Rack A/B | SHELF | `TIRE_RACK` | false |
+| Fluids Shelf | SHELF | `OIL_STORAGE` | true |
+| Battery Rack | SHELF | `BATTERY_RACK` | true |
+| Bulk Floor | FLOOR | `BULK_FLOOR` | false |
+| Van Stock 01 | TRUCK | `GENERAL` | false |
+| Parts Shelf A/B/C | SHELF | `GENERAL` | false |
+| Bin A-01 … C-08 | BIN | `SMALL_PARTS_BIN` | false |
+
+`STAGING` and `QUARANTINE` accept nothing by rule: they are putaway sources, not
+destinations. `GENERAL` is the permissive default and accepts every catalog
+category, so it is what the parts shelves and the van fall back to. Both columns
+are only sent when populated — an empty `storageCategoryCode` leaves the capability
+undeclared, which the service reports back as `GENERAL`.
+
 **Known deltas / not yet converted:**
 
 - The storage mix is deliberately uniform across all 5 sites (a richer, realistic
   garage topology replacing the seed's thinner ad-hoc spread); the seed's
   staging/quarantine **back-references on the location row**
   (`default_staging_location_id`/`default_quarantine_location_id`) are not set —
-  no API writes them today.
+  no API writes them today. #1514 kept that uniformity: the Flyway seed adds its
+  oil storage and battery racks to the 3 service centers only, whereas this
+  fixture gives all 5 sites the full set.
+- **No INACTIVE storage location** can be seeded through this pack:
+  `POST .../storage-locations` always creates in ACTIVE status, so the Flyway
+  seed's per-site "Retired Bin" rows (which exist to make "putaway must refuse a
+  decommissioned destination" testable) have no fixture equivalent. Deactivating
+  one needs a follow-up `PATCH` this pack does not issue.
+- **`allowNewProduct` is not a fixture column**, so every row lands on the
+  service default `MIXED`. Nothing in the alpha topology needs
+  `SAME_PRODUCT_ONLY` or `EMPTY_ONLY` yet; add the column when something does.
+- **Capacity descriptors are not seeded here.** The Flyway seed sets
+  `maxUnitCount`/`unitCount` on three CLT-MAIN bins (roomy, near-limit, full) to
+  make the capacity paths reachable; this pack leaves capacity unset, which means
+  uncapped.
 - Mobile-unit **capabilities and coverage rules** are intentionally dropped (bays
   and mobile units suffice for alpha), as are the mobile units'
   `travel_buffer_policy_id` references and the 4 `location_parent` hierarchy

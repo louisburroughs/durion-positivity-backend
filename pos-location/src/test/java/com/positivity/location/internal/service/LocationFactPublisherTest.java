@@ -17,6 +17,8 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.LocationParent;
 import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.LocationParentRepository;
@@ -146,6 +148,9 @@ class LocationFactPublisherTest {
                 .site(site)
                 .parentStorageLocation(parent)
                 .capacity("{\"maxUnitCount\": 12}")
+                .storageCategoryCode(StorageCategory.SMALL_PARTS_BIN)
+                .hazardContainment(true)
+                .allowNewProduct(AllowNewProductPolicy.SAME_PRODUCT_ONLY)
                 .version(7L)
                 .build();
 
@@ -166,6 +171,35 @@ class LocationFactPublisherTest {
         assertThat(fact.storageLocationType()).isEqualTo("BIN");
         assertThat(fact.status()).isEqualTo("ACTIVE");
         assertThat(fact.maxUnitCapacity()).isEqualTo(12);
+        // #1514: the putaway capability rides the existing fact additively so pos-inventory can
+        // replicate it — no new synchronous call between the two services (ADR-0044).
+        assertThat(fact.storageCategoryCode()).isEqualTo("SMALL_PARTS_BIN");
+        assertThat(fact.hazardContainment()).isTrue();
+        assertThat(fact.allowNewProduct()).isEqualTo("SAME_PRODUCT_ONLY");
+    }
+
+    @Test
+    @DisplayName("#1514 - a storage location with no declared capability publishes GENERAL, not null")
+    void storageLocationFactResolvesUndeclaredCapabilityToGeneral() {
+        StorageLocationEntity storage = StorageLocationEntity.builder()
+                .id(UUID.randomUUID())
+                .name("Legacy Bin")
+                .type(StorageLocationType.BIN)
+                .status(StorageLocationStatus.ACTIVE)
+                .version(1L)
+                .build();
+
+        publisher.storageLocationChanged(storage);
+
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("location.events.v1"), captor.capture());
+        StorageLocationUpdatedV1 fact =
+                (StorageLocationUpdatedV1) captor.getValue().payload();
+        // Consumers get the same permissive default the owner's read path applies, so a replica
+        // never has to know the null-means-GENERAL rule.
+        assertThat(fact.storageCategoryCode()).isEqualTo("GENERAL");
+        assertThat(fact.hazardContainment()).isFalse();
+        assertThat(fact.allowNewProduct()).isEqualTo("MIXED");
     }
 
     @Test

@@ -165,8 +165,10 @@ paths:
                     countryCode: US
                     locationTypeName: STORE
                     name: Downtown Service Center
+                    phoneNumber: +1-217-555-0100
                     postalCode: '62704'
                     stateOrProvince: IL
+                    timezone: America/Chicago
             schema:
               $ref: '#/components/schemas/BulkIngestRequestLocationBulkIngestRecord'
         description: Batch envelope of location records to import, scoped to a bulk ingest job and submitting operator.
@@ -1272,6 +1274,8 @@ paths:
 
         Required inputs: name and type; barcode, parentStorageLocationId, capacity and temperature (free-form JSON objects) are optional.
 
+        The optional storageCategoryCode declares the putaway capability — what the location is fit to hold (TIRE_RACK, OIL_STORAGE, BATTERY_RACK, SMALL_PARTS_BIN, BULK_FLOOR, STAGING, QUARANTINE, GENERAL) — which is independent of type: a tire rack and a bulk pallet area are both FLOOR. Omitting it leaves the capability undeclared, and the response reports GENERAL, which accepts every catalog category. hazardContainment (default false) and allowNewProduct (MIXED, SAME_PRODUCT_ONLY or EMPTY_ONLY; default MIXED) are the other putaway attributes.
+
         Emits a LOCATION_STORAGE_LOCATION_CREATE event and publishes a storage-location fact for replica consumers.
 
         Returns 404 when the site does not exist, 409 when the name or barcode is already used in the site, and 400 when the parent storage location is unknown or belongs to a different site.
@@ -1292,11 +1296,14 @@ paths:
               Refrigerated bin:
                 description: Refrigerated bin
                 value:
+                  allowNewProduct: MIXED
                   barcode: SL-000312
                   capacity:
                     maxUnits: 100
+                  hazardContainment: false
                   name: Aisle 3 Bin 12
                   parentStorageLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  storageCategoryCode: SMALL_PARTS_BIN
                   temperature:
                     max: 8
                     min: 2
@@ -1439,13 +1446,13 @@ paths:
       x-required-permissions:
       - location:read
     patch:
-      description: 'Applies a partial update to a storage location, covering rename, barcode, reparenting, capacity, temperature and status transitions.
+      description: 'Applies a partial update to a storage location, covering rename, barcode, reparenting, capacity, temperature, putaway capability and status transitions.
 
         Use this tool for all storage-location mutations after creation, including deactivation; do not use createStorageLocation, which adds a new node.
 
         Preconditions: the storage location must exist in the site; a new name or barcode must be unique within the site, a new parent must belong to the same site without creating a cycle, and deactivating a node that still holds on-hand stock requires a destinationStorageLocationId naming an ACTIVE storage location of the same site to receive the transferred inventory.
 
-        Required inputs: siteId and storageLocationId (UUIDs) as path parameters and a body with at least one field; status accepts ACTIVE, INACTIVE, MAINTENANCE or QUARANTINED.
+        Required inputs: siteId and storageLocationId (UUIDs) as path parameters and a body with at least one field; status accepts ACTIVE, INACTIVE, MAINTENANCE or QUARANTINED, storageCategoryCode accepts TIRE_RACK, OIL_STORAGE, BATTERY_RACK, SMALL_PARTS_BIN, BULK_FLOOR, STAGING, QUARANTINE or GENERAL, and allowNewProduct accepts MIXED, SAME_PRODUCT_ONLY or EMPTY_ONLY. Every capability field is independently omittable — an absent one is left unchanged rather than reset.
 
         Emits a LOCATION_STORAGE_LOCATION_UPDATE event, publishes a storage-location fact, and on deactivation with stock triggers an atomic inventory transfer to the destination.
 
@@ -2638,6 +2645,10 @@ components:
           description: State or province of the location
           example: IL
           type: string
+        timezone:
+          description: IANA timezone of the location
+          example: America/New_York
+          type: string
       required:
       - code
       - name
@@ -2847,6 +2858,10 @@ components:
           example:
             ORGANIZATIONAL: 01960003-0000-7000-8000-000000000002
           type: object
+        phoneNumber:
+          description: Primary phone number for the location
+          example: +1-217-555-0100
+          type: string
         postalCode:
           description: Postal or ZIP code of the location
           example: '62704'
@@ -2915,6 +2930,10 @@ components:
         name:
           description: Display name of the location
           example: Downtown Service Center
+          type: string
+        phoneNumber:
+          description: Primary phone number for the location
+          example: +1-217-555-0100
           type: string
         postalCode:
           description: Postal or ZIP code of the location
@@ -3386,6 +3405,14 @@ components:
     StorageLocationPatchRequest:
       description: Partial update payload for a storage location; null fields are left unchanged
       properties:
+        allowNewProduct:
+          description: Whether the storage location will take stock of a product it is not already holding. Omit to leave it unchanged.
+          enum:
+          - MIXED
+          - SAME_PRODUCT_ONLY
+          - EMPTY_ONLY
+          example: SAME_PRODUCT_ONLY
+          type: string
         barcode:
           description: Barcode identifying the storage location
           example: SL-000312
@@ -3400,6 +3427,10 @@ components:
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
+        hazardContainment:
+          description: Whether the storage location provides spill/hazard containment; required by battery and oil storage capabilities. Omit to leave it unchanged.
+          example: true
+          type: boolean
         name:
           description: Display name of the storage location
           example: Aisle 3 Bin 12
@@ -3418,6 +3449,19 @@ components:
           - QUARANTINED
           example: ACTIVE
           type: string
+        storageCategoryCode:
+          description: Putaway capability of the storage location — what it is fit to hold, independent of the physical type. Omit to leave the current capability unchanged.
+          enum:
+          - TIRE_RACK
+          - OIL_STORAGE
+          - BATTERY_RACK
+          - SMALL_PARTS_BIN
+          - BULK_FLOOR
+          - STAGING
+          - QUARANTINE
+          - GENERAL
+          example: TIRE_RACK
+          type: string
         temperature:
           description: Temperature attributes of the storage location
           example:
@@ -3429,6 +3473,14 @@ components:
     StorageLocationRequest:
       description: Request payload for creating a storage location
       properties:
+        allowNewProduct:
+          description: Whether the storage location will take stock of a product it is not already holding. Defaults to MIXED.
+          enum:
+          - MIXED
+          - SAME_PRODUCT_ONLY
+          - EMPTY_ONLY
+          example: MIXED
+          type: string
         barcode:
           description: Barcode identifying the storage location
           example: SL-000312
@@ -3438,6 +3490,10 @@ components:
           example:
             maxUnits: 100
           type: object
+        hazardContainment:
+          description: Whether the storage location provides spill/hazard containment; required by battery and oil storage capabilities. Defaults to false.
+          example: false
+          type: boolean
         name:
           description: Display name of the storage location
           example: Aisle 3 Bin 12
@@ -3447,6 +3503,19 @@ components:
           description: Identifier of the parent storage location
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
+          type: string
+        storageCategoryCode:
+          description: Putaway capability of the storage location — what it is fit to hold, independent of the physical type. Omit to leave it undeclared, which reads back as GENERAL (accepts every catalog category).
+          enum:
+          - TIRE_RACK
+          - OIL_STORAGE
+          - BATTERY_RACK
+          - SMALL_PARTS_BIN
+          - BULK_FLOOR
+          - STAGING
+          - QUARANTINE
+          - GENERAL
+          example: TIRE_RACK
           type: string
         temperature:
           description: Temperature attributes of the storage location
@@ -3472,6 +3541,14 @@ components:
     StorageLocationResponse:
       description: Response payload describing a storage location
       properties:
+        allowNewProduct:
+          description: Whether the storage location will take stock of a product it is not already holding.
+          enum:
+          - MIXED
+          - SAME_PRODUCT_ONLY
+          - EMPTY_ONLY
+          example: MIXED
+          type: string
         barcode:
           description: Barcode identifying the storage location
           example: SL-000312
@@ -3481,6 +3558,10 @@ components:
           example:
             maxUnits: 100
           type: object
+        hazardContainment:
+          description: Whether the storage location provides spill/hazard containment; required by battery and oil storage capabilities.
+          example: false
+          type: boolean
         id:
           description: Unique identifier of the storage location
           example: 01960003-0000-7000-8000-000000000001
@@ -3509,6 +3590,19 @@ components:
           description: Operational status of the storage location
           example: ACTIVE
           type: string
+        storageCategoryCode:
+          description: 'Putaway capability of the storage location — what it is fit to hold, independent of the physical type. Always populated: a location that has never declared one reports GENERAL, which accepts every catalog category.'
+          enum:
+          - TIRE_RACK
+          - OIL_STORAGE
+          - BATTERY_RACK
+          - SMALL_PARTS_BIN
+          - BULK_FLOOR
+          - STAGING
+          - QUARANTINE
+          - GENERAL
+          example: TIRE_RACK
+          type: string
         temperature:
           description: Temperature attributes of the storage location
           example:
@@ -3527,8 +3621,11 @@ components:
           example: BIN
           type: string
       required:
+      - allowNewProduct
+      - hazardContainment
       - id
       - inventoryCount
+      - storageCategoryCode
       type: object
     StorageLocationTopologyResponse:
       description: Lightweight flat projection of a storage location for topology consumers
