@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class EmitEventServiceImpl implements EmitEventService {
     private static final Pattern EVENT_ID_PATTERN = Pattern.compile("^[A-Z\\d_]+$");
     private static final Pattern API_VERSION_PATTERN = Pattern.compile("^\\d+$");
+    private static final int MAX_ENTITY_ID_LENGTH = 64;
 
     private final EventDao eventDao;
 
@@ -71,6 +72,14 @@ public class EmitEventServiceImpl implements EmitEventService {
         }
         if (request.publishedAt() == null) {
             throw new IllegalArgumentException("publishedAt is required");
+        }
+        if (request.entityId() != null) {
+            if (request.entityId().trim().isEmpty()) {
+                throw new IllegalArgumentException("entityId must not be blank when present");
+            }
+            if (request.entityId().trim().length() > MAX_ENTITY_ID_LENGTH) {
+                throw new IllegalArgumentException("entityId must be 64 characters or fewer");
+            }
         }
     }
 }
