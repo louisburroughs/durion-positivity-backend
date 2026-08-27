@@ -2,7 +2,7 @@ name: Backend CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -10,7 +10,7 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "pos-*/**"
       - "pom.xml"
@@ -18,7 +18,7 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 # Job-level permissions only (Sonar githubactions:S8264); jobs without a
@@ -388,7 +388,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -475,7 +474,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ build-test ]
+    needs: [build-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       services: ${{ steps.detect-services.outputs.services }}
@@ -599,7 +598,8 @@ jobs:
 
       - name: Skip Docker Hub push
         if: vars.ENABLE_DOCKERHUB_PUSH != 'true'
-        run: echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to
+        run:
+          echo "Docker Hub push is disabled. Set ENABLE_DOCKERHUB_PUSH=true to
           publish from this workflow."
 
   code-quality:
@@ -608,7 +608,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    needs: [ build-test ]
+    needs: [build-test]
     if: github.event_name != 'schedule'
     # Exposed at job level purely so the Sonar steps below can test for its presence:
     # the `secrets` context is not readable from a step `if:`, but `env` is.
@@ -946,7 +946,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ build-test ]
+    needs: [build-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     env:
