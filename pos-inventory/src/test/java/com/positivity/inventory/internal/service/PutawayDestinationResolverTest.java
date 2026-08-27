@@ -140,6 +140,39 @@ class PutawayDestinationResolverTest {
     }
 
     @Test
+    void closestAvailable_neverOffersAStagingOrQuarantineLocation() {
+        // A staging floor and a quarantine cage are ACTIVE storage locations at the site, so they
+        // were candidates for the proximity search. Compatibility refuses both as destinations, so
+        // offering one produces a suggestion the system then refuses, failing the whole receipt on a
+        // destination it chose itself. They must be filtered out before ranking, not after.
+        when(extStorageLocationReplicaRepository.findById(ANCHOR)).thenReturn(Optional.of(bin(ANCHOR)));
+        when(extStorageLocationReplicaRepository.findBySiteId(SITE))
+                .thenReturn(List.of(
+                        bin(ANCHOR),
+                        sourceOnlyBin(NEAR, "STAGING"),
+                        sourceOnlyBin(FAR, "QUARANTINE"),
+                        bin(LAST_USED_BIN)));
+        when(proximitySourcingStrategy.order(any())).thenAnswer(invocation -> {
+            SourcingStrategyService.SourcingSelection selection = invocation.getArgument(0);
+            // Assert on what the resolver actually offered the strategy: the filter must happen
+            // upstream of ranking, so neither source-only location may appear here at all.
+            assertThat(selection.candidates().stream()
+                            .map(SourcingCandidate::locationId)
+                            .toList())
+                    .containsExactlyInAnyOrder(ANCHOR, LAST_USED_BIN)
+                    .doesNotContain(NEAR, FAR);
+            return List.of(new SourcingCandidate(LAST_USED_BIN, null), new SourcingCandidate(ANCHOR, null));
+        });
+        when(putawayValidationService.validateLocationCapacity(eq(LAST_USED_BIN), eq(QTY)))
+                .thenReturn(ValidationResult.success());
+
+        PutawayDestinationResolver.ResolvedDestination resolved =
+                resolver().resolve(rule(PutawayDestinationStrategy.CLOSEST_AVAILABLE), PRODUCT, QTY);
+
+        assertThat(resolved.destinationLocationId()).isEqualTo(LAST_USED_BIN);
+    }
+
+    @Test
     void closestAvailable_picksNearestBinWithRoom() {
         stubSiteWithBins();
         when(proximitySourcingStrategy.order(any()))
@@ -223,6 +256,17 @@ class PutawayDestinationResolverTest {
                 .storageLocationId(id)
                 .siteId(SITE)
                 .status("ACTIVE")
+                .maxUnitCapacity(100)
+                .aggregateVersion(1L)
+                .build();
+    }
+
+    private ExtStorageLocationReplica sourceOnlyBin(UUID id, String storageCategoryCode) {
+        return ExtStorageLocationReplica.builder()
+                .storageLocationId(id)
+                .siteId(SITE)
+                .status("ACTIVE")
+                .storageCategoryCode(storageCategoryCode)
                 .maxUnitCapacity(100)
                 .aggregateVersion(1L)
                 .build();

@@ -182,10 +182,11 @@ public class AsnController {
                     Emits an INVENTORY_GOODS_RECEIPT_CREATE event, decrements the purchase order's open balance, \
                     moves the PO to PARTIALLY_RECEIVED or FULLY_RECEIVED, and updates the linked ASN's received \
                     quantities and status.
-                    Returns 403 when the receipt exceeds the open balance without the override authority, 404 when \
-                    the ASN or a referenced PO line cannot be resolved, 400 when the purchase order is unknown or \
-                    not receivable, and 422 when a UoM has no conversion path, a LOT-tracked line omits lotNumber, \
-                    or a serialized line's serial count mismatches the received quantity.
+                    Returns 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase \
+                    order is unknown or not receivable, 403 when the caller lacks goods-receipt create authority, \
+                    and 422 when the receipt would exceed the open balance without the override authority, a UoM \
+                    has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line's serial count \
+                    mismatches the received quantity.
                     """,
             tags = {"ASN"})
     @ApiResponse(
@@ -213,7 +214,8 @@ public class AsnController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "UoM conversion undefined, lot number required, or serial count mismatch",
+            description = "Over-receipt without override authority, UoM conversion undefined, lot number required,"
+                    + " or serial count mismatch",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<GoodsReceiptResponse> createGoodsReceipt(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

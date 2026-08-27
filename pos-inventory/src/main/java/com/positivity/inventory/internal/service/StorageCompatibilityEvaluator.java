@@ -81,6 +81,22 @@ public class StorageCompatibilityEvaluator {
     /** Putaway sources, never destinations. */
     private static final List<String> SOURCE_ONLY_CATEGORIES = List.of("STAGING", "QUARANTINE");
 
+    /**
+     * Whether a storage class is a putaway <em>source</em> rather than a destination.
+     *
+     * <p>Exposed so destination <em>selection</em> can skip these before it ever proposes one.
+     * {@link PutawayDestinationResolver}'s {@code CLOSEST_AVAILABLE} search ranks every active bin
+     * at the site, and a staging floor or quarantine cage is active — so without this filter an
+     * overflow hop can land on one, pass the capacity gate, and then be refused here, failing the
+     * whole receipt on a destination the system chose for itself.
+     *
+     * <p>A null code is not source-only: it means no post-#1514 fact has been seen for that
+     * location yet and resolves to {@code GENERAL}, per the class javadoc.
+     */
+    static boolean isSourceOnly(@Nullable String storageCategoryCode) {
+        return storageCategoryCode != null && SOURCE_ONLY_CATEGORIES.contains(storageCategoryCode);
+    }
+
     private final StorageCompatibilityRepository storageCompatibilityRepository;
     private final SkuCategoryLookup skuCategoryLookup;
 

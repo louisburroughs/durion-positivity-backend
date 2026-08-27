@@ -94,7 +94,9 @@ public class PutawayRuleController {
             description = """
                     Returns one putaway rule by id, with its match tier, match value, destination and strategy.
                     Use this tool to read a single rule's current state before replacing it with \
-                    updatePutawayRule; use listPutawayRules to discover ids.
+                    updatePutawayRule; do not use it to discover which rule governs a SKU, because that \
+                    depends on tier precedence across all enabled rules — list them with listPutawayRules \
+                    instead, which is also how you find ids.
                     Preconditions: the rule must exist.
                     Required inputs: ruleId (UUID string) path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
@@ -190,8 +192,9 @@ public class PutawayRuleController {
                     an omitted destinationStrategy falls back to FIXED. The one exception is isEnabled: omitting \
                     it keeps the rule's current enabled state, so a PUT that only retunes a priority cannot \
                     silently re-enable a rule somebody deliberately disabled.
-                    Use this tool to retarget, reprioritise, enable or disable a rule; use createPutawayRule for \
-                    a rule that does not exist yet.
+                    Use this tool to retarget, reprioritise, enable or disable a rule; do not use it to add a \
+                    rule that does not exist yet — call createPutawayRule instead, and do not use it to redirect \
+                    stock already on a generated task, which keeps the destination it was given.
                     Preconditions: the rule must exist, and enabling an ANY rule while another enabled ANY rule \
                     exists is refused with 409. A rule never conflicts with itself.
                     Required inputs: ruleId (UUID string) path parameter, plus the same body as \
@@ -252,8 +255,9 @@ public class PutawayRuleController {
             summary = "Delete Putaway Rule",
             description = """
                     Deletes a putaway rule permanently.
-                    Use this tool to retire configuration outright; prefer updatePutawayRule with isEnabled false \
-                    when the rule may be wanted again, since a disabled rule is unreachable but recoverable.
+                    Use this tool to retire configuration outright; do not use it to take a rule out of service \
+                    temporarily — call updatePutawayRule with isEnabled false instead, since a disabled rule is \
+                    unreachable but recoverable whereas this is not.
                     Preconditions: the rule must exist. Deleting the only enabled ANY rule is permitted but \
                     removes the terminal fallback, after which generatePutawayTasks fails for any line no other \
                     rule matches.

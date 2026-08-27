@@ -97,8 +97,13 @@ public class PutawayDestinationResolver {
             return fixed(rule);
         }
 
+        // Staging floors and quarantine cages are ACTIVE storage locations at the site, so without
+        // this filter the proximity search can offer one as an overflow hop. It would pass the
+        // capacity gate and then be refused by compatibility, failing the receipt on a destination
+        // the system picked itself. Skip them before they are ever proposed (#1514).
         List<SourcingCandidate> candidates = extStorageLocationReplicaRepository.findBySiteId(siteId).stream()
                 .filter(replica -> STATUS_ACTIVE.equalsIgnoreCase(replica.getStatus()))
+                .filter(replica -> !StorageCompatibilityEvaluator.isSourceOnly(replica.getStorageCategoryCode()))
                 .map(replica -> new SourcingCandidate(replica.getStorageLocationId(), null))
                 .toList();
         if (candidates.isEmpty()) {
