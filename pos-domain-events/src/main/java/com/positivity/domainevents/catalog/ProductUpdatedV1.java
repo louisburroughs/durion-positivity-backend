@@ -55,6 +55,14 @@ import org.jspecify.annotations.Nullable;
  *     being fetched synchronously across a domain wall (ADR-0044 R1/R3)
  * @param productCodeType scheme of {@code productCode}: {@code EAN} or {@code UPC}; null exactly
  *     when {@code productCode} is null
+ * @param subcategoryId subcategory reference, null when the product carries none. Additive within
+ *     schema v2 (ADR-0044 §3), same shape as the {@code productCode} pair above
+ * @param subcategory subcategory name snapshot; null exactly when {@code subcategoryId} is null.
+ *     The reason it exists is #1514: pos-inventory matches putaway rules on category AND
+ *     subcategory, because containment is expressed one level down — {@code Batteries} is a
+ *     subcategory of {@code Electrical System}, so category alone cannot say "acid cabinet only".
+ *     Matching needs the narrower key locally, and ADR-0044 R1/R3 rule out fetching it
+ *     synchronously across the catalog wall, so it travels on the fact
  */
 public record ProductUpdatedV1(
         @NonNull UUID productId,
@@ -76,7 +84,9 @@ public record ProductUpdatedV1(
         @Nullable UUID substitutionGroupId,
         @Nullable List<UUID> substitutionProductIds,
         @Nullable String productCode,
-        @Nullable String productCodeType) {
+        @Nullable String productCodeType,
+        @Nullable UUID subcategoryId,
+        @Nullable String subcategory) {
 
     public static final String EVENT_TYPE = "catalog.product.updated";
     public static final int SCHEMA_VERSION = 2;

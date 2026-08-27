@@ -27,10 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p><strong>Resolution precedence</strong> (Odoo {@code _get_removal_strategy}
  * analog): active SKU_CATEGORY config for the SKU's category → active SITE
- * config → active DEFAULT config → platform default {@code FIFO}. The catalog
- * replica carries no category yet, so with the default
- * {@link NoOpSkuCategoryProvider} the category step always falls through
- * (documented; a catalog contract extension lights it up). When the caller
+ * config → active DEFAULT config → platform default {@code FIFO}. The category
+ * step resolves for real since #1514 replicated the catalog category onto
+ * {@code ext_product} and {@link ReplicaSkuCategoryProvider} became the
+ * {@code @Primary} {@link SkuCategoryProvider}; it falls through only for a SKU
+ * whose category the replica cannot resolve. When the caller
  * passes no site, the engine derives it from the first candidate's
  * {@code ext_storage_location} replica row.
  *
@@ -95,8 +96,9 @@ public class SourcingStrategyServiceImpl implements SourcingStrategyService, Sou
 
     /**
      * SKU_CATEGORY → SITE → DEFAULT → FIFO. Category-scoped rows are skipped
-     * whenever the SKU's category is unresolvable (the current default —
-     * {@code ext_product} has no category field).
+     * whenever the SKU's category is unresolvable — since #1514 that means the
+     * {@code ext_product} replica has no row for the SKU or the product carries
+     * no category, rather than "no category source exists at all".
      */
     private SourcingStrategy resolveStrategy(SourcingSelection selection) {
         Optional<SourcingStrategy> byCategory = skuCategoryProvider

@@ -34,8 +34,9 @@ import tools.jackson.databind.ObjectMapper;
  * Consumes {@code catalog.events.v1} into the {@code ext_product} / {@code ext_product_uom} /
  * {@code ext_product_substitution} replicas (odoo-parity B1, #1033; contract X1, #1023). One
  * listener maintains every schema-v2 product field — base UoM + conversion set for the
- * {@link UomConversionService}, tracking level for E1, substitution-group membership for G2 — so
- * the later stories consume the replica instead of adding further catalog consumers.
+ * {@link UomConversionService}, tracking level for E1, substitution-group membership for G2, and
+ * category + subcategory for category-based putaway matching (#1514) — so the later stories
+ * consume the replica instead of adding further catalog consumers.
  *
  * <p>Consumer contract mirrors the module's other listeners: {@code processed_events} idempotency
  * (owner {@code catalog}) in the apply transaction, stale guard on the fact's
@@ -168,6 +169,13 @@ public class CatalogEventsListener {
                                 ? ExtProductReplica.TRACKING_LEVEL_NONE
                                 : payload.trackingLevel())
                 .substitutionGroupId(payload.substitutionGroupId())
+                // Category + subcategory (#1514): the item half of a putaway match. Written on
+                // every fact, so a recategorisation overwrites rather than merges — and a product
+                // whose category was cleared upstream ends up with nulls here, not a stale one.
+                .categoryId(payload.categoryId())
+                .categoryName(trimToNull(payload.category()))
+                .subcategoryId(payload.subcategoryId())
+                .subcategoryName(trimToNull(payload.subcategory()))
                 .aggregateVersion(aggregateVersion)
                 .build());
 

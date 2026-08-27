@@ -60,6 +60,38 @@ public class ExtStorageLocationReplica {
     @Column(name = "max_unit_capacity")
     private Integer maxUnitCapacity;
 
+    /**
+     * What the location is fit to hold (#1514) — pos-location's {@code StorageCategory} name, e.g.
+     * {@code BATTERY_RACK} or the permissive {@code GENERAL}. Stored as the owner's plain code
+     * rather than a local enum: the enum lives in pos-location, and a replica that rejected an
+     * unrecognised value would turn an additive owner-side change into a stalled feed on an event
+     * this consumer cannot reject.
+     *
+     * <p>Null means the fact predated #1514, NOT "undeclared": pos-location resolves an undeclared
+     * capability to {@code GENERAL} before publishing, so every post-#1514 fact carries a code.
+     * A row still null after a replay is a row no fact has been seen for.
+     */
+    @Column(name = "storage_category_code", length = 64)
+    private String storageCategoryCode;
+
+    /**
+     * Whether the location provides containment for hazardous goods — the property that makes a
+     * battery rack or an oil store not interchangeable with a plain shelf. Boxed for the same
+     * reason as {@link #storageCategoryCode}: null is a pre-#1514 fact, not a declared {@code
+     * false}. The owner models this as a primitive, so post-#1514 facts always state it.
+     */
+    @Column(name = "hazard_containment")
+    private Boolean hazardContainment;
+
+    /**
+     * Whether a putaway may introduce a product the location is not already holding:
+     * {@code MIXED}, {@code SAME_PRODUCT_ONLY}, or {@code EMPTY_ONLY}. Owner-defined code kept as
+     * text, and null-on-pre-#1514-only, both for the same reasons as
+     * {@link #storageCategoryCode}.
+     */
+    @Column(name = "allow_new_product", length = 64)
+    private String allowNewProduct;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
