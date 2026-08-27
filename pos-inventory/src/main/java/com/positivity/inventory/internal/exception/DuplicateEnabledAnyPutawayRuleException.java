@@ -28,6 +28,24 @@ public class DuplicateEnabledAnyPutawayRuleException extends RuntimeException {
         this.existingRuleId = existingRuleId;
     }
 
+    private DuplicateEnabledAnyPutawayRuleException() {
+        super("An enabled ANY putaway rule already exists. ANY matches every line, so only one may be enabled at"
+                + " a time — list the rules to find it, then disable or retarget it first.");
+        this.existingRuleId = null;
+    }
+
+    /**
+     * The same conflict, detected by the database rather than by the pre-flight read.
+     *
+     * <p>A concurrent request won the race, so the winning rule's id is not known here: reading it
+     * back would be a second query against a row another transaction just committed, and the caller's
+     * next step is to list the rules regardless. The message says so instead of reporting a null id.
+     */
+    public static DuplicateEnabledAnyPutawayRuleException detectedByConstraint() {
+        return new DuplicateEnabledAnyPutawayRuleException();
+    }
+
+    /** The existing rule's id, or null when the conflict was detected by the database constraint. */
     public UUID getExistingRuleId() {
         return existingRuleId;
     }

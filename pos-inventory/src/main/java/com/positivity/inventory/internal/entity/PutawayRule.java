@@ -10,6 +10,8 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -79,6 +81,19 @@ public class PutawayRule {
     @Builder.Default
     private boolean isEnabled = true;
 
+    /**
+     * Database guard for "at most one enabled {@code ANY} rule" (issue #1514). Holds a constant
+     * exactly when this rule is an enabled {@code ANY} rule and null otherwise; a UNIQUE constraint
+     * over it therefore constrains only those rows, since both H2 and PostgreSQL permit unlimited
+     * nulls in a unique column. See {@code V44__putaway_rule_single_enabled_any.sql} for why this
+     * rather than a partial unique index.
+     *
+     * <p>Not settable by callers: {@link #syncEnabledAnyGuard()} derives it on every insert and
+     * update, so it cannot drift from the two fields it is derived from.
+     */
+    @Column(name = "enabled_any_guard", length = 3)
+    private String enabledAnyGuard;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -86,4 +101,18 @@ public class PutawayRule {
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
+
+    /**
+     * Keeps {@link #enabledAnyGuard} derived from {@code matchType} and {@code isEnabled}.
+     *
+     * <p>Runs on insert and update so the invariant holds however the rule was built — including
+     * paths that never go through the service, such as a test fixture or a future importer. The
+     * service still checks the invariant first so the ordinary conflict is a clean 409 naming the
+     * existing rule; this is what makes the check safe under concurrency rather than advisory.
+     */
+    @PrePersist
+    @PreUpdate
+    void syncEnabledAnyGuard() {
+        enabledAnyGuard = (matchType == PutawayRuleMatchType.ANY && isEnabled) ? "ANY" : null;
+    }
 }

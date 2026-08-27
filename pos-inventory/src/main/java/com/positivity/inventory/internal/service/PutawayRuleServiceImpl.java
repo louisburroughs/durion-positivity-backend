@@ -11,10 +11,12 @@ import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.service.PutawayRuleService;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class PutawayRuleServiceImpl implements PutawayRuleService {
 
     private static final String RULE_RESOURCE = "PutawayRule";
+
+    /** Constraint added by {@code V44__putaway_rule_single_enabled_any.sql}, lower-cased for matching. */
+    private static final String SINGLE_ENABLED_ANY_CONSTRAINT = "putaway_rule_single_enabled_any";
 
     /** Listing order mirrors resolution order so the list reads as "what the matcher will try". */
     private static final Comparator<PutawayRule> RESOLUTION_ORDER = Comparator.comparingInt(
@@ -66,7 +71,7 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
                 .isEnabled(enabled)
                 .build();
 
-        return toResponse(putawayRuleRepository.save(rule));
+        return toResponse(saveEnforcingSingleEnabledAny(rule));
     }
 
     @Override
@@ -94,13 +99,51 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
                         : request.getDestinationStrategy());
         rule.setEnabled(enabled);
 
-        return toResponse(putawayRuleRepository.save(rule));
+        return toResponse(saveEnforcingSingleEnabledAny(rule));
     }
 
     @Override
     @Transactional
     public void deleteRule(@NonNull String ruleId) {
         putawayRuleRepository.delete(findRule(parseRuleId(ruleId)));
+    }
+
+    /**
+     * Saves the rule, translating the database's single-enabled-ANY constraint into the same 409 the
+     * pre-flight check raises.
+     *
+     * <p>{@link #enforceSingleEnabledAnyRule} reads before writing, so two concurrent requests can
+     * both find no enabled {@code ANY} rule and both proceed. The unique constraint on
+     * {@code enabled_any_guard} is what actually decides (see
+     * {@code V44__putaway_rule_single_enabled_any.sql}); the loser arrives here as a constraint
+     * violation and must not surface as a 500, because from the caller's side it is the ordinary
+     * conflict. The flush is explicit so the violation is thrown inside this method rather than at
+     * commit, where it could no longer be attributed to this rule.
+     */
+    private PutawayRule saveEnforcingSingleEnabledAny(PutawayRule rule) {
+        try {
+            return putawayRuleRepository.saveAndFlush(rule);
+        } catch (DataIntegrityViolationException ex) {
+            if (isSingleEnabledAnyViolation(ex)) {
+                throw DuplicateEnabledAnyPutawayRuleException.detectedByConstraint();
+            }
+            throw ex;
+        }
+    }
+
+    /**
+     * Whether this violation is the single-enabled-ANY constraint rather than some other integrity
+     * failure, which must keep its own error rather than being reported as a rule conflict. Matched
+     * on the constraint name, which the driver reports in the message on both PostgreSQL and H2.
+     */
+    private static boolean isSingleEnabledAnyViolation(DataIntegrityViolationException ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message != null && message.toLowerCase(Locale.ROOT).contains(SINGLE_ENABLED_ANY_CONSTRAINT)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

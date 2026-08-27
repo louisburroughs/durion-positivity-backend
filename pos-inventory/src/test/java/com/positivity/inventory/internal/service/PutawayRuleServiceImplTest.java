@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /** Putaway rule CRUD, including the single-enabled-ANY-rule invariant (issue #1514). */
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +48,7 @@ class PutawayRuleServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PutawayRuleServiceImpl(putawayRuleRepository);
-        when(putawayRuleRepository.save(any(PutawayRule.class))).thenAnswer(inv -> {
+        when(putawayRuleRepository.saveAndFlush(any(PutawayRule.class))).thenAnswer(inv -> {
             PutawayRule saved = inv.getArgument(0);
             if (saved.getRuleId() == null) {
                 saved.setRuleId(RULE_ID);
@@ -130,7 +131,35 @@ class PutawayRuleServiceImplTest {
                     .isInstanceOf(DuplicateEnabledAnyPutawayRuleException.class)
                     .hasMessageContaining(OTHER_RULE_ID.toString());
 
-            verify(putawayRuleRepository, never()).save(any(PutawayRule.class));
+            verify(putawayRuleRepository, never()).saveAndFlush(any(PutawayRule.class));
+        }
+
+        @Test
+        @DisplayName("#1514 - a concurrent loser gets the same 409, not a 500")
+        void reportsTheConstraintViolationAsTheSameConflict() {
+            // The pre-flight read finds nothing, so both racers proceed; the unique constraint on
+            // enabled_any_guard decides. The loser must see the ordinary conflict rather than an
+            // unhandled integrity error, since from its side nothing unusual happened.
+            when(putawayRuleRepository.saveAndFlush(any(PutawayRule.class)))
+                    .thenThrow(new DataIntegrityViolationException(
+                            "could not execute statement; constraint [putaway_rule_single_enabled_any]"));
+            PutawayRuleRequest request = request(PutawayRuleMatchType.ANY, null);
+
+            assertThatThrownBy(() -> service.createRule(request))
+                    .isInstanceOf(DuplicateEnabledAnyPutawayRuleException.class)
+                    .hasMessageContaining("only one may be enabled");
+        }
+
+        @Test
+        @DisplayName("an unrelated integrity violation keeps its own error rather than reading as a rule conflict")
+        void doesNotSwallowUnrelatedIntegrityViolations() {
+            when(putawayRuleRepository.saveAndFlush(any(PutawayRule.class)))
+                    .thenThrow(new DataIntegrityViolationException("null value in column \"priority\""));
+            PutawayRuleRequest request = request(PutawayRuleMatchType.ANY, null);
+
+            assertThatThrownBy(() -> service.createRule(request))
+                    .isInstanceOf(DataIntegrityViolationException.class)
+                    .isNotInstanceOf(DuplicateEnabledAnyPutawayRuleException.class);
         }
 
         @Test
