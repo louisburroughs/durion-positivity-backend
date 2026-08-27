@@ -744,8 +744,12 @@ Run these in order. Steps 1–5 are safe to repeat; step 7 is the only one that 
    approval-gated. Do not script around it.
 
 7. **Flip the flag.** Set `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA=true` and restart the
-   service. On boot `SkuCategoryCutoverStartupCheck` logs a WARN naming the impacted count and up to
-   20 stock item ids — that line is the flip's own audit record, so capture it.
+   service. On boot `SkuCategoryCutoverStartupCheck` logs an INFO line naming how many SKUs now
+   resolve their costing method from a `SKU_CATEGORY` row and across how many configuration rows —
+   that line is the flip's own audit record, so capture it. It logs a WARN first only when the
+   impact scan hit `pos.inventory.sku-category.impact-sku-cap`, in which case that count is a lower
+   bound; raise the cap and re-run step 2 before trusting it. The check never fails startup, so a
+   missing line means the check itself errored — look for the "did not complete" WARN.
 
 8. **Verify.** Re-run step 2 with the flag on, and read the right field.
 
