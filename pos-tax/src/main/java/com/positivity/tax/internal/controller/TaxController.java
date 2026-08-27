@@ -254,8 +254,18 @@ public class TaxController {
                     rate-by-address is a documented follow-up, not yet implemented).
                     """)
     @ApiResponse(responseCode = "200", description = "Rates resolved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid address parameters")
-    @ApiResponse(responseCode = "501", description = "Rate lookup not supported by the active tax provider")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid address parameters",
+            content =
+                    @io.swagger.v3.oas.annotations.media.Content(
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
+    @ApiResponse(
+            responseCode = "501",
+            description = "Rate lookup not supported by the active tax provider",
+            content =
+                    @io.swagger.v3.oas.annotations.media.Content(
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"tax:rates:view"})

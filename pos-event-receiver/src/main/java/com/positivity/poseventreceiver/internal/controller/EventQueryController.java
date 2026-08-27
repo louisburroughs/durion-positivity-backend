@@ -7,7 +7,6 @@ import com.positivity.poseventreceiver.service.EventQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -72,11 +71,11 @@ public class EventQueryController {
                     or size fall outside their bounds.
                     """,
             tags = {"Event Query"})
+    @ApiResponse(responseCode = "200", description = "Page of matching events returned")
     @ApiResponse(
-            responseCode = "200",
-            description = "Page of matching events returned",
-            content = @Content(schema = @Schema(implementation = PagedResponse.class)))
-    @ApiResponse(responseCode = "400", description = "since is out of the allowed range, or page/size are invalid")
+            responseCode = "400",
+            description = "since is out of the allowed range, or page/size are invalid",
+            content = @Content)
     public ResponseEntity<PagedResponse<EmittedEventResponse>> queryEventsByEntity(
             @Parameter(
                             description = "Entity id events were recorded against",
@@ -84,7 +83,7 @@ public class EventQueryController {
                             example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b")
                     @RequestParam
                     @NotBlank
-                    @Size(max = 64)
+                    @Size(min = 1, max = 64)
                     String entityId,
             @Parameter(
                             description = "Lower bound on publishedAt, inclusive. Defaults to 7 days ago; must not "

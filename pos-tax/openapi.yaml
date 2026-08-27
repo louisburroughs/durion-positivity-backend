@@ -444,13 +444,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaxRateLookupResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid address parameters
         '501':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TaxRateLookupResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Rate lookup not supported by the active tax provider
       security:
       - bearerAuth:
@@ -570,6 +570,54 @@ paths:
       - tax:commit
 components:
   schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     CustomerExemption:
       description: Transaction-level exemption claim applying to all lines
       properties:
@@ -694,6 +742,21 @@ components:
           description: Last-modification timestamp
           format: date-time
           type: string
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
       type: object
     JurisdictionTax:
       description: Per-jurisdiction tax breakdown for a single line item

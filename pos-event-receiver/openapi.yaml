@@ -369,7 +369,7 @@ paths:
         required: true
         schema:
           maxLength: 64
-          minLength: 0
+          minLength: 1
           type: string
       - description: Lower bound on publishedAt, inclusive. Defaults to 7 days ago; must not be in the future or more than 90 days in the past.
         example: 2026-08-20 00:00:00+00:00
@@ -405,13 +405,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/PagedResponse'
+                $ref: '#/components/schemas/PagedResponseEmittedEventResponse'
           description: Page of matching events returned
         '400':
-          content:
-            '*/*':
-              schema:
-                $ref: '#/components/schemas/PagedResponseEmittedEventResponse'
           description: since is out of the allowed range, or page/size are invalid
       summary: Query recorded events for one entity
       tags:
@@ -736,40 +732,6 @@ components:
       - p95Micros
       - p99Micros
       - typeCode
-      type: object
-    PagedResponse:
-      description: Generic paginated list response wrapper
-      properties:
-        content:
-          type: array
-        items:
-          description: Items on the current page
-          type: array
-        pageNumber:
-          description: Zero-based index of the current page
-          example: 0
-          format: int32
-          type: integer
-        pageSize:
-          description: Number of items per page
-          example: 20
-          format: int32
-          type: integer
-        totalCount:
-          description: Total number of items matching the query
-          example: 42
-          format: int64
-          type: integer
-        totalElements:
-          format: int64
-          type: integer
-        totalPages:
-          description: Total number of pages available
-          example: 3
-          format: int32
-          type: integer
-      required:
-      - items
       type: object
     PagedResponseEmittedEventResponse:
       description: Generic paginated list response wrapper

@@ -78,10 +78,11 @@ public class EventQueryServiceImpl implements EventQueryService {
     }
 
     private static String maskForLog(String value) {
-        int length = value.length();
+        String sanitized = value.replace('\r', '_').replace('\n', '_').replace('\t', '_');
+        int length = sanitized.length();
         if (length <= 4) {
             return "****";
         }
-        return value.substring(0, 2) + "***" + value.substring(length - 2);
+        return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
     }
 }
