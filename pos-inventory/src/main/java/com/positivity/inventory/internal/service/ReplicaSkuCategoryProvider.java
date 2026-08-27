@@ -33,11 +33,15 @@ import org.springframework.stereotype.Component;
  * to {@link NoOpSkuCategoryProvider} exactly as it did before this class existed, which makes that
  * class's "fallback" javadoc accurate rather than aspirational.
  *
- * <p>The audit and cut-over are tracked in
- * louisburroughs/durion-positivity-backend#1535, which also asks whether the SKU_CATEGORY costing
- * scope is wanted at all — it has been inert since it was written. Before enabling this on an
- * environment that has authored SKU_CATEGORY costing
- * rows, deactivate or migrate them deliberately.
+ * <p><strong>The scope stays.</strong> #1535 asked whether the SKU_CATEGORY costing scope was
+ * wanted at all and the answer is settled: it is (ADR-0048 §2, "method resolves per SKU category").
+ * What #1535 delivered instead is the machinery to flip this flag safely. The audit is
+ * {@code GET /v1/inventory/valuation/methods/sku-category-impact}, which works while this flag is
+ * still off because it reads the replica directly rather than through this SPI; the step-by-step
+ * cut-over procedure — populate, audit, decide, deactivate, revalue, flip, verify, roll back — is
+ * "SKU_CATEGORY costing and sourcing cut-over (#1535)" in {@code docs/OPERATIONS_RUNBOOK.md}.
+ * Before enabling this on an environment that has authored SKU_CATEGORY costing rows, run that
+ * procedure: deactivate or revalue them deliberately.
  *
  * <p>The switch covers only this SPI. {@link SkuCategoryLookup}, which the putaway rule matcher
  * reads, stays registered either way — it answers a question nothing asked before #1514.

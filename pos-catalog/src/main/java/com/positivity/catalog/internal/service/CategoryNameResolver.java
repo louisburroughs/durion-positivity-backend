@@ -38,6 +38,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Ambiguous names also fail. Neither {@code category.name} nor {@code subcategory.name} has a unique
  * constraint, so duplicates are possible in principle; guessing which one the caller meant would silently
  * bind products to an arbitrary taxonomy node.
+ *
+ * <p><strong>This class resolves the two names independently and does not check that they form a
+ * parent/child pair</strong> (issue #1536). Deliberately so: the pair invariant is enforced exactly once, in
+ * {@link ProductMasterDataServiceImpl}, which every write path — create, update, and bulk ingest — funnels
+ * through. Repeating the check here would give a second place for it to drift, and would leave the callers
+ * that pass ids rather than names unguarded anyway.
  */
 @Service
 @RequiredArgsConstructor

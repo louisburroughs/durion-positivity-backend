@@ -387,6 +387,8 @@ class CatalogFactPublisherTest {
         Subcategory subcategory = new Subcategory();
         subcategory.setId(SUBCATEGORY_ID);
         subcategory.setName("Batteries");
+        // #1536: a subcategory always has a parent category; keep the fixture faithful to the schema.
+        subcategory.setCategory(category);
         product.setSubcategory(subcategory);
         return product;
     }

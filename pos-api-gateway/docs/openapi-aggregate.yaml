@@ -735,6 +735,10 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation
   /v1/inventory/valuation/methods:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1methods
+  /v1/inventory/valuation/methods/sku-category-impact:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1methods~1sku-category-impact
+  /v1/inventory/valuation/methods/{configId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1methods~1{configId}
   /v1/inventory/valuation/revaluations:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations
   /v1/inventory/valuation/revaluations/{revaluationId}:

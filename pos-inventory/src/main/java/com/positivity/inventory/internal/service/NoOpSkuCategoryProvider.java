@@ -9,12 +9,14 @@ import org.springframework.stereotype.Component;
  * resolves nothing, so SKU_CATEGORY-scoped sourcing and costing config falls
  * through to SITE, then DEFAULT.
  *
- * <p>No longer the effective default — {@link ReplicaSkuCategoryProvider} is the
- * {@code @Primary} bean since #1514 replicated the category onto
- * {@code ext_product}. This bean is the reachable fallback behind that: setting
- * {@code pos.inventory.sku-category.resolve-from-replica=false} withdraws the
- * replica-backed bean and leaves this one serving the SPI, which is the lever for
- * an operator who needs the pre-#1514 fall-through back (see
+ * <p><strong>This is the default implementation.</strong>
+ * {@link ReplicaSkuCategoryProvider} takes over as the {@code @Primary} bean
+ * only when {@code pos.inventory.sku-category.resolve-from-replica} is enabled,
+ * and that defaults to false — so unless an operator has deliberately turned it
+ * on, this bean is what serves the SPI and the SKU_CATEGORY step of both costing
+ * and sourcing resolves nothing. Setting the flag back to false withdraws the
+ * replica-backed bean and returns the SPI here, which is the lever for an
+ * operator who needs the pre-#1514 fall-through back (see
  * {@link ReplicaSkuCategoryProvider} for why a costing deployment might).
  */
 @Component

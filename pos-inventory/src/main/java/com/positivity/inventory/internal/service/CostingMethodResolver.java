@@ -21,11 +21,18 @@ import org.springframework.stereotype.Component;
  * config → deployment default {@code pos.inventory.valuation.default-method}
  * (itself defaulting to AVERAGE).
  *
- * <p>The SKU_CATEGORY step resolves for real since #1514 replicated the catalog
- * category onto {@code ext_product} and {@link ReplicaSkuCategoryProvider}
- * became the {@code @Primary} {@link SkuCategoryProvider}; it falls through only
- * for a SKU whose category the replica cannot resolve. This mirrors the H1
- * sourcing-strategy resolution exactly and reuses the same
+ * <p>The SKU_CATEGORY step is <strong>inert by default</strong>. #1514
+ * replicated the catalog category onto {@code ext_product}, but
+ * {@link ReplicaSkuCategoryProvider} only becomes the {@code @Primary}
+ * {@link SkuCategoryProvider} when
+ * {@code pos.inventory.sku-category.resolve-from-replica} is enabled, and that
+ * defaults to false; until then {@link NoOpSkuCategoryProvider} serves the SPI,
+ * so this step resolves nothing and every SKU falls through to DEFAULT. With
+ * the flag on it falls through only for a SKU whose category the replica cannot
+ * resolve. Enabling it changes the method matching SKUs resolve at their next
+ * posting — audit it first with
+ * {@code GET /v1/inventory/valuation/methods/sku-category-impact} (#1535). This
+ * mirrors the H1 sourcing-strategy resolution exactly and reuses the same
  * {@link SkuCategoryProvider} bean.
  */
 @Component

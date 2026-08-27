@@ -111,6 +111,8 @@ class PriceBookResolvePriceTest {
         product.setCategory(category);
         Subcategory subcategory = new Subcategory();
         subcategory.setId(SUBCATEGORY_ID);
+        // #1536: a subcategory always has a parent category; keep the fixture faithful to the schema.
+        subcategory.setCategory(category);
         product.setSubcategory(subcategory);
 
         when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.of(product));

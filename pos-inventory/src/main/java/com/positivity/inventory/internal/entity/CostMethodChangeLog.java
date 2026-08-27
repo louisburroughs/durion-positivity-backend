@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.entity;
 
+import com.positivity.inventory.internal.enums.CostMethodChangeType;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.CostingScopeType;
 import com.positivity.shared.id.UUIDv7Id;
@@ -24,13 +25,23 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Append-only history of costing-method changes (odoo-parity J1, issue #1048;
- * ADR-0048 "method changes recorded: who/when/from/to"). One row is written by
- * the admin upsert whenever a scope's method is created or changed. Switching a
- * method going forward is J1; restating opening values (the revaluation
- * cut-over) is J4 — this log is the who/when/from/to audit that governs it.
+ * ADR-0048 "method changes recorded: who/when/from/to"). Switching a method
+ * going forward is J1; restating opening values (the revaluation cut-over) is
+ * J4 — this log is the who/when/from/to audit that governs it.
+ *
+ * <p>{@link CostMethodChangeType} says which kind of change a row records
+ * (#1535). The admin upsert writes {@code METHOD_SET} when a scope's method is
+ * created or changed, and {@code REACTIVATED} when a previously deactivated row
+ * is brought back at its existing method; deactivating a row writes
+ * {@code DEACTIVATED}. Before #1535 only the first of those existed, so
+ * retiring a scope override — the decisive step of the SKU_CATEGORY cut-over —
+ * left no audit row at all, and a deactivate/reactivate round trip was
+ * invisible because the method had not changed on the way back.
  *
  * <p>{@code createdAt} is the change instant (the "when"). {@code fromMethod}
- * is null when the scope had no prior configured method.
+ * is null when the scope had no prior configured method. {@code toMethod} is
+ * null only on a {@code DEACTIVATED} row: a retired override resolves to
+ * nothing rather than to something else.
  */
 @Entity
 @Table(
@@ -62,9 +73,15 @@ public class CostMethodChangeLog {
     @Column(name = "from_method", length = 32)
     private CostingMethod fromMethod;
 
+    /** Newly configured method at this scope; null on a {@code DEACTIVATED} row. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "to_method", nullable = false, length = 32)
+    @Column(name = "to_method", length = 32)
     private CostingMethod toMethod;
+
+    /** Which kind of change this row records (#1535). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "change_type", nullable = false, length = 32)
+    private CostMethodChangeType changeType;
 
     @Column(name = "changed_by", nullable = false, length = 255)
     private String changedBy;

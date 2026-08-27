@@ -19,5 +19,12 @@ public interface SourcingStrategyConfigRepository extends JpaRepository<Sourcing
 
     Optional<SourcingStrategyConfig> findByScopeTypeAndScopeValueIsNullAndActiveTrue(SourcingScopeType scopeType);
 
+    /**
+     * Every active row at one scope kind. Used by the SKU_CATEGORY cut-over audit (#1535): sourcing
+     * is the half of that flag that is easy to overlook, and SKU_CATEGORY is its highest-precedence
+     * scope.
+     */
+    List<SourcingStrategyConfig> findByScopeTypeAndActiveTrue(SourcingScopeType scopeType);
+
     List<SourcingStrategyConfig> findAllByOrderByScopeTypeAscScopeValueAsc();
 }

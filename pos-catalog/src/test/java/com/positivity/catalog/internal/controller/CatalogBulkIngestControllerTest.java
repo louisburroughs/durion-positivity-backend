@@ -57,6 +57,7 @@ class CatalogBulkIngestControllerTest {
 
     private static final UUID ELECTRICAL_SYSTEM_ID = UUID.fromString("01960030-0000-7000-8000-000000000004");
     private static final UUID BATTERIES_ID = UUID.fromString("01960031-0000-7000-8000-00000000000e");
+    private static final UUID TIRES_AND_WHEELS_ID = UUID.fromString("01960030-0000-7000-8000-000000000001");
 
     private BulkIngestRequest<CatalogBulkIngestRecord> singleRecordRequest(CatalogBulkIngestRecord ingestRecord) {
         BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
@@ -208,6 +209,97 @@ class CatalogBulkIngestControllerTest {
                 .isNull();
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getSubcategoryId())
                 .isNull();
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_rowWithContradictoryCategoryPair_failsThatRowOnlyWithCatalogIngestFailed() throws Exception {
+        // #1536: both names resolve, so CategoryNameResolver is happy; the pair invariant is enforced
+        // downstream in ProductMasterDataServiceImpl and surfaces here as an ordinary per-row failure.
+        CatalogBulkIngestRecord contradictory = new CatalogBulkIngestRecord();
+        contradictory.setSku("MOT-BAT-31");
+        contradictory.setName("Group 31 AGM Battery");
+        contradictory.setCategoryName("Tires & Wheels");
+        contradictory.setSubcategoryName("Batteries");
+
+        CatalogBulkIngestRecord consistent = new CatalogBulkIngestRecord();
+        consistent.setSku("MOT-BAT-65");
+        consistent.setName("Group 65 AGM Battery");
+        consistent.setCategoryName("Electrical System");
+        consistent.setSubcategoryName("Batteries");
+
+        BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(contradictory, consistent));
+
+        when(categoryNameResolver.resolveCategoryId("Tires & Wheels")).thenReturn(TIRES_AND_WHEELS_ID);
+        when(categoryNameResolver.resolveCategoryId("Electrical System")).thenReturn(ELECTRICAL_SYSTEM_ID);
+        when(categoryNameResolver.resolveSubcategoryId("Batteries")).thenReturn(BATTERIES_ID);
+
+        ProductDto productDto = new ProductDto();
+        productDto.setId(PRODUCT_ID);
+        when(productMasterDataService.createProduct(any())).thenAnswer(invocation -> {
+            var created = (com.positivity.catalog.internal.dto.ProductCreateRequestDto) invocation.getArgument(0);
+            if (TIRES_AND_WHEELS_ID.equals(created.getCategoryId())) {
+                throw new com.positivity.catalog.internal.exception.CatalogBusinessRuleException(
+                        "Subcategory 'Batteries' belongs to category 'Electrical System' (" + ELECTRICAL_SYSTEM_ID
+                                + "), not 'Tires & Wheels' (" + TIRES_AND_WHEELS_ID + ")");
+            }
+            return productDto;
+        });
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSubmitted").value(2))
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].success").value(false))
+                .andExpect(jsonPath("$.results[0].errorCode").value("CATALOG_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage")
+                        .value(org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("Batteries"),
+                                org.hamcrest.Matchers.containsString("Electrical System"))))
+                .andExpect(jsonPath("$.results[1].success").value(true));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_rowWithSubcategoryNameOnly_derivesCategory() throws Exception {
+        // #1536: a blank categoryName column is legal — the parent is derived from the subcategory by
+        // ProductMasterDataServiceImpl, so the controller forwards a null categoryId untouched.
+        CatalogBulkIngestRecord ingestRecord = new CatalogBulkIngestRecord();
+        ingestRecord.setSku("MOT-BAT-31");
+        ingestRecord.setName("Group 31 AGM Battery");
+        ingestRecord.setSubcategoryName("Batteries");
+
+        com.positivity.catalog.internal.dto.CategoryDto derived = new com.positivity.catalog.internal.dto.CategoryDto();
+        derived.setId(ELECTRICAL_SYSTEM_ID);
+        derived.setName("Electrical System");
+        ProductDto productDto = new ProductDto();
+        productDto.setId(PRODUCT_ID);
+        productDto.setCategory(derived);
+
+        when(categoryNameResolver.resolveCategoryId(null)).thenReturn(null);
+        when(categoryNameResolver.resolveSubcategoryId("Batteries")).thenReturn(BATTERIES_ID);
+        when(productMasterDataService.createProduct(any())).thenReturn(productDto);
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(singleRecordRequest(ingestRecord))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(0));
+
+        var captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.catalog.internal.dto.ProductCreateRequestDto.class);
+        org.mockito.Mockito.verify(productMasterDataService).createProduct(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getCategoryId())
+                .isNull();
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getSubcategoryId())
+                .isEqualTo(BATTERIES_ID);
     }
 
     // ─── POST /v1/catalog/bulk-ingest — 200 OK ───────────────────────────────

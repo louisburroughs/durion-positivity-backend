@@ -647,6 +647,16 @@ bin — which is exactly the pre-#1514 behaviour.
 SELECT count(*) FILTER (WHERE category_id IS NULL) AS uncategorized, count(*) AS total
 FROM ext_product;
 
+**A non-zero `V16` Stage D count in pos-catalog is a replay trigger.** The catalog-side migration
+(#1536) repairs products whose `category_id` contradicted their subcategory's parent. It deliberately
+does **not** bump `updated_at` or the aggregate version on the rows it corrects, so pos-catalog emits
+no `catalog.product.updated` fact for them — which means `ext_product` here keeps the *old, wrong*
+category until those products are republished by other means. A replica that looks fully populated by
+the query above can still be serving a contradicted category. If Stage D repaired any rows, run a
+pos-catalog product fact replay before trusting category-based putaway, and before running the
+SKU_CATEGORY cut-over audit below: a stale category name silently changes which config row a SKU
+matches.
+
 -- Should reach 0. The publisher resolves an undeclared capability to GENERAL before emitting, so
 -- a null here means "no post-#1514 fact has been seen for this location", never "undeclared".
 SELECT count(*) FROM ext_storage_location WHERE storage_category_code IS NULL;
@@ -655,9 +665,117 @@ SELECT count(*) FROM ext_storage_location WHERE storage_category_code IS NULL;
 `pos.inventory.sku-category.resolve-from-replica` is a **separate** flag and defaults **off**. It
 gates only the `SkuCategoryProvider` SPI (costing-method and sourcing-strategy resolution), not
 putaway, which reads the unconditional `SkuCategoryLookup`. Do not turn it on as part of this
-rollout — enabling it makes the `SKU_CATEGORY` scope of `costing_method_config` reachable for the
-first time and would flip matching SKUs off `DEFAULT` costing at their next ledger posting with no
-`cost_method_change_log` row and no revaluation cut-over. Tracked in #1535.
+rollout — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_config` reachable for the
+first time and would flip matching SKUs off `DEFAULT` costing at their next ledger posting. It is a
+financial change and gets its own procedure, below.
+
+### SKU_CATEGORY costing and sourcing cut-over (#1535)
+
+Enabling `pos.inventory.sku-category.resolve-from-replica` is not a configuration tweak. It makes an
+already-authored `SKU_CATEGORY` row start deciding a SKU's **costing method** at its next ledger
+posting, and it does so per SKU, staggered by whenever pos-catalog last republished each product —
+silently, unless you do the work below first. It changes **sourcing** at the same time, where
+`SKU_CATEGORY` is the *highest*-precedence step.
+
+Run these in order. Steps 1–5 are safe to repeat; step 7 is the only one that changes behaviour.
+
+1. **Confirm the catalog replica is populated.**
+
+   ```sql
+   SELECT count(*) FILTER (WHERE category_id IS NULL) AS uncategorized, count(*) AS total
+   FROM ext_product;
+   ```
+
+   A large `uncategorized` count means the pos-catalog product replay is incomplete. Finish it
+   first. If you flip the flag mid-replay the change lands staggered, arriving SKU by SKU as
+   products trickle in — which is precisely the failure mode this procedure exists to prevent.
+
+2. **Audit.** `GET /v1/inventory/valuation/methods/sku-category-impact` (`inventory:location:admin`).
+   This works **with the flag off** — it reads the replica directly rather than through the gated
+   SPI — which is the only moment the answer is actionable. Read three fields:
+
+   - `impactedSkuCount` — SKUs whose costing method would actually change.
+   - `impactedSkuWithCostStateCount` — of those, the ones that already carry opening values, i.e.
+     the ones step 6 has to cover.
+   - `categoriesWithNoReplicatedProducts` — configured category names matching no replicated
+     product. This is usually a casing or spelling mismatch between a config's `scopeValue` and
+     `ext_product.category_name`: matching is **exact and case-sensitive**, so such a row would
+     silently never fire. Fix or retire these before reading the counts as final.
+   - `categoriesWithUntrimmedScopeValue` — config rows whose `scopeValue` carries leading or trailing
+     whitespace. These can never fire either, for a subtler reason: resolution compares the stored
+     value verbatim against an already-trimmed category name, so the two can never be equal. The
+     admin API trims on write, so these are seeded or hand-inserted rows. Re-upsert them through
+     `PUT /v1/inventory/valuation/methods` to normalise.
+
+   Finally, check `truncated`. If it is `true` the product scan hit
+   `POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP` (default 5000) and every row-derived count is a lower
+   bound — raise the cap and re-run before using the report to decide anything.
+
+3. **Note that sourcing is affected too.** `impactedSourcingSkus` lists SKUs whose sourcing strategy
+   would start resolving from the `SKU_CATEGORY` step — which outranks `SITE` and `DEFAULT`, so it
+   overrides deliberate per-site configuration. This is not a costing question and it needs its own
+   sign-off. The report deliberately does not claim today's effective strategy: computing it needs a
+   `SourcingSelection` (a site and a reference location), so the honest answer varies per site.
+
+4. **Decide, per config row.** For each active `SKU_CATEGORY` row, one of two answers: keep it (and
+   revalue the SKUs it covers, step 6), or retire it (step 5). There is no third option — leaving a
+   row in place unrevalued means its SKUs change method with stale opening values.
+
+5. **Deactivate what is not wanted.**
+   `DELETE /v1/inventory/valuation/methods/{configId}` (`inventory:location:admin`). This is a soft
+   delete: the row is deactivated, never removed, and a `DEACTIVATED` row is written to
+   `cost_method_change_log`. Re-run step 2 afterwards; `impactedSkuCount` should fall.
+
+6. **Revalue what is kept.** For each impacted SKU with `hasCostState = true`, run the J4
+   revaluation: `POST /v1/inventory/valuation/revaluations` (`inventory:valuation:adjust`) with
+   `stockItemId`, `reason`, and **exactly one of** `newUnitCost` or `costDelta` — supplying both, or
+   neither, is rejected with 400 (`Supply exactly one of newUnitCost or costDelta`).
+
+   What happens next depends on the size of the value delta, and you do not choose it:
+
+   - If the delta clears an approval threshold the record is created `PENDING_APPROVAL` and must be
+     approved via `POST /v1/inventory/valuation/revaluations/{revaluationId}/approve`
+     (`inventory:valuation:adjust`). Only then is the cost state restated.
+   - Otherwise it is created `AUTO_APPLIED` and has already taken effect. **Do not call approve on
+     it** — approving anything not in `PENDING_APPROVAL` fails.
+
+   Read `status` on the create response rather than assuming. **There is no bulk or category-scoped
+   revaluation, and this is by design** (ADR-0048 IMP-004): restating inventory value is per-SKU and
+   approval-gated. Do not script around it.
+
+7. **Flip the flag.** Set `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA=true` and restart the
+   service. On boot `SkuCategoryCutoverStartupCheck` logs an INFO line naming how many SKUs now
+   resolve their costing method from a `SKU_CATEGORY` row and across how many configuration rows —
+   that line is the flip's own audit record, so capture it. It logs a WARN first only when the
+   impact scan hit `pos.inventory.sku-category.impact-sku-cap`, in which case that count is a lower
+   bound; raise the cap and re-run step 2 before trusting it. The check never fails startup, so a
+   missing line means the check itself errored — look for the "did not complete" WARN.
+
+8. **Verify.** Re-run step 2 with the flag on, and read the right field.
+
+   `impactedSkuCount` will be `0`. Be clear about why: with the flag on, a matched SKU resolves from
+   its category, so its current method *is* its projected method and nothing is pending by
+   construction. That zero confirms the report agrees the flip took effect; it is **not** an
+   independent audit of the flip, and it cannot go non-zero to warn you.
+
+   The fields that actually carry information after the flip are:
+
+   - `categoryMatchedSkuCount` — the SKUs the category step now governs. Compare it against the
+     number you read in step 2 *before* the flip; they should match. Materially larger means a
+     category override is matching more products than you signed off on, most often because more
+     products were replicated in between.
+   - `truncated` — must be `false`. If `true`, every row-derived count is a lower bound and this
+     verification is inconclusive until you raise `POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP` and
+     re-run.
+   - The startup WARN/INFO line from step 7, which reports the same governed count independently.
+
+   For the SKUs you revalued in step 6, verify the value moved as intended by reading the J4
+   revaluation records, not this report — restated opening values are outside what it measures.
+
+9. **Rollback.** Set the variable back to `false` and restart. Resolution returns to
+   `NoOpSkuCategoryProvider` immediately and the `SKU_CATEGORY` step goes inert again. Note what
+   rollback does **not** undo: revaluations posted in step 6 are separate approved J4 records and
+   stay posted. Reversing one is another revaluation, not a rollback.
 
 ### Reconciliation manifests and drift detection
 

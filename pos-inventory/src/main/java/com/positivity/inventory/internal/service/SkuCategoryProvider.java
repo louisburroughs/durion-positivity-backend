@@ -11,13 +11,17 @@ import org.jspecify.annotations.NonNull;
  * sourcing-strategy configuration (odoo-parity H1, issue #1037).
  *
  * <p>The catalog contract extension this SPI was waiting for landed in #1514:
- * {@code catalog.product.updated} now carries the product's category, the
- * {@code ext_product} replica stores it, and {@link ReplicaSkuCategoryProvider}
- * is the {@code @Primary} implementation that resolves it — so SKU_CATEGORY-scoped
- * config rows, stored but skipped until then, now match.
- * {@link NoOpSkuCategoryProvider} remains registered as the non-primary fallback:
- * with it in charge, category resolution finds nothing and lookups fall through
- * to SITE, then DEFAULT.
+ * {@code catalog.product.updated} now carries the product's category and the
+ * {@code ext_product} replica stores it. Resolving it, however, is switchable:
+ * {@link ReplicaSkuCategoryProvider} is the {@code @Primary} implementation
+ * <strong>when {@code pos.inventory.sku-category.resolve-from-replica} is
+ * enabled</strong>, and that flag defaults to false. By default the bean is not
+ * registered at all and {@link NoOpSkuCategoryProvider} is what serves this SPI
+ * — category resolution finds nothing and lookups fall through to SITE, then
+ * DEFAULT, exactly as before #1514. SKU_CATEGORY-scoped config rows therefore
+ * remain stored and skipped until an operator enables the flag deliberately;
+ * {@code GET /v1/inventory/valuation/methods/sku-category-impact} reports what
+ * doing so would change (#1535).
  *
  * <p>The answer is the category NAME, because that is what SKU_CATEGORY-scoped
  * config rows are authored and matched against. Callers that need the category

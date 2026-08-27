@@ -13,11 +13,18 @@ public enum CostingScopeType {
     SKU,
 
     /**
-     * Per-SKU-category override; {@code scopeValue} carries the category
-     * string. The catalog replica ({@code ext_product}) does not carry a
-     * category yet, so category-scoped rows are stored but unresolvable until
-     * a catalog contract extension lights them up — resolution skips to
-     * DEFAULT. Mirrors the H1 sourcing behaviour.
+     * Per-SKU-category override; {@code scopeValue} carries the category name,
+     * matched exactly (and case-sensitively) after trimming.
+     *
+     * <p>The catalog replica ({@code ext_product}) has carried the product's
+     * category since #1514, but resolution through this scope is gated by
+     * {@code pos.inventory.sku-category.resolve-from-replica}, which defaults
+     * to <strong>false</strong> — so by default these rows are still stored and
+     * skipped, and resolution falls through to DEFAULT. Enabling the flag makes
+     * them resolve for the first time, which changes the costing method of
+     * matching SKUs at their next ledger posting; audit it first with
+     * {@code GET /v1/inventory/valuation/methods/sku-category-impact} (#1535).
+     * Mirrors the H1 sourcing behaviour.
      */
     SKU_CATEGORY,
 

@@ -96,8 +96,10 @@ public class SourcingStrategyController {
                     reactivates it with the new strategy.
                     Preconditions: none beyond scope-value shape; note that FEFO falls back to FIFO while the SKU \
                     has no lot-expiry data, PROXIMITY falls back to FIFO when a decision has no reference \
-                    location, and SKU_CATEGORY rows are stored but unresolvable until the catalog replica carries \
-                    categories.
+                    location, and SKU_CATEGORY rows resolve only when \
+                    pos.inventory.sku-category.resolve-from-replica is enabled, which defaults off — call \
+                    reportSkuCategoryImpact before enabling it, since SKU_CATEGORY is the highest-precedence \
+                    scope and would override SITE rows.
                     Required inputs: scopeType (SKU_CATEGORY, SITE or DEFAULT) and strategy; scopeValue must be \
                     the category string for SKU_CATEGORY, the site UUID as text for SITE, and must be omitted for \
                     DEFAULT.
