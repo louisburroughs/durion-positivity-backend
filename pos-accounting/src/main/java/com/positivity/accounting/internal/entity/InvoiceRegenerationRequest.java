@@ -21,8 +21,10 @@ import lombok.NoArgsConstructor;
  *
  * <p>Created {@link #STATUS_PENDING} by {@code InvoiceRegenerationServiceImpl} when the command
  * is published; resolved to {@link #STATUS_COMPLETED} by {@code WorkorderEventsListener} once a
- * {@code workorder.events.v1} fact for the same {@link #workorderId} carries the resulting
- * invoice id.
+ * {@code workorder.events.v1} fact for the same {@link #workorderId} (a) post-dates {@link
+ * #requestedAt} and (b) carries a resulting invoice id other than {@link #priorInvoiceId} — see
+ * that listener's class javadoc for why both conditions are required (#1537 F4). A row that never
+ * resolves is reaped to {@link #STATUS_FAILED} after a TTL.
  */
 @Entity
 @Data
@@ -34,6 +36,15 @@ public class InvoiceRegenerationRequest {
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_COMPLETED = "COMPLETED";
+
+    /**
+     * Terminal non-success state (#1537 F4): {@code KafkaCommandListener} in pos-workorder
+     * swallows business failures (workorder missing / not eligible), so a genuinely failed
+     * regeneration emits no fact at all and would otherwise leave the row {@code PENDING}
+     * forever. Reaped from {@code PENDING} once {@link #requestedAt} exceeds the configured TTL
+     * (see {@code WorkorderEventsListener#reapExpiredRequests}).
+     */
+    public static final String STATUS_FAILED = "FAILED";
 
     @Id
     @GeneratedValue
@@ -55,6 +66,15 @@ public class InvoiceRegenerationRequest {
 
     @Column(name = "result_invoice_id", columnDefinition = "UUID")
     private UUID resultInvoiceId;
+
+    /**
+     * The invoiceId already linked to {@link #workorderId} at the moment this request was
+     * published, if any (#1537 F4). {@code WorkorderEventsListener} refuses to resolve this row
+     * from a fact carrying this same id — such a fact only echoes the pre-existing invoice
+     * (e.g. an unrelated workorder edit), not evidence that regeneration produced anything.
+     */
+    @Column(name = "prior_invoice_id", columnDefinition = "UUID", updatable = false)
+    private UUID priorInvoiceId;
 
     @Column(name = "requested_by", length = 255, updatable = false)
     private String requestedBy;

@@ -8,13 +8,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.WorkorderCommandPublisher;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.InvoiceRegenerationRequest;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.InvoiceRegenerationRequestRepository;
 import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,12 +52,15 @@ class InvoiceRegenerationServiceTest {
     @Mock
     private InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository;
 
+    @Mock
+    private ExtInvoiceRepository extInvoiceRepository;
+
     private InvoiceRegenerationServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new InvoiceRegenerationServiceImpl(
-                commandPublisherProvider, invoiceRegenerationRequestRepository, TEST_CLOCK);
+                commandPublisherProvider, invoiceRegenerationRequestRepository, extInvoiceRepository, TEST_CLOCK);
     }
 
     @Test
@@ -80,6 +86,42 @@ class InvoiceRegenerationServiceTest {
         assertThat(saved.getValue().getIdempotencyKey()).isEqualTo("idem-1");
         assertThat(saved.getValue().getStatus()).isEqualTo(InvoiceRegenerationRequest.STATUS_PENDING);
         assertThat(saved.getValue().getRequestedAt()).isEqualTo(TEST_CLOCK.instant());
+        // No replicated invoice yet for this workorder: nothing to distinguish a future fact from.
+        assertThat(saved.getValue().getPriorInvoiceId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Captures the workorder's existing invoiceId as priorInvoiceId on the new row (#1537 F4)")
+    void regenerate_capturesPriorInvoiceId() {
+        WorkorderCommandPublisher publisher = org.mockito.Mockito.mock(WorkorderCommandPublisher.class);
+        when(commandPublisherProvider.getIfAvailable()).thenReturn(publisher);
+        when(invoiceRegenerationRequestRepository.findByIdempotencyKey("idem-prior"))
+                .thenReturn(Optional.empty());
+        when(publisher.requestInvoiceRegeneration(WORKORDER_ID, "idem-prior", "SYSTEM"))
+                .thenReturn(COMMAND_ID);
+        UUID staleInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        UUID currentInvoiceId = INVOICE_ID;
+        when(extInvoiceRepository.findByWorkorderId(WORKORDER_ID))
+                .thenReturn(List.of(
+                        ExtInvoice.builder()
+                                .invoiceId(staleInvoiceId)
+                                .workorderId(WORKORDER_ID)
+                                .status("VOID")
+                                .updatedAt(TEST_CLOCK.instant().minusSeconds(3600))
+                                .build(),
+                        ExtInvoice.builder()
+                                .invoiceId(currentInvoiceId)
+                                .workorderId(WORKORDER_ID)
+                                .status("FINALIZED")
+                                .updatedAt(TEST_CLOCK.instant())
+                                .build()));
+
+        service.regenerateInvoiceFromWorkorder(WORKORDER_ID, "idem-prior");
+
+        ArgumentCaptor<InvoiceRegenerationRequest> saved = ArgumentCaptor.forClass(InvoiceRegenerationRequest.class);
+        verify(invoiceRegenerationRequestRepository).save(saved.capture());
+        // The most recently updated replicated invoice is the workorder's current one.
+        assertThat(saved.getValue().getPriorInvoiceId()).isEqualTo(currentInvoiceId);
     }
 
     @Test
@@ -137,10 +179,14 @@ class InvoiceRegenerationServiceTest {
     }
 
     @Test
-    @DisplayName("A pending (not yet completed) idempotency key re-publishes rather than short-circuiting")
-    void regenerate_pendingIdempotencyKey_stillPublishes() {
-        WorkorderCommandPublisher publisher = org.mockito.Mockito.mock(WorkorderCommandPublisher.class);
-        when(commandPublisherProvider.getIfAvailable()).thenReturn(publisher);
+    @DisplayName("A pending (not yet completed) idempotency key short-circuits to PENDING without re-publishing"
+            + " (#1537 F3)")
+    void regenerate_pendingIdempotencyKey_shortCircuitsWithoutRepublishing() {
+        // The original scenario (F3): a 30s-long regeneration retried at 5s finds the row still
+        // PENDING. Re-publishing here double-fires the Kafka command, and the second insert then
+        // violates the partial unique index on idempotency_key (V26) with a 5xx — the opposite of
+        // idempotent. The only safe response is the existing PENDING state, with no new command
+        // and no new row.
         when(invoiceRegenerationRequestRepository.findByIdempotencyKey("idem-pending"))
                 .thenReturn(Optional.of(InvoiceRegenerationRequest.builder()
                         .workorderId(WORKORDER_ID)
@@ -149,13 +195,42 @@ class InvoiceRegenerationServiceTest {
                         .status(InvoiceRegenerationRequest.STATUS_PENDING)
                         .requestedAt(TEST_CLOCK.instant())
                         .build()));
-        when(publisher.requestInvoiceRegeneration(WORKORDER_ID, "idem-pending", "SYSTEM"))
-                .thenReturn(COMMAND_ID);
 
         InvoiceGenerationResponse response = service.regenerateInvoiceFromWorkorder(WORKORDER_ID, "idem-pending");
 
         assertThat(response.getStatus()).isEqualTo(InvoiceRegenerationServiceImpl.STATUS_PENDING);
-        verify(publisher).requestInvoiceRegeneration(WORKORDER_ID, "idem-pending", "SYSTEM");
-        verify(invoiceRegenerationRequestRepository).save(any());
+        assertThat(response.getWorkorderId()).isEqualTo(WORKORDER_ID);
+        assertThat(response.getInvoiceId()).isNull();
+        // Never touches the publisher (not even asked for) and never attempts a second insert.
+        verify(commandPublisherProvider, never()).getIfAvailable();
+        verify(invoiceRegenerationRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A same-key retry never attempts a second command publish or a second insert (#1537 F3)")
+    void regenerate_sameKeyRetry_neverDoublePublishesOrDoubleInserts() {
+        WorkorderCommandPublisher publisher = org.mockito.Mockito.mock(WorkorderCommandPublisher.class);
+        when(invoiceRegenerationRequestRepository.findByIdempotencyKey("idem-retry"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(InvoiceRegenerationRequest.builder()
+                        .workorderId(WORKORDER_ID)
+                        .commandId(COMMAND_ID)
+                        .idempotencyKey("idem-retry")
+                        .status(InvoiceRegenerationRequest.STATUS_PENDING)
+                        .requestedAt(TEST_CLOCK.instant())
+                        .build()));
+        when(commandPublisherProvider.getIfAvailable()).thenReturn(publisher);
+        when(publisher.requestInvoiceRegeneration(WORKORDER_ID, "idem-retry", "SYSTEM"))
+                .thenReturn(COMMAND_ID);
+
+        InvoiceGenerationResponse first = service.regenerateInvoiceFromWorkorder(WORKORDER_ID, "idem-retry");
+        InvoiceGenerationResponse retry = service.regenerateInvoiceFromWorkorder(WORKORDER_ID, "idem-retry");
+
+        assertThat(first.getStatus()).isEqualTo(InvoiceRegenerationServiceImpl.STATUS_PENDING);
+        assertThat(retry.getStatus()).isEqualTo(InvoiceRegenerationServiceImpl.STATUS_PENDING);
+        verify(publisher, org.mockito.Mockito.times(1))
+                .requestInvoiceRegeneration(WORKORDER_ID, "idem-retry", "SYSTEM");
+        verify(invoiceRegenerationRequestRepository, org.mockito.Mockito.times(1))
+                .save(any());
     }
 }

@@ -8,12 +8,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.entity.ProcessedEvent;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -198,5 +206,56 @@ class InvoiceManifestListenerTest {
         withoutMetrics.onManifest(manifestFor(List.of("id-1")));
 
         verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("reconciles a window mixing invoice.invoice.updated with an ignored type on the same topic (#1537 F1)")
+    void mixedEventTypeWindowReconciles() {
+        // pos-invoice's InvoiceEventPublisher also publishes invoice.billing-rules.updated (from
+        // BillingRulesServiceImpl) onto invoice.events.v1, and ManifestPublisher counts every
+        // outbox row for that topic in the window regardless of type. InvoiceEventsListener only
+        // replicates invoice.invoice.updated, but it must still record every well-formed eventId
+        // it sees on the shared topic — otherwise this reconciliation can never agree (#1537 F1).
+        ExtInvoiceRepository replica = org.mockito.Mockito.mock(ExtInvoiceRepository.class);
+        when(replica.findById(org.mockito.ArgumentMatchers.any())).thenReturn(Optional.empty());
+        ExtInvoiceTaxRepository taxReplica = org.mockito.Mockito.mock(ExtInvoiceTaxRepository.class);
+        Clock clock = Clock.fixed(WINDOW_START, ZoneOffset.UTC);
+        InvoiceEventsListener eventsListener = new InvoiceEventsListener(
+                clock,
+                objectMapper,
+                processedEvents,
+                replica,
+                taxReplica,
+                org.mockito.Mockito.mock(ObjectProvider.class));
+
+        UUID invoiceId = UUID.randomUUID();
+        UUID workorderId = UUID.randomUUID();
+        eventsListener.onInvoiceEvent("""
+                {"eventId":"019104d2-0000-7000-8000-000000000001","eventType":"invoice.invoice.updated",
+                 "aggregateVersion":1,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED","total":100.00}}""".formatted(invoiceId, workorderId));
+        eventsListener.onInvoiceEvent("""
+                {"eventId":"019104d2-0000-7000-8000-000000000002","eventType":"invoice.billing-rules.updated",
+                 "aggregateVersion":1,
+                 "payload":{"partyId":"%s","purchaseOrderRequired":true}}""".formatted(UUID.randomUUID()));
+        eventsListener.onInvoiceEvent("""
+                {"eventId":"019104d2-0000-7000-8000-000000000003","eventType":"invoice.invoice.updated",
+                 "aggregateVersion":1,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED","total":200.00}}""".formatted(UUID.randomUUID(), workorderId));
+
+        ArgumentCaptor<ProcessedEvent> captor = ArgumentCaptor.forClass(ProcessedEvent.class);
+        verify(processedEvents, org.mockito.Mockito.times(3)).save(captor.capture());
+        List<String> recordedIds = new ArrayList<>();
+        captor.getAllValues().forEach(pe -> recordedIds.add(pe.getEventId()));
+
+        // The consumer's own recorded ids are exactly what its manifest lookup will return; feed
+        // that straight back so the manifest and the replica are built from the same facts.
+        replicaHas(recordedIds);
+        String manifest = manifestFor(recordedIds);
+
+        listener.onManifest(manifest);
+
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        assertThat(driftCount()).isZero();
     }
 }

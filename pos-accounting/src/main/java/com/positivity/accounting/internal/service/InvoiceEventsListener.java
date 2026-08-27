@@ -35,6 +35,10 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Same contract as {@link CustomerEventsListener}: idempotent via {@code processed_events} in
  * the upsert transaction, stale envelopes (aggregateVersion strictly below the replica's) skipped,
  * transient DB errors rethrown for container retry/DLQ, malformed payloads logged and skipped.
+ * Event types other than {@link InvoiceUpdatedV1#EVENT_TYPE} are not replicated but still recorded
+ * in {@code processed_events} (#1537 F1): pos-invoice publishes more than one event type onto this
+ * topic, and {@code InvoiceManifestListener}'s window count must match {@code ManifestPublisher}'s,
+ * which counts every fact regardless of type.
  *
  * <p>The stale guard is {@link ReplicaVersionGuard} (#1486): pos-invoice's {@code
  * InvoiceEventPublisher} flushes the invoice's JPA {@code @Version} before emit, so the version
@@ -99,10 +103,6 @@ public class InvoiceEventsListener {
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
-        if (!InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
-            log.debug("Ignoring invoice event type={}", eventType);
-            return;
-        }
         String eventId = envelope.path("eventId").stringValue(null);
         if (eventId == null || eventId.isBlank()) {
             log.warn("Skipping invoice event without eventId: {}", message);
@@ -114,7 +114,15 @@ public class InvoiceEventsListener {
         }
 
         try {
-            applyInvoiceUpdate(envelope);
+            if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                applyInvoiceUpdate(envelope);
+            } else {
+                // Ignored types still fall through to the processed_events insert below: the
+                // owner's manifest counts every fact in the window (#1537 F1) — pos-invoice's
+                // InvoiceEventPublisher also publishes invoice.billing-rules.updated onto this
+                // same topic, and ManifestPublisher's window count includes it regardless of type.
+                log.debug("Ignoring invoice event type={} eventId={}", eventType, eventId);
+            }
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;

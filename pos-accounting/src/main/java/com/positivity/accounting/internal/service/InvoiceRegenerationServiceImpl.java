@@ -1,13 +1,17 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.WorkorderCommandPublisher;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.InvoiceRegenerationRequest;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.InvoiceRegenerationRequestRepository;
 import com.positivity.accounting.service.InvoiceRegenerationService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -33,6 +37,15 @@ import org.springframework.web.server.ResponseStatusException;
  * repeat call carrying an idempotency key whose row already completed returns that terminal state
  * — {@code invoiceId} included — without publishing again; this needs no Kafka feed, so it is
  * checked before the feed-disabled fast-fail below.
+ *
+ * <p>#1537 F3: a repeat call whose row is still {@code PENDING} short-circuits the same way,
+ * returning the existing pending state rather than publishing a second command. A client that
+ * retries a slow-but-legitimate regeneration (its original request already wrote the row) would
+ * otherwise fire a duplicate {@code workorder.invoice.regenerate-requested} command and then fail
+ * the second {@code invoice_regeneration_request} insert against the partial unique index on
+ * {@code idempotency_key} (V26) with a 5xx — not idempotent across the retry window a client would
+ * actually use. Any existing row for the key — pending or completed — is therefore terminal for
+ * this call; only a genuinely new idempotency key publishes.
  */
 @Service
 public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationService {
@@ -44,14 +57,17 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
 
     private final ObjectProvider<WorkorderCommandPublisher> commandPublisher;
     private final InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository;
+    private final ExtInvoiceRepository extInvoiceRepository;
     private final Clock clock;
 
     public InvoiceRegenerationServiceImpl(
             ObjectProvider<WorkorderCommandPublisher> commandPublisher,
             InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository,
+            ExtInvoiceRepository extInvoiceRepository,
             Clock clock) {
         this.commandPublisher = commandPublisher;
         this.invoiceRegenerationRequestRepository = invoiceRegenerationRequestRepository;
+        this.extInvoiceRepository = extInvoiceRepository;
         this.clock = clock;
     }
 
@@ -66,10 +82,11 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<InvoiceRegenerationRequest> existing =
                     invoiceRegenerationRequestRepository.findByIdempotencyKey(idempotencyKey);
-            if (existing.isPresent()
-                    && InvoiceRegenerationRequest.STATUS_COMPLETED.equals(
-                            existing.get().getStatus())) {
-                return terminalResponse(workorderId, existing.get());
+            if (existing.isPresent()) {
+                InvoiceRegenerationRequest row = existing.get();
+                return InvoiceRegenerationRequest.STATUS_COMPLETED.equals(row.getStatus())
+                        ? terminalResponse(workorderId, row)
+                        : pendingResponse(workorderId);
             }
         }
 
@@ -88,6 +105,17 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
                 .workorderId(workorderId)
                 .status(InvoiceRegenerationRequest.STATUS_COMPLETED)
                 .invoiceId(completed.getResultInvoiceId())
+                .build();
+    }
+
+    /**
+     * #1537 F3: the short-circuit response for a still-outstanding request — the original
+     * command (and its commandId) already published, so this call never re-publishes.
+     */
+    private InvoiceGenerationResponse pendingResponse(UUID workorderId) {
+        return InvoiceGenerationResponse.builder()
+                .workorderId(workorderId)
+                .status(STATUS_PENDING)
                 .build();
     }
 
@@ -111,11 +139,27 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
                 .status(InvoiceRegenerationRequest.STATUS_PENDING)
                 .requestedBy(requestedBy)
                 .requestedAt(Instant.now(clock))
+                .priorInvoiceId(resolvePriorInvoiceId(workorderId))
                 .build());
         return InvoiceGenerationResponse.builder()
                 .workorderId(workorderId)
                 .status(STATUS_PENDING)
                 .build();
+    }
+
+    /**
+     * The invoiceId already linked to {@code workorderId}, if any (#1537 F4) — captured at
+     * request time so {@code WorkorderEventsListener} can tell a genuinely new invoice fact
+     * apart from an unrelated update that merely echoes the invoice the requester already had.
+     * When more than one replicated invoice references the workorder, the most recently updated
+     * one is the workorder's current invoice.
+     */
+    private @Nullable UUID resolvePriorInvoiceId(UUID workorderId) {
+        List<ExtInvoice> existing = extInvoiceRepository.findByWorkorderId(workorderId);
+        return existing.stream()
+                .max(Comparator.comparing(ExtInvoice::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .map(ExtInvoice::getInvoiceId)
+                .orElse(null);
     }
 
     private String maskWorkorderId(UUID workorderId) {
