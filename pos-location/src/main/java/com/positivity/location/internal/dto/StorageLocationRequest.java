@@ -58,12 +58,19 @@ public class StorageLocationRequest {
             requiredMode = NOT_REQUIRED)
     private StorageCategory storageCategoryCode;
 
+    /**
+     * Boxed deliberately. Jackson 3 enables {@code FAIL_ON_NULL_FOR_PRIMITIVES} by default and picks
+     * Lombok's all-args constructor as a property-based creator, so an omitted primitive arrives as
+     * null and the whole request is rejected with 400 "Failed to read request". Since this field is
+     * optional, a primitive here would have made every payload that omits it unreadable. Null means
+     * "not stated" and is coerced to false when the entity is built.
+     */
     @Schema(
             description = "Whether the storage location provides spill/hazard containment; required by battery and"
-                    + " oil storage capabilities. Defaults to false.",
+                    + " oil storage capabilities. Omit for false.",
             example = "false",
             requiredMode = NOT_REQUIRED)
-    private boolean hazardContainment;
+    private Boolean hazardContainment;
 
     @Schema(
             description = "Whether the storage location will take stock of a product it is not already holding."
