@@ -23,6 +23,7 @@ import org.springframework.web.client.RestClient;
 class EventsFacadeToolTest {
 
     private static final String BASE_URL = "http://api-gateway";
+    private static final String ENTITY_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b";
 
     private MockRestServiceServer mockServer;
     private EventsFacadeTool tool;
@@ -39,7 +40,8 @@ class EventsFacadeToolTest {
                 builder,
                 BASE_URL,
                 contract("getEventTypes").template(),
-                contract("getEventSummary").template());
+                contract("getEventSummary").template(),
+                contract("getEventHistory").template());
     }
 
     @Test
@@ -83,5 +85,21 @@ class EventsFacadeToolTest {
                 .hasMessageContaining("lastWeek");
 
         mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getEventHistory sends GET /events?entityId={entityId} and returns body")
+    void getEventHistory_sendsGetToEventsByEntityId() {
+        FacadeContractManifest.Entry entry = contract("getEventHistory");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("entityId", ENTITY_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(
+                        withSuccess("{\"items\":[{\"entityId\":\"" + ENTITY_ID + "\"}]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getEventHistory(ENTITY_ID);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains(ENTITY_ID);
     }
 }

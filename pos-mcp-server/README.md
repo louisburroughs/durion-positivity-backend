@@ -125,6 +125,7 @@ compositions and their legs:
 | `getShopQueue` | workorder workexec WIP + shop-manager schedule board |
 | `getPriceForSku` | catalog detailed product search (active MSRP); a supplied `locationId` adds a dependent effective-price leg fed by the first leg's product id |
 | `calculateTax` | gateway location lookup (destination address) + direct pos-tax `POST /v1/tax/calculate` |
+| `getTaxRate` | gateway location lookup (destination address) + direct pos-tax `GET /v1/tax/rates` |
 
 **Contract chain.** What keeps the facades honest: every `@Tool` method's verb + path lives in
 `src/test/resources/facade-contract.yaml` (compositions list every leg), and facade tests derive their
@@ -136,13 +137,14 @@ enum-expansion annotations for constrained path segments like the event-summary 
 (`.github/workflows/pr-checks.yml`) with `scripts/mcp-facade-paths-baseline.json` gating new breaks — the baseline
 is currently empty, so any new mismatch fails the build.
 
-**Deferred methods.** Three former methods are removed from the surface until their real endpoints ship:
-`getEventHistory` (#1521 — no per-entity event history endpoint), `getTaxRate` (#1522 — pos-tax publishes no rate
-lookup), and `searchEmployees` (#1523 — pos-people publishes no employee list/search).
+**Deferred methods.** None. The three methods previously removed for lacking a real backend endpoint —
+`getEventHistory` (#1521), `getTaxRate` (#1522), and `searchEmployees` (#1523) — are all restored: pos-event-receiver
+now serves per-entity event history (`GET /v1/events?entityId=`), pos-tax now serves a jurisdiction rate lookup
+(`GET /v1/tax/rates`), and pos-people now serves employee search (`GET /v1/people/employees?q=`).
 
 Permission mappings for these tools are seeded by migration `V18` (retargeted by `V35`/`V36`); the #1519
-re-derivation migration re-derives the seeds against the restored targets above, unioning across every composition
-leg.
+re-derivation migration (`V37`) re-derives the seeds against the restored targets above, unioning across every
+composition leg, and `V38` adds `tax:rates:view` to TaxFacadeTool for the restored `getTaxRate`.
 
 The seed mirrors each downstream controller's *declared* authorization, not the product intent of the facade: for
 every backend endpoint a `@Tool` method calls, the merged class + method `@PreAuthorize` is read and

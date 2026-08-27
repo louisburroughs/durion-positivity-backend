@@ -10,9 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Facade over pos-people employee lookups. Employee search was removed (#1523): pos-people
- * publishes no employee list/search endpoint, so the former searchEmployees tool could never
- * resolve; it returns once the real endpoint exists.
+ * Facade over pos-people employee lookups.
  */
 @Component
 public class HrFacadeTool {
@@ -21,17 +19,20 @@ public class HrFacadeTool {
     private final RestClient availabilityRestClient;
     private final String employeeUriTemplate;
     private final String scheduleUriTemplate;
+    private final String searchUriTemplate;
 
     public HrFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.hr.employee-base-url}") @NonNull String employeeBaseUrl,
             @Value("${pos.hr.availability-base-url}") @NonNull String availabilityBaseUrl,
             @Value("${pos.hr.employee-uri-template}") @NonNull String employeeUriTemplate,
-            @Value("${pos.hr.schedule-uri-template}") @NonNull String scheduleUriTemplate) {
+            @Value("${pos.hr.schedule-uri-template}") @NonNull String scheduleUriTemplate,
+            @Value("${pos.hr.search-uri-template}") @NonNull String searchUriTemplate) {
         this.employeeRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, employeeBaseUrl);
         this.availabilityRestClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, availabilityBaseUrl);
         this.employeeUriTemplate = employeeUriTemplate;
         this.scheduleUriTemplate = scheduleUriTemplate;
+        this.searchUriTemplate = searchUriTemplate;
     }
 
     @Tool(description = "Get employee profile information by employee ID")
@@ -48,6 +49,21 @@ public class HrFacadeTool {
         return availabilityRestClient
                 .get()
                 .uri(scheduleUriTemplate, Map.of("employeeId", employeeId))
+                .retrieve()
+                .body(String.class);
+    }
+
+    @Tool(
+            description = "Search employees by a case-insensitive substring match against first name, last "
+                    + "name, preferred name, and employee number. query may be blank to list every employee. "
+                    + "Use this tool for listing or typeahead lookups; use getEmployee instead when the "
+                    + "employee's id is already known.")
+    public String searchEmployees(
+            @ToolParam(description = "Case-insensitive substring match; blank lists all employees", required = false)
+                    String query) {
+        return employeeRestClient
+                .get()
+                .uri(searchUriTemplate, Map.of("query", query == null ? "" : query))
                 .retrieve()
                 .body(String.class);
     }
