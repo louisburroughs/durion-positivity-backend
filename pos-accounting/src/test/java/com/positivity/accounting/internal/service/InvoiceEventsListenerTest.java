@@ -94,6 +94,20 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("Stamps the processed-event row with the invoice owner tag (#1537 D2)")
+    void stampsOwnerOnProcessedEvent() {
+        when(processedEvents.existsById("e-owner")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(event("e-owner", 5));
+
+        ArgumentCaptor<com.positivity.accounting.internal.entity.ProcessedEvent> saved =
+                ArgumentCaptor.forClass(com.positivity.accounting.internal.entity.ProcessedEvent.class);
+        verify(processedEvents).save(saved.capture());
+        assertThat(saved.getValue().getOwner()).isEqualTo("invoice");
+    }
+
+    @Test
     @DisplayName("Materializes the due-date facts into the replica (#993) and tolerates their absence")
     void projectsDueDate() {
         when(processedEvents.existsById("e-due")).thenReturn(false);

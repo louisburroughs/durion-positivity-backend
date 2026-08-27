@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.config;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,10 @@ import tools.jackson.databind.ObjectMapper;
  * synchronous REST call gave them; the work itself completes asynchronously in pos-workorder,
  * and the resulting invoice flows back through {@code invoice.events.v1} into the
  * {@code ext_invoice} replica.
+ *
+ * <p>Each call mints its own {@code commandId} (#1537 D1) and returns it so the caller can
+ * persist it on an {@code invoice_regeneration_request} tracking row before the workorder fact
+ * resolving that request ever arrives.
  */
 @Slf4j
 @Component
@@ -38,20 +43,24 @@ public class WorkorderCommandPublisher {
     private long sendTimeoutMs;
 
     /**
-     * Request invoice regeneration for a workorder. Throws if the broker does not acknowledge —
-     * the caller translates that into a 503, mirroring the old sync-call failure mode. Redelivery
-     * is harmless: pos-workorder's generate-invoice is idempotent per workorder.
+     * Request invoice regeneration for a workorder, returning the {@code commandId} minted for
+     * this request (#1537 D1) so the caller can track it. Throws if the broker does not
+     * acknowledge — the caller translates that into a 503, mirroring the old sync-call failure
+     * mode. Redelivery is harmless: pos-workorder's generate-invoice is idempotent per workorder.
      */
-    public void requestInvoiceRegeneration(
+    public @NonNull UUID requestInvoiceRegeneration(
             @NonNull UUID workorderId, @Nullable String idempotencyKey, @Nullable String requestedBy) {
+        UUID commandId = UUIDv7Generator.generate();
         try {
             String command = objectMapper.writeValueAsString(new RegenerateCommand(
                     INVOICE_REGENERATE_COMMAND_TYPE,
+                    commandId.toString(),
                     new RegenerateCommand.Payload(workorderId.toString(), idempotencyKey, requestedBy)));
             kafkaTemplate
                     .send(workorderCommandsTopic, workorderId.toString(), command)
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
-            log.info("Queued invoice regeneration command for workorder {}", workorderId);
+            log.info("Queued invoice regeneration command {} for workorder {}", commandId, workorderId);
+            return commandId;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while publishing invoice regeneration command", e);
@@ -63,7 +72,9 @@ public class WorkorderCommandPublisher {
 
     /** Command envelope for pos-workorder's {@code workorder.commands.v1} listener. */
     record RegenerateCommand(
-            @NonNull String commandType, @NonNull Payload payload) {
+            @NonNull String commandType,
+            @NonNull String commandId,
+            @NonNull Payload payload) {
         record Payload(
                 @NonNull String workorderId,
                 @Nullable String idempotencyKey,

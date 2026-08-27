@@ -48,6 +48,14 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class InvoiceEventsListener {
 
+    /**
+     * Producing domain, per the repo-wide {@code processed_events} convention — stamped on every
+     * row so {@code InvoiceManifestListener} (#1537 D2) can scope its window scan to exactly the
+     * events this listener recorded, since {@code processed_events} here is shared by every one
+     * of this module's Kafka listeners.
+     */
+    static final String OWNER = "invoice";
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
@@ -73,7 +81,7 @@ public class InvoiceEventsListener {
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "invoice")
+                        .tag("owner", OWNER)
                         .tag("entity", "invoice-events")
                         .register(registry);
     }
@@ -120,6 +128,7 @@ public class InvoiceEventsListener {
         }
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
+                .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
     }

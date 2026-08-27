@@ -70,6 +70,11 @@ pos:
       # Order fact feed for register-session over/short GL posting (odoo-parity G3, #1083)
       order-events-topic: ${POS_ACCOUNTING_KAFKA_ORDER_EVENTS_TOPIC:order.events.v1}
       workorder-commands-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # Workorder fact feed resolving outstanding invoice-regeneration commands (#1537 D1)
+      workorder-events-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      # Invoice replica reconciliation manifest + its replay-request command topic (#1537 D2)
+      invoice-manifest-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
+      invoice-commands-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
       consumer-group: ${POS_ACCOUNTING_KAFKA_CONSUMER_GROUP:${spring.application.name}-payments}
 
 # Payment Gateway Configuration
