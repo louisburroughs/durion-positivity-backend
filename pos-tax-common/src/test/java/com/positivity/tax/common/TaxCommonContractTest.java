@@ -6,10 +6,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.dto.TaxJurisdiction;
+import com.positivity.tax.common.dto.TaxRateComponent;
+import com.positivity.tax.common.dto.TaxRateLookupResponse;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.common.enums.TaxReferenceType;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.lang.reflect.Field;
+import java.lang.reflect.RecordComponent;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -246,6 +257,113 @@ class TaxCommonContractTest {
             // omitting it leaves these null for every request built through the builder.
             assertThat(request.getCurrencyCode()).isEqualTo("USD");
             assertThat(request.getCalculationType()).isNotNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("jurisdiction rate lookup (#1522)")
+    class RateLookup {
+
+        @Test
+        @DisplayName("the record components are the JSON field names the lookup responds with")
+        void recordComponentsAreTheWireContract() {
+            // Neither record carries @JsonProperty, so Jackson names each field after its record
+            // component. Renaming one is a source-local edit that silently changes the response
+            // body -- and the Angular SDK is generated from that body, so the break surfaces in
+            // the browser rather than here. Order is asserted too: it is the order the generated
+            // OpenAPI schema lists the properties in.
+            assertThat(componentNames(TaxRateLookupResponse.class))
+                    .containsExactly(
+                            "countryCode",
+                            "regionCode",
+                            "city",
+                            "postalCode",
+                            "asOf",
+                            "components",
+                            "combinedRate",
+                            "source");
+            assertThat(componentNames(TaxRateComponent.class)).containsExactly("jurisdictionType", "rate");
+        }
+
+        @Test
+        @DisplayName("lookup rates use the decimal-fraction convention, not percentage points")
+        void ratesAreDecimalFractions() {
+            // This module ships both conventions: TaxJurisdiction.taxRate is percentage points
+            // (7.25) while JurisdictionTax.rate is a fraction (0.0725). TaxRateComponent
+            // deliberately follows the latter, and the @Schema example is where a caller reading
+            // the generated spec learns which. An example "corrected" to 7.25 would document a
+            // hundredfold error, so pin it against both neighbours rather than on its own.
+            BigDecimal componentRate = schemaExample(TaxRateComponent.class, "rate");
+            assertThat(componentRate)
+                    .isEqualByComparingTo(schemaExample(TaxCalculationResponse.JurisdictionTax.class, "rate"))
+                    .isLessThan(BigDecimal.ONE);
+            assertThat(schemaExample(TaxJurisdiction.class, "taxRate")).isGreaterThan(BigDecimal.ONE);
+
+            // combinedRate is documented as the sum of components[].rate, so it has to be on the
+            // same scale as the components it sums.
+            assertThat(schemaExample(TaxRateLookupResponse.class, "combinedRate"))
+                    .isLessThan(BigDecimal.ONE);
+        }
+
+        @Test
+        @DisplayName("a lookup by country and postal code alone is representable")
+        void regionAndCityMayBeAbsent() {
+            // regionCode and city are NOT_REQUIRED query parameters echoed back, and a US ZIP is
+            // enough to resolve rates without either. A compact constructor rejecting nulls here
+            // would make the endpoint's own documented minimal request unrepresentable.
+            TaxRateLookupResponse response = new TaxRateLookupResponse(
+                    "US",
+                    null,
+                    null,
+                    "94103",
+                    LocalDate.of(2026, 8, 27),
+                    List.of(new TaxRateComponent(TaxJurisdictionType.STATE, new BigDecimal("0.0725"))),
+                    new BigDecimal("0.0725"),
+                    "TEST_MODE");
+
+            assertThat(response.regionCode()).isNull();
+            assertThat(response.city()).isNull();
+            assertThat(response.countryCode()).isEqualTo("US");
+            assertThat(response.postalCode()).isEqualTo("94103");
+        }
+
+        @Test
+        @DisplayName("a jurisdiction that taxes at zero keeps its row in the breakdown")
+        void zeroRateJurisdictionIsRepresentable() {
+            // A 0% level of government is real data -- several US states levy no sales tax while
+            // their counties do. Dropping or rejecting the row would leave the caller unable to
+            // tell "this jurisdiction charges nothing" from "this jurisdiction was not consulted".
+            TaxRateComponent component = new TaxRateComponent(TaxJurisdictionType.STATE, BigDecimal.ZERO);
+
+            assertThat(component.rate()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(component.jurisdictionType()).isEqualTo(TaxJurisdictionType.STATE);
+        }
+
+        private List<String> componentNames(Class<?> record) {
+            return Arrays.stream(record.getRecordComponents())
+                    .map(RecordComponent::getName)
+                    .toList();
+        }
+
+        /**
+         * The {@code example} of the {@code @Schema} on a declared field, as a BigDecimal.
+         *
+         * <p>
+         * Read off the field rather than the record component: {@code @Schema} predates records
+         * and does not target {@code RECORD_COMPONENT}, so javac propagates it to the generated
+         * field, not to the component.
+         */
+        private BigDecimal schemaExample(Class<?> owner, String fieldName) {
+            try {
+                Field field = owner.getDeclaredField(fieldName);
+                Schema schema = field.getAnnotation(Schema.class);
+                assertThat(schema)
+                        .describedAs("@Schema on %s.%s", owner.getSimpleName(), fieldName)
+                        .isNotNull();
+                return new BigDecimal(schema.example());
+            } catch (NoSuchFieldException e) {
+                throw new AssertionError("no field " + owner.getSimpleName() + "." + fieldName, e);
+            }
         }
     }
 }
