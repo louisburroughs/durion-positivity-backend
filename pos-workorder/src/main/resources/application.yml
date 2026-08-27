@@ -104,11 +104,14 @@ workorder:
     vehicle-events-topic: ${WORKORDER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
     vehicle-events-consumer-group: ${WORKORDER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-workorder-vehicle-events}
     events-topic: ${WORKORDER_KAFKA_EVENTS_TOPIC:workorder.events.v1}
-    # People replicas (ADR-0044 §6, #877)
+    # People replicas + staffing-assignment reconciliation (ADR-0044 §6, #877; manifest listener #1537)
     people-contact-events-topic: ${WORKORDER_PC_EVENTS_TOPIC:people-contact.events.v1}
     people-contact-events-consumer-group: ${WORKORDER_PC_EVENTS_CONSUMER_GROUP:pos-workorder-people-contact-events}
     people-events-topic: ${WORKORDER_PEOPLE_EVENTS_TOPIC:people.events.v1}
     people-events-consumer-group: ${WORKORDER_PEOPLE_EVENTS_CONSUMER_GROUP:pos-workorder-people-events}
+    people-manifest-topic: ${WORKORDER_PEOPLE_MANIFEST_TOPIC:people.manifest.v1}
+    people-manifest-consumer-group: ${WORKORDER_PEOPLE_MANIFEST_CONSUMER_GROUP:pos-workorder-people-manifests}
+    people-commands-topic: ${WORKORDER_PEOPLE_COMMANDS_TOPIC:people.commands.v1}
     # Customer-party replica feed + reconciliation (ADR-0044 §6, #891)
     customer-events-topic: ${WORKORDER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
     customer-events-consumer-group: ${WORKORDER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-workorder-customer-events}

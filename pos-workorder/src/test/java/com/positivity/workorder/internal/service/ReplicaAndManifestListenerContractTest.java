@@ -372,5 +372,31 @@ class ReplicaAndManifestListenerContractTest {
 
             assertThat(driftCount("location")).isEqualTo(1.0);
         }
+
+        @Test
+        @DisplayName("people manifest: silent on match, drift and replay on mismatch — closes the loop for the"
+                + " staffing-assignment half of the dual-topic people listener")
+        void peopleManifest() {
+            PeopleManifestListener listener = new PeopleManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(listener, "peopleCommandsTopic", "people.commands.v1");
+            List<String> ids = List.of("019ff000-0000-7000-8000-000000000001");
+            when(processedEventRepository.findEventIdsInRange(
+                            PeopleReplicaEventsListener.OWNER_PEOPLE,
+                            UuidV7Timestamps.minStringAt(WINDOW_START),
+                            UuidV7Timestamps.minStringAt(WINDOW_END)))
+                    .thenReturn(ids);
+
+            listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(ids)));
+            verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+
+            listener.onManifest(manifestMessage(2, "owner-checksum"));
+            assertThat(driftCount("people")).isEqualTo(1.0);
+            verify(kafkaTemplate)
+                    .send(
+                            org.mockito.ArgumentMatchers.eq("people.commands.v1"),
+                            org.mockito.ArgumentMatchers.eq(WINDOW_START.toString()),
+                            anyString());
+        }
     }
 }
