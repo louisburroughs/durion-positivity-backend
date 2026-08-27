@@ -60,9 +60,13 @@ public class TimePeriodManagementServiceImpl implements TimePeriodManagementServ
         try {
             return toDto(timePeriodRepository.saveAndFlush(period));
         } catch (DataIntegrityViolationException ex) {
-            // Concurrent create won the (tenant_id, start_date) unique constraint race.
+            // A concurrent create won the race past the advisory check above: either the
+            // (tenant_id, start_date) unique constraint (V8) or the per-tenant no-overlap
+            // exclusion constraint (V9) rejected the insert.
             throw new IllegalStateException(
-                    "A time period starting " + request.getStartDate() + " already exists for this tenant", ex);
+                    "A time period overlapping " + request.getStartDate() + " to " + request.getEndDate()
+                            + " already exists for this tenant",
+                    ex);
         }
     }
 

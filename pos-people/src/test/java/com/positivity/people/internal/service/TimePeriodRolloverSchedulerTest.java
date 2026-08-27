@@ -40,5 +40,7 @@ class TimePeriodRolloverSchedulerTest {
         when(timePeriodManagementService.runRollover()).thenThrow(new IllegalStateException("boom"));
 
         scheduler.runScheduledRollover();
+
+        verify(timePeriodManagementService).runRollover();
     }
 }
