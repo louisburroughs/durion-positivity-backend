@@ -2527,7 +2527,7 @@ paths:
 
         Emits an INVENTORY_GOODS_RECEIPT_CREATE event, decrements the purchase order''s open balance, moves the PO to PARTIALLY_RECEIVED or FULLY_RECEIVED, and updates the linked ASN''s received quantities and status.
 
-        Returns 403 when the receipt exceeds the open balance without the override authority, 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase order is unknown or not receivable, and 422 when a UoM has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
+        Returns 404 when the ASN or a referenced PO line cannot be resolved, 400 when the purchase order is unknown or not receivable, 403 when the caller lacks goods-receipt create authority, and 422 when the receipt would exceed the open balance without the override authority, a UoM has no conversion path, a LOT-tracked line omits lotNumber, or a serialized line''s serial count mismatches the received quantity.
 
         '
       operationId: createGoodsReceipt
@@ -2587,7 +2587,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: UoM conversion undefined, lot number required, or serial count mismatch
+          description: Over-receipt without override authority, UoM conversion undefined, lot number required, or serial count mismatch
       security:
       - bearerAuth:
         - inventory:goods_receipt:create
@@ -4471,6 +4471,253 @@ paths:
       - Purchase Suggestions
       x-required-permissions:
       - inventory:replenishment:manage
+  /v1/inventory/putaway/rules:
+    get:
+      description: 'Returns every putaway rule, enabled or not, in the order the matcher tries them: tier precedence first (SKU, then SUBCATEGORY, then CATEGORY, then ANY), then ascending priority within a tier.
+
+        Use this tool to see which rule will govern an item and to find a ruleId before updating or deleting one; do not use listPutawayTasks, which returns generated work rather than configuration.
+
+        Preconditions: none.
+
+        Required inputs: none; there is no request body, paging or filtering.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when no rules are configured. That is not an error, but it does mean putaway task generation will fail for every line until at least an ANY rule exists.
+
+        '
+      operationId: listPutawayRules
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PutawayRuleResponse'
+                type: array
+          description: Putaway rules returned in resolution order
+      security:
+      - bearerAuth:
+        - inventory:putaway_rule:view
+      summary: List Putaway Rules
+      tags:
+      - Putaway
+      x-required-permissions:
+      - inventory:putaway_rule:view
+    post:
+      description: 'Creates a putaway rule that routes matching received lines to a destination bin.
+
+        Use this tool to configure where an item class should be stored; use updatePutawayRule to change a rule that already exists, and do not use it to move stock — a rule only affects which destination future generatePutawayTasks calls suggest.
+
+        Preconditions: at most one enabled ANY rule may exist. ANY matches every line, so a second enabled one would be unreachable configuration and is refused with 409.
+
+        Required inputs: priority (at least 0), matchType (SKU, SUBCATEGORY, CATEGORY or ANY), destinationLocationId (UUID), plus matchValue — a catalog product, subcategory or category id — which is required for every matchType except ANY and must be omitted for ANY. destinationStrategy defaults to FIXED and isEnabled defaults to true.
+
+        Emits an INVENTORY_PUTAWAY_RULE_CREATE event; no stock moves and existing putaway tasks keep the destinations they were generated with.
+
+        Returns 400 when matchValue is missing for a typed rule, supplied for an ANY rule, or is not a valid UUID, and 409 when an enabled ANY rule already exists.
+
+        '
+      operationId: createPutawayRule
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Route tires to a tire rack:
+                description: Route tires to a tire rack
+                value:
+                  destinationLocationId: 01960004-0001-7000-8000-000000000047
+                  destinationStrategy: FIXED
+                  isEnabled: true
+                  matchType: CATEGORY
+                  matchValue: 01960030-0000-7000-8000-000000000001
+                  priority: 10
+            schema:
+              $ref: '#/components/schemas/PutawayRuleRequest'
+        description: The rule to create.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PutawayRuleResponse'
+          description: Putaway rule created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Validation failure
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: An enabled ANY rule already exists
+      security:
+      - bearerAuth:
+        - inventory:putaway_rule:manage
+      summary: Create Putaway Rule
+      tags:
+      - Putaway
+      x-required-permissions:
+      - inventory:putaway_rule:manage
+  /v1/inventory/putaway/rules/{ruleId}:
+    delete:
+      description: 'Deletes a putaway rule permanently.
+
+        Use this tool to retire configuration outright; do not use it to take a rule out of service temporarily — call updatePutawayRule with isEnabled false instead, since a disabled rule is unreachable but recoverable whereas this is not.
+
+        Preconditions: the rule must exist. Deleting the only enabled ANY rule is permitted but removes the terminal fallback, after which generatePutawayTasks fails for any line no other rule matches.
+
+        Required inputs: ruleId (UUID string) path parameter; there is no request body.
+
+        Emits an INVENTORY_PUTAWAY_RULE_DELETE event; no stock moves and putaway tasks already generated under this rule are unaffected.
+
+        Returns 404 when the rule does not exist, and 400 when ruleId is not a valid UUID.
+
+        '
+      operationId: deletePutawayRule
+      parameters:
+      - description: Putaway rule identifier
+        in: path
+        name: ruleId
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Putaway rule deleted
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Putaway rule not found
+      security:
+      - bearerAuth:
+        - inventory:putaway_rule:manage
+      summary: Delete Putaway Rule
+      tags:
+      - Putaway
+      x-required-permissions:
+      - inventory:putaway_rule:manage
+    get:
+      description: 'Returns one putaway rule by id, with its match tier, match value, destination and strategy.
+
+        Use this tool to read a single rule''s current state before replacing it with updatePutawayRule; do not use it to discover which rule governs a SKU, because that depends on tier precedence across all enabled rules — list them with listPutawayRules instead, which is also how you find ids.
+
+        Preconditions: the rule must exist.
+
+        Required inputs: ruleId (UUID string) path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no rule exists for the supplied id, and 400 when ruleId is not a valid UUID.
+
+        '
+      operationId: getPutawayRule
+      parameters:
+      - description: Putaway rule identifier
+        in: path
+        name: ruleId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PutawayRuleResponse'
+          description: Putaway rule returned
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Putaway rule not found
+      security:
+      - bearerAuth:
+        - inventory:putaway_rule:view
+      summary: Get Putaway Rule
+      tags:
+      - Putaway
+      x-required-permissions:
+      - inventory:putaway_rule:view
+    put:
+      description: 'Replaces every field of an existing putaway rule; this is a full replacement, not a patch, so an omitted destinationStrategy falls back to FIXED. The one exception is isEnabled: omitting it keeps the rule''s current enabled state, so a PUT that only retunes a priority cannot silently re-enable a rule somebody deliberately disabled.
+
+        Use this tool to retarget, reprioritise, enable or disable a rule; do not use it to add a rule that does not exist yet — call createPutawayRule instead, and do not use it to redirect stock already on a generated task, which keeps the destination it was given.
+
+        Preconditions: the rule must exist, and enabling an ANY rule while another enabled ANY rule exists is refused with 409. A rule never conflicts with itself.
+
+        Required inputs: ruleId (UUID string) path parameter, plus the same body as createPutawayRule — priority, matchType, destinationLocationId and a matchValue required for every matchType except ANY.
+
+        Emits an INVENTORY_PUTAWAY_RULE_UPDATE event; no stock moves and putaway tasks already generated keep their destinations.
+
+        Returns 404 when the rule does not exist, 400 on the same validation failures as createPutawayRule, and 409 when another enabled ANY rule already exists.
+
+        '
+      operationId: updatePutawayRule
+      parameters:
+      - description: Putaway rule identifier
+        in: path
+        name: ruleId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Route tires to a tire rack:
+                description: Route tires to a tire rack
+                value:
+                  destinationLocationId: 01960004-0001-7000-8000-000000000047
+                  destinationStrategy: FIXED
+                  isEnabled: true
+                  matchType: CATEGORY
+                  matchValue: 01960030-0000-7000-8000-000000000001
+                  priority: 10
+            schema:
+              $ref: '#/components/schemas/PutawayRuleRequest'
+        description: The rule's replacement state.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PutawayRuleResponse'
+          description: Putaway rule updated
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Validation failure
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Putaway rule not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Another enabled ANY rule already exists
+      security:
+      - bearerAuth:
+        - inventory:putaway_rule:manage
+      summary: Update Putaway Rule
+      tags:
+      - Putaway
+      x-required-permissions:
+      - inventory:putaway_rule:manage
   /v1/inventory/putaway/tasks:
     get:
       description: 'Returns every UNASSIGNED putaway task, each with its product, quantity, staging source and suggested destination.
@@ -4531,7 +4778,7 @@ paths:
 
         Emits an INVENTORY_PUTAWAY_TASK_GENERATE event; the tasks are created UNASSIGNED and no stock moves until executePutaway runs.
 
-        Returns 404 when the goods receipt does not exist, and 400 when both line forms are supplied, neither is supplied, an id is not a valid UUID, or a quantity is below 1.
+        Returns 404 when the goods receipt does not exist, 400 when both line forms are supplied, neither is supplied, an id is not a valid UUID, or a quantity is below 1, and 422 when the receipt is not booked into the staging location (RECEIPT_NOT_STAGED), when no enabled rule matches a line and no ANY fallback rule exists (NO_PUTAWAY_RULE_MATCH), or when the resolved destination is not physically fit for the line''s catalog class (LOCATION_NOT_VALID_FOR_SKU).
 
         '
       operationId: generatePutawayTasks
@@ -4575,6 +4822,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Goods receipt not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Receipt not staged, no matching putaway rule, or destination not fit for the SKU
       security:
       - bearerAuth:
         - inventory:putaway:generate
@@ -11161,6 +11414,91 @@ components:
       required:
       - productId
       - quantity
+      type: object
+    PutawayRuleRequest:
+      description: 'A putaway rule: what a received line must be for this rule to govern it, and where that line should then be suggested to go'
+      properties:
+        destinationLocationId:
+          description: The bin this rule points at. For FIXED it is the suggested destination outright; for LAST_USED and CLOSEST_AVAILABLE it is the anchor the strategy searches from and the fallback when the strategy cannot be honoured.
+          example: 01960004-0001-7000-8000-000000000047
+          format: uuid
+          type: string
+        destinationStrategy:
+          description: How the destination is chosen once this rule wins; defaults to FIXED
+          enum:
+          - FIXED
+          - LAST_USED
+          - CLOSEST_AVAILABLE
+          example: FIXED
+          type: string
+        isEnabled:
+          description: Whether the rule participates in matching; defaults to true. A disabled rule is unreachable and is not subject to the single-enabled-ANY-rule constraint.
+          example: true
+          type: boolean
+        matchType:
+          description: Which tier this rule matches at. Resolution runs SKU, then SUBCATEGORY, then CATEGORY, then ANY, and stops at the first tier with a match — so a SKU rule always beats a subcategory rule for the same item, whatever their priorities.
+          enum:
+          - SKU
+          - SUBCATEGORY
+          - CATEGORY
+          - ANY
+          example: CATEGORY
+          type: string
+        matchValue:
+          description: 'The id this rule matches: a catalog product id for SKU, a catalog subcategory id for SUBCATEGORY, a catalog category id for CATEGORY. Must be omitted for ANY, which matches every line.'
+          example: 01960030-0000-7000-8000-000000000001
+          type: string
+        priority:
+          description: Lower wins. Ties are broken arbitrarily, so give rules in the same tier distinct priorities if the order between them matters.
+          example: 10
+          format: int32
+          minimum: 0
+          type: integer
+      required:
+      - destinationLocationId
+      - matchType
+      - priority
+      type: object
+    PutawayRuleResponse:
+      description: A configured putaway rule
+      properties:
+        createdAt:
+          description: When the rule was created
+          format: date-time
+          type: string
+        destinationLocationId:
+          description: The bin this rule points at
+          example: 01960004-0001-7000-8000-000000000047
+          type: string
+        destinationStrategy:
+          description: How the destination is chosen once this rule wins
+          example: FIXED
+          type: string
+        isEnabled:
+          description: Whether the rule participates in matching
+          example: true
+          type: boolean
+        matchType:
+          description: 'Tier this rule matches at: SKU, SUBCATEGORY, CATEGORY or ANY'
+          example: CATEGORY
+          type: string
+        matchValue:
+          description: The catalog id this rule matches; null for ANY
+          example: 01960030-0000-7000-8000-000000000001
+          type: string
+        priority:
+          description: Match priority; lower wins within a tier
+          example: 10
+          format: int32
+          type: integer
+        ruleId:
+          description: Rule identifier
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a40
+          type: string
+        updatedAt:
+          description: When the rule was last modified
+          format: date-time
+          type: string
       type: object
     PutawayTaskResponse:
       description: Putaway task describing a product to move from staging to a suggested storage location

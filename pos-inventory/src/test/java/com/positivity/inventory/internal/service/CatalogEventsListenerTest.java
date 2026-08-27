@@ -45,6 +45,8 @@ class CatalogEventsListenerTest {
     private static final UUID PRODUCT_ID = UUID.fromString("018f0000-0000-7000-8000-000000000c01");
     private static final UUID GROUP_ID = UUID.fromString("018f0000-0000-7000-8000-000000000c02");
     private static final UUID MEMBER_ID = UUID.fromString("018f0000-0000-7000-8000-000000000c03");
+    private static final UUID CATEGORY_ID = UUID.fromString("018f0000-0000-7000-8000-000000000c04");
+    private static final UUID SUBCATEGORY_ID = UUID.fromString("018f0000-0000-7000-8000-000000000c05");
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtProductReplicaRepository extProduct = mock(ExtProductReplicaRepository.class);
@@ -75,13 +77,24 @@ class CatalogEventsListenerTest {
                  "aggregateId":"%s","aggregateVersion":%d,
                  "payload":{"productId":"%s","sku":"OIL-5W30","name":"Engine Oil 5W30","active":true,
                             "updatedAt":"2026-07-20T10:00:00Z",
+                            "categoryId":"%s","category":"Electrical System",
+                            "subcategoryId":"%s","subcategory":"Batteries",
                             "baseUom":"EA","trackingLevel":"LOT",
                             "uomConversions":[
                               {"uomCode":"EA","uomType":"BASE","factorToBase":1,"precisionScale":0},
                               {"uomCode":"CASE","uomType":"PURCHASE","factorToBase":12,"precisionScale":2}],
                             "substitutionGroupId":"%s","substitutionProductIds":["%s","%s"],
                             "productCode":"4012345678901","productCodeType":"EAN"}}
-                """.formatted(eventId, PRODUCT_ID, aggregateVersion, PRODUCT_ID, GROUP_ID, PRODUCT_ID, MEMBER_ID);
+                """.formatted(
+                        eventId,
+                        PRODUCT_ID,
+                        aggregateVersion,
+                        PRODUCT_ID,
+                        CATEGORY_ID,
+                        SUBCATEGORY_ID,
+                        GROUP_ID,
+                        PRODUCT_ID,
+                        MEMBER_ID);
     }
 
     /** Pre-v2 fact: none of the v2 fields present. */
@@ -205,6 +218,69 @@ class CatalogEventsListenerTest {
         verify(extProductUom, never()).save(any());
         verify(extProductSubstitution).deleteByProductId(PRODUCT_ID);
         verify(extProductSubstitution, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Category and subcategory land on the ext_product replica (#1514)")
+    void replicatesCategoryAndSubcategory() {
+        when(processedEvents.existsById("e-cat")).thenReturn(false);
+        when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+
+        listener.onCatalogEvent(v2Event("e-cat", 100));
+
+        ArgumentCaptor<ExtProductReplica> parent = ArgumentCaptor.captor();
+        verify(extProduct).save(parent.capture());
+        assertThat(parent.getValue().getCategoryId()).isEqualTo(CATEGORY_ID);
+        assertThat(parent.getValue().getCategoryName()).isEqualTo("Electrical System");
+        assertThat(parent.getValue().getSubcategoryId()).isEqualTo(SUBCATEGORY_ID);
+        assertThat(parent.getValue().getSubcategoryName()).isEqualTo("Batteries");
+    }
+
+    @Test
+    @DisplayName("A fact with no category pair replicates nulls rather than blanks")
+    void uncategorisedProductReplicatesNulls() {
+        when(processedEvents.existsById("e-nocat")).thenReturn(false);
+        when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.empty());
+
+        listener.onCatalogEvent(v1Event("e-nocat", 100));
+
+        ArgumentCaptor<ExtProductReplica> parent = ArgumentCaptor.captor();
+        verify(extProduct).save(parent.capture());
+        assertThat(parent.getValue().getCategoryId()).isNull();
+        assertThat(parent.getValue().getCategoryName()).isNull();
+        assertThat(parent.getValue().getSubcategoryId()).isNull();
+        assertThat(parent.getValue().getSubcategoryName()).isNull();
+    }
+
+    @Test
+    @DisplayName("Recategorisation is a full overwrite — the previous category does not survive")
+    void recategorisationOverwritesThePreviousCategory() {
+        when(processedEvents.existsById("e-recat")).thenReturn(false);
+        ExtProductReplica stale = existingReplica(50);
+        stale.setCategoryId(UUID.fromString("018f0000-0000-7000-8000-0000000000ff"));
+        stale.setCategoryName("Filters");
+        stale.setSubcategoryId(UUID.fromString("018f0000-0000-7000-8000-0000000000fe"));
+        stale.setSubcategoryName("Oil Filters");
+        when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.of(stale));
+
+        listener.onCatalogEvent(v2Event("e-recat", 100));
+
+        ArgumentCaptor<ExtProductReplica> parent = ArgumentCaptor.captor();
+        verify(extProduct).save(parent.capture());
+        assertThat(parent.getValue().getCategoryName()).isEqualTo("Electrical System");
+        assertThat(parent.getValue().getSubcategoryName()).isEqualTo("Batteries");
+    }
+
+    @Test
+    @DisplayName("The stale guard still holds with the category fields: a lower version cannot recategorise")
+    void staleFactCannotRecategorise() {
+        when(processedEvents.existsById("e-stale-cat")).thenReturn(false);
+        when(extProduct.findById(PRODUCT_ID)).thenReturn(Optional.of(existingReplica(200)));
+
+        listener.onCatalogEvent(v2Event("e-stale-cat", 100));
+
+        verify(extProduct, never()).save(any());
+        verify(processedEvents).save(any());
     }
 
     @Test

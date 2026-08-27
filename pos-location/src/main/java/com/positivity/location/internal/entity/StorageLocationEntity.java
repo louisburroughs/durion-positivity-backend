@@ -1,5 +1,7 @@
 package com.positivity.location.internal.entity;
 
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.shared.id.UUIDv7Id;
@@ -77,6 +79,32 @@ public class StorageLocationEntity {
         return parentStorageLocation != null ? parentStorageLocation.getId() : null;
     }
 
+    /**
+     * Putaway capability of the location — what it is fit to hold — distinct from {@link #type},
+     * which is physical topology (issue #1514).
+     *
+     * <p>Nullable on purpose: rows that predate the capability declare none, so V8 needed no
+     * backfill. Null is resolved to {@link StorageCategory#GENERAL} at every read boundary via
+     * {@link StorageCategory#orDefault}, never here, so the stored state stays honest about
+     * whether an operator ever declared one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "storage_category_code", length = 30)
+    private StorageCategory storageCategoryCode;
+
+    /**
+     * Whether the location provides spill/hazard containment. Backs the putaway compatibility
+     * matrix, which requires containment for battery and oil storage (issue #1514).
+     */
+    @Column(name = "hazard_containment", nullable = false)
+    private boolean hazardContainment;
+
+    /** Whether the location will take stock of a product it is not already holding (#1514). */
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    @Column(name = "allow_new_product", nullable = false, length = 30)
+    private AllowNewProductPolicy allowNewProduct = AllowNewProductPolicy.MIXED;
+
     @Column(name = "capacity", columnDefinition = "TEXT")
     private String capacity;
 
@@ -107,6 +135,11 @@ public class StorageLocationEntity {
     void onCreate() {
         if (status == null) {
             status = StorageLocationStatus.ACTIVE;
+        }
+        // allow_new_product is NOT NULL in the schema; an entity built through the no-args
+        // constructor bypasses the builder default, so coerce it the same way status is (#1514).
+        if (allowNewProduct == null) {
+            allowNewProduct = AllowNewProductPolicy.MIXED;
         }
     }
 }

@@ -50,6 +50,166 @@ class CatalogBulkIngestControllerTest {
     @MockitoBean
     ProductMasterDataService productMasterDataService;
 
+    @MockitoBean
+    com.positivity.catalog.internal.service.CategoryNameResolver categoryNameResolver;
+
+    // ─── category / subcategory resolution by name ───────────────────────────
+
+    private static final UUID ELECTRICAL_SYSTEM_ID = UUID.fromString("01960030-0000-7000-8000-000000000004");
+    private static final UUID BATTERIES_ID = UUID.fromString("01960031-0000-7000-8000-00000000000e");
+
+    private BulkIngestRequest<CatalogBulkIngestRecord> singleRecordRequest(CatalogBulkIngestRecord ingestRecord) {
+        BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(ingestRecord));
+        return request;
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_resolvesCategoryAndSubcategoryNamesOntoTheCreateRequest() throws Exception {
+        CatalogBulkIngestRecord ingestRecord = new CatalogBulkIngestRecord();
+        ingestRecord.setSku("MOT-BAT-31");
+        ingestRecord.setName("Group 31 AGM Battery");
+        ingestRecord.setCategoryName("Electrical System");
+        ingestRecord.setSubcategoryName("Batteries");
+
+        ProductDto productDto = new ProductDto();
+        productDto.setId(PRODUCT_ID);
+        when(productMasterDataService.createProduct(any())).thenReturn(productDto);
+        when(categoryNameResolver.resolveCategoryId("Electrical System")).thenReturn(ELECTRICAL_SYSTEM_ID);
+        when(categoryNameResolver.resolveSubcategoryId("Batteries")).thenReturn(BATTERIES_ID);
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(singleRecordRequest(ingestRecord))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(0));
+
+        var captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.catalog.internal.dto.ProductCreateRequestDto.class);
+        org.mockito.Mockito.verify(productMasterDataService).createProduct(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getCategoryId())
+                .isEqualTo(ELECTRICAL_SYSTEM_ID);
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getSubcategoryId())
+                .isEqualTo(BATTERIES_ID);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_unknownCategoryName_failsThatRowRatherThanLandingUncategorized() throws Exception {
+        CatalogBulkIngestRecord ingestRecord = new CatalogBulkIngestRecord();
+        ingestRecord.setSku("BAD-CAT-1");
+        ingestRecord.setName("Mystery Part");
+        ingestRecord.setCategoryName("Sprockets");
+
+        when(categoryNameResolver.resolveCategoryId("Sprockets"))
+                .thenThrow(new com.positivity.catalog.internal.exception.CatalogValidationException(
+                        "Category not found by name: Sprockets"));
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(singleRecordRequest(ingestRecord))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(0))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("CATALOG_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("Category not found by name: Sprockets"));
+
+        org.mockito.Mockito.verify(productMasterDataService, org.mockito.Mockito.never())
+                .createProduct(any());
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_unknownSubcategoryName_failsThatRow() throws Exception {
+        CatalogBulkIngestRecord ingestRecord = new CatalogBulkIngestRecord();
+        ingestRecord.setSku("BAD-SUB-1");
+        ingestRecord.setName("Mystery Part");
+        ingestRecord.setSubcategoryName("Flux Capacitors");
+
+        when(categoryNameResolver.resolveSubcategoryId("Flux Capacitors"))
+                .thenThrow(new com.positivity.catalog.internal.exception.CatalogValidationException(
+                        "Subcategory not found by name: Flux Capacitors"));
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(singleRecordRequest(ingestRecord))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(0))
+                .andExpect(jsonPath("$.failureCount").value(1));
+
+        org.mockito.Mockito.verify(productMasterDataService, org.mockito.Mockito.never())
+                .createProduct(any());
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_oneBadCategoryRow_doesNotFailTheWholeBatch() throws Exception {
+        CatalogBulkIngestRecord good = new CatalogBulkIngestRecord();
+        good.setSku("GOOD-1");
+        good.setName("Group 31 AGM Battery");
+        good.setCategoryName("Electrical System");
+
+        CatalogBulkIngestRecord bad = new CatalogBulkIngestRecord();
+        bad.setSku("BAD-1");
+        bad.setName("Mystery Part");
+        bad.setCategoryName("Sprockets");
+
+        BulkIngestRequest<CatalogBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(good, bad));
+
+        ProductDto productDto = new ProductDto();
+        productDto.setId(PRODUCT_ID);
+        when(productMasterDataService.createProduct(any())).thenReturn(productDto);
+        when(categoryNameResolver.resolveCategoryId("Electrical System")).thenReturn(ELECTRICAL_SYSTEM_ID);
+        when(categoryNameResolver.resolveCategoryId("Sprockets"))
+                .thenThrow(new com.positivity.catalog.internal.exception.CatalogValidationException(
+                        "Category not found by name: Sprockets"));
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSubmitted").value(2))
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].success").value(true))
+                .andExpect(jsonPath("$.results[1].success").value(false));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"catalog:product:create"})
+    void bulkIngest_absentCategoryNames_landUncategorizedWithoutError() throws Exception {
+        CatalogBulkIngestRecord ingestRecord = new CatalogBulkIngestRecord();
+        ingestRecord.setSku("NOCAT-1");
+        ingestRecord.setName("Unclassified Widget");
+
+        ProductDto productDto = new ProductDto();
+        productDto.setId(PRODUCT_ID);
+        when(productMasterDataService.createProduct(any())).thenReturn(productDto);
+        when(categoryNameResolver.resolveCategoryId(null)).thenReturn(null);
+        when(categoryNameResolver.resolveSubcategoryId(null)).thenReturn(null);
+
+        mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(singleRecordRequest(ingestRecord))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1));
+
+        var captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.catalog.internal.dto.ProductCreateRequestDto.class);
+        org.mockito.Mockito.verify(productMasterDataService).createProduct(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getCategoryId())
+                .isNull();
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getSubcategoryId())
+                .isNull();
+    }
+
     // ─── POST /v1/catalog/bulk-ingest — 200 OK ───────────────────────────────
 
     @Test

@@ -902,13 +902,16 @@ public enum PermissionCode {
     PEOPLE__TIMEPERIOD__CREATE(488, "people:timePeriod:create"),
     PEOPLE__TIMEPERIOD__TRANSITION(489, "people:timePeriod:transition"),
     // ── Tax (new) ──────────────────────────────────────────────────────────────
-    TAX__RATES__VIEW(490, "tax:rates:view");
+    TAX__RATES__VIEW(490, "tax:rates:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__PUTAWAY_RULE__MANAGE(491, "inventory:putaway_rule:manage"),
+    INVENTORY__PUTAWAY_RULE__VIEW(492, "inventory:putaway_rule:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 63;
+    public static final int CATALOG_VERSION = 64;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

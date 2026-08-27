@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
@@ -11,6 +12,8 @@ import com.positivity.location.internal.dto.StorageLocationRequest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
@@ -28,6 +31,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -141,6 +145,131 @@ class StorageLocationServiceTest {
 
         assertThat(response.getCapacity()).containsEntry("unitCount", 50);
         assertThat(response.getTemperature()).containsEntry("minCelsius", 2);
+    }
+
+    // -------------------------------------------------------------------------
+    // Putaway capability (issue #1514)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1514 - create round-trips the putaway capability, containment and mixing policy")
+    void createStorageLocation_withCapability_roundTripsCapability() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        StorageLocationRequest request = validRequest("Battery Rack A", "BAR-BAT", StorageLocationType.SHELF, null);
+        request.setStorageCategoryCode(StorageCategory.BATTERY_RACK);
+        request.setHazardContainment(true);
+        request.setAllowNewProduct(AllowNewProductPolicy.SAME_PRODUCT_ONLY);
+
+        stubCreate(siteId, "Battery Rack A", "BAR-BAT", newId);
+
+        StorageLocationResponse response = storageLocationService.createStorageLocation(siteId, request);
+
+        assertThat(response.getStorageCategoryCode()).isEqualTo(StorageCategory.BATTERY_RACK);
+        assertThat(response.isHazardContainment()).isTrue();
+        assertThat(response.getAllowNewProduct()).isEqualTo(AllowNewProductPolicy.SAME_PRODUCT_ONLY);
+    }
+
+    @Test
+    @DisplayName("#1514 - create without a capability persists NULL and reads back as GENERAL")
+    void createStorageLocation_withoutCapability_readsAsGeneral() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID newId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        StorageLocationRequest request = validRequest("Plain Bin", "BAR-PLAIN", StorageLocationType.BIN, null);
+
+        ArgumentCaptor<StorageLocationEntity> captor = ArgumentCaptor.forClass(StorageLocationEntity.class);
+        stubCreate(siteId, "Plain Bin", "BAR-PLAIN", newId);
+
+        StorageLocationResponse response = storageLocationService.createStorageLocation(siteId, request);
+
+        // Stored undeclared (the column stays nullable so pre-#1514 rows need no backfill) but
+        // resolved to the permissive default on the way out.
+        verify(storageLocationRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getStorageCategoryCode()).isNull();
+        assertThat(response.getStorageCategoryCode()).isEqualTo(StorageCategory.GENERAL);
+        assertThat(response.isHazardContainment()).isFalse();
+        assertThat(response.getAllowNewProduct()).isEqualTo(AllowNewProductPolicy.MIXED);
+    }
+
+    @Test
+    @DisplayName("#1514 - get resolves a stored NULL capability as GENERAL")
+    void getStorageLocation_nullCapability_readsAsGeneral() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID storageId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        StorageLocationEntity entity = StorageLocationEntity.builder()
+                .id(storageId)
+                .name("Legacy Bin")
+                .type(StorageLocationType.BIN)
+                .status(StorageLocationStatus.ACTIVE)
+                .site(Location.builder().id(siteId).build())
+                .build();
+        when(storageLocationRepository.findByIdAndSiteId(storageId, siteId)).thenReturn(Optional.of(entity));
+
+        StorageLocationResponse response = storageLocationService.getStorageLocation(siteId, storageId);
+
+        assertThat(response.getStorageCategoryCode()).isEqualTo(StorageCategory.GENERAL);
+    }
+
+    @Test
+    @DisplayName("#1514 - patch updates the capability, containment and mixing policy")
+    void patchStorageLocation_updatesCapability() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID storageId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        StorageLocationEntity existing = StorageLocationEntity.builder()
+                .id(storageId)
+                .name("Rack 1")
+                .type(StorageLocationType.SHELF)
+                .status(StorageLocationStatus.ACTIVE)
+                .site(Location.builder().id(siteId).build())
+                .build();
+
+        StorageLocationPatchRequest patch = StorageLocationPatchRequest.builder()
+                .storageCategoryCode(StorageCategory.TIRE_RACK)
+                .hazardContainment(Boolean.TRUE)
+                .allowNewProduct(AllowNewProductPolicy.EMPTY_ONLY)
+                .build();
+
+        when(storageLocationRepository.findByIdAndSiteId(storageId, siteId)).thenReturn(Optional.of(existing));
+        when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        StorageLocationResponse response = storageLocationService.patchStorageLocation(siteId, storageId, patch);
+
+        assertThat(response.getStorageCategoryCode()).isEqualTo(StorageCategory.TIRE_RACK);
+        assertThat(response.isHazardContainment()).isTrue();
+        assertThat(response.getAllowNewProduct()).isEqualTo(AllowNewProductPolicy.EMPTY_ONLY);
+    }
+
+    @Test
+    @DisplayName("#1514 - patch omitting the capability fields leaves them unchanged")
+    void patchStorageLocation_withoutCapabilityFields_leavesThemUnchanged() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID storageId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        StorageLocationEntity existing = StorageLocationEntity.builder()
+                .id(storageId)
+                .name("Oil Store")
+                .type(StorageLocationType.FLOOR)
+                .status(StorageLocationStatus.ACTIVE)
+                .site(Location.builder().id(siteId).build())
+                .storageCategoryCode(StorageCategory.OIL_STORAGE)
+                .hazardContainment(true)
+                .allowNewProduct(AllowNewProductPolicy.SAME_PRODUCT_ONLY)
+                .build();
+
+        StorageLocationPatchRequest patch =
+                StorageLocationPatchRequest.builder().name("Oil Store West").build();
+
+        when(storageLocationRepository.findByIdAndSiteId(storageId, siteId)).thenReturn(Optional.of(existing));
+        when(storageLocationRepository.existsByNameIgnoreCaseAndSiteIdAndIdNot("Oil Store West", siteId, storageId))
+                .thenReturn(false);
+        when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        StorageLocationResponse response = storageLocationService.patchStorageLocation(siteId, storageId, patch);
+
+        assertThat(response.getStorageCategoryCode()).isEqualTo(StorageCategory.OIL_STORAGE);
+        assertThat(response.isHazardContainment()).isTrue();
+        assertThat(response.getAllowNewProduct()).isEqualTo(AllowNewProductPolicy.SAME_PRODUCT_ONLY);
     }
 
     /**
@@ -1048,5 +1177,29 @@ class StorageLocationServiceTest {
                 .type(type)
                 .parentStorageLocationId(parentId)
                 .build();
+    }
+
+    /**
+     * Stubs the site lookup, both uniqueness pre-checks and the save for a create that is
+     * expected to succeed, echoing the entity back with {@code newId} assigned.
+     *
+     * @param siteId  owning site
+     * @param name    requested display name
+     * @param barcode requested barcode
+     * @param newId   id the repository assigns on save
+     */
+    private void stubCreate(UUID siteId, String name, String barcode, UUID newId) {
+        when(locationRepository.findById(siteId))
+                .thenReturn(Optional.of(Location.builder().id(siteId).build()));
+        when(storageLocationRepository.existsByNameIgnoreCaseAndSiteId(name, siteId))
+                .thenReturn(false);
+        when(storageLocationRepository.existsByBarcodeAndSiteId(barcode, siteId))
+                .thenReturn(false);
+        when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
+                .thenAnswer(inv -> {
+                    StorageLocationEntity e = inv.getArgument(0);
+                    e.setId(newId);
+                    return e;
+                });
     }
 }

@@ -314,11 +314,20 @@ Instant createdAt
 putaway_rule {
 UUID ruleId
 Integer priority
-String criteria
+PutawayRuleMatchType matchType
+String matchValue
 UUID destinationLocationId
+PutawayDestinationStrategy destinationStrategy
 boolean isEnabled
 Instant createdAt
 Instant updatedAt
+}
+storage_compatibility {
+UUID compatibilityId
+StorageCompatibilityMatchLevel matchLevel
+UUID catalogRefId
+String storageCategoryCode
+boolean requiresContainment
 }
 putaway_task {
 UUID taskId

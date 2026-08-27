@@ -11,12 +11,11 @@ import com.positivity.inventory.internal.exception.ReceiptNotStagedException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
-import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayGenerationService;
 import com.positivity.inventory.service.PutawayValidationService;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PutawayGenerationServiceImpl implements PutawayGenerationService {
 
-    private static final UUID DEFAULT_LOCATION = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-    private final PutawayRuleRepository putawayRuleRepository;
+    private final PutawayRuleMatcher putawayRuleMatcher;
     private final PutawayTaskRepository putawayTaskRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final PutawayDestinationResolver putawayDestinationResolver;
@@ -51,14 +48,15 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
             throw new ReceiptNotStagedException(sourceReceiptId, sourceReceipt.getLocationId(), stagingLocationId);
         }
 
-        List<PutawayRule> enabledRules = putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAsc();
-        Optional<PutawayRule> winningRule =
-                enabledRules.isEmpty() ? Optional.empty() : Optional.of(enabledRules.get(0));
-
         List<ParsedPutawayLineItem> lineItems = resolveLineItems(request);
 
+        // One rule lookup and one category lookup for the whole receipt, but a rule resolved per
+        // line: two lines of a receipt legitimately land in different bins (#1514).
+        Map<UUID, PutawayRule> rulesByProduct = putawayRuleMatcher.matchAll(
+                lineItems.stream().map(ParsedPutawayLineItem::productId).toList());
+
         List<PutawayTask> tasks = lineItems.stream()
-                .map(lineItem -> toTask(sourceReceipt, lineItem, winningRule))
+                .map(lineItem -> toTask(sourceReceipt, lineItem, rulesByProduct.get(lineItem.productId())))
                 .toList();
 
         return putawayTaskRepository.saveAll(tasks).stream()
@@ -105,17 +103,23 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     }
 
     /**
-     * Builds an unassigned putaway task for one received line, resolving the
-     * suggested destination via the winning rule's destination strategy
-     * (odoo-parity K2, issue #1055). With no matching rule the pre-K2 default
-     * location is used; a {@code FIXED} rule yields byte-identical pre-K2
-     * behavior (fixed destination, no fallback metadata).
+     * Builds an unassigned putaway task for one received line, resolving the suggested destination
+     * via the line's own winning rule and that rule's destination strategy (odoo-parity K2, issue
+     * #1055). A {@code FIXED} rule yields byte-identical pre-K2 behavior (fixed destination, no
+     * fallback metadata).
+     *
+     * <p>{@code winningRule} is never null: {@link PutawayRuleMatcher} either returns a rule for
+     * every product or throws {@code NoPutawayRuleMatchException}. The hardcoded
+     * {@code 00000000-0000-0000-0000-000000000001} default location this method used to fall back on
+     * is gone (#1514) — no environment ever had that bin, so it produced a task pointing at a
+     * location that does not exist and deferred the failure to execution time. An enabled
+     * {@code ANY} rule is the terminal fallback now, and its absence is reported as a configuration
+     * error at once.
      */
     private PutawayTask toTask(
-            GoodsReceiptEntity sourceReceipt, ParsedPutawayLineItem lineItem, Optional<PutawayRule> winningRule) {
-        PutawayDestinationResolver.ResolvedDestination destination = winningRule
-                .map(rule -> putawayDestinationResolver.resolve(rule, lineItem.productId(), lineItem.quantity()))
-                .orElseGet(() -> new PutawayDestinationResolver.ResolvedDestination(DEFAULT_LOCATION, null, null));
+            GoodsReceiptEntity sourceReceipt, ParsedPutawayLineItem lineItem, PutawayRule winningRule) {
+        PutawayDestinationResolver.ResolvedDestination destination =
+                putawayDestinationResolver.resolve(winningRule, lineItem.productId(), lineItem.quantity());
         putawayValidationService.validateLocationCompatibility(
                 destination.destinationLocationId(), lineItem.productId().toString());
 

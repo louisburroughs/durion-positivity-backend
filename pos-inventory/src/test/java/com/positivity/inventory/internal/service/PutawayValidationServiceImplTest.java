@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
@@ -16,7 +17,6 @@ import com.positivity.inventory.internal.exception.LocationNotValidForSkuExcepti
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
-import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -58,10 +58,10 @@ class PutawayValidationServiceImplTest {
     private PutawayRuleRepository putawayRuleRepository;
 
     @Mock
-    private ReplenishmentPolicyRepository replenishmentPolicyRepository;
+    private StorageLocationValidationService storageLocationValidationService;
 
     @Mock
-    private StorageLocationValidationService storageLocationValidationService;
+    private StorageCompatibilityEvaluator storageCompatibilityEvaluator;
 
     private PutawayValidationServiceImpl service;
 
@@ -70,13 +70,14 @@ class PutawayValidationServiceImplTest {
         service = new PutawayValidationServiceImpl(
                 inventoryLedgerEntryRepository,
                 putawayRuleRepository,
-                replenishmentPolicyRepository,
-                storageLocationValidationService);
+                storageLocationValidationService,
+                storageCompatibilityEvaluator);
         when(putawayRuleRepository.existsByDestinationLocationIdAndIsEnabledTrue(DESTINATION_LOCATION_ID))
                 .thenReturn(true);
-        when(replenishmentPolicyRepository.existsByItemSKU(SKU)).thenReturn(true);
-        when(replenishmentPolicyRepository.existsByItemSKUAndLocationId(SKU, DESTINATION_LOCATION_ID))
-                .thenReturn(true);
+        // #1514: physical fitness replaced the two replenishment-policy gates. The evaluator's own
+        // matrix logic is covered by StorageCompatibilityEvaluatorTest; here it is a collaborator.
+        when(storageCompatibilityEvaluator.evaluate(any(), anyString()))
+                .thenReturn(StorageCompatibilityEvaluator.Verdict.accept());
         when(storageLocationValidationService.getStorageLocationValidation(anyString()))
                 .thenReturn(locationValidation(true, true, 100));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
@@ -94,12 +95,23 @@ class PutawayValidationServiceImplTest {
 
     private static StorageLocationValidationService.StorageLocationValidation locationValidation(
             boolean exists, boolean active, Integer maxUnitCapacity) {
+        return locationValidation(exists, active, maxUnitCapacity, "GENERAL", false);
+    }
+
+    private static StorageLocationValidationService.StorageLocationValidation locationValidation(
+            boolean exists,
+            boolean active,
+            Integer maxUnitCapacity,
+            String storageCategoryCode,
+            Boolean hazardContainment) {
         StorageLocationValidationService.StorageLocationValidation validation =
                 new StorageLocationValidationService.StorageLocationValidation();
         validation.setStorageLocationId(DESTINATION_LOCATION_ID);
         validation.setExists(exists);
         validation.setActive(active);
         validation.setMaxUnitCapacity(maxUnitCapacity);
+        validation.setStorageCategoryCode(storageCategoryCode);
+        validation.setHazardContainment(hazardContainment);
         return validation;
     }
 
@@ -140,7 +152,7 @@ class PutawayValidationServiceImplTest {
     class ValidateLocationCompatibility {
 
         @Test
-        void acceptsAnEnabledLocationThatIsConfiguredForTheSku() {
+        void acceptsAnEnabledLocationThatIsPhysicallyFitForTheSku() {
             assertThat(service.validateLocationCompatibility(DESTINATION_LOCATION_ID, SKU)
                             .isValid())
                     .isTrue();
@@ -157,22 +169,42 @@ class PutawayValidationServiceImplTest {
         }
 
         @Test
-        void refusesASkuWithNoReplenishmentPolicy() {
-            when(replenishmentPolicyRepository.existsByItemSKU(SKU)).thenReturn(false);
+        @DisplayName("#1514 - a class/capability mismatch is refused, and the reason names it")
+        void refusesAClassCapabilityMismatch() {
+            when(storageCompatibilityEvaluator.evaluate(any(), anyString()))
+                    .thenReturn(StorageCompatibilityEvaluator.Verdict.refuse(
+                            "OIL_STORAGE does not accept catalog class Tires & Wheels (accepted: BULK_FLOOR,"
+                                    + " TIRE_RACK)"));
 
             assertThatThrownBy(() -> service.validateLocationCompatibility(DESTINATION_LOCATION_ID, SKU))
                     .isInstanceOf(LocationNotValidForSkuException.class)
-                    .hasMessageContaining("not configured in replenishment policies");
+                    .hasMessageContaining("OIL_STORAGE does not accept catalog class Tires & Wheels");
         }
 
         @Test
-        void refusesASkuThatIsNotAllowedAtTheDestination() {
-            when(replenishmentPolicyRepository.existsByItemSKUAndLocationId(SKU, DESTINATION_LOCATION_ID))
-                    .thenReturn(false);
+        @DisplayName("#1514 - the destination's capability is read and handed to the evaluator")
+        void passesTheDestinationCapabilityToTheEvaluator() {
+            when(storageLocationValidationService.getStorageLocationValidation(anyString()))
+                    .thenReturn(locationValidation(true, true, 100, "TIRE_RACK", true));
 
-            assertThatThrownBy(() -> service.validateLocationCompatibility(DESTINATION_LOCATION_ID, SKU))
-                    .isInstanceOf(LocationNotValidForSkuException.class)
-                    .hasMessageContaining("not allowed at destination");
+            service.validateLocationCompatibility(DESTINATION_LOCATION_ID, SKU);
+
+            org.mockito.ArgumentCaptor<StorageLocationValidationService.StorageLocationValidation> captor =
+                    org.mockito.ArgumentCaptor.forClass(
+                            StorageLocationValidationService.StorageLocationValidation.class);
+            verify(storageCompatibilityEvaluator).evaluate(captor.capture(), eq(SKU));
+            assertThat(captor.getValue().getStorageCategoryCode()).isEqualTo("TIRE_RACK");
+            assertThat(captor.getValue().getHazardContainment()).isTrue();
+        }
+
+        @Test
+        @DisplayName("#1514 - a SKU with no replenishment policy is no longer refused: that gate is gone")
+        void doesNotConsultReplenishmentPoliciesAtAll() {
+            // The bug in #1514: a brand-new SKU could never be put away anywhere because eligibility
+            // required an (itemSKU, locationId) replenishment-policy row. Nothing here reads one now.
+            assertThat(service.validateLocationCompatibility(DESTINATION_LOCATION_ID, "BRAND-NEW-SKU")
+                            .isValid())
+                    .isTrue();
         }
     }
 
@@ -217,26 +249,51 @@ class PutawayValidationServiceImplTest {
         }
 
         @Test
-        void refusesALocationWithNoConfiguredCapacity() {
+        @DisplayName("#1514 - a bin that declares no capacity is uncapped, not full")
+        void acceptsALocationWithNoDeclaredCapacity() {
             when(storageLocationValidationService.getStorageLocationValidation(anyString()))
                     .thenReturn(locationValidation(true, true, null));
-            when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DESTINATION_LOCATION_ID))
-                    .thenReturn(null);
 
-            assertThatThrownBy(() -> service.validateLocationCapacity(DESTINATION_LOCATION_ID, 1))
+            ValidationResult result = service.validateLocationCapacity(DESTINATION_LOCATION_ID, 1);
+
+            assertThat(result.isValid()).isTrue();
+            assertThat(result.getWarnings()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("#1514 - a huge putaway into an uncapped bin is still accepted with no warning")
+        void anUncappedBinNeverWarns() {
+            when(storageLocationValidationService.getStorageLocationValidation(anyString()))
+                    .thenReturn(locationValidation(true, true, null));
+
+            ValidationResult result = service.validateLocationCapacity(DESTINATION_LOCATION_ID, 1_000_000);
+
+            assertThat(result.isValid()).isTrue();
+            assertThat(result.getWarnings()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("#1514 - a DECLARED capacity of zero still refuses: it is not the same as undeclared")
+        void aDeclaredZeroCapacityStillRefuses() {
+            // pos-location can publish maxUnitCapacity = 0 from a capacity descriptor, which is an
+            // operator saying "hold nothing here". Only an absent value means uncapped.
+            when(storageLocationValidationService.getStorageLocationValidation(anyString()))
+                    .thenReturn(locationValidation(true, true, 0));
+
+            assertThatThrownBy(() -> service.validateLocationCapacity(DESTINATION_LOCATION_ID, 10))
                     .isInstanceOf(LocationAtCapacityException.class);
         }
 
         @Test
-        void fallsBackToTheReplenishmentPolicyMaximumWhenTheBinDeclaresNone() {
+        @DisplayName("#1514 - an uncapped bin is not even queried for on-hand: there is nothing to compare")
+        void anUncappedBinSkipsTheOnHandRead() {
             when(storageLocationValidationService.getStorageLocationValidation(anyString()))
-                    .thenReturn(locationValidation(true, true, 0));
-            when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DESTINATION_LOCATION_ID))
-                    .thenReturn(200);
+                    .thenReturn(locationValidation(true, true, null));
 
-            assertThat(service.validateLocationCapacity(DESTINATION_LOCATION_ID, 10)
-                            .isValid())
-                    .isTrue();
+            service.validateLocationCapacity(DESTINATION_LOCATION_ID, 10);
+
+            verify(inventoryLedgerEntryRepository, org.mockito.Mockito.never())
+                    .calculateOnHandQuantityAtLocation(eq(DESTINATION_LOCATION_ID), any(List.class));
         }
 
         @Test
@@ -438,11 +495,10 @@ class PutawayValidationServiceImplTest {
         }
 
         @Test
-        void reportsThatToleranceCannotBeJudgedWithoutAConfiguredCapacity() {
+        @DisplayName("#1514 - a declared zero capacity is still uncheckable for tolerance, and says so")
+        void reportsThatToleranceCannotBeJudgedForADeclaredZeroCapacity() {
             when(storageLocationValidationService.getStorageLocationValidation(anyString()))
-                    .thenReturn(locationValidation(true, true, null));
-            when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DESTINATION_LOCATION_ID))
-                    .thenReturn(0);
+                    .thenReturn(locationValidation(true, true, 0));
             PutawayExecutionRequest request = request(10);
             request.setOverrideCapacity(true);
             request.setOverrideReasonCode(OverrideReasonCode.CAPACITY_OVERRIDE);
@@ -453,6 +509,27 @@ class PutawayValidationServiceImplTest {
             ValidationResult result = service.validatePutawayExecution(request);
 
             assertThat(errorCodes(result)).contains("CAPACITY_OVERRIDE_TOLERANCE_UNCHECKABLE");
+        }
+
+        @Test
+        @DisplayName("#1514 - an uncapped bin needs no tolerance judgement, so the override raises no error")
+        void raisesNoToleranceErrorForAnUncappedBin() {
+            // Pre-#1514 this reported CAPACITY_OVERRIDE_TOLERANCE_UNCHECKABLE, because an undeclared
+            // capacity computed max = 0 and threw. An uncapped bin can no longer be over tolerance,
+            // so that error code was removed along with the branch that produced it.
+            when(storageLocationValidationService.getStorageLocationValidation(anyString()))
+                    .thenReturn(locationValidation(true, true, null));
+            PutawayExecutionRequest request = request(10);
+            request.setOverrideCapacity(true);
+            request.setOverrideReasonCode(OverrideReasonCode.CAPACITY_OVERRIDE);
+            request.setOverrideJustification("peak season");
+            request.setApprovedBy("ops.manager");
+            authenticateWith(PutawayPermissions.OVERRIDE_LOCATION_CAPACITY);
+
+            ValidationResult result = service.validatePutawayExecution(request);
+
+            assertThat(errorCodes(result)).isEmpty();
+            assertThat(warningCodes(result)).contains("CAPACITY_OVERRIDDEN");
         }
 
         @Test

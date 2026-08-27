@@ -633,6 +633,10 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}~1accept
   /v1/inventory/purchase-suggestions/{suggestionId}/dismiss:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}~1dismiss
+  /v1/inventory/putaway/rules:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1putaway~1rules
+  /v1/inventory/putaway/rules/{ruleId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1putaway~1rules~1{ruleId}
   /v1/inventory/putaway/tasks:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1putaway~1tasks
   /v1/inventory/putaway/tasks/generate:

@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrde
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
+import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
@@ -124,6 +125,16 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(DuplicateAsnException.class)
     public ResponseEntity<ApiError> handleDuplicateAsn(DuplicateAsnException ex) {
         return build(HttpStatus.CONFLICT, CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * A second enabled ANY putaway rule was requested (#1514). ANY matches every line, so only the
+     * first one the priority order reaches can ever fire; a second is unreachable configuration
+     * rather than a bad request, hence 409.
+     */
+    @ExceptionHandler(DuplicateEnabledAnyPutawayRuleException.class)
+    public ResponseEntity<ApiError> handleDuplicateEnabledAnyPutawayRule(DuplicateEnabledAnyPutawayRuleException ex) {
+        return build(HttpStatus.CONFLICT, DuplicateEnabledAnyPutawayRuleException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(OverReceiptNotPermittedException.class)

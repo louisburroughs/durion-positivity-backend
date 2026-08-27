@@ -50,6 +50,9 @@ public class StorageLocationController {
              "barcode":"SL-000312",
              "type":"BIN",
              "parentStorageLocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10",
+             "storageCategoryCode":"SMALL_PARTS_BIN",
+             "hazardContainment":false,
+             "allowNewProduct":"MIXED",
              "capacity":{"maxUnits":100},
              "temperature":{"min":2,"max":8,"unit":"C"}}
             """;
@@ -74,6 +77,12 @@ public class StorageLocationController {
                     parentStorageLocationId must reference a storage location of the same site.
                     Required inputs: name and type; barcode, parentStorageLocationId, capacity and temperature \
                     (free-form JSON objects) are optional.
+                    The optional storageCategoryCode declares the putaway capability — what the location is fit \
+                    to hold (TIRE_RACK, OIL_STORAGE, BATTERY_RACK, SMALL_PARTS_BIN, BULK_FLOOR, STAGING, \
+                    QUARANTINE, GENERAL) — which is independent of type: a tire rack and a bulk pallet area are \
+                    both FLOOR. Omitting it leaves the capability undeclared, and the response reports GENERAL, \
+                    which accepts every catalog category. hazardContainment (default false) and allowNewProduct \
+                    (MIXED, SAME_PRODUCT_ONLY or EMPTY_ONLY; default MIXED) are the other putaway attributes.
                     Emits a LOCATION_STORAGE_LOCATION_CREATE event and publishes a storage-location fact for \
                     replica consumers.
                     Returns 404 when the site does not exist, 409 when the name or barcode is already used in the \
@@ -189,7 +198,7 @@ public class StorageLocationController {
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_UPDATE", apiVersion = "1")
     @Operation(operationId = "patchStorageLocation", summary = "Patch Fields of a Storage Location", description = """
                     Applies a partial update to a storage location, covering rename, barcode, reparenting, \
-                    capacity, temperature and status transitions.
+                    capacity, temperature, putaway capability and status transitions.
                     Use this tool for all storage-location mutations after creation, including deactivation; do \
                     not use createStorageLocation, which adds a new node.
                     Preconditions: the storage location must exist in the site; a new name or barcode must be \
@@ -198,7 +207,11 @@ public class StorageLocationController {
                     destinationStorageLocationId naming an ACTIVE storage location of the same site to receive \
                     the transferred inventory.
                     Required inputs: siteId and storageLocationId (UUIDs) as path parameters and a body with at \
-                    least one field; status accepts ACTIVE, INACTIVE, MAINTENANCE or QUARANTINED.
+                    least one field; status accepts ACTIVE, INACTIVE, MAINTENANCE or QUARANTINED, \
+                    storageCategoryCode accepts TIRE_RACK, OIL_STORAGE, BATTERY_RACK, SMALL_PARTS_BIN, \
+                    BULK_FLOOR, STAGING, QUARANTINE or GENERAL, and allowNewProduct accepts MIXED, \
+                    SAME_PRODUCT_ONLY or EMPTY_ONLY. Every capability field is independently omittable — an \
+                    absent one is left unchanged rather than reset.
                     Emits a LOCATION_STORAGE_LOCATION_UPDATE event, publishes a storage-location fact, and on \
                     deactivation with stock triggers an atomic inventory transfer to the destination.
                     Returns 404 when the storage location or transfer destination does not exist, 409 when the \

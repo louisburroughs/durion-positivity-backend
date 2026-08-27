@@ -198,14 +198,34 @@ reader maps them 1:1. Each successful row publishes a product fact on
 inventory, supplier) live — the post-seed `facts/replay` step the runbook requires
 for Flyway-seeded catalogs is not needed for pipeline-loaded products.
 
+**Category resolution (issue #1514).** `categoryName` and `subcategoryName` are
+resolved to ids against the Flyway reference seed
+(`pos-catalog/.../R__seed_reference_catalog.sql` — 12 categories, 40 subcategories),
+so pipeline-loaded products now land **categorized** and the resolved category and
+subcategory travel on the product fact. This is what makes category-based putaway
+work on fixture data; previously both columns were carried but ignored and every
+product landed uncategorized.
+
+- **Matching:** the name is trimmed and matched case-insensitively. Exact casing is
+  not required.
+- **Unknown name:** the row **fails** with `CATALOG_INGEST_FAILED` and the rest of
+  the batch proceeds. It is *not* created uncategorized, and no category is invented
+  — categories are curated reference data, and landing uncategorized would look like
+  success while silently producing a product that no category-based putaway rule can
+  match. Check `failureCount` and the per-row `results`, not just the HTTP status.
+- **Omitted name:** blank or absent is "unclassified" and resolves to null without
+  error, so a row may legitimately carry neither.
+- All 500 rows in `products.csv` resolve today (verified by
+  `AlphaFixtureCategoryNamesResolveTest`, which parses this CSV and the seed SQL at
+  build time). Any future edit introducing an unseeded name fails that test rather
+  than surfacing as a per-row ingest failure during a reseed.
+
 **Deltas / not yet converted:**
 
 - The CSV carries `manufacturerName`, `manufacturerBrand`, `countryOfOrigin`, and
   `type` (Wave 2) — the manufacturer fields also travel on the product fact, so
   warranty/supplier replicas get them. Still not expressible: `manufacturerId`
-  (there is no manufacturer table; the seed's ids were synthetic and are dropped),
-  and `categoryName`/`subcategoryName` remain carried-but-ignored until
-  category-by-name resolution lands (products land uncategorized).
+  (there is no manufacturer table; the seed's ids were synthetic and are dropped).
 - `upc` and `description` are blank (the seed never had UPCs; description defaults
   to the name server-side); `price` is blank (pricing is a separate seed).
 - Categories/subcategories (`R__seed_reference_catalog.sql`), services (file 3 — no
@@ -219,11 +239,11 @@ for Flyway-seeded catalogs is not needed for pipeline-loaded products.
 | File | Rows | Target |
 |---|---|---|
 | `locations.csv` | 5 sites (3 service centers, mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
-| `storage-locations.csv` | 170 (34 per site: 2 floors, 2 cages, 6 shelves, 24 bins under the parts shelves) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order) |
+| `storage-locations.csv` | 185 (37 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order) |
 | `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
 | `mobile-units.csv` | 9 mobile units | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
 
-Columns: `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
+Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 Location types resolve by name (created on the fly if missing, though the reference
 seed provides them); timezones are validated by the service (invalid → per-row
 failure). Note the run-order chicken-and-egg: bulk-load jobs require a `locationId`,
@@ -231,15 +251,183 @@ so the very first location load in an empty alpha needs one location created via
 gateway API first (or use that location's id once the reference/security bootstrap
 provides one).
 
+Columns (`storage-locations.csv`): `locationCode,name,type,parentName,storageCategoryCode,hazardContainment`.
+`type` is the physical topology (FLOOR/SHELF/BIN/CAGE/TRUCK) and is unchanged;
+`storageCategoryCode` is the putaway capability added in #1514 — what the location is
+fit to *hold* — so a rule can route tires to a tire rack and oil to oil storage.
+Both tire racks and bulk pallet areas are FLOOR-or-SHELF topologically, which is why
+the capability cannot be derived from `type`. Values: `TIRE_RACK`, `OIL_STORAGE`,
+`BATTERY_RACK`, `SMALL_PARTS_BIN`, `BULK_FLOOR`, `STAGING`, `QUARANTINE`, `GENERAL`.
+The mapping this fixture uses:
+
+| Row | `type` | `storageCategoryCode` | `hazardContainment` |
+|---|---|---|---|
+| Receiving Dock, Staging Floor | FLOOR | `STAGING` | false |
+| Quarantine Cage, Core Returns Cage | CAGE | `QUARANTINE` | false |
+| Tire Rack A/B | SHELF | `TIRE_RACK` | false |
+| Fluids Shelf | SHELF | `OIL_STORAGE` | true |
+| Battery Rack | SHELF | `BATTERY_RACK` | true |
+| Bulk Floor | FLOOR | `BULK_FLOOR` | false |
+| Van Stock 01 | TRUCK | `GENERAL` | false |
+| Parts Shelf A/B/C | SHELF | `GENERAL` | false |
+| Bin A-01 … C-08 | BIN | `SMALL_PARTS_BIN` | false |
+
+`STAGING` and `QUARANTINE` accept nothing by rule: they are putaway sources, not
+destinations. `GENERAL` is the permissive default and accepts every catalog
+category, so it is what the parts shelves and the van fall back to. Both columns
+are only sent when populated — an empty `storageCategoryCode` leaves the capability
+undeclared, which the service reports back as `GENERAL`.
+
 **Known deltas / not yet converted:**
 
 - The storage mix is deliberately uniform across all 5 sites (a richer, realistic
   garage topology replacing the seed's thinner ad-hoc spread); the seed's
   staging/quarantine **back-references on the location row**
   (`default_staging_location_id`/`default_quarantine_location_id`) are not set —
-  no API writes them today.
+  no API writes them today. #1514 kept that uniformity: the Flyway seed adds its
+  oil storage and battery racks to the 3 service centers only, whereas this
+  fixture gives all 5 sites the full set.
+- **No INACTIVE storage location** can be seeded through this pack:
+  `POST .../storage-locations` always creates in ACTIVE status, so the Flyway
+  seed's per-site "Retired Bin" rows (which exist to make "putaway must refuse a
+  decommissioned destination" testable) have no fixture equivalent. Deactivating
+  one needs a follow-up `PATCH` this pack does not issue.
+- **`allowNewProduct` is not a fixture column**, so every row lands on the
+  service default `MIXED`. Nothing in the alpha topology needs
+  `SAME_PRODUCT_ONLY` or `EMPTY_ONLY` yet; add the column when something does.
+- **Capacity descriptors are not seeded here.** The Flyway seed sets
+  `maxUnitCount`/`unitCount` on three CLT-MAIN bins (roomy, near-limit, full) to
+  make the capacity paths reachable; this pack leaves capacity unset, which means
+  uncapped.
 - Mobile-unit **capabilities and coverage rules** are intentionally dropped (bays
   and mobile units suffice for alpha), as are the mobile units'
   `travel_buffer_policy_id` references and the 4 `location_parent` hierarchy
   edges (`POST /v1/locations/{id}/parents` exists if wanted later).
 - The seed file stays until alpha is reseeded and verified (§5.4).
+
+### `inventory/` — new in #1514 (no Flyway seed to replace)
+
+| File | Rows | Target |
+|---|---|---|
+| `putaway-rules.csv` | 16 rules (12 category rules, 3 subcategory overrides, 1 terminal `ANY`) | gateway API pack (`POST /inventory/inventory/putaway/rules` per row) |
+
+Columns: `priority,matchType,matchName,locationCode,destinationName,destinationStrategy,isEnabled`.
+
+Putaway rules decide which bin a received line is suggested for. They are Tier 2
+(`docs/DATA_SEED_STRATEGY.md` §2), not Flyway: they name per-environment storage
+location ids and they have an `@EmitEvent` audited lifecycle now that the CRUD
+endpoint exists — so a SQL seed would both hardcode ids and skip the audit event.
+The *compatibility matrix* they must agree with is the opposite case (service-private,
+environment-invariant, no lifecycle) and stays in Flyway,
+`pos-inventory V43__storage_compatibility.sql`.
+
+Runs **last**, after `location/` and `catalog/`: every reference is resolved at load
+time against data those packs create.
+
+**Nothing in this file is a uuid.** Each row carries business keys and the driver
+resolves them:
+
+- `matchName` is a catalog **category or subcategory name** (`matchType` says which),
+  matched case-insensitively. pos-catalog exposes no endpoint that lists categories,
+  so the driver resolves a name through an **exemplar product**: it picks the first SKU
+  in `catalog/products.csv` carrying that name, looks it up
+  (`GET /catalog/products/search?sku=…`), reads the product's resolved
+  `category`/`subcategory` id back (`GET /catalog/products/{id}`), and checks the name
+  it got matches the one asked for. An unresolvable name fails that row with a `WARN`
+  naming the cause — it is never defaulted, because a rule that silently lost its match
+  value is authored, accepted and never fires.
+- `locationCode` + `destinationName` are the destination's business key, resolved
+  against the site's storage-location list exactly as `storage-locations.csv` resolves
+  `parentName`.
+- `ANY` rows carry an empty `matchName`; the endpoint requires `matchValue` to be
+  absent for that tier.
+
+Resolution order is `SKU > SUBCATEGORY > CATEGORY > ANY`, then ascending `priority`
+inside a tier, so the file is written in that order and priorities are distinct within
+each tier (ties are broken arbitrarily by the matcher).
+
+Every destination is one the compatibility matrix accepts for that rule's class — a
+rule pointing at a bin the matrix refuses loads cleanly and then fails once per
+received line with `LOCATION_NOT_VALID_FOR_SKU`:
+
+| Rule | Destination | `storageCategoryCode` | Strategy |
+|---|---|---|---|
+| `SUBCATEGORY` Batteries | Battery Rack | `BATTERY_RACK` (containment) | FIXED |
+| `SUBCATEGORY` ATF & Gear Oil | Fluids Shelf | `OIL_STORAGE` (containment) | FIXED |
+| `SUBCATEGORY` Hydraulic Cylinders & Hoses | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `CATEGORY` Tires & Wheels | Tire Rack A | `TIRE_RACK` | FIXED |
+| `CATEGORY` Engine Parts | Bin A-01 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Brake System | Bin A-05 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Electrical System | Bin B-01 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Drivetrain & Transmission | Bin B-05 | `SMALL_PARTS_BIN` | LAST_USED |
+| `CATEGORY` Suspension & Steering | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `CATEGORY` Fluids & Chemicals | Fluids Shelf | `OIL_STORAGE` (containment) | FIXED |
+| `CATEGORY` Filters | Bin C-01 | `SMALL_PARTS_BIN` | CLOSEST_AVAILABLE |
+| `CATEGORY` Exhaust System | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `CATEGORY` HVAC & Climate | Bin C-05 | `SMALL_PARTS_BIN` | LAST_USED |
+| `CATEGORY` Body & Lighting | Parts Shelf C | `GENERAL` | FIXED |
+| `CATEGORY` Heavy Equipment & Hydraulics | Bulk Floor | `BULK_FLOOR` | FIXED |
+| `ANY` (terminal) | Parts Shelf B | `GENERAL` | FIXED |
+
+Three things about that table are load-bearing rather than cosmetic:
+
+- **The three subcategory rules are exactly the three subcategories the matrix
+  overrides.** A subcategory with a matrix override but no rule routes by its *parent
+  category's* rule to a destination the override refuses — `Batteries` would go to a
+  small-parts bin, and the matrix would then refuse acid without a bund. This is the
+  reason `SUBCATEGORY` outranks `CATEGORY` at all. Adding a matrix override means
+  adding a rule here.
+- **The `ANY` destination is `GENERAL`.** An item with no catalog classification is
+  accepted only by `GENERAL` storage, so any other destination would make the terminal
+  fallback refuse the very brand-new SKU it exists to catch.
+- **`CLOSEST_AVAILABLE` is only used on bins that sit under a parts shelf.** The
+  strategy ranks every ACTIVE location at the site by topology hops from its anchor and
+  takes the first with capacity; it does not consult the matrix. An anchor with no
+  parent and no children has nothing to rank, and its overflow degrades to the
+  lowest-id location at the site — so standalone racks and floors use FIXED. Where it
+  is used, the neighbours it would overflow to (the parent shelf at one hop, sibling
+  bins at two) are legal for the same class.
+
+`AlphaFixturePutawayRulesTest` (pos-inventory) parses this CSV, the catalog taxonomy
+seed, `location/storage-locations.csv` and `V43__storage_compatibility.sql` at build
+time and asserts all of the above, so a contradictory rule fails the build instead of a
+reseed.
+
+The pack's token needs `location:read` (the location roster and each site's
+storage-location list), `catalog:product:view` (exemplar resolution), and
+`inventory:putaway_rule:view` plus `inventory:putaway_rule:manage`. Running
+`--only inventory/putaway-rules.csv` with the rule scopes alone gets a 403 on the
+storage-location list; the driver reports that HTTP status rather than blaming the
+fixture for an unresolved destination.
+
+**Known deltas:**
+
+- **All 16 rules target `CLT-MAIN-001`.** A putaway rule has no site scope — the
+  matched rule's `destinationLocationId` is a single bin — so one enabled rule per
+  (tier, class) is all the model allows. Rules for a second site would be
+  lower-priority dead configuration. `locationCode` is a column anyway so the pack
+  says which site it means and can be retargeted by editing one column.
+- **Re-runs converge but never update.** The driver lists the configured rules first
+  and skips a row whose `(matchType, matchValue)` already exists (and treats the
+  endpoint's 409 — a second enabled `ANY` rule — the same way), so a re-run creates
+  nothing. It deliberately does **not** `PUT` the existing rule back to the fixture's
+  values: an operator who retuned a priority or disabled a rule on alpha keeps that.
+  Applying a changed fixture row means deleting the rule (`DELETE
+  /inventory/inventory/putaway/rules/{ruleId}`) and re-running. A **disabled** existing
+  rule blocks its fixture row the same way — which leaves that class with no reachable
+  rule — so the driver emits a `WARN` naming the rule id rather than reporting a clean
+  converged run.
+- **The `SKU` tier is not exercised.** `matchType: SKU` works and the driver would
+  resolve it, but per-SKU slotting is an operator decision about one part, not demo
+  topology; tier precedence itself is covered by `PutawayRuleMatcherTest`. Add rows
+  with `matchType: SKU` and a SKU in `matchName` if alpha ever needs one — the
+  exemplar-product resolution would have to be extended to return the product id
+  directly.
+- **`isEnabled` is `true` on every row.** The column exists because the endpoint has
+  the field and a disabled rule is a legitimate fixture state, but nothing in the alpha
+  topology wants one: a disabled rule is unreachable configuration.
+- **Priorities are spaced by 10** (and `ANY` sits at 1000) so a rule can be inserted
+  between two others without renumbering the file.
+- The fixture assumes the storage capabilities in `location/storage-locations.csv`. If
+  that file's `storageCategoryCode` mapping changes, these rules must be re-checked
+  against the matrix — the build-time test does exactly that.

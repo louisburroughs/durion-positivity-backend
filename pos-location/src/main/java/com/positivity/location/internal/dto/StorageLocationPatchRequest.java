@@ -3,6 +3,8 @@ package com.positivity.location.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Map;
@@ -51,6 +53,29 @@ public class StorageLocationPatchRequest {
             example = "01960003-0000-7000-8000-000000000002",
             requiredMode = NOT_REQUIRED)
     private UUID destinationStorageLocationId;
+
+    @Schema(
+            description = "Putaway capability of the storage location — what it is fit to hold, independent of the"
+                    + " physical type. Omit to leave the current capability unchanged.",
+            example = "TIRE_RACK",
+            requiredMode = NOT_REQUIRED)
+    private StorageCategory storageCategoryCode;
+
+    // Boxed on purpose: this is a patch payload, so null has to mean "unchanged" rather than
+    // silently resetting containment to false on every unrelated patch (#1514).
+    @Schema(
+            description = "Whether the storage location provides spill/hazard containment; required by battery and"
+                    + " oil storage capabilities. Omit to leave it unchanged.",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    private Boolean hazardContainment;
+
+    @Schema(
+            description = "Whether the storage location will take stock of a product it is not already holding."
+                    + " Omit to leave it unchanged.",
+            example = "SAME_PRODUCT_ONLY",
+            requiredMode = NOT_REQUIRED)
+    private AllowNewProductPolicy allowNewProduct;
 
     @Schema(
             description = "Capacity attributes of the storage location",

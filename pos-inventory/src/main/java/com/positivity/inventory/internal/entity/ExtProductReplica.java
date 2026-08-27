@@ -56,6 +56,29 @@ public class ExtProductReplica {
     @Column(name = "substitution_group_id")
     private UUID substitutionGroupId;
 
+    /**
+     * Catalog category of the product (#1514). Both the id and the name snapshot are replicated:
+     * putaway rules match on the id because it survives a rename, while the SKU_CATEGORY-scoped
+     * sourcing and costing config rows are authored against the name. Null means the product
+     * carries no category — never a default.
+     */
+    @Column(name = "category_id")
+    private UUID categoryId;
+
+    @Column(name = "category_name", length = 255)
+    private String categoryName;
+
+    /**
+     * Catalog subcategory, the level containment is actually expressed at: {@code Batteries} is a
+     * subcategory of {@code Electrical System}, so a category-only rule cannot say "acid cabinet
+     * only". Null when the product carries no subcategory.
+     */
+    @Column(name = "subcategory_id")
+    private UUID subcategoryId;
+
+    @Column(name = "subcategory_name", length = 255)
+    private String subcategoryName;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

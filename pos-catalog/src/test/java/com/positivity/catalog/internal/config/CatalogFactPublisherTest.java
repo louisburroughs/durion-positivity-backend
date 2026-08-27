@@ -14,6 +14,7 @@ import com.positivity.catalog.internal.entity.ProductTrackingLevel;
 import com.positivity.catalog.internal.entity.ProductUomEntity;
 import com.positivity.catalog.internal.entity.ProductUomType;
 import com.positivity.catalog.internal.entity.ServiceEntity;
+import com.positivity.catalog.internal.entity.Subcategory;
 import com.positivity.catalog.internal.entity.SubstitutionGroupEntity;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
 import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
@@ -60,6 +61,8 @@ import tools.jackson.databind.json.JsonMapper;
 class CatalogFactPublisherTest {
 
     private static final Instant NOW = Instant.parse("2026-07-22T10:15:30Z");
+    private static final UUID CATEGORY_ID = UUID.fromString("00000000-0000-0000-0000-000000000ca7");
+    private static final UUID SUBCATEGORY_ID = UUID.fromString("00000000-0000-0000-0000-0000000005b1");
 
     @Mock
     private ObjectProvider<OutboxEventWriter> outboxEventWriterProvider;
@@ -141,6 +144,47 @@ class CatalogFactPublisherTest {
         assertThat(payload.path("substitutionProductIds"))
                 .extracting(node -> node.stringValue(null))
                 .containsExactly(product.getId().toString(), siblingId.toString());
+    }
+
+    @Test
+    @DisplayName("payload carries the category AND subcategory pair (#1514, additive within v2)")
+    void payloadCarriesCategoryAndSubcategory() {
+        ProductEntity product = product();
+        when(productUomRepository.findByProductIdOrderByUomCodeAsc(product.getId()))
+                .thenReturn(List.of());
+        when(substitutionGroupMemberRepository.findByProductId(product.getId())).thenReturn(Optional.empty());
+
+        publisher.publishProductUpdated(product);
+
+        DomainEventEnvelope<?> envelope = capturedEnvelope();
+        // Additive within v2: the version must not move for a new field (ADR-0044 §3).
+        assertThat(envelope.schemaVersion()).isEqualTo(2);
+        JsonNode payload =
+                objectMapper.readTree(objectMapper.writeValueAsString(envelope)).path("payload");
+        assertThat(payload.path("categoryId").stringValue(null)).isEqualTo(CATEGORY_ID.toString());
+        assertThat(payload.path("category").stringValue(null)).isEqualTo("Electrical System");
+        assertThat(payload.path("subcategoryId").stringValue(null)).isEqualTo(SUBCATEGORY_ID.toString());
+        assertThat(payload.path("subcategory").stringValue(null)).isEqualTo("Batteries");
+    }
+
+    @Test
+    @DisplayName("a product with no subcategory publishes the pair as null, not as an empty string")
+    void payloadOmitsSubcategoryWhenTheProductHasNone() {
+        ProductEntity product = product();
+        product.setSubcategory(null);
+        when(productUomRepository.findByProductIdOrderByUomCodeAsc(product.getId()))
+                .thenReturn(List.of());
+        when(substitutionGroupMemberRepository.findByProductId(product.getId())).thenReturn(Optional.empty());
+
+        publisher.publishProductUpdated(product);
+
+        JsonNode payload = objectMapper
+                .readTree(objectMapper.writeValueAsString(capturedEnvelope()))
+                .path("payload");
+        assertThat(payload.path("subcategoryId").isNull()).isTrue();
+        assertThat(payload.path("subcategory").isNull()).isTrue();
+        // The category pair is unaffected by a missing subcategory.
+        assertThat(payload.path("categoryId").stringValue(null)).isEqualTo(CATEGORY_ID.toString());
     }
 
     @Test
@@ -337,7 +381,13 @@ class CatalogFactPublisherTest {
         // convention would fail loudly rather than passing by coincidence.
         product.setVersion(42L);
         Category category = new Category();
+        category.setId(CATEGORY_ID);
+        category.setName("Electrical System");
         product.setCategory(category);
+        Subcategory subcategory = new Subcategory();
+        subcategory.setId(SUBCATEGORY_ID);
+        subcategory.setName("Batteries");
+        product.setSubcategory(subcategory);
         return product;
     }
 

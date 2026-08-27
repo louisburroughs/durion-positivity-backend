@@ -219,6 +219,14 @@ public class LocationEventsListener {
                 .status(payload.status())
                 .parentStorageLocationId(payload.parentStorageLocationId())
                 .maxUnitCapacity(payload.maxUnitCapacity())
+                // Putaway capability trio (#1514), additive within schema v1: stored verbatim as
+                // the owner's codes rather than parsed into a local enum. pos-location owns
+                // StorageCategory, and a replica that rejected an unrecognised value would turn an
+                // additive owner-side change into a stalled feed on an event it cannot reject.
+                // Null stays null — "the publisher predates the field", not a default.
+                .storageCategoryCode(trimToNull(payload.storageCategoryCode()))
+                .hazardContainment(payload.hazardContainment())
+                .allowNewProduct(trimToNull(payload.allowNewProduct()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -226,5 +234,14 @@ public class LocationEventsListener {
                 "Updated ext_storage_location storageLocationId={} version={}",
                 payload.storageLocationId(),
                 aggregateVersion);
+    }
+
+    /** Absent and blank are the same statement from the owner: no code declared. */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

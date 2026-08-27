@@ -7,6 +7,7 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.catalog.internal.dto.CatalogBulkIngestRecord;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
+import com.positivity.catalog.internal.service.CategoryNameResolver;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
 
     private static final String DEFAULT_UNIT_OF_MEASURE = "EA";
     private final ProductMasterDataService productMasterDataService;
+    private final CategoryNameResolver categoryNameResolver;
 
     @Override
     @PostMapping("/bulk-ingest")
@@ -54,10 +56,14 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
             unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku \
             then the name. manufacturerName, manufacturerBrand, countryOfOrigin, and type are carried onto \
             the product (the manufacturer fields also travel on the product fact for replica consumers), \
-            while price, categoryName and subcategoryName are accepted but ignored until pricing and \
-            category-by-name resolution land.
-            Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact and \
-            invalidates the product-detail cache.
+            while price is accepted but ignored until catalog pricing lands.
+            categoryName and subcategoryName are resolved against the seeded catalog reference data, \
+            trimmed and matched case-insensitively; omit them to leave the product unclassified. A supplied \
+            name that matches no seeded record fails that row with CATALOG_INGEST_FAILED rather than \
+            landing the product uncategorized, so a typo cannot silently produce a product that no \
+            category-based rule can match.
+            Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact carrying \
+            the resolved category and subcategory, and invalidates the product-detail cache.
             Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the \
             per-row results rather than the HTTP status.
             """)
@@ -122,15 +128,15 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
     }
 
     private ProductCreateRequestDto toProductCreateRequest(@NonNull CatalogBulkIngestRecord ingestRecord) {
-        // price, categoryName, and subcategoryName are still not supported: catalog
-        // pricing and category-by-name resolution remain future waves.
-        if (ingestRecord.getPrice() != null
-                || ingestRecord.getCategoryName() != null
-                || ingestRecord.getSubcategoryName() != null) {
-            log.warn(
-                    "CatalogBulkIngestController: price/categoryName/subcategoryName are ignored — not yet supported by catalog service");
+        // price remains unsupported: catalog pricing is a separate wave. categoryName and
+        // subcategoryName are now resolved against the seeded catalog reference data; an
+        // unknown name throws and is reported as a per-row failure by processRecords.
+        if (ingestRecord.getPrice() != null) {
+            log.warn("CatalogBulkIngestController: price is ignored — not yet supported by catalog service");
         }
         ProductCreateRequestDto request = new ProductCreateRequestDto();
+        request.setCategoryId(categoryNameResolver.resolveCategoryId(ingestRecord.getCategoryName()));
+        request.setSubcategoryId(categoryNameResolver.resolveSubcategoryId(ingestRecord.getSubcategoryName()));
         request.setSku(ingestRecord.getSku());
         request.setUpc(ingestRecord.getUpc());
         request.setName(ingestRecord.getName());

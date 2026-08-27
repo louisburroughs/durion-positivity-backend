@@ -5,6 +5,7 @@ import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductStatus;
 import com.positivity.catalog.internal.entity.ProductTrackingLevel;
 import com.positivity.catalog.internal.entity.ServiceEntity;
+import com.positivity.catalog.internal.entity.Subcategory;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
 import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
@@ -133,6 +134,7 @@ public class CatalogFactPublisher {
     private void publishProduct(
             OutboxEventWriter writer, ProductEntity product, boolean active, long aggregateVersion) {
         Category category = product.getCategory();
+        Subcategory subcategory = product.getSubcategory();
         ProductTrackingLevel trackingLevel =
                 product.getTrackingLevel() == null ? ProductTrackingLevel.NONE : product.getTrackingLevel();
         SubstitutionGroupMemberEntity membership = substitutionGroupMemberRepository
@@ -160,7 +162,9 @@ public class CatalogFactPublisher {
                 product.getProductCode(),
                 product.getProductCodeType() == null
                         ? null
-                        : product.getProductCodeType().name());
+                        : product.getProductCodeType().name(),
+                subcategory == null ? null : subcategory.getId(),
+                subcategory == null ? null : subcategory.getName());
         DomainEventEnvelope<ProductUpdatedV1> envelope = DomainEventEnvelope.of(
                 ProductUpdatedV1.EVENT_TYPE,
                 ProductUpdatedV1.SCHEMA_VERSION,

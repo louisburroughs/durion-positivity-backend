@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.StorageLocationRepository;
@@ -196,6 +198,53 @@ class StorageLocationRepositoryDataJpaTest {
                 .isTrue();
         assertThat(repository.existsByBarcodeAndSiteId("BC-J-001", UUID.randomUUID()))
                 .isFalse();
+    }
+
+    /**
+     * The putaway capability columns must survive a real persist/reload cycle (#1514) — the
+     * service tests stub the repository, so only this test proves the JPA mapping and the
+     * generated DDL agree on the three new columns.
+     */
+    @Test
+    void storageCapabilityColumns_roundTripThroughPersistence() {
+        Location site = persistSite("SITE-L");
+        StorageLocationEntity rack = StorageLocationEntity.builder()
+                .id(UUID.randomUUID())
+                .name("Battery Rack")
+                .type(StorageLocationType.SHELF)
+                .status(StorageLocationStatus.ACTIVE)
+                .site(site)
+                .storageCategoryCode(StorageCategory.BATTERY_RACK)
+                .hazardContainment(true)
+                .allowNewProduct(AllowNewProductPolicy.SAME_PRODUCT_ONLY)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        repository.save(rack);
+        em.flush();
+        em.clear();
+
+        StorageLocationEntity reloaded = repository.findById(rack.getId()).orElseThrow();
+        assertThat(reloaded.getStorageCategoryCode()).isEqualTo(StorageCategory.BATTERY_RACK);
+        assertThat(reloaded.isHazardContainment()).isTrue();
+        assertThat(reloaded.getAllowNewProduct()).isEqualTo(AllowNewProductPolicy.SAME_PRODUCT_ONLY);
+    }
+
+    /**
+     * A row created without a declared capability keeps NULL in the column (no backfill needed
+     * for pre-#1514 rows) while the containment/mixing attributes take their non-null defaults.
+     */
+    @Test
+    void storageCapabilityColumns_defaultWhenUndeclared() {
+        Location site = persistSite("SITE-M");
+        StorageLocationEntity bin = persistStorage(site, "Undeclared Bin", StorageLocationType.BIN, null);
+        em.flush();
+        em.clear();
+
+        StorageLocationEntity reloaded = repository.findById(bin.getId()).orElseThrow();
+        assertThat(reloaded.getStorageCategoryCode()).isNull();
+        assertThat(reloaded.isHazardContainment()).isFalse();
+        assertThat(reloaded.getAllowNewProduct()).isEqualTo(AllowNewProductPolicy.MIXED);
     }
 
     @Test

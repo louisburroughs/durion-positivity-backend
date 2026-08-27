@@ -9,7 +9,6 @@ import com.positivity.inventory.internal.exception.LocationNotValidForSkuExcepti
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
-import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.internal.service.StorageLocationValidationService.StorageLocationValidation;
 import com.positivity.inventory.service.PutawayValidationService;
@@ -42,28 +41,45 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
 
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final PutawayRuleRepository putawayRuleRepository;
-    private final ReplenishmentPolicyRepository replenishmentPolicyRepository;
     private final StorageLocationValidationService storageLocationValidationService;
+    private final StorageCompatibilityEvaluator storageCompatibilityEvaluator;
 
     @Autowired
     public PutawayValidationServiceImpl(
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
             PutawayRuleRepository putawayRuleRepository,
-            ReplenishmentPolicyRepository replenishmentPolicyRepository,
-            StorageLocationValidationService storageLocationValidationService) {
+            StorageLocationValidationService storageLocationValidationService,
+            StorageCompatibilityEvaluator storageCompatibilityEvaluator) {
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.putawayRuleRepository = putawayRuleRepository;
-        this.replenishmentPolicyRepository = replenishmentPolicyRepository;
         this.storageLocationValidationService = storageLocationValidationService;
+        this.storageCompatibilityEvaluator = storageCompatibilityEvaluator;
     }
 
     public PutawayValidationServiceImpl() {
         this.inventoryLedgerEntryRepository = null;
         this.putawayRuleRepository = null;
-        this.replenishmentPolicyRepository = null;
         this.storageLocationValidationService = null;
+        this.storageCompatibilityEvaluator = null;
     }
 
+    /**
+     * Two checks, both about the destination rather than about paperwork (#1514).
+     *
+     * <p>The destination must be the target of an enabled putaway rule, and it must be physically fit
+     * to hold the item per {@link StorageCompatibilityEvaluator}.
+     *
+     * <p>What used to be here and is deliberately gone: two gates requiring an
+     * {@code (itemSKU, locationId)} replenishment-policy row to exist. Those made putaway eligibility
+     * a function of restock configuration, so a brand-new SKU could never be put away anywhere — the
+     * bug in #1514 — while a tire could be put away into oil storage as long as a policy row happened
+     * to name the pair. {@link com.positivity.inventory.internal.entity.ReplenishmentPolicy} is
+     * untouched and keeps doing its documented job for the replenishment scan.
+     *
+     * <p>The {@code LOCATION_NOT_VALID_FOR_SKU} error code is unchanged, as is the
+     * {@code OVERRIDE_LOCATION_COMPATIBILITY} override flow that bypasses this method; only the
+     * reason text is new, and it now names the class/capability mismatch.
+     */
     @Override
     public ValidationResult validateLocationCompatibility(UUID destinationLocationId, String skuId) {
         if (log.isDebugEnabled()) {
@@ -73,7 +89,9 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                     maskForLog(skuId));
         }
 
-        if (putawayRuleRepository == null || replenishmentPolicyRepository == null) {
+        if (putawayRuleRepository == null
+                || storageCompatibilityEvaluator == null
+                || storageLocationValidationService == null) {
             return ValidationResult.success();
         }
 
@@ -82,14 +100,20 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                     destinationLocationId, skuId, "Destination location is not enabled for putaway");
         }
 
-        if (!replenishmentPolicyRepository.existsByItemSKU(skuId)) {
-            throw new LocationNotValidForSkuException(
-                    destinationLocationId, skuId, "SKU is not configured in replenishment policies");
-        }
+        // Deliberately not gated on destination.isExists(). A location missing from the replica
+        // yields exists=false with null capabilities, which the evaluator resolves the same
+        // permissive way as a pre-#1514 fact — and it has to, because V41 ships the capability
+        // columns empty with no backfill, so on an upgraded environment every destination looks
+        // like that until pos-location's facts are replayed. Refusing here would dead-end every
+        // receipt in exactly the window this change exists to fix. The dangerous half is still
+        // closed: an item whose catalog class demands containment is refused by a destination that
+        // does not declare it, and an unknown destination declares nothing. Existence is enforced
+        // at execution by validateLocationCapacity.
+        StorageLocationValidation destination = getStorageLocationValidation(destinationLocationId);
 
-        if (!replenishmentPolicyRepository.existsByItemSKUAndLocationId(skuId, destinationLocationId)) {
-            throw new LocationNotValidForSkuException(
-                    destinationLocationId, skuId, "SKU is not allowed at destination location");
+        StorageCompatibilityEvaluator.Verdict verdict = storageCompatibilityEvaluator.evaluate(destination, skuId);
+        if (!verdict.accepted()) {
+            throw new LocationNotValidForSkuException(destinationLocationId, skuId, String.valueOf(verdict.reason()));
         }
 
         return ValidationResult.success();
@@ -114,16 +138,28 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         }
     }
 
-    private int getMaxCapacity(UUID destinationLocationId, StorageLocationValidation locationValidation) {
-        int maxCapacity = 0;
-        if (locationValidation != null && locationValidation.getMaxUnitCapacity() != null) {
-            maxCapacity = locationValidation.getMaxUnitCapacity();
+    /**
+     * The bin's own declared unit limit, or null when it has <em>not declared one at all</em> (#1514).
+     *
+     * <p>Absent means uncapped. The pre-#1514 code fell back to
+     * {@code SUM(replenishment_policy.maximum_quantity)} for the location and then treated a
+     * still-zero result as "full", so a bin that had simply never declared a capacity computed
+     * max = 0 and hard-failed every putaway into it — which is why the seeded bins were unusable.
+     * Replenishment maximums are slotting targets for the restock scan, not bin physics, so they are
+     * no longer consulted here; {@code sumMaximumQuantityByLocationId} had no other caller and was
+     * removed with them.
+     *
+     * <p>A declared <em>zero</em> is not the same statement and is deliberately not folded into
+     * "uncapped": pos-location can publish {@code maxUnitCapacity = 0} from a capacity descriptor,
+     * and that is an operator saying "hold nothing here". Mapping it to uncapped would turn the
+     * strongest possible refusal into unlimited acceptance, so only a null passes through as
+     * uncapped and a zero flows on to the at-capacity check below.
+     */
+    private Integer declaredCapacity(StorageLocationValidation locationValidation) {
+        if (locationValidation == null) {
+            return null;
         }
-
-        if (maxCapacity <= 0 && replenishmentPolicyRepository != null) {
-            maxCapacity = safeInt(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(destinationLocationId));
-        }
-        return maxCapacity;
+        return locationValidation.getMaxUnitCapacity();
     }
 
     @Override
@@ -143,19 +179,29 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         StorageLocationValidation locationValidation = getStorageLocationValidation(destinationLocationId);
         validateStorageLocation(locationValidation);
 
+        // An undeclared capacity is uncapped (#1514): nothing to compare against, so there is
+        // nothing to refuse and no near-limit warning to raise. The near-limit warnings below apply
+        // only where a limit is actually declared. A declared zero is not undeclared — it flows on
+        // and is refused by the at-capacity check.
+        Integer declaredCapacity = declaredCapacity(locationValidation);
+        if (declaredCapacity == null) {
+            return result;
+        }
+
         // Capacity is a bin's declared unit limit and stays an int; the on-hand it is compared
         // against comes from the ledger and is decimal (ADR-0055, #1414). Comparing them widens
         // the limit rather than narrowing the measurement, so a bin holding 10.5 units is not
         // reported as holding 10.
         BigDecimal currentCapacity = Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                 destinationLocationId, ON_HAND_EVENT_TYPES));
-        BigDecimal maxCapacity = BigDecimal.valueOf(getMaxCapacity(destinationLocationId, locationValidation));
+        BigDecimal maxCapacity = BigDecimal.valueOf(declaredCapacity);
 
         // Direct signum/compareTo rather than the Quantities helpers: every value here is
         // provably non-null (nz above, BigDecimal.valueOf, add), and mixing the null-tolerant
         // helpers with the direct dereferences below reads as inconsistent null handling — to
         // SonarCloud's dataflow engine and to a human alike.
         if (maxCapacity.signum() <= 0) {
+            // A bin that declares it holds nothing refuses everything.
             throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
         }
 
@@ -367,24 +413,29 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
             }
         } catch (LocationAtCapacityException e) {
             if (!Quantities.isPositive(e.getMaxCapacity())) {
+                // Reachable only for a bin that declares a capacity of zero. Since #1514 an
+                // *undeclared* capacity is uncapped and never throws at all, so this no longer
+                // fires for the "nobody configured a limit" case it used to dominate — but the
+                // guard has to stay, because the tolerance ratio below divides by this value.
                 result.addError(
                         "CAPACITY_OVERRIDE_TOLERANCE_UNCHECKABLE",
-                        "Cannot evaluate capacity override tolerance because max capacity is not configured");
-            } else {
-                BigDecimal projectedCapacity = e.getCurrentCapacity().add(BigDecimal.valueOf(request.getQuantity()));
-                BigDecimal overfillUnits = projectedCapacity.subtract(e.getMaxCapacity());
-                double overfillPercent = !Quantities.isPositive(overfillUnits)
-                        ? 0.0
-                        : overfillUnits
-                                .divide(e.getMaxCapacity(), CAPACITY_RATIO_SCALE, RoundingMode.HALF_UP)
-                                .doubleValue();
-                if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
-                    result.addError(
-                            "CAPACITY_OVERRIDE_EXCEEDS_TOLERANCE",
-                            String.format(
-                                    "Capacity override exceeds tolerance (%.2f%% > %.2f%%)",
-                                    overfillPercent * 100.0, CAPACITY_TOLERANCE_PERCENT * 100.0));
-                }
+                        "Cannot evaluate capacity override tolerance because the destination declares"
+                                + " a capacity of zero");
+                return;
+            }
+            BigDecimal projectedCapacity = e.getCurrentCapacity().add(BigDecimal.valueOf(request.getQuantity()));
+            BigDecimal overfillUnits = projectedCapacity.subtract(e.getMaxCapacity());
+            double overfillPercent = !Quantities.isPositive(overfillUnits)
+                    ? 0.0
+                    : overfillUnits
+                            .divide(e.getMaxCapacity(), CAPACITY_RATIO_SCALE, RoundingMode.HALF_UP)
+                            .doubleValue();
+            if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
+                result.addError(
+                        "CAPACITY_OVERRIDE_EXCEEDS_TOLERANCE",
+                        String.format(
+                                "Capacity override exceeds tolerance (%.2f%% > %.2f%%)",
+                                overfillPercent * 100.0, CAPACITY_TOLERANCE_PERCENT * 100.0));
             }
         }
     }
@@ -400,10 +451,6 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
             return "****";
         }
         return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
-    }
-
-    private int safeInt(Integer value) {
-        return value != null ? value : 0;
     }
 
     private void enforceOverridePermission(String requiredPermission) {

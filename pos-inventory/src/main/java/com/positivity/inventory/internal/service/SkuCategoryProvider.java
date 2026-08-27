@@ -10,11 +10,19 @@ import org.jspecify.annotations.NonNull;
  * SPI hook that resolves a SKU's catalog category for SKU_CATEGORY-scoped
  * sourcing-strategy configuration (odoo-parity H1, issue #1037).
  *
- * <p>The catalog replica ({@code ext_product}) does not carry a category
- * today, so the default {@link NoOpSkuCategoryProvider} resolves nothing and
- * SKU_CATEGORY-scoped config rows are stored but skipped — resolution falls
- * through to SITE, then DEFAULT. A later catalog contract extension registers
- * a real {@code @Primary} implementation to light them up.
+ * <p>The catalog contract extension this SPI was waiting for landed in #1514:
+ * {@code catalog.product.updated} now carries the product's category, the
+ * {@code ext_product} replica stores it, and {@link ReplicaSkuCategoryProvider}
+ * is the {@code @Primary} implementation that resolves it — so SKU_CATEGORY-scoped
+ * config rows, stored but skipped until then, now match.
+ * {@link NoOpSkuCategoryProvider} remains registered as the non-primary fallback:
+ * with it in charge, category resolution finds nothing and lookups fall through
+ * to SITE, then DEFAULT.
+ *
+ * <p>The answer is the category NAME, because that is what SKU_CATEGORY-scoped
+ * config rows are authored and matched against. Callers that need the category
+ * and subcategory ids — putaway rule matching does, since containment is
+ * expressed one level down — ask {@link SkuCategoryLookup} instead.
  */
 public interface SkuCategoryProvider {
 

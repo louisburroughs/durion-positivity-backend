@@ -10,6 +10,8 @@ import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO
 import com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
+import com.positivity.location.internal.enums.AllowNewProductPolicy;
+import com.positivity.location.internal.enums.StorageCategory;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
@@ -114,6 +116,12 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .status(StorageLocationStatus.ACTIVE)
                 .site(site)
                 .parentStorageLocation(parentEntity)
+                // Issue #1514: an omitted capability is stored as NULL rather than coerced to
+                // GENERAL, so "never declared" stays distinguishable from an explicit GENERAL;
+                // toResponse resolves it for readers.
+                .storageCategoryCode(request.getStorageCategoryCode())
+                .hazardContainment(request.isHazardContainment())
+                .allowNewProduct(AllowNewProductPolicy.orDefault(request.getAllowNewProduct()))
                 .capacity(serializeJson(request.getCapacity(), CAPACITY))
                 .temperature(serializeJson(request.getTemperature(), TEMPERATURE))
                 .build());
@@ -242,6 +250,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         applyPatchedParent(siteId, storageLocationId, patch, existing);
         applyPatchedCapacity(patch, existing);
         applyPatchedTemperature(patch, existing);
+        applyPatchedCapability(patch, existing);
         applyPatchedStatus(siteId, storageLocationId, patch, existing);
 
         StorageLocationEntity saved = storageLocationRepository.saveAndFlush(existing);
@@ -369,6 +378,23 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         existing.setTemperature(serializeJson(patch.getTemperature(), TEMPERATURE));
     }
 
+    /**
+     * Applies the putaway capability triple (issue #1514). Each of the three is independently
+     * omittable: a patch that only renames a location must not reset its capability, its
+     * containment or its mixing policy, so an absent field is left alone rather than defaulted.
+     */
+    private void applyPatchedCapability(StorageLocationPatchRequest patch, StorageLocationEntity existing) {
+        if (patch.getStorageCategoryCode() != null) {
+            existing.setStorageCategoryCode(patch.getStorageCategoryCode());
+        }
+        if (patch.getHazardContainment() != null) {
+            existing.setHazardContainment(patch.getHazardContainment());
+        }
+        if (patch.getAllowNewProduct() != null) {
+            existing.setAllowNewProduct(patch.getAllowNewProduct());
+        }
+    }
+
     private void applyPatchedParent(
             UUID siteId, UUID storageLocationId, StorageLocationPatchRequest patch, StorageLocationEntity existing) {
         UUID proposedParentId = patch.getParentStorageLocationId();
@@ -438,6 +464,11 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .status(entity.getStatus().name())
                 .siteId(entity.getSiteId())
                 .parentStorageLocationId(entity.getParentStorageLocationId())
+                // Issue #1514: the read boundary is where an undeclared capability becomes
+                // GENERAL, so no caller has to know the column is nullable.
+                .storageCategoryCode(StorageCategory.orDefault(entity.getStorageCategoryCode()))
+                .hazardContainment(entity.isHazardContainment())
+                .allowNewProduct(AllowNewProductPolicy.orDefault(entity.getAllowNewProduct()))
                 .capacity(deserializeJson(entity.getCapacity(), CAPACITY))
                 .temperature(deserializeJson(entity.getTemperature(), TEMPERATURE))
                 .inventoryCount(0)

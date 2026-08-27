@@ -21,11 +21,11 @@ import org.springframework.stereotype.Component;
  * config → deployment default {@code pos.inventory.valuation.default-method}
  * (itself defaulting to AVERAGE).
  *
- * <p>The catalog replica ({@code ext_product}) carries no category, so with the
- * default {@link NoOpSkuCategoryProvider} the SKU_CATEGORY step always falls
- * through — the row is stored but unresolvable until a catalog contract
- * extension registers a {@code @Primary} {@link SkuCategoryProvider}. This
- * mirrors the H1 sourcing-strategy resolution exactly and reuses the same
+ * <p>The SKU_CATEGORY step resolves for real since #1514 replicated the catalog
+ * category onto {@code ext_product} and {@link ReplicaSkuCategoryProvider}
+ * became the {@code @Primary} {@link SkuCategoryProvider}; it falls through only
+ * for a SKU whose category the replica cannot resolve. This mirrors the H1
+ * sourcing-strategy resolution exactly and reuses the same
  * {@link SkuCategoryProvider} bean.
  */
 @Component

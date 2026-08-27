@@ -45,6 +45,12 @@ public class ProductUpdateRequestDto {
     private UUID categoryId;
 
     @Schema(
+            description = "Identifier of the product subcategory",
+            example = "01960031-0000-7000-8000-00000000000e",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID subcategoryId;
+
+    @Schema(
             description = "Stock keeping unit",
             example = "BP-CER-FRT-001",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)

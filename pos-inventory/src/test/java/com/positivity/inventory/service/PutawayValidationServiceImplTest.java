@@ -20,9 +20,9 @@ import com.positivity.inventory.internal.exception.LocationNotValidForSkuExcepti
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
-import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.internal.service.PutawayValidationServiceImpl;
+import com.positivity.inventory.internal.service.StorageCompatibilityEvaluator;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -170,23 +170,34 @@ class PutawayValidationServiceImplTest {
                 .contains("CAPACITY_NEAR_LIMIT");
     }
 
-    @Test
-    void validateLocationCapacity_throwsWhenDestinationStorageLocationInactive() {
+    /**
+     * Wires a service whose destination declares {@code maxUnitCapacity} and holds {@code onHand}.
+     * Since #1514 the bin's own declared limit is the only capacity source — the
+     * {@code SUM(replenishment_policy.maximum_quantity)} fallback these tests used to configure is
+     * gone, because replenishment maximums are slotting targets rather than bin physics.
+     */
+    private PutawayValidationServiceImpl serviceWithCapacity(boolean active, Integer maxUnitCapacity, String onHand) {
         InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
         PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
-        ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
         StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
+        StorageCompatibilityEvaluator evaluator = mock(StorageCompatibilityEvaluator.class);
 
         StorageLocationValidationService.StorageLocationValidation validation =
                 new StorageLocationValidationService.StorageLocationValidation();
         validation.setExists(true);
-        validation.setActive(false);
+        validation.setActive(active);
+        validation.setMaxUnitCapacity(maxUnitCapacity);
 
         when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
                 .thenReturn(validation);
+        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal(onHand));
 
-        PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
+        return new PutawayValidationServiceImpl(ledger, putawayRuleRepository, locationValidationClient, evaluator);
+    }
+
+    @Test
+    void validateLocationCapacity_throwsWhenDestinationStorageLocationInactive() {
+        PutawayValidationServiceImpl service = serviceWithCapacity(false, 100, "0");
 
         assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 1))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -195,24 +206,7 @@ class PutawayValidationServiceImplTest {
 
     @Test
     void validateLocationCapacity_throwsWhenProjectedCapacityMeetsConfiguredMaximum() {
-        InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
-        PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
-        ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
-
-        StorageLocationValidationService.StorageLocationValidation validation =
-                new StorageLocationValidationService.StorageLocationValidation();
-        validation.setExists(true);
-        validation.setActive(true);
-
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
-                .thenReturn(validation);
-        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal("7"));
-        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
-                .thenReturn(10);
-
-        PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
+        PutawayValidationServiceImpl service = serviceWithCapacity(true, 10, "7");
 
         assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 3))
                 .isInstanceOf(LocationAtCapacityException.class);
@@ -220,24 +214,7 @@ class PutawayValidationServiceImplTest {
 
     @Test
     void validateLocationCapacity_addsWarningWhenOverfillIsWithinTolerance() {
-        InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
-        PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
-        ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
-
-        StorageLocationValidationService.StorageLocationValidation validation =
-                new StorageLocationValidationService.StorageLocationValidation();
-        validation.setExists(true);
-        validation.setActive(true);
-
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
-                .thenReturn(validation);
-        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal("10"));
-        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
-                .thenReturn(12);
-
-        PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
+        PutawayValidationServiceImpl service = serviceWithCapacity(true, 12, "10");
 
         ValidationResult result = service.validateLocationCapacity(DEST_1, 3);
 
@@ -248,28 +225,30 @@ class PutawayValidationServiceImplTest {
     }
 
     @Test
-    void validateLocationCapacity_prefersLocationUnitCapacityOverPolicyCapacity() {
-        InventoryLedgerEntryRepository ledger = mock(InventoryLedgerEntryRepository.class);
-        PutawayRuleRepository putawayRuleRepository = mock(PutawayRuleRepository.class);
-        ReplenishmentPolicyRepository replenishmentPolicyRepository = mock(ReplenishmentPolicyRepository.class);
-        StorageLocationValidationService locationValidationClient = mock(StorageLocationValidationService.class);
-
-        StorageLocationValidationService.StorageLocationValidation validation =
-                new StorageLocationValidationService.StorageLocationValidation();
-        validation.setExists(true);
-        validation.setActive(true);
-        validation.setMaxUnitCapacity(10);
-
-        when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
-                .thenReturn(validation);
-        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal("8"));
-        when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
-                .thenReturn(1000);
-
-        PutawayValidationServiceImpl service = new PutawayValidationServiceImpl(
-                ledger, putawayRuleRepository, replenishmentPolicyRepository, locationValidationClient);
+    void validateLocationCapacity_usesTheBinsOwnDeclaredUnitCapacity() {
+        PutawayValidationServiceImpl service = serviceWithCapacity(true, 10, "8");
 
         assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 2))
+                .isInstanceOf(LocationAtCapacityException.class);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("#1514 - a bin declaring no capacity is uncapped rather than full")
+    void validateLocationCapacity_undeclaredCapacityIsUncapped() {
+        PutawayValidationServiceImpl service = serviceWithCapacity(true, null, "0");
+
+        ValidationResult result = service.validateLocationCapacity(DEST_1, 5_000);
+
+        assertThat(result.isValid()).isTrue();
+        assertThat(result.getWarnings()).isEmpty();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("#1514 - a bin declaring a capacity of zero still refuses")
+    void validateLocationCapacity_declaredZeroCapacityRefuses() {
+        PutawayValidationServiceImpl service = serviceWithCapacity(true, 0, "0");
+
+        assertThatThrownBy(() -> service.validateLocationCapacity(DEST_1, 1))
                 .isInstanceOf(LocationAtCapacityException.class);
     }
 

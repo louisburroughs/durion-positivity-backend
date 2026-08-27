@@ -1,9 +1,9 @@
-generatedAt: "2026-08-27T10:13:27.562802+00:00"
+generatedAt: "2026-08-27T13:17:04.943383+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 455
-  uniquePermissionCount: 455
+  permissionCount: 457
+  uniquePermissionCount: 457
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -346,7 +346,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 55
+    permissionCount: 57
     permissions:
       - name: "inventory:adjustment:approve"
         description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
@@ -418,6 +418,10 @@ manifests:
         description: "Override location compatibility rules when location is not valid for SKU"
       - name: "inventory:putaway:view"
         description: "View putaway tasks and their assignment status"
+      - name: "inventory:putaway_rule:manage"
+        description: "Create, replace, and delete putaway rules that route received goods to storage locations"
+      - name: "inventory:putaway_rule:view"
+        description: "View putaway rule configuration"
       - name: "inventory:receiving:complete"
         description: "Complete receiving operations including recording quantities"
       - name: "inventory:receiving:create"
@@ -2167,6 +2171,18 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:putaway:view"
     description: "View putaway tasks and their assignment status"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:putaway_rule:manage"
+    description: "Create, replace, and delete putaway rules that route received goods to storage locations"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:putaway_rule:view"
+    description: "View putaway rule configuration"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"
