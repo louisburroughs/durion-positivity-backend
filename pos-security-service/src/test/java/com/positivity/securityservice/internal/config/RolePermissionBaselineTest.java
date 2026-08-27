@@ -103,6 +103,25 @@ class RolePermissionBaselineTest {
     private static final Path MIGRATIONS = Path.of("src/main/resources/db/migration");
 
     /**
+     * The #1512 revoke of SYSTEM_ADMINISTRATOR's out-of-band grants. Its keep list is a copy of
+     * this seed's SYSTEM_ADMINISTRATOR block, which is what
+     * {@link #v31KeepListMatchesTheSeededSystemAdministratorGrants} exists to police.
+     */
+    private static final Path V31_REVOKE =
+            MIGRATIONS.resolve("V31__revoke_system_administrator_out_of_band_grants.sql");
+
+    /**
+     * A lower-case, colon-bearing quoted literal — a permission name. Deliberately not matched
+     * against role names (upper-case, no colon) or the migration's {@code RAISE} messages (which
+     * start upper-case and contain spaces), so the keep list is the only thing it picks up once
+     * comments are stripped.
+     */
+    private static final Pattern QUOTED_PERMISSION = Pattern.compile("'([a-z][a-z0-9_.-]*(?::[a-z0-9_.-]+)+)'");
+
+    /** A {@code --} comment, to end of line. */
+    private static final Pattern SQL_LINE_COMMENT = Pattern.compile("--.*");
+
+    /**
      * Roles the retired hardcoded switch expanded that no migration and no runtime initializer
      * ever creates. Both {@code user_roles} and {@code role_assignments} are foreign-keyed to
      * {@code roles(id)}, so no user could hold one — they were unreachable branches, and their
@@ -567,6 +586,65 @@ class RolePermissionBaselineTest {
         assertThat(assertedPermissions)
                 .as("permissions asserted in section 4 vs permissions actually granted")
                 .isEqualTo(grantedPermissions);
+    }
+
+    @Test
+    @DisplayName("V31's keep list is exactly the SYSTEM_ADMINISTRATOR grants this seed makes")
+    void v31KeepListMatchesTheSeededSystemAdministratorGrants() throws IOException {
+        // V31 (#1512) deletes every SYSTEM_ADMINISTRATOR grant *not* in a hardcoded list, because
+        // SQL cannot read a repeatable seed in another file. That makes the list a second copy of
+        // this block, and a copy drifts. Both directions are a defect, and they fail differently:
+        // a name missing from V31 revokes authority the seed deliberately gives the role, and a
+        // name in V31 that the seed no longer grants keeps an out-of-band grant alive past the
+        // migration written to remove it. Equality is the only version of this that holds.
+        Set<String> keepList = parsePermissionLiterals(Files.readString(V31_REVOKE));
+
+        assertThat(keepList).as("no keep list parsed out of %s", V31_REVOKE).isNotEmpty();
+        assertThat(keepList)
+                .as("V31's keep list vs the seed's SYSTEM_ADMINISTRATOR grants")
+                .isEqualTo(seededGrants.get("SYSTEM_ADMINISTRATOR"));
+    }
+
+    @Test
+    @DisplayName("V31 revokes from SYSTEM_ADMINISTRATOR alone, never role-agnostically")
+    void v31RevokeIsScopedToSystemAdministrator() throws IOException {
+        // The #1512 investigation turned on V25-V28 deleting by permission_id with no role filter:
+        // written to retire grants from the seeded roles, they also stripped 48 grants off
+        // SYSTEM_ADMINISTRATOR, a role none of them mentions. V31 must not repeat that. A DELETE
+        // against role_permissions here has to name the role it means.
+        String body = SQL_LINE_COMMENT.matcher(Files.readString(V31_REVOKE)).replaceAll("");
+
+        assertThat(body)
+                .as("V31 must resolve the role it revokes from")
+                .contains("FROM roles WHERE name = 'SYSTEM_ADMINISTRATOR'");
+        assertThat(body)
+                .as("every DELETE against role_permissions in V31 must be role-scoped")
+                .containsPattern("DELETE FROM role_permissions\\s+WHERE role_id = sa_role_id");
+        assertThat(countOccurrences(body, "DELETE FROM role_permissions"))
+                .as("a second, unscoped DELETE would reintroduce the V25-V28 footgun")
+                .isEqualTo(1);
+    }
+
+    /** Permission names quoted in {@code sql}, with {@code --} comments stripped first. */
+    private static Set<String> parsePermissionLiterals(String sql) {
+        // Comments first: this migration's header names permission families in prose, and the
+        // audit tooling has already been bitten once by scoring a commented-out code as real
+        // (docs/rbac-permission-role-audit-2026-08.md, task 7).
+        String body = SQL_LINE_COMMENT.matcher(sql).replaceAll("");
+        Set<String> names = new TreeSet<>();
+        Matcher literal = QUOTED_PERMISSION.matcher(body);
+        while (literal.find()) {
+            names.add(literal.group(1));
+        }
+        return names;
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+            count++;
+        }
+        return count;
     }
 
     private static String readResource(String name) throws IOException {

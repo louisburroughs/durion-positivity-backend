@@ -84,14 +84,16 @@ genuinely enforced — just not by `@PreAuthorize`).
 112 permission codes are required by at least one operation and granted to **no role in
 the seed — ADMIN included**. 229 contract operations have no granted alternate at all.
 
-> **Discrepancy with #1512 worth confirming:** the issue says `SecurityBootstrap` grants
-> SYSTEM_ADMINISTRATOR every registered permission at runtime on alpha. **No such class
-> exists in this repository.** `RoleAuthorityServiceImpl` resolves authorities solely
-> from `role_permissions`, and the seed explicitly makes SYSTEM_ADMINISTRATOR *not* a
-> superuser (34 grants). If alpha behaves as described, that bootstrap lives outside
-> this repo (ops tooling or environment SQL) and should be located and documented —
-> otherwise these 229 operations are unreachable by *everyone*, admin included, on a
-> fresh database.
+> **Discrepancy with #1512 — resolved, see Task 8:** the issue says `SecurityBootstrap`
+> grants SYSTEM_ADMINISTRATOR every registered permission at runtime on alpha. **No such
+> class exists in this repository**, and this audit first read that absence as evidence
+> against the claim. It was the opposite: the claim held and the absence *was* the
+> finding. `RoleAuthorityServiceImpl` resolves authorities solely from
+> `role_permissions`, the seed makes SYSTEM_ADMINISTRATOR deliberately *not* a superuser
+> (40 grants), and alpha nonetheless carried 398 — every row then in the `permissions`
+> table, granted out of band and outside version control. So on a fresh database these
+> 229 operations really were unreachable by *everyone*, admin included; alpha only looked
+> healthy because of a grant no reviewer ever saw.
 
 ### 1a. Whole feature areas with zero role wiring
 
@@ -673,7 +675,7 @@ All six flags are decided; the chart above reflects them:
 | 5 | Triage remaining ~55 ADMIN-only unenforced codes: enforce or retire | medium | **IN PROGRESS** — retirement wave DONE (34 codes, V28); enforcement wave DONE for 15 codes gated across pos-catalog/pos-price/pos-vehicle-inventory/pos-vehicle-fitment, grants paired (seed-only, no migration); 12 codes still deferred (feature not built: crm integration-audit/processing-log/suspense reads, workorder estimate-item/snapshot GETs, people:skill:* feature (3 codes), nlti:request:read status endpoint, catalog:service_type:create/edit endpoint split, pricing:normalization:view) |
 | 6 | Close the `x-required-permissions` gap | medium | **IN PROGRESS** — decomposed into 3 causes (§5 Task 6): pos-security-service (88, tooling gap) and pos-catalog (37, real phantom-role gap) each being fixed by a concurrent effort; pos-event-receiver (12) and the 3 stragglers (pos-customer, pos-invoice, pos-vehicle-inventory) verified as correct silence — no fix needed, one convention note left on vehicle-inventory's `hasRole('ADMIN')` |
 | 7 | CI check on `scripts/audit-rbac.py` output (fail on new drift) | small | **DONE** — `--check` mode + `scripts/rbac-audit-baseline.json`, wired into the `validate-permissions` job; see subsection below |
-| 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | no |
+| 8 | Locate/confirm the alpha "SecurityBootstrap" superuser behavior; document or remove | small | **DONE for the policy half** — confirmed real (398 grants vs the seed's 40), decided unchanged and enforced by `V31__revoke_system_administrator_out_of_band_grants.sql`; the actor is still unnamed and needs alpha ops logs — see the subsection below |
 | 9 | Remove dead authorities: literal `"admin"` check, `ACCOUNTING_ADMIN`/`AR_MANAGER` alternates, `people:time:export:read` alternate | small | **DONE** — pos-people, pos-people-contact and pos-accounting code, contracts and tests cleaned |
 | 10 | Seed dummy users for the roles that currently have none (see below) so every persona is exercisable under its own login | small | **DONE** — 8 users seeded (…012–…019); felicia.grant's LOCATION-scoped assignment deferred until a location fixture exists; customer-persona flag still open |
 
@@ -778,3 +780,78 @@ Implementation notes:
 - Per ADR-0043/#714, users without a `person_id` get no `personId` claim; the existing
   17 operational users are seeded without one, so follow that precedent unless a
   persona's flow needs it (timekeeping flows for MANAGER-tier roles may).
+
+### Task 8 — the alpha SYSTEM_ADMINISTRATOR grant
+
+**Confirmed, decided and enforced. One thread is still open and it is not in this repository.**
+
+#### What was measured
+
+| | Count |
+| --- | ---: |
+| alpha SYSTEM_ADMINISTRATOR | **398** |
+| seed SYSTEM_ADMINISTRATOR | 40 |
+| seed ADMIN | 420 |
+| registered in `PermissionCode` | 481 |
+
+The 83-row gap between 481 and 398 decomposes with no remainder: 48 revoked
+role-agnostically by V25/V26/V27/V28, 35 registered after the grant ran. `481 − 48 − 35 =
+398`. All 48 role-agnostic revokes land inside the gap and none outside it, which is what
+makes the set look curated when it is not — those four migrations delete by
+`permission_id` with no `role_id` filter, so they stripped 48 grants off a role none of
+them mentions.
+
+Ruled out, each by name: **seed drift** (ADMIN reads exactly 420, matching the seed; SA
+never exceeds 40 across all 25 seed commits on all branches), **the durion seed-generator**
+(`scripts/seed-generator/src/emitters/001-security.js` emits no role/permission mapping at
+all — verified at source, one commit, never emitted a grant), and **a bootstrap running at
+startup** (Flyway runs at boot, V28 installed 2026-08-26 10:56:51 on the most recent boot,
+and SA still read 398 rather than climbing to 481).
+
+Twelve of the grants are codes **no version of the seed has ever given to any role** —
+`crm:vehicle:edit`/`deactivate` (retired by ADR-0044 §6), the `people:person:*` family
+(superseded by `people:employee:*`), `people:role:*`, `people:userLink:*` and
+`inventory:shortages:resolve`. They cannot have arrived through role grants at any point in
+the seed's history. Registration timestamps date the run to **between 2026-08-24 and
+2026-08-25 23:38** — during the week of this audit, not old residue.
+
+#### The decision
+
+**SYSTEM_ADMINISTRATOR is not a superuser.** That is what #1373 settled and what the seed's
+policy header states; the environment drifted from the model, the model did not change. The
+grants were never in version control, so there was nothing in the seed to revise —
+`V31__revoke_system_administrator_out_of_band_grants.sql` deletes the role's grants that
+`R__seed_role_permissions.sql` does not make, and nothing else.
+
+Three properties the migration is built around:
+
+- **Role-scoped on purpose.** The `DELETE` names SYSTEM_ADMINISTRATOR in its `WHERE`
+  clause. This is the deliberate opposite of the V25–V28 shape, and
+  `SystemAdministratorRevokeIT#leavesEveryOtherRoleUntouched` fails if it ever stops being
+  true. A revoke that means one role should say so.
+- **The keep list is guarded, not trusted.** SQL cannot read a repeatable migration in
+  another file, so V31 carries a copy of the seed's 40 SYSTEM_ADMINISTRATOR rows.
+  `RolePermissionBaselineTest#v31KeepListMatchesTheSeededSystemAdministratorGrants` asserts
+  the two copies are equal in both directions — a name missing from V31 revokes authority
+  the seed deliberately grants, and a name V31 keeps that the seed no longer grants
+  outlives the migration written to remove it.
+- **Safe on a fresh database.** Flyway runs versioned migrations before repeatable ones, so
+  V31 executes against an unseeded table, finds no grants, and returns. The repeatable seed
+  arrives afterwards — which on an existing environment also means the baseline is
+  re-asserted immediately after the revoke.
+
+#### Still open
+
+- **The actor.** `role_permissions` had no provenance columns until V30, so the database
+  cannot say who did this. Alpha deploy and ops logs for 2026-08-24 and 2026-08-25 should
+  name it. This needs access outside the repository. Now that V30 is in place, the same
+  question about a *future* grant is a single `SELECT`.
+- **An environment-aware check.** `scripts/audit-rbac.py --check` proves the *seed* is
+  self-consistent. It cannot see a running environment, and reported green throughout the
+  window in which alpha carried 358 grants the seed never made. Proving a deployed database
+  matches its seed is a different check, and this is the argument for having one. V31
+  corrects the environment once; it does not detect the next drift.
+- **Role-agnostic revokes as a convention.** V25–V28 reaching past the roles they name is
+  what made this set legible, so it worked out here. It is still a footgun: future revoke
+  migrations should scope to the roles they mean, or state in the header that they are
+  intentionally global.
