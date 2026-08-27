@@ -401,13 +401,15 @@ public class ProductController {
             lightweight catalog-item path with no duplicate checks, and do not use bulkIngestCatalogProducts, \
             which loads many products in one call.
             Preconditions: no product may already use the SKU (case-insensitive), and when manufacturerId is \
-            supplied no product may already pair it with the same mpn; a supplied categoryId must resolve.
+            supplied no product may already pair it with the same mpn; a supplied categoryId or \
+            subcategoryId must resolve.
             Required inputs: name, description, unitOfMeasure, sku and mpn, all non-blank; manufacturerId, \
-            categoryId, upc and attributes are optional, and a upc also becomes the productCode with type UPC.
-            Emits a CATALOG_PRODUCT_CREATED event, publishes a product fact for downstream replicas, and \
-            invalidates the product-detail cache.
+            categoryId, subcategoryId, upc and attributes are optional, and a upc also becomes the \
+            productCode with type UPC.
+            Emits a CATALOG_PRODUCT_CREATED event, publishes a product fact carrying the category and \
+            subcategory for downstream replicas, and invalidates the product-detail cache.
             Returns 409 when the SKU or the manufacturerId plus mpn pair already exists, and 400 when the \
-            supplied categoryId does not resolve.
+            supplied categoryId or subcategoryId does not resolve.
             """)
     @ApiResponse(
             responseCode = "201",
@@ -433,7 +435,8 @@ public class ProductController {
                                                                      "mpn":"AT3-26570R17",
                                                                      "upc":"036121960222",
                                                                      "manufacturerId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
-                                                                     "categoryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"}
+                                                                     "categoryId":"01960030-0000-7000-8000-000000000004",
+                                                                     "subcategoryId":"01960031-0000-7000-8000-00000000000e"}
                                                                     """)))
                     @Valid
                     @RequestBody
@@ -448,18 +451,19 @@ public class ProductController {
     @PutMapping("/{productId}")
     @Operation(operationId = "updateProduct", summary = "Update Product Master Record", description = """
             Replaces the mutable master-data fields of a product — name, description, unit of measure, \
-            manufacturer, category, UPC and attributes — while the SKU stays immutable.
+            manufacturer, category, subcategory, UPC and attributes — while the SKU stays immutable.
             Use this tool to correct product master data; do not use updateProductLifecycle, which changes \
             selling state, and do not use updateProductTrackingLevel, which changes stock tracking.
             Preconditions: the product must exist, and a sku field in the body must either be omitted or \
             match the stored SKU exactly.
             Required inputs: productId (UUID) path parameter plus non-blank name, description, unitOfMeasure \
-            and mpn; omitted optional fields such as upc and categoryId are cleared, not preserved.
-            Emits a CATALOG_PRODUCT_UPDATED event, publishes a product fact for downstream replicas, and \
-            invalidates the product-detail cache.
+            and mpn; omitted optional fields such as upc, categoryId and subcategoryId are cleared, not \
+            preserved.
+            Emits a CATALOG_PRODUCT_UPDATED event, publishes a product fact carrying the category and \
+            subcategory for downstream replicas, and invalidates the product-detail cache.
             Returns 404 when the product does not exist, 400 when the body tries to change the SKU or names a \
-            categoryId that does not resolve, and 409 when the manufacturerId plus mpn pair collides with \
-            another product.
+            categoryId or subcategoryId that does not resolve, and 409 when the manufacturerId plus mpn pair \
+            collides with another product.
             """)
     @ApiResponse(
             responseCode = "200",
@@ -488,7 +492,8 @@ public class ProductController {
                                                                      "unitOfMeasure":"EA",
                                                                      "mpn":"AT3-26570R17",
                                                                      "upc":"036121960222",
-                                                                     "categoryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"}
+                                                                     "categoryId":"01960030-0000-7000-8000-000000000004",
+                                                                     "subcategoryId":"01960031-0000-7000-8000-00000000000e"}
                                                                     """)))
                     @Valid
                     @RequestBody

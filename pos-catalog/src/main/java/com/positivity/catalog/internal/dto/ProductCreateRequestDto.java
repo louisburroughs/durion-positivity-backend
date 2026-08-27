@@ -38,6 +38,12 @@ public class ProductCreateRequestDto {
             requiredMode = NOT_REQUIRED)
     private UUID categoryId;
 
+    @Schema(
+            description = "Subcategory identifier",
+            example = "01960031-0000-7000-8000-00000000000e",
+            requiredMode = NOT_REQUIRED)
+    private UUID subcategoryId;
+
     @NotBlank
     @Schema(description = "Stock keeping unit", example = "SKU-12345", requiredMode = REQUIRED)
     private String sku;

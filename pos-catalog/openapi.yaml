@@ -296,9 +296,11 @@ paths:
 
         Preconditions: each row''s SKU must not already exist (case-insensitive), or that row fails with CATALOG_INGEST_FAILED while the rest of the batch proceeds.
 
-        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku then the name, while price, categoryName and subcategoryName are accepted but ignored in this wave.
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku then the name. manufacturerName, manufacturerBrand, countryOfOrigin, and type are carried onto the product (the manufacturer fields also travel on the product fact for replica consumers), while price is accepted but ignored until catalog pricing lands.
 
-        Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact and invalidates the product-detail cache.
+        categoryName and subcategoryName are resolved against the seeded catalog reference data, trimmed and matched case-insensitively; omit them to leave the product unclassified. A supplied name that matches no seeded record fails that row with CATALOG_INGEST_FAILED rather than landing the product uncategorized, so a typo cannot silently produce a product that no category-based rule can match.
+
+        Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact carrying the resolved category and subcategory, and invalidates the product-detail cache.
 
         Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
 
@@ -961,13 +963,13 @@ paths:
 
         Use this tool for governed product-master entry; do not use createCatalogItem, which is the lightweight catalog-item path with no duplicate checks, and do not use bulkIngestCatalogProducts, which loads many products in one call.
 
-        Preconditions: no product may already use the SKU (case-insensitive), and when manufacturerId is supplied no product may already pair it with the same mpn; a supplied categoryId must resolve.
+        Preconditions: no product may already use the SKU (case-insensitive), and when manufacturerId is supplied no product may already pair it with the same mpn; a supplied categoryId or subcategoryId must resolve.
 
-        Required inputs: name, description, unitOfMeasure, sku and mpn, all non-blank; manufacturerId, categoryId, upc and attributes are optional, and a upc also becomes the productCode with type UPC.
+        Required inputs: name, description, unitOfMeasure, sku and mpn, all non-blank; manufacturerId, categoryId, subcategoryId, upc and attributes are optional, and a upc also becomes the productCode with type UPC.
 
-        Emits a CATALOG_PRODUCT_CREATED event, publishes a product fact for downstream replicas, and invalidates the product-detail cache.
+        Emits a CATALOG_PRODUCT_CREATED event, publishes a product fact carrying the category and subcategory for downstream replicas, and invalidates the product-detail cache.
 
-        Returns 409 when the SKU or the manufacturerId plus mpn pair already exists, and 400 when the supplied categoryId does not resolve.
+        Returns 409 when the SKU or the manufacturerId plus mpn pair already exists, and 400 when the supplied categoryId or subcategoryId does not resolve.
 
         '
       operationId: createProduct
@@ -978,12 +980,13 @@ paths:
               New tire product:
                 description: New tire product
                 value:
-                  categoryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  categoryId: 01960030-0000-7000-8000-000000000004
                   description: All-terrain light truck tire, 265/70R17
                   manufacturerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   mpn: AT3-26570R17
                   name: All-Terrain Tire 265/70R17
                   sku: TIRE-AT-2657017
+                  subcategoryId: 01960031-0000-7000-8000-00000000000e
                   unitOfMeasure: EA
                   upc: 036121960222
             schema:
@@ -2921,17 +2924,17 @@ paths:
       x-required-permissions:
       - catalog:product:view
     put:
-      description: 'Replaces the mutable master-data fields of a product — name, description, unit of measure, manufacturer, category, UPC and attributes — while the SKU stays immutable.
+      description: 'Replaces the mutable master-data fields of a product — name, description, unit of measure, manufacturer, category, subcategory, UPC and attributes — while the SKU stays immutable.
 
         Use this tool to correct product master data; do not use updateProductLifecycle, which changes selling state, and do not use updateProductTrackingLevel, which changes stock tracking.
 
         Preconditions: the product must exist, and a sku field in the body must either be omitted or match the stored SKU exactly.
 
-        Required inputs: productId (UUID) path parameter plus non-blank name, description, unitOfMeasure and mpn; omitted optional fields such as upc and categoryId are cleared, not preserved.
+        Required inputs: productId (UUID) path parameter plus non-blank name, description, unitOfMeasure and mpn; omitted optional fields such as upc, categoryId and subcategoryId are cleared, not preserved.
 
-        Emits a CATALOG_PRODUCT_UPDATED event, publishes a product fact for downstream replicas, and invalidates the product-detail cache.
+        Emits a CATALOG_PRODUCT_UPDATED event, publishes a product fact carrying the category and subcategory for downstream replicas, and invalidates the product-detail cache.
 
-        Returns 404 when the product does not exist, 400 when the body tries to change the SKU or names a categoryId that does not resolve, and 409 when the manufacturerId plus mpn pair collides with another product.
+        Returns 404 when the product does not exist, 400 when the body tries to change the SKU or names a categoryId or subcategoryId that does not resolve, and 409 when the manufacturerId plus mpn pair collides with another product.
 
         '
       operationId: updateProduct
@@ -2950,10 +2953,11 @@ paths:
               Correct description and category:
                 description: Correct description and category
                 value:
-                  categoryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  categoryId: 01960030-0000-7000-8000-000000000004
                   description: All-terrain LT tire, 265/70R17, load range E
                   mpn: AT3-26570R17
                   name: All-Terrain Tire 265/70R17
+                  subcategoryId: 01960031-0000-7000-8000-00000000000e
                   unitOfMeasure: EA
                   upc: 036121960222
             schema:
@@ -4073,9 +4077,21 @@ components:
           description: Category name to associate the item with
           example: Tools
           type: string
+        countryOfOrigin:
+          description: ISO country of origin
+          example: DE
+          type: string
         description:
           description: Long description of the item
           example: Forged steel adjustable wrench
+          type: string
+        manufacturerBrand:
+          description: Manufacturer brand
+          example: Bosch Blue
+          type: string
+        manufacturerName:
+          description: Manufacturer display name
+          example: Bosch
           type: string
         mpn:
           description: Manufacturer part number; falls back to the SKU when absent
@@ -4098,6 +4114,10 @@ components:
         subcategoryName:
           description: Subcategory name to associate the item with
           example: Hand Tools
+          type: string
+        type:
+          description: Product type classification
+          example: PART
           type: string
         unitOfMeasure:
           description: Unit of measure for the item; defaults to EA when absent
@@ -5180,15 +5200,27 @@ components:
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
           format: uuid
           type: string
+        countryOfOrigin:
+          description: ISO country of origin
+          example: DE
+          type: string
         description:
           description: Product description
           example: Forged steel adjustable wrench
           minLength: 1
           type: string
+        manufacturerBrand:
+          description: Manufacturer brand
+          example: Bosch Blue
+          type: string
         manufacturerId:
           description: Manufacturer identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
           format: uuid
+          type: string
+        manufacturerName:
+          description: Manufacturer display name
+          example: Bosch
           type: string
         mpn:
           description: Manufacturer part number
@@ -5204,6 +5236,15 @@ components:
           description: Stock keeping unit
           example: SKU-12345
           minLength: 1
+          type: string
+        subcategoryId:
+          description: Subcategory identifier
+          example: 01960031-0000-7000-8000-00000000000e
+          format: uuid
+          type: string
+        type:
+          description: Product type classification
+          example: PART
           type: string
         unitOfMeasure:
           description: Unit of measure
@@ -5880,6 +5921,11 @@ components:
         sku:
           description: Stock keeping unit
           example: BP-CER-FRT-001
+          type: string
+        subcategoryId:
+          description: Identifier of the product subcategory
+          example: 01960031-0000-7000-8000-00000000000e
+          format: uuid
           type: string
         unitOfMeasure:
           description: Unit of measure for the product

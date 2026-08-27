@@ -198,14 +198,34 @@ reader maps them 1:1. Each successful row publishes a product fact on
 inventory, supplier) live — the post-seed `facts/replay` step the runbook requires
 for Flyway-seeded catalogs is not needed for pipeline-loaded products.
 
+**Category resolution (issue #1514).** `categoryName` and `subcategoryName` are
+resolved to ids against the Flyway reference seed
+(`pos-catalog/.../R__seed_reference_catalog.sql` — 12 categories, 40 subcategories),
+so pipeline-loaded products now land **categorized** and the resolved category and
+subcategory travel on the product fact. This is what makes category-based putaway
+work on fixture data; previously both columns were carried but ignored and every
+product landed uncategorized.
+
+- **Matching:** the name is trimmed and matched case-insensitively. Exact casing is
+  not required.
+- **Unknown name:** the row **fails** with `CATALOG_INGEST_FAILED` and the rest of
+  the batch proceeds. It is *not* created uncategorized, and no category is invented
+  — categories are curated reference data, and landing uncategorized would look like
+  success while silently producing a product that no category-based putaway rule can
+  match. Check `failureCount` and the per-row `results`, not just the HTTP status.
+- **Omitted name:** blank or absent is "unclassified" and resolves to null without
+  error, so a row may legitimately carry neither.
+- All 500 rows in `products.csv` resolve today (verified by
+  `AlphaFixtureCategoryNamesResolveTest`, which parses this CSV and the seed SQL at
+  build time). Any future edit introducing an unseeded name fails that test rather
+  than surfacing as a per-row ingest failure during a reseed.
+
 **Deltas / not yet converted:**
 
 - The CSV carries `manufacturerName`, `manufacturerBrand`, `countryOfOrigin`, and
   `type` (Wave 2) — the manufacturer fields also travel on the product fact, so
   warranty/supplier replicas get them. Still not expressible: `manufacturerId`
-  (there is no manufacturer table; the seed's ids were synthetic and are dropped),
-  and `categoryName`/`subcategoryName` remain carried-but-ignored until
-  category-by-name resolution lands (products land uncategorized).
+  (there is no manufacturer table; the seed's ids were synthetic and are dropped).
 - `upc` and `description` are blank (the seed never had UPCs; description defaults
   to the name server-side); `price` is blank (pricing is a separate seed).
 - Categories/subcategories (`R__seed_reference_catalog.sql`), services (file 3 — no

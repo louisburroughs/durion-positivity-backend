@@ -7,15 +7,18 @@ import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ProductSearchResultDto;
 import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
+import com.positivity.catalog.internal.dto.SubcategoryDto;
 import com.positivity.catalog.internal.entity.Category;
 import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductStatus;
+import com.positivity.catalog.internal.entity.Subcategory;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.CategoryRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
+import com.positivity.catalog.internal.repository.SubcategoryRepository;
 import com.positivity.catalog.service.ProductMasterDataService;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +35,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final SubcategoryRepository subcategoryRepository;
     private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
     private final CatalogFactPublisher catalogFactPublisher;
     private final ProductCodeUniquenessGuard productCodeUniquenessGuard;
@@ -63,6 +67,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setSpecifications(request.getAttributes());
         entity.setStatus(ProductStatus.ACTIVE);
         entity.setCategory(resolveCategory(request.getCategoryId()));
+        entity.setSubcategory(resolveSubcategory(request.getSubcategoryId()));
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
@@ -101,6 +106,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setAttributes(request.getAttributes());
         entity.setSpecifications(request.getAttributes());
         entity.setCategory(resolveCategory(request.getCategoryId()));
+        entity.setSubcategory(resolveSubcategory(request.getSubcategoryId()));
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
@@ -168,6 +174,14 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         return category.orElseThrow(() -> new CatalogValidationException("Category not found: " + categoryId));
     }
 
+    private Subcategory resolveSubcategory(UUID subcategoryId) {
+        if (subcategoryId == null) {
+            return null;
+        }
+        Optional<Subcategory> subcategory = subcategoryRepository.findById(subcategoryId);
+        return subcategory.orElseThrow(() -> new CatalogValidationException("Subcategory not found: " + subcategoryId));
+    }
+
     private ProductDto toDto(ProductEntity entity) {
         ProductDto dto = new ProductDto();
         dto.setId(entity.getId());
@@ -195,6 +209,12 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
             categoryDto.setId(entity.getCategory().getId());
             categoryDto.setName(entity.getCategory().getName());
             dto.setCategory(categoryDto);
+        }
+        if (entity.getSubcategory() != null) {
+            SubcategoryDto subcategoryDto = new SubcategoryDto();
+            subcategoryDto.setId(entity.getSubcategory().getId());
+            subcategoryDto.setName(entity.getSubcategory().getName());
+            dto.setSubcategory(subcategoryDto);
         }
         return dto;
     }
