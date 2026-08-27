@@ -8,9 +8,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -22,27 +25,36 @@ import tools.jackson.databind.ObjectMapper;
  * <p>For every {@link ReconciliationManifestV1} on {@code catalog.manifest.v1}, recomputes the
  * same count + checksum from {@code processed_events} (owner {@code catalog}) — window membership
  * is the UUIDv7 timestamp embedded in each recorded eventId, exactly the definition the owner
- * used. On mismatch it increments {@code replica.drift}.
+ * used. On mismatch it increments {@code replica.drift} and publishes a {@code
+ * catalog.outbox.replay-requested} command for the window, same as {@link LocationManifestListener}
+ * and every other manifest listener in this module — the replayed facts are indistinguishable from
+ * live ones, so repair is idempotent on the consumer's normal apply path.
  *
- * <p>Unlike {@link LocationManifestListener}, drift does NOT publish a replay command:
- * pos-catalog has no {@code catalog.commands.v1} listener yet (X1 finding, #1023) — a command
- * would be dropped unheard. Detection stays log + metric until catalog grows a replay listener;
- * the drift counter is the operational signal to re-emit catalog-side.
+ * <p>pos-catalog gained its replay-only {@code catalog.commands.v1} listener in #1537, closing the
+ * #1023 gap that previously left this module able only to detect drift, never repair it.
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "pos.inventory.kafka", name = "enabled", havingValue = "true")
 public class CatalogManifestListener {
 
+    private static final String REPLAY_COMMAND_TYPE = "catalog.outbox.replay-requested";
+
     private final ProcessedEventRepository processedEventRepository;
+    private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final Counter driftCounter;
 
+    @Value("${pos.inventory.kafka.catalog-commands-topic:catalog.commands.v1}")
+    private String catalogCommandsTopic;
+
     public CatalogManifestListener(
             ProcessedEventRepository processedEventRepository,
+            KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.processedEventRepository = processedEventRepository;
+        this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.driftCounter = registry == null
@@ -88,9 +100,7 @@ public class CatalogManifestListener {
         }
         log.warn(
                 "Replica drift detected owner=catalog window=[{}, {}) expectedCount={} observedCount={}"
-                        + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — no replay requested:"
-                        + " catalog has no catalog.commands.v1 listener yet (#1023); repair requires a"
-                        + " catalog-side re-emit",
+                        + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — requesting outbox replay",
                 manifest.windowStartUtc(),
                 manifest.windowEndUtc(),
                 manifest.eventCount(),
@@ -98,5 +108,26 @@ public class CatalogManifestListener {
                 manifest.eventIdsChecksum(),
                 observedChecksum,
                 manifest.eventTypeCounts());
+        requestReplay(manifest);
+    }
+
+    private void requestReplay(@NonNull ReconciliationManifestV1 manifest) {
+        try {
+            String command = objectMapper.writeValueAsString(new ReplayCommand(
+                    REPLAY_COMMAND_TYPE,
+                    new ReplayCommand.Payload(
+                            manifest.windowStartUtc().toString(),
+                            manifest.windowEndUtc().toString())));
+            kafkaTemplate.send(catalogCommandsTopic, manifest.windowStartUtc().toString(), command);
+        } catch (Exception e) {
+            // Best effort: the drift metric already fired, and the next manifest re-detects.
+            log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);
+        }
+    }
+
+    /** Command envelope for the owner's {@code catalog.commands.v1} listener. */
+    record ReplayCommand(
+            @NonNull String commandType, @NonNull Payload payload) {
+        record Payload(@Nullable String since, @Nullable String until) {}
     }
 }

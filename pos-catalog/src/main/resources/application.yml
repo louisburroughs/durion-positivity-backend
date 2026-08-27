@@ -60,6 +60,11 @@ pos:
       inventory-commands-topic: ${POS_CATALOG_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
       # catalog.product.updated fact producer (#924)
       events-topic: ${POS_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      # Own command inbox (ADR-0044 §4, #1537): CatalogCommandListener's replay-only listener,
+      # closing #1023 so pos-inventory's CatalogManifestListener can request repair on drift
+      # instead of only detecting it.
+      commands-topic: ${POS_CATALOG_COMMANDS_TOPIC:catalog.commands.v1}
+      commands-consumer-group: ${POS_CATALOG_COMMANDS_CONSUMER_GROUP:pos-catalog-commands}
       # Supplier PRICAT application into append-only price entries (ADR-0053 §7, #1308). The
       # command topic is where a detected chunk gap asks the owner to re-emit (ADR-0044 §4) --
       # never a synchronous call back to pos-supplier.
