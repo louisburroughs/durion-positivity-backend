@@ -897,13 +897,15 @@ public enum PermissionCode {
     CATALOG__PRODUCT_UOM__EDIT(484, "catalog:product_uom:edit"),
     CATALOG__ITEM_COST__READ(485, "catalog:item_cost:read"),
     CATALOG__TREAD_DESIGN__VIEW(486, "catalog:tread_design:view"),
-    CATALOG__FACT__REPLAY(487, "catalog:fact:replay");
+    CATALOG__FACT__REPLAY(487, "catalog:fact:replay"),
+    // ── Tax (new) ──────────────────────────────────────────────────────────────
+    TAX__RATES__VIEW(488, "tax:rates:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 61;
+    public static final int CATALOG_VERSION = 62;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
