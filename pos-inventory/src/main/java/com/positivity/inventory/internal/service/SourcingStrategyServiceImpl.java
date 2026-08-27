@@ -28,10 +28,17 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><strong>Resolution precedence</strong> (Odoo {@code _get_removal_strategy}
  * analog): active SKU_CATEGORY config for the SKU's category → active SITE
  * config → active DEFAULT config → platform default {@code FIFO}. The category
- * step resolves for real since #1514 replicated the catalog category onto
- * {@code ext_product} and {@link ReplicaSkuCategoryProvider} became the
- * {@code @Primary} {@link SkuCategoryProvider}; it falls through only for a SKU
- * whose category the replica cannot resolve. When the caller
+ * step is <strong>inert by default</strong>: #1514 replicated the catalog
+ * category onto {@code ext_product}, but {@link ReplicaSkuCategoryProvider}
+ * becomes the {@code @Primary} {@link SkuCategoryProvider} only when
+ * {@code pos.inventory.sku-category.resolve-from-replica} is enabled, and that
+ * defaults to false — until then {@link NoOpSkuCategoryProvider} serves the SPI
+ * and this is a three-step chain in practice. With the flag on the step falls
+ * through only for a SKU whose category the replica cannot resolve. Note this is
+ * the <em>highest</em>-precedence scope, so enabling the flag lets a category
+ * row override a deliberate per-site strategy; audit it first with
+ * {@code GET /v1/inventory/valuation/methods/sku-category-impact}, whose
+ * {@code impactedSourcingSkus} covers exactly this (#1535). When the caller
  * passes no site, the engine derives it from the first candidate's
  * {@code ext_storage_location} replica row.
  *

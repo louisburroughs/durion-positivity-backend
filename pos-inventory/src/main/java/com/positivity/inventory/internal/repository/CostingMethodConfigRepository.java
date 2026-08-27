@@ -29,5 +29,12 @@ public interface CostingMethodConfigRepository extends JpaRepository<CostingMeth
      */
     List<CostingMethodConfig> findByScopeTypeAndActiveTrue(CostingScopeType scopeType);
 
+    /**
+     * How many active rows exist at one scope kind, without loading them. The boot-time cut-over
+     * notice (#1535) needs only this number when the flag is off, and must not pay for the full
+     * impact report to get it.
+     */
+    long countByScopeTypeAndActiveTrue(CostingScopeType scopeType);
+
     List<CostingMethodConfig> findAllByOrderByScopeTypeAscScopeValueAsc();
 }

@@ -29,4 +29,11 @@ public interface SkuCategoryCutoverService {
     /** The impact report for the current configuration and replica contents. */
     @NonNull
     SkuCategoryImpactResponse impact();
+
+    /**
+     * How many active SKU_CATEGORY costing configuration rows exist — the one number that says
+     * whether the flag is worth thinking about at all, answered by a count query rather than by
+     * building the whole report. The boot-time notice uses this when the flag is off.
+     */
+    long activeSkuCategoryConfigCount();
 }

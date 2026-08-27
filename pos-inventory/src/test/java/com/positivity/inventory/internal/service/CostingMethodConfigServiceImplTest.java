@@ -199,13 +199,38 @@ class CostingMethodConfigServiceImplTest {
 
         service.upsertConfig(request(sku, CostingMethod.STANDARD));
 
-        // The trap: a brand-new builder-made row is also inactive (no @Builder.Default on `active`),
-        // so "was inactive" alone cannot tell creation from reactivation. Branch order is what does.
+        // The trap: a brand-new builder-made row is ALSO inactive (there is no @Builder.Default on
+        // `active`), so "was inactive" is not by itself enough to mean "reactivated". What protects
+        // this case is the configId != null guard on wasInactive — a row that has never been saved
+        // has no id yet. Branch order alone would not save it; see the sibling test below for the
+        // case branch order actually decides.
         assertThat(logsFor(sku)).singleElement().satisfies(l -> {
             assertThat(l.getChangeType()).isEqualTo(CostMethodChangeType.METHOD_SET);
             assertThat(l.getFromMethod()).isNull();
             assertThat(l.getToMethod()).isEqualTo(CostingMethod.STANDARD);
         });
+    }
+
+    @Test
+    @DisplayName("reactivating an inactive row at a CHANGED method records METHOD_SET, not REACTIVATED")
+    void upsertOnAnInactiveRowWithAChangedMethod_recordsMethodSet() {
+        String sku = "SKU-" + java.util.UUID.randomUUID();
+        CostingMethodConfigResponse created = service.upsertConfig(request(sku, CostingMethod.STANDARD));
+        service.deactivateConfig(created.getConfigId());
+
+        service.upsertConfig(request(sku, CostingMethod.AVERAGE));
+
+        // This is the case branch order decides: both conditions hold (the method changed AND the row
+        // was inactive), and the method change is the more consequential fact, so METHOD_SET must
+        // win. Swap the branches and this test fails while the new-row test above still passes.
+        assertThat(logsFor(sku))
+                .filteredOn(l -> l.getChangeType() == CostMethodChangeType.REACTIVATED)
+                .isEmpty();
+        assertThat(logsFor(sku))
+                .filteredOn(l -> l.getChangeType() == CostMethodChangeType.METHOD_SET
+                        && l.getFromMethod() == CostingMethod.STANDARD
+                        && l.getToMethod() == CostingMethod.AVERAGE)
+                .hasSize(1);
     }
 
     private List<CostMethodChangeLog> logsFor(String scopeValue) {

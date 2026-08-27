@@ -6848,7 +6848,7 @@ paths:
 
         Use this tool to set FIFO, FEFO, PROXIMITY or HIGHEST_STOCK at a scope; do not use deactivateSourcingStrategyConfig to change a strategy — an upsert on an inactive row reactivates it with the new strategy.
 
-        Preconditions: none beyond scope-value shape; note that FEFO falls back to FIFO while the SKU has no lot-expiry data, PROXIMITY falls back to FIFO when a decision has no reference location, and SKU_CATEGORY rows are stored but unresolvable until the catalog replica carries categories.
+        Preconditions: none beyond scope-value shape; note that FEFO falls back to FIFO while the SKU has no lot-expiry data, PROXIMITY falls back to FIFO when a decision has no reference location, and SKU_CATEGORY rows resolve only when pos.inventory.sku-category.resolve-from-replica is enabled, which defaults off — call reportSkuCategoryImpact before enabling it, since SKU_CATEGORY is the highest-precedence scope and would override SITE rows.
 
         Required inputs: scopeType (SKU_CATEGORY, SITE or DEFAULT) and strategy; scopeValue must be the category string for SKU_CATEGORY, the site UUID as text for SITE, and must be omitted for DEFAULT.
 
@@ -8018,7 +8018,7 @@ paths:
 
         Emits an INVENTORY_VALUATION_METHOD_SKU_CATEGORY_IMPACT audit event; nothing is changed.
 
-        Returns 200 with zero counts when no SKU_CATEGORY configuration exists, meaning the flag would change nothing for costing. The full cut-over procedure is in docs/OPERATIONS_RUNBOOK.md.
+        Returns 200 with zero counts when no SKU_CATEGORY configuration exists, meaning the flag would change nothing for costing. impactedSkuCount counts changes still pending and is computed against the flag''s current value, so it reaches zero once the cut-over is complete; use categoryMatchedSkuCount for how many SKUs the category step governs. When truncated is true the scan hit impactSkuCap and every row-derived count is a lower bound. The full cut-over procedure is in docs/OPERATIONS_RUNBOOK.md.
 
         '
       operationId: reportSkuCategoryImpact
@@ -12993,17 +12993,29 @@ components:
           example: AVERAGE
           type: string
         activeSkuCategoryConfigCount:
-          description: Number of active SKU_CATEGORY costing configuration rows, inert or not
+          description: Number of active SKU_CATEGORY costing configuration rows
           example: 3
           format: int32
           type: integer
         categoriesWithNoReplicatedProducts:
-          description: 'Configured category names that match no replicated product, sorted. Usually a casing or spelling mismatch against ext_product.category_name: matching is exact and case-sensitive after trimming, so such a row would silently never fire.'
+          description: 'Configured category names matching no replicated product, sorted. Usually a casing or spelling mismatch against ext_product.category_name: matching is exact and case-sensitive, so such a row silently never fires. Computed over the whole ext_product table, so it stays exact even when truncated is true.'
           example:
           - electrical system
           items:
             type: string
           type: array
+        categoriesWithUntrimmedScopeValue:
+          description: 'Configured scope values carrying leading or trailing whitespace, sorted. These can never fire: resolution keys on the stored scope value verbatim while the category side is trimmed, so the two can never be equal. The admin API trims on write, so these are seeded or hand-inserted rows. Fix them before reading the counts as final.'
+          example:
+          - '  Beverages  '
+          items:
+            type: string
+          type: array
+        categoryMatchedSkuCount:
+          description: Unshielded SKUs matched by an active SKU_CATEGORY costing row — the SKUs this flag governs. With the flag on these resolve from their category today; with it off they would. Unlike impactedSkuCount this does not go to zero after the cut-over. A lower bound when truncated is true.
+          example: 94
+          format: int32
+          type: integer
         deploymentDefaultMethod:
           description: Deployment default pos.inventory.valuation.default-method, the last fallback
           enum:
@@ -13012,17 +13024,22 @@ components:
           example: AVERAGE
           type: string
         evaluatedSkuCount:
-          description: SKUs reached by an active SKU_CATEGORY row, before shielding and no-op filtering
+          description: SKUs reached by an active SKU_CATEGORY costing row, before shielding and no-op filtering. Answered by a count query, so exact even when truncated is true.
           example: 120
+          format: int64
+          type: integer
+        impactSkuCap:
+          description: The pos.inventory.sku-category.impact-sku-cap in force for this run
+          example: 5000
           format: int32
           type: integer
         impactedSkuCount:
-          description: SKUs whose costing method would actually change
+          description: 'SKUs whose costing method would still change — changes not yet cut over. Zero by construction whenever resolveFromReplicaEnabled is true, since a matched SKU then already resolves from its category: this field is for planning the flip, not for auditing it afterwards. A lower bound when truncated is true.'
           example: 17
           format: int32
           type: integer
         impactedSkuWithCostStateCount:
-          description: Impacted SKUs that already have a sku_cost_state row, i.e. the ones a J4 revaluation cut-over has to cover
+          description: Impacted SKUs that already have a sku_cost_state row, i.e. the ones a J4 revaluation cut-over has to cover. A lower bound when truncated is true.
           example: 12
           format: int32
           type: integer
@@ -13032,24 +13049,32 @@ components:
             $ref: '#/components/schemas/SkuCategoryImpactRow'
           type: array
         impactedSourcingSkus:
-          description: SKUs whose sourcing strategy would start resolving from a SKU_CATEGORY row — a separate change from costing, needing its own sign-off
+          description: SKUs whose sourcing strategy resolves, or would resolve, from a SKU_CATEGORY row — a separate change from costing, needing its own sign-off
           items:
             $ref: '#/components/schemas/SourcingImpactRow'
           type: array
         resolveFromReplicaEnabled:
-          description: Current value of pos.inventory.sku-category.resolve-from-replica — the premise of this report. False means the impacted rows are pending; true means they have already taken effect.
+          description: 'Current value of pos.inventory.sku-category.resolve-from-replica. An input to the calculation, not a label: each row''s currentMethod is resolved as the running system would resolve it under this flag, so impactedSkuCount means changes still pending and reaches zero once the cut-over is complete.'
+          example: false
+          type: boolean
+        truncated:
+          description: True when the product scan hit impactSkuCap and the row lists are incomplete. Every count derived from rows is then a lower bound. Raise the cap and re-run before using a truncated report to decide a financial cut-over.
           example: false
           type: boolean
       required:
       - activeSkuCategoryConfigCount
       - categoriesWithNoReplicatedProducts
+      - categoriesWithUntrimmedScopeValue
+      - categoryMatchedSkuCount
       - deploymentDefaultMethod
       - evaluatedSkuCount
+      - impactSkuCap
       - impactedSkuCount
       - impactedSkuWithCostStateCount
       - impactedSkus
       - impactedSourcingSkus
       - resolveFromReplicaEnabled
+      - truncated
       type: object
     SkuCategoryImpactRow:
       description: One SKU whose costing method would change under SKU_CATEGORY resolution (#1535)

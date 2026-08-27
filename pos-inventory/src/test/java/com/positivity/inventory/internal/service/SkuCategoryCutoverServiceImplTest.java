@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.only;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.costing.SkuCategoryImpactResponse;
@@ -46,6 +49,7 @@ class SkuCategoryCutoverServiceImplTest {
     private static final UUID CONFIG_ID = UUID.fromString("018f0000-0000-7000-8000-0000000015c1");
     private static final UUID SOURCING_CONFIG_ID = UUID.fromString("018f0000-0000-7000-8000-0000000015d1");
     private static final String CATEGORY = "Electrical System";
+    private static final int DEFAULT_CAP = 5000;
 
     private final CostingMethodConfigRepository configRepository = mock(CostingMethodConfigRepository.class);
     private final SourcingStrategyConfigRepository sourcingStrategyConfigRepository =
@@ -64,19 +68,28 @@ class SkuCategoryCutoverServiceImplTest {
                 .thenReturn(List.of());
         when(sourcingStrategyConfigRepository.findByScopeTypeAndActiveTrue(any()))
                 .thenReturn(List.of());
-        when(extProductReplicaRepository.findByTrimmedCategoryNameIn(anyCollection()))
+        when(extProductReplicaRepository.findByTrimmedCategoryNameIn(anyCollection(), any()))
+                .thenReturn(List.of());
+        when(extProductReplicaRepository.countByTrimmedCategoryNameIn(anyCollection()))
+                .thenReturn(0L);
+        when(extProductReplicaRepository.findDistinctTrimmedCategoryNamesIn(anyCollection()))
                 .thenReturn(List.of());
         when(skuCostStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
     }
 
     private SkuCategoryCutoverServiceImpl service(boolean resolveFromReplicaEnabled) {
+        return service(resolveFromReplicaEnabled, DEFAULT_CAP);
+    }
+
+    private SkuCategoryCutoverServiceImpl service(boolean resolveFromReplicaEnabled, int impactSkuCap) {
         return new SkuCategoryCutoverServiceImpl(
                 configRepository,
                 sourcingStrategyConfigRepository,
                 extProductReplicaRepository,
                 skuCostStateRepository,
                 costingMethodResolver,
-                resolveFromReplicaEnabled);
+                resolveFromReplicaEnabled,
+                impactSkuCap);
     }
 
     private static CostingMethodConfig categoryConfig(String categoryName, CostingMethod method) {
@@ -103,9 +116,24 @@ class SkuCategoryCutoverServiceImplTest {
                 .thenReturn(List.of(configs));
     }
 
+    /**
+     * Stubs the scan, the population count and the distinct-name probe consistently, so a test never
+     * asserts against a replica set the count query disagrees with.
+     */
     private void givenReplicas(ExtProductReplica... replicas) {
-        when(extProductReplicaRepository.findByTrimmedCategoryNameIn(anyCollection()))
-                .thenReturn(List.of(replicas));
+        List<ExtProductReplica> rows = List.of(replicas);
+        when(extProductReplicaRepository.findByTrimmedCategoryNameIn(anyCollection(), any()))
+                .thenReturn(rows);
+        when(extProductReplicaRepository.countByTrimmedCategoryNameIn(anyCollection()))
+                .thenReturn((long) rows.size());
+        when(extProductReplicaRepository.findDistinctTrimmedCategoryNamesIn(anyCollection()))
+                .thenAnswer(invocation -> rows.stream()
+                        .map(replica -> replica.getCategoryName() == null
+                                ? null
+                                : replica.getCategoryName().trim())
+                        .filter(name -> name != null && !name.isEmpty())
+                        .distinct()
+                        .toList());
     }
 
     @Test
@@ -301,10 +329,11 @@ class SkuCategoryCutoverServiceImplTest {
     }
 
     @Test
-    @DisplayName("category matching is exact after trimming, so a casing mismatch is reported as unmatched")
-    void impact_matchesCategoryNameExactlyAfterTrimming() {
-        givenCategoryConfig(categoryConfig("  " + CATEGORY + "  ", CostingMethod.STANDARD));
-        // Same name modulo surrounding whitespace matches; different casing does not.
+    @DisplayName("matching is verbatim on the stored scope value, as the resolver matches")
+    void impact_matchesCategoryNameExactlyAsTheRuntimeDoes() {
+        givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
+        // The replica side is trimmed by the SPI, so surrounding whitespace there is harmless;
+        // different casing is not, because the resolver's map lookup is case-sensitive.
         givenReplicas(replica(PRODUCT_A, " " + CATEGORY + " "), replica(PRODUCT_B, "electrical system"));
 
         SkuCategoryImpactResponse report = service(false).impact();
@@ -312,25 +341,132 @@ class SkuCategoryCutoverServiceImplTest {
         assertThat(report.getImpactedSkus())
                 .extracting(SkuCategoryImpactRow::getStockItemId)
                 .containsExactly(PRODUCT_A.toString());
-        assertThat(report.getCategoriesWithNoReplicatedProducts()).isEmpty();
     }
 
     @Test
-    @DisplayName("the whole point: the report is non-empty while resolve-from-replica is still false")
-    void impact_worksWhileResolveFromReplicaIsFalse() {
+    @DisplayName("a config scope value with whitespace can never fire, and is reported as such rather than trimmed")
+    void impact_reportsUntrimmedScopeValuesAsUnmatchableRatherThanTrimmingThem() {
+        givenCategoryConfig(categoryConfig("  " + CATEGORY + "  ", CostingMethod.STANDARD));
+        givenReplicas(replica(PRODUCT_A, CATEGORY));
+
+        SkuCategoryImpactResponse report = service(false).impact();
+
+        // CostingMethodResolver keys on the STORED scope value verbatim while the category arrives
+        // trimmed, so this row never fires at runtime. The report must say so, not quietly trim it
+        // into working — the API trims on write, so a row like this is seeded or hand-inserted, and
+        // being right about hand-authored config is this report's whole job.
+        assertThat(report.getCategoriesWithUntrimmedScopeValue()).containsExactly("  " + CATEGORY + "  ");
+        assertThat(report.getImpactedSkus()).isEmpty();
+        assertThat(report.getCategoryMatchedSkuCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("the report is non-empty while resolve-from-replica is false, and never consults the gated SPI")
+    void impact_worksWhileResolveFromReplicaIsFalseWithoutTouchingTheSpi() {
         givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
         givenReplicas(replica(PRODUCT_A, CATEGORY));
 
         SkuCategoryImpactResponse report = service(false).impact();
 
-        // If this class ever grows a SkuCategoryProvider dependency, the flag would gag the SPI and
-        // this report would be empty at exactly the moment an operator needs it.
         assertThat(report.isResolveFromReplicaEnabled()).isFalse();
         assertThat(report.getImpactedSkuCount()).isEqualTo(1);
-        assertThat(report.getImpactedSkus()).isNotEmpty();
+
+        // The load-bearing assertion. CostingMethodResolver.resolve/resolveAll route through the
+        // SkuCategoryProvider SPI, which the flag gags — using either would make this report empty at
+        // exactly the moment an operator needs it. defaultMethod() is the only safe member, so pin
+        // that it is the ONLY one called. A declared-field check cannot catch this; a call to
+        // resolver.resolve(sku) would slip straight past it.
+        verify(costingMethodResolver, only()).defaultMethod();
     }
 
-    /** Guards the constructor contract the class javadoc rests on. */
+    // ─── the flag is an input, not a caption (F1) ────────────────────────────
+
+    @Test
+    @DisplayName("with the flag ON a matched SKU already resolves from its category, so nothing is pending")
+    void impact_withFlagOn_reportsNoPendingChangeBecauseTheCategoryAlreadyResolves() {
+        givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
+        givenReplicas(replica(PRODUCT_A, CATEGORY));
+
+        SkuCategoryImpactResponse report = service(true).impact();
+
+        // Same configuration and same replica as the flag-off case above, which reports 1 impacted.
+        // This is what lets the report verify its own cut-over: re-running after the flip must be
+        // able to reach zero, otherwise runbook step 8 asserts something that can never happen.
+        assertThat(report.isResolveFromReplicaEnabled()).isTrue();
+        assertThat(report.getImpactedSkuCount()).isZero();
+        assertThat(report.getImpactedSkus()).isEmpty();
+        // But the SKU is still governed by the category step, and that count does not vanish.
+        assertThat(report.getCategoryMatchedSkuCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("categoryMatchedSkuCount counts governed SKUs under either flag state")
+    void impact_categoryMatchedSkuCountIsFlagIndependent() {
+        givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
+        givenReplicas(replica(PRODUCT_A, CATEGORY), replica(PRODUCT_B, CATEGORY));
+
+        assertThat(service(false).impact().getCategoryMatchedSkuCount()).isEqualTo(2);
+        assertThat(service(true).impact().getCategoryMatchedSkuCount()).isEqualTo(2);
+    }
+
+    // ─── bounds (F2) ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("hitting the cap sets truncated and keeps evaluatedSkuCount truthful")
+    void impact_atTheCap_setsTruncatedAndStillReportsTheTruePopulation() {
+        givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
+        // Cap of 1 with two matching products: the scan fetches cap+1 to detect the overflow.
+        givenReplicas(replica(PRODUCT_A, CATEGORY), replica(PRODUCT_B, CATEGORY));
+
+        SkuCategoryImpactResponse report = service(false, 1).impact();
+
+        assertThat(report.isTruncated()).isTrue();
+        assertThat(report.getImpactSkuCap()).isEqualTo(1);
+        assertThat(report.getImpactedSkus()).hasSize(1);
+        // The count query is not capped, so the population size stays honest even though the rows
+        // are a lower bound. Silently shortening a report used to decide a financial cut-over would
+        // be worse than the unboundedness it replaces.
+        assertThat(report.getEvaluatedSkuCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a scan inside the cap is not marked truncated")
+    void impact_insideTheCap_isNotTruncated() {
+        givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
+        givenReplicas(replica(PRODUCT_A, CATEGORY));
+
+        assertThat(service(false, 5000).impact().isTruncated()).isFalse();
+    }
+
+    @Test
+    @DisplayName("the replica scan runs once for costing and sourcing together, not once each")
+    void impact_scansTheReplicaOnlyOnceForBothFeeds() {
+        givenCategoryConfig(categoryConfig(CATEGORY, CostingMethod.STANDARD));
+        when(sourcingStrategyConfigRepository.findByScopeTypeAndActiveTrue(SourcingScopeType.SKU_CATEGORY))
+                .thenReturn(List.of(SourcingStrategyConfig.builder()
+                        .configId(SOURCING_CONFIG_ID)
+                        .scopeType(SourcingScopeType.SKU_CATEGORY)
+                        .scopeValue(CATEGORY)
+                        .strategy(SourcingStrategy.FEFO)
+                        .active(true)
+                        .build()));
+        givenReplicas(replica(PRODUCT_A, CATEGORY));
+
+        SkuCategoryImpactResponse report = service(false).impact();
+
+        assertThat(report.getImpactedSkus()).hasSize(1);
+        assertThat(report.getImpactedSourcingSkus()).hasSize(1);
+        // findByTrimmedCategoryNameIn is a documented sequential scan; running it per feed doubled
+        // the most expensive thing this method does.
+        verify(extProductReplicaRepository, times(1)).findByTrimmedCategoryNameIn(anyCollection(), any());
+    }
+
+    /**
+     * A cheap structural backstop for the "no SPI dependency" rule. It is deliberately NOT the main
+     * guard — it only inspects declared field types, so a call to {@code costingMethodResolver
+     * .resolve(sku)} would route through the gated SPI and still pass here. The behavioural guard is
+     * the {@code verify(costingMethodResolver, only()).defaultMethod()} above.
+     */
     @Test
     @DisplayName("the impl declares no SkuCategoryProvider collaborator")
     void impl_hasNoSkuCategoryProviderDependency() {

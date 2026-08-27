@@ -355,6 +355,7 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
 | `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED`     | `false`  | Run the EAN resolution sweep against pos-catalog       |
 | `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE`  | `200`    | Hints resolved per pass                                |
 | `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`    | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_config` and of `sourcing_strategy_config` reachable, changing both costing method and sourcing strategy for matching SKUs. Audit first with `GET /v1/inventory/valuation/methods/sku-category-impact` (valid while the flag is off), then follow "SKU_CATEGORY costing and sourcing cut-over (#1535)" in `docs/OPERATIONS_RUNBOOK.md`. Putaway does not use this SPI. |
+| `POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP`          | `5000`   | Maximum products the SKU_CATEGORY impact report scans. Past this it sets `truncated: true` rather than silently shortening; raise it and re-run. |
 
 ## Dependencies
 

@@ -88,16 +88,24 @@ pos:
       #
       # OFF by default, and this entry does not change that: @ConditionalOnProperty on
       # ReplicaSkuCategoryProvider is havingValue="true" with matchIfMissing=false, so an absent key
-      # and `false` mean exactly the same thing. This is a wiring fix, not a flip.
+      # and `false` mean exactly the same thing.
       #
-      # The wiring bug it fixes: without a placeholder here there was nothing for Spring's relaxed
-      # binding to bind into, so the env var README.md documents did not bind at all — only the
-      # unreadable POS_INVENTORY_SKUCATEGORY_RESOLVEFROMREPLICA would have worked.
+      # The placeholder is here for consistency with every other key in this file, not to repair a
+      # binding failure: POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA resolves with or without it
+      # (SystemEnvironmentPropertySource matches dashes to underscores, and Boot's
+      # SystemEnvironmentPropertyMapper offers both candidate forms). What it does buy is that the
+      # key is discoverable here and its default is stated in one place.
+      # SkuCategoryPropertyBindingTest pins the binding itself.
       #
       # Before enabling: run GET /v1/inventory/valuation/methods/sku-category-impact and follow
       # "SKU_CATEGORY costing and sourcing cut-over (#1535)" in docs/OPERATIONS_RUNBOOK.md. Turning
       # it on changes the costing method of matching SKUs at their next ledger posting.
       resolve-from-replica: ${POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA:false}
+      # Upper bound on products the impact report will scan and materialise. The natural size of that
+      # report is "however many products carry a configured category name", which no operator
+      # controls, and it is built on every boot when the flag is on. Past this cap the report sets
+      # truncated=true rather than silently shortening itself; raise it and re-run if you hit it.
+      impact-sku-cap: ${POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP:5000}
     receiving:
       # Optional site identifier used to resolve default staging location from pos-location.
       site-id: ${POS_INVENTORY_RECEIVING_SITE_ID:}
