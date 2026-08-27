@@ -296,7 +296,7 @@ paths:
 
         Preconditions: each row''s SKU must not already exist (case-insensitive), or that row fails with CATALOG_INGEST_FAILED while the rest of the batch proceeds.
 
-        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku then the name, while price, categoryName and subcategoryName are accepted but ignored in this wave.
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku then the name. manufacturerName, manufacturerBrand, countryOfOrigin, and type are carried onto the product (the manufacturer fields also travel on the product fact for replica consumers), while price, categoryName and subcategoryName are accepted but ignored until pricing and category-by-name resolution land.
 
         Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact and invalidates the product-detail cache.
 
@@ -4073,9 +4073,21 @@ components:
           description: Category name to associate the item with
           example: Tools
           type: string
+        countryOfOrigin:
+          description: ISO country of origin
+          example: DE
+          type: string
         description:
           description: Long description of the item
           example: Forged steel adjustable wrench
+          type: string
+        manufacturerBrand:
+          description: Manufacturer brand
+          example: Bosch Blue
+          type: string
+        manufacturerName:
+          description: Manufacturer display name
+          example: Bosch
           type: string
         mpn:
           description: Manufacturer part number; falls back to the SKU when absent
@@ -4098,6 +4110,10 @@ components:
         subcategoryName:
           description: Subcategory name to associate the item with
           example: Hand Tools
+          type: string
+        type:
+          description: Product type classification
+          example: PART
           type: string
         unitOfMeasure:
           description: Unit of measure for the item; defaults to EA when absent
@@ -5180,15 +5196,27 @@ components:
           example: 2c018664-dfea-46ef-a838-6b9dbf8f9b1d
           format: uuid
           type: string
+        countryOfOrigin:
+          description: ISO country of origin
+          example: DE
+          type: string
         description:
           description: Product description
           example: Forged steel adjustable wrench
           minLength: 1
           type: string
+        manufacturerBrand:
+          description: Manufacturer brand
+          example: Bosch Blue
+          type: string
         manufacturerId:
           description: Manufacturer identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
           format: uuid
+          type: string
+        manufacturerName:
+          description: Manufacturer display name
+          example: Bosch
           type: string
         mpn:
           description: Manufacturer part number
@@ -5204,6 +5232,10 @@ components:
           description: Stock keeping unit
           example: SKU-12345
           minLength: 1
+          type: string
+        type:
+          description: Product type classification
+          example: PART
           type: string
         unitOfMeasure:
           description: Unit of measure

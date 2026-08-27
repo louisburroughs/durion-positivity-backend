@@ -12,6 +12,8 @@ servers:
 tags:
 - description: Operations for creating and loading appointments in shop management
   name: Appointments API
+- description: Operator maintenance of mechanic skill enrichment
+  name: Mechanic Skills API
 - description: Create and list technician and resource assignments for an appointment
   name: Appointment Assignments
 - description: Shop schedule and assignment audit trail.
@@ -605,6 +607,55 @@ paths:
       - Schedule API
       x-required-permissions:
       - shop:schedule:view
+  /v1/shop-manager/mechanics/by-person/{personId}/skills:
+    put:
+      description: 'Replaces the full skill set of the mechanic linked to a person with the supplied codes and proficiency levels.
+
+        Use this tool for operator maintenance of skills, which are shop-manager-owned enrichment the HR feed never carries; do not use this tool to edit the mechanic record itself, which is projected from people.events.v1.
+
+        Preconditions: the caller must hold shop:schedule:edit and a mechanic must exist for the personId (technicians are projected from ACTIVE TECHNICIAN staffing assignments).
+
+        Required inputs: personId as a path parameter and skills, a non-empty array where each entry has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
+
+        Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the edit rides the HR-feed path as a synthetic skills event stamped with the current timestamp, advancing the sync version so ordering against in-flight feed events is last-write-wins.
+
+        Returns 204 on success, 404 when no mechanic exists for the person, and 400 when the body is invalid.
+
+        '
+      operationId: replaceMechanicSkills
+      parameters:
+      - in: path
+        name: personId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Replace mechanic skills:
+                description: Replace mechanic skills
+                value:
+                  skills:
+                  - proficiencyLevel: 4
+                    skillCode: T4-BRAKES
+            schema:
+              $ref: '#/components/schemas/ReplaceMechanicSkillsRequest'
+        description: The full replacement skill set for the mechanic.
+        required: true
+      responses:
+        '204':
+          description: Skill set replaced.
+        '404':
+          description: No mechanic for that person.
+      security:
+      - bearerAuth:
+        - shop:schedule:edit
+      summary: Replace a Mechanic's Skill Set
+      tags:
+      - Mechanic Skills API
+      x-required-permissions:
+      - shop:schedule:edit
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       description: 'Resolves the person identity (names, emails, phone numbers) of a technician working at a shop location from the local people-contact replica.
@@ -1297,6 +1348,17 @@ components:
           example: jane.d@example.com
           type: string
       type: object
+    ReplaceMechanicSkillsRequest:
+      properties:
+        skills:
+          description: Full replacement skill set for the mechanic
+          items:
+            $ref: '#/components/schemas/SkillInput'
+          minItems: 1
+          type: array
+      required:
+      - skills
+      type: object
     RescheduleAppointmentRequest:
       description: Request to reschedule an appointment to a new time window with a mandatory reason
       properties:
@@ -1531,6 +1593,23 @@ components:
       - id
       - recordedAt
       - retentionYears
+      type: object
+    SkillInput:
+      properties:
+        proficiencyLevel:
+          description: Proficiency 1 (beginner) to 5 (master)
+          example: 4
+          format: int32
+          maximum: 5
+          minimum: 1
+          type: integer
+        skillCode:
+          description: Skill code (ASE T-series convention)
+          example: T4-BRAKES
+          minLength: 1
+          type: string
+      required:
+      - skillCode
       type: object
   securitySchemes:
     bearerAuth:

@@ -3770,7 +3770,7 @@ paths:
 
         Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
 
-        Returns 400 when the username already exists or a named role is not found.
+        Returns 409 when the username already exists, and 400 when a field is missing or a named role is not found.
 
         '
       operationId: createUser
@@ -3786,7 +3786,7 @@ paths:
                   - SHOP_MGR
                   username: jane.doe
             schema:
-              type: object
+              $ref: '#/components/schemas/CreateUserRequest'
         description: Username, password, and role names of the account to create.
         required: true
       responses:
@@ -6550,6 +6550,88 @@ paths:
       - Admin Account-State API
       x-required-permissions:
       - security:user_account_state:manage
+  /v1/users/{id}/person-link:
+    put:
+      description: 'Requests a PRIMARY link between a user account and a canonical person over the people-contact command channel; the users.person_id projection updates asynchronously when the confirming link fact arrives.
+
+        Use this tool for operator provisioning of accounts created via createUser, which performs no identity resolution; do not use selfRegisterUser, which resolves and links its own person.
+
+        Preconditions: the caller must hold security:user:edit and the user id must exist; the personId is not validated here — an unknown person is rejected by pos-people-contact when it processes the command.
+
+        Required inputs: the user id as a path parameter and personId in the body.
+
+        Emits a SECURITY_USER_PERSON_LINK_REQUEST event and queues the link-create command.
+
+        Returns 202 because the link lands asynchronously, and 404 when the user does not exist.
+
+        '
+      operationId: linkUserPerson
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Link canonical person:
+                description: Link canonical person
+                value:
+                  personId: 01960011-0000-7000-8000-000000000001
+            schema:
+              $ref: '#/components/schemas/LinkUserPersonRequest'
+        description: The canonical person identifier to link to the user account.
+        required: true
+      responses:
+        '202':
+          description: Link command queued; projection updates asynchronously.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Bad Request
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:user:edit
+      summary: Link a User Account to Its Canonical Person
+      tags:
+      - User API
+      x-required-permissions:
+      - security:user:edit
   /v1/users/{id}/unlock:
     post:
       description: 'Clears the lockout state on a user account, resetting the failed-attempt counter and lock timestamps so the user can authenticate again.
@@ -7304,6 +7386,33 @@ components:
       - permissionCount
       - version
       type: object
+    CreateUserRequest:
+      properties:
+        password:
+          description: Initial password; hashed server-side before storage
+          example: Sup3rS3cret!
+          minLength: 1
+          type: string
+        roles:
+          description: Existing role names to attach directly
+          example:
+          - TECHNICIAN
+          items:
+            minLength: 1
+            type: string
+          minItems: 1
+          type: array
+          uniqueItems: true
+        username:
+          description: Unique login name for the new account
+          example: jane.doe
+          minLength: 1
+          type: string
+      required:
+      - password
+      - roles
+      - username
+      type: object
     CrmMatchSummaryDto:
       description: Summary of CRM person-search candidates evaluated during registration
       properties:
@@ -7391,6 +7500,16 @@ components:
           type: string
       required:
       - subject
+      type: object
+    LinkUserPersonRequest:
+      properties:
+        personId:
+          description: Canonical person id (pos-people-contact) to link the account to
+          example: 01960011-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+      required:
+      - personId
       type: object
     LoginRequest:
       description: Request to authenticate a user with username and password

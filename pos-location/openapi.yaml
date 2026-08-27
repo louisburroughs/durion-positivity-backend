@@ -165,8 +165,10 @@ paths:
                     countryCode: US
                     locationTypeName: STORE
                     name: Downtown Service Center
+                    phoneNumber: +1-217-555-0100
                     postalCode: '62704'
                     stateOrProvince: IL
+                    timezone: America/Chicago
             schema:
               $ref: '#/components/schemas/BulkIngestRequestLocationBulkIngestRecord'
         description: Batch envelope of location records to import, scoped to a bulk ingest job and submitting operator.
@@ -2638,6 +2640,10 @@ components:
           description: State or province of the location
           example: IL
           type: string
+        timezone:
+          description: IANA timezone of the location
+          example: America/New_York
+          type: string
       required:
       - code
       - name
@@ -2847,6 +2853,10 @@ components:
           example:
             ORGANIZATIONAL: 01960003-0000-7000-8000-000000000002
           type: object
+        phoneNumber:
+          description: Primary phone number for the location
+          example: +1-217-555-0100
+          type: string
         postalCode:
           description: Postal or ZIP code of the location
           example: '62704'
@@ -2915,6 +2925,10 @@ components:
         name:
           description: Display name of the location
           example: Downtown Service Center
+          type: string
+        phoneNumber:
+          description: Primary phone number for the location
+          example: +1-217-555-0100
           type: string
         postalCode:
           description: Postal or ZIP code of the location

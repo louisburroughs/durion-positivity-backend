@@ -28,22 +28,22 @@ public class MechanicSkillController {
     private final MechanicSyncService mechanicSyncService;
 
     @Operation(operationId = "replaceMechanicSkills", summary = "Replace a Mechanic's Skill Set", description = """
-                    Replaces the full skill set of the mechanic linked to a person with the supplied codes and \
-                    proficiency levels.
-                    Use this tool for operator maintenance of skills, which are shop-manager-owned enrichment the \
-                    HR feed never carries; the mechanic record itself is projected from people.events.v1 and is \
-                    not editable here.
-                    Preconditions: the caller must hold shop:schedule:edit and a mechanic must exist for the \
-                    personId (technicians are projected from ACTIVE TECHNICIAN staffing assignments).
-                    Required inputs: personId as a path parameter and skills, a non-empty array where each entry \
-                    has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
-                    Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the \
-                    edit rides the HR-feed path as a synthetic skills event stamped with the current \
-                    timestamp, advancing the sync version so ordering against in-flight feed events is \
-                    last-write-wins.
-                    Returns 204 on success, 404 when no mechanic exists for the person, and 400 when the body is \
-                    invalid.
-                    """)
+                        Replaces the full skill set of the mechanic linked to a person with the supplied codes and \
+                        proficiency levels.
+                        Use this tool for operator maintenance of skills, which are shop-manager-owned enrichment the \
+                        HR feed never carries; do not use this tool to edit the mechanic record itself, which is \
+                        projected from people.events.v1.
+                        Preconditions: the caller must hold shop:schedule:edit and a mechanic must exist for the \
+                        personId (technicians are projected from ACTIVE TECHNICIAN staffing assignments).
+                        Required inputs: personId as a path parameter and skills, a non-empty array where each entry \
+                        has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
+                        Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the \
+                        edit rides the HR-feed path as a synthetic skills event stamped with the current \
+                        timestamp, advancing the sync version so ordering against in-flight feed events is \
+                        last-write-wins.
+                        Returns 204 on success, 404 when no mechanic exists for the person, and 400 when the body is \
+                        invalid.
+                        """)
     @ApiResponse(responseCode = "204", description = "Skill set replaced.")
     @ApiResponse(responseCode = "404", description = "No mechanic for that person.")
     @EmitEvent(id = "SHOP_MECHANIC_SKILLS_REPLACE", apiVersion = "1")
@@ -53,7 +53,23 @@ public class MechanicSkillController {
     @PreAuthorize("hasAuthority('" + ShopPermissions.SCHEDULE_EDIT + "')")
     @PutMapping("/mechanics/by-person/{personId}/skills")
     public ResponseEntity<Void> replaceSkills(
-            @PathVariable @NonNull String personId, @Valid @RequestBody @NonNull ReplaceMechanicSkillsRequest request) {
+            @PathVariable @NonNull String personId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The full replacement skill set for the mechanic.",
+                            required = true,
+                            content =
+                                    @io.swagger.v3.oas.annotations.media.Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Replace mechanic skills",
+                                                            value = """
+                                        {"skills":[{"skillCode":"T4-BRAKES","proficiencyLevel":4}]}
+                                        """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ReplaceMechanicSkillsRequest request) {
         mechanicSyncService.replaceSkills(
                 personId,
                 request.skills().stream()

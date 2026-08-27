@@ -33,17 +33,17 @@ public class UserController {
     private final UserService userService;
 
     @Operation(operationId = "createUser", summary = "Create a User With Roles", description = """
-                    Creates a user account with a username, a hashed password, and a set of directly attached \
-                    roles.
-                    Use this tool for operator provisioning of accounts; do not use selfRegisterUser, the anonymous \
-                    customer flow that fixes the role to SELF_SERVICE_CUSTOMER and runs identity resolution first.
-                    Preconditions: the caller must hold security:user:create, the username must be unused, and \
-                    every named role must already exist.
-                    Required inputs: username, password, and roles, a non-empty array of existing role names.
-                    Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
-                    Returns 409 when the username already exists, and 400 when a field is missing or a named \
-                    role is not found.
-                    """)
+                        Creates a user account with a username, a hashed password, and a set of directly attached \
+                        roles.
+                        Use this tool for operator provisioning of accounts; do not use selfRegisterUser, the anonymous \
+                        customer flow that fixes the role to SELF_SERVICE_CUSTOMER and runs identity resolution first.
+                        Preconditions: the caller must hold security:user:create, the username must be unused, and \
+                        every named role must already exist.
+                        Required inputs: username, password, and roles, a non-empty array of existing role names.
+                        Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
+                        Returns 409 when the username already exists, and 400 when a field is missing or a named \
+                        role is not found.
+                        """)
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -59,10 +59,10 @@ public class UserController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "New user", value = """
-                                                                    {"username":"jane.doe",
-                                                                     "password":"Sup3rS3cret!",
-                                                                     "roles":["SHOP_MGR"]}
-                                                                    """)))
+                                        {"username":"jane.doe",
+                                         "password":"Sup3rS3cret!",
+                                         "roles":["SHOP_MGR"]}
+                                        """)))
                     @jakarta.validation.Valid
                     @RequestBody
                     CreateUserRequest request) {
@@ -71,14 +71,14 @@ public class UserController {
     }
 
     @Operation(operationId = "listUsers", summary = "List All User Accounts", description = """
-                    Returns every user account with its id, username, effective role names, and linked personId.
-                    Use this tool to enumerate accounts; use getUserById instead for one known user.
-                    Preconditions: the caller must hold security:user:view.
-                    Required inputs: none; there are no filters or paging parameters, so the full user table is \
-                    returned.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with an empty list when no users exist; there are no business error conditions.
-                    """)
+                        Returns every user account with its id, username, effective role names, and linked personId.
+                        Use this tool to enumerate accounts; use getUserById instead for one known user.
+                        Preconditions: the caller must hold security:user:view.
+                        Required inputs: none; there are no filters or paging parameters, so the full user table is \
+                        returned.
+                        No events are emitted and no state changes; this is a read-only projection.
+                        Returns 200 with an empty list when no users exist; there are no business error conditions.
+                        """)
     @ApiResponse(responseCode = "200", description = "List of users returned successfully.")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -90,15 +90,15 @@ public class UserController {
     }
 
     @Operation(operationId = "getUserById", summary = "Get a User Account by Id", description = """
-                    Returns a single user account by UUID, including effective role names merged from direct roles \
-                    and currently active role assignments.
-                    Use this tool when the user id is known; use listUsers instead to browse accounts, and \
-                    getUserAccountState for administrative lock and expiry flags.
-                    Preconditions: the caller must hold security:user:view and the user must exist.
-                    Required inputs: id (UUID) as a path parameter.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when no user exists for the supplied id.
-                    """)
+                        Returns a single user account by UUID, including effective role names merged from direct roles \
+                        and currently active role assignments.
+                        Use this tool when the user id is known; use listUsers instead to browse accounts, and \
+                        getUserAccountState for administrative lock and expiry flags.
+                        Preconditions: the caller must hold security:user:view and the user must exist.
+                        Required inputs: id (UUID) as a path parameter.
+                        No events are emitted and no state changes; this is a read-only projection.
+                        Returns 404 when no user exists for the supplied id.
+                        """)
     @ApiResponse(responseCode = "200", description = "User found and returned.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -116,19 +116,19 @@ public class UserController {
     }
 
     @Operation(operationId = "updateUser", summary = "Partially Update a User Account", description = """
-                    Applies a partial update to a user account: username, password, and the direct role set are \
-                    each replaced only when supplied.
-                    Use this tool to change account fields; do not use assignUserRolesByUsername, which only \
-                    replaces roles, and do not use the account-state endpoints such as disableUserAccount, which \
-                    flip administrative flags.
-                    Preconditions: the caller must hold security:user:edit, the user must exist, and any named role \
-                    must already exist.
-                    Required inputs: id (UUID) as a path parameter; username, password, and roles are all optional, \
-                    and omitted or blank fields are left unchanged.
-                    Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
-                    Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss \
-                    surfaces as 400 rather than 404.
-                    """)
+                        Applies a partial update to a user account: username, password, and the direct role set are \
+                        each replaced only when supplied.
+                        Use this tool to change account fields; do not use assignUserRolesByUsername, which only \
+                        replaces roles, and do not use the account-state endpoints such as disableUserAccount, which \
+                        flip administrative flags.
+                        Preconditions: the caller must hold security:user:edit, the user must exist, and any named role \
+                        must already exist.
+                        Required inputs: id (UUID) as a path parameter; username, password, and roles are all optional, \
+                        and omitted or blank fields are left unchanged.
+                        Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
+                        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss \
+                        surfaces as 400 rather than 404.
+                        """)
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
     @ApiResponse(
             responseCode = "400",
@@ -150,8 +150,8 @@ public class UserController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Rename and reset roles", value = """
-                                                                    {"username":"jane.doe","roles":["SHOP_MGR"]}
-                                                                    """)))
+                                        {"username":"jane.doe","roles":["SHOP_MGR"]}
+                                        """)))
                     @RequestBody
                     UserUpdateRequest user) {
         UserDto updatedUser = userService.updateUser(id, user);
@@ -159,17 +159,17 @@ public class UserController {
     }
 
     @Operation(operationId = "deleteUser", summary = "Delete a User Account", description = """
-                    Deletes a user account and queues removal of its user-person link so downstream projections \
-                    follow the account out.
-                    Use this tool to remove an account permanently; do not use disableUserAccount, which blocks \
-                    sign-in reversibly and keeps the record.
-                    Preconditions: the caller must hold security:user:delete; deleting an id that does not exist is \
-                    a silent no-op.
-                    Required inputs: id (UUID) as a path parameter.
-                    Emits a SECURITY_USER_DELETE event and sends a UserPersonLinkRemoveRequested command to the \
-                    people-contact domain in the same transaction.
-                    Returns 204 in all cases, including when the user was already absent.
-                    """)
+                        Deletes a user account and queues removal of its user-person link so downstream projections \
+                        follow the account out.
+                        Use this tool to remove an account permanently; do not use disableUserAccount, which blocks \
+                        sign-in reversibly and keeps the record.
+                        Preconditions: the caller must hold security:user:delete; deleting an id that does not exist is \
+                        a silent no-op.
+                        Required inputs: id (UUID) as a path parameter.
+                        Emits a SECURITY_USER_DELETE event and sends a UserPersonLinkRemoveRequested command to the \
+                        people-contact domain in the same transaction.
+                        Returns 204 in all cases, including when the user was already absent.
+                        """)
     @ApiResponse(responseCode = "204", description = "User deleted successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_DELETE", apiVersion = "1")
@@ -190,18 +190,18 @@ public class UserController {
             operationId = "linkUserPerson",
             summary = "Link a User Account to Its Canonical Person",
             description = """
-                    Requests a PRIMARY link between a user account and a canonical person over the \
-                    people-contact command channel; the users.person_id projection updates asynchronously when \
-                    the confirming link fact arrives.
-                    Use this tool for operator provisioning of accounts created via createUser, which performs \
-                    no identity resolution; do not use selfRegisterUser, which resolves and links its own person.
-                    Preconditions: the caller must hold security:user:edit and the user id must exist; the \
-                    personId is not validated here — an unknown person is rejected by pos-people-contact when \
-                    it processes the command.
-                    Required inputs: the user id as a path parameter and personId in the body.
-                    Emits a SECURITY_USER_PERSON_LINK_REQUEST event and queues the link-create command.
-                    Returns 202 because the link lands asynchronously, and 404 when the user does not exist.
-                    """)
+                        Requests a PRIMARY link between a user account and a canonical person over the \
+                        people-contact command channel; the users.person_id projection updates asynchronously when \
+                        the confirming link fact arrives.
+                        Use this tool for operator provisioning of accounts created via createUser, which performs \
+                        no identity resolution; do not use selfRegisterUser, which resolves and links its own person.
+                        Preconditions: the caller must hold security:user:edit and the user id must exist; the \
+                        personId is not validated here — an unknown person is rejected by pos-people-contact when \
+                        it processes the command.
+                        Required inputs: the user id as a path parameter and personId in the body.
+                        Emits a SECURITY_USER_PERSON_LINK_REQUEST event and queues the link-create command.
+                        Returns 202 because the link lands asynchronously, and 404 when the user does not exist.
+                        """)
     @ApiResponse(responseCode = "202", description = "Link command queued; projection updates asynchronously.")
     @ApiResponse(responseCode = "404", description = "User not found.")
     @EmitEvent(id = "SECURITY_USER_PERSON_LINK_REQUEST", apiVersion = "1")
@@ -212,7 +212,17 @@ public class UserController {
     @PutMapping("/{id}/person-link")
     public ResponseEntity<Void> linkUserPerson(
             @PathVariable UUID id,
-            @jakarta.validation.Valid @RequestBody
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The canonical person identifier to link to the user account.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Link canonical person", value = """
+                                        {"personId":"01960011-0000-7000-8000-000000000001"}
+                                        """)))
+                    @jakarta.validation.Valid
+                    @RequestBody
                     com.positivity.securityservice.internal.dto.LinkUserPersonRequest request) {
         userService.requestPersonLink(id, request.personId());
         return ResponseEntity.accepted().build();
@@ -222,18 +232,18 @@ public class UserController {
             operationId = "assignUserRolesByUsername",
             summary = "Replace a User's Direct Role Set",
             description = """
-                    Replaces a user's directly attached role set with the supplied role names, looking the user up \
-                    by username.
-                    Use this tool for wholesale role replacement by username; do not use assignUserRole, which adds \
-                    a single scoped role assignment by UUID without touching the direct set.
-                    Preconditions: the caller must hold security:role:assign, the username must resolve to a user, \
-                    and every named role must exist.
-                    Required inputs: username as a path parameter and roles, an array of existing role names, in \
-                    the body; the set replaces all current direct roles.
-                    Emits a SECURITY_USER_ASSIGN_ROLES event.
-                    Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss \
-                    surfaces as 400 rather than 404.
-                    """)
+                        Replaces a user's directly attached role set with the supplied role names, looking the user up \
+                        by username.
+                        Use this tool for wholesale role replacement by username; do not use assignUserRole, which adds \
+                        a single scoped role assignment by UUID without touching the direct set.
+                        Preconditions: the caller must hold security:role:assign, the username must resolve to a user, \
+                        and every named role must exist.
+                        Required inputs: username as a path parameter and roles, an array of existing role names, in \
+                        the body; the set replaces all current direct roles.
+                        Emits a SECURITY_USER_ASSIGN_ROLES event.
+                        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss \
+                        surfaces as 400 rather than 404.
+                        """)
     @ApiResponse(responseCode = "200", description = "User roles updated successfully.")
     @ApiResponse(
             responseCode = "400",
@@ -254,8 +264,8 @@ public class UserController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Replace roles", value = """
-                                                                    {"roles":["SHOP_MGR","ACCOUNTING_CLERK"]}
-                                                                    """)))
+                                        {"roles":["SHOP_MGR","ACCOUNTING_CLERK"]}
+                                        """)))
                     @RequestBody
                     Map<String, Object> payload) {
         List<?> rolesList = (List<?>) payload.get("roles");
