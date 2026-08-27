@@ -13,6 +13,7 @@ import com.positivity.tax.common.enums.TaxReferenceType;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.ActiveCertificateLookup;
 import com.positivity.tax.internal.service.ExemptionResolver;
+import com.positivity.tax.internal.service.TestModeRateResolver;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -56,7 +57,8 @@ class TestModeTaxCalculatorTest {
         testMode.setDefaultRates(rates);
         properties.setTestMode(testMode);
         lookup = new StubLookup();
-        calculator = new TestModeTaxCalculator(properties, FIXED_CLOCK, new ExemptionResolver(lookup));
+        calculator = new TestModeTaxCalculator(
+                FIXED_CLOCK, new ExemptionResolver(lookup), new TestModeRateResolver(properties));
     }
 
     /** Configurable stub certificate lookup: returns {@link #result} for any query. */

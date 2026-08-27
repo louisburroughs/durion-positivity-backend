@@ -479,6 +479,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1{id}
   /v1/customer/bulk-ingest:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1customer~1bulk-ingest
+  /v1/customer/commercial/bulk-ingest:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1customer~1commercial~1bulk-ingest
   /v1/customers/{id}/requirements-met:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1customers~1{id}~1requirements-met
   /v1/promotions/redemptions:
@@ -1265,6 +1267,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}~1expire-account
   /v1/users/{id}/expire-credentials:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}~1expire-credentials
+  /v1/users/{id}/person-link:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}~1person-link
   /v1/users/{id}/unlock:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}~1unlock
   /v1/users/{userId}/permissions:
@@ -1287,6 +1291,8 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1reschedule
   /v1/schedules/view:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1view
+  /v1/shop-manager/mechanics/by-person/{personId}/skills:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1by-person~1{personId}~1skills
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1{locationId}~1technicians~1{personId}~1person
   /v1/shop/audit:
@@ -1359,6 +1365,8 @@ paths:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates~1{id}
   /v1/tax/mode:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1mode
+  /v1/tax/rates:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1rates
   /v1/tax/transactions/{referenceId}/commit:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1commit
   /v1/tax/transactions/{referenceId}/void:

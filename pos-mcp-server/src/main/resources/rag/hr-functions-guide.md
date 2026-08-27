@@ -74,6 +74,16 @@ Retrieve an employee profile by their employee ID.
 **Required permission(s):** `people:employee:view`  
 **Roles with permission:** `ADMIN`
 
+### Searching employees
+
+Search returns a paged list of slim employee rows (id, employee number, name, status, active flag) matching a
+case-insensitive substring against first name, last name, preferred name, and employee number. Leaving the query
+blank lists every employee, paged. Use this for listing or typeahead lookups; use "Viewing an employee" instead
+once the employee's id is already known.
+
+**Required permission(s):** `people:employee:view`  
+**Roles with permission:** `ADMIN`
+
 ---
 
 ## Person Records

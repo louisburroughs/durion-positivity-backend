@@ -52,11 +52,20 @@ public class EmittedEvent {
     @Column(name = "published_at")
     private Instant publishedAt;
 
-    public EmittedEvent(String id, String apiVersion, long timestamp, long elapsedMs, Instant publishedAt) {
+    /**
+     * Optional identifier of the entity this event relates to. Sparse: most events do not set
+     * it, which is why {@code idx_emitted_event_entity_time} is a partial index.
+     */
+    @Column(name = "entity_id")
+    private String entityId;
+
+    public EmittedEvent(
+            String id, String apiVersion, long timestamp, long elapsedMs, Instant publishedAt, String entityId) {
         this.id = id;
         this.apiVersion = apiVersion;
         this.timestamp = timestamp;
         this.elapsedMs = elapsedMs;
         this.publishedAt = publishedAt;
+        this.entityId = entityId;
     }
 }

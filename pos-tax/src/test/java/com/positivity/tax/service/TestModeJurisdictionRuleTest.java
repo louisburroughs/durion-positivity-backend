@@ -7,6 +7,7 @@ import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.ActiveCertificateLookup;
 import com.positivity.tax.internal.service.ExemptionResolver;
+import com.positivity.tax.internal.service.TestModeRateResolver;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -51,7 +52,8 @@ class TestModeJurisdictionRuleTest {
         testMode.setDefaultRates(Map.of("STATE", new BigDecimal("0.01")));
         properties.setTestMode(testMode);
         ActiveCertificateLookup lookup = (customerId, certificateId, stateScope, reason, date) -> Optional.empty();
-        calculator = new TestModeTaxCalculator(properties, FIXED_CLOCK, new ExemptionResolver(lookup));
+        calculator = new TestModeTaxCalculator(
+                FIXED_CLOCK, new ExemptionResolver(lookup), new TestModeRateResolver(properties));
     }
 
     @Nested

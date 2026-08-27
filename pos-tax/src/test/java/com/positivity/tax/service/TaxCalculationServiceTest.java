@@ -12,6 +12,7 @@ import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.service.ExemptionResolver;
 import com.positivity.tax.internal.service.ExternalTaxServiceClient;
 import com.positivity.tax.internal.service.TaxCalculationServiceImpl;
+import com.positivity.tax.internal.service.TestModeRateResolver;
 import com.positivity.tax.internal.service.TestModeTaxCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -56,10 +57,10 @@ class TaxCalculationServiceTest {
         properties.setTestMode(testMode);
 
         TestModeTaxCalculator testCalculator = new TestModeTaxCalculator(
-                properties,
                 FIXED_CLOCK,
                 new ExemptionResolver(
-                        (customerId, certificateId, stateScope, reason, date) -> java.util.Optional.empty()));
+                        (customerId, certificateId, stateScope, reason, date) -> java.util.Optional.empty()),
+                new TestModeRateResolver(properties));
         com.positivity.tax.internal.service.TaxProviderSelector selector =
                 new com.positivity.tax.internal.service.TaxProviderSelector(
                         properties,

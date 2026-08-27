@@ -6,9 +6,12 @@ import com.positivity.events.EmitEvent;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxProviderTransactionResult;
+import com.positivity.tax.common.dto.TaxRateLookupResponse;
+import com.positivity.tax.common.validation.IsoCountryCode;
 import com.positivity.tax.internal.security.TaxPermissions;
 import com.positivity.tax.internal.service.TaxProviderLifecycleService;
 import com.positivity.tax.service.TaxCalculationService;
+import com.positivity.tax.service.TaxRateLookupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -17,16 +20,21 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * REST controller for tax calculation endpoints.
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/v1/tax")
 @Tag(name = "Tax", description = "Tax calculation API")
@@ -34,10 +42,15 @@ public class TaxController {
 
     private final TaxCalculationService taxCalculationService;
     private final TaxProviderLifecycleService lifecycleService;
+    private final TaxRateLookupService taxRateLookupService;
 
-    public TaxController(TaxCalculationService taxCalculationService, TaxProviderLifecycleService lifecycleService) {
+    public TaxController(
+            TaxCalculationService taxCalculationService,
+            TaxProviderLifecycleService lifecycleService,
+            TaxRateLookupService taxRateLookupService) {
         this.taxCalculationService = taxCalculationService;
         this.lifecycleService = lifecycleService;
+        this.taxRateLookupService = taxRateLookupService;
     }
 
     /**
@@ -210,6 +223,60 @@ public class TaxController {
     public ResponseEntity<ModeResponse> getMode() {
         boolean testMode = taxCalculationService.isTestMode();
         return ResponseEntity.ok(new ModeResponse(testMode ? "test" : "production", testMode));
+    }
+
+    /**
+     * Look up the per-jurisdiction tax rates applicable to a destination address (issue #1522).
+     *
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @param postalCode  postal/ZIP code
+     * @param regionCode  optional region/subdivision code
+     * @param city        optional city
+     * @param asOf        optional effective date; defaults to today
+     * @return the resolved rate components and combined rate
+     */
+    @GetMapping("/rates")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.RATES_VIEW + "')")
+    @Operation(operationId = "getTaxRates", summary = "Look up jurisdiction tax rates", description = """
+                    Resolves the per-jurisdiction tax rates applicable to a destination address, without calculating
+                    tax for any line items.
+                    Use this tool to preview or display the rate breakdown for an address; do not use it to compute
+                    tax on a cart or invoice, which is calculateTax.
+                    Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014) — it has no gateway route and
+                    is reached only by direct in-cluster calls, never through pos-api-gateway.
+                    Required inputs: countryCode (ISO 3166-1 alpha-2) and postalCode; regionCode and city narrow the
+                    match further, and asOf (ISO-8601 date) defaults to today.
+                    No events are emitted and no state changes; components are per-jurisdiction rates as decimal
+                    fractions (not a blended estimate), and SPECIAL/DISTRICT jurisdiction types appear only when a
+                    configured rule produces them — today's test-mode rules emit STATE/COUNTY/CITY.
+                    Returns 400 when countryCode or postalCode are missing or malformed, and 501 when the configured
+                    tax provider does not support rate-only lookup (every production provider today; AvaTax
+                    rate-by-address is a documented follow-up, not yet implemented).
+                    """)
+    @ApiResponse(responseCode = "200", description = "Rates resolved successfully")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid address parameters",
+            content =
+                    @io.swagger.v3.oas.annotations.media.Content(
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
+    @ApiResponse(
+            responseCode = "501",
+            description = "Rate lookup not supported by the active tax provider",
+            content =
+                    @io.swagger.v3.oas.annotations.media.Content(
+                            schema = @Schema(implementation = com.positivity.shared.error.ApiError.class)))
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"tax:rates:view"})
+    public ResponseEntity<TaxRateLookupResponse> getRates(
+            @RequestParam @NotBlank @IsoCountryCode String countryCode,
+            @RequestParam @NotBlank String postalCode,
+            @RequestParam(required = false) String regionCode,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {
+        log.info("Received tax rate lookup request for postal code(mask): {}", maskForLog(postalCode));
+        return ResponseEntity.ok(taxRateLookupService.lookupRates(countryCode, regionCode, city, postalCode, asOf));
     }
 
     /**

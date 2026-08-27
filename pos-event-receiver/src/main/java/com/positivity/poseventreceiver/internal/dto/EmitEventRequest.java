@@ -47,4 +47,11 @@ public record EmitEventRequest(
                 requiredMode = Schema.RequiredMode.REQUIRED,
                 example = "2026-03-05T21:15:00Z")
         @NotNull(message = "publishedAt is required")
-        Instant publishedAt) {}
+        Instant publishedAt,
+
+        @Schema(
+                description = "Optional identifier of the entity this event relates to, enabling later lookup via"
+                        + " GET /v1/events?entityId=...; omit when the event has no single associated entity",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b")
+        String entityId) {}

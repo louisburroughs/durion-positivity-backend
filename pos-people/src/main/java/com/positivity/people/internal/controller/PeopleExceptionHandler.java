@@ -6,6 +6,7 @@ import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -122,6 +123,16 @@ public class PeopleExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
+        return problem;
+    }
+
+    // @Validated query/path parameter constraints (e.g. @PositiveOrZero page, @Max(100) size)
+    // fail with this rather than MethodArgumentNotValidException, which only covers @Valid
+    // request bodies.
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ProblemDetail handleConstraintViolation(ConstraintViolationException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;

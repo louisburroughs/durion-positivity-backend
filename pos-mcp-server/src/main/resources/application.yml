@@ -371,6 +371,9 @@ pos:
     event-types-uri-template: ${POS_EVENT_RECEIVER_EVENT_TYPES_URI_TEMPLATE:/event-receiver/v1/eventTypes/active}
     # facade-checker: expand window=lastHour|lastDay|lastWeek
     summary-uri-template: ${POS_EVENT_RECEIVER_SUMMARY_URI_TEMPLATE:/event-receiver/v1/events/summary/{window}}
+    # getEventHistory (#1521 restoration): entityId is required server-side, since/page/size
+    # all default server-side, so the facade only ever supplies entityId.
+    history-uri-template: ${POS_EVENT_RECEIVER_HISTORY_URI_TEMPLATE:/event-receiver/v1/events?entityId={entityId}}
   inventory:
     base-url: ${POS_INVENTORY_BASE_URL:http://pos-api-gateway}
     stock-uri-template: ${POS_INVENTORY_STOCK_URI_TEMPLATE:/inventory/v1/inventory/availability/by-sku?productSku={productSku}}
@@ -432,6 +435,8 @@ pos:
     availability-base-url: ${POS_HR_AVAILABILITY_BASE_URL:http://pos-api-gateway}
     employee-uri-template: ${POS_HR_EMPLOYEE_URI_TEMPLATE:/people/v1/people/employees/{employeeId}}
     schedule-uri-template: ${POS_HR_SCHEDULE_URI_TEMPLATE:/people/v1/people/availability?employeeId={employeeId}}
+    # searchEmployees (#1523 restoration).
+    search-uri-template: ${POS_HR_SEARCH_URI_TEMPLATE:/people/v1/people/employees?q={query}}
   shopmanager:
     base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-api-gateway}
     # getShopStatus/getShopQueue composition legs (#1519 WS-3.SHOPSTATUS/WS-3.SHOPQUEUE).
@@ -456,6 +461,11 @@ pos:
     location-uri-template: ${POS_TAX_LOCATION_URI_TEMPLATE:/location/v1/locations/{locationId}}
     tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate}
     tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/tax-liability?startDate={startDate}&endDate={endDate}}
+    # getTaxRate composition leg (#1522 restoration): direct pos-tax GET, relative to
+    # pos.tax.base-url, mirroring the calculateTax direct leg above. countryCode and
+    # postalCode are always appended by the tool; regionCode/city are appended only when the
+    # resolved location supplies them.
+    rates-uri-template: ${POS_TAX_RATES_URI_TEMPLATE:/rates?countryCode={countryCode}&postalCode={postalCode}}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-api-gateway}
     vehicle-uri-template: ${POS_VEHICLE_URI_TEMPLATE:/vehicle-inventory/v1/vehicle-registry/{vehicleId}}

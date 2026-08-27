@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -27,9 +28,9 @@ import org.springframework.web.client.RestClient;
  *
  * <p>Everything pos-tax does not serve goes through a second, load-balanced gateway client
  * ({@code pos.tax.gateway-base-url}): {@link #getTaxSummary} reads pos-accounting's tax-liability
- * report, and {@link #calculateTax}'s address lookup reads the location roster (#1519
- * WS-3.TAXCALC). The former {@code getTaxRate} tool is removed — pos-tax publishes no rate lookup
- * (#1522).
+ * report, and {@link #calculateTax}'s and {@link #getTaxRate}'s address lookups read the location
+ * roster (#1519 WS-3.TAXCALC). {@link #getTaxRate} composes that gateway location lookup with a
+ * direct GET to pos-tax's {@code /rates} endpoint (#1522).
  */
 @Component
 public class TaxFacadeTool {
@@ -41,6 +42,7 @@ public class TaxFacadeTool {
     private final String taxCalculateUriTemplate;
     private final String locationUriTemplate;
     private final String taxSummaryUriTemplate;
+    private final String ratesUriTemplate;
 
     public TaxFacadeTool(
             RestClient.Builder restClientBuilder,
@@ -49,13 +51,15 @@ public class TaxFacadeTool {
             @Value("${pos.tax.gateway-base-url}") @NonNull String gatewayBaseUrl,
             @Value("${pos.tax.tax-calculate-uri-template}") @NonNull String taxCalculateUriTemplate,
             @Value("${pos.tax.location-uri-template}") @NonNull String locationUriTemplate,
-            @Value("${pos.tax.tax-summary-uri-template}") @NonNull String taxSummaryUriTemplate) {
+            @Value("${pos.tax.tax-summary-uri-template}") @NonNull String taxSummaryUriTemplate,
+            @Value("${pos.tax.rates-uri-template}") @NonNull String ratesUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.gatewayRestClient =
                 ToolRestClientSupport.instrumentedClient(loadBalancedRestClientBuilder, gatewayBaseUrl);
         this.taxCalculateUriTemplate = taxCalculateUriTemplate;
         this.locationUriTemplate = locationUriTemplate;
         this.taxSummaryUriTemplate = taxSummaryUriTemplate;
+        this.ratesUriTemplate = ratesUriTemplate;
     }
 
     @Tool(
@@ -88,7 +92,7 @@ public class TaxFacadeTool {
         JsonNode location = parseLocation(locationBody);
         String addressProblem = location == null
                 ? "Location " + locationId + " returned an unreadable record; tax was not calculated"
-                : destinationAddressProblem(location, locationId);
+                : destinationAddressProblem(location, locationId, "tax was not calculated");
         String replayedLocationBody = locationBody;
         ToolComposition composition = ToolComposition.named("taxCalculation")
                 .call("location", () -> replayedLocationBody)
@@ -110,6 +114,71 @@ public class TaxFacadeTool {
                             .body(String.class));
         }
         return composition.require("tax").render();
+    }
+
+    @Tool(
+            description = "Look up the per-jurisdiction tax rates applicable to a location's address, without "
+                    + "calculating tax for any line items. locationId is the location's id (UUID) — its address "
+                    + "is looked up and used as the rate-lookup destination. Returns a JSON envelope with two "
+                    + "sections: location (the location record whose address anchored the lookup) and rates "
+                    + "(the resolved per-jurisdiction rate components and combined rate). If the location has no "
+                    + "usable address (postal code and a 2-letter ISO country are required), the envelope is "
+                    + "degraded with the reason and no rate lookup is attempted.")
+    public String getTaxRate(@ToolParam(description = "The location id (UUID)") @NonNull String locationId) {
+        String locationBody;
+        try {
+            locationBody = gatewayRestClient
+                    .get()
+                    .uri(locationUriTemplate, Map.of("locationId", locationId))
+                    .retrieve()
+                    .body(String.class);
+        } catch (RuntimeException locationFailure) {
+            return ToolComposition.named("taxRateLookup")
+                    .call("location", () -> {
+                        throw locationFailure;
+                    })
+                    .require("location")
+                    .render();
+        }
+        JsonNode location = parseLocation(locationBody);
+        String addressProblem = location == null
+                ? "Location " + locationId + " returned an unreadable record; tax rates were not looked up"
+                : destinationAddressProblem(location, locationId, "tax rates were not looked up");
+        String replayedLocationBody = locationBody;
+        ToolComposition composition = ToolComposition.named("taxRateLookup")
+                .call("location", () -> replayedLocationBody)
+                .require("location");
+        if (addressProblem != null) {
+            composition.call("rates", () -> {
+                throw new ToolComposition.LegFailure(addressProblem);
+            });
+        } else {
+            JsonNode resolvedLocation = java.util.Objects.requireNonNull(location);
+            String template = ratesUriTemplate;
+            Map<String, String> uriParams = new LinkedHashMap<>();
+            uriParams.put(
+                    "countryCode", resolvedLocation.path("country").asText().toUpperCase(java.util.Locale.ROOT));
+            uriParams.put("postalCode", resolvedLocation.path("postalCode").asText());
+            String regionCode = resolvedLocation.path("state").asText("");
+            if (!regionCode.isBlank()) {
+                template = template + "&regionCode={regionCode}";
+                uriParams.put("regionCode", regionCode);
+            }
+            String city = resolvedLocation.path("city").asText("");
+            if (!city.isBlank()) {
+                template = template + "&city={city}";
+                uriParams.put("city", city);
+            }
+            String finalTemplate = template;
+            composition.call(
+                    "rates",
+                    () -> restClient
+                            .get()
+                            .uri(finalTemplate, uriParams)
+                            .retrieve()
+                            .body(String.class));
+        }
+        return composition.require("rates").render();
     }
 
     @Tool(
@@ -144,20 +213,23 @@ public class TaxFacadeTool {
     }
 
     /**
-     * Reason the location cannot anchor a tax calculation, or {@code null} when its address is
-     * usable. pos-tax requires {@code destinationAddress.countryCode} (ISO alpha-2) and
-     * {@code postalCode}; the location's address fields are all optional.
+     * Reason the location cannot anchor a tax calculation or rate lookup, or {@code null} when its
+     * address is usable. pos-tax requires {@code countryCode} (ISO alpha-2) and {@code postalCode}
+     * for both {@code /calculate} and {@code /rates}; the location's address fields are all
+     * optional. {@code action} names what did not happen (e.g. "tax was not calculated" or "tax
+     * rates were not looked up") so the same check serves both callers.
      */
-    private static @Nullable String destinationAddressProblem(@NonNull JsonNode location, @NonNull String locationId) {
+    private static @Nullable String destinationAddressProblem(
+            @NonNull JsonNode location, @NonNull String locationId, @NonNull String action) {
         String country = location.path("country").asText("");
         String postalCode = location.path("postalCode").asText("");
         if (country.isBlank() || postalCode.isBlank()) {
-            return "Location " + locationId + " has no usable address (postal code and country are "
-                    + "required); tax was not calculated";
+            return "Location " + locationId + " has no usable address (postal code and country are " + "required); "
+                    + action;
         }
         if (!country.matches("[A-Za-z]{2}")) {
             return "Location " + locationId + " has country '" + country + "', which is not a 2-letter "
-                    + "ISO country code; tax was not calculated";
+                    + "ISO country code; " + action;
         }
         return null;
     }

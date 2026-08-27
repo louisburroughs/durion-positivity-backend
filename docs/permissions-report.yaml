@@ -1,9 +1,9 @@
-generatedAt: "2026-08-27T13:03:59.454561+00:00"
+generatedAt: "2026-08-27T13:17:04.943383+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 456
-  uniquePermissionCount: 456
+  permissionCount: 457
+  uniquePermissionCount: 457
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -878,12 +878,14 @@ manifests:
     domain: "tax"
     serviceName: "pos-tax"
     version: "1.0"
-    permissionCount: 5
+    permissionCount: 6
     permissions:
       - name: "tax:calculate"
         description: "Calculate tax for line items based on destination and jurisdiction rules"
       - name: "tax:mode:view"
         description: "View current tax service mode (test or production)"
+      - name: "tax:rates:view"
+        description: "View jurisdiction tax rates via the rate lookup endpoint"
       - name: "tax:exemption:view"
         description: "View tax exemption certificates in the pos-tax exemption registry"
       - name: "tax:exemption:manage"
@@ -3327,6 +3329,12 @@ permissions:
     source: "pos-tax/src/main/resources/permissions.yaml"
   - name: "tax:mode:view"
     description: "View current tax service mode (test or production)"
+    domain: "tax"
+    serviceName: "pos-tax"
+    module: "pos-tax"
+    source: "pos-tax/src/main/resources/permissions.yaml"
+  - name: "tax:rates:view"
+    description: "View jurisdiction tax rates via the rate lookup endpoint"
     domain: "tax"
     serviceName: "pos-tax"
     module: "pos-tax"
