@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -45,18 +46,30 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li>{@code ${some.prop:some.topic.v1}} — the dominant form, in both {@code @Value} fields and
  *       {@code @KafkaListener(topics = ...)}. The default after the colon is taken.
- *   <li>Bare string literals, e.g. {@code "workorder.events.v1"}.
+ *   <li>Bare string literals, e.g. {@code "workorder.events.v1"}. Because {@link #TOPIC_PATTERN}
+ *       matches any versioned two-segment string (not just the {@code events}/{@code commands}/
+ *       {@code manifest} suffixes — see below), a bare literal alone is a weak signal: nothing
+ *       stops an unrelated string like an event-type tag (e.g. {@code getEventType()} returning
+ *       {@code "estimate.created.v1"}) from having the same shape. So a bare-literal match only
+ *       counts when its source line also contains the substring {@code "topic"} (case-insensitive)
+ *       — true of every real topic-holding constant/field in this repo (e.g. {@code
+ *       SETTLEMENT_CONFIG_TOPIC}, {@code eventsTopic}) and false of the event-type-tag false
+ *       positives found when this guard was added. The {@code ${...}} placeholder form above needs
+ *       no such guard: it is only ever used here for Kafka topic properties.
  *   <li>{@link com.positivity.domainevents.DomainTopics#events(String)} / {@code #commands} /
  *       {@code #manifest} calls, and the {@code WORKORDER_EVENTS_V1} / {@code
  *       WORKORDER_COMMANDS_V1} / {@code WORKORDER_MANIFEST_V1} constants it also exposes. A
  *       {@code DomainTopics.events("catalog")} call resolves directly; a {@code
- *       DomainTopics.events(SOME_CONSTANT)} call (three call sites at the time of writing:
- *       {@code SupplierPriceCatalogEventsListener.OWNER}, {@code
- *       SettlementEventPublisher.PAYMENT_DOMAIN}, {@code OrderDomainEventPublisher.ORDER_DOMAIN})
- *       resolves by finding a {@code String SOME_CONSTANT = "literal";} field declared in the
- *       <em>same file</em> — every such call site in the repo defines its domain constant locally,
- *       so a same-file lookup is sufficient and doesn't risk resolving the wrong file's constant
- *       of the same name.
+ *       DomainTopics.events(SOME_CONSTANT)} call resolves by finding a {@code String SOME_CONSTANT
+ *       = "literal";} field declared in the <em>same file</em> — every such call site in the repo
+ *       defines its domain constant locally, so a same-file lookup is sufficient and doesn't risk
+ *       resolving the wrong file's constant of the same name. (At the time of writing this is five
+ *       call sites over three same-file constants: {@code SupplierPriceCatalogEventsListener.OWNER}
+ *       and {@code SettlementEventPublisher.PAYMENT_DOMAIN} used once each, plus {@code
+ *       OrderDomainEventPublisher.ORDER_DOMAIN} used three times in that one file. That count is
+ *       illustrative, not an invariant this test checks — the same-file convention is what new call
+ *       sites must follow, not a fixed roster, so an added or removed site doesn't need this
+ *       comment updated to stay correct.)
  * </ol>
  *
  * <p><strong>{@link com.positivity.domainevents.DomainTopics} itself is excluded from the
@@ -83,23 +96,55 @@ import org.junit.jupiter.api.Test;
  * {@code }} or {@code "}), and in the repo DLQ topics are never spelled out as a literal anyway —
  * every {@code KafkaErrorHandlingConfig} builds the DLQ name at runtime with {@code
  * record.topic() + ".dlq"}.
+ *
+ * <p><strong>Two limits worth knowing before trusting a green (or red) run:</strong>
+ *
+ * <ol>
+ *   <li><strong>This is a naming check, not a wiring check.</strong> It proves a topic name is
+ *       spelled somewhere outside an {@code @KafkaListener(...)} argument list (producer) and
+ *       somewhere inside one (consumer) — it does not prove either side actually sends or receives
+ *       a message. A bare {@code @Value("${x:foo.commands.v1}")} field with no {@code
+ *       kafkaTemplate.send}/outbox call anywhere in the file satisfies "has a producer"; adding a
+ *       config field with the right default is enough on its own to turn this test green. Treat a
+ *       pass as "the topic is named on both sides", not "the topic is proven to flow".
+ *   <li><strong>Comment filtering is prefix-only.</strong> {@link #classify} and {@link
+ *       #localStringConstants} skip a line only when its stripped form <em>starts with</em> {@code
+ *       *}, {@code //}, or {@code /*} — there is no trailing-comment stripping. A line like {@code
+ *       someField = "real.commands.v1"; // was "invoice.commands.v1"} would register a phantom
+ *       occurrence from the trailing comment. Zero lines in the repo do this today (verified by
+ *       inspection when this limit was documented), so it is latent, not live. It is intentionally
+ *       left undocumented-but-unfixed rather than patched with a naive {@code //}-strip: a comment
+ *       stripper that doesn't understand string literals would itself corrupt any topic literal or
+ *       URL containing {@code //}, which is a worse failure mode than the latent one it would close.
+ * </ol>
  */
 class TopicInventoryTest {
 
     /**
-     * Topics of interest: {@code {domain}.events.v1}, {@code {domain}.commands.v1}, {@code
-     * {domain}.manifest.v1}. Anchored full-match so a DLQ-suffixed spelling (if one ever appeared
-     * as a literal) could never satisfy it.
+     * Topics of interest: any versioned two-segment domain topic, e.g. {@code
+     * {domain}.events.v1}, {@code {domain}.commands.v1}, {@code {domain}.manifest.v1}, {@code
+     * sender.outcomes.v1}, {@code payment.cleared.v1}, {@code payment.settlement-config.v1}. Not
+     * restricted to the {@code events}/{@code commands}/{@code manifest} suffix set: issue #1537's
+     * own named orphans ({@code sender.outcomes.v1}, {@code payment.cleared.v1}) don't use that
+     * suffix set, so a narrower pattern would silently exclude the very topics the gate exists to
+     * catch — a repo-wide scan when this was widened (recorded in the finding notes on the PR)
+     * found no non-topic string of this shape reachable by {@link #PLACEHOLDER_DEFAULT} or the
+     * guarded {@link #BARE_LITERAL} (see its javadoc for the one false-positive class found and how
+     * it's excluded). Anchored full-match so a DLQ-suffixed spelling (if one ever appeared as a
+     * literal) could never satisfy it.
      */
-    private static final Pattern TOPIC_PATTERN = Pattern.compile("^[a-z][a-z0-9-]*\\.(events|commands|manifest)\\.v1$");
+    private static final Pattern TOPIC_PATTERN = Pattern.compile("^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.v[0-9]+$");
 
     /** Form 1: {@code ${some.prop:some.topic.v1}} — the default after the colon. */
     private static final Pattern PLACEHOLDER_DEFAULT =
-            Pattern.compile("\\$\\{[A-Za-z0-9._-]*:([a-z][a-z0-9-]*\\.(?:events|commands|manifest)\\.v1)}");
+            Pattern.compile("\\$\\{[A-Za-z0-9._-]*:([a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.v[0-9]+)}");
 
-    /** Form 2: a bare string literal spelling out the whole topic name. */
-    private static final Pattern BARE_LITERAL =
-            Pattern.compile("\"([a-z][a-z0-9-]*\\.(?:events|commands|manifest)\\.v1)\"");
+    /**
+     * Form 2: a bare string literal spelling out the whole topic name. Matched candidates are only
+     * recorded by {@link #classify} when their source line also contains {@code "topic"}
+     * (case-insensitive) — see the class javadoc's discussion of this form for why.
+     */
+    private static final Pattern BARE_LITERAL = Pattern.compile("\"([a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.v[0-9]+)\"");
 
     /** Form 3a: {@code DomainTopics.events("catalog")} etc. with an inline string literal. */
     private static final Pattern DOMAIN_TOPICS_LITERAL_CALL =
@@ -140,10 +185,11 @@ class TopicInventoryTest {
      * <p>{@code sender.outcomes.v1}: {@code pos-marketing} consumes delivery/bounce/complaint
      * outcomes from the shared platform sender, a system outside this repo (see
      * docs/PLATFORM_SENDER_CONTRACT.md). There is and never will be an in-repo producer for it.
-     * Note this topic doesn't actually match {@link #TOPIC_PATTERN} ({@code outcomes} isn't
-     * {@code events}/{@code commands}/{@code manifest}), so the scanner below would never flag it
-     * regardless — it's listed anyway per the design doc's instruction that external topics must
-     * be documented explicitly rather than rely on happening to fall outside the naming pattern.
+     * This topic does match {@link #TOPIC_PATTERN} and is reached by the scanner as a
+     * consumer-only occurrence in {@code DeliveryOutcomeListener} — this entry is what keeps
+     * {@link #everyInternalTopicHasAProducerAndAConsumer} from failing on it, not the naming
+     * pattern. (Removing this entry reproduces that failure — see the finding notes on the PR that
+     * widened {@link #TOPIC_PATTERN} for the exact failure output this entry guards against.)
      */
     private static final Map<String, ExternalTopic> EXTERNAL_TOPIC_ALLOWLIST = Map.of(
             "sender.outcomes.v1",
@@ -170,16 +216,17 @@ class TopicInventoryTest {
 
     /**
      * Main guard. Scans every {@code pos-*} module's {@code src/main/java} and builds the
-     * producer/consumer module sets per topic (see class javadoc for the classification rule),
-     * then fails if any non-allowlisted topic has producers with no consumers, or consumers with
-     * no producers.
+     * producer/consumer module sets per topic (see class javadoc for the classification rule and
+     * its two documented limits), then fails if any non-allowlisted topic has producers with no
+     * consumers, or consumers with no producers.
      *
-     * <p>Expected to fail today (2026-08-27): {@code people.manifest.v1} (pos-people produces,
-     * nobody consumes) and {@code people.commands.v1} (pos-people consumes, nobody produces) are
-     * known orphans the concurrent pos-accounting/pos-invoice/pos-people/pos-shop-manager/
-     * pos-workorder/pos-catalog/pos-inventory/pos-marketing workstreams are in the middle of
-     * closing. This test intentionally asserts zero orphans rather than pinning today's known
-     * set, so it turns green on its own once those land instead of needing a follow-up edit.
+     * <p>This test intentionally asserts zero orphans rather than pinning a known-orphan set: any
+     * one-sided topic that isn't in {@link #EXTERNAL_TOPIC_ALLOWLIST} is a bug, full stop, so a new
+     * orphan introduced by a future change fails the build immediately instead of needing this
+     * javadoc updated first. If this test is failing, the report it prints (topic name plus the
+     * module(s) on the side that exists) is the starting point — either add a real producer/consumer
+     * in-repo, or add an {@link #EXTERNAL_TOPIC_ALLOWLIST} entry with a contract test if the missing
+     * side is genuinely outside this repo.
      */
     @Test
     void everyInternalTopicHasAProducerAndAConsumer() throws IOException {
@@ -302,6 +349,73 @@ class TopicInventoryTest {
     }
 
     /**
+     * Pins the paren-depth heuristic against three shapes {@link #classify}'s "open {@code
+     * @KafkaListener(...)}" tracking must keep handling correctly: an annotation whose attributes
+     * span more than the two lines the other fixtures use, one containing a nested parenthesised
+     * expression (so naive "stop at the first close paren" logic would misfire), and a topic-shaped
+     * literal sitting in an attribute other than {@code topics} (which must still classify as a
+     * consumer occurrence — classification is per-occurrence-inside-the-open-parens, not
+     * per-attribute-name; see class javadoc).
+     */
+    @Test
+    void classifierHandlesMultiLineAndNestedListenerAnnotations() {
+        Map<String, Set<String>> producers = new TreeMap<>();
+        Map<String, Set<String>> consumers = new TreeMap<>();
+
+        List<String> multiLineFixture = List.of(
+                "class FixtureMultiLineListener {",
+                "    @KafkaListener(",
+                "            id = \"fixture-multiline-listener\",",
+                "            topics = \"${pos.fixture.kafka.multiline-topic:fixture-multiline.events.v1}\",",
+                "            groupId = \"pos-fixture-multiline\",",
+                "            containerFactory = \"kafkaListenerContainerFactory\")",
+                "    public void onMultiLine(String message) {}",
+                "}");
+        List<String> nestedParensFixture = List.of(
+                "class FixtureNestedParens {",
+                "    @KafkaListener(",
+                "            topics = \"${pos.fixture.kafka.nested-topic:fixture-nested.commands.v1}\",",
+                "            groupId = resolveGroupId(DEFAULT_PREFIX, \"nested\"))",
+                "    public void onNested(String message) {}",
+                "}");
+        List<String> nonTopicsAttributeFixture = List.of(
+                "class FixtureNonTopicsAttribute {",
+                "    @KafkaListener(",
+                "            topics = \"${pos.fixture.kafka.real-topic:fixture-realattr.events.v1}\",",
+                "            groupId = \"${pos.fixture.kafka.non-topics-attr-topic:fixture-nontopics.commands.v1}\")",
+                "    public void onNonTopicsAttr(String message) {}",
+                "}");
+
+        classify("pos-fixture-multiline", multiLineFixture, producers, consumers);
+        classify("pos-fixture-nested", nestedParensFixture, producers, consumers);
+        classify("pos-fixture-nontopics-attr", nonTopicsAttributeFixture, producers, consumers);
+
+        assertThat(consumers.getOrDefault("fixture-multiline.events.v1", Set.of()))
+                .as("topic inside a @KafkaListener whose attributes span several lines is a consumer")
+                .containsExactly("pos-fixture-multiline");
+        assertThat(producers.getOrDefault("fixture-multiline.events.v1", Set.of()))
+                .as("multi-line listener topic must NOT be recorded as a producer")
+                .isEmpty();
+
+        assertThat(consumers.getOrDefault("fixture-nested.commands.v1", Set.of()))
+                .as("topic inside a @KafkaListener with a nested parenthesised expression is a consumer")
+                .containsExactly("pos-fixture-nested");
+        assertThat(producers.getOrDefault("fixture-nested.commands.v1", Set.of()))
+                .as("nested-parens listener topic must NOT be recorded as a producer")
+                .isEmpty();
+
+        assertThat(consumers.getOrDefault("fixture-realattr.events.v1", Set.of()))
+                .as("the topics= attribute value is a consumer")
+                .containsExactly("pos-fixture-nontopics-attr");
+        assertThat(consumers.getOrDefault("fixture-nontopics.commands.v1", Set.of()))
+                .as("a topic-shaped literal in a non-topics attribute (groupId) is STILL a consumer occurrence")
+                .containsExactly("pos-fixture-nontopics-attr");
+        assertThat(producers.getOrDefault("fixture-nontopics.commands.v1", Set.of()))
+                .as("non-topics-attribute topic must NOT be recorded as a producer")
+                .isEmpty();
+    }
+
+    /**
      * Classifies every topic-shaped occurrence in {@code lines} (one file's worth of source) as a
      * producer or consumer reference for {@code moduleName}, per the per-occurrence rule described
      * in the class javadoc: an occurrence found while a {@code @KafkaListener(...)} argument list
@@ -324,7 +438,12 @@ class TopicInventoryTest {
 
             Set<String> topicsOnLine = new TreeSet<>();
             addMatches(PLACEHOLDER_DEFAULT, code, 1, topicsOnLine);
-            addMatches(BARE_LITERAL, code, 1, topicsOnLine);
+            // Guarded per the class javadoc's discussion of form 2: a bare literal only counts as
+            // a topic occurrence when its line also mentions "topic", so an unrelated same-shaped
+            // string (e.g. an event-type tag returned by getEventType()) isn't swept in.
+            if (code.toLowerCase(Locale.ROOT).contains("topic")) {
+                addMatches(BARE_LITERAL, code, 1, topicsOnLine);
+            }
 
             Matcher literalCall = DOMAIN_TOPICS_LITERAL_CALL.matcher(code);
             while (literalCall.find()) {
