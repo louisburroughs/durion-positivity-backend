@@ -195,7 +195,7 @@ preserved); a second conflict returns `409 Conflict` and the client should retry
 | `pos.accounting.credit-memo.revenue-account-id`     | required             | GL account for revenue reversals         |
 | `pos.accounting.credit-memo.tax-payable-account-id` | required             | GL account for tax payable reversals     |
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
-| `pos.accounting.kafka.enabled`                      | `false`              | Enable Kafka consumer for payment events |
+| `pos.accounting.kafka.enabled`                      | `false`              | Enable all of accounting's Kafka consumers (payment, workorder, invoice, invoice-manifest, customer, inventory, order, warranty, settlement-config) |
 | `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap facts for shrinkage GL posting (#1043) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 

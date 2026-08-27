@@ -195,6 +195,20 @@ class SettlementEventsListenerPaymentSettledTest {
         }
 
         @Test
+        @DisplayName("skips and marks processed when eventId is not a parseable UUID, without calling"
+                + " handlePaymentCleared")
+        void skipsWhenEventIdNotUuid() {
+            String nonUuidEventId = "not-a-uuid";
+
+            listener().onPaymentEvent(envelope(nonUuidEventId, settled(PARTY_UUID.toString())));
+
+            verify(paymentApplicationService, never()).handlePaymentCleared(any(), any(), any(), any(), any(), any());
+            ArgumentCaptor<ProcessedEvent> captor = ArgumentCaptor.forClass(ProcessedEvent.class);
+            verify(processedEventRepository).save(captor.capture());
+            assertThat(captor.getValue().getEventId()).isEqualTo(nonUuidEventId);
+        }
+
+        @Test
         @DisplayName("propagates a handlePaymentCleared failure unmarked, for container retry/DLQ (finding 13 parity)")
         void propagatesServiceFailureUnmarked() {
             doThrow(new RuntimeException("db unavailable"))

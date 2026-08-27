@@ -208,13 +208,29 @@ public class SettlementEventsListener {
             return;
         }
 
+        // The sourceEventId parameter below requires a genuine UUID (it's a UUID column on
+        // ReceivablePayment); a non-UUID eventId is a malformed-envelope condition, not a business
+        // or DB error, so it follows the same "skip and mark processed" contract as the payload
+        // parse failures above rather than propagating for retry/DLQ.
+        UUID eventUuid;
+        try {
+            eventUuid = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.warn("Skipping payment.payment.settled event with non-UUID eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
+        }
+
         paymentApplicationService.handlePaymentCleared(
                 payload.paymentIntentId(),
                 customerId,
                 payload.currencyCode(),
                 payload.amount(),
                 payload.settledAt(),
-                UUID.fromString(eventId));
+                eventUuid);
         markProcessed(eventId);
     }
 

@@ -207,6 +207,51 @@ class InvoiceRegenerationServiceTest {
     }
 
     @Test
+    @DisplayName("A FAILED row for the matching workorder returns FAILED and does not re-publish (finding 2a)")
+    void regenerate_failedRowSameWorkorder_returnsFailedWithoutRepublishing() {
+        when(invoiceRegenerationRequestRepository.findByIdempotencyKey("idem-failed"))
+                .thenReturn(Optional.of(InvoiceRegenerationRequest.builder()
+                        .workorderId(WORKORDER_ID)
+                        .commandId(COMMAND_ID)
+                        .idempotencyKey("idem-failed")
+                        .status(InvoiceRegenerationRequest.STATUS_FAILED)
+                        .requestedAt(TEST_CLOCK.instant())
+                        .build()));
+
+        InvoiceGenerationResponse response = service.regenerateInvoiceFromWorkorder(WORKORDER_ID, "idem-failed");
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceRegenerationRequest.STATUS_FAILED);
+        assertThat(response.getWorkorderId()).isEqualTo(WORKORDER_ID);
+        assertThat(response.getInvoiceId()).isNull();
+        verify(commandPublisherProvider, never()).getIfAvailable();
+        verify(invoiceRegenerationRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Same idempotency key reused for a different workorder returns 409 CONFLICT and does not"
+            + " publish (finding 2b)")
+    void regenerate_sameKeyDifferentWorkorder_returns409WithoutPublishing() {
+        UUID otherWorkorderId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        when(invoiceRegenerationRequestRepository.findByIdempotencyKey("idem-shared"))
+                .thenReturn(Optional.of(InvoiceRegenerationRequest.builder()
+                        .workorderId(otherWorkorderId)
+                        .commandId(COMMAND_ID)
+                        .idempotencyKey("idem-shared")
+                        .status(InvoiceRegenerationRequest.STATUS_COMPLETED)
+                        .resultInvoiceId(INVOICE_ID)
+                        .requestedAt(TEST_CLOCK.instant())
+                        .resolvedAt(TEST_CLOCK.instant())
+                        .build()));
+
+        assertThatThrownBy(() -> service.regenerateInvoiceFromWorkorder(WORKORDER_ID, "idem-shared"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.CONFLICT));
+        verify(commandPublisherProvider, never()).getIfAvailable();
+        verify(invoiceRegenerationRequestRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("A same-key retry never attempts a second command publish or a second insert (#1537 F3)")
     void regenerate_sameKeyRetry_neverDoublePublishesOrDoubleInserts() {
         WorkorderCommandPublisher publisher = org.mockito.Mockito.mock(WorkorderCommandPublisher.class);

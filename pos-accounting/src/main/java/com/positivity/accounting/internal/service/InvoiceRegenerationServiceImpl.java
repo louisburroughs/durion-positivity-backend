@@ -84,9 +84,19 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
                     invoiceRegenerationRequestRepository.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
                 InvoiceRegenerationRequest row = existing.get();
-                return InvoiceRegenerationRequest.STATUS_COMPLETED.equals(row.getStatus())
-                        ? terminalResponse(workorderId, row)
-                        : pendingResponse(workorderId);
+                if (!row.getWorkorderId().equals(workorderId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Idempotency key already used for a different workorder ("
+                                    + maskWorkorderId(row.getWorkorderId()) + ")");
+                }
+                if (InvoiceRegenerationRequest.STATUS_COMPLETED.equals(row.getStatus())) {
+                    return terminalResponse(workorderId, row);
+                }
+                if (InvoiceRegenerationRequest.STATUS_FAILED.equals(row.getStatus())) {
+                    return failedResponse(workorderId);
+                }
+                return pendingResponse(workorderId);
             }
         }
 
@@ -116,6 +126,18 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
         return InvoiceGenerationResponse.builder()
                 .workorderId(workorderId)
                 .status(STATUS_PENDING)
+                .build();
+    }
+
+    /**
+     * Finding 2a: a row the reaper marked {@link InvoiceRegenerationRequest#STATUS_FAILED} must be
+     * reported as failed, not silently downgraded to {@link #STATUS_PENDING} — a caller polling
+     * this idempotency key would otherwise wait forever for a regeneration that already gave up.
+     */
+    private InvoiceGenerationResponse failedResponse(UUID workorderId) {
+        return InvoiceGenerationResponse.builder()
+                .workorderId(workorderId)
+                .status(InvoiceRegenerationRequest.STATUS_FAILED)
                 .build();
     }
 

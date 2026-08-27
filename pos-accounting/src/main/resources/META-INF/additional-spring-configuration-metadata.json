@@ -40,6 +40,30 @@
       "defaultValue": false
     },
     {
+      "name": "pos.accounting.kafka.workorder-events-topic",
+      "type": "java.lang.String",
+      "description": "Workorder fact feed resolving outstanding invoice-regeneration commands (#1537 D1).",
+      "defaultValue": "workorder.events.v1"
+    },
+    {
+      "name": "pos.accounting.kafka.invoice-manifest-topic",
+      "type": "java.lang.String",
+      "description": "Invoice replica reconciliation manifest feed (#1537 D2).",
+      "defaultValue": "invoice.manifest.v1"
+    },
+    {
+      "name": "pos.accounting.kafka.invoice-commands-topic",
+      "type": "java.lang.String",
+      "description": "Command topic for requesting invoice-manifest replay (#1537 D2).",
+      "defaultValue": "invoice.commands.v1"
+    },
+    {
+      "name": "pos.accounting.kafka.invoice-manifest-consumer-group",
+      "type": "java.lang.String",
+      "description": "Kafka consumer group id for the invoice-manifest reconciliation listener (#1537 D2).",
+      "defaultValue": "pos-accounting-invoice-manifests"
+    },
+    {
       "name": "pos.invoice.service-id",
       "type": "java.lang.String",
       "description": "Eureka service ID for pos-invoice.",
