@@ -23,7 +23,9 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Consumes {@code people.events.v1} into the {@code ext_people_employee} replica
- * (ADR-0044 §6, #877). Only {@code people.employee.updated} is handled. Idempotent via
+ * (ADR-0044 §6, #877). Only {@code people.employee.updated} updates the replica;
+ * {@code people.staffing-assignment.updated} and any other type on the topic are ignored for
+ * replication purposes but still recorded — see {@link #onPeopleEvent}. Idempotent via
  * {@code processed_events}; strictly-below stale guard on the emission-timestamp
  * aggregateVersion; transient errors rethrown for retry/DLQ.
  */
@@ -74,10 +76,6 @@ public class PeopleEventsListener {
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
-        if (!EmployeeUpdatedV1.EVENT_TYPE.equals(eventType)) {
-            log.debug("Ignoring people event type={}", eventType);
-            return;
-        }
         String eventId = envelope.path("eventId").stringValue(null);
         if (eventId == null || eventId.isBlank()) {
             log.warn("Skipping people event without eventId: {}", message);
@@ -88,24 +86,14 @@ public class PeopleEventsListener {
         }
 
         try {
-            EmployeeUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), EmployeeUpdatedV1.class);
-            long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
-            ExtEmployeeReplica existing =
-                    extEmployeeReplicaRepository.findById(payload.employeeId()).orElse(null);
-            if (existing == null || existing.getAggregateVersion() <= aggregateVersion) {
-                extEmployeeReplicaRepository.save(ExtEmployeeReplica.builder()
-                        .employeeId(payload.employeeId())
-                        .personId(payload.personId())
-                        .employeeNumber(payload.employeeNumber())
-                        .status(payload.status())
-                        .aggregateVersion(aggregateVersion)
-                        .updatedAt(Instant.now(clock))
-                        .build());
-                log.info(
-                        "Updated ext_people_employee employeeId={} employeeNumber={} status={}",
-                        payload.employeeId(),
-                        payload.employeeNumber(),
-                        payload.status());
+            switch (eventType == null ? "" : eventType) {
+                case EmployeeUpdatedV1.EVENT_TYPE -> applyEmployeeUpdated(envelope);
+                default ->
+                    // Ignored types (e.g. people.staffing-assignment.updated) still fall through
+                    // to the processed_events insert below: the owner's manifest counts every
+                    // fact in the window, so skipping the insert would register as replica
+                    // drift and trigger a pointless replay.
+                    log.debug("Ignoring people event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
             throw e;
@@ -122,5 +110,27 @@ public class PeopleEventsListener {
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
+    }
+
+    private void applyEmployeeUpdated(@NonNull JsonNode envelope) {
+        EmployeeUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), EmployeeUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtEmployeeReplica existing =
+                extEmployeeReplicaRepository.findById(payload.employeeId()).orElse(null);
+        if (existing == null || existing.getAggregateVersion() <= aggregateVersion) {
+            extEmployeeReplicaRepository.save(ExtEmployeeReplica.builder()
+                    .employeeId(payload.employeeId())
+                    .personId(payload.personId())
+                    .employeeNumber(payload.employeeNumber())
+                    .status(payload.status())
+                    .aggregateVersion(aggregateVersion)
+                    .updatedAt(Instant.now(clock))
+                    .build());
+            log.info(
+                    "Updated ext_people_employee employeeId={} employeeNumber={} status={}",
+                    payload.employeeId(),
+                    payload.employeeNumber(),
+                    payload.status());
+        }
     }
 }

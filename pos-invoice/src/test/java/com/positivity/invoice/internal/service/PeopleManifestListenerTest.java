@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,11 +10,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
+import com.positivity.domainevents.people.EmployeeUpdatedV1;
+import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
+import com.positivity.invoice.internal.entity.ProcessedEvent;
+import com.positivity.invoice.internal.repository.ExtEmployeeReplicaRepository;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -159,5 +169,45 @@ class PeopleManifestListenerTest {
         // the owner's replay is deduplicated by the processed_events primary key downstream.
         verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(eq(COMMANDS_TOPIC), anyString(), anyString());
         assertThat(driftCount()).isEqualTo(2d);
+    }
+
+    @Test
+    @DisplayName("regression #1537: a window mixing employee and staffing-assignment events reconciles"
+            + " cleanly against a manifest counting both")
+    void mixedEventTypeWindowReconciles() {
+        // pos-people publishes both people.employee.updated and people.staffing-assignment.updated
+        // on people.events.v1, and the owner's manifest counts every fact in the window regardless
+        // of type. PeopleEventsListener only replicates employee.updated, but it must still record
+        // every well-formed eventId it sees — otherwise this reconciliation can never agree (#1537).
+        ExtEmployeeReplicaRepository employeeRepository = mock(ExtEmployeeReplicaRepository.class);
+        when(employeeRepository.findById(any())).thenReturn(Optional.empty());
+        Clock clock = Clock.fixed(WINDOW_START, ZoneOffset.UTC);
+        PeopleEventsListener eventsListener = new PeopleEventsListener(
+                clock, objectMapper, processedEvents, employeeRepository, mock(ObjectProvider.class));
+
+        eventsListener.onPeopleEvent("""
+                {"eventId":"019104d2-0000-7000-8000-000000000001","eventType":"%s","aggregateVersion":1,
+                 "payload":{"employeeId":"%s","employeeNumber":"E-1001","status":"ACTIVE"}}""".formatted(EmployeeUpdatedV1.EVENT_TYPE, UUID.randomUUID()));
+        eventsListener.onPeopleEvent("""
+                {"eventId":"019104d2-0000-7000-8000-000000000002","eventType":"%s","aggregateVersion":1,
+                 "payload":{}}""".formatted(StaffingAssignmentUpdatedV1.EVENT_TYPE));
+        eventsListener.onPeopleEvent("""
+                {"eventId":"019104d2-0000-7000-8000-000000000003","eventType":"%s","aggregateVersion":1,
+                 "payload":{"employeeId":"%s","employeeNumber":"E-1002","status":"ACTIVE"}}""".formatted(EmployeeUpdatedV1.EVENT_TYPE, UUID.randomUUID()));
+
+        ArgumentCaptor<ProcessedEvent> captor = ArgumentCaptor.forClass(ProcessedEvent.class);
+        verify(processedEvents, org.mockito.Mockito.times(3)).save(captor.capture());
+        List<String> recordedIds = new ArrayList<>();
+        captor.getAllValues().forEach(pe -> recordedIds.add(pe.getEventId()));
+
+        // The consumer's own recorded ids are exactly what its manifest lookup will return; feed
+        // that straight back so the manifest and the replica are built from the same facts.
+        replicaHas(recordedIds);
+        String manifest = manifestFor(recordedIds);
+
+        listener.onManifest(manifest);
+
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        assertThat(driftCount()).isZero();
     }
 }
