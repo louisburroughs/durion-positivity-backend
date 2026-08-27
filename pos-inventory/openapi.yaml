@@ -7955,7 +7955,7 @@ paths:
 
         Use this tool to switch which method a scope resolves to going forward only; do not use it expecting opening values to be restated — that cut-over is createRevaluation, which this call deliberately does not perform.
 
-        Preconditions: none; note that SKU_CATEGORY rows are stored but unresolvable until the catalog replica carries a category, so resolution skips them to DEFAULT.
+        Preconditions: none; note that the catalog replica has carried the product''s category since #1514, and SKU_CATEGORY resolution is gated by pos.inventory.sku-category.resolve-from-replica, which defaults off — call reportSkuCategoryImpact before enabling it.
 
         Required inputs: scopeType, method, and scopeValue — the stock item id for SKU, the category string for SKU_CATEGORY, and omitted for DEFAULT.
 
@@ -8002,6 +8002,94 @@ paths:
       - bearerAuth:
         - inventory:location:admin
       summary: Upsert costing method configuration
+      tags:
+      - Valuation Methods
+      x-required-permissions:
+      - inventory:location:admin
+  /v1/inventory/valuation/methods/sku-category-impact:
+    get:
+      description: 'Reports which SKUs would change costing method, from what to what, if pos.inventory.sku-category.resolve-from-replica were enabled, and which SKUs would start resolving their sourcing strategy from a SKU_CATEGORY row.
+
+        Use this tool as the pre-flight for that flag: it is valid and meaningful while the flag is still OFF, which is the only moment the answer is actionable, because it reads the catalog replica directly instead of going through the SPI the flag gates. Do not use listCostingMethodConfigs for this — it lists what is configured, not what would change.
+
+        Preconditions: none beyond the inventory:location:admin authority; the catalog product replica should be fully populated first, or the report understates the impact.
+
+        Required inputs: none; there is no request body, paging or filtering.
+
+        Emits an INVENTORY_VALUATION_METHOD_SKU_CATEGORY_IMPACT audit event; nothing is changed.
+
+        Returns 200 with zero counts when no SKU_CATEGORY configuration exists, meaning the flag would change nothing for costing. The full cut-over procedure is in docs/OPERATIONS_RUNBOOK.md.
+
+        '
+      operationId: reportSkuCategoryImpact
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkuCategoryImpactResponse'
+          description: SKU_CATEGORY impact report returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required permission
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      summary: Report the SKU_CATEGORY resolution impact
+      tags:
+      - Valuation Methods
+      x-required-permissions:
+      - inventory:location:admin
+  /v1/inventory/valuation/methods/{configId}:
+    delete:
+      description: 'Deactivates one costing method configuration row so it stops participating in method resolution; this is a soft delete and the row is never removed.
+
+        Use this tool to retire a scope override and fall back to the next precedence level — this is how a SKU_CATEGORY row is taken out of scope before enabling pos.inventory.sku-category.resolve-from-replica; do not use upsertCostingMethodConfig with a different method when the intent is to remove the override entirely.
+
+        Preconditions: the configuration row must exist; deactivating an already inactive row is a no-op that returns the row and writes no second audit entry.
+
+        Required inputs: configId (UUID) path parameter; there is no request body.
+
+        Emits an INVENTORY_VALUATION_METHOD_DEACTIVATE event, and records a DEACTIVATED row in the cost method change log; subsequent postings fall back to DEFAULT or the deployment default pos.inventory.valuation.default-method.
+
+        Returns 404 when no configuration exists for the supplied id.
+
+        '
+      operationId: deactivateCostingMethodConfig
+      parameters:
+      - description: Identifier of the costing method configuration row to deactivate
+        in: path
+        name: configId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostingMethodConfigResponse'
+          description: Costing method configuration deactivated
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required permission
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Costing method configuration not found
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      summary: Deactivate costing method configuration
       tags:
       - Valuation Methods
       x-required-permissions:
@@ -12894,6 +12982,140 @@ components:
       - siteId
       - totals
       type: object
+    SkuCategoryImpactResponse:
+      description: Impact of enabling SKU_CATEGORY costing and sourcing resolution (#1535)
+      properties:
+        activeDefaultConfigMethod:
+          description: Method of the active DEFAULT configuration row, or null when there is none
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
+          type: string
+        activeSkuCategoryConfigCount:
+          description: Number of active SKU_CATEGORY costing configuration rows, inert or not
+          example: 3
+          format: int32
+          type: integer
+        categoriesWithNoReplicatedProducts:
+          description: 'Configured category names that match no replicated product, sorted. Usually a casing or spelling mismatch against ext_product.category_name: matching is exact and case-sensitive after trimming, so such a row would silently never fire.'
+          example:
+          - electrical system
+          items:
+            type: string
+          type: array
+        deploymentDefaultMethod:
+          description: Deployment default pos.inventory.valuation.default-method, the last fallback
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
+          type: string
+        evaluatedSkuCount:
+          description: SKUs reached by an active SKU_CATEGORY row, before shielding and no-op filtering
+          example: 120
+          format: int32
+          type: integer
+        impactedSkuCount:
+          description: SKUs whose costing method would actually change
+          example: 17
+          format: int32
+          type: integer
+        impactedSkuWithCostStateCount:
+          description: Impacted SKUs that already have a sku_cost_state row, i.e. the ones a J4 revaluation cut-over has to cover
+          example: 12
+          format: int32
+          type: integer
+        impactedSkus:
+          description: The impacted SKUs, one row each
+          items:
+            $ref: '#/components/schemas/SkuCategoryImpactRow'
+          type: array
+        impactedSourcingSkus:
+          description: SKUs whose sourcing strategy would start resolving from a SKU_CATEGORY row — a separate change from costing, needing its own sign-off
+          items:
+            $ref: '#/components/schemas/SourcingImpactRow'
+          type: array
+        resolveFromReplicaEnabled:
+          description: Current value of pos.inventory.sku-category.resolve-from-replica — the premise of this report. False means the impacted rows are pending; true means they have already taken effect.
+          example: false
+          type: boolean
+      required:
+      - activeSkuCategoryConfigCount
+      - categoriesWithNoReplicatedProducts
+      - deploymentDefaultMethod
+      - evaluatedSkuCount
+      - impactedSkuCount
+      - impactedSkuWithCostStateCount
+      - impactedSkus
+      - impactedSourcingSkus
+      - resolveFromReplicaEnabled
+      type: object
+    SkuCategoryImpactRow:
+      description: One SKU whose costing method would change under SKU_CATEGORY resolution (#1535)
+      properties:
+        avgCost:
+          description: Running weighted-average unit cost; null when there is no cost state
+          example: 12.5
+          type: number
+        categoryId:
+          description: Replicated catalog category id; the rename-stable key
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+          format: uuid
+          type: string
+        categoryName:
+          description: Replicated catalog category name, the value SKU_CATEGORY config rows are matched on
+          example: Electrical System
+          type: string
+        configId:
+          description: Id of the SKU_CATEGORY configuration row that would win
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+          format: uuid
+          type: string
+        currentMethod:
+          description: Method this SKU resolves today (active DEFAULT config, else the deployment default)
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
+          type: string
+        hasCostState:
+          description: Whether the SKU has a sku_cost_state row, i.e. whether it has opening values a J4 revaluation would have to restate
+          example: true
+          type: boolean
+        onHandQty:
+          description: Quantity the costing engine has costed so far; null when there is no cost state
+          example: 42.0
+          type: number
+        productId:
+          description: Catalog product id in the ext_product replica; identical to stockItemId for product-backed SKUs
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        projectedMethod:
+          description: Method this SKU would resolve once SKU_CATEGORY resolution is enabled
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: STANDARD
+          type: string
+        standardCost:
+          description: Configured standard price; null when there is no cost state or none is set
+          example: 13.0
+          type: number
+        stockItemId:
+          description: Stock item id the costing engine resolves against
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          type: string
+      required:
+      - categoryName
+      - configId
+      - currentMethod
+      - hasCostState
+      - productId
+      - projectedMethod
+      - stockItemId
+      type: object
     SnoozeReplenishmentPolicyRequest:
       description: Request to snooze a replenishment policy until a future instant, or clear an existing snooze by sending a null snoozedUntil
       properties:
@@ -12902,6 +13124,43 @@ components:
           example: 2026-02-01 00:00:00+00:00
           format: date-time
           type: string
+      type: object
+    SourcingImpactRow:
+      description: One SKU whose sourcing strategy would start resolving from SKU_CATEGORY (#1535)
+      properties:
+        categoryName:
+          description: Replicated catalog category name the SKU_CATEGORY row is matched on
+          example: Electrical System
+          type: string
+        configId:
+          description: Id of the SKU_CATEGORY sourcing configuration row that would win
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62
+          format: uuid
+          type: string
+        productId:
+          description: Catalog product id in the ext_product replica
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        projectedStrategy:
+          description: Strategy this SKU would source by once SKU_CATEGORY resolution is enabled
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: FEFO
+          type: string
+        stockItemId:
+          description: Stock item id the sourcing engine resolves against
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          type: string
+      required:
+      - categoryName
+      - configId
+      - productId
+      - projectedStrategy
+      - stockItemId
       type: object
     SourcingStrategyConfigRequest:
       description: Upsert of the sourcing strategy configured for one scope (odoo-parity H1)

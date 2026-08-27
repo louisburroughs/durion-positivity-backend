@@ -100,10 +100,14 @@ location suggestion, and (from parity-F5) replenishment source selection via
   The `SKU_CATEGORY` scope resolves through the `SkuCategoryProvider` SPI, which is gated by
   `pos.inventory.sku-category.resolve-from-replica` and **defaults off** — so the scope is skipped
   and this is a three-step chain in practice. Since #1514 the catalog replica does carry the
-  category, so turning the flag on would make the scope reachable for the first time; that also
-  makes the `SKU_CATEGORY` scope of `costing_method_config` reachable, which would flip matching
-  SKUs off `DEFAULT` costing at their next ledger posting with no `cost_method_change_log` row and
-  no revaluation cut-over. Tracked in #1535 — leave it off until that is resolved. Putaway does
+  category, so turning the flag on would make the scope reachable for the first time. Note that
+  `SKU_CATEGORY` is the **highest**-precedence sourcing scope, so a category row that starts
+  resolving overrides even a deliberate per-site strategy. The same flag also makes the
+  `SKU_CATEGORY` scope of `sku_cost_method_config` reachable, which would flip matching SKUs off
+  `DEFAULT` costing at their next ledger posting. Audit both before flipping it:
+  `GET /v1/inventory/valuation/methods/sku-category-impact` (`inventory:location:admin`) reports
+  exactly which SKUs would change and works while the flag is still off; the full procedure is
+  "SKU_CATEGORY costing and sourcing cut-over (#1535)" in `docs/OPERATIONS_RUNBOOK.md`. Putaway does
   **not** go through this SPI; it reads the unconditional `SkuCategoryLookup`.
 - **Audit**: the effective strategy is recorded as `sourcingReason` on pick tasks
   (and, from F5, replenishment tasks) so ops can answer "why this bin".
@@ -350,7 +354,7 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
 | `POS_INVENTORY_SUPPLIER_HINT_STALENESS_CEILING`      | `PT24H`  | Age past which a supplier hint reads as unknown        |
 | `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED`     | `false`  | Run the EAN resolution sweep against pos-catalog       |
 | `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE`  | `200`    | Hints resolved per pass                                |
-| `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`    | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `costing_method_config` reachable and would change costing (#1535). Putaway does not use this SPI. |
+| `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`    | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_config` and of `sourcing_strategy_config` reachable, changing both costing method and sourcing strategy for matching SKUs. Audit first with `GET /v1/inventory/valuation/methods/sku-category-impact` (valid while the flag is off), then follow "SKU_CATEGORY costing and sourcing cut-over (#1535)" in `docs/OPERATIONS_RUNBOOK.md`. Putaway does not use this SPI. |
 
 ## Dependencies
 

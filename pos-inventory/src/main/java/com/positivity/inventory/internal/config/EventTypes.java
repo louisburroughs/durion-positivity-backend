@@ -75,12 +75,20 @@ public final class EventTypes {
                                 "Deactivate a sourcing strategy configuration row")
                         .build(),
 
-                // CostingMethodController - 2 events (odoo-parity J1, #1048)
+                // CostingMethodController - 4 events (odoo-parity J1, #1048; cut-over audit #1535)
                 EventTypeRegistration.fastRead("INVENTORY_VALUATION_METHOD_LIST", "List costing method configurations")
                         .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_VALUATION_METHOD_UPSERT",
                                 "Create or update the costing method for one scope")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VALUATION_METHOD_DEACTIVATE",
+                                "Deactivate a costing method configuration row")
+                        .build(),
+                EventTypeRegistration.search(
+                                "INVENTORY_VALUATION_METHOD_SKU_CATEGORY_IMPACT",
+                                "Report which SKUs would change costing method if SKU_CATEGORY resolution is enabled")
                         .build(),
 
                 // RevaluationController - 3 events (odoo-parity J4, #1054)

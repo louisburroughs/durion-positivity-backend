@@ -23,5 +23,11 @@ public interface CostingMethodConfigRepository extends JpaRepository<CostingMeth
 
     Optional<CostingMethodConfig> findByScopeTypeAndScopeValueIsNullAndActiveTrue(CostingScopeType scopeType);
 
+    /**
+     * Every active row at one scope kind. Used by the SKU_CATEGORY cut-over audit (#1535) to
+     * enumerate the category overrides that would start resolving.
+     */
+    List<CostingMethodConfig> findByScopeTypeAndActiveTrue(CostingScopeType scopeType);
+
     List<CostingMethodConfig> findAllByOrderByScopeTypeAscScopeValueAsc();
 }

@@ -7,8 +7,9 @@ package com.positivity.inventory.internal.enums;
  * {@code unitCost} stamped on every on-hand-affecting ledger entry.
  *
  * <p>Resolution precedence (see {@code CostingMethodResolver}): per-SKU config
- * row → per-SKU-category config row (unresolvable today — the catalog replica
- * carries no category) → DEFAULT config row → deployment default
+ * row → per-SKU-category config row (reachable only when
+ * {@code pos.inventory.sku-category.resolve-from-replica} is enabled; off by
+ * default) → DEFAULT config row → deployment default
  * {@code pos.inventory.valuation.default-method} (which itself defaults to
  * {@link #AVERAGE}).
  */

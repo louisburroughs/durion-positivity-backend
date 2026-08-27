@@ -118,6 +118,21 @@ class ReplicaSkuCategoryProviderTest {
                 });
     }
 
+    @Test
+    @DisplayName("resolve-from-replica explicitly false still selects the no-op provider")
+    void resolveFromReplicaExplicitlyFalse_stillSelectsTheNoOpProvider() {
+        // #1535 added the key to application.yml so the documented env var has something to bind
+        // into. That is a wiring fix, not a flip: @ConditionalOnProperty(havingValue = "true",
+        // matchIfMissing = false) treats an absent key and an explicit `false` identically.
+        contextRunner()
+                .withPropertyValues("pos.inventory.sku-category.resolve-from-replica=false")
+                .run(context -> {
+                    assertThat(context.getBean(SkuCategoryProvider.class)).isInstanceOf(NoOpSkuCategoryProvider.class);
+                    assertThat(context.getBeansOfType(ReplicaSkuCategoryProvider.class))
+                            .isEmpty();
+                });
+    }
+
     /** The three beans that decide which implementation serves the SPI. */
     @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
     @org.springframework.context.annotation.Import({

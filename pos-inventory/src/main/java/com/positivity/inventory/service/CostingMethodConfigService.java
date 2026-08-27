@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.costing.CostingMethodConfigRequest;
 import com.positivity.inventory.internal.dto.costing.CostingMethodConfigResponse;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -25,4 +26,16 @@ public interface CostingMethodConfigService {
      */
     @NonNull
     CostingMethodConfigResponse upsertConfig(@NonNull CostingMethodConfigRequest request);
+
+    /**
+     * Deactivates one configuration row so it stops participating in resolution, recording a
+     * {@code DEACTIVATED} row in the change log (#1535). This is a soft delete; the row is never
+     * removed, and deactivating an already inactive row returns it without writing a second log
+     * row — an append-only audit must not be pollutable by a repeated DELETE.
+     *
+     * @throws com.positivity.inventory.internal.exception.ResourceNotFoundException when no
+     *     configuration exists for {@code configId}
+     */
+    @NonNull
+    CostingMethodConfigResponse deactivateConfig(@NonNull UUID configId);
 }
