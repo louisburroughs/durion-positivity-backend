@@ -117,9 +117,12 @@ public class ReviewQueueServiceImpl implements ReviewQueueService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() != JobStatus.FAILED) {
-            throw new IllegalStateException(
-                    "Corrections can only be submitted for jobs in FAILED state, current state: " + job.getStatus());
+        // PARTIAL is the common case: the batch finished, but the owning service rejected some
+        // rows. Those are exactly the rows an operator corrects, so gating on FAILED alone left
+        // this endpoint unreachable for them.
+        if (job.getStatus() != JobStatus.FAILED && job.getStatus() != JobStatus.PARTIAL) {
+            throw new IllegalStateException("Corrections can only be submitted for jobs in FAILED or PARTIAL state,"
+                    + " current state: " + job.getStatus());
         }
 
         int acceptedCount = 0;

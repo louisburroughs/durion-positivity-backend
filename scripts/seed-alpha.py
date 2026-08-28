@@ -75,7 +75,9 @@ PACK_FILES = [
 CATALOG_PRODUCTS_PACK = "catalog/products.csv"
 
 POLL_INTERVAL_SECONDS = 5
-TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED"}
+# PARTIAL is terminal too: the batch finished, but the owning service rejected some rows. Without
+# it here the driver would poll a finished job forever and then report a timeout.
+TERMINAL_STATUSES = {"COMPLETED", "PARTIAL", "FAILED", "CANCELLED"}
 
 
 class Gateway:
@@ -960,7 +962,9 @@ def run_pack_file(gateway, relative_path, domain_type, transform_name, location_
         f"success={status.get('successCount')} failures={status.get('failureCount')}"
     )
     if status.get("failureCount"):
-        print(f"  review failures: GET {gateway.base_url}/bulk-loader/bulk-jobs/{job_id} (review queue)")
+        # Every rejected row now has an audit record naming what the owning service said about it,
+        # so point at the listing that carries the reason rather than the job summary.
+        print(f"  review failures: GET {gateway.base_url}/bulk-loader/bulk-jobs/{job_id}/audit")
     return ok
 
 

@@ -3,7 +3,10 @@ package com.positivity.bulkloader.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -11,6 +14,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.bulkingest.BulkIngestResponse;
+import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
@@ -27,8 +32,11 @@ import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
+import com.positivity.bulkloader.internal.enums.DomainType;
+import com.positivity.bulkloader.internal.service.BulkIngestResultRecorder;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -101,6 +109,9 @@ class BatchConfigurationWriterTest {
     @Mock
     RestClient.ResponseSpec responseSpec;
 
+    @Mock
+    BulkIngestResultRecorder bulkIngestResultRecorder;
+
     @InjectMocks
     BatchConfiguration batchConfiguration;
 
@@ -128,7 +139,8 @@ class BatchConfigurationWriterTest {
                 bulkLoadAuthorizationContext,
                 null,
                 null,
-                null);
+                null,
+                bulkIngestResultRecorder);
     }
 
     // --- catalogBulkIngestWriter ---
@@ -155,6 +167,76 @@ class BatchConfigurationWriterTest {
         assertThat(request.getLocationId()).isEqualTo(java.util.UUID.fromString(VALID_LOCATION_ID));
         assertThat(request.getOperatorId()).isEqualTo(VALID_OPERATOR_ID);
         assertThat(request.getRecords()).hasSize(1);
+    }
+
+    // --- response handling, shared by every writer via postChunkAndRecord ---
+
+    @Test
+    void bulkIngestWriter_recordsThePerRowResponse_ratherThanDiscardingIt() {
+        // The Stage-1 defect: the chunk used to be posted with toBodilessEntity(), so a row the
+        // owning service rejected left no trace and still counted as written.
+        BulkIngestResponse response = BulkIngestResponse.builder()
+                .totalSubmitted(1)
+                .successCount(0)
+                .failureCount(1)
+                .results(List.of(BulkIngestResult.builder()
+                        .rowIndex(0)
+                        .success(false)
+                        .errorCode("CATALOG_INGEST_FAILED")
+                        .build()))
+                .build();
+        when(responseSpec.body(BulkIngestResponse.class)).thenReturn(response);
+
+        CatalogProductRecord product = new CatalogProductRecord();
+        product.setSku("SKU-001");
+        product.setName("Product Name");
+
+        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+        assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+
+        verify(bulkIngestResultRecorder)
+                .record(
+                        eq(java.util.UUID.fromString(VALID_JOB_ID)),
+                        eq(DomainType.CATALOG_PRODUCT),
+                        eq(0L),
+                        anyList(),
+                        eq(response));
+    }
+
+    @Test
+    void bulkIngestWriter_advancesTheRowCursorAcrossChunks() {
+        // Row numbers have to read against the uploaded file; restarting at zero every chunk would
+        // make the audit trail unusable for finding the offending line.
+        when(responseSpec.body(BulkIngestResponse.class)).thenReturn(null);
+
+        CatalogProductRecord first = new CatalogProductRecord();
+        first.setSku("SKU-001");
+        CatalogProductRecord second = new CatalogProductRecord();
+        second.setSku("SKU-002");
+
+        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+                restClientBuilder, VALID_JOB_ID, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+        assertThatCode(() -> {
+                    writer.write(Chunk.of(first, second));
+                    writer.write(Chunk.of(first));
+                })
+                .doesNotThrowAnyException();
+
+        verify(bulkIngestResultRecorder).record(any(), eq(DomainType.CATALOG_PRODUCT), eq(0L), anyList(), any());
+        verify(bulkIngestResultRecorder).record(any(), eq(DomainType.CATALOG_PRODUCT), eq(2L), anyList(), any());
+    }
+
+    @Test
+    void bulkIngestWriter_whenJobParametersMissing_recordsNothing() {
+        CatalogProductRecord product = new CatalogProductRecord();
+        product.setSku("SKU-001");
+
+        ItemWriter<CatalogProductRecord> writer = batchConfiguration.catalogBulkIngestWriter(
+                restClientBuilder, null, VALID_LOCATION_ID, VALID_OPERATOR_ID);
+        assertThatCode(() -> writer.write(Chunk.of(product))).doesNotThrowAnyException();
+
+        verifyNoInteractions(bulkIngestResultRecorder);
     }
 
     @Test
@@ -317,7 +399,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void commercialCustomerBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         CommercialCustomerRecord account = new CommercialCustomerRecord();
         account.setLegalName("Piedmont Freight Carriers LLC");
@@ -429,7 +511,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void locationBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         LocationRecord location = new LocationRecord();
         location.setName("Charlotte South");
@@ -682,7 +764,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void catalogBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         CatalogProductRecord product = new CatalogProductRecord();
         product.setSku("SKU-001");
@@ -696,7 +778,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void customerBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         CustomerPersonRecord person = new CustomerPersonRecord();
         person.setFirstName("John");
@@ -710,7 +792,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void peopleBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         PersonRecord employee = new PersonRecord();
         employee.setFirstName("Jane");
@@ -725,7 +807,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void priceBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         BasePriceRecord priceEntry = new BasePriceRecord();
         priceEntry.setProductId("prod-1");
@@ -739,7 +821,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void vehicleBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         VehicleBulkRecord vehicle = new VehicleBulkRecord();
         vehicle.setVin("1HGCM82633A004352");
@@ -753,7 +835,7 @@ class BatchConfigurationWriterTest {
 
     @Test
     void vehicleFitmentBulkIngestWriter_throwsRestClientException_onHttpFailure() {
-        when(responseSpec.toBodilessEntity()).thenThrow(new RestClientException("test error"));
+        when(responseSpec.body(BulkIngestResponse.class)).thenThrow(new RestClientException("test error"));
 
         VehicleFitmentRecord fitment = new VehicleFitmentRecord();
         fitment.setManufacturerName("Bosch");

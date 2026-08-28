@@ -1,6 +1,7 @@
 package com.positivity.bulkloader.internal.config;
 
 import com.positivity.bulkingest.BulkIngestRequest;
+import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
@@ -20,6 +21,7 @@ import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.parser.FlexibleRecordItemReader;
 import com.positivity.bulkloader.internal.parser.RecordFileParserRegistry;
+import com.positivity.bulkloader.internal.service.BulkIngestResultRecorder;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.bulkloader.internal.service.BulkLoadJobExecutionListener;
 import com.positivity.bulkloader.internal.service.ColumnMappingService;
@@ -28,6 +30,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -80,6 +83,7 @@ public class BatchConfiguration {
     private final BulkLoadJobExecutionListener bulkLoadJobExecutionListener;
     private final RecordFileParserRegistry recordFileParserRegistry;
     private final ColumnMappingService columnMappingService;
+    private final BulkIngestResultRecorder bulkIngestResultRecorder;
 
     // Eureka service ids resolved through the load-balanced builder (#641); the ingest
     // writers address sibling services by discovery instead of host:port base URLs.
@@ -201,36 +205,23 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + catalogServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context =
                     resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            BulkIngestRequest<CatalogProductRecord> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/catalog/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "catalog:product:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "catalogBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "catalogBulkIngestWriter",
+                    DomainType.CATALOG_PRODUCT,
+                    "/v1/catalog/bulk-ingest",
+                    "catalog:product:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    new ArrayList<>(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -298,36 +289,23 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + customerServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context =
                     resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            BulkIngestRequest<CustomerPersonRecord> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/customer/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "crm:party:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "customerBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "customerBulkIngestWriter",
+                    DomainType.CUSTOMER,
+                    "/v1/customer/bulk-ingest",
+                    "crm:party:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    new ArrayList<>(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -403,36 +381,23 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + customerServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context =
                     resolveJobContext("commercialCustomerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            BulkIngestRequest<CommercialCustomerRecord> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/customer/commercial/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "crm:party:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "commercialCustomerBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "commercialCustomerBulkIngestWriter",
+                    DomainType.COMMERCIAL_CUSTOMER,
+                    "/v1/customer/commercial/bulk-ingest",
+                    "crm:party:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    new ArrayList<>(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -512,37 +477,23 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + locationServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context =
                     resolveJobContext("locationBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            List<LocationWriterPayload> payloads = mapLocationPayloads(chunk.getItems());
-            BulkIngestRequest<LocationWriterPayload> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, payloads);
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/locations/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "location:write")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "locationBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "locationBulkIngestWriter",
+                    DomainType.LOCATION,
+                    "/v1/locations/bulk-ingest",
+                    "location:write",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    mapLocationPayloads(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -617,35 +568,22 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + peopleServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context = resolveJobContext("peopleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            BulkIngestRequest<PersonRecord> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/people/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "people:employee:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "peopleBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "peopleBulkIngestWriter",
+                    DomainType.PERSON,
+                    "/v1/people/bulk-ingest",
+                    "people:employee:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    new ArrayList<>(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -713,35 +651,22 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + priceServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context = resolveJobContext("priceBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            BulkIngestRequest<BasePriceRecord> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, new ArrayList<>(chunk.getItems()));
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/price/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "pricing:base_price:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "priceBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "priceBulkIngestWriter",
+                    DomainType.BASE_PRICE,
+                    "/v1/price/bulk-ingest",
+                    "pricing:base_price:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    new ArrayList<>(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -819,37 +744,23 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + vehicleInventoryServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context =
                     resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            List<VehicleWriterPayload> payloads = mapVehiclePayloads(chunk.getItems());
-            BulkIngestRequest<VehicleWriterPayload> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, payloads);
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/vehicles/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "vehicle-inventory:registry:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "vehicleBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "vehicleBulkIngestWriter",
+                    DomainType.VEHICLE,
+                    "/v1/vehicles/bulk-ingest",
+                    "vehicle-inventory:registry:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    mapVehiclePayloads(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -926,37 +837,23 @@ public class BatchConfiguration {
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
         RestClient client =
                 restClientBuilder.baseUrl("http://" + vehicleFitmentServiceId).build();
+        AtomicLong rowCursor = new AtomicLong();
         return chunk -> {
             JobContext context =
                     resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
                 return;
             }
-            String sanitizedOperatorId = sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER);
-
-            List<FitmentWriterPayload> payloads = mapFitmentPayloads(chunk.getItems());
-            BulkIngestRequest<FitmentWriterPayload> request =
-                    buildBulkIngestRequest(context, sanitizedOperatorId, payloads);
-
-            try {
-                RestClient.RequestBodySpec requestSpec = client.post()
-                        .uri("/v1/fitments/bulk-ingest")
-                        .header(HEADER_AUTHORITIES, "vehicle-fitment:hint:create")
-                        .header(HEADER_USER, sanitizedOperatorId);
-                applyRelayHeaders(requestSpec);
-                requestSpec
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (RestClientException e) {
-                log.error(
-                        "vehicleFitmentBulkIngestWriter: HTTP call failed for chunk of {} records: {}",
-                        chunk.size(),
-                        e.getMessage(),
-                        e);
-                throw e;
-            }
+            postChunkAndRecord(
+                    client,
+                    "vehicleFitmentBulkIngestWriter",
+                    DomainType.VEHICLE_FITMENT,
+                    "/v1/fitments/bulk-ingest",
+                    "vehicle-fitment:hint:create",
+                    context,
+                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
+                    mapFitmentPayloads(chunk.getItems()),
+                    rowCursor);
         };
     }
 
@@ -1027,6 +924,55 @@ public class BatchConfiguration {
                     chunkSize);
             return null;
         }
+    }
+
+    /**
+     * Posts one chunk to its owning service and records the outcome of every row in it.
+     *
+     * <p>Shared by all eight writers because the per-row bookkeeping has to be identical: the
+     * response body is now read rather than discarded, and each submitted record gets an audit row
+     * carrying what the service said about it. Before this the chunk was posted with {@code
+     * toBodilessEntity()}, so a chunk every row of which was rejected still counted as written.
+     *
+     * <p>{@code rowCursor} is per step instance (the writer beans are {@code @StepScope}), which is
+     * what makes an audit row's number read against the uploaded file instead of restarting at
+     * zero for every chunk.
+     */
+    private <P> void postChunkAndRecord(
+            RestClient client,
+            String writerName,
+            DomainType domainType,
+            String uri,
+            String downstreamAuthority,
+            JobContext context,
+            String operatorId,
+            List<P> payloads,
+            AtomicLong rowCursor) {
+
+        BulkIngestRequest<P> request = buildBulkIngestRequest(context, operatorId, payloads);
+        long rowOffset = rowCursor.getAndAdd(payloads.size());
+
+        BulkIngestResponse response;
+        try {
+            RestClient.RequestBodySpec requestSpec = client.post()
+                    .uri(uri)
+                    .header(HEADER_AUTHORITIES, downstreamAuthority)
+                    .header(HEADER_USER, operatorId);
+            applyRelayHeaders(requestSpec);
+            response = requestSpec
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(BulkIngestResponse.class);
+        } catch (RestClientException e) {
+            log.error(
+                    "{}: HTTP call failed for chunk of {} records: {}", writerName, payloads.size(), e.getMessage(), e);
+            throw e;
+        }
+
+        // A null response is recorded, not ignored: the rows were sent, and an operator needs to
+        // see that nothing came back rather than read the silence as success.
+        bulkIngestResultRecorder.record(context.jobId(), domainType, rowOffset, payloads, response);
     }
 
     private <T> BulkIngestRequest<T> buildBulkIngestRequest(JobContext context, String operatorId, List<T> records) {
