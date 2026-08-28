@@ -3,7 +3,7 @@ package com.positivity.poseventreceiver.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
-import com.positivity.poseventreceiver.service.EventTypeService;
+import com.positivity.poseventreceiver.internal.service.EventTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

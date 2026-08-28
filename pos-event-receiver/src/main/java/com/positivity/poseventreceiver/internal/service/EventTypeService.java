@@ -1,4 +1,4 @@
-package com.positivity.poseventreceiver.service;
+package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;

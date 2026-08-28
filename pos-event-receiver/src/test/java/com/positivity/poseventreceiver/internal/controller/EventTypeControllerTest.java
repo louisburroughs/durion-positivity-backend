@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
-import com.positivity.poseventreceiver.service.EventTypeService;
+import com.positivity.poseventreceiver.internal.service.EventTypeService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

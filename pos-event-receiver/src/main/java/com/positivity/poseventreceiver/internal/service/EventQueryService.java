@@ -1,4 +1,4 @@
-package com.positivity.poseventreceiver.service;
+package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.internal.dto.EmittedEventResponse;
 import com.positivity.poseventreceiver.internal.dto.PagedResponse;

@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.poseventreceiver.internal.dto.EmittedEventResponse;
 import com.positivity.poseventreceiver.internal.dto.PagedResponse;
-import com.positivity.poseventreceiver.service.EventQueryService;
+import com.positivity.poseventreceiver.internal.service.EventQueryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

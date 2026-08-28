@@ -1,4 +1,4 @@
-package com.positivity.poseventreceiver.service;
+package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
 import java.util.List;
