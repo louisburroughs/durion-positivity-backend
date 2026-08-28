@@ -1,6 +1,7 @@
 package com.positivity.bulkloader.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 
 import com.positivity.bulkingest.BulkIngestResponse;
@@ -65,7 +66,13 @@ class BulkIngestResultRecorderTest {
                                 .build()))
                 .build();
 
-        recorder().record(JOB_ID, DomainType.CATALOG_PRODUCT, 0L, List.of(new Row("A"), new Row("B")), response);
+        recorder()
+                .record(
+                        JOB_ID,
+                        DomainType.CATALOG_PRODUCT,
+                        List.of(0L, 1L),
+                        List.of(new Row("A"), new Row("B")),
+                        response);
 
         verify(auditRepository).saveAll(auditCaptor.capture());
         List<BulkLoadRecordAudit> audits = auditCaptor.getValue();
@@ -85,13 +92,13 @@ class BulkIngestResultRecorderTest {
     }
 
     @Test
-    void record_appliesRowOffset_soRowNumbersReadAgainstTheFile() {
+    void record_usesTheRowNumbersItIsGiven_notItsOwnCount() {
         BulkIngestResponse response = BulkIngestResponse.builder()
                 .results(List.of(
                         BulkIngestResult.builder().rowIndex(0).success(true).build()))
                 .build();
 
-        recorder().record(JOB_ID, DomainType.LOCATION, 500L, List.of(new Row("A")), response);
+        recorder().record(JOB_ID, DomainType.LOCATION, List.of(500L), List.of(new Row("A")), response);
 
         verify(auditRepository).saveAll(auditCaptor.capture());
         assertThat(auditCaptor.getValue().getFirst().getRowNumber()).isEqualTo(500L);
@@ -104,7 +111,7 @@ class BulkIngestResultRecorderTest {
                         BulkIngestResult.builder().rowIndex(0).success(true).build()))
                 .build();
 
-        recorder().record(JOB_ID, DomainType.PERSON, 0L, List.of(new Row("A"), new Row("B")), response);
+        recorder().record(JOB_ID, DomainType.PERSON, List.of(0L, 1L), List.of(new Row("A"), new Row("B")), response);
 
         verify(auditRepository).saveAll(auditCaptor.capture());
         List<BulkLoadRecordAudit> audits = auditCaptor.getValue();
@@ -115,7 +122,7 @@ class BulkIngestResultRecorderTest {
 
     @Test
     void record_whenNoResponseBody_marksEveryRowFailed() {
-        recorder().record(JOB_ID, DomainType.VEHICLE, 0L, List.of(new Row("A"), new Row("B")), null);
+        recorder().record(JOB_ID, DomainType.VEHICLE, List.of(0L, 1L), List.of(new Row("A"), new Row("B")), null);
 
         verify(auditRepository).saveAll(auditCaptor.capture());
         List<BulkLoadRecordAudit> audits = auditCaptor.getValue();
@@ -129,9 +136,39 @@ class BulkIngestResultRecorderTest {
     void record_whenResponseCarriesNoResults_marksEveryRowFailed() {
         BulkIngestResponse response = BulkIngestResponse.builder().build();
 
-        recorder().record(JOB_ID, DomainType.BASE_PRICE, 0L, List.of(new Row("A")), response);
+        recorder().record(JOB_ID, DomainType.BASE_PRICE, List.of(0L), List.of(new Row("A")), response);
 
         verify(auditRepository).saveAll(auditCaptor.capture());
         assertThat(auditCaptor.getValue().getFirst().getReviewStatus()).isEqualTo(ReviewStatus.PENDING);
+    }
+
+    @Test
+    void record_whenRowNumbersAndRecordsDisagree_failsRatherThanMisattributing() {
+        // A mismatch means the audit trail would blame the wrong line for a failure, which is worse
+        // than no trail at all — so it is a bug to surface, not a case to paper over.
+        assertThatThrownBy(() -> recorder()
+                        .record(JOB_ID, DomainType.PERSON, List.of(0L), List.of(new Row("A"), new Row("B")), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("same length");
+    }
+
+    @Test
+    void recordRejected_writesAReviewableRowForALoaderSideRejection() {
+        recorder()
+                .recordRejected(
+                        JOB_ID,
+                        DomainType.VEHICLE,
+                        7L,
+                        new Row("A"),
+                        "BULK_LOAD_VALIDATION_FAILED",
+                        "accountId is required");
+
+        ArgumentCaptor<BulkLoadRecordAudit> captor = ArgumentCaptor.forClass(BulkLoadRecordAudit.class);
+        verify(auditRepository).save(captor.capture());
+        BulkLoadRecordAudit audit = captor.getValue();
+        assertThat(audit.getRowNumber()).isEqualTo(7L);
+        assertThat(audit.getReviewStatus()).isEqualTo(ReviewStatus.PENDING);
+        assertThat(audit.getReasonCodes()).contains("accountId is required");
+        assertThat(audit.getOriginalValues()).contains("\"sku\":\"A\"");
     }
 }

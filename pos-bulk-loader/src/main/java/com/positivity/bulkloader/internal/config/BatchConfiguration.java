@@ -12,6 +12,7 @@ import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
+import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
@@ -93,8 +94,8 @@ public class BatchConfiguration {
     @Bean
     public Step catalogBulkLoadStep(
             ItemStreamReader<CatalogProductRecord> catalogReader,
-            ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor,
-            ItemWriter<CatalogProductRecord> catalogBulkIngestWriter) {
+            ItemProcessor<CatalogProductRecord, NumberedRecord<CatalogProductRecord>> catalogItemProcessor,
+            ItemWriter<NumberedRecord<CatalogProductRecord>> catalogBulkIngestWriter) {
         return jobFactory.step("catalogBulkLoadStep", catalogReader, catalogItemProcessor, catalogBulkIngestWriter);
     }
 
@@ -107,13 +108,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor() {
-        return jobFactory.processor(catalogLoaderStrategy);
+    @StepScope
+    public ItemProcessor<CatalogProductRecord, NumberedRecord<CatalogProductRecord>> catalogItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                catalogLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<CatalogProductRecord> catalogBulkIngestWriter(
+    public ItemWriter<NumberedRecord<CatalogProductRecord>> catalogBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -137,8 +145,8 @@ public class BatchConfiguration {
     @Bean
     public Step customerBulkLoadStep(
             ItemStreamReader<CustomerPersonRecord> customerReader,
-            ItemProcessor<CustomerPersonRecord, CustomerPersonRecord> customerItemProcessor,
-            ItemWriter<CustomerPersonRecord> customerBulkIngestWriter) {
+            ItemProcessor<CustomerPersonRecord, NumberedRecord<CustomerPersonRecord>> customerItemProcessor,
+            ItemWriter<NumberedRecord<CustomerPersonRecord>> customerBulkIngestWriter) {
         return jobFactory.step("customerBulkLoadStep", customerReader, customerItemProcessor, customerBulkIngestWriter);
     }
 
@@ -151,13 +159,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<CustomerPersonRecord, CustomerPersonRecord> customerItemProcessor() {
-        return jobFactory.processor(customerLoaderStrategy);
+    @StepScope
+    public ItemProcessor<CustomerPersonRecord, NumberedRecord<CustomerPersonRecord>> customerItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                customerLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<CustomerPersonRecord> customerBulkIngestWriter(
+    public ItemWriter<NumberedRecord<CustomerPersonRecord>> customerBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -181,8 +196,9 @@ public class BatchConfiguration {
     @Bean
     public Step commercialCustomerBulkLoadStep(
             ItemStreamReader<CommercialCustomerRecord> commercialCustomerReader,
-            ItemProcessor<CommercialCustomerRecord, CommercialCustomerRecord> commercialCustomerItemProcessor,
-            ItemWriter<CommercialCustomerRecord> commercialCustomerBulkIngestWriter) {
+            ItemProcessor<CommercialCustomerRecord, NumberedRecord<CommercialCustomerRecord>>
+                    commercialCustomerItemProcessor,
+            ItemWriter<NumberedRecord<CommercialCustomerRecord>> commercialCustomerBulkIngestWriter) {
         return jobFactory.step(
                 "commercialCustomerBulkLoadStep",
                 commercialCustomerReader,
@@ -199,13 +215,21 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<CommercialCustomerRecord, CommercialCustomerRecord> commercialCustomerItemProcessor() {
-        return jobFactory.processor(commercialCustomerLoaderStrategy);
+    @StepScope
+    public ItemProcessor<CommercialCustomerRecord, NumberedRecord<CommercialCustomerRecord>>
+            commercialCustomerItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                commercialCustomerLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<CommercialCustomerRecord> commercialCustomerBulkIngestWriter(
+    public ItemWriter<NumberedRecord<CommercialCustomerRecord>> commercialCustomerBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -229,8 +253,8 @@ public class BatchConfiguration {
     @Bean
     public Step locationBulkLoadStep(
             ItemStreamReader<LocationRecord> locationReader,
-            ItemProcessor<LocationRecord, LocationRecord> locationItemProcessor,
-            ItemWriter<LocationRecord> locationBulkIngestWriter) {
+            ItemProcessor<LocationRecord, NumberedRecord<LocationRecord>> locationItemProcessor,
+            ItemWriter<NumberedRecord<LocationRecord>> locationBulkIngestWriter) {
         return jobFactory.step("locationBulkLoadStep", locationReader, locationItemProcessor, locationBulkIngestWriter);
     }
 
@@ -243,13 +267,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<LocationRecord, LocationRecord> locationItemProcessor() {
-        return jobFactory.processor(locationLoaderStrategy);
+    @StepScope
+    public ItemProcessor<LocationRecord, NumberedRecord<LocationRecord>> locationItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                locationLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<LocationRecord> locationBulkIngestWriter(
+    public ItemWriter<NumberedRecord<LocationRecord>> locationBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -274,8 +305,8 @@ public class BatchConfiguration {
     @Bean
     public Step peopleBulkLoadStep(
             ItemStreamReader<PersonRecord> peopleReader,
-            ItemProcessor<PersonRecord, PersonRecord> peopleItemProcessor,
-            ItemWriter<PersonRecord> peopleBulkIngestWriter) {
+            ItemProcessor<PersonRecord, NumberedRecord<PersonRecord>> peopleItemProcessor,
+            ItemWriter<NumberedRecord<PersonRecord>> peopleBulkIngestWriter) {
         return jobFactory.step("peopleBulkLoadStep", peopleReader, peopleItemProcessor, peopleBulkIngestWriter);
     }
 
@@ -288,13 +319,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<PersonRecord, PersonRecord> peopleItemProcessor() {
-        return jobFactory.processor(personLoaderStrategy);
+    @StepScope
+    public ItemProcessor<PersonRecord, NumberedRecord<PersonRecord>> peopleItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                personLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<PersonRecord> peopleBulkIngestWriter(
+    public ItemWriter<NumberedRecord<PersonRecord>> peopleBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -318,8 +356,8 @@ public class BatchConfiguration {
     @Bean
     public Step priceBulkLoadStep(
             ItemStreamReader<BasePriceRecord> priceReader,
-            ItemProcessor<BasePriceRecord, BasePriceRecord> priceItemProcessor,
-            ItemWriter<BasePriceRecord> priceBulkIngestWriter) {
+            ItemProcessor<BasePriceRecord, NumberedRecord<BasePriceRecord>> priceItemProcessor,
+            ItemWriter<NumberedRecord<BasePriceRecord>> priceBulkIngestWriter) {
         return jobFactory.step("priceBulkLoadStep", priceReader, priceItemProcessor, priceBulkIngestWriter);
     }
 
@@ -332,13 +370,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<BasePriceRecord, BasePriceRecord> priceItemProcessor() {
-        return jobFactory.processor(basePriceLoaderStrategy);
+    @StepScope
+    public ItemProcessor<BasePriceRecord, NumberedRecord<BasePriceRecord>> priceItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                basePriceLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<BasePriceRecord> priceBulkIngestWriter(
+    public ItemWriter<NumberedRecord<BasePriceRecord>> priceBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -362,8 +407,8 @@ public class BatchConfiguration {
     @Bean
     public Step vehicleBulkLoadStep(
             ItemStreamReader<VehicleBulkRecord> vehicleReader,
-            ItemProcessor<VehicleBulkRecord, VehicleBulkRecord> vehicleItemProcessor,
-            ItemWriter<VehicleBulkRecord> vehicleBulkIngestWriter) {
+            ItemProcessor<VehicleBulkRecord, NumberedRecord<VehicleBulkRecord>> vehicleItemProcessor,
+            ItemWriter<NumberedRecord<VehicleBulkRecord>> vehicleBulkIngestWriter) {
         return jobFactory.step("vehicleBulkLoadStep", vehicleReader, vehicleItemProcessor, vehicleBulkIngestWriter);
     }
 
@@ -376,13 +421,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<VehicleBulkRecord, VehicleBulkRecord> vehicleItemProcessor() {
-        return jobFactory.processor(vehicleLoaderStrategy);
+    @StepScope
+    public ItemProcessor<VehicleBulkRecord, NumberedRecord<VehicleBulkRecord>> vehicleItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                vehicleLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<VehicleBulkRecord> vehicleBulkIngestWriter(
+    public ItemWriter<NumberedRecord<VehicleBulkRecord>> vehicleBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -407,8 +459,8 @@ public class BatchConfiguration {
     @Bean
     public Step vehicleFitmentBulkLoadStep(
             ItemStreamReader<VehicleFitmentRecord> vehicleFitmentReader,
-            ItemProcessor<VehicleFitmentRecord, VehicleFitmentRecord> vehicleFitmentItemProcessor,
-            ItemWriter<VehicleFitmentRecord> vehicleFitmentBulkIngestWriter) {
+            ItemProcessor<VehicleFitmentRecord, NumberedRecord<VehicleFitmentRecord>> vehicleFitmentItemProcessor,
+            ItemWriter<NumberedRecord<VehicleFitmentRecord>> vehicleFitmentBulkIngestWriter) {
         return jobFactory.step(
                 "vehicleFitmentBulkLoadStep",
                 vehicleFitmentReader,
@@ -425,13 +477,20 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemProcessor<VehicleFitmentRecord, VehicleFitmentRecord> vehicleFitmentItemProcessor() {
-        return jobFactory.processor(vehicleFitmentLoaderStrategy);
+    @StepScope
+    public ItemProcessor<VehicleFitmentRecord, NumberedRecord<VehicleFitmentRecord>> vehicleFitmentItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                vehicleFitmentLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
     }
 
     @Bean
     @StepScope
-    public ItemWriter<VehicleFitmentRecord> vehicleFitmentBulkIngestWriter(
+    public ItemWriter<NumberedRecord<VehicleFitmentRecord>> vehicleFitmentBulkIngestWriter(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
@@ -448,7 +507,7 @@ public class BatchConfiguration {
                 this::mapFitmentPayloads);
     }
 
-    private List<LocationWriterPayload> mapLocationPayloads(List<LocationRecord> items) {
+    private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {
         List<LocationWriterPayload> payloads = new ArrayList<>(items.size());
         for (LocationRecord item : items) {
             payloads.add(new LocationWriterPayload(
@@ -487,7 +546,7 @@ public class BatchConfiguration {
         return null;
     }
 
-    private List<VehicleWriterPayload> mapVehiclePayloads(List<VehicleBulkRecord> items) {
+    private List<VehicleWriterPayload> mapVehiclePayloads(List<? extends VehicleBulkRecord> items) {
         List<VehicleWriterPayload> payloads = new ArrayList<>(items.size());
         for (VehicleBulkRecord item : items) {
             payloads.add(new VehicleWriterPayload(
@@ -535,7 +594,7 @@ public class BatchConfiguration {
         }
     }
 
-    private List<FitmentWriterPayload> mapFitmentPayloads(List<VehicleFitmentRecord> items) {
+    private List<FitmentWriterPayload> mapFitmentPayloads(List<? extends VehicleFitmentRecord> items) {
         List<FitmentWriterPayload> payloads = new ArrayList<>(items.size());
         for (VehicleFitmentRecord item : items) {
             payloads.add(new FitmentWriterPayload(

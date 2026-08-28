@@ -45,7 +45,8 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("customer/person-customers.csv", DomainType.CUSTOMER),
                 Arguments.of("customer/commercial-customers.csv", DomainType.COMMERCIAL_CUSTOMER),
                 Arguments.of("location/locations.csv", DomainType.LOCATION),
-                Arguments.of("people/employees.csv", DomainType.PERSON));
+                Arguments.of("people/employees.csv", DomainType.PERSON),
+                Arguments.of("vehicle/vehicles.csv", DomainType.VEHICLE));
     }
 
     @ParameterizedTest(name = "{0} -> {1}")
@@ -84,28 +85,22 @@ class AlphaFixtureHeadersMapTest {
     }
 
     /**
-     * The vehicles pack is the one loader-backed fixture whose file is rewritten before upload: the
-     * driver resolves each owner to an account id first, so the uploaded headers are the loader's,
-     * not the fixture's.
+     * A vehicles file may name its owner either way: by account id, or by the owner keys the loader
+     * resolves. Both shapes have to map, because the fixture uses the second and a customer file
+     * would typically use the first.
      */
     @org.junit.jupiter.api.Test
-    void vehicleUploadHeadersMapToTheVehicleRecord() {
-        List<String> uploadedHeaders = List.of(
-                "accountId",
-                "vin",
-                "unitNumber",
-                "description",
-                "make",
-                "model",
-                "year",
-                "trim",
-                "licensePlate",
-                "licensePlateJurisdiction");
+    void vehicleHeadersMapWhetherTheOwnerIsAnIdOrAName() {
+        List<String> byAccountId = List.of("accountId", "vin", "unitNumber", "description");
+        List<String> byOwnerName = List.of("ownerType", "ownerName", "vin", "unitNumber", "description");
 
-        Map<String, String> mappings = detection.suggestMappings(uploadedHeaders, DomainType.VEHICLE);
-
-        assertThat(mappings).hasSameSizeAs(uploadedHeaders);
-        assertThat(mappings).containsEntry("accountId", "accountId").containsEntry("vin", "vin");
+        assertThat(detection.suggestMappings(byAccountId, DomainType.VEHICLE))
+                .hasSameSizeAs(byAccountId)
+                .containsEntry("accountId", "accountId");
+        assertThat(detection.suggestMappings(byOwnerName, DomainType.VEHICLE))
+                .hasSameSizeAs(byOwnerName)
+                .containsEntry("ownerType", "ownerType")
+                .containsEntry("ownerName", "ownerName");
     }
 
     /**

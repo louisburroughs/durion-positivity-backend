@@ -2,29 +2,22 @@ package com.positivity.bulkloader.internal.config;
 
 import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.bulkingest.BulkIngestResponse;
+import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.service.BulkIngestResultRecorder;
-import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
-import com.positivity.security.common.GatewaySecurityConstants;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.batch.infrastructure.item.ItemWriter;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Builds the {@link ItemWriter} that posts a domain's chunks to its owning service's
@@ -41,12 +34,11 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Slf4j
 public class BulkIngestWriterFactory {
 
-    private static final String BEARER_PREFIX = "Bearer ";
     private static final String HEADER_AUTHORITIES = "X-Authorities";
     private static final String HEADER_USER = "X-User";
     private static final String BULK_LOADER_SERVICE_USER = "bulk-loader-service";
 
-    private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
+    private final AuthorizationHeaderRelay headerRelay;
     private final BulkIngestResultRecorder bulkIngestResultRecorder;
 
     /**
@@ -73,7 +65,7 @@ public class BulkIngestWriterFactory {
 
     /** A writer that posts each record as-is. */
     @NonNull
-    public <I> ItemWriter<I> create(
+    public <I> ItemWriter<NumberedRecord<I>> create(
             RestClient.Builder restClientBuilder, @NonNull Target target, @NonNull JobParams params) {
         return create(restClientBuilder, target, params, items -> items);
     }
@@ -83,7 +75,7 @@ public class BulkIngestWriterFactory {
      * typed values (a UUID, an int) that the loader record carries as text.
      */
     @NonNull
-    public <I, P> ItemWriter<I> create(
+    public <I, P> ItemWriter<NumberedRecord<I>> create(
             RestClient.Builder restClientBuilder,
             @NonNull Target target,
             @NonNull JobParams params,
@@ -91,9 +83,6 @@ public class BulkIngestWriterFactory {
 
         RestClient client =
                 restClientBuilder.baseUrl("http://" + target.serviceId()).build();
-        // Per step instance, so an audit row's number reads against the uploaded file rather than
-        // restarting at zero for every chunk.
-        AtomicLong rowCursor = new AtomicLong();
 
         return chunk -> {
             JobContext context = resolveJobContext(target.writerName(), params, chunk.size());
@@ -101,10 +90,16 @@ public class BulkIngestWriterFactory {
                 return;
             }
             String operatorId = sanitizeHeaderValue(params.operatorId(), BULK_LOADER_SERVICE_USER);
-            // Copied out of the chunk so the mapper — and the audit trail built from its result —
-            // work on a list that outlives Spring Batch's wildcard-typed view of it.
-            List<I> items = new ArrayList<>(chunk.getItems());
-            postChunk(client, target, context, operatorId, payloadMapper.apply(items), rowCursor);
+
+            // Row numbers come from the processor, which saw every row including the ones it
+            // dropped; the writer only ever sees the survivors, so it cannot count them itself.
+            List<Long> rowNumbers = new ArrayList<>(chunk.size());
+            List<I> items = new ArrayList<>(chunk.size());
+            for (NumberedRecord<I> numbered : chunk.getItems()) {
+                rowNumbers.add(numbered.rowNumber());
+                items.add(numbered.record());
+            }
+            postChunk(client, target, context, operatorId, rowNumbers, payloadMapper.apply(items));
         };
     }
 
@@ -113,8 +108,8 @@ public class BulkIngestWriterFactory {
             Target target,
             JobContext context,
             String operatorId,
-            List<P> payloads,
-            AtomicLong rowCursor) {
+            List<Long> rowNumbers,
+            List<P> payloads) {
 
         BulkIngestRequest<P> request = new BulkIngestRequest<>();
         request.setJobId(context.jobId());
@@ -122,15 +117,13 @@ public class BulkIngestWriterFactory {
         request.setOperatorId(operatorId);
         request.setRecords(payloads);
 
-        long rowOffset = rowCursor.getAndAdd(payloads.size());
-
         BulkIngestResponse response;
         try {
             RestClient.RequestBodySpec requestSpec = client.post()
                     .uri(target.uri())
                     .header(HEADER_AUTHORITIES, target.downstreamAuthority())
                     .header(HEADER_USER, operatorId);
-            applyRelayHeaders(requestSpec);
+            headerRelay.apply(requestSpec);
             response = requestSpec
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
@@ -148,7 +141,7 @@ public class BulkIngestWriterFactory {
 
         // A null response is recorded, not ignored: the rows were sent, and an operator needs to
         // see that nothing came back rather than read the silence as success.
-        bulkIngestResultRecorder.record(context.jobId(), target.domainType(), rowOffset, payloads, response);
+        bulkIngestResultRecorder.record(context.jobId(), target.domainType(), rowNumbers, payloads, response);
     }
 
     private record JobContext(UUID jobId, UUID locationId) {}
@@ -185,48 +178,5 @@ public class BulkIngestWriterFactory {
         }
         String sanitizedValue = value.replaceAll("[\r\n\t]", "").trim();
         return sanitizedValue.isBlank() ? fallback : sanitizedValue;
-    }
-
-    private void applyRelayHeaders(RestClient.RequestBodySpec requestSpec) {
-        String authorizationHeader = resolveAuthorizationHeader();
-        if (!StringUtils.hasText(authorizationHeader)) {
-            return;
-        }
-        requestSpec.header(HttpHeaders.AUTHORIZATION, authorizationHeader);
-        requestSpec.header(GatewaySecurityConstants.HEADER_TOKEN, extractTokenValue(authorizationHeader));
-    }
-
-    /**
-     * The caller's bearer token: from the launch-time context first (the batch thread has no
-     * request bound to it), then from the current request, then from the gateway token header.
-     */
-    @Nullable
-    private String resolveAuthorizationHeader() {
-        String launchAuthorizationHeader = bulkLoadAuthorizationContext.getAuthorizationHeader();
-        if (StringUtils.hasText(launchAuthorizationHeader) && launchAuthorizationHeader.startsWith(BEARER_PREFIX)) {
-            return launchAuthorizationHeader;
-        }
-
-        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
-            return null;
-        }
-
-        HttpServletRequest request = requestAttributes.getRequest();
-        String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith(BEARER_PREFIX)) {
-            return authorizationHeader;
-        }
-
-        String gatewayTokenHeader = request.getHeader(GatewaySecurityConstants.HEADER_TOKEN);
-        if (!StringUtils.hasText(gatewayTokenHeader)) {
-            return null;
-        }
-        return gatewayTokenHeader.startsWith(BEARER_PREFIX) ? gatewayTokenHeader : BEARER_PREFIX + gatewayTokenHeader;
-    }
-
-    private String extractTokenValue(String authorizationHeader) {
-        return authorizationHeader.startsWith(BEARER_PREFIX)
-                ? authorizationHeader.substring(BEARER_PREFIX.length())
-                : authorizationHeader;
     }
 }

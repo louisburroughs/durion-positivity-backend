@@ -57,8 +57,9 @@ public class BulkIngestResultRecorder {
      *
      * @param jobId the bulk-load job the chunk belongs to
      * @param domainType recorded as the audit row's entity type
-     * @param rowOffset the file-absolute index of the chunk's first record, so row numbers read
-     *     against the uploaded file rather than restarting at zero every chunk
+     * @param rowNumbers the file line each submitted record came from, positionally aligned with
+     *     {@code submitted}. Passed in rather than counted here because rows the processor dropped
+     *     never reach the writer, so counting would name the wrong line after the first skip.
      * @param submitted the records posted, in the order they were posted
      * @param response the owning service's reply, or null when it returned no usable body
      */
@@ -66,19 +67,50 @@ public class BulkIngestResultRecorder {
     public void record(
             @NonNull UUID jobId,
             @NonNull DomainType domainType,
-            long rowOffset,
+            @NonNull List<Long> rowNumbers,
             @NonNull List<?> submitted,
             @Nullable BulkIngestResponse response) {
+
+        if (rowNumbers.size() != submitted.size()) {
+            throw new IllegalArgumentException("rowNumbers and submitted records must be the same length: %d vs %d"
+                    .formatted(rowNumbers.size(), submitted.size()));
+        }
 
         Map<Integer, BulkIngestResult> byRowIndex = indexResults(response);
         List<BulkLoadRecordAudit> audits = new ArrayList<>(submitted.size());
 
         for (int i = 0; i < submitted.size(); i++) {
             BulkIngestResult result = byRowIndex.get(i);
-            audits.add(toAudit(jobId, domainType, rowOffset + i, submitted.get(i), result, response != null));
+            audits.add(toAudit(jobId, domainType, rowNumbers.get(i), submitted.get(i), result, response != null));
         }
 
         auditRepository.saveAll(audits);
+    }
+
+    /**
+     * Records a row the loader itself rejected, before anything was sent.
+     *
+     * <p>A row dropped by validation or by an unresolvable business key is as much a failure as one
+     * the owning service refused, and needs the same reviewable record — otherwise the only trace
+     * is a line in the service log.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordRejected(
+            @NonNull UUID jobId,
+            @NonNull DomainType domainType,
+            long rowNumber,
+            @NonNull Object rejectedRecord,
+            @NonNull String errorCode,
+            @NonNull String errorMessage) {
+
+        BulkLoadRecordAudit audit = new BulkLoadRecordAudit();
+        audit.setJobId(jobId);
+        audit.setEntityType(domainType.name());
+        audit.setRowNumber(rowNumber);
+        audit.setReviewStatus(ReviewStatus.PENDING);
+        audit.setOriginalValues(serialize(rejectedRecord));
+        audit.setReasonCodes(serializeReason(errorCode, errorMessage));
+        auditRepository.save(audit);
     }
 
     private Map<Integer, BulkIngestResult> indexResults(@Nullable BulkIngestResponse response) {
