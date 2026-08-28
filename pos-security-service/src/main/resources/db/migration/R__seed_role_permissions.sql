@@ -29,6 +29,16 @@
 --   configuration, tool management, document ingest) and no accounting, catalog,
 --   workorder, inventory or shop authority. ADMIN remains the all-domain role
 --   and is a strict superset.
+--   This block is additive, so it could not undo a grant made outside it, and
+--   something outside it did: #1512 found SYSTEM_ADMINISTRATOR holding 398
+--   permissions on alpha -- every row then in the permissions table -- against
+--   the 40 granted here. The decision stands unchanged, and
+--   V31__revoke_system_administrator_out_of_band_grants.sql enforces it by
+--   deleting the role's grants that this block does not make. V31 carries a copy
+--   of the SYSTEM_ADMINISTRATOR rows below, because SQL cannot read a repeatable
+--   migration in another file; RolePermissionBaselineTest fails the build if the
+--   two copies ever disagree. Editing this role's grants therefore means editing
+--   V31 too.
 -- * The retired switch also expanded ACCOUNTANT, AP_CLERK, CONTROLLER, CSR,
 --   FLEET_MANAGER and GL_ANALYST. Those are NOT reproduced here except
 --   CONTROLLER (see the 2026-08 rescope bullet below): no migration and no
