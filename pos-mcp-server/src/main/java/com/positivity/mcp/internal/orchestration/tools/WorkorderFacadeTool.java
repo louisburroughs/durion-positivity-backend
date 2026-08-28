@@ -57,6 +57,6 @@ public class WorkorderFacadeTool {
                 .uri(workorderStatusUriTemplate, Map.of("workorderId", workorderId))
                 .retrieve()
                 .body(String.class);
-        return FacadeJsonSupport.workorderStatusProjection(body);
+        return body == null ? null : FacadeJsonSupport.workorderStatusProjection(body);
     }
 }

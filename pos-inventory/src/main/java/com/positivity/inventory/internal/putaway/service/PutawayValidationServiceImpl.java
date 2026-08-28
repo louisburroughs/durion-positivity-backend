@@ -20,6 +20,8 @@ import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,7 +85,8 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
      * reason text is new, and it now names the class/capability mismatch.
      */
     @Override
-    public ValidationResult validateLocationCompatibility(UUID destinationLocationId, String skuId) {
+    public @NonNull ValidationResult validateLocationCompatibility(
+            @NonNull UUID destinationLocationId, @NonNull String skuId) {
         if (log.isDebugEnabled()) {
             log.debug(
                     "Validating location compatibility: location(mask)={}, sku(mask)={}",
@@ -111,7 +114,8 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         // closed: an item whose catalog class demands containment is refused by a destination that
         // does not declare it, and an unknown destination declares nothing. Existence is enforced
         // at execution by validateLocationCapacity.
-        StorageLocationValidation destination = getStorageLocationValidation(destinationLocationId);
+        StorageLocationValidation destination =
+                storageLocationValidationService.getStorageLocationValidation(destinationLocationId.toString());
 
         StorageCompatibilityEvaluator.Verdict verdict = storageCompatibilityEvaluator.evaluate(destination, skuId);
         if (!verdict.accepted()) {
@@ -121,14 +125,14 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         return ValidationResult.success();
     }
 
-    private StorageLocationValidation getStorageLocationValidation(UUID destinationLocationId) {
+    private @Nullable StorageLocationValidation getStorageLocationValidation(@NonNull UUID destinationLocationId) {
         if (storageLocationValidationService == null) {
             return null;
         }
         return storageLocationValidationService.getStorageLocationValidation(destinationLocationId.toString());
     }
 
-    private void validateStorageLocation(StorageLocationValidation locationValidation) {
+    private void validateStorageLocation(@Nullable StorageLocationValidation locationValidation) {
         if (locationValidation == null) {
             return;
         }
@@ -157,7 +161,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
      * strongest possible refusal into unlimited acceptance, so only a null passes through as
      * uncapped and a zero flows on to the at-capacity check below.
      */
-    private Integer declaredCapacity(StorageLocationValidation locationValidation) {
+    private @Nullable Integer declaredCapacity(@Nullable StorageLocationValidation locationValidation) {
         if (locationValidation == null) {
             return null;
         }
@@ -165,7 +169,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateLocationCapacity(UUID destinationLocationId, int quantity) {
+    public @NonNull ValidationResult validateLocationCapacity(@NonNull UUID destinationLocationId, int quantity) {
         if (log.isDebugEnabled()) {
             log.debug(
                     "Validating location capacity: location(mask)={}, quantity={}",
@@ -246,7 +250,8 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validateSourceOnHand(UUID sourceLocationId, String skuId, int quantity) {
+    public @NonNull ValidationResult validateSourceOnHand(
+            @NonNull UUID sourceLocationId, @NonNull String skuId, int quantity) {
         log.debug("Validating source on-hand: location={}, sku={}, quantity={}", sourceLocationId, skuId, quantity);
 
         ValidationResult result = ValidationResult.success();
@@ -273,7 +278,7 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
     }
 
     @Override
-    public ValidationResult validatePutawayExecution(PutawayExecutionRequest request) {
+    public @NonNull ValidationResult validatePutawayExecution(@NonNull PutawayExecutionRequest request) {
 
         if (log.isInfoEnabled()) {
             log.info(

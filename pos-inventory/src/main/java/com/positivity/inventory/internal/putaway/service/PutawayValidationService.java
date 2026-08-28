@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Service for validating putaway operations according to business rules.
@@ -44,7 +45,8 @@ public interface PutawayValidationService {
      * @throws LocationNotValidForSkuException if location is invalid and no
      *                                         override
      */
-    ValidationResult validateLocationCompatibility(UUID destinationLocationId, String skuId);
+    @NonNull
+    ValidationResult validateLocationCompatibility(@NonNull UUID destinationLocationId, @NonNull String skuId);
 
     /**
      * Validates that the destination location has sufficient capacity.
@@ -64,7 +66,8 @@ public interface PutawayValidationService {
      * @return validation result
      * @throws LocationAtCapacityException if location is full and no override
      */
-    ValidationResult validateLocationCapacity(UUID destinationLocationId, int quantity);
+    @NonNull
+    ValidationResult validateLocationCapacity(@NonNull UUID destinationLocationId, int quantity);
 
     /**
      * Validates that the source location has on-hand inventory for the SKU.
@@ -86,7 +89,8 @@ public interface PutawayValidationService {
      * @return validation result
      * @throws NoOnHandAtSourceLocationException if no on-hand inventory found
      */
-    ValidationResult validateSourceOnHand(UUID sourceLocationId, String skuId, int quantity);
+    @NonNull
+    ValidationResult validateSourceOnHand(@NonNull UUID sourceLocationId, @NonNull String skuId, int quantity);
 
     /**
      * Performs comprehensive validation for a putaway execution request.
@@ -94,5 +98,6 @@ public interface PutawayValidationService {
      * @param request the putaway execution request
      * @return comprehensive validation result
      */
-    ValidationResult validatePutawayExecution(PutawayExecutionRequest request);
+    @NonNull
+    ValidationResult validatePutawayExecution(@NonNull PutawayExecutionRequest request);
 }

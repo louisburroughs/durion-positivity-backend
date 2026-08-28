@@ -228,9 +228,13 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * and swallowed so one bad op never aborts the batch. Returns {@code true} on success.
      */
     private boolean persistOne(@NonNull DiscoveredOperation operation) {
+        String httpPath = operation.httpPath();
+        if (httpPath == null) {
+            return false;
+        }
         try {
             UUID toolId = toolMetadataRepository.upsertDiscoveredOperation(
-                    operation, OpenApiToolMapper.extractDomain(operation.httpPath()));
+                    operation, OpenApiToolMapper.extractDomain(httpPath));
             toolMetadataRepository.linkToolToWorkflow(toolId, DISCOVERED_WORKFLOW_STATE);
             for (String permissionCode : operation.requiredPermissions()) {
                 toolMetadataRepository.addToolPermission(toolId, permissionCode);

@@ -424,8 +424,8 @@ public class CatalogCommandListener {
         return Math.min(Math.max(requested, 1), MAX_REPLAY_LIMIT);
     }
 
-    private @Nullable UUID parseUuid(@Nullable JsonNode node, @NonNull String field) {
-        String value = node == null ? null : node.path(field).stringValue(null);
+    private @Nullable UUID parseUuid(@NonNull JsonNode node, @NonNull String field) {
+        String value = node.path(field).stringValue(null);
         if (value == null || value.isBlank()) {
             return null;
         }
@@ -437,8 +437,8 @@ public class CatalogCommandListener {
         }
     }
 
-    private @Nullable Instant parseInstant(@Nullable JsonNode payloadNode, @NonNull String field) {
-        String value = payloadNode == null ? null : payloadNode.path(field).stringValue(null);
+    private @Nullable Instant parseInstant(@NonNull JsonNode payloadNode, @NonNull String field) {
+        String value = payloadNode.path(field).stringValue(null);
         if (value == null || value.isBlank()) {
             return null;
         }

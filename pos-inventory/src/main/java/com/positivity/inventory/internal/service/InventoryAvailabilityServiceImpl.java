@@ -127,9 +127,6 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     @Override
     @Transactional(readOnly = true)
     public List<LocationAvailabilityDto> getAvailabilityByProductAsOf(@NonNull UUID productId, @NonNull Instant asOf) {
-        if (productId == null) {
-            throw new InvalidInventoryAvailabilityRequestException("Product ID is required");
-        }
         asOfQueryGuard.check(asOf);
 
         // Odoo-parity A3 (#1029): direct ledger aggregation with a timestamp bound; the

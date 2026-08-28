@@ -474,6 +474,6 @@ class SkuCategoryCutoverServiceImplTest {
                 .<Class<?>>map(java.lang.reflect.Field::getType)
                 .toList();
 
-        assertThat(fieldTypes).doesNotContain(SkuCategoryProvider.class);
+        assertThat(fieldTypes).isNotEmpty().doesNotContain(SkuCategoryProvider.class);
     }
 }

@@ -113,10 +113,18 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
     }
 
     private String normalize(String header) {
-        return header.toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", "_")
-                .replaceAll("^_+", "")
-                .replaceAll("_+$", "");
+        String collapsed = header.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_");
+        // Trim leading/trailing underscores without regex: "_+$" backtracks quadratically on
+        // underscore runs (Sonar S8786).
+        int start = 0;
+        int end = collapsed.length();
+        while (start < end && collapsed.charAt(start) == '_') {
+            start++;
+        }
+        while (end > start && collapsed.charAt(end - 1) == '_') {
+            end--;
+        }
+        return collapsed.substring(start, end);
     }
 
     private String inferTargetField(String normalized, DomainType domain) {
