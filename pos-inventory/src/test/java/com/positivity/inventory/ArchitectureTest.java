@@ -155,6 +155,21 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("service package must expose contracts only; implementations belong in internal.service");
 
+    // ADR-0026 D4: the public service package is a grant surface. Grant-surface types may not
+    // depend on this module's internal implementation. pos-inventory holds no grant, so this
+    // package is empty; the rule (with allowEmptyShould) keeps it honest if a grant is ever added.
+    // Package patterns are exact-anchored on purpose: "com.positivity.inventory.service.." must
+    // NOT match "com.positivity.inventory.internal.service".
+    @ArchTest
+    static final ArchRule public_service_surface_should_not_depend_on_internal = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.inventory.service..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.positivity.inventory.internal..")
+            .allowEmptyShould(true)
+            .because("ADR-0026 D4: grant-surface types must not leak internal.* types to consuming modules");
+
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices().matching(
                     "com.positivity.inventory.internal.(*)..")

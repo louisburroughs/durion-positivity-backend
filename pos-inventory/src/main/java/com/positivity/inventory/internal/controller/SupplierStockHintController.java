@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.supplierhint.SupplierStockHintView;
 import com.positivity.inventory.internal.enums.SupplierHintIdentityKind;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.SupplierStockHintService;
+import com.positivity.inventory.internal.service.SupplierStockHintService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

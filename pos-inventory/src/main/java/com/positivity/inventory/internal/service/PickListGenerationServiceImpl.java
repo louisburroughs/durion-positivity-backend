@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.config.PickListGenerationService;
 import com.positivity.inventory.internal.dto.picklist.GeneratePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.entity.PickListEntity;
@@ -15,7 +16,6 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingDecision;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
-import com.positivity.inventory.service.PickListGenerationService;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;

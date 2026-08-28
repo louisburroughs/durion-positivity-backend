@@ -1,7 +1,6 @@
 package com.positivity.inventory.internal.config;
 
 import com.positivity.inventory.internal.dto.costing.SkuCategoryImpactResponse;
-import com.positivity.inventory.service.SkuCategoryCutoverService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

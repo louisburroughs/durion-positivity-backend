@@ -12,7 +12,7 @@ import com.positivity.inventory.internal.dto.putaway.PutawayExecutionResponse;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
-import com.positivity.inventory.service.PutawayExecuteService;
+import com.positivity.inventory.internal.putaway.service.PutawayExecuteService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

@@ -8,9 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.config.TestSecurityConfig;
+import com.positivity.inventory.internal.costing.service.ValuationService;
 import com.positivity.inventory.internal.dto.valuation.ValuationReportResponse;
 import com.positivity.inventory.internal.dto.valuation.ValuationRow;
-import com.positivity.inventory.service.ValuationService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

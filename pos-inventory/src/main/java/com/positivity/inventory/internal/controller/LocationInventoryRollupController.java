@@ -1,8 +1,8 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
+import com.positivity.inventory.internal.rollup.service.LocationInventoryRollupService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.LocationInventoryRollupService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

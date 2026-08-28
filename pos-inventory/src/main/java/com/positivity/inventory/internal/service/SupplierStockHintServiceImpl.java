@@ -8,7 +8,6 @@ import com.positivity.inventory.internal.enums.SupplierHintAvailability;
 import com.positivity.inventory.internal.enums.SupplierHintIdentityKind;
 import com.positivity.inventory.internal.repository.SupplierStockHintRepository;
 import com.positivity.inventory.internal.repository.SupplierStockSnapshotReceiptRepository;
-import com.positivity.inventory.service.SupplierStockHintService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

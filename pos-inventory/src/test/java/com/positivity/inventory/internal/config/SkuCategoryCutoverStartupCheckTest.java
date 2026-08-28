@@ -13,7 +13,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.inventory.internal.dto.costing.SkuCategoryImpactResponse;
 import com.positivity.inventory.internal.enums.CostingMethod;
-import com.positivity.inventory.service.SkuCategoryCutoverService;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

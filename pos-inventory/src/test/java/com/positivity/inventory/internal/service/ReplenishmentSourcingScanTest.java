@@ -16,11 +16,11 @@ import com.positivity.inventory.internal.enums.ReplenishmentSourceType;
 import com.positivity.inventory.internal.enums.ReplenishmentSourcingReason;
 import com.positivity.inventory.internal.enums.ReplenishmentStatus;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
+import com.positivity.inventory.internal.replenishment.service.ReplenishmentService;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
-import com.positivity.inventory.service.ReplenishmentService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -54,7 +54,7 @@ class ReplenishmentSourcingScanTest {
     private ReplenishmentTaskRepository taskRepository;
 
     @Autowired
-    private com.positivity.inventory.service.TransferOrderService transferOrderService;
+    private com.positivity.inventory.internal.movement.service.TransferOrderService transferOrderService;
 
     @Autowired
     private PurchaseSuggestionRepository suggestionRepository;

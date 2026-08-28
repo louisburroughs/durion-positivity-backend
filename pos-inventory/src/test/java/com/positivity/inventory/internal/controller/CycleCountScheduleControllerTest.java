@@ -13,8 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.config.TestSecurityConfig;
+import com.positivity.inventory.internal.cyclecount.service.CycleCountScheduleService;
 import com.positivity.inventory.internal.dto.cyclecount.schedule.CycleCountScheduleResponse;
-import com.positivity.inventory.service.CycleCountScheduleService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

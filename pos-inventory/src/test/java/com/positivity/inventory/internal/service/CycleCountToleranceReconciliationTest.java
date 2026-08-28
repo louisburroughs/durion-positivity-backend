@@ -2,6 +2,8 @@ package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.inventory.internal.cyclecount.service.CycleCountAdjustmentService;
+import com.positivity.inventory.internal.cyclecount.service.CycleCountService;
 import com.positivity.inventory.internal.dto.cyclecount.AdjustmentResponse;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
@@ -20,8 +22,6 @@ import com.positivity.inventory.internal.repository.CycleCountAdjustmentReposito
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.CycleCountToleranceRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.service.CycleCountAdjustmentService;
-import com.positivity.inventory.service.CycleCountService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.util.List;

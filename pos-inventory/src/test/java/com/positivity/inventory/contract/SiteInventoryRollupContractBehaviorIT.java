@@ -13,7 +13,7 @@ import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
-import com.positivity.inventory.service.SiteInventoryRollupService;
+import com.positivity.inventory.internal.rollup.service.SiteInventoryRollupService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

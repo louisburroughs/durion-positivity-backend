@@ -2,8 +2,8 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.backorder.BackorderResponse;
 import com.positivity.inventory.internal.enums.BackorderStatus;
+import com.positivity.inventory.internal.reservation.service.BackorderService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.BackorderService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

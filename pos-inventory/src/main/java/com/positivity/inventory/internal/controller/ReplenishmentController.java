@@ -8,8 +8,8 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResu
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import com.positivity.inventory.internal.dto.replenishment.SnoozeReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
+import com.positivity.inventory.internal.replenishment.service.ReplenishmentService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.ReplenishmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;

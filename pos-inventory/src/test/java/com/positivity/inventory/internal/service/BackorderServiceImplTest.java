@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.repository.BackorderRecordRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.internal.reservation.service.BackorderServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

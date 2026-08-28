@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.PurchaseSuggestionResponse;
-import com.positivity.inventory.service.PurchaseSuggestionService;
+import com.positivity.inventory.internal.replenishment.service.PurchaseSuggestionService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

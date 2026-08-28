@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.config.SkuCategoryCutoverService;
 import com.positivity.inventory.internal.dto.costing.SkuCategoryImpactResponse;
 import com.positivity.inventory.internal.dto.costing.SkuCategoryImpactRow;
 import com.positivity.inventory.internal.dto.costing.SourcingImpactRow;
@@ -14,7 +15,6 @@ import com.positivity.inventory.internal.repository.CostingMethodConfigRepositor
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import com.positivity.inventory.internal.repository.SourcingStrategyConfigRepository;
-import com.positivity.inventory.service.SkuCategoryCutoverService;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

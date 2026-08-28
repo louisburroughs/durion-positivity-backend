@@ -7,7 +7,7 @@ import com.positivity.inventory.internal.dto.lot.LotResponse;
 import com.positivity.inventory.internal.dto.lot.LotStatusUpdateRequest;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.InventoryLotService;
+import com.positivity.inventory.internal.tracking.service.InventoryLotService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

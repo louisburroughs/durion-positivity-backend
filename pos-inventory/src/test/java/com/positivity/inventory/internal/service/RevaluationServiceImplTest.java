@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
+import com.positivity.inventory.internal.costing.service.RevaluationServiceImpl;
 import com.positivity.inventory.internal.dto.revaluation.CreateRevaluationRequest;
 import com.positivity.inventory.internal.dto.revaluation.RejectRevaluationRequest;
 import com.positivity.inventory.internal.dto.revaluation.RevaluationResponse;
@@ -21,7 +22,6 @@ import com.positivity.inventory.internal.enums.RevaluationStatus;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.RevaluationRecordRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
-import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;

@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
-import com.positivity.inventory.service.ReceivingService;
+import com.positivity.inventory.internal.receiving.service.ReceivingService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

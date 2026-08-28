@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.sourcing.SourcingStrategyConfigRequest;
 import com.positivity.inventory.internal.dto.sourcing.SourcingStrategyConfigResponse;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.SourcingStrategyConfigService;
+import com.positivity.inventory.internal.service.SourcingStrategyConfigService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

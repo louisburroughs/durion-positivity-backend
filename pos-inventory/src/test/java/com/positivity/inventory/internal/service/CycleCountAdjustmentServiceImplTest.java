@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.inventory.internal.cyclecount.service.CycleCountAdjustmentServiceImpl;
 import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
@@ -17,7 +18,6 @@ import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;

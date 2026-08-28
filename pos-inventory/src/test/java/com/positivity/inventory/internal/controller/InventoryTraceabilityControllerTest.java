@@ -12,7 +12,7 @@ import com.positivity.inventory.internal.dto.traceability.TraceabilityUpstream;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.service.InventoryTraceabilityService;
+import com.positivity.inventory.internal.tracking.service.InventoryTraceabilityService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

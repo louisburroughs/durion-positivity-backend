@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
-import com.positivity.inventory.service.ReceivingService;
+import com.positivity.inventory.internal.receiving.service.ReceivingService;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

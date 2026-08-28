@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
+import com.positivity.inventory.internal.config.ConsumptionService;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
@@ -23,7 +24,6 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingDecision;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
-import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;

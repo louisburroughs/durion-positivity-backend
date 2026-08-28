@@ -1,7 +1,6 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
-import com.positivity.inventory.service.InventoryLeadTimeService;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;

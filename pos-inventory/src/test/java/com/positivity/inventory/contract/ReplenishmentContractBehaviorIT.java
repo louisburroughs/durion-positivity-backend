@@ -15,7 +15,7 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResu
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
-import com.positivity.inventory.service.ReplenishmentService;
+import com.positivity.inventory.internal.replenishment.service.ReplenishmentService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

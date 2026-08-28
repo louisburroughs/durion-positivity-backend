@@ -23,7 +23,7 @@ import com.positivity.inventory.internal.enums.AsnStatus;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
-import com.positivity.inventory.service.AsnService;
+import com.positivity.inventory.internal.receiving.service.AsnService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

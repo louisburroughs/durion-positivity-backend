@@ -13,7 +13,7 @@ import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.sourcing.SourcingStrategyConfigResponse;
 import com.positivity.inventory.internal.enums.SourcingScopeType;
 import com.positivity.inventory.internal.enums.SourcingStrategy;
-import com.positivity.inventory.service.SourcingStrategyConfigService;
+import com.positivity.inventory.internal.service.SourcingStrategyConfigService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

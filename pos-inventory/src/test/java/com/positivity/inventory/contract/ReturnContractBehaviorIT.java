@@ -10,7 +10,7 @@ import com.positivity.inventory.internal.dto.returns.ReturnLineDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
-import com.positivity.inventory.service.ReturnService;
+import com.positivity.inventory.internal.receiving.service.ReturnService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
