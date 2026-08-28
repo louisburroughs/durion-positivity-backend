@@ -25,6 +25,10 @@ public final class EventTypes {
                 // PersonBulkIngestController (person CRUD moved to pos-people-contact, #874/#875)
                 EventTypeRegistration.write("PEOPLE_BULK_INGEST", "Bulk import employee records")
                         .build(),
+                EventTypeRegistration.write(
+                                "PEOPLE_STAFFING_ASSIGNMENT_BULK_INGEST",
+                                "Bulk import person-to-location staffing assignments")
+                        .build(),
 
                 // StaffingAssignmentController - 3 events
                 EventTypeRegistration.write(

@@ -316,6 +316,10 @@ public final class EventTypes {
                                 "INVENTORY_OPENING_STOCK_BULK_INGEST",
                                 "Bulk establish opening on-hand stock (files and approves an adjustment per line)")
                         .build(),
+                EventTypeRegistration.write("INVENTORY_PUTAWAY_RULE_BULK_INGEST", "Bulk import putaway routing rules")
+                        .build(),
+                EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_PLAN_BULK_INGEST", "Bulk import cycle count plans")
+                        .build(),
 
                 // SupplierStockHintController - 2 events (CAP-322, #1312)
                 EventTypeRegistration.fastRead(

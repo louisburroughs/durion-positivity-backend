@@ -41,6 +41,10 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("inventory:adjustment:create"),
             new SimpleGrantedAuthority("inventory:adjustment:approve"),
             new SimpleGrantedAuthority("inventory:adjustment:view"),
+            new SimpleGrantedAuthority("inventory:putaway_rule:manage"),
+            new SimpleGrantedAuthority("inventory:putaway_rule:view"),
+            new SimpleGrantedAuthority("inventory:cycle_count:initiate"),
+            new SimpleGrantedAuthority("inventory:cycle_count:view"),
             new SimpleGrantedAuthority("inventory:stock_movement:create"),
             new SimpleGrantedAuthority("inventory:bulk_ingest:execute"));
 
