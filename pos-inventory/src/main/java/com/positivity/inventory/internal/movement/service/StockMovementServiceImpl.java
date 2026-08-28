@@ -164,7 +164,7 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     @Override
     @Transactional
-    public @NonNull InventoryLedgerEntry approveAdjustmentRequest(
+    public @NonNull InventoryLedgerEntryResponse approveAdjustmentRequest(
             @NonNull UUID adjustmentRequestId, @NonNull String approverUserId) {
         InventoryAdjustmentRequest adjustmentRequest = adjustmentRepository
                 .findById(adjustmentRequestId)
@@ -200,7 +200,7 @@ public class StockMovementServiceImpl implements StockMovementService {
         adjustmentRequest.setApprovedAt(Instant.now(clock));
         adjustmentRepository.save(adjustmentRequest);
 
-        return ledgerPostingService.post(entry);
+        return toResponse(ledgerPostingService.post(entry));
     }
 
     /**

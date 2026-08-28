@@ -3,7 +3,7 @@ package com.positivity.price.internal.service;
 import com.positivity.price.internal.dto.ApplyPromotionRequest;
 import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
-import com.positivity.price.internal.entity.PromotionOffer;
+import com.positivity.price.internal.dto.PromotionOfferResponse;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -12,23 +12,23 @@ public interface PromotionOfferService {
 
     /** Create a new promotion offer in DRAFT status. Issue: #97 */
     @NonNull
-    PromotionOffer createOffer(@NonNull CreatePromotionOfferRequest request);
+    PromotionOfferResponse createOffer(@NonNull CreatePromotionOfferRequest request);
 
     /** Get offer by UUID. Issue: #97 */
     @NonNull
-    PromotionOffer getOfferById(@NonNull UUID promotionOfferId);
+    PromotionOfferResponse getOfferById(@NonNull UUID promotionOfferId);
 
     /** Get offer by promo code. Issue: #97 */
     @NonNull
-    PromotionOffer getOfferByCode(@NonNull String promoCode);
+    PromotionOfferResponse getOfferByCode(@NonNull String promoCode);
 
     /** Transition offer from DRAFT or INACTIVE to ACTIVE. Issue: #97 */
     @NonNull
-    PromotionOffer activateOffer(@NonNull UUID promotionOfferId);
+    PromotionOfferResponse activateOffer(@NonNull UUID promotionOfferId);
 
     /** Transition offer to INACTIVE. Issue: #97 */
     @NonNull
-    PromotionOffer deactivateOffer(@NonNull UUID promotionOfferId);
+    PromotionOfferResponse deactivateOffer(@NonNull UUID promotionOfferId);
 
     /** Apply a promotion code during estimate pricing. Issue: #95 */
     @NonNull

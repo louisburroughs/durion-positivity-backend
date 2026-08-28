@@ -4,7 +4,6 @@ import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.ApplyPromotionRequest;
 import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
-import com.positivity.price.internal.dto.PromotionOfferMapper;
 import com.positivity.price.internal.dto.PromotionOfferResponse;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.internal.service.PromotionOfferService;
@@ -96,8 +95,7 @@ public class PromotionOfferController {
                     @Valid
                     @RequestBody
                     CreatePromotionOfferRequest request) {
-        var offer = promotionOfferService.createOffer(request);
-        var response = PromotionOfferMapper.toResponse(offer);
+        var response = promotionOfferService.createOffer(request);
         URI location = URI.create("/v1/promotions/offers/" + response.getPromotionOfferId());
         return ResponseEntity.created(location).body(response);
     }
@@ -121,8 +119,7 @@ public class PromotionOfferController {
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<PromotionOfferResponse> getOfferById(@PathVariable("id") UUID promotionOfferId) {
-        var offer = promotionOfferService.getOfferById(promotionOfferId);
-        return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
+        return ResponseEntity.ok(promotionOfferService.getOfferById(promotionOfferId));
     }
 
     @GetMapping("/by-code/{promoCode}")
@@ -144,8 +141,7 @@ public class PromotionOfferController {
     @ApiResponse(responseCode = "404", description = "Promotion offer not found.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<PromotionOfferResponse> getOfferByCode(@PathVariable("promoCode") String promoCode) {
-        var offer = promotionOfferService.getOfferByCode(promoCode);
-        return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
+        return ResponseEntity.ok(promotionOfferService.getOfferByCode(promoCode));
     }
 
     @PatchMapping("/{id}/activate")
@@ -171,8 +167,7 @@ public class PromotionOfferController {
     @ApiResponse(responseCode = "422", description = "Promotion offer cannot be activated in current state.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<PromotionOfferResponse> activateOffer(@PathVariable("id") UUID promotionOfferId) {
-        var offer = promotionOfferService.activateOffer(promotionOfferId);
-        return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
+        return ResponseEntity.ok(promotionOfferService.activateOffer(promotionOfferId));
     }
 
     @PatchMapping("/{id}/deactivate")
@@ -198,8 +193,7 @@ public class PromotionOfferController {
     @ApiResponse(responseCode = "422", description = "Promotion offer is not currently ACTIVE.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<PromotionOfferResponse> deactivateOffer(@PathVariable("id") UUID promotionOfferId) {
-        var offer = promotionOfferService.deactivateOffer(promotionOfferId);
-        return ResponseEntity.ok(PromotionOfferMapper.toResponse(offer));
+        return ResponseEntity.ok(promotionOfferService.deactivateOffer(promotionOfferId));
     }
 
     @PostMapping("/apply")

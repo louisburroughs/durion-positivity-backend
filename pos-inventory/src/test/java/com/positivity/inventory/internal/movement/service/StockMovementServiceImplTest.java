@@ -296,7 +296,8 @@ class StockMovementServiceImplTest {
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
                 .thenReturn(new BigDecimal("15"));
 
-        InventoryLedgerEntry result = service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+        InventoryLedgerEntryResponse result =
+                service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_IN);
         assertThat(result.getChangeInQuantity()).isEqualByComparingTo("4");
@@ -313,7 +314,8 @@ class StockMovementServiceImplTest {
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
                 .thenReturn(new BigDecimal("10"));
 
-        InventoryLedgerEntry result = service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+        InventoryLedgerEntryResponse result =
+                service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_OUT);
         assertThat(result.getChangeInQuantity()).isEqualByComparingTo("-3");
