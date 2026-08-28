@@ -3,7 +3,7 @@ package com.positivity.catalog.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
-import com.positivity.catalog.internal.entity.ProductLifecycleState;
+import com.positivity.catalog.internal.enums.ProductLifecycleState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;

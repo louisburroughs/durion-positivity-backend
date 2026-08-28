@@ -5,7 +5,7 @@ import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ProductSearchResultDto;
 import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
-import com.positivity.catalog.internal.entity.ProductStatus;
+import com.positivity.catalog.internal.enums.ProductStatus;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Pageable;

@@ -16,7 +16,6 @@ import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
-import com.positivity.customer.internal.entity.CommercialParty;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -65,8 +64,6 @@ public interface PartyService {
             UUID partyId, UpsertCommunicationPreferencesRequest request);
 
     CreateVehicleForPartyResponse createVehicleForParty(UUID partyId, CreateVehicleForPartyRequest request);
-
-    CommercialParty findPartyById(UUID partyId);
 
     com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(UUID partyId);
 

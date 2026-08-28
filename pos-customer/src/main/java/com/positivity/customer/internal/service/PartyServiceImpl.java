@@ -747,9 +747,8 @@ public class PartyServiceImpl implements PartyService {
         return Sort.by(orders);
     }
 
-    @Override
     @Transactional(readOnly = true)
-    public CommercialParty findPartyById(UUID partyId) {
+    CommercialParty findPartyById(UUID partyId) {
         return findPartyByIdInternal(partyId);
     }
 

@@ -4,9 +4,9 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.catalog.internal.entity.ProductCodeType;
-import com.positivity.catalog.internal.entity.ProductLifecycleState;
-import com.positivity.catalog.internal.entity.ProductStatus;
 import com.positivity.catalog.internal.entity.ProductTrackingLevel;
+import com.positivity.catalog.internal.enums.ProductLifecycleState;
+import com.positivity.catalog.internal.enums.ProductStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;

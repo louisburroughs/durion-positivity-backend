@@ -1,6 +1,6 @@
 package com.positivity.catalog.internal.dto;
 
-import com.positivity.catalog.internal.entity.ProductLifecycleState;
+import com.positivity.catalog.internal.enums.ProductLifecycleState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;

@@ -3,7 +3,7 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
-import com.positivity.catalog.internal.entity.ProductLifecycleState;
+import com.positivity.catalog.internal.enums.ProductLifecycleState;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
