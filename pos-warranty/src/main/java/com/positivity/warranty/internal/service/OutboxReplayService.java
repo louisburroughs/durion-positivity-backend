@@ -1,4 +1,4 @@
-package com.positivity.warranty.service;
+package com.positivity.warranty.internal.service;
 
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
