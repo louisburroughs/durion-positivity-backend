@@ -128,7 +128,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
                 "name", "PricingAnalyst",
                 "description", "Pricing analyst role"));
 
-        String roleResponse = mockMvc.perform(withSystemAdminAuth(post("/v1/users/roles")
+        String roleResponse = mockMvc.perform(withSystemAdminAuth(post("/v1/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(rolePayload)))
                 .andExpect(status().isCreated())
@@ -140,7 +140,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> createdRole = objectMapper.readValue(roleResponse, Map.class);
         String roleId = String.valueOf(createdRole.get("id"));
 
-        mockMvc.perform(withSystemAdminAuth(put("/v1/users/roles/{roleId}/permissions/grant", roleId)
+        mockMvc.perform(withSystemAdminAuth(put("/v1/roles/{roleId}/permissions/grant", roleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("permission", "pricing:msrp:edit")))))
                 .andExpect(status().isOk());
@@ -175,7 +175,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
                 "name", "PricingApprover",
                 "description", "Pricing approver role"));
 
-        String roleResponse = mockMvc.perform(withSystemAdminAuth(post("/v1/users/roles")
+        String roleResponse = mockMvc.perform(withSystemAdminAuth(post("/v1/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(rolePayload)))
                 .andExpect(status().isCreated())
@@ -187,7 +187,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> createdRole = objectMapper.readValue(roleResponse, Map.class);
         String roleId = String.valueOf(createdRole.get("id"));
 
-        mockMvc.perform(withSystemAdminAuth(put("/v1/users/roles/{roleId}/permissions/grant", roleId)
+        mockMvc.perform(withSystemAdminAuth(put("/v1/roles/{roleId}/permissions/grant", roleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("permission", "pricing:msrp:edit")))))
                 .andExpect(status().isOk());

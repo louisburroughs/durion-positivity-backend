@@ -1237,30 +1237,6 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1{id}
   /v1/users/principals/{principalId}/roles/{roleId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1principals~1{principalId}~1roles~1{roleId}
-  /v1/users/roles:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles
-  /v1/users/roles/assignments:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1assignments
-  /v1/users/roles/assignments/user/{userId}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1assignments~1user~1{userId}
-  /v1/users/roles/assignments/{assignmentId}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1assignments~1{assignmentId}
-  /v1/users/roles/by-name/{name}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1by-name~1{name}
-  /v1/users/roles/check-permission:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1check-permission
-  /v1/users/roles/permissions:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1permissions
-  /v1/users/roles/permissions/user/{userId}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1permissions~1user~1{userId}
-  /v1/users/roles/{id}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{id}
-  /v1/users/roles/{roleId}/permissions/grant:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{roleId}~1permissions~1grant
-  /v1/users/roles/{roleId}/permissions/{permissionKey}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{roleId}~1permissions~1{permissionKey}
-  /v1/users/roles/{role}/default-permissions:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{role}~1default-permissions
   /v1/users/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}
   /v1/users/{id}/account-state:

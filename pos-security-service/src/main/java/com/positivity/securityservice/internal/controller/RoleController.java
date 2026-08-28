@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.*;
  * user role assignments.
  */
 @RestController
-@RequestMapping({"/v1/roles", "/v1/users/roles"})
+@RequestMapping("/v1/roles")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Role Management", description = "Manage roles, permissions, and user assignments")
