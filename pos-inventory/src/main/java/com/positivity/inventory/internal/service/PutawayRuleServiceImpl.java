@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.enums.PutawayDestinationStrategy;
 import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.service.PutawayRuleService;
 import java.util.Comparator;
@@ -37,6 +38,7 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
             .thenComparingInt(rule -> rule.getPriority() == null ? Integer.MAX_VALUE : rule.getPriority());
 
     private final PutawayRuleRepository putawayRuleRepository;
+    private final ExtStorageLocationReplicaRepository extStorageLocationReplicaRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -58,6 +60,7 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
     public @NonNull PutawayRuleResponse createRule(@NonNull PutawayRuleRequest request) {
         boolean enabled = request.getIsEnabled() == null || request.getIsEnabled();
         enforceSingleEnabledAnyRule(request.getMatchType(), enabled, null);
+        requireResolvableDestination(request.getDestinationLocationId(), enabled);
 
         PutawayRule rule = PutawayRule.builder()
                 .priority(request.getPriority())
@@ -88,6 +91,7 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
         // somebody just wrote.
         boolean enabled = request.getIsEnabled() == null ? rule.isEnabled() : request.getIsEnabled();
         enforceSingleEnabledAnyRule(request.getMatchType(), enabled, parsedRuleId);
+        requireResolvableDestination(request.getDestinationLocationId(), enabled);
 
         rule.setPriority(request.getPriority());
         rule.setMatchType(request.getMatchType());
@@ -168,6 +172,41 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
                 .ifPresent(existing -> {
                     throw new DuplicateEnabledAnyPutawayRuleException(existing.getRuleId());
                 });
+    }
+
+    /**
+     * An enabled rule must target a storage location the {@code ext_storage_location} replica knows
+     * (issue #1543).
+     *
+     * <p>Rules are the only putaway artifact authored ahead of use, and a destination typo surfaces
+     * nowhere until execution: generation stamps the id onto tasks unchecked (deliberately — see the
+     * upgrade-window note in {@code PutawayValidationServiceImpl#validatePutaway}), claiming
+     * succeeds, and the first refusal is an operator with stock in hand. Alpha ran that way for
+     * months with the terminal {@code ANY} rule aimed at a bin that never existed. Refusing here
+     * moves the failure to the person editing the rule, who is the one who can fix it.
+     *
+     * <p>Two states pass without a lookup verdict. A <em>disabled</em> rule may say anything — it is
+     * unreachable, and refusing it would block the documented retire-by-disabling path when a rule's
+     * bin has since been decommissioned. And when the replica is <em>completely empty</em> the check
+     * stands down: on a freshly provisioned environment pos-location's facts may not have arrived
+     * yet, and refusing every rule until they do would turn a hydration lag into a configuration
+     * outage. That window is advisory-covered by {@code PutawayRuleDestinationStartupCheck}. A
+     * partially hydrated replica does refuse an unseen bin — by then absence is the best available
+     * evidence the id is wrong, and the error names the replica so a race with a just-created
+     * location is recognisable for what it is.
+     */
+    private void requireResolvableDestination(@Nullable UUID destinationLocationId, boolean enabled) {
+        if (!enabled || destinationLocationId == null) {
+            return;
+        }
+        if (extStorageLocationReplicaRepository.existsById(destinationLocationId)) {
+            return;
+        }
+        if (extStorageLocationReplicaRepository.count() == 0) {
+            return;
+        }
+        throw new IllegalArgumentException("Destination storage location " + destinationLocationId
+                + " does not exist in the storage-location replica");
     }
 
     /**
