@@ -70,6 +70,7 @@ PACK_FILES = [
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER"),
     ("vehicle/vehicles.csv", "VEHICLE"),
     ("catalog/products.csv", "CATALOG_PRODUCT"),
+    ("price/base-prices.csv", "BASE_PRICE"),
     ("inventory/putaway-rules.csv", "PUTAWAY_RULE"),
     ("inventory/on-hand.csv", "INVENTORY_STOCK_COUNT"),
     ("inventory/cycle-count-plans.csv", "CYCLE_COUNT_PLAN"),

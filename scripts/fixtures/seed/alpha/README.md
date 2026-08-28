@@ -52,8 +52,8 @@ event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
 **location** (sites, storage topology, site defaults, bays, mobile units) → people →
-people-contact → **customer** → vehicle → catalog → price → inventory (putaway rules,
-then on-hand, then cycle count plans). Locations must be
+people-contact → **customer** → vehicle → catalog → price → catalog → price →
+inventory (putaway rules, then on-hand, then cycle count plans). Locations must be
 loaded (or already present)
 first in any case — bulk-load jobs themselves require a valid `locationId`.
 
@@ -236,6 +236,41 @@ product landed uncategorized.
   `product_msrp`), and `product_uom` (file 5) are **not converted** and their seed
   files stay. The products file itself stays until the alpha reseed is verified
   (§5.4).
+
+### `price/` — from `pos-catalog R__seed_reference_catalog_4_pricing.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `base-prices.csv` | 500 MSRPs, one per catalog product | `POST /v1/price/bulk-ingest` (`domainType: BASE_PRICE`) |
+
+Columns: `sku,msrp,currency,effectiveFrom`. The amounts are the seed's own `product_msrp`
+values, not invented ones, so alpha prices what the catalog actually sells at.
+
+**Keyed by SKU, not product id.** Product ids are generated when the catalog pack loads, so a
+file carrying them would only work against the environment it was written for. The loader
+resolves each SKU against the live catalog, which is why this pack runs after
+`catalog/products.csv`. A SKU that is not in the catalog fails its row rather than loading a
+price attached to nothing.
+
+Two formats the endpoint is strict about, and which its own schema examples get wrong:
+`effectiveFrom` is parsed with `Instant.parse`, so it must be a full ISO-8601 instant
+(`2024-01-01T00:00:00Z`) rather than the bare date the example shows; and `productId` in that
+example is `P001`, which is not a UUID. `AlphaFixtureBasePricesTest` reads this file and
+`catalog/products.csv` together at build time and pins both formats, so a rename or a reformat
+fails the build rather than a reseed.
+
+**Not converted:** `item_cost` from the same seed file. Cost is not a base price — it belongs
+to the costing/valuation path, which has no ingest endpoint — so the seed file stays for it.
+
+### `vehicle-fitment/` — deliberately absent
+
+`VEHICLE_FITMENT` is a wired loader domain with no fixture pack, and this is on purpose rather
+than an oversight. `part_fitment_entity.part_number_id` is a bare `BIGINT` with no table behind
+it in pos-vehicle-fitment: it is an identifier owned elsewhere, and nothing in the alpha catalog
+produces one (catalog products are keyed by UUID and SKU). A fixture would therefore have to
+invent part numbers, and the result would look like real fitment coverage while matching no
+product in the environment — worse than having no pack at all. Converting it needs a decision
+about where part numbers come from first.
 
 ### `location/` — from `pos-location R__seed_location_2_operational_data.sql`
 

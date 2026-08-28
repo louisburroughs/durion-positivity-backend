@@ -66,7 +66,8 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("inventory/cycle-count-plans.csv", DomainType.CYCLE_COUNT_PLAN, Set.<String>of()),
                 Arguments.of("security/users.csv", DomainType.SECURITY_USER, Set.<String>of()),
                 Arguments.of("security/user-person-links.csv", DomainType.USER_PERSON_LINK, Set.<String>of()),
-                Arguments.of("shop-manager/mechanic-skills.csv", DomainType.MECHANIC_SKILL, Set.<String>of()));
+                Arguments.of("shop-manager/mechanic-skills.csv", DomainType.MECHANIC_SKILL, Set.<String>of()),
+                Arguments.of("price/base-prices.csv", DomainType.BASE_PRICE, Set.<String>of()));
     }
 
     @ParameterizedTest(name = "{0} -> {1}")
