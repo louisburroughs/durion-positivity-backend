@@ -1,4 +1,4 @@
-package com.positivity.documents.service;
+package com.positivity.documents.internal.service;
 
 import com.positivity.documents.internal.dto.RenderRequest;
 import org.jspecify.annotations.NonNull;

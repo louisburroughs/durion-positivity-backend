@@ -1,4 +1,4 @@
-package com.positivity.documents.service;
+package com.positivity.documents.internal.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -7,8 +7,6 @@ import com.positivity.documents.internal.dto.RenderRequest;
 import com.positivity.documents.internal.enums.DocumentFormat;
 import com.positivity.documents.internal.exception.RenderingException;
 import com.positivity.documents.internal.exception.TemplateNotFoundException;
-import com.positivity.documents.internal.service.PdfRenderingServiceImpl;
-import com.positivity.documents.internal.service.TemplateService;
 import com.positivity.documents.internal.service.format.CsvFormatHandler;
 import com.positivity.documents.internal.service.format.JsonFormatHandler;
 import com.positivity.documents.internal.service.format.MarkdownFormatHandler;

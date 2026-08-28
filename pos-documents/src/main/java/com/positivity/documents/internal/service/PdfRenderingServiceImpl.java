@@ -8,7 +8,6 @@ import com.positivity.documents.internal.exception.RenderingException;
 import com.positivity.documents.internal.exception.TemplateNotFoundException;
 import com.positivity.documents.internal.exception.UnsupportedFormatException;
 import com.positivity.documents.internal.service.format.FormatHandler;
-import com.positivity.documents.service.PdfRenderingService;
 import java.io.ByteArrayOutputStream;
 import java.time.Clock;
 import java.time.Instant;

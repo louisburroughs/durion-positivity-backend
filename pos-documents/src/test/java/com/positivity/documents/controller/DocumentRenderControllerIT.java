@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppC
 
 import com.positivity.documents.internal.dto.RenderRequest;
 import com.positivity.documents.internal.enums.DocumentFormat;
-import com.positivity.documents.service.PdfRenderingService;
+import com.positivity.documents.internal.service.PdfRenderingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,4 +1,4 @@
-package com.positivity.documents.service;
+package com.positivity.documents.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
