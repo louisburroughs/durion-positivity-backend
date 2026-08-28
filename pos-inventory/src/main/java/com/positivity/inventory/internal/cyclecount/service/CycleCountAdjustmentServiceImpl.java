@@ -316,7 +316,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     : InventoryLedgerEventType.COUNT_VARIANCE_OUT;
 
             InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
-                    .stockItemId(adjustment.getStockItemId().toString())
+                    .stockItemId(adjustment.getStockItemId())
                     .locationId(locationId)
                     .adjustmentId(adjustment.getAdjustmentId())
                     .eventType(eventType)
@@ -370,8 +370,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 .orElse(null);
     }
 
-    /** Current on-hand for the SKU — location-scoped when a location is known, global otherwise. */
-    private @NonNull BigDecimal currentOnHand(@NonNull UUID stockItemId, @Nullable UUID locationId) {
+    /** Current on-hand for the stock reference — location-scoped when a location is known, global otherwise. */
+    private @NonNull BigDecimal currentOnHand(@NonNull String stockItemId, @Nullable UUID locationId) {
         return Quantities.nz(
                 locationId != null
                         ? ledgerRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId)
@@ -385,11 +385,10 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
      * {@code null} when the SKU has no {@code sku_cost_state} row or no derivable cost, so the
      * caller can fall back to the request-supplied cost.
      */
-    private @Nullable BigDecimal resolveEngineCost(@NonNull UUID stockItemId) {
-        String sku = stockItemId.toString();
+    private @Nullable BigDecimal resolveEngineCost(@NonNull String stockItemId) {
         return costStateRepository
-                .findByStockItemId(sku)
-                .map(state -> methodResolver.resolve(sku) == CostingMethod.STANDARD
+                .findByStockItemId(stockItemId)
+                .map(state -> methodResolver.resolve(stockItemId) == CostingMethod.STANDARD
                         ? (state.getStandardCost() != null ? state.getStandardCost() : state.getAvgCost())
                         : state.getAvgCost())
                 .orElse(null);

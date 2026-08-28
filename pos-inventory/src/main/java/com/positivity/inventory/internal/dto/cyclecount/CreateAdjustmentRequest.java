@@ -22,11 +22,13 @@ import lombok.NoArgsConstructor;
 public class CreateAdjustmentRequest {
 
     @Schema(
-            description = "Identifier of the stock item being adjusted",
-            example = "01960003-0000-7000-8000-000000000001",
+            description = "Stock reference being adjusted — the ledger's freeform stock_item_id text: a SKU code"
+                    + " (e.g. OIL-5W30-5QT), or a catalog product UUID rendered as text. Not a product id.",
+            example = "OIL-5W30-5QT",
             requiredMode = REQUIRED)
-    @NotNull(message = "Stock item ID is required")
-    private UUID stockItemId;
+    @NotBlank(message = "Stock item ID is required")
+    @Size(max = 255)
+    private String stockItemId;
 
     @Schema(
             description = "Cycle count task this adjustment settles, if created from a task. Enables"

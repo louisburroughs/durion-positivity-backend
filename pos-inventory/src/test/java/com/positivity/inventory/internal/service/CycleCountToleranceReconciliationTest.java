@@ -170,7 +170,7 @@ class CycleCountToleranceReconciliationTest {
 
         // Count and adjustment are separate transactions: within tolerance, no adjustment is
         // ever created and the ledger gains no new entry from the count itself.
-        assertThat(adjustmentRepository.findByStockItemId(productId)).isEmpty();
+        assertThat(adjustmentRepository.findByStockItemId(productId.toString())).isEmpty();
         assertThat(ledgerRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                 .hasSize(ledgerEntriesBeforeCount);
     }
@@ -202,14 +202,14 @@ class CycleCountToleranceReconciliationTest {
 
         // The count alone never touches the ledger or creates an adjustment — separate
         // transactions, exactly as the owner's spec requires.
-        assertThat(adjustmentRepository.findByStockItemId(productId)).isEmpty();
+        assertThat(adjustmentRepository.findByStockItemId(productId.toString())).isEmpty();
         assertThat(ledgerRepository.findByStockItemIdOrderByTimestampAsc(productId.toString()))
                 .hasSize(ledgerEntriesBeforeCount);
 
         // A reviewer investigates and explicitly creates the adjustment — a second, separate
         // transaction.
         AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
-                .stockItemId(productId)
+                .stockItemId(productId.toString())
                 .taskId(task.getTaskId())
                 .reasonCode("Suspected meter drift")
                 .countedQuantity(new BigDecimal("7890"))
@@ -290,6 +290,6 @@ class CycleCountToleranceReconciliationTest {
 
         assertThat(response.isWithinTolerance()).isTrue();
         assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.ACCEPTED_WITHIN_TOLERANCE);
-        assertThat(adjustmentRepository.findByStockItemId(productId)).isEmpty();
+        assertThat(adjustmentRepository.findByStockItemId(productId.toString())).isEmpty();
     }
 }

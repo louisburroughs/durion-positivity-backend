@@ -251,7 +251,7 @@ class CycleCountConflictDetectionTest {
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
 
         AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
-                .stockItemId(stockItemId)
+                .stockItemId(sku)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
                 .countedQuantity(new BigDecimal("5"))
@@ -285,8 +285,10 @@ class CycleCountConflictDetectionTest {
     void approvalOnConflict_locationBinTask_scopesRecomputeAndPostingToTheBin() {
         ensureTier1ApprovalThreshold();
 
-        UUID stockItemId = UUID.randomUUID();
-        String sku = stockItemId.toString();
+        // Freeform SKU code, not a UUID: the ledger's stock reference is text, and since the
+        // stock_item_id widening the adjustment leg accepts it too — the exact path that was
+        // dead-ended while cycle_count_adjustment.stock_item_id was typed uuid.
+        String sku = "SKU-I2-BIN-" + UUID.randomUUID();
         UUID binA = UUID.randomUUID();
         UUID binB = UUID.randomUUID();
         // Multi-bin SKU: 5 in bin A, 7 in bin B (global 12). The count is of bin A only.
@@ -305,7 +307,7 @@ class CycleCountConflictDetectionTest {
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
 
         AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
-                .stockItemId(stockItemId)
+                .stockItemId(sku)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
                 .countedQuantity(new BigDecimal("3"))
@@ -356,7 +358,7 @@ class CycleCountConflictDetectionTest {
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
 
         AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
-                .stockItemId(stockItemId)
+                .stockItemId(sku)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
                 .countedQuantity(new BigDecimal("8"))

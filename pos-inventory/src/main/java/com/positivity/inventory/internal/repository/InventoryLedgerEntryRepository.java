@@ -107,6 +107,10 @@ public interface InventoryLedgerEntryRepository
                 stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());
     }
 
+    default BigDecimal calculateOnHandQuantity(String stockItemId) {
+        return calculateOnHandQuantityForEventTypes(stockItemId, InventoryLedgerEventType.onHandAffectingTypes());
+    }
+
     @Query("""
                         SELECT COALESCE(SUM(e.changeInQuantity), 0)
                         FROM InventoryLedgerEntry e

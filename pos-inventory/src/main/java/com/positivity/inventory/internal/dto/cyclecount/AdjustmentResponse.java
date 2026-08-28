@@ -39,11 +39,12 @@ public class AdjustmentResponse {
     private UUID adjustmentId;
 
     @Schema(
-            description = "Identifier of the stock item the adjustment applies to",
-            example = "01960003-0000-7000-8000-000000000002",
+            description = "Stock reference the adjustment applies to — the ledger's freeform stock_item_id text:"
+                    + " a SKU code, or a catalog product UUID rendered as text",
+            example = "OIL-5W30-5QT",
             requiredMode = REQUIRED)
     @NotNull
-    private UUID stockItemId;
+    private String stockItemId;
 
     @Schema(
             description = "Reason code explaining why the adjustment was made",
