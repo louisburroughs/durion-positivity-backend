@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.marketing.config.TestSecurityConfig;
 import com.positivity.marketing.internal.dto.CampaignResponse;
-import com.positivity.marketing.service.CampaignSendService;
-import com.positivity.marketing.service.CampaignService;
+import com.positivity.marketing.internal.service.CampaignSendService;
+import com.positivity.marketing.internal.service.CampaignService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;

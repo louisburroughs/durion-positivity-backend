@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.marketing.internal.dto.CampaignStatsResponse;
 import com.positivity.marketing.internal.dto.ProgramStatsResponse;
 import com.positivity.marketing.internal.security.MarketingPermissionRegistry;
-import com.positivity.marketing.service.CampaignStatsService;
+import com.positivity.marketing.internal.service.CampaignStatsService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

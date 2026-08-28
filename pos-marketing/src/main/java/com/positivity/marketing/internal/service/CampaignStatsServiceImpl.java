@@ -9,7 +9,6 @@ import com.positivity.marketing.internal.exception.MarketingResourceNotFoundExce
 import com.positivity.marketing.internal.repository.CampaignAttributionRepository;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.CampaignSendRepository;
-import com.positivity.marketing.service.CampaignStatsService;
 import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.List;

@@ -6,7 +6,7 @@ import com.positivity.marketing.internal.dto.UpsertMessageTemplateRequest;
 import com.positivity.marketing.internal.enums.AudienceType;
 import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.marketing.internal.security.MarketingPermissionRegistry;
-import com.positivity.marketing.service.MessageTemplateService;
+import com.positivity.marketing.internal.service.MessageTemplateService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

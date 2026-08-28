@@ -1,4 +1,4 @@
-package com.positivity.marketing.service;
+package com.positivity.marketing.internal.service;
 
 import com.positivity.marketing.internal.dto.CampaignSendResponse;
 import com.positivity.marketing.internal.dto.PagedResponse;

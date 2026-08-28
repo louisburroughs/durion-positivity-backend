@@ -13,8 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.marketing.config.TestSecurityConfig;
 import com.positivity.marketing.internal.dto.MessageTemplateResponse;
-import com.positivity.marketing.service.CampaignStatsService;
-import com.positivity.marketing.service.MessageTemplateService;
+import com.positivity.marketing.internal.service.CampaignStatsService;
+import com.positivity.marketing.internal.service.MessageTemplateService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;

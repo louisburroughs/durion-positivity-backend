@@ -12,7 +12,6 @@ import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityE
 import com.positivity.marketing.internal.repository.CampaignAudienceMemberRepository;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.CampaignSendRepository;
-import com.positivity.marketing.service.CampaignSendService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;

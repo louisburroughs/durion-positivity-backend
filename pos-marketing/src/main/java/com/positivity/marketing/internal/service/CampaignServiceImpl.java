@@ -14,7 +14,6 @@ import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityE
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
 import com.positivity.marketing.internal.repository.SegmentReplicaRepository;
-import com.positivity.marketing.service.CampaignService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.ArrayList;
 import java.util.HashSet;
