@@ -85,6 +85,13 @@ public class CycleCountTask {
     private String auditorId;
 
     /**
+     * Cycle count plan this task was generated from, when the task came out of
+     * plan-driven task generation. Null for tasks created outside a plan.
+     */
+    @Column(name = "plan_id")
+    private UUID planId;
+
+    /**
      * Current status of the task in the workflow.
      */
     @Enumerated(EnumType.STRING)

@@ -109,13 +109,16 @@ public final class EventTypes {
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_RECOUNT", "Submit a recount for a cycle count task")
                         .build(),
 
-                // CycleCountPlanController - 3 events
+                // CycleCountPlanController - 4 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_PLAN_CREATE", "Create a cycle count plan")
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_CYCLE_COUNT_PLAN_LIST", "List cycle count plans")
                         .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE", "Transition a cycle count plan status")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_TASK_GENERATE", "Generate count tasks for a cycle count plan")
                         .build(),
 
                 // CycleCountScheduleController - 4 events (odoo-parity I1, #1031)

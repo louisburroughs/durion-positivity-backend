@@ -499,6 +499,7 @@ public class CycleCountServiceImpl implements CycleCountService {
                 .expectedQuantity(task.getExpectedQuantity())
                 .unitOfMeasure(baseUnitOfMeasureResolver.resolve(task.getItemSku()))
                 .auditorId(task.getAuditorId())
+                .planId(task.getPlanId())
                 .status(task.getStatus())
                 .latestCountEntryId(task.getLatestCountEntryId())
                 .countEntriesCount(task.getCountEntriesCount())

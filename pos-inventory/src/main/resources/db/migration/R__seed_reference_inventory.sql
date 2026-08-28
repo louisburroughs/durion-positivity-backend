@@ -628,3 +628,50 @@ VALUES
   (md5('inv_seed2:WIXF-XP50003F:01960004-0003-7000-8000-000000000022')::uuid, 'WIXF-XP50003F', '01960004-0003-7000-8000-000000000022'::uuid, 'GOODS_RECEIPT', 6, 6, 'EA', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: WIX XP Series Oil Filter XP50003'),
   (md5('inv_seed2:DORM-635-422:01960004-0003-7000-8000-000000000022')::uuid, 'DORM-635-422', '01960004-0003-7000-8000-000000000022'::uuid, 'GOODS_RECEIPT', 20, 20, 'EA', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Dorman Valve Cover Gasket Set 635-422')
 ON CONFLICT (ledger_entry_id) DO NOTHING;
+
+-- =============================================================================
+-- CYCLE COUNT PLAN — Shelf A (Bins A-01..A-10), ready for task generation
+--
+-- A PLANNED plan whose zoneIds are the ten Shelf A bin storage-location UUIDs
+-- stocked by the ledger rows above. Task generation
+-- (POST /v1/inventory/cycleCountPlans/{planId}/tasks) treats each zone id as a
+-- count location directly (plus any replicated descendants), so this plan
+-- expands into ASSIGNED tasks with ledger-derived expected quantities on a
+-- database seeded only by this file — no ext_storage_location facts required.
+--
+-- scheduled_date is NOW()-relative and only matters for the API-side "must be
+-- future" rule on plan creation, which direct seeding does not go through;
+-- generation itself never reads it. Idempotent via the deterministic plan_id
+-- and the NOT EXISTS guard on the zone rows (cycle_count_plan_zone has no
+-- unique key to ON CONFLICT against).
+-- =============================================================================
+INSERT INTO cycle_count_plan (plan_id, location_id, plan_name, scheduled_date, status, created_by, created_at, updated_at)
+VALUES (
+    md5('inv_seed:cycle-count-plan-shelf-a')::uuid,
+    '96dd346a-047c-86f5-3c9a-7c8cac53da86'::uuid,
+    'Seeded count — Shelf A motor oils & fluids',
+    (NOW() + INTERVAL '7 days')::date,
+    'PLANNED',
+    'system-seed',
+    NOW(),
+    NOW())
+ON CONFLICT (plan_id) DO NOTHING;
+
+INSERT INTO cycle_count_plan_zone (plan_id, zone_id)
+SELECT md5('inv_seed:cycle-count-plan-shelf-a')::uuid, v.zone_id
+FROM (VALUES
+    ('01960004-0001-7000-8000-000000000009'::uuid),
+    ('01960004-0001-7000-8000-00000000000a'::uuid),
+    ('01960004-0001-7000-8000-00000000000b'::uuid),
+    ('01960004-0001-7000-8000-00000000000c'::uuid),
+    ('01960004-0001-7000-8000-00000000000d'::uuid),
+    ('01960004-0001-7000-8000-00000000000e'::uuid),
+    ('01960004-0001-7000-8000-00000000000f'::uuid),
+    ('01960004-0001-7000-8000-000000000010'::uuid),
+    ('01960004-0001-7000-8000-000000000011'::uuid),
+    ('01960004-0001-7000-8000-000000000012'::uuid)
+) AS v(zone_id)
+WHERE NOT EXISTS (
+    SELECT 1 FROM cycle_count_plan_zone z
+    WHERE z.plan_id = md5('inv_seed:cycle-count-plan-shelf-a')::uuid
+      AND z.zone_id = v.zone_id);

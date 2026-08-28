@@ -25,4 +25,15 @@ public interface CycleCountTaskRepository extends JpaRepository<CycleCountTask, 
      * Find tasks assigned to an auditor with a specific status.
      */
     List<CycleCountTask> findByAuditorIdAndStatus(String auditorId, TaskStatus status);
+
+    /**
+     * Tasks generated from one cycle count plan.
+     */
+    List<CycleCountTask> findByPlanId(UUID planId);
+
+    /**
+     * Idempotency check for plan-driven task generation: whether the plan
+     * already has a task for this (bin, SKU).
+     */
+    boolean existsByPlanIdAndBinLocationAndItemSku(UUID planId, String binLocation, String itemSku);
 }
