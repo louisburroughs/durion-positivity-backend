@@ -42,15 +42,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -63,12 +60,6 @@ class BatchConfigurationWriterTest {
     private static final String VALID_JOB_ID = "00000000-0000-0000-0000-000000000001";
     private static final String VALID_LOCATION_ID = "00000000-0000-0000-0000-000000000002";
     private static final String VALID_OPERATOR_ID = "op-001";
-
-    @Mock
-    JobRepository jobRepository;
-
-    @Mock
-    PlatformTransactionManager transactionManager;
 
     @Mock
     CatalogLoaderStrategy catalogLoaderStrategy;
@@ -112,7 +103,6 @@ class BatchConfigurationWriterTest {
     @Mock
     BulkIngestResultRecorder bulkIngestResultRecorder;
 
-    @InjectMocks
     BatchConfiguration batchConfiguration;
 
     BulkLoadAuthorizationContext bulkLoadAuthorizationContext = new BulkLoadAuthorizationContext();
@@ -125,9 +115,14 @@ class BatchConfigurationWriterTest {
         lenient().when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
         lenient().when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
         lenient().when(requestBodySpec.retrieve()).thenReturn(responseSpec);
+        // A real writer factory, not a mock: these tests are about what actually goes over the
+        // wire, and the bean methods are now thin delegations to it. The job factory is unused by
+        // the writer beans under test.
+        BulkIngestWriterFactory writerFactory =
+                new BulkIngestWriterFactory(bulkLoadAuthorizationContext, bulkIngestResultRecorder);
         batchConfiguration = new BatchConfiguration(
-                jobRepository,
-                transactionManager,
+                null,
+                writerFactory,
                 catalogLoaderStrategy,
                 customerLoaderStrategy,
                 commercialCustomerLoaderStrategy,
@@ -135,12 +130,7 @@ class BatchConfigurationWriterTest {
                 personLoaderStrategy,
                 basePriceLoaderStrategy,
                 vehicleLoaderStrategy,
-                vehicleFitmentLoaderStrategy,
-                bulkLoadAuthorizationContext,
-                null,
-                null,
-                null,
-                bulkIngestResultRecorder);
+                vehicleFitmentLoaderStrategy);
     }
 
     // --- catalogBulkIngestWriter ---

@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.service;
 
+import com.positivity.bulkloader.internal.domain.DomainRecordFields;
 import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import java.util.EnumMap;
@@ -127,7 +128,21 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
         return collapsed.substring(start, end);
     }
 
+    /**
+     * The target field a source column feeds, or null when the column has no home in this domain.
+     *
+     * <p>Two sources, in order: the hand-written synonym table below, which translates genuinely
+     * different spellings ({@code zip} → {@code postalCode}); then the record's own field names,
+     * for the ordinary case of a header that already names its field. Without the second source a
+     * column nobody thought to add to the table is dropped in silence — which is how the LOCATION
+     * table came to omit {@code addressLine2} and {@code active} unnoticed.
+     */
     private String inferTargetField(String normalized, DomainType domain) {
+        String synonym = inferFromSynonyms(normalized, domain);
+        return synonym != null ? synonym : DomainRecordFields.matchCanonicalField(normalized, domain);
+    }
+
+    private String inferFromSynonyms(String normalized, DomainType domain) {
         return switch (domain) {
             case CATALOG_PRODUCT ->
                 switch (normalized) {

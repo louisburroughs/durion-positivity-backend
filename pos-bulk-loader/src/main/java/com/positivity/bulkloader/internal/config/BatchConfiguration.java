@@ -1,7 +1,7 @@
 package com.positivity.bulkloader.internal.config;
 
-import com.positivity.bulkingest.BulkIngestRequest;
-import com.positivity.bulkingest.BulkIngestResponse;
+import com.positivity.bulkloader.internal.config.BulkIngestWriterFactory.JobParams;
+import com.positivity.bulkloader.internal.config.BulkIngestWriterFactory.Target;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
@@ -19,58 +19,40 @@ import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
 import com.positivity.bulkloader.internal.enums.DomainType;
-import com.positivity.bulkloader.internal.parser.FlexibleRecordItemReader;
-import com.positivity.bulkloader.internal.parser.RecordFileParserRegistry;
-import com.positivity.bulkloader.internal.service.BulkIngestResultRecorder;
-import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
-import com.positivity.bulkloader.internal.service.BulkLoadJobExecutionListener;
-import com.positivity.bulkloader.internal.service.ColumnMappingService;
-import com.positivity.security.common.GatewaySecurityConstants;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
-import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
-import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.batch.infrastructure.item.ItemStreamReader;
 import org.springframework.batch.infrastructure.item.ItemWriter;
-import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
-import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.infrastructure.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
+/**
+ * The per-domain Spring Batch beans of the bulk loader.
+ *
+ * <p>Everything the domains share — building the job, step, header-driven reader and validating
+ * processor, and posting a chunk to its owning service with the per-row audit trail — lives in
+ * {@link BulkLoadJobFactory} and {@link BulkIngestWriterFactory}. What remains here is the part
+ * Spring has to see by name: four beans per domain, each a single call, plus the payload
+ * projections for the three domains whose ingest DTOs need typed values the loader records carry
+ * as text.
+ */
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
 public class BatchConfiguration {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-    private static final String HEADER_AUTHORITIES = "X-Authorities";
-    private static final String HEADER_USER = "X-User";
-    private static final String BULK_LOADER_SERVICE_USER = "bulk-loader-service";
-
-    private final JobRepository jobRepository;
-    private final PlatformTransactionManager transactionManager;
+    private final BulkLoadJobFactory jobFactory;
+    private final BulkIngestWriterFactory writerFactory;
     private final CatalogLoaderStrategy catalogLoaderStrategy;
     private final CustomerLoaderStrategy customerLoaderStrategy;
     private final CommercialCustomerLoaderStrategy commercialCustomerLoaderStrategy;
@@ -79,11 +61,6 @@ public class BatchConfiguration {
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
     private final VehicleLoaderStrategy vehicleLoaderStrategy;
     private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
-    private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
-    private final BulkLoadJobExecutionListener bulkLoadJobExecutionListener;
-    private final RecordFileParserRegistry recordFileParserRegistry;
-    private final ColumnMappingService columnMappingService;
-    private final BulkIngestResultRecorder bulkIngestResultRecorder;
 
     // Eureka service ids resolved through the load-balanced builder (#641); the ingest
     // writers address sibling services by discovery instead of host:port base URLs.
@@ -108,92 +85,30 @@ public class BatchConfiguration {
     @Value("${pos.vehicle-fitment.service-id:vehicle-fitment}")
     private String vehicleFitmentServiceId;
 
-    @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}")
-    private String storageRoot;
-
     @Bean
     public Job catalogBulkLoadJob(Step catalogBulkLoadStep) {
-        return new JobBuilder("catalogBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(catalogBulkLoadStep)
-                .build();
+        return jobFactory.job("catalogBulkLoadJob", catalogBulkLoadStep);
     }
 
     @Bean
     public Step catalogBulkLoadStep(
-            ItemStreamReader<CatalogProductRecord> catalogFlexibleReader,
+            ItemStreamReader<CatalogProductRecord> catalogReader,
             ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor,
             ItemWriter<CatalogProductRecord> catalogBulkIngestWriter) {
-        return new StepBuilder("catalogBulkLoadStep", jobRepository)
-                .<CatalogProductRecord, CatalogProductRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(catalogFlexibleReader)
-                .processor(catalogItemProcessor)
-                .writer(catalogBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step("catalogBulkLoadStep", catalogReader, catalogItemProcessor, catalogBulkIngestWriter);
     }
 
-    /**
-     * Header/structure-driven reader for catalog uploads: supports delimited text (CSV/TSV/pipe),
-     * spreadsheets (xlsx/xls), JSON, YAML, and XML. Columns are discovered from the file itself
-     * and mapped to catalog fields via job-approved mappings or rule-based inference.
-     */
     @Bean
     @StepScope
-    public ItemStreamReader<CatalogProductRecord> catalogFlexibleReader(
+    public ItemStreamReader<CatalogProductRecord> catalogReader(
             @Value("#{jobParameters['storagePath']}") String storagePath,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-        String fileName = resolved.getFileName().toString();
-        UUID jobId = parseUuidOrNull(jobIdParam);
-        return new FlexibleRecordItemReader<>(
-                () -> {
-                    try {
-                        return recordFileParserRegistry.open(java.nio.file.Files.newInputStream(resolved), fileName);
-                    } catch (java.io.IOException e) {
-                        throw new java.io.UncheckedIOException("Failed to open uploaded file: " + fileName, e);
-                    }
-                },
-                headers -> columnMappingService.resolveEffectiveMappings(jobId, headers, DomainType.CATALOG_PRODUCT),
-                catalogLoaderStrategy::mapRow);
-    }
-
-    private java.nio.file.Path resolveStoragePath(String storagePath) {
-        if (storagePath == null || storagePath.isBlank()) {
-            throw new IllegalArgumentException("storagePath job parameter must not be null or blank");
-        }
-        java.nio.file.Path base = java.nio.file.Path.of(storageRoot).normalize().toAbsolutePath();
-        java.nio.file.Path resolved = base.resolve(storagePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IllegalArgumentException("Invalid storage path: attempted path traversal");
-        }
-        return resolved;
-    }
-
-    private UUID parseUuidOrNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException _) {
-            return null;
-        }
+        return jobFactory.reader(catalogLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<CatalogProductRecord, CatalogProductRecord> catalogItemProcessor() {
-        return item -> {
-            List<String> errors = catalogLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Catalog record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(catalogLoaderStrategy);
     }
 
     @Bean
@@ -203,81 +118,41 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + catalogServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context =
-                    resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "catalogBulkIngestWriter",
-                    DomainType.CATALOG_PRODUCT,
-                    "/v1/catalog/bulk-ingest",
-                    "catalog:product:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    new ArrayList<>(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "catalogBulkIngestWriter",
+                        DomainType.CATALOG_PRODUCT,
+                        catalogServiceId,
+                        "/v1/catalog/bulk-ingest",
+                        "catalog:product:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
     }
 
     @Bean
     public Job customerBulkLoadJob(Step customerBulkLoadStep) {
-        return new JobBuilder("customerBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(customerBulkLoadStep)
-                .build();
+        return jobFactory.job("customerBulkLoadJob", customerBulkLoadStep);
     }
 
     @Bean
     public Step customerBulkLoadStep(
-            FlatFileItemReader<CustomerPersonRecord> customerCsvReader,
+            ItemStreamReader<CustomerPersonRecord> customerReader,
             ItemProcessor<CustomerPersonRecord, CustomerPersonRecord> customerItemProcessor,
             ItemWriter<CustomerPersonRecord> customerBulkIngestWriter) {
-        return new StepBuilder("customerBulkLoadStep", jobRepository)
-                .<CustomerPersonRecord, CustomerPersonRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(customerCsvReader)
-                .processor(customerItemProcessor)
-                .writer(customerBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step("customerBulkLoadStep", customerReader, customerItemProcessor, customerBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<CustomerPersonRecord> customerCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<CustomerPersonRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(CustomerPersonRecord.class);
-        return new FlatFileItemReaderBuilder<CustomerPersonRecord>()
-                .name("customerCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names("firstName", "lastName", "email", "phoneNumber", "primaryAddress", "customerNumber")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<CustomerPersonRecord> customerReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(customerLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<CustomerPersonRecord, CustomerPersonRecord> customerItemProcessor() {
-        return item -> {
-            List<String> errors = customerLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Customer record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(customerLoaderStrategy);
     }
 
     @Bean
@@ -287,89 +162,45 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + customerServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context =
-                    resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "customerBulkIngestWriter",
-                    DomainType.CUSTOMER,
-                    "/v1/customer/bulk-ingest",
-                    "crm:party:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    new ArrayList<>(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "customerBulkIngestWriter",
+                        DomainType.CUSTOMER,
+                        customerServiceId,
+                        "/v1/customer/bulk-ingest",
+                        "crm:party:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
     }
 
     @Bean
     public Job commercialCustomerBulkLoadJob(Step commercialCustomerBulkLoadStep) {
-        return new JobBuilder("commercialCustomerBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(commercialCustomerBulkLoadStep)
-                .build();
+        return jobFactory.job("commercialCustomerBulkLoadJob", commercialCustomerBulkLoadStep);
     }
 
     @Bean
     public Step commercialCustomerBulkLoadStep(
-            FlatFileItemReader<CommercialCustomerRecord> commercialCustomerCsvReader,
+            ItemStreamReader<CommercialCustomerRecord> commercialCustomerReader,
             ItemProcessor<CommercialCustomerRecord, CommercialCustomerRecord> commercialCustomerItemProcessor,
             ItemWriter<CommercialCustomerRecord> commercialCustomerBulkIngestWriter) {
-        return new StepBuilder("commercialCustomerBulkLoadStep", jobRepository)
-                .<CommercialCustomerRecord, CommercialCustomerRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(commercialCustomerCsvReader)
-                .processor(commercialCustomerItemProcessor)
-                .writer(commercialCustomerBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step(
+                "commercialCustomerBulkLoadStep",
+                commercialCustomerReader,
+                commercialCustomerItemProcessor,
+                commercialCustomerBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<CommercialCustomerRecord> commercialCustomerCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<CommercialCustomerRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(CommercialCustomerRecord.class);
-        return new FlatFileItemReaderBuilder<CommercialCustomerRecord>()
-                .name("commercialCustomerCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names(
-                        "legalName",
-                        "displayName",
-                        "taxId",
-                        "billingTermsId",
-                        "contactFirstName",
-                        "contactLastName",
-                        "contactEmail",
-                        "contactPhone")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<CommercialCustomerRecord> commercialCustomerReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(commercialCustomerLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<CommercialCustomerRecord, CommercialCustomerRecord> commercialCustomerItemProcessor() {
-        return item -> {
-            List<String> errors = commercialCustomerLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Commercial customer record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(commercialCustomerLoaderStrategy);
     }
 
     @Bean
@@ -379,93 +210,41 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + customerServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context =
-                    resolveJobContext("commercialCustomerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "commercialCustomerBulkIngestWriter",
-                    DomainType.COMMERCIAL_CUSTOMER,
-                    "/v1/customer/commercial/bulk-ingest",
-                    "crm:party:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    new ArrayList<>(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "commercialCustomerBulkIngestWriter",
+                        DomainType.COMMERCIAL_CUSTOMER,
+                        customerServiceId,
+                        "/v1/customer/commercial/bulk-ingest",
+                        "crm:party:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
     }
 
     @Bean
     public Job locationBulkLoadJob(Step locationBulkLoadStep) {
-        return new JobBuilder("locationBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(locationBulkLoadStep)
-                .build();
+        return jobFactory.job("locationBulkLoadJob", locationBulkLoadStep);
     }
 
     @Bean
     public Step locationBulkLoadStep(
-            FlatFileItemReader<LocationRecord> locationCsvReader,
+            ItemStreamReader<LocationRecord> locationReader,
             ItemProcessor<LocationRecord, LocationRecord> locationItemProcessor,
             ItemWriter<LocationRecord> locationBulkIngestWriter) {
-        return new StepBuilder("locationBulkLoadStep", jobRepository)
-                .<LocationRecord, LocationRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(locationCsvReader)
-                .processor(locationItemProcessor)
-                .writer(locationBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step("locationBulkLoadStep", locationReader, locationItemProcessor, locationBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<LocationRecord> locationCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<LocationRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(LocationRecord.class);
-        return new FlatFileItemReaderBuilder<LocationRecord>()
-                .name("locationCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names(
-                        "name",
-                        "code",
-                        "addressLine1",
-                        "addressLine2",
-                        "city",
-                        "stateOrProvince",
-                        "postalCode",
-                        "countryCode",
-                        "phoneNumber",
-                        "active",
-                        "locationTypeName",
-                        "timezone")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<LocationRecord> locationReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(locationLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<LocationRecord, LocationRecord> locationItemProcessor() {
-        return item -> {
-            List<String> errors = locationLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Location record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(locationLoaderStrategy);
     }
 
     @Bean
@@ -475,88 +254,42 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + locationServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context =
-                    resolveJobContext("locationBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "locationBulkIngestWriter",
-                    DomainType.LOCATION,
-                    "/v1/locations/bulk-ingest",
-                    "location:write",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    mapLocationPayloads(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "locationBulkIngestWriter",
+                        DomainType.LOCATION,
+                        locationServiceId,
+                        "/v1/locations/bulk-ingest",
+                        "location:write"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapLocationPayloads);
     }
 
     @Bean
     public Job peopleBulkLoadJob(Step peopleBulkLoadStep) {
-        return new JobBuilder("peopleBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(peopleBulkLoadStep)
-                .build();
+        return jobFactory.job("peopleBulkLoadJob", peopleBulkLoadStep);
     }
 
     @Bean
     public Step peopleBulkLoadStep(
-            FlatFileItemReader<PersonRecord> peopleCsvReader,
+            ItemStreamReader<PersonRecord> peopleReader,
             ItemProcessor<PersonRecord, PersonRecord> peopleItemProcessor,
             ItemWriter<PersonRecord> peopleBulkIngestWriter) {
-        return new StepBuilder("peopleBulkLoadStep", jobRepository)
-                .<PersonRecord, PersonRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(peopleCsvReader)
-                .processor(peopleItemProcessor)
-                .writer(peopleBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step("peopleBulkLoadStep", peopleReader, peopleItemProcessor, peopleBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<PersonRecord> peopleCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<PersonRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(PersonRecord.class);
-        return new FlatFileItemReaderBuilder<PersonRecord>()
-                .name("peopleCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names(
-                        "firstName",
-                        "lastName",
-                        "preferredName",
-                        "employeeNumber",
-                        "hireDate",
-                        "primaryEmail",
-                        "primaryPhone")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<PersonRecord> peopleReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(personLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<PersonRecord, PersonRecord> peopleItemProcessor() {
-        return item -> {
-            List<String> errors = personLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Person record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(personLoaderStrategy);
     }
 
     @Bean
@@ -566,80 +299,41 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + peopleServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context = resolveJobContext("peopleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "peopleBulkIngestWriter",
-                    DomainType.PERSON,
-                    "/v1/people/bulk-ingest",
-                    "people:employee:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    new ArrayList<>(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "peopleBulkIngestWriter",
+                        DomainType.PERSON,
+                        peopleServiceId,
+                        "/v1/people/bulk-ingest",
+                        "people:employee:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
     }
 
     @Bean
     public Job priceBulkLoadJob(Step priceBulkLoadStep) {
-        return new JobBuilder("priceBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(priceBulkLoadStep)
-                .build();
+        return jobFactory.job("priceBulkLoadJob", priceBulkLoadStep);
     }
 
     @Bean
     public Step priceBulkLoadStep(
-            FlatFileItemReader<BasePriceRecord> priceCsvReader,
+            ItemStreamReader<BasePriceRecord> priceReader,
             ItemProcessor<BasePriceRecord, BasePriceRecord> priceItemProcessor,
             ItemWriter<BasePriceRecord> priceBulkIngestWriter) {
-        return new StepBuilder("priceBulkLoadStep", jobRepository)
-                .<BasePriceRecord, BasePriceRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(priceCsvReader)
-                .processor(priceItemProcessor)
-                .writer(priceBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step("priceBulkLoadStep", priceReader, priceItemProcessor, priceBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<BasePriceRecord> priceCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<BasePriceRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(BasePriceRecord.class);
-        return new FlatFileItemReaderBuilder<BasePriceRecord>()
-                .name("priceCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names("productId", "msrp", "currency", "effectiveFrom")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<BasePriceRecord> priceReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(basePriceLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<BasePriceRecord, BasePriceRecord> priceItemProcessor() {
-        return item -> {
-            List<String> errors = basePriceLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Base price record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(basePriceLoaderStrategy);
     }
 
     @Bean
@@ -649,90 +343,41 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + priceServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context = resolveJobContext("priceBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "priceBulkIngestWriter",
-                    DomainType.BASE_PRICE,
-                    "/v1/price/bulk-ingest",
-                    "pricing:base_price:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    new ArrayList<>(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "priceBulkIngestWriter",
+                        DomainType.BASE_PRICE,
+                        priceServiceId,
+                        "/v1/price/bulk-ingest",
+                        "pricing:base_price:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
     }
 
     @Bean
     public Job vehicleBulkLoadJob(Step vehicleBulkLoadStep) {
-        return new JobBuilder("vehicleBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(vehicleBulkLoadStep)
-                .build();
+        return jobFactory.job("vehicleBulkLoadJob", vehicleBulkLoadStep);
     }
 
     @Bean
     public Step vehicleBulkLoadStep(
-            FlatFileItemReader<VehicleBulkRecord> vehicleCsvReader,
+            ItemStreamReader<VehicleBulkRecord> vehicleReader,
             ItemProcessor<VehicleBulkRecord, VehicleBulkRecord> vehicleItemProcessor,
             ItemWriter<VehicleBulkRecord> vehicleBulkIngestWriter) {
-        return new StepBuilder("vehicleBulkLoadStep", jobRepository)
-                .<VehicleBulkRecord, VehicleBulkRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(vehicleCsvReader)
-                .processor(vehicleItemProcessor)
-                .writer(vehicleBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step("vehicleBulkLoadStep", vehicleReader, vehicleItemProcessor, vehicleBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<VehicleBulkRecord> vehicleCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<VehicleBulkRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(VehicleBulkRecord.class);
-        return new FlatFileItemReaderBuilder<VehicleBulkRecord>()
-                .name("vehicleCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names(
-                        "accountId",
-                        "vin",
-                        "unitNumber",
-                        "description",
-                        "make",
-                        "model",
-                        "year",
-                        "trim",
-                        "licensePlate",
-                        "licensePlateJurisdiction")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<VehicleBulkRecord> vehicleReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(vehicleLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<VehicleBulkRecord, VehicleBulkRecord> vehicleItemProcessor() {
-        return item -> {
-            List<String> errors = vehicleLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Vehicle record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(vehicleLoaderStrategy);
     }
 
     @Bean
@@ -742,90 +387,46 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + vehicleInventoryServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context =
-                    resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "vehicleBulkIngestWriter",
-                    DomainType.VEHICLE,
-                    "/v1/vehicles/bulk-ingest",
-                    "vehicle-inventory:registry:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    mapVehiclePayloads(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "vehicleBulkIngestWriter",
+                        DomainType.VEHICLE,
+                        vehicleInventoryServiceId,
+                        "/v1/vehicles/bulk-ingest",
+                        "vehicle-inventory:registry:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapVehiclePayloads);
     }
 
     @Bean
     public Job vehicleFitmentBulkLoadJob(Step vehicleFitmentBulkLoadStep) {
-        return new JobBuilder("vehicleFitmentBulkLoadJob", jobRepository)
-                .listener(bulkLoadJobExecutionListener)
-                .start(vehicleFitmentBulkLoadStep)
-                .build();
+        return jobFactory.job("vehicleFitmentBulkLoadJob", vehicleFitmentBulkLoadStep);
     }
 
     @Bean
     public Step vehicleFitmentBulkLoadStep(
-            FlatFileItemReader<VehicleFitmentRecord> vehicleFitmentCsvReader,
+            ItemStreamReader<VehicleFitmentRecord> vehicleFitmentReader,
             ItemProcessor<VehicleFitmentRecord, VehicleFitmentRecord> vehicleFitmentItemProcessor,
             ItemWriter<VehicleFitmentRecord> vehicleFitmentBulkIngestWriter) {
-        return new StepBuilder("vehicleFitmentBulkLoadStep", jobRepository)
-                .<VehicleFitmentRecord, VehicleFitmentRecord>chunk(500)
-                .transactionManager(transactionManager)
-                .reader(vehicleFitmentCsvReader)
-                .processor(vehicleFitmentItemProcessor)
-                .writer(vehicleFitmentBulkIngestWriter)
-                .faultTolerant()
-                .skipLimit(Integer.MAX_VALUE)
-                .skip(Exception.class)
-                .build();
+        return jobFactory.step(
+                "vehicleFitmentBulkLoadStep",
+                vehicleFitmentReader,
+                vehicleFitmentItemProcessor,
+                vehicleFitmentBulkIngestWriter);
     }
 
     @Bean
     @StepScope
-    public FlatFileItemReader<VehicleFitmentRecord> vehicleFitmentCsvReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath) {
-        java.nio.file.Path resolved = resolveStoragePath(storagePath);
-
-        BeanWrapperFieldSetMapper<VehicleFitmentRecord> mapper = new BeanWrapperFieldSetMapper<>();
-        mapper.setTargetType(VehicleFitmentRecord.class);
-        return new FlatFileItemReaderBuilder<VehicleFitmentRecord>()
-                .name("vehicleFitmentCsvReader")
-                .resource(new FileSystemResource(resolved))
-                .delimited()
-                .names(
-                        "partNumberId",
-                        "manufacturerName",
-                        "makeName",
-                        "modelName",
-                        "vehicleTypeName",
-                        "vehicleYear",
-                        "engineType",
-                        "submodel",
-                        "notes")
-                .fieldSetMapper(mapper)
-                .linesToSkip(1)
-                .build();
+    public ItemStreamReader<VehicleFitmentRecord> vehicleFitmentReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(vehicleFitmentLoaderStrategy, storagePath, jobIdParam);
     }
 
     @Bean
     public ItemProcessor<VehicleFitmentRecord, VehicleFitmentRecord> vehicleFitmentItemProcessor() {
-        return item -> {
-            List<String> errors = vehicleFitmentLoaderStrategy.validate(item);
-            if (!errors.isEmpty()) {
-                log.warn("Vehicle fitment record validation failed: {}", errors);
-                return null;
-            }
-            return item;
-        };
+        return jobFactory.processor(vehicleFitmentLoaderStrategy);
     }
 
     @Bean
@@ -835,156 +436,19 @@ public class BatchConfiguration {
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + vehicleFitmentServiceId).build();
-        AtomicLong rowCursor = new AtomicLong();
-        return chunk -> {
-            JobContext context =
-                    resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
-            if (context == null) {
-                return;
-            }
-            postChunkAndRecord(
-                    client,
-                    "vehicleFitmentBulkIngestWriter",
-                    DomainType.VEHICLE_FITMENT,
-                    "/v1/fitments/bulk-ingest",
-                    "vehicle-fitment:hint:create",
-                    context,
-                    sanitizeHeaderValue(operatorId, BULK_LOADER_SERVICE_USER),
-                    mapFitmentPayloads(chunk.getItems()),
-                    rowCursor);
-        };
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "vehicleFitmentBulkIngestWriter",
+                        DomainType.VEHICLE_FITMENT,
+                        vehicleFitmentServiceId,
+                        "/v1/fitments/bulk-ingest",
+                        "vehicle-fitment:hint:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapFitmentPayloads);
     }
 
-    private String sanitizeHeaderValue(String value, String fallback) {
-        if (value == null) {
-            return fallback;
-        }
-        String sanitizedValue = value.replaceAll("[\r\n\t]", "").trim();
-        return sanitizedValue.isBlank() ? fallback : sanitizedValue;
-    }
-
-    private void applyRelayHeaders(RestClient.RequestBodySpec requestSpec) {
-        String authorizationHeader = resolveAuthorizationHeader();
-        if (!StringUtils.hasText(authorizationHeader)) {
-            return;
-        }
-
-        requestSpec.header(HttpHeaders.AUTHORIZATION, authorizationHeader);
-        requestSpec.header(GatewaySecurityConstants.HEADER_TOKEN, extractTokenValue(authorizationHeader));
-    }
-
-    private String resolveAuthorizationHeader() {
-        String launchAuthorizationHeader = bulkLoadAuthorizationContext.getAuthorizationHeader();
-        if (StringUtils.hasText(launchAuthorizationHeader) && launchAuthorizationHeader.startsWith(BEARER_PREFIX)) {
-            return launchAuthorizationHeader;
-        }
-
-        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes requestAttributes)) {
-            return null;
-        }
-
-        HttpServletRequest request = requestAttributes.getRequest();
-        String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (StringUtils.hasText(authorizationHeader) && authorizationHeader.startsWith(BEARER_PREFIX)) {
-            return authorizationHeader;
-        }
-
-        String gatewayTokenHeader = request.getHeader(GatewaySecurityConstants.HEADER_TOKEN);
-        if (!StringUtils.hasText(gatewayTokenHeader)) {
-            return null;
-        }
-        return gatewayTokenHeader.startsWith(BEARER_PREFIX) ? gatewayTokenHeader : BEARER_PREFIX + gatewayTokenHeader;
-    }
-
-    private String extractTokenValue(String authorizationHeader) {
-        return authorizationHeader.startsWith(BEARER_PREFIX)
-                ? authorizationHeader.substring(BEARER_PREFIX.length())
-                : authorizationHeader;
-    }
-
-    private JobContext resolveJobContext(String writerName, String jobIdParam, String locationIdParam, int chunkSize) {
-        if (jobIdParam == null || locationIdParam == null) {
-            log.warn(
-                    "{}: missing jobId or locationId job parameters, skipping chunk of {} records",
-                    writerName,
-                    chunkSize);
-            return null;
-        }
-
-        try {
-            return new JobContext(UUID.fromString(jobIdParam), UUID.fromString(locationIdParam));
-        } catch (IllegalArgumentException _) {
-            log.warn(
-                    "{}: invalid jobId/locationId values (jobId={}, locationId={}), skipping chunk of {} records",
-                    writerName,
-                    jobIdParam,
-                    locationIdParam,
-                    chunkSize);
-            return null;
-        }
-    }
-
-    /**
-     * Posts one chunk to its owning service and records the outcome of every row in it.
-     *
-     * <p>Shared by all eight writers because the per-row bookkeeping has to be identical: the
-     * response body is now read rather than discarded, and each submitted record gets an audit row
-     * carrying what the service said about it. Before this the chunk was posted with {@code
-     * toBodilessEntity()}, so a chunk every row of which was rejected still counted as written.
-     *
-     * <p>{@code rowCursor} is per step instance (the writer beans are {@code @StepScope}), which is
-     * what makes an audit row's number read against the uploaded file instead of restarting at
-     * zero for every chunk.
-     */
-    private <P> void postChunkAndRecord(
-            RestClient client,
-            String writerName,
-            DomainType domainType,
-            String uri,
-            String downstreamAuthority,
-            JobContext context,
-            String operatorId,
-            List<P> payloads,
-            AtomicLong rowCursor) {
-
-        BulkIngestRequest<P> request = buildBulkIngestRequest(context, operatorId, payloads);
-        long rowOffset = rowCursor.getAndAdd(payloads.size());
-
-        BulkIngestResponse response;
-        try {
-            RestClient.RequestBodySpec requestSpec = client.post()
-                    .uri(uri)
-                    .header(HEADER_AUTHORITIES, downstreamAuthority)
-                    .header(HEADER_USER, operatorId);
-            applyRelayHeaders(requestSpec);
-            response = requestSpec
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body(BulkIngestResponse.class);
-        } catch (RestClientException e) {
-            log.error(
-                    "{}: HTTP call failed for chunk of {} records: {}", writerName, payloads.size(), e.getMessage(), e);
-            throw e;
-        }
-
-        // A null response is recorded, not ignored: the rows were sent, and an operator needs to
-        // see that nothing came back rather than read the silence as success.
-        bulkIngestResultRecorder.record(context.jobId(), domainType, rowOffset, payloads, response);
-    }
-
-    private <T> BulkIngestRequest<T> buildBulkIngestRequest(JobContext context, String operatorId, List<T> records) {
-        BulkIngestRequest<T> request = new BulkIngestRequest<>();
-        request.setJobId(context.jobId());
-        request.setLocationId(context.locationId());
-        request.setOperatorId(operatorId);
-        request.setRecords(records);
-        return request;
-    }
-
-    private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {
+    private List<LocationWriterPayload> mapLocationPayloads(List<LocationRecord> items) {
         List<LocationWriterPayload> payloads = new ArrayList<>(items.size());
         for (LocationRecord item : items) {
             payloads.add(new LocationWriterPayload(
@@ -1023,7 +487,7 @@ public class BatchConfiguration {
         return null;
     }
 
-    private List<VehicleWriterPayload> mapVehiclePayloads(List<? extends VehicleBulkRecord> items) {
+    private List<VehicleWriterPayload> mapVehiclePayloads(List<VehicleBulkRecord> items) {
         List<VehicleWriterPayload> payloads = new ArrayList<>(items.size());
         for (VehicleBulkRecord item : items) {
             payloads.add(new VehicleWriterPayload(
@@ -1071,7 +535,7 @@ public class BatchConfiguration {
         }
     }
 
-    private List<FitmentWriterPayload> mapFitmentPayloads(List<? extends VehicleFitmentRecord> items) {
+    private List<FitmentWriterPayload> mapFitmentPayloads(List<VehicleFitmentRecord> items) {
         List<FitmentWriterPayload> payloads = new ArrayList<>(items.size());
         for (VehicleFitmentRecord item : items) {
             payloads.add(new FitmentWriterPayload(
@@ -1102,8 +566,6 @@ public class BatchConfiguration {
             return null;
         }
     }
-
-    private record JobContext(UUID jobId, UUID locationId) {}
 
     private record LocationWriterPayload(
             String name,
