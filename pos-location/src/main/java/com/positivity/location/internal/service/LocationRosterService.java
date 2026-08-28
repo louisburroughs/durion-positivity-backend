@@ -1,7 +1,6 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.dto.LocationRef;
-import com.positivity.location.internal.entity.Location;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -25,13 +24,4 @@ public interface LocationRosterService {
      */
     @NonNull
     Page<LocationRef> getRoster(@Nullable String status, @Nullable Instant sinceUpdatedAt, @NonNull Pageable pageable);
-
-    /**
-     * Maps a location entity to the location roster DTO.
-     *
-     * @param location location entity
-     * @return mapped location reference
-     */
-    @NonNull
-    LocationRef toLocationRef(@NonNull Location location);
 }

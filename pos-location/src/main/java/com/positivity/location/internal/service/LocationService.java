@@ -7,9 +7,6 @@ import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.PersonDTO;
-import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.LocationParent;
-import com.positivity.location.internal.entity.ParentType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,21 +49,7 @@ public interface LocationService {
      */
     List<LocationDescendantResponseDTO> getDescendantsDto(UUID locationId, String parentTypeValue);
 
-    List<Location> getAllLocations();
-
-    Optional<Location> getLocationById(UUID id);
-
-    Location saveLocation(Location location);
-
     void deleteLocation(UUID id);
-
-    LocationParent addParent(UUID childId, UUID parentId, ParentType parentType);
-
-    List<LocationParent> getAllParents();
-
-    List<Location> getAllChildren(UUID parentId);
-
-    List<Location> getAllChildren(UUID parentId, ParentType parentType);
 
     PersonDTO getResponsiblePerson(UUID locationId);
 }

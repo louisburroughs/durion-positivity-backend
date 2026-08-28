@@ -42,7 +42,6 @@ public class LocationRosterServiceImpl implements LocationRosterService {
         return locations.map(this::toLocationRef);
     }
 
-    @Override
     @NonNull
     public LocationRef toLocationRef(@NonNull Location location) {
         return LocationRef.builder()

@@ -283,19 +283,6 @@ public class LocationServiceImpl implements LocationService {
         return descendants;
     }
 
-    public List<Location> getAllLocations() {
-        return locationRepository.findAll();
-    }
-
-    public Optional<Location> getLocationById(UUID id) {
-        return locationRepository.findById(id);
-    }
-
-    @Transactional
-    public Location saveLocation(Location location) {
-        return saveLocationInternal(location);
-    }
-
     private Location saveLocationInternal(Location location) {
         try {
             Location saved = locationRepository.saveAndFlush(location);
@@ -365,11 +352,6 @@ public class LocationServiceImpl implements LocationService {
         locationFactPublisher.locationDeleted(location);
     }
 
-    @Transactional
-    public LocationParent addParent(UUID childId, UUID parentId, ParentType parentType) {
-        return addParentInternal(childId, parentId, parentType);
-    }
-
     private LocationParent addParentInternal(UUID childId, UUID parentId, ParentType parentType) {
         if (childId.equals(parentId)) {
             throw new IllegalArgumentException("A location cannot be its own parent");
@@ -424,21 +406,6 @@ public class LocationServiceImpl implements LocationService {
         locationRepository.saveAndFlush(child);
         locationFactPublisher.locationChanged(child);
         return saved;
-    }
-
-    @Transactional(readOnly = true)
-    public List<LocationParent> getAllParents() {
-        return locationParentRepository.findAll();
-    }
-
-    @Transactional(readOnly = true)
-    public List<Location> getAllChildren(UUID parentId) {
-        return findChildren(parentId, null);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Location> getAllChildren(UUID parentId, ParentType parentType) {
-        return findChildren(parentId, parentType);
     }
 
     @Transactional(readOnly = true)
