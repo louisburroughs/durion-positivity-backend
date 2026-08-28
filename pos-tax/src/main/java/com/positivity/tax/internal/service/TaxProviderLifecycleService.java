@@ -4,7 +4,6 @@ import com.positivity.tax.common.dto.TaxProviderTransactionResult;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
-import com.positivity.tax.service.TaxProviderClient;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;

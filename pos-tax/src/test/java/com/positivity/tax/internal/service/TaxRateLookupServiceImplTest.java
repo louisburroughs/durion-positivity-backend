@@ -1,4 +1,4 @@
-package com.positivity.tax.service;
+package com.positivity.tax.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,13 +10,6 @@ import com.positivity.tax.common.dto.TaxRateLookupResponse;
 import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.exception.TaxRateLookupUnsupportedException;
-import com.positivity.tax.internal.service.AvalaraTaxProvider;
-import com.positivity.tax.internal.service.ExternalTaxProvider;
-import com.positivity.tax.internal.service.TaxProviderSelector;
-import com.positivity.tax.internal.service.TaxRateLookupServiceImpl;
-import com.positivity.tax.internal.service.TestModeRateResolver;
-import com.positivity.tax.internal.service.TestModeTaxCalculator;
-import com.positivity.tax.internal.service.TestModeTaxProvider;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

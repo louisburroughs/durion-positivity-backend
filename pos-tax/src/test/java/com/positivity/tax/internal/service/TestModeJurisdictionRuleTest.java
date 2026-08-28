@@ -1,14 +1,10 @@
-package com.positivity.tax.service;
+package com.positivity.tax.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.internal.config.TaxProperties;
-import com.positivity.tax.internal.service.ActiveCertificateLookup;
-import com.positivity.tax.internal.service.ExemptionResolver;
-import com.positivity.tax.internal.service.TestModeRateResolver;
-import com.positivity.tax.internal.service.TestModeTaxCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

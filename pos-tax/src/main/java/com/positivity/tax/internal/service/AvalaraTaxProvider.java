@@ -13,7 +13,6 @@ import com.positivity.tax.common.enums.TaxJurisdictionType;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.exception.TaxCalculationException;
-import com.positivity.tax.service.TaxProviderClient;
 import io.github.resilience4j.retry.Retry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

@@ -1,4 +1,4 @@
-package com.positivity.tax.service;
+package com.positivity.tax.internal.service;
 
 import com.positivity.tax.internal.dto.ExemptionCertificateRequest;
 import com.positivity.tax.internal.dto.ExemptionCertificateResponse;

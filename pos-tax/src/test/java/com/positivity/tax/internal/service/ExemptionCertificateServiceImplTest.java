@@ -1,4 +1,4 @@
-package com.positivity.tax.service;
+package com.positivity.tax.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,8 +12,6 @@ import com.positivity.tax.internal.dto.ExemptionCertificateResponse;
 import com.positivity.tax.internal.entity.ExemptionCertificate;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
 import com.positivity.tax.internal.repository.ExemptionCertificateRepository;
-import com.positivity.tax.internal.service.ActiveCertificateLookup;
-import com.positivity.tax.internal.service.ExemptionCertificateServiceImpl;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;

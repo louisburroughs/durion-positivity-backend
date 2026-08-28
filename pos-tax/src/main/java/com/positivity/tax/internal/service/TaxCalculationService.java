@@ -1,4 +1,4 @@
-package com.positivity.tax.service;
+package com.positivity.tax.internal.service;
 
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;

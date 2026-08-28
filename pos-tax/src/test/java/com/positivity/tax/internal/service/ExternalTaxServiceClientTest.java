@@ -1,4 +1,4 @@
-package com.positivity.tax.service;
+package com.positivity.tax.internal.service;
 
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -8,7 +8,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxLineItem;
-import com.positivity.tax.internal.service.ExternalTaxServiceClient;
 import io.github.resilience4j.retry.Retry;
 import java.math.BigDecimal;
 import java.util.List;

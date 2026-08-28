@@ -4,8 +4,6 @@ import com.positivity.tax.common.dto.TaxRateComponent;
 import com.positivity.tax.common.dto.TaxRateLookupResponse;
 import com.positivity.tax.internal.config.TaxProperties;
 import com.positivity.tax.internal.exception.TaxRateLookupUnsupportedException;
-import com.positivity.tax.service.TaxProviderClient;
-import com.positivity.tax.service.TaxRateLookupService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
