@@ -1,4 +1,4 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -6,8 +6,6 @@ import static org.mockito.Mockito.when;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.internal.service.PersonDirectoryService;
-import com.positivity.customer.internal.service.PersonPartyServiceImpl;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;

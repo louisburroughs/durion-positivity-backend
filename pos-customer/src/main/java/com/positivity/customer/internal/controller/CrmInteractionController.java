@@ -5,7 +5,7 @@ import com.positivity.customer.internal.dto.PagedResponse;
 import com.positivity.customer.internal.dto.RecordInteractionRequest;
 import com.positivity.customer.internal.enums.InteractionType;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.CustomerInteractionService;
+import com.positivity.customer.internal.service.CustomerInteractionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

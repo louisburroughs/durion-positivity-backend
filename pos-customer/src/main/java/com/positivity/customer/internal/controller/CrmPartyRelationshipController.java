@@ -5,7 +5,7 @@ import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.PartyRelationshipService;
+import com.positivity.customer.internal.service.PartyRelationshipService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

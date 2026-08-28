@@ -4,7 +4,7 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.CommunicationPreferenceService;
+import com.positivity.customer.internal.service.CommunicationPreferenceService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

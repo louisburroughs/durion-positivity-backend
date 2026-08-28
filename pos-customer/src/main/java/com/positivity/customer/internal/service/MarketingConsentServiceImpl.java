@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.config.SuppressionService;
 import com.positivity.customer.internal.dto.ConsentEventResponse;
 import com.positivity.customer.internal.dto.MarketingConsentDecision;
 import com.positivity.customer.internal.dto.MarketingConsentSummaryResponse;
@@ -17,8 +18,6 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.ConsentEventRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.MarketingConsentService;
-import com.positivity.customer.service.SuppressionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

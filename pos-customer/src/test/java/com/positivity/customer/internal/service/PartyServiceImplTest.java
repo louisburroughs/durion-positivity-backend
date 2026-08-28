@@ -1,4 +1,4 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,8 +33,6 @@ import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.internal.service.PartyServiceImpl;
-import com.positivity.customer.internal.service.PersonDirectoryService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -106,8 +104,8 @@ class PartyServiceImplTest {
                 extVehicleRepository,
                 emptyOutboxWriterProvider(),
                 org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerFactPublisher.class),
-                org.mockito.Mockito.mock(com.positivity.customer.service.MarketingConsentService.class),
-                org.mockito.Mockito.mock(com.positivity.customer.service.CustomerInteractionService.class),
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.MarketingConsentService.class),
+                org.mockito.Mockito.mock(com.positivity.customer.internal.service.CustomerInteractionService.class),
                 org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
     }
 

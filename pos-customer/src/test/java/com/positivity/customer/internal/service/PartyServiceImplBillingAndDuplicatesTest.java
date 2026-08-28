@@ -19,8 +19,6 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.CustomerInteractionService;
-import com.positivity.customer.service.MarketingConsentService;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
 import jakarta.persistence.EntityManager;

@@ -4,8 +4,6 @@ import com.positivity.customer.internal.dto.AddSuppressionRequest;
 import com.positivity.customer.internal.enums.ConsentChangeSource;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.enums.SuppressionReason;
-import com.positivity.customer.service.SegmentService;
-import com.positivity.customer.service.SuppressionService;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

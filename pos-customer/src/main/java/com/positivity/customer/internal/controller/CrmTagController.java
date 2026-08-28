@@ -5,7 +5,7 @@ import com.positivity.customer.internal.dto.PartyTagAssignmentResponse;
 import com.positivity.customer.internal.dto.PartyTagResponse;
 import com.positivity.customer.internal.dto.UpsertPartyTagRequest;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.PartyTagService;
+import com.positivity.customer.internal.service.PartyTagService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

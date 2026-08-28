@@ -1,8 +1,8 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.PersonLinkReconciliationService;
-import com.positivity.customer.service.PersonLinkReconciliationService.PersonLinkReport;
+import com.positivity.customer.internal.service.PersonLinkReconciliationService;
+import com.positivity.customer.internal.service.PersonLinkReconciliationService.PersonLinkReport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

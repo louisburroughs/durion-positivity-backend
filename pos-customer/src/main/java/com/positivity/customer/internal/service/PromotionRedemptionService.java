@@ -1,4 +1,4 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
 import com.positivity.customer.internal.dto.RecordRedemptionRequest;

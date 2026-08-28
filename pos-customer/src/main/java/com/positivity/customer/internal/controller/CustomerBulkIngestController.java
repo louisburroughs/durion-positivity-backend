@@ -9,7 +9,7 @@ import com.positivity.customer.internal.dto.CustomerBulkIngestRecord;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.PersonService;
+import com.positivity.customer.internal.service.PersonService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.tags.Tag;

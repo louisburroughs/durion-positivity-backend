@@ -1,12 +1,10 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.internal.service.PersonDirectoryService;
-import com.positivity.customer.internal.service.PersonLinkReconciliationServiceImpl;
-import com.positivity.customer.service.PersonLinkReconciliationService.PersonLinkReport;
+import com.positivity.customer.internal.service.PersonLinkReconciliationService.PersonLinkReport;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

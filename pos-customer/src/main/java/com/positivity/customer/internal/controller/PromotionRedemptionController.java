@@ -3,7 +3,7 @@ package com.positivity.customer.internal.controller;
 import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
 import com.positivity.customer.internal.dto.RecordRedemptionRequest;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.PromotionRedemptionService;
+import com.positivity.customer.internal.service.PromotionRedemptionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

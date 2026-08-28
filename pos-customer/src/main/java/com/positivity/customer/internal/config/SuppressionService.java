@@ -1,4 +1,4 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.config;
 
 import com.positivity.customer.internal.dto.AddSuppressionRequest;
 import com.positivity.customer.internal.dto.PagedResponse;

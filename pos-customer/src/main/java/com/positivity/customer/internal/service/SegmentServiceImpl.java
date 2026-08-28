@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.config.SegmentService;
 import com.positivity.customer.internal.domain.PartyAttributes;
 import com.positivity.customer.internal.domain.SegmentAttribute;
 import com.positivity.customer.internal.domain.SegmentPredicate;
@@ -19,8 +20,6 @@ import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.repository.SegmentMemberRepository;
 import com.positivity.customer.internal.repository.SegmentRepository;
-import com.positivity.customer.service.MarketingConsentService;
-import com.positivity.customer.service.SegmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

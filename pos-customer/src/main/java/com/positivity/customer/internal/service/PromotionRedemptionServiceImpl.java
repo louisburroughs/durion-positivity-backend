@@ -9,7 +9,6 @@ import com.positivity.customer.internal.enums.RedemptionStatus;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
 import com.positivity.customer.internal.repository.PromotionCounterRepository;
 import com.positivity.customer.internal.repository.PromotionRedemptionRepository;
-import com.positivity.customer.service.PromotionRedemptionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.LocalDateTime;

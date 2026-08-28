@@ -3,7 +3,6 @@ package com.positivity.customer.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
-import com.positivity.customer.service.PartyService;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

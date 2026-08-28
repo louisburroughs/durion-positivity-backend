@@ -4,7 +4,6 @@ import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.CustomerService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

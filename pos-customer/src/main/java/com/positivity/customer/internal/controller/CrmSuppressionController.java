@@ -1,11 +1,11 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.config.SuppressionService;
 import com.positivity.customer.internal.dto.AddSuppressionRequest;
 import com.positivity.customer.internal.dto.PagedResponse;
 import com.positivity.customer.internal.dto.SuppressionEntryResponse;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.SuppressionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

@@ -14,8 +14,6 @@ import com.positivity.customer.internal.dto.SuppressionEntryResponse;
 import com.positivity.customer.internal.enums.ConsentChangeSource;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.enums.SuppressionReason;
-import com.positivity.customer.service.OutboxReplayService;
-import com.positivity.customer.service.SuppressionService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,8 +34,8 @@ class CustomerCommandListenerTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-07-13T12:00:00Z"), ZoneOffset.UTC);
 
     private final OutboxReplayService replayService = mock(OutboxReplayService.class);
-    private final com.positivity.customer.service.SegmentService segmentService =
-            mock(com.positivity.customer.service.SegmentService.class);
+    private final com.positivity.customer.internal.config.SegmentService segmentService =
+            mock(com.positivity.customer.internal.config.SegmentService.class);
     private final SuppressionService suppressionService = mock(SuppressionService.class);
 
     private CustomerCommandListener listener;

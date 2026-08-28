@@ -4,7 +4,7 @@ import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
 import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.ContactRoleService;
+import com.positivity.customer.internal.service.ContactRoleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

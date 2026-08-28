@@ -1,4 +1,4 @@
-package com.positivity.customer.service;
+package com.positivity.customer.internal.service;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

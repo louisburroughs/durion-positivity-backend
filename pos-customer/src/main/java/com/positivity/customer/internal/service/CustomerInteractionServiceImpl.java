@@ -8,7 +8,6 @@ import com.positivity.customer.internal.enums.InteractionDirection;
 import com.positivity.customer.internal.enums.InteractionType;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.repository.CustomerInteractionRepository;
-import com.positivity.customer.service.CustomerInteractionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

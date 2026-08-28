@@ -7,7 +7,6 @@ import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.CrmVehicleService;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
