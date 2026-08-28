@@ -1,4 +1,4 @@
-package com.positivity.poseventreceiver.dao;
+package com.positivity.poseventreceiver.internal.dao;
 
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;

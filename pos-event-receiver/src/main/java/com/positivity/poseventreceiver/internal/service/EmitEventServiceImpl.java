@@ -1,6 +1,6 @@
 package com.positivity.poseventreceiver.internal.service;
 
-import com.positivity.poseventreceiver.dao.EventDao;
+import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
