@@ -17,7 +17,6 @@ import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
-import com.positivity.location.service.MobileUnitService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

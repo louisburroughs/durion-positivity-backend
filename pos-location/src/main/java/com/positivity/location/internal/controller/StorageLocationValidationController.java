@@ -3,7 +3,7 @@ package com.positivity.location.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.StorageLocationService;
+import com.positivity.location.internal.service.StorageLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

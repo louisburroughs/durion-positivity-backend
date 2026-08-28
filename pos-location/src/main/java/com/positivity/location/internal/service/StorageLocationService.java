@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.dto.StorageLocationPatchRequest;
 import com.positivity.location.internal.dto.StorageLocationRequest;

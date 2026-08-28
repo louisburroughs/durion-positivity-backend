@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,7 +13,6 @@ import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
-import com.positivity.location.internal.service.StorageLocationServiceImpl;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

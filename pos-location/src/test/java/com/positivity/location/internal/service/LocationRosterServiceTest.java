@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import com.positivity.location.internal.dto.LocationRef;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.service.LocationRosterServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

@@ -7,7 +7,6 @@ import com.positivity.location.internal.entity.ServiceAreaPostalCodeValue;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
-import com.positivity.location.service.ServiceAreaService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

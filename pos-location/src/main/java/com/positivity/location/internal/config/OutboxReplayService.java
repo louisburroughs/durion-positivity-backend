@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.config;
 
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;

@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;

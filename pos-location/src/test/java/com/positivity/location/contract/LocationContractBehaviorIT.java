@@ -14,7 +14,7 @@ import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
-import com.positivity.location.service.LocationService;
+import com.positivity.location.internal.service.LocationService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

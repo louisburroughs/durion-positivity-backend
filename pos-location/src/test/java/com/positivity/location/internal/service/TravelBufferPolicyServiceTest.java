@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,7 +13,6 @@ import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
-import com.positivity.location.internal.service.TravelBufferPolicyServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

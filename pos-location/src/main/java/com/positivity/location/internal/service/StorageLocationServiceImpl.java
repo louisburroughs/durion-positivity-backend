@@ -17,8 +17,6 @@ import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.ExtStorageLocationOnHandReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
-import com.positivity.location.service.StorageLocationInventoryTransferService;
-import com.positivity.location.service.StorageLocationService;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;

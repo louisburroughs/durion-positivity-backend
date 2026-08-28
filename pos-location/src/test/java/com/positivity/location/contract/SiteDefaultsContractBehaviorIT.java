@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
-import com.positivity.location.service.SiteDefaultsService;
+import com.positivity.location.internal.service.SiteDefaultsService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

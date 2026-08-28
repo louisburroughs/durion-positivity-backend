@@ -9,7 +9,7 @@ import com.positivity.location.internal.dto.LocationBulkIngestRecord;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.LocationService;
+import com.positivity.location.internal.service.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

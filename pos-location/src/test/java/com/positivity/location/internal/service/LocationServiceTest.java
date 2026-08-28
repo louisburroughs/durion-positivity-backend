@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,7 +24,6 @@ import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
-import com.positivity.location.internal.service.LocationServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;

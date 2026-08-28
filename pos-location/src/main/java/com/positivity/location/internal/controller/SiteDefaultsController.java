@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.SiteDefaultsRequest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.SiteDefaultsService;
+import com.positivity.location.internal.service.SiteDefaultsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

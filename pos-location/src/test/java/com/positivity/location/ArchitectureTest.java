@@ -112,6 +112,21 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("service package defines module API contracts, not implementations");
 
+    // ADR-0026 D4: the public service package is a grant surface. Grant-surface types may not
+    // depend on this module's internal implementation. pos-location holds no grant, so this package
+    // is empty; the rule (with allowEmptyShould) keeps it honest if a grant is ever added.
+    // Package patterns are exact-anchored on purpose: "com.positivity.location.service.." must NOT
+    // match "com.positivity.location.internal.service".
+    @ArchTest
+    static final ArchRule public_service_surface_should_not_depend_on_internal = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.location.service..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.positivity.location.internal..")
+            .allowEmptyShould(true)
+            .because("ADR-0026 D4: grant-surface types must not leak internal.* types to consuming modules");
+
     @ArchTest
     static final ArchRule internal_service_implementations_should_implement_service_interfaces = classes()
             .that()
@@ -120,10 +135,11 @@ public class ArchitectureTest {
             .haveSimpleNameEndingWith("Impl")
             .should()
             .implement(DescribedPredicate.describe(
-                    "a service interface in com.positivity.location.service..",
-                    javaClass -> javaClass.getPackageName().startsWith("com.positivity.location.service")))
+                    "a service interface in com.positivity.location.internal..",
+                    javaClass -> javaClass.getPackageName().startsWith("com.positivity.location.internal")))
             .allowEmptyShould(true)
-            .because("internal service classes should implement interfaces from the public service package");
+            .because("internal service classes should implement their service interfaces (ADR-0026 D3: "
+                    + "ungranted interfaces live under internal, beside or near their implementations)");
 
     @ArchTest
     static final ArchRule mapped_controller_methods_should_require_authorization = methods()

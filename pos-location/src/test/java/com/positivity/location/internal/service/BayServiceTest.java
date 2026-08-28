@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -27,7 +27,6 @@ import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
-import com.positivity.location.internal.service.BayServiceImpl;
 import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
@@ -192,7 +191,7 @@ class BayServiceTest {
                 .hasMessageContaining("Bay not found");
     }
 
-    private static final String BAY_SERVICE_FQCN = "com.positivity.location.service.BayService";
+    private static final String BAY_SERVICE_FQCN = "com.positivity.location.internal.service.BayService";
     private static final String BAY_REPOSITORY_FQCN = "com.positivity.location.internal.repository.BayRepository";
     private static final String LOCATION_REPOSITORY_FQCN =
             "com.positivity.location.internal.repository.LocationRepository";

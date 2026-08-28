@@ -2,7 +2,7 @@ package com.positivity.location.internal.controller;
 
 import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.MobileUnitService;
+import com.positivity.location.internal.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

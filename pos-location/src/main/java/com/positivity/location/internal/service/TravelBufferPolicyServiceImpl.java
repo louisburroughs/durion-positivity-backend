@@ -6,7 +6,6 @@ import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
-import com.positivity.location.service.TravelBufferPolicyService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;

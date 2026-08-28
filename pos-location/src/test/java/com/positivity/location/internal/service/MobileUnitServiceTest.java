@@ -1,4 +1,4 @@
-package com.positivity.location.service;
+package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,7 +27,6 @@ import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
-import com.positivity.location.internal.service.MobileUnitServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

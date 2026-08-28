@@ -8,7 +8,7 @@ import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.StorageLocationService;
+import com.positivity.location.internal.service.StorageLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
