@@ -3,7 +3,7 @@ package com.positivity.price.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.PriceQuoteRequest;
 import com.positivity.price.internal.dto.PriceQuoteResponse;
-import com.positivity.price.service.PriceQuoteService;
+import com.positivity.price.internal.service.PriceQuoteService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

@@ -14,7 +14,7 @@ import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.internal.enums.LocationTag;
 import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
-import com.positivity.price.service.RestrictionRuleService;
+import com.positivity.price.internal.service.RestrictionRuleService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;

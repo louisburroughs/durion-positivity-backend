@@ -1,6 +1,6 @@
-package com.positivity.price.service;
+package com.positivity.price.internal.service;
 
-import com.positivity.price.service.model.BasePriceView;
+import com.positivity.price.internal.service.model.BasePriceView;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

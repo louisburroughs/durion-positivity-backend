@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.price.config.TestSecurityConfig;
 import com.positivity.price.internal.dto.BasePriceBulkIngestRecord;
-import com.positivity.price.service.BasePriceService;
+import com.positivity.price.internal.service.BasePriceService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

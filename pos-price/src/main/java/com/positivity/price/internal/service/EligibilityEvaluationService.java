@@ -1,6 +1,7 @@
-package com.positivity.price.service;
+package com.positivity.price.internal.service;
 
 import com.positivity.price.internal.dto.AddEligibilityRuleRequest;
+import com.positivity.price.internal.dto.EligibilityDecision;
 import com.positivity.price.internal.entity.PromotionEligibilityRule;
 import java.util.List;
 import java.util.UUID;

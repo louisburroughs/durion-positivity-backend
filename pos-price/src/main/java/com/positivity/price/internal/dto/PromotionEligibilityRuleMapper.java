@@ -1,7 +1,6 @@
 package com.positivity.price.internal.dto;
 
 import com.positivity.price.internal.entity.PromotionEligibilityRule;
-import com.positivity.price.service.EligibilityDecision;
 
 /** Maps promotion eligibility domain models to API response DTOs. Issue: #96 */
 public final class PromotionEligibilityRuleMapper {

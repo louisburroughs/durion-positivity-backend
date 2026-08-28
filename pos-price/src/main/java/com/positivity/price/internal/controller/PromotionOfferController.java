@@ -7,7 +7,7 @@ import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.dto.PromotionOfferMapper;
 import com.positivity.price.internal.dto.PromotionOfferResponse;
 import com.positivity.price.internal.security.PricingPermissions;
-import com.positivity.price.service.PromotionOfferService;
+import com.positivity.price.internal.service.PromotionOfferService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

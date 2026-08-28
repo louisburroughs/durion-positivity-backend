@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.repository.ProductBasePriceRepository;
-import com.positivity.price.service.BasePriceService;
-import com.positivity.price.service.model.BasePriceView;
+import com.positivity.price.internal.service.BasePriceService;
+import com.positivity.price.internal.service.model.BasePriceView;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

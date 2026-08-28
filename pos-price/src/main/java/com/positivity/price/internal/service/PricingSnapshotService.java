@@ -1,4 +1,4 @@
-package com.positivity.price.service;
+package com.positivity.price.internal.service;
 
 import com.positivity.price.internal.dto.PricingSnapshotCreateRequest;
 import com.positivity.price.internal.dto.PricingSnapshotResponse;

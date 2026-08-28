@@ -1,4 +1,4 @@
-package com.positivity.price.service;
+package com.positivity.price.internal.service;
 
 import com.positivity.price.internal.dto.RestrictionEvaluationRequest;
 import com.positivity.price.internal.dto.RestrictionEvaluationResult;

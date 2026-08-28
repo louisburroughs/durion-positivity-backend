@@ -8,7 +8,6 @@ import com.positivity.price.internal.enums.OverrideStatus;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionOverrideAuditRepository;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
-import com.positivity.price.service.RestrictionOverrideService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

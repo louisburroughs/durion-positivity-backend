@@ -5,7 +5,6 @@ import com.positivity.price.internal.dto.PricingSnapshotResponse;
 import com.positivity.price.internal.entity.PricingSnapshot;
 import com.positivity.price.internal.exception.SnapshotNotFoundException;
 import com.positivity.price.internal.repository.PricingSnapshotRepository;
-import com.positivity.price.service.PricingSnapshotService;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;

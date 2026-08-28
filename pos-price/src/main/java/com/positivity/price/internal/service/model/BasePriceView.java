@@ -1,4 +1,4 @@
-package com.positivity.price.service.model;
+package com.positivity.price.internal.service.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;

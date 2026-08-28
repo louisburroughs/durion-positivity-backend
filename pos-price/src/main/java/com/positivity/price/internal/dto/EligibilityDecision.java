@@ -1,4 +1,4 @@
-package com.positivity.price.service;
+package com.positivity.price.internal.dto;
 
 import com.positivity.price.internal.enums.EligibilityReasonCode;
 import org.jspecify.annotations.NonNull;

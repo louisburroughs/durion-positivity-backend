@@ -5,7 +5,6 @@ import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.internal.entity.RestrictionRule;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
-import com.positivity.price.service.RestrictionRuleService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
