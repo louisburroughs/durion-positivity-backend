@@ -375,12 +375,11 @@ class ArchitectureTests {
 
     /**
      * ADR-0026 D5 enforcement switch (#1541). {@code false} = report mode: the rule prints the
-     * per-module leak census but never fails the build. Once the #1541 migration has moved every
-     * ungranted service interface to {@code internal.service}, flip this single line to
-     * {@code true} and the rule gates at <strong>zero</strong> — there is deliberately no
-     * threshold parameter to loosen.
+     * per-module leak census but never fails the build. The #1541 migration moved every ungranted
+     * service interface to {@code internal.service}, so the rule now gates at <strong>zero</strong>
+     * — there is deliberately no threshold parameter to loosen.
      */
-    private static final boolean D5_ENFORCED = false;
+    private static final boolean D5_ENFORCED = true;
 
     /**
      * ADR-0026 D4 grant-surface census (#1541): the exact set of granted types, keyed by fully
