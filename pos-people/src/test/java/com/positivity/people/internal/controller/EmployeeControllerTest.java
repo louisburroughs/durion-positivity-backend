@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.people.config.TestSecurityConfig;
 import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
-import com.positivity.people.service.EmployeeService;
+import com.positivity.people.internal.service.EmployeeService;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;

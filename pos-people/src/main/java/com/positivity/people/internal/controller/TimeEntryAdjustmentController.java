@@ -5,7 +5,7 @@ import com.positivity.people.internal.dto.TimeEntryAdjustment;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.TimeEntryAdjustmentService;
+import com.positivity.people.internal.service.TimeEntryAdjustmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

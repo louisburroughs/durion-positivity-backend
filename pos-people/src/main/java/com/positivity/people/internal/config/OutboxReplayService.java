@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.config;
 
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;

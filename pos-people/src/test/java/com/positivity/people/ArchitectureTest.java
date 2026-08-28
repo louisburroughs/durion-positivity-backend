@@ -109,6 +109,21 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("service layer is the public API of this module");
 
+    // ADR-0026 D4: the public service package is a grant surface. Grant-surface types may not
+    // depend on this module's internal implementation. pos-people holds no grant, so this package
+    // is empty; the rule (with allowEmptyShould) keeps it honest if a grant is ever added.
+    // Package patterns are exact-anchored on purpose: "com.positivity.people.service.." must NOT
+    // match "com.positivity.people.internal.service".
+    @ArchTest
+    static final ArchRule public_service_surface_should_not_depend_on_internal = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.people.service..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("com.positivity.people.internal..")
+            .allowEmptyShould(true)
+            .because("ADR-0026 D4: grant-surface types must not leak internal.* types to consuming modules");
+
     @ArchTest
     static final ArchRule classes_outside_internal_should_use_service_naming = classes()
             .that()

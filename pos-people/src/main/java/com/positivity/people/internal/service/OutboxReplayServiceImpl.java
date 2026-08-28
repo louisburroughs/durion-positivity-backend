@@ -1,7 +1,7 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.config.OutboxReplayService;
 import com.positivity.people.internal.repository.OutboxEventRepository;
-import com.positivity.people.service.OutboxReplayService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

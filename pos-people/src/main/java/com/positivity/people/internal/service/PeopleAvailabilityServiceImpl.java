@@ -5,8 +5,6 @@ import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
-import com.positivity.people.service.PeopleAvailabilityService;
-import com.positivity.people.service.UserPersonTranslationService;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;

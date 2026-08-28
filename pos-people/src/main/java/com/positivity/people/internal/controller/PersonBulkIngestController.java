@@ -10,7 +10,7 @@ import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.PersonBulkIngestRecord;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.EmployeeService;
+import com.positivity.people.internal.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

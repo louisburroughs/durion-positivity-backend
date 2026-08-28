@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Time Entry Approval API", description = "Approve/reject time entries (batch)")
 public class TimeEntryApprovalController {
 
-    private final com.positivity.people.service.TimeEntryService timeEntryService;
+    private final com.positivity.people.internal.service.TimeEntryService timeEntryService;
 
     @Operation(
             operationId = "approveTimeEntriesBatch",

@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.PeopleReportsService;
+import com.positivity.people.internal.service.PeopleReportsService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

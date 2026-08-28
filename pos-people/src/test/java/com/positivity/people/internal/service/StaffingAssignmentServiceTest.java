@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,8 +14,6 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
-import com.positivity.people.internal.service.LocationReferenceService;
-import com.positivity.people.internal.service.StaffingAssignmentServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;

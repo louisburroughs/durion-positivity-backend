@@ -1,11 +1,11 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.config.TimekeepingIngestionService;
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
 import com.positivity.people.internal.entity.TimekeepingEntry;
 import com.positivity.people.internal.enums.ApprovalStatus;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
-import com.positivity.people.service.TimekeepingIngestionService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;

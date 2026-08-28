@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.entity.ExtUserLinkReplica;
 import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
-import com.positivity.people.internal.service.UserPersonTranslationServiceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.List;

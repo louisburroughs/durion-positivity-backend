@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import java.util.List;

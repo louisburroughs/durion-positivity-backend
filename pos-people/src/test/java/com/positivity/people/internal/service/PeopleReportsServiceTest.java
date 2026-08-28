@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,9 +16,6 @@ import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
-import com.positivity.people.internal.service.LocationReferenceService;
-import com.positivity.people.internal.service.PeopleReportsServiceImpl;
-import com.positivity.people.internal.service.TimekeepingThresholdCache;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

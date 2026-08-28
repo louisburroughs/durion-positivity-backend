@@ -11,7 +11,6 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
-import com.positivity.people.service.StaffingAssignmentService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;

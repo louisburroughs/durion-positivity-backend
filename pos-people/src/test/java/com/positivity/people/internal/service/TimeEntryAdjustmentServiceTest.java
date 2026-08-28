@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -12,7 +12,6 @@ import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
-import com.positivity.people.internal.service.TimeEntryAdjustmentServiceImpl;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;

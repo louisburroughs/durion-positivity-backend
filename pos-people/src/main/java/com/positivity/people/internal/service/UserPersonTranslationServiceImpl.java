@@ -2,7 +2,6 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.entity.ExtUserLinkReplica;
 import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
-import com.positivity.people.service.UserPersonTranslationService;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Optional;

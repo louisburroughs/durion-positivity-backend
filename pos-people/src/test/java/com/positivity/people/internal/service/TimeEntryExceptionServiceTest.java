@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -12,7 +12,6 @@ import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.entity.TimeEntryException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
-import com.positivity.people.internal.service.TimeEntryExceptionServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.time.Clock;
 import java.util.Optional;

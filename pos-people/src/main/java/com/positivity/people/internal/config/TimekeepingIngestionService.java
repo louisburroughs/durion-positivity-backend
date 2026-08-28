@@ -1,4 +1,4 @@
-package com.positivity.people.service;
+package com.positivity.people.internal.config;
 
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;

@@ -2,7 +2,6 @@ package com.positivity.people.internal.config;
 
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
-import com.positivity.people.service.TimekeepingIngestionService;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 

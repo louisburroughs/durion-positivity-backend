@@ -21,7 +21,6 @@ import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
-import com.positivity.people.service.EmployeeService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;

@@ -2,10 +2,10 @@ package com.positivity.people.cap140;
 
 import static org.mockito.Mockito.verify;
 
+import com.positivity.people.internal.config.TimekeepingIngestionService;
 import com.positivity.people.internal.config.WorkSessionEventListener;
 import com.positivity.people.internal.dto.WorkSessionCompletedEvent;
 import com.positivity.people.internal.dto.WorkSessionCorrectedEvent;
-import com.positivity.people.service.TimekeepingIngestionService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

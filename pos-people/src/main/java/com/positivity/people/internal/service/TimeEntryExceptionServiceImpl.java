@@ -7,7 +7,6 @@ import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
-import com.positivity.people.service.TimeEntryExceptionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
