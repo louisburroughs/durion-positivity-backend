@@ -257,10 +257,13 @@ class WorkorderServiceImplCrmPropagationTest {
         when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation())
                 .thenReturn(Optional.of(primaryLocation));
 
+        ArgumentCaptor<Workorder> workorderCaptor = ArgumentCaptor.forClass(Workorder.class);
+        when(workorderRepository.save(workorderCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
         WorkorderResponse result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
         assertThat(result.getShopId()).isEqualTo(primaryLocation);
-        assertThat(result.getLocationId()).isEqualTo(primaryLocation);
+        assertThat(workorderCaptor.getValue().getLocationId()).isEqualTo(primaryLocation);
     }
 
     @Test
@@ -268,10 +271,13 @@ class WorkorderServiceImplCrmPropagationTest {
     void createWorkorder_nullEstimateId_noPrimaryLocation_shopIdNull() {
         when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
 
+        ArgumentCaptor<Workorder> workorderCaptor = ArgumentCaptor.forClass(Workorder.class);
+        when(workorderRepository.save(workorderCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
         WorkorderResponse result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
         assertThat(result.getShopId()).isNull();
-        assertThat(result.getLocationId()).isNull();
+        assertThat(workorderCaptor.getValue().getLocationId()).isNull();
     }
 
     // =====================================================================

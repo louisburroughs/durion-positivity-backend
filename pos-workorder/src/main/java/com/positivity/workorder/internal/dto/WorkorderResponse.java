@@ -32,9 +32,6 @@ public class WorkorderResponse {
     @Schema(description = "Shop ID", example = "550e8400-e29b-41d4-a716-446655440003")
     private UUID shopId;
 
-    @Schema(description = "Location ID", example = "550e8400-e29b-41d4-a716-446655440003")
-    private UUID locationId;
-
     @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440004")
     private UUID vehicleId;
 
@@ -75,7 +72,6 @@ public class WorkorderResponse {
                 .estimateId(entity.getEstimateId())
                 .customerId(entity.getCustomerId())
                 .shopId(entity.getShopId())
-                .locationId(entity.getLocationId())
                 .vehicleId(entity.getVehicleId())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
                 .approvedAt(entity.getApprovedAt())
