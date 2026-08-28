@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.handler;
 
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
@@ -108,7 +108,7 @@ public class PaymentApplicationReversalGLPostingEventHandler {
             // the same sourceEventId but has a non-null reversalJournalEntry link,
             // so it is excluded by the service query.) Repository access is kept
             // behind the service layer per the module's architecture rules.
-            JournalEntry original =
+            JournalEntryResponse original =
                     journalEntryService.findOriginalBySourceEvent(sourceEventId).orElse(null);
 
             if (original == null) {
@@ -135,7 +135,7 @@ public class PaymentApplicationReversalGLPostingEventHandler {
             // null reversalDate (default: original's date if its period is open,
             // else current date) and no override (async worker holds no override
             // authority). Reuses the existing period-enforcement path.
-            JournalEntry reversal = journalEntryService.reverseJournalEntry(
+            JournalEntryResponse reversal = journalEntryService.reverseJournalEntry(
                     original.getJournalEntryId(), event.getReason(), null, null);
 
             idempotencyService.registerKey(idempotencyKey, reversal.getJournalEntryId());

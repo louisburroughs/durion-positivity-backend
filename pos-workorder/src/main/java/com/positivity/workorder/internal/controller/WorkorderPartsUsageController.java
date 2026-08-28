@@ -98,7 +98,7 @@ public class WorkorderPartsUsageController {
         var event = usageService.issuePartQuantity(
                 workorderId, request.getWorkorderPartId(), request.getQuantity(), request.getUomCode(), idempotencyKey);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
+        return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
     /**
@@ -162,7 +162,7 @@ public class WorkorderPartsUsageController {
                     request.getUomCode(),
                     idempotencyKey);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
+            return ResponseEntity.status(HttpStatus.CREATED).body(event);
         } catch (IllegalArgumentException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -229,7 +229,7 @@ public class WorkorderPartsUsageController {
                     request.getUomCode(),
                     idempotencyKey);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(WorkorderPartsUsageMapper.toResponse(event));
+            return ResponseEntity.status(HttpStatus.CREATED).body(event);
         } catch (IllegalArgumentException _) {
             return ResponseEntity.badRequest().build();
         }

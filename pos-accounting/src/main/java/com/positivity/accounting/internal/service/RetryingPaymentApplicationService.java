@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
-import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
@@ -104,7 +104,7 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
 
     @Override
     @NonNull
-    public PaymentApplicationReversal reversePaymentApplication(
+    public PaymentApplicationReversalResponse reversePaymentApplication(
             @NonNull UUID paymentApplicationId, @NonNull String reason) {
         return delegate.reversePaymentApplication(paymentApplicationId, reason);
     }

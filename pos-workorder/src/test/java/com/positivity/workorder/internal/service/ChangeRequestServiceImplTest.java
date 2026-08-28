@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.entity.ApprovalRecord;
 import com.positivity.workorder.internal.entity.ChangeRequest;
@@ -162,14 +163,14 @@ class ChangeRequestServiceImplTest {
         void opensTheRequestForAdvisorReviewAndAttachesItsItems() {
             stubWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
 
-            ChangeRequest created =
+            ChangeRequestResponse created =
                     service.createChangeRequest(dto().parts(List.of(CreateChangeRequestDTO.WorkorderItemDTO.builder()
                                     .productEntityId(PRODUCT_ID)
                                     .quantity(2)
                                     .build()))
                             .build());
 
-            assertThat(created.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
+            assertThat(created.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW.name());
             assertThat(created.getRequestedByUserId()).isEqualTo("jane.smith");
             assertThat(created.getRequestedAt()).isEqualTo(NOW_LOCAL);
 
@@ -188,8 +189,11 @@ class ChangeRequestServiceImplTest {
         void survivesAnUnreachableDocumentServiceWithoutAPdfReference() {
             stubWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
 
-            assertThat(service.createChangeRequest(dto().build()).getSupplementalEstimatePdfId())
-                    .isNull();
+            service.createChangeRequest(dto().build());
+
+            ArgumentCaptor<ChangeRequest> saved = ArgumentCaptor.forClass(ChangeRequest.class);
+            verify(changeRequestRepository).save(saved.capture());
+            assertThat(saved.getValue().getSupplementalEstimatePdfId()).isNull();
         }
 
         @Test
@@ -283,7 +287,7 @@ class ChangeRequestServiceImplTest {
         void acceptsAnEmergencyItemWithAPhoto() {
             stubWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
 
-            ChangeRequest created = service.createChangeRequest(dto().isEmergencyException(true)
+            ChangeRequestResponse created = service.createChangeRequest(dto().isEmergencyException(true)
                     .exceptionReason("brake failure")
                     .services(List.of(CreateChangeRequestDTO.WorkorderItemDTO.builder()
                             .serviceEntityId(SERVICE_ENTITY_ID)
@@ -324,7 +328,7 @@ class ChangeRequestServiceImplTest {
             when(changeRequestRepository.findById(CHANGE_REQUEST_ID))
                     .thenReturn(Optional.of(changeRequest(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)));
 
-            ChangeRequest replayed = service.createChangeRequestWithIdempotency(dto().build(), "cr-key-1");
+            ChangeRequestResponse replayed = service.createChangeRequestWithIdempotency(dto().build(), "cr-key-1");
 
             assertThat(replayed.getId()).isEqualTo(CHANGE_REQUEST_ID);
             verify(workOrderRepository, never()).findById(any());
@@ -367,9 +371,9 @@ class ChangeRequestServiceImplTest {
             when(workOrderServiceRepository.findByChangeRequest_Id(CHANGE_REQUEST_ID))
                     .thenReturn(List.of(line));
 
-            ChangeRequest approved = service.approveChangeRequest(CHANGE_REQUEST_ID, APPROVER_ID, "go ahead");
+            ChangeRequestResponse approved = service.approveChangeRequest(CHANGE_REQUEST_ID, APPROVER_ID, "go ahead");
 
-            assertThat(approved.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.APPROVED);
+            assertThat(approved.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.APPROVED.name());
             assertThat(approved.getApprovedBy()).isEqualTo("jane.smith");
             assertThat(approved.getApprovedAt()).isEqualTo(NOW_LOCAL);
             assertThat(line.getStatus()).isEqualTo(WorkorderItemStatus.READY_TO_EXECUTE);
@@ -390,9 +394,9 @@ class ChangeRequestServiceImplTest {
             when(workOrderPartRepository.findByChangeRequest_Id(CHANGE_REQUEST_ID))
                     .thenReturn(List.of(part));
 
-            ChangeRequest declined = service.declineChangeRequest(CHANGE_REQUEST_ID, "customer declined");
+            ChangeRequestResponse declined = service.declineChangeRequest(CHANGE_REQUEST_ID, "customer declined");
 
-            assertThat(declined.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.DECLINED);
+            assertThat(declined.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.DECLINED.name());
             assertThat(declined.getDeclinedAt()).isEqualTo(NOW_LOCAL);
             assertThat(part.getStatus()).isEqualTo(WorkorderItemStatus.CANCELLED);
 
@@ -442,9 +446,10 @@ class ChangeRequestServiceImplTest {
             ChangeRequest pending = changeRequest(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
             when(changeRequestRepository.findById(CHANGE_REQUEST_ID)).thenReturn(Optional.of(pending));
 
-            ChangeRequest overridden = service.applyEmergencyOverride(CHANGE_REQUEST_ID, "brake failure");
+            ChangeRequestResponse overridden = service.applyEmergencyOverride(CHANGE_REQUEST_ID, "brake failure");
 
-            assertThat(overridden.getStatus()).isEqualTo(ChangeRequest.ChangeRequestStatus.APPROVED_WITH_EXCEPTION);
+            assertThat(overridden.getStatus())
+                    .isEqualTo(ChangeRequest.ChangeRequestStatus.APPROVED_WITH_EXCEPTION.name());
             assertThat(overridden.getIsEmergencyException()).isTrue();
             assertThat(overridden.getExceptionReason()).isEqualTo("brake failure");
 
@@ -585,7 +590,8 @@ class ChangeRequestServiceImplTest {
                     .thenReturn(List.of(gated, ungated));
 
             assertThat(service.hasPendingApprovalGatedRequests(WORKORDER_ID)).isTrue();
-            assertThat(service.getPendingApprovalGatedRequests(WORKORDER_ID)).containsExactly(gated);
+            assertThat(service.getPendingApprovalGatedRequests(WORKORDER_ID))
+                    .containsExactly(ChangeRequestResponse.fromEntity(gated));
         }
 
         @Test

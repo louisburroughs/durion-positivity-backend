@@ -10,6 +10,7 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
+import com.positivity.workorder.internal.dto.TimeEntryResponse;
 import com.positivity.workorder.internal.entity.TimeEntry;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TimeEntryStatus;
@@ -49,6 +50,12 @@ class TimeEntryServiceImplTest {
     private static final UUID WORK_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
+    // Simulates the timestamp Spring Data auditing stamps onto @LastModifiedDate at flush time
+    // (a plain save() on an already-managed entity does not flush, so @PreUpdate/auditing has not
+    // run yet when the mapper reads the entity -- see approveTimeEntry/rejectTimeEntry).
+    private static final Instant STALE_UPDATED_AT = Instant.parse("2023-01-01T00:00:00Z");
+    private static final Instant FLUSHED_UPDATED_AT = Instant.parse("2024-06-01T12:00:00Z");
+
     @BeforeEach
     void setUpSecurityContext() {
         var context = SecurityContextHolder.createEmptyContext();
@@ -85,7 +92,22 @@ class TimeEntryServiceImplTest {
                 .startAt(Instant.now(TEST_CLOCK).minusSeconds(3600))
                 .endAt(Instant.now(TEST_CLOCK))
                 .status(TimeEntryStatus.SUBMITTED)
+                .updatedAt(STALE_UPDATED_AT)
                 .build();
+    }
+
+    /**
+     * Stubs saveAndFlush() to mimic a real flush stamping @LastModifiedDate. Entry starts out
+     * carrying STALE_UPDATED_AT (as an un-flushed save() would leave it); only a call to
+     * saveAndFlush() bumps it to FLUSHED_UPDATED_AT, so a test asserting on FLUSHED_UPDATED_AT
+     * fails if the implementation regresses to plain save().
+     */
+    private void stubSaveReturningStaleUpdatedAt() {
+        when(timeEntryRepository.saveAndFlush(any(TimeEntry.class))).thenAnswer(inv -> {
+            TimeEntry e = inv.getArgument(0);
+            e.setUpdatedAt(FLUSHED_UPDATED_AT);
+            return e;
+        });
     }
 
     private TimeEntry approvedEntry() {
@@ -98,12 +120,24 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC1: approveEntry SUBMITTED returns APPROVED with decision fields set")
     void approveEntry_succeeds() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
-        when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
-        TimeEntry result = timeEntryService.approveTimeEntry(TIME_ENTRY_ID);
+        when(timeEntryRepository.saveAndFlush(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        TimeEntryResponse result = timeEntryService.approveTimeEntry(TIME_ENTRY_ID);
         assertThat(result.getStatus()).isEqualTo(TimeEntryStatus.APPROVED);
         assertThat(result.getDecisionByUserId()).isNotNull();
         assertThat(result.getDecisionAtUtc()).isNotNull();
         verify(eventPublisher).publishEvent(any(TimeEntryApprovedEvent.class));
+    }
+
+    @Test
+    @DisplayName("Regression: approveTimeEntry returns updatedAt reflecting the post-flush auditing value")
+    void approveEntry_returnsPostFlushUpdatedAt() {
+        when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
+        stubSaveReturningStaleUpdatedAt();
+
+        TimeEntryResponse result = timeEntryService.approveTimeEntry(TIME_ENTRY_ID);
+
+        assertThat(result.getUpdatedAt()).isEqualTo(FLUSHED_UPDATED_AT);
+        verify(timeEntryRepository).saveAndFlush(any(TimeEntry.class));
     }
 
     @Test
@@ -128,13 +162,26 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC2: rejectEntry SUBMITTED returns REJECTED with reason set")
     void rejectEntry_succeeds() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
-        when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(timeEntryRepository.saveAndFlush(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
         RejectTimeEntryRequest request = new RejectTimeEntryRequest("Hours do not match timesheet record");
-        TimeEntry result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
+        TimeEntryResponse result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
         assertThat(result.getStatus()).isEqualTo(TimeEntryStatus.REJECTED);
         assertThat(result.getRejectionReason()).isEqualTo("Hours do not match timesheet record");
         assertThat(result.getDecisionByUserId()).isNotNull();
         verify(eventPublisher).publishEvent(any(TimeEntryRejectedEvent.class));
+    }
+
+    @Test
+    @DisplayName("Regression: rejectTimeEntry returns updatedAt reflecting the post-flush auditing value")
+    void rejectEntry_returnsPostFlushUpdatedAt() {
+        when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
+        stubSaveReturningStaleUpdatedAt();
+
+        TimeEntryResponse result =
+                timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, new RejectTimeEntryRequest("Timesheet discrepancy"));
+
+        assertThat(result.getUpdatedAt()).isEqualTo(FLUSHED_UPDATED_AT);
+        verify(timeEntryRepository).saveAndFlush(any(TimeEntry.class));
     }
 
     @Test
@@ -163,9 +210,9 @@ class TimeEntryServiceImplTest {
     @DisplayName("AC2 (additional): rejectEntry valid reason returns REJECTED entry")
     void rejectEntry_withValidReason_setsApprovalFields() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
-        when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(timeEntryRepository.saveAndFlush(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
         RejectTimeEntryRequest request = new RejectTimeEntryRequest("Timesheet discrepancy");
-        TimeEntry result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
+        TimeEntryResponse result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
         assertThat(result.getStatus()).isEqualTo(TimeEntryStatus.REJECTED);
         assertThat(result.getRejectionReason()).isNotBlank();
         assertThat(result.getDecisionAtUtc()).isNotNull();

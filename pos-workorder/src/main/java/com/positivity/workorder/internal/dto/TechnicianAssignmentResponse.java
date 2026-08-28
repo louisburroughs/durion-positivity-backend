@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
-import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -109,20 +108,20 @@ public class TechnicianAssignmentResponse {
      */
     @NonNull
     public static TechnicianAssignmentResponse fromAssignment(
-            @NonNull TechnicianAssignment assignment,
+            @NonNull TechnicianAssignmentRecord assignment,
             @NonNull String workorderStatus,
             @Nullable String previousTechId,
             @Nullable String message) {
         return TechnicianAssignmentResponse.builder()
-                .workorderId(assignment.getWorkorderId().toString())
-                .technicianId(assignment.getTechnicianId().toString())
+                .workorderId(assignment.workorderId().toString())
+                .technicianId(assignment.technicianId().toString())
                 .technicianName(null) // To be populated by controller if needed
-                .assignedAt(assignment.getAssignedAt())
-                .assignedBy(assignment.getAssignedBy())
+                .assignedAt(assignment.assignedAt())
+                .assignedBy(assignment.assignedBy())
                 .previousTechnicianId(previousTechId)
                 .status(workorderStatus)
                 .message(message)
-                .notes(assignment.getNotes())
+                .notes(assignment.notes())
                 .build();
     }
 
@@ -178,15 +177,15 @@ public class TechnicianAssignmentResponse {
          * Convert entity to history entry DTO.
          */
         @NonNull
-        public static AssignmentHistoryEntry fromEntity(@NonNull TechnicianAssignment assignment) {
+        public static AssignmentHistoryEntry fromEntity(@NonNull TechnicianAssignmentRecord assignment) {
             return AssignmentHistoryEntry.builder()
-                    .technicianId(assignment.getTechnicianId().toString())
+                    .technicianId(assignment.technicianId().toString())
                     .technicianName(null) // To be populated if needed
-                    .assignedAt(assignment.getAssignedAt())
-                    .assignedBy(assignment.getAssignedBy())
-                    .unassignedAt(assignment.getUnassignedAt())
-                    .reason(assignment.getReassignmentReason())
-                    .notes(assignment.getNotes())
+                    .assignedAt(assignment.assignedAt())
+                    .assignedBy(assignment.assignedBy())
+                    .unassignedAt(assignment.unassignedAt())
+                    .reason(assignment.reassignmentReason())
+                    .notes(assignment.notes())
                     .build();
         }
     }
@@ -196,17 +195,17 @@ public class TechnicianAssignmentResponse {
      */
     @NonNull
     public static TechnicianAssignmentResponse withHistory(
-            @NonNull TechnicianAssignment currentAssignment,
-            @NonNull List<TechnicianAssignment> history,
+            @NonNull TechnicianAssignmentRecord currentAssignment,
+            @NonNull List<TechnicianAssignmentRecord> history,
             @NonNull String currentWorkorderStatus) {
         List<AssignmentHistoryEntry> historyEntries =
                 history.stream().map(AssignmentHistoryEntry::fromEntity).toList();
 
         return TechnicianAssignmentResponse.builder()
-                .workorderId(currentAssignment.getWorkorderId().toString())
-                .technicianId(currentAssignment.getTechnicianId().toString())
-                .assignedAt(currentAssignment.getAssignedAt())
-                .assignedBy(currentAssignment.getAssignedBy())
+                .workorderId(currentAssignment.workorderId().toString())
+                .technicianId(currentAssignment.technicianId().toString())
+                .assignedAt(currentAssignment.assignedAt())
+                .assignedBy(currentAssignment.assignedBy())
                 .currentStatus(currentWorkorderStatus)
                 .assignmentHistory(historyEntries)
                 .build();

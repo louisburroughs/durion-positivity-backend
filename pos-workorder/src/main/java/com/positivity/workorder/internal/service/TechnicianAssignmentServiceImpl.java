@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -60,7 +61,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      */
     @Transactional
     @NonNull
-    public TechnicianAssignment assignTechnician(
+    public TechnicianAssignmentRecord assignTechnician(
             @NonNull UUID workorderId, @NonNull UUID technicianId, @NonNull String assignedBy, @Nullable String notes) {
 
         Workorder workorder = workorderRepository
@@ -101,7 +102,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
             log.debug("Transitioned workorder {} to ASSIGNED status", workorderId);
         }
 
-        return saved;
+        return TechnicianAssignmentRecord.fromEntity(saved);
     }
 
     /**
@@ -124,7 +125,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      */
     @Transactional
     @NonNull
-    public TechnicianAssignment reassignTechnician(
+    public TechnicianAssignmentRecord reassignTechnician(
             @NonNull UUID workorderId,
             @NonNull UUID newTechnicianId,
             @NonNull String reassignedBy,
@@ -175,11 +176,11 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 newTechnicianId,
                 reassignedBy);
 
-        return saved;
+        return TechnicianAssignmentRecord.fromEntity(saved);
     }
 
     @Override
-    public Optional<TechnicianAssignment> releaseAssignment(
+    public Optional<TechnicianAssignmentRecord> releaseAssignment(
             @NonNull UUID workorderId, @NonNull String releasedBy, @Nullable String reason) {
         Optional<TechnicianAssignment> currentAssignment =
                 assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
@@ -195,7 +196,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 workorderId,
                 releasedBy,
                 reason);
-        return Optional.of(saved);
+        return Optional.of(TechnicianAssignmentRecord.fromEntity(saved));
     }
 
     /**
@@ -205,8 +206,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * @return optional containing the current assignment if one exists
      */
     @NonNull
-    public Optional<TechnicianAssignment> getCurrentAssignment(@NonNull UUID workorderId) {
-        return assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
+    public Optional<TechnicianAssignmentRecord> getCurrentAssignment(@NonNull UUID workorderId) {
+        return assignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(workorderId)
+                .map(TechnicianAssignmentRecord::fromEntity);
     }
 
     /**
@@ -216,8 +219,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * @return list of assignments ordered by assignedAt descending
      */
     @NonNull
-    public List<TechnicianAssignment> getAssignmentHistory(@NonNull UUID workorderId) {
-        return assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
+    public List<TechnicianAssignmentRecord> getAssignmentHistory(@NonNull UUID workorderId) {
+        return assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId).stream()
+                .map(TechnicianAssignmentRecord::fromEntity)
+                .toList();
     }
 
     /**
@@ -229,10 +234,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      */
     @NonNull
     public Optional<UUID> getPreviousTechnicianId(@NonNull UUID workorderId) {
-        List<TechnicianAssignment> history = getAssignmentHistory(workorderId);
+        List<TechnicianAssignmentRecord> history = getAssignmentHistory(workorderId);
         if (history.size() >= 2) {
             // Second most recent assignment is the previous one
-            return Optional.of(history.get(1).getTechnicianId());
+            return Optional.of(history.get(1).technicianId());
         }
         return Optional.empty();
     }

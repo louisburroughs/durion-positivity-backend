@@ -4,7 +4,10 @@ import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
+import com.positivity.workorder.internal.dto.WorkorderResponse;
+import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
+import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
@@ -19,11 +22,11 @@ public interface WorkorderService {
 
     record ReopenResult(UUID workorderId, String currentStatus, Boolean isReopened, Instant reopenedAt) {}
 
-    List<Workorder> getAllWorkorders();
+    List<WorkorderResponse> getAllWorkorders();
 
-    Optional<Workorder> getWorkorderById(UUID id);
+    Optional<WorkorderResponse> getWorkorderById(UUID id);
 
-    Workorder createWorkorder(UUID estimateId, UUID customerId);
+    WorkorderResponse createWorkorder(UUID estimateId, UUID customerId);
 
     /**
      * Mark a single workorder service line as COMPLETED. Allowed from active item states
@@ -66,15 +69,23 @@ public interface WorkorderService {
      *                       null, idempotency is not enforced
      * @return the created or existing workorder
      */
-    Workorder createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey);
+    WorkorderResponse createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey);
 
+    /**
+     * Create a workorder from a caller-assembled entity, honoring whatever fields (estimateId,
+     * approvalId, status, ...) the caller has already set on it.
+     *
+     * <p>Unlike the other create methods, this one is a purely internal collaborator: no
+     * controller or other module calls it today, so it is left operating on the managed
+     * {@link Workorder} entity rather than a DTO (issue #1550).
+     */
     Workorder createWorkorder(Workorder workorder);
 
     void deleteWorkorder(UUID id);
 
     void startWorkorder(UUID workorderId, String actorId, String reason);
 
-    Workorder approveWorkorder(
+    WorkorderResponse approveWorkorder(
             UUID workorderId,
             UUID customerId,
             String signatureData,
@@ -84,9 +95,9 @@ public interface WorkorderService {
 
     void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, String actorId, String reason);
 
-    List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(UUID workorderId);
+    List<WorkorderStateTransitionResponse> getTransitionHistory(UUID workorderId);
 
-    List<com.positivity.workorder.internal.entity.WorkorderSnapshot> getSnapshotHistory(UUID workorderId);
+    List<WorkorderSnapshotResponse> getSnapshotHistory(UUID workorderId);
 
     WorkorderStateMachine.CompletionPreconditions getCompletionPreconditions(UUID workorderId);
 

@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.entity.ProcessorSettlementLine;
+import com.positivity.accounting.internal.dto.SettlementLineResponse;
 import com.positivity.domainevents.payment.SettlementReportedV1;
 import java.util.List;
 import java.util.UUID;
@@ -26,7 +26,7 @@ public interface SettlementReconciliationService {
     void ingestSettlement(@NonNull SettlementReportedV1 payload);
 
     /** List a settlement's lines, optionally filtered to {@code UNMATCHED} only. */
-    List<ProcessorSettlementLine> listLines(@NonNull String settlementId, boolean unmatchedOnly);
+    List<SettlementLineResponse> listLines(@NonNull String settlementId, boolean unmatchedOnly);
 
     /**
      * Manually match an {@code UNMATCHED} line to an AR receivable payment, posting a reclass entry
@@ -36,7 +36,7 @@ public interface SettlementReconciliationService {
      * @param receivablePaymentId the receivable payment to match to
      * @return the updated line
      */
-    ProcessorSettlementLine manualMatchToReceivable(@NonNull UUID lineId, @NonNull UUID receivablePaymentId);
+    SettlementLineResponse manualMatchToReceivable(@NonNull UUID lineId, @NonNull UUID receivablePaymentId);
 
     /**
      * Write off an {@code UNMATCHED} line below the configured threshold, posting a reversible
@@ -46,5 +46,5 @@ public interface SettlementReconciliationService {
      * @param reason mandatory write-off reason (audited)
      * @return the updated line
      */
-    ProcessorSettlementLine writeOffLine(@NonNull UUID lineId, @NonNull String reason);
+    SettlementLineResponse writeOffLine(@NonNull UUID lineId, @NonNull String reason);
 }

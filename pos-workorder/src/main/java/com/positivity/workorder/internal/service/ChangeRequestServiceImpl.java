@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.entity.ApprovalRecord;
 import com.positivity.workorder.internal.entity.ChangeRequest;
@@ -58,8 +59,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     @Transactional
-    public ChangeRequest createChangeRequest(CreateChangeRequestDTO dto) {
-        return createChangeRequestInternal(dto);
+    public ChangeRequestResponse createChangeRequest(CreateChangeRequestDTO dto) {
+        return ChangeRequestResponse.fromEntity(createChangeRequestInternal(dto));
     }
 
     private ChangeRequest createChangeRequestInternal(CreateChangeRequestDTO dto) {
@@ -145,7 +146,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     @Transactional
-    public ChangeRequest createChangeRequestWithIdempotency(CreateChangeRequestDTO dto, String idempotencyKey) {
+    public ChangeRequestResponse createChangeRequestWithIdempotency(CreateChangeRequestDTO dto, String idempotencyKey) {
         // Check for existing change request if idempotency key is provided
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<UUID> existingChangeRequestId = idempotencyService.getExistingChangeRequestId(
@@ -155,11 +156,11 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                         "Idempotent request detected for key {}; returning existing change request {}",
                         idempotencyKey,
                         existingChangeRequestId.get());
-                return changeRequestRepository
+                return ChangeRequestResponse.fromEntity(changeRequestRepository
                         .findById(existingChangeRequestId.get())
                         .orElseThrow(() ->
                                 new IllegalStateException("Idempotency key points to non-existent change request: "
-                                        + existingChangeRequestId.get()));
+                                        + existingChangeRequestId.get())));
             }
         }
 
@@ -196,10 +197,10 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                     // Return the existing change request to maintain idempotency semantics
                     // The transaction will be rolled back, preventing the duplicate 'created'
                     // change request
-                    return changeRequestRepository
+                    return ChangeRequestResponse.fromEntity(changeRequestRepository
                             .findById(existingChangeRequestId.get())
                             .orElseThrow(() -> new IllegalStateException("Idempotency key " + idempotencyKey
-                                    + " points to non-existent change request: " + existingChangeRequestId.get()));
+                                    + " points to non-existent change request: " + existingChangeRequestId.get())));
                 } else {
                     // This should not happen - if DataIntegrityViolationException was thrown,
                     // the key must exist. This indicates a serious data inconsistency.
@@ -212,7 +213,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
             }
         }
 
-        return created;
+        return ChangeRequestResponse.fromEntity(created);
     }
 
     /**
@@ -220,7 +221,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     @Transactional
-    public ChangeRequest approveChangeRequest(UUID changeRequestId, UUID approvedBy, String approvalNote) {
+    public ChangeRequestResponse approveChangeRequest(UUID changeRequestId, UUID approvedBy, String approvalNote) {
         String resolvedActorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(
                         "Authenticated user context is required for approving change request"));
@@ -260,7 +261,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.READY_TO_EXECUTE);
 
         log.info("Approved change request {} by user {}", changeRequestId, resolvedActorId);
-        return changeRequest;
+        return ChangeRequestResponse.fromEntity(changeRequest);
     }
 
     /**
@@ -268,7 +269,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     @Transactional
-    public ChangeRequest declineChangeRequest(UUID changeRequestId, String approvalNote) {
+    public ChangeRequestResponse declineChangeRequest(UUID changeRequestId, String approvalNote) {
         String resolvedActorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(
                         "Authenticated user context is required for declining change request"));
@@ -307,7 +308,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.CANCELLED);
 
         log.info("Declined change request {}", changeRequestId);
-        return changeRequest;
+        return ChangeRequestResponse.fromEntity(changeRequest);
     }
 
     /**
@@ -316,7 +317,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      */
     @Override
     @Transactional
-    public ChangeRequest applyEmergencyOverride(UUID changeRequestId, String exceptionReason) {
+    public ChangeRequestResponse applyEmergencyOverride(UUID changeRequestId, String exceptionReason) {
         String managerActorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() ->
                         new IllegalStateException("Authenticated user context is required for emergency override"));
@@ -357,7 +358,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         updateItemsStatus(changeRequest.getId(), WorkorderItemStatus.READY_TO_EXECUTE);
 
         log.info("Applied emergency override to change request {} by manager {}", changeRequestId, managerActorId);
-        return changeRequest;
+        return ChangeRequestResponse.fromEntity(changeRequest);
     }
 
     /**
@@ -454,26 +455,29 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
      * Get all pending approval-gated change requests for a work order.
      */
     @Override
-    public List<ChangeRequest> getPendingApprovalGatedRequests(UUID workorderId) {
+    public List<ChangeRequestResponse> getPendingApprovalGatedRequests(UUID workorderId) {
         List<ChangeRequest> pendingRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
                 workorderId, ChangeRequestStatus.AWAITING_ADVISOR_REVIEW);
 
         // Filter for approval-gated requests
         return pendingRequests.stream()
                 .filter(request -> Boolean.TRUE.equals(request.getIsApprovalGated()))
+                .map(ChangeRequestResponse::fromEntity)
                 .toList();
     }
 
     @Override
-    public List<ChangeRequest> getChangeRequestsByWorkorder(UUID workorderId) {
-        return changeRequestRepository.findByWorkorder_Id(workorderId);
+    public List<ChangeRequestResponse> getChangeRequestsByWorkorder(UUID workorderId) {
+        return changeRequestRepository.findByWorkorder_Id(workorderId).stream()
+                .map(ChangeRequestResponse::fromEntity)
+                .toList();
     }
 
     @Override
-    public ChangeRequest getChangeRequestById(UUID id) {
-        return changeRequestRepository
+    public ChangeRequestResponse getChangeRequestById(UUID id) {
+        return ChangeRequestResponse.fromEntity(changeRequestRepository
                 .findById(id)
-                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + id));
+                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + id)));
     }
 
     private void validateEmergencyDocumentation(CreateChangeRequestDTO dto) {

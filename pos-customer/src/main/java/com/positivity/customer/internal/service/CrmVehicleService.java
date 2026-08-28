@@ -1,7 +1,6 @@
 package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
-import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.shared.dto.VehicleResponse;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,17 +17,10 @@ public interface CrmVehicleService {
      */
     Optional<VehicleResponse> getVehicleForCustomer(UUID customerId, UUID vehicleId);
 
-    CommercialParty findPartyByVehicleId(UUID vehicleId);
-
     com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary fetchVehicleSummaryByVin(
             String vinCode);
 
     CrmSnapshotDTO buildSnapshotForVehicleOwner(UUID vehicleId);
-
-    CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party);
-
-    java.util.List<com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(
-            CommercialParty party);
 
     /**
      * Lists vehicle summaries for any customer (person or commercial), resolved by

@@ -8,7 +8,10 @@ import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
+import com.positivity.workorder.internal.dto.WorkorderResponse;
+import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
+import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.entity.AuditEvent;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
@@ -87,19 +90,21 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
 
     @Override
-    public List<Workorder> getAllWorkorders() {
-        return workorderRepository.findAll();
+    public List<WorkorderResponse> getAllWorkorders() {
+        return workorderRepository.findAll().stream()
+                .map(WorkorderResponse::fromEntity)
+                .toList();
     }
 
     @Override
-    public Optional<Workorder> getWorkorderById(UUID id) {
-        return workorderRepository.findById(id);
+    public Optional<WorkorderResponse> getWorkorderById(UUID id) {
+        return workorderRepository.findById(id).map(WorkorderResponse::fromEntity);
     }
 
     @Override
     @Transactional
-    public Workorder createWorkorder(UUID estimateId, UUID customerId) {
-        return doCreateWorkorder(estimateId, customerId);
+    public WorkorderResponse createWorkorder(UUID estimateId, UUID customerId) {
+        return WorkorderResponse.fromEntity(doCreateWorkorder(estimateId, customerId));
     }
 
     private Workorder doCreateWorkorder(UUID estimateId, UUID customerId) {
@@ -192,19 +197,19 @@ public class WorkorderServiceImpl implements WorkorderService {
      */
     @Override
     @Transactional
-    public Workorder createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey) {
+    public WorkorderResponse createWorkorderWithIdempotency(UUID estimateId, UUID customerId, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            return doCreateWorkorder(estimateId, customerId);
+            return WorkorderResponse.fromEntity(doCreateWorkorder(estimateId, customerId));
         }
 
         Optional<Workorder> existingWorkorder = getExistingIdempotentWorkorder(idempotencyKey);
         if (existingWorkorder.isPresent()) {
-            return existingWorkorder.get();
+            return WorkorderResponse.fromEntity(existingWorkorder.get());
         }
 
         Workorder created = doCreateWorkorder(estimateId, customerId);
 
-        return registerIdempotencyKeyWithFallback(idempotencyKey, created);
+        return WorkorderResponse.fromEntity(registerIdempotencyKeyWithFallback(idempotencyKey, created));
     }
 
     private Optional<Workorder> getExistingIdempotentWorkorder(String idempotencyKey) {
@@ -520,7 +525,7 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     @Override
     @Transactional
-    public Workorder approveWorkorder(
+    public WorkorderResponse approveWorkorder(
             UUID workorderId,
             UUID customerId,
             String signatureData,
@@ -562,7 +567,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         // was already asked -- requestAuthorization does not re-ask a granted or pending one.
         fleetAuthorizationService.requestAuthorization(saved.getId());
 
-        return saved;
+        return WorkorderResponse.fromEntity(saved);
     }
 
     @Override
@@ -572,14 +577,17 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     @Override
-    public List<com.positivity.workorder.internal.entity.WorkorderStateTransition> getTransitionHistory(
-            UUID workorderId) {
-        return stateMachine.getTransitionHistory(workorderId);
+    public List<WorkorderStateTransitionResponse> getTransitionHistory(UUID workorderId) {
+        return stateMachine.getTransitionHistory(workorderId).stream()
+                .map(WorkorderStateTransitionResponse::fromEntity)
+                .toList();
     }
 
     @Override
-    public List<com.positivity.workorder.internal.entity.WorkorderSnapshot> getSnapshotHistory(UUID workorderId) {
-        return stateMachine.getSnapshotHistory(workorderId);
+    public List<WorkorderSnapshotResponse> getSnapshotHistory(UUID workorderId) {
+        return stateMachine.getSnapshotHistory(workorderId).stream()
+                .map(WorkorderSnapshotResponse::fromEntity)
+                .toList();
     }
 
     @Override

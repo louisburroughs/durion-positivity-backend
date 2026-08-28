@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
@@ -76,7 +77,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
      */
     @Transactional
     @NonNull
-    public WorkorderLaborEntry startLaborSession(
+    public WorkorderLaborEntryResponse startLaborSession(
             @NonNull UUID workorderId,
             @NonNull UUID serviceId,
             @NonNull UUID technicianId,
@@ -93,9 +94,9 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                         "Idempotency key {} already processed, returning existing labor entry {}",
                         idempotencyKey,
                         existingId.get());
-                return laborRepository
+                return WorkorderLaborEntryResponse.fromEntity(laborRepository
                         .findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get()));
+                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get())));
             }
         }
 
@@ -144,7 +145,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
             idempotencyService.registerLaborKey(IDEMPOTENCY_OPERATION_LABOR_START, idempotencyKey, saved.getId());
         }
 
-        return saved;
+        return WorkorderLaborEntryResponse.fromEntity(saved);
     }
 
     /**
@@ -158,7 +159,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
      */
     @Transactional
     @NonNull
-    public WorkorderLaborEntry stopLaborSession(@NonNull UUID entryId, @Nullable String idempotencyKey) {
+    public WorkorderLaborEntryResponse stopLaborSession(@NonNull UUID entryId, @Nullable String idempotencyKey) {
 
         // Check idempotency first
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -169,9 +170,9 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                         "Idempotency key {} already processed, returning existing stopped labor entry {}",
                         idempotencyKey,
                         existingId.get());
-                return laborRepository
+                return WorkorderLaborEntryResponse.fromEntity(laborRepository
                         .findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get()));
+                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get())));
             }
         }
 
@@ -192,7 +193,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
             idempotencyService.registerLaborKey(IDEMPOTENCY_OPERATION_LABOR_STOP, idempotencyKey, saved.getId());
         }
 
-        return saved;
+        return WorkorderLaborEntryResponse.fromEntity(saved);
     }
 
     /**
@@ -203,8 +204,10 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
      */
     @Transactional(readOnly = true)
     @NonNull
-    public List<WorkorderLaborEntry> getLaborHistory(@NonNull UUID workorderId) {
-        return laborRepository.findByWorkorder_IdOrderByStartTimeDesc(workorderId);
+    public List<WorkorderLaborEntryResponse> getLaborHistory(@NonNull UUID workorderId) {
+        return laborRepository.findByWorkorder_IdOrderByStartTimeDesc(workorderId).stream()
+                .map(WorkorderLaborEntryResponse::fromEntity)
+                .toList();
     }
 
     /**
@@ -219,7 +222,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
      */
     @Transactional
     @NonNull
-    public WorkorderLaborEntry adjustLaborHours(
+    public WorkorderLaborEntryResponse adjustLaborHours(
             @NonNull UUID entryId,
             @NonNull BigDecimal hours,
             @NonNull String reason,
@@ -235,9 +238,9 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                         "Idempotency key {} already processed, returning existing adjusted labor entry {}",
                         idempotencyKey,
                         existingId.get());
-                return laborRepository
+                return WorkorderLaborEntryResponse.fromEntity(laborRepository
                         .findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get()));
+                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get())));
             }
         }
 
@@ -254,6 +257,6 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
             idempotencyService.registerLaborKey(IDEMPOTENCY_OPERATION_LABOR_ADJUST, idempotencyKey, saved.getId());
         }
 
-        return saved;
+        return WorkorderLaborEntryResponse.fromEntity(saved);
     }
 }

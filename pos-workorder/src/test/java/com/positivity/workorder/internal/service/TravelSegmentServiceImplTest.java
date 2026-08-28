@@ -10,8 +10,9 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.dto.CreateTravelSegmentAdjustmentRequest;
 import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
+import com.positivity.workorder.internal.dto.TravelSegmentAdjustmentResponse;
+import com.positivity.workorder.internal.dto.TravelSegmentResponse;
 import com.positivity.workorder.internal.entity.TravelSegment;
-import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
 import com.positivity.workorder.internal.enums.TravelSegmentStatus;
 import com.positivity.workorder.internal.enums.TravelSegmentType;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
@@ -50,6 +51,12 @@ class TravelSegmentServiceImplTest {
     private static final UUID TECHNICIAN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID SEGMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID ACTED_FOR_PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    // Simulates the timestamp Spring Data auditing stamps onto @LastModifiedDate at flush time
+    // (a plain save()/saveAll() on already-managed entities does not flush, so @PreUpdate/auditing
+    // has not run yet when the mapper reads the entity -- see stopTravelSegment/submitTravelSegments).
+    private static final Instant STALE_UPDATED_AT = Instant.parse("2023-01-01T00:00:00Z");
+    private static final Instant FLUSHED_UPDATED_AT = Instant.parse("2024-06-01T12:00:00Z");
 
     @Mock
     private TravelSegmentRepository travelSegmentRepository;
@@ -103,7 +110,7 @@ class TravelSegmentServiceImplTest {
                 .thenReturn(0L);
         when(travelSegmentRepository.save(any(TravelSegment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TravelSegment result = serviceImpl.startTravelSegment(validStartRequest());
+        TravelSegmentResponse result = serviceImpl.startTravelSegment(validStartRequest());
 
         assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.IN_PROGRESS);
         assertThat(result.getStartAt()).isNotNull();
@@ -125,9 +132,9 @@ class TravelSegmentServiceImplTest {
                 .build();
 
         when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
-        when(travelSegmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(travelSegmentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        TravelSegment result = serviceImpl.stopTravelSegment(
+        TravelSegmentResponse result = serviceImpl.stopTravelSegment(
                 SEGMENT_ID, StopTravelSegmentRequest.builder().build());
 
         assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.COMPLETED);
@@ -135,6 +142,37 @@ class TravelSegmentServiceImplTest {
         assertThat(result.getDurationMinutes()).isGreaterThan(0);
         assertThat(result.getRawMinutes()).isEqualTo(result.getDurationMinutes());
         assertThat(result.getBufferedMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("Regression: stopTravelSegment returns updatedAt reflecting the post-flush auditing value")
+    void stopSegment_returnsPostFlushUpdatedAt() {
+        TravelSegment segment = TravelSegment.builder()
+                .travelSegmentId(SEGMENT_ID)
+                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                .technicianId(TECHNICIAN_ID)
+                .segmentType(TravelSegmentType.DEPART_SHOP)
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(600))
+                .status(TravelSegmentStatus.IN_PROGRESS)
+                .createdBy("system")
+                .updatedAt(STALE_UPDATED_AT)
+                .build();
+
+        when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
+        // Entry starts out carrying STALE_UPDATED_AT (as an un-flushed save() would leave it);
+        // only a call to saveAndFlush() bumps it to FLUSHED_UPDATED_AT, so this test fails if the
+        // implementation regresses to plain save().
+        when(travelSegmentRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            TravelSegment s = inv.getArgument(0);
+            s.setUpdatedAt(FLUSHED_UPDATED_AT);
+            return s;
+        });
+
+        TravelSegmentResponse result = serviceImpl.stopTravelSegment(
+                SEGMENT_ID, StopTravelSegmentRequest.builder().build());
+
+        assertThat(result.getUpdatedAt()).isEqualTo(FLUSHED_UPDATED_AT);
+        verify(travelSegmentRepository).saveAndFlush(any());
     }
 
     @Test
@@ -222,13 +260,46 @@ class TravelSegmentServiceImplTest {
         when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
                         MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID))
                 .thenReturn(List.of(seg1, seg2));
-        when(travelSegmentRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(travelSegmentRepository.saveAllAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID);
 
         assertThat(seg1.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
         assertThat(seg2.getStatus()).isEqualTo(TravelSegmentStatus.SUBMITTED);
-        verify(travelSegmentRepository).saveAll(any());
+        verify(travelSegmentRepository).saveAllAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Regression: submitTravelSegments returns updatedAt reflecting the post-flush auditing value")
+    void submitSegments_returnsPostFlushUpdatedAt() {
+        TravelSegment seg1 = TravelSegment.builder()
+                .travelSegmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .mobileWorkAssignmentId(MOBILE_WORK_ASSIGNMENT_ID)
+                .technicianId(TECHNICIAN_ID)
+                .segmentType(TravelSegmentType.DEPART_SHOP)
+                .startAt(Instant.now(TEST_CLOCK).minusSeconds(300))
+                .status(TravelSegmentStatus.IN_PROGRESS)
+                .createdBy("system")
+                .updatedAt(STALE_UPDATED_AT)
+                .build();
+
+        when(travelSegmentRepository.findByMobileWorkAssignmentIdAndTechnicianId(
+                        MOBILE_WORK_ASSIGNMENT_ID, TECHNICIAN_ID))
+                .thenReturn(List.of(seg1));
+        // Entry starts out carrying STALE_UPDATED_AT (as an un-flushed saveAll() would leave it);
+        // only a call to saveAllAndFlush() bumps it to FLUSHED_UPDATED_AT, so this test fails if
+        // the implementation regresses to plain saveAll().
+        when(travelSegmentRepository.saveAllAndFlush(any())).thenAnswer(inv -> {
+            List<TravelSegment> segments = inv.getArgument(0);
+            segments.forEach(s -> s.setUpdatedAt(FLUSHED_UPDATED_AT));
+            return segments;
+        });
+
+        List<TravelSegmentResponse> result = serviceImpl.submitTravelSegments(MOBILE_WORK_ASSIGNMENT_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getUpdatedAt()).isEqualTo(FLUSHED_UPDATED_AT);
+        verify(travelSegmentRepository).saveAllAndFlush(any());
     }
 
     @Test
@@ -258,7 +329,7 @@ class TravelSegmentServiceImplTest {
         when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
         when(travelSegmentAdjustmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        TravelSegmentAdjustment result = serviceImpl.createAdjustment(SEGMENT_ID, validAdjustmentRequest());
+        TravelSegmentAdjustmentResponse result = serviceImpl.createAdjustment(SEGMENT_ID, validAdjustmentRequest());
 
         assertThat(result.getApprovalStatus()).isEqualTo("PENDING");
         assertThat(result.getAdjustedByUserId()).isNotNull();

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEve
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
@@ -885,15 +886,15 @@ class PaymentApplicationServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        PaymentApplicationReversal result =
+        PaymentApplicationReversalResponse result =
                 service.reversePaymentApplication(applicationId, "Customer disputed charge");
 
         // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getOriginalPaymentApplicationId()).isEqualTo(applicationId);
-        assertThat(result.getAmount()).isEqualByComparingTo("500.00");
-        assertThat(result.getReason()).isEqualTo("Customer disputed charge");
-        assertThat(result.getReversedBy()).isEqualTo("SYSTEM"); // Derived from SecurityContext (fallback in
+        assertThat(result.originalPaymentApplicationId()).isEqualTo(applicationId);
+        assertThat(result.amount()).isEqualByComparingTo("500.00");
+        assertThat(result.reason()).isEqualTo("Customer disputed charge");
+        assertThat(result.reversedBy()).isEqualTo("SYSTEM"); // Derived from SecurityContext (fallback in
         // tests)
 
         // Verify payment unappliedAmount restored
@@ -1014,12 +1015,12 @@ class PaymentApplicationServiceTest {
 
         try {
             // Act
-            PaymentApplicationReversal result =
+            PaymentApplicationReversalResponse result =
                     service.reversePaymentApplication(applicationId, "Customer disputed charge");
 
             // Assert
             assertThat(result).isNotNull();
-            assertThat(result.getReversedBy()).isEqualTo("admin@example.com"); // From SecurityContext
+            assertThat(result.reversedBy()).isEqualTo("admin@example.com"); // From SecurityContext
             assertThat(testPayment.getModifiedBy()).isEqualTo("admin@example.com"); // Payment also updated
 
             verify(paymentApplicationReversalRepository).save(any(PaymentApplicationReversal.class));

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
+import com.positivity.workorder.internal.dto.WorkorderPartsUsageMapper;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
@@ -173,7 +174,7 @@ class WorkorderPartUsageServiceImplTest {
             WorkorderPart part = part("0", "0", "0");
             givenPart(part);
 
-            WorkorderPartUsageEvent event =
+            WorkorderPartUsageEventResponse event =
                     service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(event.getEventType()).isEqualTo("ISSUE");
@@ -223,10 +224,10 @@ class WorkorderPartUsageServiceImplTest {
                     .thenReturn(Optional.of(EVENT_ID));
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existing));
 
-            WorkorderPartUsageEvent event =
+            WorkorderPartUsageEventResponse event =
                     service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "issue-key-1");
 
-            assertThat(event).isSameAs(existing);
+            assertThat(event).isEqualTo(WorkorderPartsUsageMapper.toResponse(existing));
             verify(usageEventRepository, never()).save(any());
             verify(workorderPartRepository, never()).save(any());
         }
@@ -332,7 +333,7 @@ class WorkorderPartUsageServiceImplTest {
             WorkorderPart part = part("4", "1", "0");
             givenPart(part);
 
-            WorkorderPartUsageEvent event =
+            WorkorderPartUsageEventResponse event =
                     service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(event.getEventType()).isEqualTo("CONSUME");
@@ -398,7 +399,7 @@ class WorkorderPartUsageServiceImplTest {
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existing));
 
             assertThat(service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "consume-key-1"))
-                    .isSameAs(existing);
+                    .isEqualTo(WorkorderPartsUsageMapper.toResponse(existing));
         }
 
         @Test
@@ -456,7 +457,7 @@ class WorkorderPartUsageServiceImplTest {
             WorkorderPart part = part("5", "2", "1");
             givenPart(part);
 
-            WorkorderPartUsageEvent event =
+            WorkorderPartUsageEventResponse event =
                     service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(event.getEventType()).isEqualTo("RETURN");
@@ -512,7 +513,7 @@ class WorkorderPartUsageServiceImplTest {
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existing));
 
             assertThat(service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "return-key-1"))
-                    .isSameAs(existing);
+                    .isEqualTo(WorkorderPartsUsageMapper.toResponse(existing));
         }
 
         @Test

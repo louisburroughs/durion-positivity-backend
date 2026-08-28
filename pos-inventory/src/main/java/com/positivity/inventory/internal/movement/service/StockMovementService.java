@@ -4,7 +4,6 @@ import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
-import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -64,5 +63,6 @@ public interface StockMovementService {
      * @return the created ledger entry
      */
     @NonNull
-    InventoryLedgerEntry approveAdjustmentRequest(@NonNull UUID adjustmentRequestId, @NonNull String approverUserId);
+    InventoryLedgerEntryResponse approveAdjustmentRequest(
+            @NonNull UUID adjustmentRequestId, @NonNull String approverUserId);
 }

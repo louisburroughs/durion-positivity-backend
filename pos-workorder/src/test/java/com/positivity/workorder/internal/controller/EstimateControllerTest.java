@@ -18,7 +18,6 @@ import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
-import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
@@ -79,14 +78,15 @@ class EstimateControllerTest {
     @InjectMocks
     private EstimateController controller;
 
-    private Workorder workorder;
+    private WorkorderResponse workorder;
 
     @BeforeEach
     void setUp() {
-        workorder = new Workorder();
-        workorder.setId(WORKORDER_ID);
-        workorder.setEstimateId(ESTIMATE_ID);
-        workorder.setCustomerId(CUSTOMER_ID);
+        workorder = WorkorderResponse.builder()
+                .id(WORKORDER_ID)
+                .estimateId(ESTIMATE_ID)
+                .customerId(CUSTOMER_ID)
+                .build();
     }
 
     private static EstimateResponse estimate() {
@@ -489,8 +489,8 @@ class EstimateControllerTest {
                     .registerKey(PROMOTE_OPERATION, IDEMPOTENCY_KEY, WORKORDER_ID);
             when(idempotencyService.getExistingWorkorderId(PROMOTE_OPERATION, IDEMPOTENCY_KEY))
                     .thenReturn(Optional.empty(), Optional.of(OTHER_WORKORDER_ID));
-            Workorder winner = new Workorder();
-            winner.setId(OTHER_WORKORDER_ID);
+            WorkorderResponse winner =
+                    WorkorderResponse.builder().id(OTHER_WORKORDER_ID).build();
             when(workorderService.getWorkorderById(OTHER_WORKORDER_ID)).thenReturn(Optional.of(winner));
 
             ResponseEntity<WorkorderResponse> response =

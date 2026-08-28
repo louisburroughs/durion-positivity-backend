@@ -10,12 +10,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.dto.IntentSlot;
 import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.dto.WritePlanResponseV1;
-import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.entity.NltiRequest;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.entity.NltiWritePlan;
@@ -194,9 +194,9 @@ class NltiWritePlanServiceTest {
         assertThat(saved.getIdempotencyKey()).isNotBlank();
         assertThat(request.getStatus()).isEqualTo(NltiRequestStatus.PENDING_CONFIRMATION);
         verify(writePlanExecutor, never()).execute(anyString(), anyString(), any());
-        ArgumentCaptor<NltiAuditEvent> auditCaptor = ArgumentCaptor.forClass(NltiAuditEvent.class);
+        ArgumentCaptor<AuditEventAppend> auditCaptor = ArgumentCaptor.forClass(AuditEventAppend.class);
         verify(auditLedgerService).append(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().getEventType()).isEqualTo(NltiAuditEventType.PLAN);
+        assertThat(auditCaptor.getValue().eventType()).isEqualTo(NltiAuditEventType.PLAN);
     }
 
     @Test
@@ -285,10 +285,10 @@ class NltiWritePlanServiceTest {
         assertThat(outcome.status()).isEqualTo("COMPLETE");
         assertThat(outcome.executionResult()).isEqualTo("created PO-77");
         assertThat(plan.getExecutedAt()).isNotNull();
-        ArgumentCaptor<NltiAuditEvent> auditCaptor = ArgumentCaptor.forClass(NltiAuditEvent.class);
+        ArgumentCaptor<AuditEventAppend> auditCaptor = ArgumentCaptor.forClass(AuditEventAppend.class);
         verify(auditLedgerService, org.mockito.Mockito.times(3)).append(auditCaptor.capture());
         assertThat(auditCaptor.getAllValues())
-                .extracting(NltiAuditEvent::getEventType)
+                .extracting(AuditEventAppend::eventType)
                 .containsExactly(
                         NltiAuditEventType.CONFIRMATION,
                         NltiAuditEventType.EXECUTION_STEP,
@@ -389,10 +389,10 @@ class NltiWritePlanServiceTest {
                 .isInstanceOf(WritePlanExecutionException.class);
 
         assertThat(plan.getStatus()).isEqualTo(NltiRequestStatus.ERROR);
-        ArgumentCaptor<NltiAuditEvent> auditCaptor = ArgumentCaptor.forClass(NltiAuditEvent.class);
+        ArgumentCaptor<AuditEventAppend> auditCaptor = ArgumentCaptor.forClass(AuditEventAppend.class);
         verify(auditLedgerService, org.mockito.Mockito.times(3)).append(auditCaptor.capture());
         assertThat(auditCaptor.getAllValues())
-                .extracting(NltiAuditEvent::getEventType)
+                .extracting(AuditEventAppend::eventType)
                 .containsExactly(
                         NltiAuditEventType.CONFIRMATION,
                         NltiAuditEventType.EXECUTION_STEP,

@@ -9,6 +9,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.vehiclefitment.internal.dto.MakeResponse;
+import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
+import com.positivity.vehiclefitment.internal.dto.ModelResponse;
+import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
@@ -180,7 +184,7 @@ class VehicleFitmentServiceTest {
                 .thenReturn("{\"Results\":[{\"Mfr_ID\":\"" + MANUFACTURER_ID
                         + "\",\"Mfr_CommonName\":\"Toyota Motor Corp\"}]}");
 
-        List<Manufacturer> result = service.getManufacturers();
+        List<ManufacturerResponse> result = service.getManufacturers();
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Toyota Motor Corp");
@@ -227,7 +231,7 @@ class VehicleFitmentServiceTest {
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"Make_ID\":\"" + MAKE_ID + "\",\"Make_Name\":\"Toyota\"}]}");
 
-        List<Make> result = service.getMakesByManufacturer(MANUFACTURER_ID);
+        List<MakeResponse> result = service.getMakesByManufacturer(MANUFACTURER_ID);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Toyota");
@@ -279,7 +283,7 @@ class VehicleFitmentServiceTest {
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"Model_ID\":\"" + modelId + "\",\"Model_Name\":\"Camry\"}]}");
 
-        List<Model> result = service.getModelsByMake(MAKE_ID);
+        List<ModelResponse> result = service.getModelsByMake(MAKE_ID);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Camry");
@@ -329,7 +333,7 @@ class VehicleFitmentServiceTest {
         when(responseSpec.body(String.class))
                 .thenReturn("{\"Results\":[{\"VehicleTypeId\":\"1\",\"VehicleTypeName\":\"Passenger Car\"}]}");
 
-        List<VehicleType> result = service.getVehicleTypesForMake(MAKE_ID);
+        List<VehicleTypeResponse> result = service.getVehicleTypesForMake(MAKE_ID);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getVehicleTypeName()).isEqualTo("Passenger Car");

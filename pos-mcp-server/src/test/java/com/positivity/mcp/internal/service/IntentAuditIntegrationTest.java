@@ -6,8 +6,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.dto.ClarificationResponseDTO;
-import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.entity.NltiIntent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.enums.NltiIntentStatus;
@@ -102,13 +102,13 @@ class IntentAuditIntegrationTest {
         // Issue NLTI-002: AC6 — parse() must trigger AuditLedgerService.append(INTENT event)
         service.parse("check stock", SESSION_ID, CORRELATION_ID);
 
-        ArgumentCaptor<NltiAuditEvent> captor = ArgumentCaptor.forClass(NltiAuditEvent.class);
+        ArgumentCaptor<AuditEventAppend> captor = ArgumentCaptor.forClass(AuditEventAppend.class);
         verify(auditLedgerService, times(1)).append(captor.capture());
-        NltiAuditEvent captured = captor.getValue();
-        org.assertj.core.api.Assertions.assertThat(captured.getId()).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(captured.getEventType()).isEqualTo(NltiAuditEventType.INTENT);
-        org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId()).isEqualTo(CORRELATION_ID);
-        org.assertj.core.api.Assertions.assertThat(captured.getSessionId()).isEqualTo(SESSION_ID);
+        AuditEventAppend captured = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(captured.id()).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(captured.eventType()).isEqualTo(NltiAuditEventType.INTENT);
+        org.assertj.core.api.Assertions.assertThat(captured.correlationId()).isEqualTo(CORRELATION_ID);
+        org.assertj.core.api.Assertions.assertThat(captured.sessionId()).isEqualTo(SESSION_ID);
     }
 
     // ─── AC5: metric emission — parse ────────────────────────────────────────
@@ -143,13 +143,13 @@ class IntentAuditIntegrationTest {
 
         service.resolve(INTENT_ID, response);
 
-        ArgumentCaptor<NltiAuditEvent> captor = ArgumentCaptor.forClass(NltiAuditEvent.class);
+        ArgumentCaptor<AuditEventAppend> captor = ArgumentCaptor.forClass(AuditEventAppend.class);
         verify(auditLedgerService, times(1)).append(captor.capture());
-        NltiAuditEvent captured = captor.getValue();
-        org.assertj.core.api.Assertions.assertThat(captured.getId()).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(captured.getEventType()).isEqualTo(NltiAuditEventType.INTENT);
-        org.assertj.core.api.Assertions.assertThat(captured.getCorrelationId()).isEqualTo(CORRELATION_ID);
-        org.assertj.core.api.Assertions.assertThat(captured.getSessionId()).isEqualTo(SESSION_ID);
+        AuditEventAppend captured = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(captured.id()).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(captured.eventType()).isEqualTo(NltiAuditEventType.INTENT);
+        org.assertj.core.api.Assertions.assertThat(captured.correlationId()).isEqualTo(CORRELATION_ID);
+        org.assertj.core.api.Assertions.assertThat(captured.sessionId()).isEqualTo(SESSION_ID);
     }
 
     // ─── AC5: metric emission — clarification ────────────────────────────────

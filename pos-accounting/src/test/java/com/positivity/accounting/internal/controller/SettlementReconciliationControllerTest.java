@@ -13,9 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.internal.dto.SettlementLineResponse;
 import com.positivity.accounting.internal.dto.SettlementManualMatchRequest;
 import com.positivity.accounting.internal.dto.SettlementWriteOffRequest;
-import com.positivity.accounting.internal.entity.ProcessorSettlementLine;
 import com.positivity.accounting.internal.enums.SettlementLineMatchStatus;
 import com.positivity.accounting.internal.enums.SettlementLineType;
 import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
@@ -48,8 +48,8 @@ class SettlementReconciliationControllerTest extends BaseIntegrationTest {
     @MockitoBean
     private SettlementReconciliationService settlementReconciliationService;
 
-    private static ProcessorSettlementLine unmatchedLine() {
-        return ProcessorSettlementLine.builder()
+    private static SettlementLineResponse unmatchedLine() {
+        return SettlementLineResponse.builder()
                 .lineId(LINE_ID)
                 .settlementId(SETTLEMENT_ID)
                 .lineType(SettlementLineType.CHARGE)

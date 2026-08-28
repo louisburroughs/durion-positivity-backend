@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
-import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryPostRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
@@ -141,12 +140,7 @@ public class JournalEntryController {
         var entryPage = journalEntryService.listJournalEntries(pageable, entryNumber);
 
         PagedResponse<JournalEntryResponse> response = new PagedResponse<>(
-                entryPage.getContent().stream()
-                        .map(JournalEntryMapper::toResponse)
-                        .toList(),
-                entryPage.getNumber(),
-                entryPage.getSize(),
-                entryPage.getTotalElements());
+                entryPage.getContent(), entryPage.getNumber(), entryPage.getSize(), entryPage.getTotalElements());
 
         return ResponseEntity.ok(response);
     }
@@ -177,7 +171,7 @@ public class JournalEntryController {
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
         log.debug("Getting journal entry: {}", journalEntryId);
         var entry = journalEntryService.getJournalEntry(journalEntryId);
-        return ResponseEntity.ok(JournalEntryMapper.toResponse(entry));
+        return ResponseEntity.ok(entry);
     }
 
     @GetMapping("/{journalEntryId}/traceability")
@@ -258,9 +252,8 @@ public class JournalEntryController {
                     @RequestBody
                     JournalEntryCreateRequest request) {
         log.debug("Creating journal entry: {}", request.getDescription());
-        var entity = JournalEntryMapper.toEntity(request);
-        var created = journalEntryService.createJournalEntry(entity);
-        return ResponseEntity.status(HttpStatus.CREATED).body(JournalEntryMapper.toResponse(created));
+        var created = journalEntryService.createJournalEntry(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/{journalEntryId}")
@@ -310,9 +303,8 @@ public class JournalEntryController {
                     @RequestBody
                     JournalEntryCreateRequest request) {
         log.debug("Updating journal entry: {}", journalEntryId);
-        var updates = JournalEntryMapper.toEntity(request);
-        var updated = journalEntryService.updateJournalEntry(journalEntryId, updates);
-        return ResponseEntity.ok(JournalEntryMapper.toResponse(updated));
+        var updated = journalEntryService.updateJournalEntry(journalEntryId, request);
+        return ResponseEntity.ok(updated);
     }
 
     @PostMapping("/{journalEntryId}/post")
@@ -387,7 +379,7 @@ public class JournalEntryController {
         log.info("Posting journal entry: {}", journalEntryId);
         String overrideJustification = request != null ? request.getOverrideJustification() : null;
         var posted = journalEntryService.postJournalEntry(journalEntryId, overrideJustification);
-        return ResponseEntity.ok(JournalEntryMapper.toResponse(posted));
+        return ResponseEntity.ok(posted);
     }
 
     @PostMapping("/{journalEntryId}/reverse")
@@ -463,6 +455,6 @@ public class JournalEntryController {
         log.info("Reversing journal entry: {}", journalEntryId);
         var reversed = journalEntryService.reverseJournalEntry(
                 journalEntryId, request.getReason(), request.getReversalDate(), request.getOverrideJustification());
-        return ResponseEntity.ok(JournalEntryMapper.toResponse(reversed));
+        return ResponseEntity.ok(reversed);
     }
 }

@@ -2,11 +2,11 @@ package com.positivity.securityservice.internal.service;
 
 import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
 import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
+import com.positivity.securityservice.internal.dto.SelfRegistrationAttemptSnapshot;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.dto.SelfRegistrationReviewCaseCreateRequest;
 import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
@@ -63,7 +63,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 normalizedIdpSubject);
 
         if (idempotencyKey != null) {
-            Optional<SelfRegistrationAttempt> existingAttempt =
+            Optional<SelfRegistrationAttemptSnapshot> existingAttempt =
                     selfRegistrationAttemptService.findByIdempotencyKey(idempotencyKey);
             if (existingAttempt.isPresent()) {
                 return replayAttempt(existingAttempt.get(), requestFingerprint);
@@ -147,43 +147,43 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
                 .build();
     }
 
-    private SelfRegistrationResponse replayAttempt(SelfRegistrationAttempt attempt, String requestFingerprint) {
-        if (!requestFingerprint.equals(attempt.getRequestFingerprint())) {
+    private SelfRegistrationResponse replayAttempt(SelfRegistrationAttemptSnapshot attempt, String requestFingerprint) {
+        if (!requestFingerprint.equals(attempt.requestFingerprint())) {
             throw new SelfRegistrationConflictException(
                     "IDEMPOTENCY_KEY_REUSED",
                     "The provided idempotency key has already been used with a different self-registration request",
-                    attempt.getReferenceId());
+                    attempt.referenceId());
         }
-        if (attempt.getStatus() == SelfRegistrationAttemptStatus.SUCCEEDED) {
+        if (attempt.status() == SelfRegistrationAttemptStatus.SUCCEEDED) {
             return SelfRegistrationResponse.builder()
-                    .userId(attempt.getUserId())
-                    .personId(attempt.getPersonId())
-                    .username(attempt.getUsername())
-                    .linkStatus(attempt.getLinkStatus())
-                    .matchedExistingPerson(attempt.isMatchedExistingPerson())
+                    .userId(attempt.userId())
+                    .personId(attempt.personId())
+                    .username(attempt.username())
+                    .linkStatus(attempt.linkStatus())
+                    .matchedExistingPerson(attempt.matchedExistingPerson())
                     .crmMatchSummary(toCrmMatchSummary(attempt))
-                    .idempotencyKey(attempt.getIdempotencyKey())
-                    .issuedTokens(attempt.isIssuedTokens())
+                    .idempotencyKey(attempt.idempotencyKey())
+                    .issuedTokens(attempt.issuedTokens())
                     .build();
         }
         throw new SelfRegistrationConflictException(
-                attempt.getConflictCode(), attempt.getConflictMessage(), attempt.getReferenceId());
+                attempt.conflictCode(), attempt.conflictMessage(), attempt.referenceId());
     }
 
-    private CrmMatchSummaryDto toCrmMatchSummary(SelfRegistrationAttempt attempt) {
-        if (attempt.getCrmCandidateCount() == null) {
+    private CrmMatchSummaryDto toCrmMatchSummary(SelfRegistrationAttemptSnapshot attempt) {
+        if (attempt.crmCandidateCount() == null) {
             return null;
         }
         return CrmMatchSummaryDto.builder()
-                .candidateCount(attempt.getCrmCandidateCount())
-                .anyMatches(Boolean.TRUE.equals(attempt.getCrmAnyMatches()))
-                .individualCustomerCandidateCount(defaultInteger(attempt.getCrmIndividualCustomerCandidateCount()))
-                .commercialContactCandidateCount(defaultInteger(attempt.getCrmCommercialContactCandidateCount()))
-                .sharedIdentityCandidateCount(defaultInteger(attempt.getCrmSharedIdentityCandidateCount()))
-                .exactEmailMatch(Boolean.TRUE.equals(attempt.getCrmExactEmailMatch()))
-                .exactPhoneMatch(Boolean.TRUE.equals(attempt.getCrmExactPhoneMatch()))
-                .exactNameMatch(Boolean.TRUE.equals(attempt.getCrmExactNameMatch()))
-                .reviewRequired(Boolean.TRUE.equals(attempt.getCrmReviewRequired()))
+                .candidateCount(attempt.crmCandidateCount())
+                .anyMatches(Boolean.TRUE.equals(attempt.crmAnyMatches()))
+                .individualCustomerCandidateCount(defaultInteger(attempt.crmIndividualCustomerCandidateCount()))
+                .commercialContactCandidateCount(defaultInteger(attempt.crmCommercialContactCandidateCount()))
+                .sharedIdentityCandidateCount(defaultInteger(attempt.crmSharedIdentityCandidateCount()))
+                .exactEmailMatch(Boolean.TRUE.equals(attempt.crmExactEmailMatch()))
+                .exactPhoneMatch(Boolean.TRUE.equals(attempt.crmExactPhoneMatch()))
+                .exactNameMatch(Boolean.TRUE.equals(attempt.crmExactNameMatch()))
+                .reviewRequired(Boolean.TRUE.equals(attempt.crmReviewRequired()))
                 .build();
     }
 

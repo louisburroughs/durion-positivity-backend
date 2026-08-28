@@ -2,12 +2,12 @@ package com.positivity.catalog.internal.config;
 
 import com.positivity.catalog.internal.entity.Category;
 import com.positivity.catalog.internal.entity.ProductEntity;
-import com.positivity.catalog.internal.entity.ProductStatus;
 import com.positivity.catalog.internal.entity.ProductTrackingLevel;
 import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.Subcategory;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
 import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
+import com.positivity.catalog.internal.enums.ProductStatus;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.domainevents.DomainEventEnvelope;

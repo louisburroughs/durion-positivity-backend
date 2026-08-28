@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -102,15 +103,15 @@ class TechnicianAssignmentServiceImplTest {
         void createsAssignment() {
             givenWorkorder(WorkorderStatus.APPROVED);
 
-            TechnicianAssignment assignment =
+            TechnicianAssignmentRecord assignment =
                     service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", "morning bay");
 
-            assertThat(assignment.getTechnicianId()).isEqualTo(TECHNICIAN_ID);
-            assertThat(assignment.getAssignedBy()).isEqualTo("dispatch");
-            assertThat(assignment.getAssignedAt()).isEqualTo(NOW_LOCAL);
-            assertThat(assignment.getNotes()).isEqualTo("morning bay");
-            assertThat(assignment.getCurrent()).isTrue();
-            assertThat(assignment.getWorkorder().getId()).isEqualTo(WORKORDER_ID);
+            assertThat(assignment.technicianId()).isEqualTo(TECHNICIAN_ID);
+            assertThat(assignment.assignedBy()).isEqualTo("dispatch");
+            assertThat(assignment.assignedAt()).isEqualTo(NOW_LOCAL);
+            assertThat(assignment.notes()).isEqualTo("morning bay");
+            assertThat(assignment.current()).isTrue();
+            assertThat(assignment.workorderId()).isEqualTo(WORKORDER_ID);
         }
 
         @Test
@@ -197,18 +198,18 @@ class TechnicianAssignmentServiceImplTest {
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
 
-            TechnicianAssignment created = service.reassignTechnician(
+            TechnicianAssignmentRecord created = service.reassignTechnician(
                     WORKORDER_ID, TECHNICIAN_ID, "supervisor", "called out sick", "swap to bay 2");
 
             assertThat(existing.getCurrent()).isFalse();
             assertThat(existing.getUnassignedAt()).isEqualTo(NOW_LOCAL);
             assertThat(existing.getReassignmentReason()).isEqualTo("called out sick");
 
-            assertThat(created.getTechnicianId()).isEqualTo(TECHNICIAN_ID);
-            assertThat(created.getAssignedBy()).isEqualTo("supervisor");
-            assertThat(created.getReassignmentReason()).isEqualTo("called out sick");
-            assertThat(created.getNotes()).isEqualTo("swap to bay 2");
-            assertThat(created.getCurrent()).isTrue();
+            assertThat(created.technicianId()).isEqualTo(TECHNICIAN_ID);
+            assertThat(created.assignedBy()).isEqualTo("supervisor");
+            assertThat(created.reassignmentReason()).isEqualTo("called out sick");
+            assertThat(created.notes()).isEqualTo("swap to bay 2");
+            assertThat(created.current()).isTrue();
         }
 
         @Test
@@ -275,7 +276,8 @@ class TechnicianAssignmentServiceImplTest {
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
 
-            assertThat(service.getCurrentAssignment(WORKORDER_ID)).contains(existing);
+            assertThat(service.getCurrentAssignment(WORKORDER_ID))
+                    .contains(TechnicianAssignmentRecord.fromEntity(existing));
         }
 
         @Test
@@ -292,7 +294,10 @@ class TechnicianAssignmentServiceImplTest {
             when(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(WORKORDER_ID))
                     .thenReturn(List.of(newest, older));
 
-            assertThat(service.getAssignmentHistory(WORKORDER_ID)).containsExactly(newest, older);
+            assertThat(service.getAssignmentHistory(WORKORDER_ID))
+                    .containsExactly(
+                            TechnicianAssignmentRecord.fromEntity(newest),
+                            TechnicianAssignmentRecord.fromEntity(older));
         }
 
         @Test

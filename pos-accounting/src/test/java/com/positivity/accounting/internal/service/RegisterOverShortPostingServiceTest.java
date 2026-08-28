@@ -8,7 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -68,10 +67,8 @@ class RegisterOverShortPostingServiceTest {
                 CLOSED_AT);
     }
 
-    private JournalEntry postedEntry() {
-        JournalEntry posted = new JournalEntry();
-        posted.setJournalEntryId(JOURNAL_ENTRY_ID);
-        return posted;
+    private UUID postedEntry() {
+        return JOURNAL_ENTRY_ID;
     }
 
     @Test

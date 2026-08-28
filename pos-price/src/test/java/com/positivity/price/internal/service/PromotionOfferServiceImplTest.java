@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.EligibilityDecision;
 import com.positivity.price.internal.dto.EstimateContext;
 import com.positivity.price.internal.dto.LineItemContext;
+import com.positivity.price.internal.dto.PromotionOfferResponse;
 import com.positivity.price.internal.entity.PromotionOffer;
 import com.positivity.price.internal.enums.DiscountType;
 import com.positivity.price.internal.enums.EligibilityReasonCode;
@@ -216,5 +218,58 @@ class PromotionOfferServiceImplTest {
         assertThatThrownBy(() -> promotionOfferService.applyPromotion(request))
                 .isInstanceOf(PromotionMultipleNotAllowedException.class)
                 .hasMessage("Only one promotion may be applied per estimate");
+    }
+
+    /**
+     * save() on an already-managed entity does not flush, so @LastModifiedDate has not run yet
+     * when the mapper reads it; only saveAndFlush() forces the @PreUpdate callback that stamps
+     * updatedAt before the entity is mapped to a response. The stub below mirrors that: save()
+     * returns the entity untouched (as an unflushed managed save would), while saveAndFlush()
+     * applies the auditing update, so this test fails if activateOffer/deactivateOffer regress
+     * to calling save() instead of saveAndFlush().
+     */
+    private static final Instant STALE_UPDATED_AT = Instant.parse("2023-12-01T00:00:00Z");
+
+    private static final Instant FRESH_UPDATED_AT = Instant.parse("2024-01-01T00:00:00Z");
+
+    private void stubSaveAndFlushAppliesAuditing() {
+        lenient()
+                .when(promotionOfferRepository.save(any(PromotionOffer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(promotionOfferRepository.saveAndFlush(any(PromotionOffer.class))).thenAnswer(invocation -> {
+            PromotionOffer offer = invocation.getArgument(0);
+            offer.setUpdatedAt(FRESH_UPDATED_AT);
+            return offer;
+        });
+    }
+
+    @Test
+    @DisplayName("activateOffer: returned response reflects post-flush updatedAt")
+    void activateOffer_returnsResponseWithFreshUpdatedAt() {
+        testPromo.setStatus(PromotionStatus.DRAFT);
+        testPromo.setUpdatedAt(STALE_UPDATED_AT);
+        when(promotionOfferRepository.findById(testPromo.getPromotionOfferId())).thenReturn(Optional.of(testPromo));
+        stubSaveAndFlushAppliesAuditing();
+
+        PromotionOfferResponse response = promotionOfferService.activateOffer(testPromo.getPromotionOfferId());
+
+        assertThat(response.getStatus()).isEqualTo(PromotionStatus.ACTIVE);
+        assertThat(response.getUpdatedAt()).isEqualTo(FRESH_UPDATED_AT);
+        assertThat(response.getUpdatedAt()).isNotEqualTo(STALE_UPDATED_AT);
+    }
+
+    @Test
+    @DisplayName("deactivateOffer: returned response reflects post-flush updatedAt")
+    void deactivateOffer_returnsResponseWithFreshUpdatedAt() {
+        testPromo.setStatus(PromotionStatus.ACTIVE);
+        testPromo.setUpdatedAt(STALE_UPDATED_AT);
+        when(promotionOfferRepository.findById(testPromo.getPromotionOfferId())).thenReturn(Optional.of(testPromo));
+        stubSaveAndFlushAppliesAuditing();
+
+        PromotionOfferResponse response = promotionOfferService.deactivateOffer(testPromo.getPromotionOfferId());
+
+        assertThat(response.getStatus()).isEqualTo(PromotionStatus.INACTIVE);
+        assertThat(response.getUpdatedAt()).isEqualTo(FRESH_UPDATED_AT);
+        assertThat(response.getUpdatedAt()).isNotEqualTo(STALE_UPDATED_AT);
     }
 }

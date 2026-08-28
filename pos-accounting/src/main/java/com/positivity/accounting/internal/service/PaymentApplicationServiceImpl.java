@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
+import com.positivity.accounting.internal.dto.PaymentApplicationReversalResponse;
 import com.positivity.accounting.internal.entity.CustomerCredit;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
@@ -394,7 +395,7 @@ public class PaymentApplicationServiceImpl
      * @throws MultiApplicationReversalException if the application is one of several
      *                                           for the same apply request
      */
-    public PaymentApplicationReversal reversePaymentApplication(
+    public PaymentApplicationReversalResponse reversePaymentApplication(
             @NonNull UUID paymentApplicationId, @NonNull String reason) {
 
         // Already-reversed guard first (409), preserving the prior contract before the multi-application
@@ -423,7 +424,17 @@ public class PaymentApplicationServiceImpl
                         + "; reverse the whole payment instead of a single application");
             }
         }
-        return applyReversal(paymentApplicationId, reason);
+        return toReversalResponse(applyReversal(paymentApplicationId, reason));
+    }
+
+    private static PaymentApplicationReversalResponse toReversalResponse(PaymentApplicationReversal reversal) {
+        return new PaymentApplicationReversalResponse(
+                reversal.getReversalId(),
+                reversal.getOriginalPaymentApplicationId(),
+                reversal.getAmount(),
+                reversal.getReason(),
+                reversal.getReversedAt(),
+                reversal.getReversedBy());
     }
 
     /**

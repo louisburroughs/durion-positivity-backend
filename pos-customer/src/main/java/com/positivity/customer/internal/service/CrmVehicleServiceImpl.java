@@ -62,9 +62,8 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
                 .map(this::mapToResponse);
     }
 
-    @Override
     @Transactional(readOnly = true)
-    public CommercialParty findPartyByVehicleId(@NonNull UUID vehicleId) {
+    CommercialParty findPartyByVehicleId(@NonNull UUID vehicleId) {
         log.debug("Finding party for vehicle: {}", vehicleId);
         return extVehicleRepository
                 .findById(vehicleId)
@@ -107,8 +106,7 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
         return buildSnapshotForOwnerParty(owner);
     }
 
-    @Override
-    public CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party) {
+    CrmSnapshotDTO buildSnapshotForOwnerParty(CommercialParty party) {
         com.positivity.customer.internal.dto.snapshot.SnapshotMetadata meta =
                 new com.positivity.customer.internal.dto.snapshot.SnapshotMetadata(
                         UUIDv7Generator.generate(), Instant.now(clock), "1.0.0");
@@ -132,8 +130,7 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
         return result;
     }
 
-    @Override
-    public List<CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(CommercialParty party) {
+    List<CrmSnapshotDTO.VehicleSummary> collectVehiclesForParty(CommercialParty party) {
         return collectVehicleSummaries(party);
     }
 

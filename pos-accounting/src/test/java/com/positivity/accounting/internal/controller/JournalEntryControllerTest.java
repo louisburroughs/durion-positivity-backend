@@ -14,8 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryPostRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
@@ -53,16 +53,17 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
     @MockitoBean
     private JournalEntryService journalEntryService;
 
-    private static JournalEntry draftEntry() {
-        JournalEntry entry = new JournalEntry(ENTRY_ID);
+    private static JournalEntryResponse draftEntry() {
+        JournalEntryResponse entry = new JournalEntryResponse();
+        entry.setJournalEntryId(ENTRY_ID);
         entry.setStatus(JournalEntryStatus.DRAFT);
         entry.setTransactionDate(LocalDateTime.of(2026, 7, 15, 10, 30));
         entry.setDescription("A2 controller test entry");
         return entry;
     }
 
-    private static JournalEntry postedEntry() {
-        JournalEntry entry = draftEntry();
+    private static JournalEntryResponse postedEntry() {
+        JournalEntryResponse entry = draftEntry();
         entry.setStatus(JournalEntryStatus.POSTED);
         entry.setEntryNumber(ENTRY_NUMBER);
         entry.setPostedAt(Instant.parse("2026-07-15T10:40:00Z"));
@@ -93,7 +94,7 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should return null entryNumber for a newly created draft")
         void createdDraft_hasNullEntryNumber() throws Exception {
-            when(journalEntryService.createJournalEntry(any(JournalEntry.class)))
+            when(journalEntryService.createJournalEntry(any(JournalEntryCreateRequest.class)))
                     .thenReturn(draftEntry());
 
             mockMvc.perform(withAuth(post("/v1/accounting/journal-entries"))
@@ -230,8 +231,9 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         private static final String REVERSAL_ENTRY_NUMBER = "JE-202607-2";
         private static final String REASON = "Correcting duplicate posting";
 
-        private JournalEntry reversalEntry() {
-            JournalEntry reversal = new JournalEntry(REVERSAL_ID);
+        private JournalEntryResponse reversalEntry() {
+            JournalEntryResponse reversal = new JournalEntryResponse();
+            reversal.setJournalEntryId(REVERSAL_ID);
             reversal.setStatus(JournalEntryStatus.POSTED);
             reversal.setTransactionDate(LocalDateTime.of(2026, 7, 15, 10, 30));
             reversal.setDescription("REVERSAL of " + ENTRY_ID + " - Reason: " + REASON);
@@ -383,7 +385,7 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should include entryNumber per item, null for drafts, without a filter")
         void list_withoutFilter_exposesEntryNumbers() throws Exception {
-            JournalEntry draft = draftEntry();
+            JournalEntryResponse draft = draftEntry();
             draft.setJournalEntryId(UUID.fromString("01936e5e-0000-7000-8000-00000000000d"));
             when(journalEntryService.listJournalEntries(any(Pageable.class), isNull()))
                     .thenReturn(new PageImpl<>(List.of(postedEntry(), draft)));

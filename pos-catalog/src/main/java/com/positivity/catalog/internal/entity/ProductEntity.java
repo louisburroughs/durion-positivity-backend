@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
+import com.positivity.catalog.internal.enums.ProductLifecycleState;
+import com.positivity.catalog.internal.enums.ProductStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;

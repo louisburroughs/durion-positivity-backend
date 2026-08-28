@@ -3,11 +3,11 @@ package com.positivity.mcp.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.dto.ClarificationQuestion;
 import com.positivity.mcp.internal.dto.ClarificationResponseDTO;
 import com.positivity.mcp.internal.dto.IntentSlot;
 import com.positivity.mcp.internal.dto.IntentV1;
-import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.entity.NltiIntent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.enums.NltiIntentStatus;
@@ -254,19 +254,15 @@ public class IntentParserServiceImpl implements IntentParserService {
     }
 
     private void appendAuditEvent(NltiAuditEventType eventType, UUID correlationId, UUID sessionId) {
-        NltiAuditEvent event = new NltiAuditEvent();
-        event.setId(UUIDv7Generator.generate());
-        event.setCorrelationId(correlationId);
-        event.setSessionId(sessionId);
-        event.setEventType(eventType);
-        event.setTimestamp(resolveNow());
+        UUID eventId = UUIDv7Generator.generate();
         log.debug(
                 "Appending audit event eventId={} eventType={} correlationId={} sessionId={}",
-                event.getId(),
+                eventId,
                 eventType,
                 correlationId,
                 sessionId);
-        auditLedgerService.append(event);
+        auditLedgerService.append(
+                new AuditEventAppend(eventId, correlationId, sessionId, null, eventType, resolveNow(), null));
     }
 
     private OffsetDateTime resolveNow() {

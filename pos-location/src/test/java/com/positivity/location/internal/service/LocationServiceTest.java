@@ -323,21 +323,13 @@ class LocationServiceTest {
     }
 
     @Test
-    void getLocation_notFound_throwsException() {
+    void getLocation_notFound_returnsEmpty() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationRepository.findById(id)).thenReturn(Optional.empty());
-        Optional<Location> result = locationService.getLocationById(id);
 
-        assertThatThrownBy(() -> throwNotFound(result))
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> {
-                    ResponseStatusException ex = (ResponseStatusException) error;
-                    assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-                });
-    }
+        Optional<LocationResponseDTO> result = locationService.getLocationByIdDto(id);
 
-    private static void throwNotFound(Optional<Location> location) {
-        location.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        assertThat(result).isEmpty();
     }
 
     @Test
@@ -640,7 +632,7 @@ class LocationServiceTest {
     void addParent_selfParent_throwsIllegalArgumentException() {
         UUID same = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        assertThatThrownBy(() -> locationService.addParent(same, same, ParentType.HOME_OFFICE))
+        assertThatThrownBy(() -> locationService.addParent(same, same, "HOME_OFFICE"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("cannot be its own parent");
     }

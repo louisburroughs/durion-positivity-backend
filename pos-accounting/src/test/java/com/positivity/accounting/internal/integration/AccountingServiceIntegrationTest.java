@@ -265,6 +265,8 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account1.setAccountName("Account 1");
         account1.setAccountType(AccountType.ASSET);
         account1.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account1.setCreatedBy("testuser");
+        account1.setModifiedBy("testuser");
         account1 = glAccountRepository.save(account1);
 
         GLAccount account2 = new GLAccount();
@@ -273,6 +275,8 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account2.setAccountName("Account 2");
         account2.setAccountType(AccountType.LIABILITY);
         account2.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account2.setCreatedBy("testuser");
+        account2.setModifiedBy("testuser");
         account2 = glAccountRepository.save(account2);
 
         // Create entry
@@ -314,6 +318,8 @@ class AccountingServiceIntegrationTest extends BaseIntegrationTest {
         account.setAccountName("Test Account");
         account.setAccountType(AccountType.ASSET);
         account.setActivationDate(LocalDateTime.of(2024, 1, 1, 0, 0));
+        account.setCreatedBy("testuser");
+        account.setModifiedBy("testuser");
         account = glAccountRepository.save(account);
 
         String payload = """

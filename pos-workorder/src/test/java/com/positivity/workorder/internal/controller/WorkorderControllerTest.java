@@ -18,7 +18,6 @@ import com.positivity.workorder.internal.dto.ReopenWorkorderRequest;
 import com.positivity.workorder.internal.dto.ReopenWorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
-import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.service.WorkorderCountService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
@@ -70,15 +69,16 @@ class WorkorderControllerTest {
     @InjectMocks
     private WorkorderController controller;
 
-    private Workorder workorder;
+    private WorkorderResponse workorder;
 
     @BeforeEach
     void setUp() {
-        workorder = new Workorder();
-        workorder.setId(WORKORDER_ID);
-        workorder.setEstimateId(ESTIMATE_ID);
-        workorder.setCustomerId(CUSTOMER_ID);
-        workorder.setStatus(WorkorderStatus.DRAFT);
+        workorder = WorkorderResponse.builder()
+                .id(WORKORDER_ID)
+                .estimateId(ESTIMATE_ID)
+                .customerId(CUSTOMER_ID)
+                .status(WorkorderStatus.DRAFT.name())
+                .build();
     }
 
     @Nested

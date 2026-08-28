@@ -6,6 +6,8 @@ import com.positivity.price.internal.client.VehicleContext;
 import com.positivity.price.internal.client.VehicleDataProvider;
 import com.positivity.price.internal.dto.AddEligibilityRuleRequest;
 import com.positivity.price.internal.dto.EligibilityDecision;
+import com.positivity.price.internal.dto.EligibilityRuleResponse;
+import com.positivity.price.internal.dto.PromotionEligibilityRuleMapper;
 import com.positivity.price.internal.entity.PromotionEligibilityRule;
 import com.positivity.price.internal.entity.PromotionOffer;
 import com.positivity.price.internal.enums.ConditionType;
@@ -52,7 +54,7 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @Override
     @NonNull
     @Transactional
-    public PromotionEligibilityRule addRule(@NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request) {
+    public EligibilityRuleResponse addRule(@NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request) {
         PromotionOffer promotion = promotionOfferRepository
                 .findById(promotionId)
                 .orElseThrow(() -> new PromotionOfferNotFoundException(promotionId));
@@ -65,14 +67,16 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
         rule.setRuleCombination(
                 request.getRuleCombination() != null ? request.getRuleCombination() : RuleCombination.AND);
         rule.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
-        return promotionEligibilityRuleRepository.save(rule);
+        return PromotionEligibilityRuleMapper.toResponse(promotionEligibilityRuleRepository.save(rule));
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public List<PromotionEligibilityRule> getRules(@NonNull UUID promotionId) {
-        return promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(promotionId);
+    public List<EligibilityRuleResponse> getRules(@NonNull UUID promotionId) {
+        return promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(promotionId).stream()
+                .map(PromotionEligibilityRuleMapper::toResponse)
+                .toList();
     }
 
     @Override

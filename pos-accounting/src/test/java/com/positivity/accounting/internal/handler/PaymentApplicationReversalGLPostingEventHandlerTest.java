@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
@@ -52,8 +52,8 @@ class PaymentApplicationReversalGLPostingEventHandlerTest {
     private PaymentApplicationReversalGLPostingEvent testEvent;
     private UUID originalJournalEntryId;
     private UUID reversingJournalEntryId;
-    private JournalEntry originalEntry;
-    private JournalEntry reversingEntry;
+    private JournalEntryResponse originalEntry;
+    private JournalEntryResponse reversingEntry;
 
     @BeforeEach
     void setUp() {
@@ -68,15 +68,17 @@ class PaymentApplicationReversalGLPostingEventHandlerTest {
                 .reason("Customer disputed charge")
                 .build();
 
-        originalEntry = new JournalEntry();
-        originalEntry.setJournalEntryId(originalJournalEntryId);
-        originalEntry.setSourceEventId(SOURCE_EVENT_ID);
-        originalEntry.setStatus(JournalEntryStatus.POSTED);
-        // Original cash-receipt entry is not itself a reversal.
-        originalEntry.setReversalJournalEntry(null);
+        originalEntry = JournalEntryResponse.builder()
+                .journalEntryId(originalJournalEntryId)
+                .sourceEventId(SOURCE_EVENT_ID)
+                .status(JournalEntryStatus.POSTED)
+                // Original cash-receipt entry is not itself a reversal.
+                .reversalJournalEntryId(null)
+                .build();
 
-        reversingEntry = new JournalEntry();
-        reversingEntry.setJournalEntryId(reversingJournalEntryId);
+        reversingEntry = JournalEntryResponse.builder()
+                .journalEntryId(reversingJournalEntryId)
+                .build();
     }
 
     @Test

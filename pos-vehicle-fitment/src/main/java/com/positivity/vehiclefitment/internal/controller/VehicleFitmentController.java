@@ -3,7 +3,6 @@ package com.positivity.vehiclefitment.internal.controller;
 import com.positivity.vehiclefitment.internal.dto.MakeResponse;
 import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
 import com.positivity.vehiclefitment.internal.dto.ModelResponse;
-import com.positivity.vehiclefitment.internal.dto.VehicleFitmentMapper;
 import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
 import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
 import com.positivity.vehiclefitment.internal.service.VehicleFitmentService;
@@ -52,9 +51,7 @@ public class VehicleFitmentController {
             scopes = {VehicleFitmentPermissions.CATALOG_VIEW})
     @GetMapping("/manufacturers")
     public List<ManufacturerResponse> getManufacturers() {
-        return vehicleFitmentService.getManufacturers().stream()
-                .map(VehicleFitmentMapper::toManufacturerResponse)
-                .toList();
+        return vehicleFitmentService.getManufacturers();
     }
 
     @Operation(operationId = "listMakesByManufacturer", summary = "List Makes for a Manufacturer", description = """
@@ -80,9 +77,7 @@ public class VehicleFitmentController {
             @Parameter(description = "ID of the manufacturer", example = "00e0c0f0-0000-0000-0000-000000000000")
                     @PathVariable
                     UUID manufacturerId) {
-        return vehicleFitmentService.getMakesByManufacturer(manufacturerId).stream()
-                .map(VehicleFitmentMapper::toMakeResponse)
-                .toList();
+        return vehicleFitmentService.getMakesByManufacturer(manufacturerId);
     }
 
     @Operation(operationId = "listModelsByMake", summary = "List Models for a Make", description = """
@@ -106,9 +101,7 @@ public class VehicleFitmentController {
     public List<ModelResponse> getModelsByMake(
             @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable
                     UUID makeId) {
-        return vehicleFitmentService.getModelsByMake(makeId).stream()
-                .map(VehicleFitmentMapper::toModelResponse)
-                .toList();
+        return vehicleFitmentService.getModelsByMake(makeId);
     }
 
     @Operation(operationId = "listVehicleTypesByMake", summary = "List Vehicle Types for a Make", description = """
@@ -132,8 +125,6 @@ public class VehicleFitmentController {
     public List<VehicleTypeResponse> getVehicleTypesForMake(
             @Parameter(description = "ID of the make", example = "00e0c0f0-0000-0000-0000-000000000000") @PathVariable
                     UUID makeId) {
-        return vehicleFitmentService.getVehicleTypesForMake(makeId).stream()
-                .map(VehicleFitmentMapper::toVehicleTypeResponse)
-                .toList();
+        return vehicleFitmentService.getVehicleTypesForMake(makeId);
     }
 }

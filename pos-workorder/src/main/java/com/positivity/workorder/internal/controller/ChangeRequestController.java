@@ -94,7 +94,7 @@ public class ChangeRequestController {
         try {
             dto.setWorkorderId(workorderId);
             var created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
-            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(created));
+            return ResponseEntity.ok(created);
         } catch (IllegalArgumentException | IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -142,7 +142,7 @@ public class ChangeRequestController {
         try {
             var approved =
                     changeRequestService.approveChangeRequest(changeId, dto.getApprovedBy(), dto.getApprovalNote());
-            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(approved));
+            return ResponseEntity.ok(approved);
         } catch (IllegalArgumentException | IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -189,7 +189,7 @@ public class ChangeRequestController {
             @Parameter(description = "Decline details including note") @RequestBody DeclineChangeRequestDTO dto) {
         try {
             var declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
-            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(declined));
+            return ResponseEntity.ok(declined);
         } catch (IllegalArgumentException | IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -277,7 +277,7 @@ public class ChangeRequestController {
                     EmergencyOverrideDTO dto) {
         try {
             var overridden = changeRequestService.applyEmergencyOverride(changeId, dto.getExceptionReason());
-            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(overridden));
+            return ResponseEntity.ok(overridden);
         } catch (IllegalArgumentException | IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -306,7 +306,7 @@ public class ChangeRequestController {
                     UUID changeId) {
         try {
             var changeRequest = changeRequestService.getChangeRequestById(changeId);
-            return ResponseEntity.ok(ChangeRequestResponse.fromEntity(changeRequest));
+            return ResponseEntity.ok(changeRequest);
         } catch (IllegalArgumentException _) {
             return ResponseEntity.notFound().build();
         }
@@ -334,9 +334,7 @@ public class ChangeRequestController {
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID workorderId) {
-        var changeRequests = changeRequestService.getChangeRequestsByWorkorder(workorderId);
-        return ResponseEntity.ok(
-                changeRequests.stream().map(ChangeRequestResponse::fromEntity).toList());
+        return ResponseEntity.ok(changeRequestService.getChangeRequestsByWorkorder(workorderId));
     }
 
     @Operation(operationId = "checkWorkorderCanClose", summary = "Check Workorder Close Eligibility", description = """

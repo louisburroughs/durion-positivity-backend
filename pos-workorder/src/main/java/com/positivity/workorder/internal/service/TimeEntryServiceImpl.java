@@ -4,6 +4,8 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
+import com.positivity.workorder.internal.dto.TimeEntryMapper;
+import com.positivity.workorder.internal.dto.TimeEntryResponse;
 import com.positivity.workorder.internal.entity.TimeEntry;
 import com.positivity.workorder.internal.enums.TimeEntryStatus;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
@@ -33,7 +35,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
 
     @Override
     @Transactional
-    public @NonNull TimeEntry approveTimeEntry(@NonNull UUID timeEntryId) {
+    public @NonNull TimeEntryResponse approveTimeEntry(@NonNull UUID timeEntryId) {
         TimeEntry entry = timeEntryRepository
                 .findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
@@ -44,15 +46,16 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         entry.setStatus(TimeEntryStatus.APPROVED);
         entry.setDecisionByUserId(actor);
         entry.setDecisionAtUtc(Instant.now(clock));
-        entry = timeEntryRepository.save(entry);
+        entry = timeEntryRepository.saveAndFlush(entry);
         eventPublisher.publishEvent(new TimeEntryApprovedEvent(
                 entry.getTimeEntryId(), entry.getWorkOrderId(), entry.getDecisionByUserId(), entry.getDecisionAtUtc()));
-        return entry;
+        return TimeEntryMapper.toResponse(entry);
     }
 
     @Override
     @Transactional
-    public @NonNull TimeEntry rejectTimeEntry(@NonNull UUID timeEntryId, @NonNull RejectTimeEntryRequest request) {
+    public @NonNull TimeEntryResponse rejectTimeEntry(
+            @NonNull UUID timeEntryId, @NonNull RejectTimeEntryRequest request) {
         TimeEntry entry = timeEntryRepository
                 .findById(timeEntryId)
                 .orElseThrow(() -> new TimeEntryNotFoundException(timeEntryId));
@@ -64,13 +67,13 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         entry.setRejectionReason(request.getRejectionReason());
         entry.setDecisionByUserId(actor);
         entry.setDecisionAtUtc(Instant.now(clock));
-        entry = timeEntryRepository.save(entry);
+        entry = timeEntryRepository.saveAndFlush(entry);
         eventPublisher.publishEvent(new TimeEntryRejectedEvent(
                 entry.getTimeEntryId(),
                 entry.getWorkOrderId(),
                 actor,
                 entry.getDecisionAtUtc(),
                 entry.getRejectionReason()));
-        return entry;
+        return TimeEntryMapper.toResponse(entry);
     }
 }

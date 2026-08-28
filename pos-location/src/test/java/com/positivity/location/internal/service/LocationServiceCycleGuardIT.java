@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.ParentType;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -57,11 +56,11 @@ class LocationServiceCycleGuardIT {
         Location child = createLocation("Child-A");
         Location parent = createLocation("Parent-B");
 
-        locationService.addParent(child.getId(), parent.getId(), ParentType.PHYSICAL);
+        locationService.addParent(child.getId(), parent.getId(), "PHYSICAL");
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
-                () -> locationService.addParent(parent.getId(), child.getId(), ParentType.PHYSICAL));
+                () -> locationService.addParent(parent.getId(), child.getId(), "PHYSICAL"));
 
         assertTrue(ex.getMessage().contains("inverse relationship already exists"));
         assertEquals(1L, locationParentRepository.count());
@@ -73,12 +72,11 @@ class LocationServiceCycleGuardIT {
         Location b = createLocation("Node-B");
         Location c = createLocation("Node-C");
 
-        locationService.addParent(a.getId(), b.getId(), ParentType.PHYSICAL);
-        locationService.addParent(b.getId(), c.getId(), ParentType.PHYSICAL);
+        locationService.addParent(a.getId(), b.getId(), "PHYSICAL");
+        locationService.addParent(b.getId(), c.getId(), "PHYSICAL");
 
         IllegalStateException ex = assertThrows(
-                IllegalStateException.class,
-                () -> locationService.addParent(c.getId(), a.getId(), ParentType.PHYSICAL));
+                IllegalStateException.class, () -> locationService.addParent(c.getId(), a.getId(), "PHYSICAL"));
 
         assertTrue(ex.getMessage().contains("parent is a descendant of child"));
         assertEquals(2L, locationParentRepository.count());
@@ -89,7 +87,7 @@ class LocationServiceCycleGuardIT {
         Location child = createLocation("Child-Del");
         Location parent = createLocation("Parent-Del");
 
-        locationService.addParent(child.getId(), parent.getId(), ParentType.PHYSICAL);
+        locationService.addParent(child.getId(), parent.getId(), "PHYSICAL");
 
         assertDoesNotThrow(() -> locationRepository.deleteAll());
     }

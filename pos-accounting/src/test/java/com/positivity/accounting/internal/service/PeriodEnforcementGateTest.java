@@ -4,10 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
@@ -146,21 +147,23 @@ class PeriodEnforcementGateTest {
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
-    private JournalEntry createDraft(LocalDateTime transactionDate) {
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription("B2 period gate test");
-        entry.addLine(line(new BigDecimal("100.0000"), BigDecimal.ZERO));
-        entry.addLine(line(BigDecimal.ZERO, new BigDecimal("100.0000")));
-        return journalEntryService.createJournalEntry(entry);
+    private JournalEntryResponse createDraft(LocalDateTime transactionDate) {
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description("B2 period gate test")
+                .lines(List.of(
+                        line(new BigDecimal("100.0000"), BigDecimal.ZERO),
+                        line(BigDecimal.ZERO, new BigDecimal("100.0000"))))
+                .build();
+        return journalEntryService.createJournalEntry(request);
     }
 
-    private JournalEntryLine line(BigDecimal debit, BigDecimal credit) {
-        JournalEntryLine journalEntryLine = new JournalEntryLine();
-        journalEntryLine.setGlAccountId(glAccountId);
-        journalEntryLine.setDebitAmount(debit);
-        journalEntryLine.setCreditAmount(credit);
-        return journalEntryLine;
+    private JournalEntryCreateRequest.JournalEntryLineRequest line(BigDecimal debit, BigDecimal credit) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(glAccountId)
+                .debitAmount(debit)
+                .creditAmount(credit)
+                .build();
     }
 
     private List<AccountingAuditLog> overrideAuditRowsFor(UUID journalEntryId) {
@@ -182,8 +185,8 @@ class PeriodEnforcementGateTest {
         void openPeriod_postsAndAutoProvisions() {
             assertThat(periodRepository.findByPeriodCode("2018-01")).isEmpty();
 
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 1, 10, 9, 0));
-            JournalEntry posted = journalEntryService.postJournalEntry(draft.getJournalEntryId());
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 1, 10, 9, 0));
+            JournalEntryResponse posted = journalEntryService.postJournalEntry(draft.getJournalEntryId());
 
             assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
             assertThat(posted.getEntryNumber()).isEqualTo("JE-201801-1");
@@ -199,14 +202,14 @@ class PeriodEnforcementGateTest {
             accountingPeriodService.closePeriod("2018-02");
 
             // Drafts gate at posting time (B1/B2), not at creation.
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 2, 14, 9, 0));
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 2, 14, 9, 0));
             assertThat(draft.getStatus()).isEqualTo(JournalEntryStatus.DRAFT);
 
             assertThatThrownBy(() -> journalEntryService.postJournalEntry(draft.getJournalEntryId()))
                     .isInstanceOf(AccountingPeriodClosedException.class)
                     .hasMessageContaining("2018-02");
 
-            JournalEntry reloaded = journalEntryService.getJournalEntry(draft.getJournalEntryId());
+            JournalEntryResponse reloaded = journalEntryService.getJournalEntry(draft.getJournalEntryId());
             assertThat(reloaded.getStatus()).isEqualTo(JournalEntryStatus.DRAFT);
             assertThat(reloaded.getEntryNumber()).isNull();
         }
@@ -215,10 +218,11 @@ class PeriodEnforcementGateTest {
         @DisplayName("closed period + override authority + justification: posts with PERIOD_OVERRIDE_POST audit row")
         void closedPeriod_withOverride_succeeds() {
             accountingPeriodService.closePeriod("2018-03");
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 3, 5, 9, 0));
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 3, 5, 9, 0));
 
             authenticate(OVERRIDE_AUTHORITY);
-            JournalEntry posted = journalEntryService.postJournalEntry(draft.getJournalEntryId(), JUSTIFICATION);
+            JournalEntryResponse posted =
+                    journalEntryService.postJournalEntry(draft.getJournalEntryId(), JUSTIFICATION);
 
             assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
             assertThat(posted.getEntryNumber()).isEqualTo("JE-201803-1");
@@ -235,7 +239,7 @@ class PeriodEnforcementGateTest {
         @DisplayName("closed period + justification without the override authority: rejected")
         void closedPeriod_justificationWithoutAuthority_rejected() {
             accountingPeriodService.closePeriod("2018-04");
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 4, 5, 9, 0));
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 4, 5, 9, 0));
 
             authenticate(); // authenticated, but no override authority
             assertThatThrownBy(() -> journalEntryService.postJournalEntry(draft.getJournalEntryId(), JUSTIFICATION))
@@ -249,7 +253,7 @@ class PeriodEnforcementGateTest {
         @DisplayName("closed period + override authority without justification: rejected")
         void closedPeriod_authorityWithoutJustification_rejected() {
             accountingPeriodService.closePeriod("2018-05");
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 5, 5, 9, 0));
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 5, 5, 9, 0));
 
             authenticate(OVERRIDE_AUTHORITY);
             assertThatThrownBy(() -> journalEntryService.postJournalEntry(draft.getJournalEntryId(), "  "))
@@ -260,7 +264,7 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("hard-locked date: rejected regardless of override, even in an OPEN period")
         void hardLocked_rejectedRegardlessOfOverride() {
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 6, 20, 9, 0));
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 6, 20, 9, 0));
             configurationService.setHardLockDate(LocalDate.of(2018, 7, 1), "Fiscal 2018-H1 finalized");
 
             authenticate(OVERRIDE_AUTHORITY);
@@ -279,8 +283,8 @@ class PeriodEnforcementGateTest {
         void hardLockBoundary_onDatePosts() {
             configurationService.setHardLockDate(LocalDate.of(2018, 8, 1), "Boundary check");
 
-            JournalEntry draft = createDraft(LocalDateTime.of(2018, 8, 1, 0, 0));
-            JournalEntry posted = journalEntryService.postJournalEntry(draft.getJournalEntryId());
+            JournalEntryResponse draft = createDraft(LocalDateTime.of(2018, 8, 1, 0, 0));
+            JournalEntryResponse posted = journalEntryService.postJournalEntry(draft.getJournalEntryId());
 
             assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         }
@@ -292,19 +296,19 @@ class PeriodEnforcementGateTest {
     @DisplayName("reversal (reverseJournalEntry)")
     class Reversal {
 
-        private JournalEntry createPosted(LocalDateTime transactionDate) {
-            JournalEntry draft = createDraft(transactionDate);
+        private JournalEntryResponse createPosted(LocalDateTime transactionDate) {
+            JournalEntryResponse draft = createDraft(transactionDate);
             return journalEntryService.postJournalEntry(draft.getJournalEntryId());
         }
 
         @Test
         @DisplayName("closed period + override authority + justification: reversal posts into the closed month")
         void closedPeriod_withOverride_succeeds() {
-            JournalEntry original = createPosted(LocalDateTime.of(2018, 9, 10, 9, 0));
+            JournalEntryResponse original = createPosted(LocalDateTime.of(2018, 9, 10, 9, 0));
             accountingPeriodService.closePeriod("2018-09");
 
             authenticate(OVERRIDE_AUTHORITY);
-            JournalEntry reversal = journalEntryService.reverseJournalEntry(
+            JournalEntryResponse reversal = journalEntryService.reverseJournalEntry(
                     original.getJournalEntryId(), "CORRECTION", LocalDate.of(2018, 9, 15), JUSTIFICATION);
 
             assertThat(reversal.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
@@ -325,7 +329,7 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("closed period without override: rejected with PERIOD_CLOSED and nothing changes")
         void closedPeriod_withoutOverride_rejected() {
-            JournalEntry original = createPosted(LocalDateTime.of(2018, 10, 10, 9, 0));
+            JournalEntryResponse original = createPosted(LocalDateTime.of(2018, 10, 10, 9, 0));
             accountingPeriodService.closePeriod("2018-10");
 
             assertThatThrownBy(() -> journalEntryService.reverseJournalEntry(
@@ -343,7 +347,7 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("hard-locked reversal date: rejected regardless of override")
         void hardLocked_rejectedRegardlessOfOverride() {
-            JournalEntry original = createPosted(LocalDateTime.of(2018, 11, 10, 9, 0));
+            JournalEntryResponse original = createPosted(LocalDateTime.of(2018, 11, 10, 9, 0));
             configurationService.setHardLockDate(LocalDate.of(2018, 12, 1), "Fiscal 2018 finalized");
 
             authenticate(OVERRIDE_AUTHORITY);
@@ -366,7 +370,7 @@ class PeriodEnforcementGateTest {
     @DisplayName("credit-memo GL posting (GLPostingService.postCreditMemoReversal)")
     class CreditMemoPosting {
 
-        private JournalEntry postCreditMemo(String overrideJustification) {
+        private UUID postCreditMemo(String overrideJustification) {
             return glPostingService.postCreditMemoReversal(
                     UUID.randomUUID(),
                     glAccountId,
@@ -383,8 +387,8 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("open (current) period: posts")
         void openPeriod_posts() {
-            JournalEntry posted = postCreditMemo(null);
-            assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
+            UUID posted = postCreditMemo(null);
+            assertThat(journalEntryService.getJournalEntry(posted).getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         }
 
         @Test
@@ -403,10 +407,10 @@ class PeriodEnforcementGateTest {
             accountingPeriodService.closePeriod(YearMonth.now().toString());
 
             authenticate(OVERRIDE_AUTHORITY);
-            JournalEntry posted = postCreditMemo(JUSTIFICATION);
+            UUID posted = postCreditMemo(JUSTIFICATION);
 
-            assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
-            assertThat(overrideAuditRowsFor(posted.getJournalEntryId())).hasSize(1);
+            assertThat(journalEntryService.getJournalEntry(posted).getStatus()).isEqualTo(JournalEntryStatus.POSTED);
+            assertThat(overrideAuditRowsFor(posted)).hasSize(1);
         }
 
         @Test
@@ -429,7 +433,7 @@ class PeriodEnforcementGateTest {
     @DisplayName("payment-application GL posting (GLPostingService.postPaymentApplication)")
     class PaymentApplicationPosting {
 
-        private JournalEntry postPaymentApplication(String overrideJustification) {
+        private UUID postPaymentApplication(String overrideJustification) {
             return glPostingService.postPaymentApplication(
                     UUID.randomUUID(),
                     glAccountId,
@@ -443,8 +447,8 @@ class PeriodEnforcementGateTest {
         @Test
         @DisplayName("open (current) period: posts")
         void openPeriod_posts() {
-            JournalEntry posted = postPaymentApplication(null);
-            assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
+            UUID posted = postPaymentApplication(null);
+            assertThat(journalEntryService.getJournalEntry(posted).getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         }
 
         @Test
@@ -463,10 +467,10 @@ class PeriodEnforcementGateTest {
             accountingPeriodService.closePeriod(YearMonth.now().toString());
 
             authenticate(OVERRIDE_AUTHORITY);
-            JournalEntry posted = postPaymentApplication(JUSTIFICATION);
+            UUID posted = postPaymentApplication(JUSTIFICATION);
 
-            assertThat(posted.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
-            assertThat(overrideAuditRowsFor(posted.getJournalEntryId())).hasSize(1);
+            assertThat(journalEntryService.getJournalEntry(posted).getStatus()).isEqualTo(JournalEntryStatus.POSTED);
+            assertThat(overrideAuditRowsFor(posted)).hasSize(1);
         }
 
         @Test

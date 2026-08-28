@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.vehicle.internal.config.CarePreferenceEventPublisher;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
+import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
@@ -41,7 +42,7 @@ class VehiclePreferencesServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new VehiclePreferencesServiceImpl(preferencesRepository, vehicleRepository, publisher);
-        when(preferencesRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(preferencesRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     private UpsertPreferencesRequest request(Map<String, Object> preferences, Integer serviceIntervalMonths) {
@@ -77,10 +78,12 @@ class VehiclePreferencesServiceImplTest {
         when(vehicleRepository.getReferenceById(VEHICLE_ID)).thenReturn(vehicleRecord());
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.empty());
 
-        VehicleCarePreference saved = service.upsertPreferences(request(new HashMap<>(), 4));
+        VehicleCarePreferenceResponse saved = service.upsertPreferences(request(new HashMap<>(), 4));
 
         assertThat(saved.getServiceIntervalMonths()).isEqualTo(4);
-        verify(publisher).publishCarePreferenceUpserted(saved);
+        ArgumentCaptor<VehicleCarePreference> captor = ArgumentCaptor.forClass(VehicleCarePreference.class);
+        verify(publisher).publishCarePreferenceUpserted(captor.capture());
+        assertThat(captor.getValue().getServiceIntervalMonths()).isEqualTo(4);
     }
 
     @Test
@@ -89,10 +92,12 @@ class VehiclePreferencesServiceImplTest {
         when(vehicleRepository.existsById(VEHICLE_ID)).thenReturn(true);
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(existing(4)));
 
-        VehicleCarePreference saved = service.upsertPreferences(request(new HashMap<>(), null));
+        VehicleCarePreferenceResponse saved = service.upsertPreferences(request(new HashMap<>(), null));
 
         assertThat(saved.getServiceIntervalMonths()).isNull();
-        verify(publisher).publishCarePreferenceUpserted(saved);
+        ArgumentCaptor<VehicleCarePreference> captor = ArgumentCaptor.forClass(VehicleCarePreference.class);
+        verify(publisher).publishCarePreferenceUpserted(captor.capture());
+        assertThat(captor.getValue().getServiceIntervalMonths()).isNull();
     }
 
     @Test
@@ -103,7 +108,7 @@ class VehiclePreferencesServiceImplTest {
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.empty());
         Map<String, Object> blob = new HashMap<>(Map.of("serviceIntervalMonths", 9, "oilType", "synthetic"));
 
-        VehicleCarePreference saved = service.upsertPreferences(request(blob, null));
+        VehicleCarePreferenceResponse saved = service.upsertPreferences(request(blob, null));
 
         assertThat(saved.getServiceIntervalMonths()).isEqualTo(9);
         assertThat(saved.getPreferences()).doesNotContainKey("serviceIntervalMonths");
@@ -118,7 +123,7 @@ class VehiclePreferencesServiceImplTest {
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.empty());
         Map<String, Object> blob = new HashMap<>(Map.of("serviceIntervalMonths", 9));
 
-        VehicleCarePreference saved = service.upsertPreferences(request(blob, 3));
+        VehicleCarePreferenceResponse saved = service.upsertPreferences(request(blob, 3));
 
         assertThat(saved.getServiceIntervalMonths()).isEqualTo(3);
         assertThat(saved.getPreferences()).doesNotContainKey("serviceIntervalMonths");
@@ -147,12 +152,14 @@ class VehiclePreferencesServiceImplTest {
     void mergeNullIntervalLeavesUnchanged() {
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(existing(4)));
 
-        VehicleCarePreference saved =
+        VehicleCarePreferenceResponse saved =
                 service.mergePreferences(VEHICLE_ID, new HashMap<>(Map.of("washPreference", "hand")), null, USER_ID);
 
         assertThat(saved.getServiceIntervalMonths()).isEqualTo(4);
         assertThat(saved.getPreferences()).containsEntry("washPreference", "hand");
-        verify(publisher).publishCarePreferenceUpserted(saved);
+        ArgumentCaptor<VehicleCarePreference> captor = ArgumentCaptor.forClass(VehicleCarePreference.class);
+        verify(publisher).publishCarePreferenceUpserted(captor.capture());
+        assertThat(captor.getValue().getServiceIntervalMonths()).isEqualTo(4);
     }
 
     @Test
@@ -160,11 +167,11 @@ class VehiclePreferencesServiceImplTest {
     void mergeUpdatesInterval() {
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(existing(4)));
 
-        VehicleCarePreference saved = service.mergePreferences(VEHICLE_ID, new HashMap<>(), 7, USER_ID);
+        VehicleCarePreferenceResponse saved = service.mergePreferences(VEHICLE_ID, new HashMap<>(), 7, USER_ID);
         assertThat(saved.getServiceIntervalMonths()).isEqualTo(7);
 
         when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(existing(4)));
-        VehicleCarePreference viaLegacy =
+        VehicleCarePreferenceResponse viaLegacy =
                 service.mergePreferences(VEHICLE_ID, new HashMap<>(Map.of("serviceIntervalMonths", 12)), null, USER_ID);
         assertThat(viaLegacy.getServiceIntervalMonths()).isEqualTo(12);
         assertThat(viaLegacy.getPreferences()).doesNotContainKey("serviceIntervalMonths");
@@ -193,7 +200,56 @@ class VehiclePreferencesServiceImplTest {
         service.upsertPreferences(request(new HashMap<>(), null));
 
         ArgumentCaptor<VehicleCarePreference> captor = ArgumentCaptor.forClass(VehicleCarePreference.class);
-        verify(preferencesRepository).save(captor.capture());
+        verify(preferencesRepository).saveAndFlush(captor.capture());
         verify(publisher).publishCarePreferenceUpserted(captor.getValue());
+    }
+
+    /**
+     * Regression test for a bug where mapping to the response DTO happened on an entity that
+     * had merely been passed to {@code save()} without a flush: on an UPDATE, {@code @LastModifiedDate}
+     * is applied by Hibernate's {@code @PreUpdate} callback, which for an already-managed entity only
+     * fires at flush/commit time. Reading {@code updatedAt} off the un-flushed entity therefore
+     * returned a stale value. The fix is {@code saveAndFlush}, which forces the callback to run before
+     * the entity is mapped to the response.
+     */
+    @Test
+    @DisplayName("Upsert of an existing record flushes before mapping so @LastModifiedDate is fresh in the response")
+    void upsertOfExistingRecordFlushesBeforeMapping() {
+        when(vehicleRepository.existsById(VEHICLE_ID)).thenReturn(true);
+        VehicleCarePreference stored = existing(4);
+        when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(stored));
+        // Simulate the @LastModifiedDate/@PreUpdate stamp that Hibernate only applies on flush.
+        java.time.Instant flushedUpdatedAt = java.time.Instant.parse("2026-08-28T12:00:00Z");
+        when(preferencesRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            VehicleCarePreference entity = inv.getArgument(0);
+            entity.setUpdatedAt(flushedUpdatedAt);
+            return entity;
+        });
+
+        VehicleCarePreferenceResponse saved = service.upsertPreferences(request(new HashMap<>(), 6));
+
+        assertThat(saved.getUpdatedAt()).isEqualTo(flushedUpdatedAt);
+        verify(preferencesRepository).saveAndFlush(any());
+        verify(preferencesRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Merge flushes before mapping so @LastModifiedDate is fresh in the response")
+    void mergeFlushesBeforeMapping() {
+        VehicleCarePreference stored = existing(4);
+        when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(stored));
+        java.time.Instant flushedUpdatedAt = java.time.Instant.parse("2026-08-28T12:30:00Z");
+        when(preferencesRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            VehicleCarePreference entity = inv.getArgument(0);
+            entity.setUpdatedAt(flushedUpdatedAt);
+            return entity;
+        });
+
+        VehicleCarePreferenceResponse saved =
+                service.mergePreferences(VEHICLE_ID, new HashMap<>(Map.of("washPreference", "hand")), null, USER_ID);
+
+        assertThat(saved.getUpdatedAt()).isEqualTo(flushedUpdatedAt);
+        verify(preferencesRepository).saveAndFlush(any());
+        verify(preferencesRepository, never()).save(any());
     }
 }

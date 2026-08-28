@@ -1,4 +1,4 @@
-package com.positivity.catalog.internal.entity;
+package com.positivity.catalog.internal.enums;
 
 public enum ProductLifecycleState {
     ACTIVE,

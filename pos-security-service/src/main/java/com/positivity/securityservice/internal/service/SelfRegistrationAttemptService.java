@@ -1,7 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.dto.SelfRegistrationAttemptSnapshot;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
-import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 public interface SelfRegistrationAttemptService {
 
     @NonNull
-    Optional<SelfRegistrationAttempt> findByIdempotencyKey(@NonNull String idempotencyKey);
+    Optional<SelfRegistrationAttemptSnapshot> findByIdempotencyKey(@NonNull String idempotencyKey);
 
     void recordSuccess(
             @NonNull String idempotencyKey,

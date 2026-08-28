@@ -9,8 +9,7 @@ import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
@@ -278,26 +277,29 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
                 .build());
 
         // Build a balanced journal entry: debit 500.00 to account 7000
-        JournalEntryLine debitLine = new JournalEntryLine();
-        debitLine.setLineNumber(1);
-        debitLine.setGlAccountId(created.getGlAccountId());
-        debitLine.setDebitAmount(new BigDecimal("500.00"));
-        debitLine.setCreditAmount(BigDecimal.ZERO);
-        debitLine.setDescription("Test debit to 7000");
+        JournalEntryCreateRequest.JournalEntryLineRequest debitLine =
+                JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                        .glAccountId(created.getGlAccountId())
+                        .debitAmount(new BigDecimal("500.00"))
+                        .creditAmount(BigDecimal.ZERO)
+                        .description("Test debit to 7000")
+                        .build();
 
-        JournalEntryLine creditLine = new JournalEntryLine();
-        creditLine.setLineNumber(2);
-        creditLine.setGlAccountId(counterpart.getGlAccountId());
-        creditLine.setDebitAmount(BigDecimal.ZERO);
-        creditLine.setCreditAmount(new BigDecimal("500.00"));
-        creditLine.setDescription("Offsetting credit to 7001");
+        JournalEntryCreateRequest.JournalEntryLineRequest creditLine =
+                JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                        .glAccountId(counterpart.getGlAccountId())
+                        .debitAmount(BigDecimal.ZERO)
+                        .creditAmount(new BigDecimal("500.00"))
+                        .description("Offsetting credit to 7001")
+                        .build();
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(LocalDateTime.now(TEST_CLOCK));
-        entry.setDescription("Non-zero balance setup for deactivation test");
-        entry.setLines(List.of(debitLine, creditLine));
+        JournalEntryCreateRequest entry = JournalEntryCreateRequest.builder()
+                .transactionDate(LocalDateTime.now(TEST_CLOCK))
+                .description("Non-zero balance setup for deactivation test")
+                .lines(List.of(debitLine, creditLine))
+                .build();
 
-        JournalEntry draft = journalEntryService.createJournalEntry(entry);
+        var draft = journalEntryService.createJournalEntry(entry);
         journalEntryService.postJournalEntry(draft.getJournalEntryId());
 
         // When / Then — deactivation must fail because the account has a 500.00 debit balance

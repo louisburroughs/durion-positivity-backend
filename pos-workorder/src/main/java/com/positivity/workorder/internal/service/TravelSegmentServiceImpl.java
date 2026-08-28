@@ -6,6 +6,9 @@ import com.positivity.workorder.internal.domain.TravelSegmentStoppedEvent;
 import com.positivity.workorder.internal.dto.CreateTravelSegmentAdjustmentRequest;
 import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
+import com.positivity.workorder.internal.dto.TravelSegmentAdjustmentResponse;
+import com.positivity.workorder.internal.dto.TravelSegmentMapper;
+import com.positivity.workorder.internal.dto.TravelSegmentResponse;
 import com.positivity.workorder.internal.entity.TravelSegment;
 import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -44,7 +47,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
 
     @Override
     @Transactional
-    public @NonNull TravelSegment startTravelSegment(@NonNull StartTravelSegmentRequest request) {
+    public @NonNull TravelSegmentResponse startTravelSegment(@NonNull StartTravelSegmentRequest request) {
         // AC5: on-behalf requires a reason code
         if (request.getActedForPersonId() != null && request.getOnBehalfReasonCode() == null) {
             throw new IllegalArgumentException("onBehalfReasonCode is required when actedForPersonId is set");
@@ -73,12 +76,12 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         TravelSegment saved = travelSegmentRepository.save(segment);
         eventPublisher.publishEvent(
                 new TravelSegmentStartedEvent(saved.getTravelSegmentId(), saved.getTechnicianId(), saved.getStartAt()));
-        return saved;
+        return TravelSegmentMapper.toResponse(saved);
     }
 
     @Override
     @Transactional
-    public @NonNull TravelSegment stopTravelSegment(
+    public @NonNull TravelSegmentResponse stopTravelSegment(
             @NonNull UUID travelSegmentId, @NonNull StopTravelSegmentRequest request) {
         TravelSegment segment = travelSegmentRepository
                 .findById(travelSegmentId)
@@ -100,15 +103,15 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         segment.setStatus(TravelSegmentStatus.COMPLETED);
         segment.setLastModifiedBy(actor);
         segment.setLastModifiedAt(endAt);
-        TravelSegment saved = travelSegmentRepository.save(segment);
+        TravelSegment saved = travelSegmentRepository.saveAndFlush(segment);
         eventPublisher.publishEvent(new TravelSegmentStoppedEvent(
                 saved.getTravelSegmentId(), saved.getTechnicianId(), saved.getEndAt(), saved.getDurationMinutes()));
-        return saved;
+        return TravelSegmentMapper.toResponse(saved);
     }
 
     @Override
     @Transactional
-    public @NonNull List<TravelSegment> submitTravelSegments(@NonNull UUID mobileWorkAssignmentId) {
+    public @NonNull List<TravelSegmentResponse> submitTravelSegments(@NonNull UUID mobileWorkAssignmentId) {
         String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         UUID technicianId;
         try {
@@ -128,13 +131,13 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
             throw new TravelSegmentNotFoundException(mobileWorkAssignmentId);
         }
         all.forEach(s -> s.setStatus(TravelSegmentStatus.SUBMITTED));
-        travelSegmentRepository.saveAll(all);
-        return all;
+        travelSegmentRepository.saveAllAndFlush(all);
+        return TravelSegmentMapper.toResponses(all);
     }
 
     @Override
     @Transactional
-    public @NonNull TravelSegmentAdjustment createAdjustment(
+    public @NonNull TravelSegmentAdjustmentResponse createAdjustment(
             @NonNull UUID travelSegmentId, @NonNull CreateTravelSegmentAdjustmentRequest request) {
         TravelSegment segment = travelSegmentRepository
                 .findById(travelSegmentId)
@@ -150,6 +153,6 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
                 .adjustmentReason(request.getAdjustmentReason())
                 .adjustedByUserId(actor)
                 .build();
-        return travelSegmentAdjustmentRepository.save(adjustment);
+        return TravelSegmentMapper.toAdjustmentResponse(travelSegmentAdjustmentRepository.save(adjustment));
     }
 }

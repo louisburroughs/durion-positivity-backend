@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.handler;
 
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.service.GLMappingResolver;
@@ -116,7 +115,7 @@ public class PaymentApplicationGLPostingEventHandler {
             UUID sourceEventId = toSourceEventId(applicationRequestId);
             String description = "AR cash receipt for payment application request " + applicationRequestId;
 
-            JournalEntry posted = glPostingService.postPaymentApplication(
+            UUID postedJournalEntryId = glPostingService.postPaymentApplication(
                     sourceEventId,
                     undepositedFundsAccountId,
                     arAccountId,
@@ -124,12 +123,12 @@ public class PaymentApplicationGLPostingEventHandler {
                     transactionDate,
                     description);
 
-            idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
+            idempotencyService.registerKey(idempotencyKey, postedJournalEntryId);
 
             log.info(
                     "Payment application GL posting completed | applicationRequestId={} | journalEntryId={}",
                     applicationRequestId,
-                    posted.getJournalEntryId());
+                    postedJournalEntryId);
 
         } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
             // Wave 2 period gate: propagate unwrapped so the failure reason

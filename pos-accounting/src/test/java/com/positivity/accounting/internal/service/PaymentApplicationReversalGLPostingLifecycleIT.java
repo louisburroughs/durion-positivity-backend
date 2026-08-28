@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.accounting.internal.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -137,12 +138,12 @@ class PaymentApplicationReversalGLPostingLifecycleIT {
     @DisplayName("apply→reverse nets to zero in the GL: original REVERSED + reversing POSTED, lines inverted")
     void reverse_postsSymmetricReversingEntry_netZero() {
         UUID applicationRequestId = UUID.fromString("00000000-0000-0000-0000-0000000c2001");
-        JournalEntry cashReceipt = postCashReceipt(applicationRequestId, LocalDateTime.of(2019, 3, 10, 9, 30));
+        UUID cashReceiptId = postCashReceipt(applicationRequestId, LocalDateTime.of(2019, 3, 10, 9, 30));
 
         handler.onPaymentApplicationReversalGLPosting(reversalEvent(applicationRequestId, "Customer disputed charge"));
 
         // Original cash-receipt entry flips POSTED -> REVERSED.
-        JournalEntry reloadedOriginal = journalEntryService.getJournalEntry(cashReceipt.getJournalEntryId());
+        JournalEntryResponse reloadedOriginal = journalEntryService.getJournalEntry(cashReceiptId);
         assertThat(reloadedOriginal.getStatus()).isEqualTo(JournalEntryStatus.REVERSED);
         assertThat(reloadedOriginal.getReversedByJournalEntryId()).isNotNull();
 
@@ -154,7 +155,7 @@ class PaymentApplicationReversalGLPostingLifecycleIT {
                 .findFirst()
                 .orElseThrow();
         assertThat(reversing.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
-        assertThat(reversing.getReversalJournalEntryId()).isEqualTo(cashReceipt.getJournalEntryId());
+        assertThat(reversing.getReversalJournalEntryId()).isEqualTo(cashReceiptId);
 
         // GL symmetry: net (debit - credit) over ALL lines of both entries is
         // zero for every account touched — the reversing entry mirrors the
@@ -193,7 +194,7 @@ class PaymentApplicationReversalGLPostingLifecycleIT {
             + " (B2 default, #944)")
     void reverse_originalPeriodClosed_fallsToCurrentOpenPeriod() {
         UUID applicationRequestId = UUID.fromString("00000000-0000-0000-0000-0000000c2003");
-        JournalEntry cashReceipt = postCashReceipt(applicationRequestId, LocalDateTime.of(2019, 5, 8, 16, 45));
+        UUID cashReceiptId = postCashReceipt(applicationRequestId, LocalDateTime.of(2019, 5, 8, 16, 45));
 
         // Close the original's period; the B2 reversal-date default must fall to
         // the current open period rather than failing.
@@ -201,7 +202,7 @@ class PaymentApplicationReversalGLPostingLifecycleIT {
 
         handler.onPaymentApplicationReversalGLPosting(reversalEvent(applicationRequestId, "Late reversal"));
 
-        JournalEntry reloadedOriginal = journalEntryService.getJournalEntry(cashReceipt.getJournalEntryId());
+        JournalEntryResponse reloadedOriginal = journalEntryService.getJournalEntry(cashReceiptId);
         assertThat(reloadedOriginal.getStatus()).isEqualTo(JournalEntryStatus.REVERSED);
 
         JournalEntry reversing = journalEntryRepository.findAll().stream()
@@ -216,7 +217,7 @@ class PaymentApplicationReversalGLPostingLifecycleIT {
 
     // ===== helpers =====
 
-    private JournalEntry postCashReceipt(UUID applicationRequestId, LocalDateTime transactionDate) {
+    private UUID postCashReceipt(UUID applicationRequestId, LocalDateTime transactionDate) {
         // Mirrors the C1 cash-receipt posting: sourceEventId == the application
         // request id (UUID form), Dr Undeposited Funds / Cr AR.
         return glPostingService.postPaymentApplication(

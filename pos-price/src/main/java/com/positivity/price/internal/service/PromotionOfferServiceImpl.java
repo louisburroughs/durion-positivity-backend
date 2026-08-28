@@ -5,6 +5,8 @@ import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.dto.EligibilityDecision;
 import com.positivity.price.internal.dto.PricingAdjustment;
+import com.positivity.price.internal.dto.PromotionOfferMapper;
+import com.positivity.price.internal.dto.PromotionOfferResponse;
 import com.positivity.price.internal.entity.PromotionOffer;
 import com.positivity.price.internal.enums.PromotionStatus;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
@@ -51,7 +53,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
     @Override
     @NonNull
     @Transactional
-    public PromotionOffer createOffer(@NonNull CreatePromotionOfferRequest request) {
+    public PromotionOfferResponse createOffer(@NonNull CreatePromotionOfferRequest request) {
         if (promotionOfferRepository.existsByPromoCode(request.getPromoCode())) {
             throw new DuplicatePromoCodeException(request.getPromoCode());
         }
@@ -73,32 +75,30 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         offer.setStatus(PromotionStatus.DRAFT);
         offer.setCreatedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
 
-        return promotionOfferRepository.save(offer);
+        return PromotionOfferMapper.toResponse(promotionOfferRepository.save(offer));
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public PromotionOffer getOfferById(@NonNull UUID promotionOfferId) {
-        return promotionOfferRepository
-                .findById(promotionOfferId)
-                .orElseThrow(() -> new PromotionOfferNotFoundException(promotionOfferId));
+    public PromotionOfferResponse getOfferById(@NonNull UUID promotionOfferId) {
+        return PromotionOfferMapper.toResponse(findOfferById(promotionOfferId));
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public PromotionOffer getOfferByCode(@NonNull String promoCode) {
-        return promotionOfferRepository
+    public PromotionOfferResponse getOfferByCode(@NonNull String promoCode) {
+        return PromotionOfferMapper.toResponse(promotionOfferRepository
                 .findByPromoCode(promoCode)
-                .orElseThrow(() -> new PromotionOfferNotFoundException(promoCode));
+                .orElseThrow(() -> new PromotionOfferNotFoundException(promoCode)));
     }
 
     @Override
     @NonNull
     @Transactional
-    public PromotionOffer activateOffer(@NonNull UUID promotionOfferId) {
-        PromotionOffer offer = getOfferById(promotionOfferId);
+    public PromotionOfferResponse activateOffer(@NonNull UUID promotionOfferId) {
+        PromotionOffer offer = findOfferById(promotionOfferId);
         if (offer.getStatus() == PromotionStatus.EXPIRED) {
             throw new PromotionOfferStateException("Cannot activate an expired promotion");
         }
@@ -107,20 +107,26 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         }
 
         offer.setStatus(PromotionStatus.ACTIVE);
-        return promotionOfferRepository.save(offer);
+        return PromotionOfferMapper.toResponse(promotionOfferRepository.saveAndFlush(offer));
     }
 
     @Override
     @NonNull
     @Transactional
-    public PromotionOffer deactivateOffer(@NonNull UUID promotionOfferId) {
-        PromotionOffer offer = getOfferById(promotionOfferId);
+    public PromotionOfferResponse deactivateOffer(@NonNull UUID promotionOfferId) {
+        PromotionOffer offer = findOfferById(promotionOfferId);
         if (offer.getStatus() != PromotionStatus.ACTIVE) {
             throw new PromotionOfferStateException("Only ACTIVE promotions can be deactivated");
         }
 
         offer.setStatus(PromotionStatus.INACTIVE);
-        return promotionOfferRepository.save(offer);
+        return PromotionOfferMapper.toResponse(promotionOfferRepository.saveAndFlush(offer));
+    }
+
+    private @NonNull PromotionOffer findOfferById(@NonNull UUID promotionOfferId) {
+        return promotionOfferRepository
+                .findById(promotionOfferId)
+                .orElseThrow(() -> new PromotionOfferNotFoundException(promotionOfferId));
     }
 
     @Override

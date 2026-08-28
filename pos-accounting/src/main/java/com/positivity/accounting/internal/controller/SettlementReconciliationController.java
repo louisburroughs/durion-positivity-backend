@@ -109,10 +109,7 @@ public class SettlementReconciliationController {
                     sanitizeForLog(settlementId),
                     sanitizeForLog(unmatchedOnly));
         }
-        List<SettlementLineResponse> response =
-                settlementReconciliationService.listLines(settlementId, unmatchedOnly).stream()
-                        .map(SettlementLineResponse::from)
-                        .toList();
+        List<SettlementLineResponse> response = settlementReconciliationService.listLines(settlementId, unmatchedOnly);
         return ResponseEntity.ok(response);
     }
 
@@ -193,8 +190,8 @@ public class SettlementReconciliationController {
                     sanitizeForLog(lineId),
                     sanitizeForLog(request.getReceivablePaymentId()));
         }
-        SettlementLineResponse response = SettlementLineResponse.from(
-                settlementReconciliationService.manualMatchToReceivable(lineId, request.getReceivablePaymentId()));
+        SettlementLineResponse response =
+                settlementReconciliationService.manualMatchToReceivable(lineId, request.getReceivablePaymentId());
         return ResponseEntity.ok(response);
     }
 
@@ -272,8 +269,7 @@ public class SettlementReconciliationController {
         if (log.isInfoEnabled()) {
             log.info("Write off settlement line {}", sanitizeForLog(lineId));
         }
-        SettlementLineResponse response =
-                SettlementLineResponse.from(settlementReconciliationService.writeOffLine(lineId, request.getReason()));
+        SettlementLineResponse response = settlementReconciliationService.writeOffLine(lineId, request.getReason());
         return ResponseEntity.ok(response);
     }
 

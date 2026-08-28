@@ -87,8 +87,7 @@ public class PromotionEligibilityRuleController {
                     @Valid
                     @RequestBody
                     AddEligibilityRuleRequest request) {
-        var rule = eligibilityEvaluationService.addRule(promotionId, request);
-        var response = PromotionEligibilityRuleMapper.toResponse(rule);
+        var response = eligibilityEvaluationService.addRule(promotionId, request);
         URI location = URI.create("/v1/promotions/offers/" + promotionId + "/rules/" + response.getRuleId());
         return ResponseEntity.created(location).body(response);
     }
@@ -117,10 +116,7 @@ public class PromotionEligibilityRuleController {
     @ApiResponse(responseCode = "200", description = "Eligibility rules returned.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
     public ResponseEntity<List<EligibilityRuleResponse>> getRules(@PathVariable("promotionId") UUID promotionId) {
-        List<EligibilityRuleResponse> responses = eligibilityEvaluationService.getRules(promotionId).stream()
-                .map(PromotionEligibilityRuleMapper::toResponse)
-                .toList();
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(eligibilityEvaluationService.getRules(promotionId));
     }
 
     @DeleteMapping("/{ruleId}")

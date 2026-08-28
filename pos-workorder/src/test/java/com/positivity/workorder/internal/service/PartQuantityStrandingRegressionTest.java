@@ -196,7 +196,13 @@ class PartQuantityStrandingRegressionTest {
         token.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "jane.smith"));
         SecurityContextHolder.getContext().setAuthentication(token);
 
-        when(usageEventRepository.save(any(WorkorderPartUsageEvent.class))).thenAnswer(i -> i.getArgument(0));
+        when(usageEventRepository.save(any(WorkorderPartUsageEvent.class))).thenAnswer(i -> {
+            WorkorderPartUsageEvent event = i.getArgument(0);
+            if (event.getId() == null) {
+                org.springframework.test.util.ReflectionTestUtils.setField(event, "id", UUID.randomUUID());
+            }
+            return event;
+        });
     }
 
     @AfterEach

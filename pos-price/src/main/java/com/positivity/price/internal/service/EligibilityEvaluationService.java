@@ -2,7 +2,7 @@ package com.positivity.price.internal.service;
 
 import com.positivity.price.internal.dto.AddEligibilityRuleRequest;
 import com.positivity.price.internal.dto.EligibilityDecision;
-import com.positivity.price.internal.entity.PromotionEligibilityRule;
+import com.positivity.price.internal.dto.EligibilityRuleResponse;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -13,11 +13,11 @@ public interface EligibilityEvaluationService {
 
     /** Add an eligibility rule to a promotion. Issue: #96 */
     @NonNull
-    PromotionEligibilityRule addRule(@NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request);
+    EligibilityRuleResponse addRule(@NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request);
 
     /** Get all eligibility rules for a promotion. Issue: #96 */
     @NonNull
-    List<PromotionEligibilityRule> getRules(@NonNull UUID promotionId);
+    List<EligibilityRuleResponse> getRules(@NonNull UUID promotionId);
 
     /**
      * Delete an eligibility rule by ID, verifying it belongs to the given
