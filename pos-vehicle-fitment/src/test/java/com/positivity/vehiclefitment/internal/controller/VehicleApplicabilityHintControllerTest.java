@@ -17,7 +17,7 @@ import com.positivity.vehiclefitment.internal.dto.FitmentTagDto;
 import com.positivity.vehiclefitment.internal.dto.HintResponse;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
-import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
+import com.positivity.vehiclefitment.internal.service.VehicleApplicabilityHintService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;

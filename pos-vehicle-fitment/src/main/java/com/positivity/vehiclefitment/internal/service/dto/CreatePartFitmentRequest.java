@@ -1,32 +1,26 @@
-package com.positivity.vehiclefitment.service.dto;
+package com.positivity.vehiclefitment.internal.service.dto;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import java.util.UUID;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.NonNull;
 
 @Data
-@Builder
 @NoArgsConstructor
-@AllArgsConstructor
-@Schema(description = "Response payload representing a stored part fitment association")
-public class PartFitmentResponse {
+@Schema(description = "Request payload for creating a part fitment association")
+public class CreatePartFitmentRequest {
 
-    @Schema(
-            description = "Part fitment identifier",
-            example = "550e8400-e29b-41d4-a716-446655440200",
-            requiredMode = REQUIRED)
-    @NotNull
-    private UUID id;
+    public CreatePartFitmentRequest(@NonNull Long partNumberId) {
+        this.partNumberId = partNumberId;
+    }
 
     @Schema(description = "Part number identifier the fitment applies to", example = "100245", requiredMode = REQUIRED)
     @NotNull
+    @NonNull
     private Long partNumberId;
 
     @Schema(description = "Manufacturer name for the vehicle", example = "Toyota", requiredMode = NOT_REQUIRED)

@@ -1,4 +1,4 @@
-package com.positivity.vehiclefitment.service;
+package com.positivity.vehiclefitment.internal.service;
 
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
@@ -6,8 +6,8 @@ import com.positivity.vehiclefitment.internal.entity.Model;
 import com.positivity.vehiclefitment.internal.entity.VehicleType;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
-import com.positivity.vehiclefitment.service.dto.CreatePartFitmentRequest;
-import com.positivity.vehiclefitment.service.dto.PartFitmentResponse;
+import com.positivity.vehiclefitment.internal.service.dto.CreatePartFitmentRequest;
+import com.positivity.vehiclefitment.internal.service.dto.PartFitmentResponse;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;

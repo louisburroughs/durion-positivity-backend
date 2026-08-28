@@ -6,7 +6,6 @@ import com.positivity.vehiclefitment.internal.entity.FitmentTag;
 import com.positivity.vehiclefitment.internal.entity.TagType;
 import com.positivity.vehiclefitment.internal.entity.VehicleApplicabilityHint;
 import com.positivity.vehiclefitment.internal.repository.VehicleApplicabilityHintRepository;
-import com.positivity.vehiclefitment.service.VehicleApplicabilityHintService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
