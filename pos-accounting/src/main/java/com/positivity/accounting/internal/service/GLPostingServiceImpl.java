@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -62,10 +62,10 @@ public class GLPostingServiceImpl implements GLPostingService {
      * @param description         Entry description
      * @param isPriorPeriod       True if prior period adjustment
      * @param originalPeriodId    Original period ID if prior period
-     * @return Posted journal entry
+     * @return posted journal entry's id
      */
     @Override
-    public JournalEntry postCreditMemoReversal(
+    public UUID postCreditMemoReversal(
             @NonNull UUID creditMemoId,
             @NonNull UUID revenueAccountId,
             @NonNull UUID taxPayableAccountId,
@@ -89,7 +89,7 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
-    public JournalEntry postCreditMemoReversal(
+    public UUID postCreditMemoReversal(
             @NonNull UUID creditMemoId,
             @NonNull UUID revenueAccountId,
             @NonNull UUID taxPayableAccountId,
@@ -110,52 +110,37 @@ public class GLPostingServiceImpl implements GLPostingService {
                 taxReversed,
                 totalAmount);
 
-        // Create journal entry
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(LocalDateTime.now(clock));
-        entry.setDescription(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""));
-        entry.setSourceEventId(creditMemoId);
-
-        // Create journal entry lines
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
 
         // Line 1: Debit Revenue (reverse revenue recognition)
-        JournalEntryLine revenueLine = new JournalEntryLine();
-        revenueLine.setGlAccountId(revenueAccountId);
-        revenueLine.setDebitAmount(creditAmount);
-        revenueLine.setCreditAmount(BigDecimal.ZERO);
-        revenueLine.setDescription("Revenue Reversal - CM#" + creditMemoId);
-        lines.add(revenueLine);
+        lines.add(
+                lineRequest(revenueAccountId, creditAmount, BigDecimal.ZERO, "Revenue Reversal - CM#" + creditMemoId));
 
         // Line 2: Debit Tax Liability (reverse tax payable)
-        JournalEntryLine taxLine = new JournalEntryLine();
-        taxLine.setGlAccountId(taxPayableAccountId);
-        taxLine.setDebitAmount(taxReversed);
-        taxLine.setCreditAmount(BigDecimal.ZERO);
-        taxLine.setDescription("Tax Reversal - CM#" + creditMemoId);
-        lines.add(taxLine);
+        lines.add(lineRequest(taxPayableAccountId, taxReversed, BigDecimal.ZERO, "Tax Reversal - CM#" + creditMemoId));
 
         // Line 3: Credit AR (reduce accounts receivable)
-        JournalEntryLine arLine = new JournalEntryLine();
-        arLine.setGlAccountId(arAccountId);
-        arLine.setDebitAmount(BigDecimal.ZERO);
-        arLine.setCreditAmount(totalAmount);
-        arLine.setDescription("AR Reduction - CM#" + creditMemoId);
-        lines.add(arLine);
+        lines.add(lineRequest(arAccountId, BigDecimal.ZERO, totalAmount, "AR Reduction - CM#" + creditMemoId));
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(LocalDateTime.now(clock))
+                .description(description + (isPriorPeriod ? " [PRIOR PERIOD: " + originalPeriodId + "]" : ""))
+                .sourceEventId(creditMemoId)
+                .lines(lines)
+                .build();
 
         // Create and post entry (period gate + override applied inside post, B2)
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted Credit Memo GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     @Override
-    public JournalEntry postCreditMemoVoid(
+    public UUID postCreditMemoVoid(
             @NonNull UUID creditMemoId,
             @NonNull UUID revenueAccountId,
             @NonNull UUID taxPayableAccountId,
@@ -173,46 +158,33 @@ public class GLPostingServiceImpl implements GLPostingService {
                 creditAmount,
                 taxReversed);
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(LocalDateTime.now(clock));
-        entry.setDescription(description);
-        entry.setSourceEventId(creditMemoId);
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
 
         // Line 1: Debit AR (restore the receivable the memo had reduced)
-        JournalEntryLine arLine = new JournalEntryLine();
-        arLine.setGlAccountId(arAccountId);
-        arLine.setDebitAmount(totalAmount);
-        arLine.setCreditAmount(BigDecimal.ZERO);
-        arLine.setDescription("AR Restoration - CM VOID#" + creditMemoId);
-        lines.add(arLine);
+        lines.add(lineRequest(arAccountId, totalAmount, BigDecimal.ZERO, "AR Restoration - CM VOID#" + creditMemoId));
 
         // Line 2: Credit Revenue (re-recognize the reversed revenue)
-        JournalEntryLine revenueLine = new JournalEntryLine();
-        revenueLine.setGlAccountId(revenueAccountId);
-        revenueLine.setDebitAmount(BigDecimal.ZERO);
-        revenueLine.setCreditAmount(creditAmount);
-        revenueLine.setDescription("Revenue Restoration - CM VOID#" + creditMemoId);
-        lines.add(revenueLine);
+        lines.add(lineRequest(
+                revenueAccountId, BigDecimal.ZERO, creditAmount, "Revenue Restoration - CM VOID#" + creditMemoId));
 
         // Line 3: Credit Sales-Tax Payable (restore the reversed tax liability)
-        JournalEntryLine taxLine = new JournalEntryLine();
-        taxLine.setGlAccountId(taxPayableAccountId);
-        taxLine.setDebitAmount(BigDecimal.ZERO);
-        taxLine.setCreditAmount(taxReversed);
-        taxLine.setDescription("Tax Restoration - CM VOID#" + creditMemoId);
-        lines.add(taxLine);
+        lines.add(lineRequest(
+                taxPayableAccountId, BigDecimal.ZERO, taxReversed, "Tax Restoration - CM VOID#" + creditMemoId));
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(LocalDateTime.now(clock))
+                .description(description)
+                .sourceEventId(creditMemoId)
+                .lines(lines)
+                .build();
 
         // Create and post entry (period gate applies inside post — voids land in an open period)
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
 
         log.info("Posted Credit Memo VOID GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     /**
@@ -229,10 +201,10 @@ public class GLPostingServiceImpl implements GLPostingService {
      * @param arAccountId               GL account for AR
      * @param amount                    Payment amount
      * @param description               Entry description
-     * @return Posted journal entry
+     * @return posted journal entry's id
      */
     @Override
-    public JournalEntry postPaymentApplication(
+    public UUID postPaymentApplication(
             @NonNull UUID paymentApplicationId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
@@ -250,7 +222,7 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
-    public JournalEntry postPaymentApplication(
+    public UUID postPaymentApplication(
             @NonNull UUID paymentApplicationId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
@@ -265,41 +237,33 @@ public class GLPostingServiceImpl implements GLPostingService {
                 amount,
                 amount);
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription(description);
-        entry.setSourceEventId(paymentApplicationId);
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
 
         // Debit: Undeposited Funds (D-3)
-        JournalEntryLine cashLine = new JournalEntryLine();
-        cashLine.setGlAccountId(undepositedFundsAccountId);
-        cashLine.setDebitAmount(amount);
-        cashLine.setCreditAmount(BigDecimal.ZERO);
-        cashLine.setDescription("Cash Receipt - PA#" + paymentApplicationId);
-        lines.add(cashLine);
+        lines.add(lineRequest(
+                undepositedFundsAccountId, amount, BigDecimal.ZERO, "Cash Receipt - PA#" + paymentApplicationId));
 
         // Credit: AR
-        JournalEntryLine arLine = new JournalEntryLine();
-        arLine.setGlAccountId(arAccountId);
-        arLine.setDebitAmount(BigDecimal.ZERO);
-        arLine.setCreditAmount(amount);
-        arLine.setDescription("AR Reduction - PA#" + paymentApplicationId);
-        lines.add(arLine);
+        lines.add(lineRequest(arAccountId, BigDecimal.ZERO, amount, "AR Reduction - PA#" + paymentApplicationId));
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(paymentApplicationId)
+                .lines(lines)
+                .build();
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted payment application GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     @Override
-    public JournalEntry postCustomerCreditIssuance(
+    public UUID postCustomerCreditIssuance(
             @NonNull UUID sourceEventId,
             @NonNull UUID creditId,
             @NonNull UUID undepositedFundsAccountId,
@@ -316,41 +280,34 @@ public class GLPostingServiceImpl implements GLPostingService {
                 amount,
                 amount);
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription(description);
-        entry.setSourceEventId(sourceEventId);
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
 
         // Debit: Undeposited Funds (the overpayment cash received).
-        JournalEntryLine cashLine = new JournalEntryLine();
-        cashLine.setGlAccountId(undepositedFundsAccountId);
-        cashLine.setDebitAmount(amount);
-        cashLine.setCreditAmount(BigDecimal.ZERO);
-        cashLine.setDescription("Overpayment Cash - Credit#" + creditId);
-        lines.add(cashLine);
+        lines.add(lineRequest(
+                undepositedFundsAccountId, amount, BigDecimal.ZERO, "Overpayment Cash - Credit#" + creditId));
 
         // Credit: Customer Credit Liability (obligation now owed to the customer).
-        JournalEntryLine liabilityLine = new JournalEntryLine();
-        liabilityLine.setGlAccountId(creditLiabilityAccountId);
-        liabilityLine.setDebitAmount(BigDecimal.ZERO);
-        liabilityLine.setCreditAmount(amount);
-        liabilityLine.setDescription("Customer Credit Issued - Credit#" + creditId);
-        lines.add(liabilityLine);
+        lines.add(lineRequest(
+                creditLiabilityAccountId, BigDecimal.ZERO, amount, "Customer Credit Issued - Credit#" + creditId));
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(sourceEventId)
+                .lines(lines)
+                .build();
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted customer credit issuance GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     @Override
-    public JournalEntry postCustomerCreditRelief(
+    public UUID postCustomerCreditRelief(
             @NonNull UUID sourceEventId,
             @NonNull UUID creditId,
             @NonNull UUID creditLiabilityAccountId,
@@ -368,42 +325,34 @@ public class GLPostingServiceImpl implements GLPostingService {
                 contraLineLabel,
                 amount);
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription(description);
-        entry.setSourceEventId(sourceEventId);
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
 
         // Debit: Customer Credit Liability (the obligation being discharged).
-        JournalEntryLine liabilityLine = new JournalEntryLine();
-        liabilityLine.setGlAccountId(creditLiabilityAccountId);
-        liabilityLine.setDebitAmount(amount);
-        liabilityLine.setCreditAmount(BigDecimal.ZERO);
-        liabilityLine.setDescription("Customer Credit Relieved - Credit#" + creditId);
-        lines.add(liabilityLine);
+        lines.add(lineRequest(
+                creditLiabilityAccountId, amount, BigDecimal.ZERO, "Customer Credit Relieved - Credit#" + creditId));
 
         // Credit: AR (application) or Undeposited Funds (refund) — chosen by the caller
         // through posting-category configuration, never hardcoded here.
-        JournalEntryLine contraLine = new JournalEntryLine();
-        contraLine.setGlAccountId(contraAccountId);
-        contraLine.setDebitAmount(BigDecimal.ZERO);
-        contraLine.setCreditAmount(amount);
-        contraLine.setDescription(contraLineLabel + " - Credit#" + creditId);
-        lines.add(contraLine);
+        lines.add(lineRequest(contraAccountId, BigDecimal.ZERO, amount, contraLineLabel + " - Credit#" + creditId));
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(sourceEventId)
+                .lines(lines)
+                .build();
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted customer credit relief GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     @Override
-    public JournalEntry postInventoryShrinkage(
+    public UUID postInventoryShrinkage(
             @NonNull UUID sourceEventId,
             @NonNull UUID scrapId,
             @NonNull UUID shrinkageAccountId,
@@ -421,30 +370,31 @@ public class GLPostingServiceImpl implements GLPostingService {
                 shrinkageAccountId,
                 inventoryAccountId);
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription(description);
-        entry.setSourceEventId(sourceEventId);
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
 
         // Debit: Inventory Shrinkage expense (the write-off cost recognized).
         addDebit(lines, shrinkageAccountId, amount, "Shrinkage Expense - Scrap#" + scrapId);
         // Credit: Inventory asset (the stock value leaving the balance sheet).
         addCredit(lines, inventoryAccountId, amount, "Inventory Relief - Scrap#" + scrapId);
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(sourceEventId)
+                .lines(lines)
+                .build();
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
 
         log.info("Posted inventory shrinkage GL entry: journal entry ID {}", posted.getJournalEntryId());
 
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     @Override
-    public JournalEntry postSettlement(@NonNull SettlementPostingCommand command) {
+    public UUID postSettlement(@NonNull SettlementPostingCommand command) {
         log.info(
                 "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",
                 command.sourceEventId(),
@@ -453,12 +403,7 @@ public class GLPostingServiceImpl implements GLPostingService {
                 command.matchedGross(),
                 command.unmatchedGross());
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(command.transactionDate());
-        entry.setDescription(command.description());
-        entry.setSourceEventId(command.sourceEventId());
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
         // Sign-route every leg so a refund/chargeback or net-negative payout never
         // produces a negative debit or credit (which would violate the
         // chk_journal_entry_line_debit_xor_credit CHECK and poison the outbox). The
@@ -475,18 +420,23 @@ public class GLPostingServiceImpl implements GLPostingService {
                 lines, command.undepositedFundsAccountId(), command.matchedGross(), "Undeposited Funds Cleared", false);
         addSigned(lines, command.suspenseAccountId(), command.unmatchedGross(), "Settlement Suspense", false);
 
-        entry.setLines(lines);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(command.transactionDate())
+                .description(command.description())
+                .sourceEventId(command.sourceEventId())
+                .lines(lines)
+                .build();
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted =
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
                 journalEntryService.postJournalEntry(created.getJournalEntryId(), command.overrideJustification());
 
         log.info("Posted settlement GL entry: journal entry ID {}", posted.getJournalEntryId());
-        return posted;
+        return posted.getJournalEntryId();
     }
 
     @Override
-    public JournalEntry postSettlementWriteOff(
+    public UUID postSettlementWriteOff(
             @NonNull UUID sourceEventId,
             @NonNull UUID suspenseAccountId,
             @NonNull UUID adjustmentAccountId,
@@ -506,7 +456,7 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
-    public JournalEntry postSettlementReclass(
+    public UUID postSettlementReclass(
             @NonNull UUID sourceEventId,
             @NonNull UUID suspenseAccountId,
             @NonNull UUID undepositedFundsAccountId,
@@ -526,7 +476,7 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
-    public JournalEntry postRegisterOverShort(
+    public UUID postRegisterOverShort(
             @NonNull UUID sourceEventId,
             @NonNull UUID sessionId,
             @NonNull UUID debitAccountId,
@@ -551,7 +501,7 @@ public class GLPostingServiceImpl implements GLPostingService {
      * of {@code amount}. Used by settlement write-off (Dr Suspense / Cr
      * Adjustment) and manual-match reclass (Dr Suspense / Cr Undeposited Funds).
      */
-    private JournalEntry postTwoLineReclass(
+    private UUID postTwoLineReclass(
             @NonNull UUID sourceEventId,
             @NonNull UUID debitAccountId,
             @NonNull UUID creditAccountId,
@@ -560,20 +510,35 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull String description,
             @Nullable String overrideJustification,
             @NonNull String lineLabel) {
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription(description);
-        entry.setSourceEventId(sourceEventId);
-
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
         addDebit(lines, debitAccountId, amount, lineLabel);
         addCredit(lines, creditAccountId, amount, lineLabel);
-        entry.setLines(lines);
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(sourceEventId)
+                .lines(lines)
+                .build();
+
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted =
+                journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
         log.info("Posted {} GL entry: journal entry ID {}", lineLabel, posted.getJournalEntryId());
-        return posted;
+        return posted.getJournalEntryId();
+    }
+
+    private static JournalEntryCreateRequest.JournalEntryLineRequest lineRequest(
+            @NonNull UUID accountId,
+            @NonNull BigDecimal debitAmount,
+            @NonNull BigDecimal creditAmount,
+            @NonNull String description) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(accountId)
+                .debitAmount(debitAmount)
+                .creditAmount(creditAmount)
+                .description(description)
+                .build();
     }
 
     /**
@@ -584,7 +549,7 @@ public class GLPostingServiceImpl implements GLPostingService {
      * false for normal-credit legs (Undeposited Funds, Suspense).
      */
     private static void addSigned(
-            @NonNull List<JournalEntryLine> lines,
+            @NonNull List<JournalEntryCreateRequest.JournalEntryLineRequest> lines,
             @NonNull UUID accountId,
             @NonNull BigDecimal amount,
             @NonNull String description,
@@ -603,35 +568,25 @@ public class GLPostingServiceImpl implements GLPostingService {
 
     /** Append a debit line unless the amount is zero (zero legs are omitted). */
     private static void addDebit(
-            @NonNull List<JournalEntryLine> lines,
+            @NonNull List<JournalEntryCreateRequest.JournalEntryLineRequest> lines,
             @NonNull UUID accountId,
             @NonNull BigDecimal amount,
             @NonNull String description) {
         if (amount.signum() == 0) {
             return;
         }
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(accountId);
-        line.setDebitAmount(amount);
-        line.setCreditAmount(BigDecimal.ZERO);
-        line.setDescription(description);
-        lines.add(line);
+        lines.add(lineRequest(accountId, amount, BigDecimal.ZERO, description));
     }
 
     /** Append a credit line unless the amount is zero (zero legs are omitted). */
     private static void addCredit(
-            @NonNull List<JournalEntryLine> lines,
+            @NonNull List<JournalEntryCreateRequest.JournalEntryLineRequest> lines,
             @NonNull UUID accountId,
             @NonNull BigDecimal amount,
             @NonNull String description) {
         if (amount.signum() == 0) {
             return;
         }
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(accountId);
-        line.setDebitAmount(BigDecimal.ZERO);
-        line.setCreditAmount(amount);
-        line.setDescription(description);
-        lines.add(line);
+        lines.add(lineRequest(accountId, BigDecimal.ZERO, amount, description));
     }
 }

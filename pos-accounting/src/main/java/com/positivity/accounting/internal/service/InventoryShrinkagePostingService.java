@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -90,7 +89,7 @@ public class InventoryShrinkagePostingService {
                 + ", sku " + fact.sku() + ", qty " + fact.quantity() + " @ " + unitCost + ")"
                 + (fact.workorderId() != null ? " [workorder " + fact.workorderId() + "]" : "");
 
-        JournalEntry posted = glPostingService.postInventoryShrinkage(
+        UUID posted = glPostingService.postInventoryShrinkage(
                 toSourceEventId(fact.scrapId()),
                 fact.scrapId(),
                 shrinkageAccountId,
@@ -100,7 +99,7 @@ public class InventoryShrinkagePostingService {
                 description,
                 null);
 
-        idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
+        idempotencyService.registerKey(idempotencyKey, posted);
 
         log.info(
                 "Inventory shrinkage GL posting completed | scrapId={} | sku={} | reasonCode={} | amount={} "
@@ -109,7 +108,7 @@ public class InventoryShrinkagePostingService {
                 fact.sku(),
                 fact.reasonCode(),
                 amount,
-                posted.getJournalEntryId());
+                posted);
     }
 
     /**

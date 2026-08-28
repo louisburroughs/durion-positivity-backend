@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -62,10 +61,8 @@ class InventoryShrinkagePostingServiceTest {
                 .thenReturn(SHRINKAGE_ACCOUNT);
         when(glMappingResolver.resolveGLAccount("INVENTORY_SHRINKAGE", "INVENTORY_ASSET", expectedDate))
                 .thenReturn(INVENTORY_ACCOUNT);
-        JournalEntry posted = new JournalEntry();
-        posted.setJournalEntryId(JOURNAL_ENTRY_ID);
         when(glPostingService.postInventoryShrinkage(any(), any(), any(), any(), any(), any(), anyString(), any()))
-                .thenReturn(posted);
+                .thenReturn(JOURNAL_ENTRY_ID);
 
         service.postShrinkage(fact(new BigDecimal("12.50")));
 

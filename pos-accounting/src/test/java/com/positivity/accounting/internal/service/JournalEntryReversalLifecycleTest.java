@@ -4,11 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
@@ -124,14 +125,14 @@ class JournalEntryReversalLifecycleTest {
     @Test
     @DisplayName("round trip: original flips to REVERSED with linkage both ways; reversal POSTED, numbered, inverted")
     void reverse_roundTrip_statusLinkageNumberingAndAudit() {
-        JournalEntry original = createPosted(LocalDateTime.of(2019, 5, 10, 9, 30));
+        JournalEntryResponse original = createPosted(LocalDateTime.of(2019, 5, 10, 9, 30));
         assertThat(original.getEntryNumber()).isEqualTo("JE-201905-1");
 
-        JournalEntry reversal =
+        JournalEntryResponse reversal =
                 journalEntryService.reverseJournalEntry(original.getJournalEntryId(), "CORRECTION", null);
 
         // Original: REVERSED, reversedAt stamped, linked to its reversal
-        JournalEntry reloadedOriginal = journalEntryService.getJournalEntry(original.getJournalEntryId());
+        JournalEntryResponse reloadedOriginal = journalEntryService.getJournalEntry(original.getJournalEntryId());
         assertThat(reloadedOriginal.getStatus()).isEqualTo(JournalEntryStatus.REVERSED);
         assertThat(reloadedOriginal.getReversedAt()).isNotNull();
         assertThat(reloadedOriginal.getReversedByJournalEntryId()).isEqualTo(reversal.getJournalEntryId());
@@ -142,7 +143,7 @@ class JournalEntryReversalLifecycleTest {
         // Reversal: immediately POSTED with its own number in the same open
         // month (default reversal date = original's transaction date), linked
         // back to the original, lines inverted.
-        JournalEntry reloadedReversal = journalEntryService.getJournalEntry(reversal.getJournalEntryId());
+        JournalEntryResponse reloadedReversal = journalEntryService.getJournalEntry(reversal.getJournalEntryId());
         assertThat(reloadedReversal.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(reloadedReversal.getEntryNumber()).isEqualTo("JE-201905-2");
         assertThat(reloadedReversal.getPostedAt()).isNotNull();
@@ -197,7 +198,7 @@ class JournalEntryReversalLifecycleTest {
     @Test
     @DisplayName("double reversal is rejected with JE_ALREADY_REVERSED semantics")
     void reverse_twice_rejected() {
-        JournalEntry original = createPosted(LocalDateTime.of(2019, 6, 12, 14, 0));
+        JournalEntryResponse original = createPosted(LocalDateTime.of(2019, 6, 12, 14, 0));
         journalEntryService.reverseJournalEntry(original.getJournalEntryId(), "FIRST", null);
 
         assertThatThrownBy(() -> journalEntryService.reverseJournalEntry(original.getJournalEntryId(), "SECOND", null))
@@ -216,9 +217,9 @@ class JournalEntryReversalLifecycleTest {
     @Test
     @DisplayName("explicit reversalDate in an open period dates and numbers the reversal in that month")
     void reverse_explicitOpenDate_used() {
-        JournalEntry original = createPosted(LocalDateTime.of(2019, 7, 3, 8, 15));
+        JournalEntryResponse original = createPosted(LocalDateTime.of(2019, 7, 3, 8, 15));
 
-        JournalEntry reversal = journalEntryService.reverseJournalEntry(
+        JournalEntryResponse reversal = journalEntryService.reverseJournalEntry(
                 original.getJournalEntryId(), "RECLASS", LocalDate.of(2019, 8, 5));
 
         assertThat(reversal.getTransactionDate()).isEqualTo(LocalDateTime.of(2019, 8, 5, 0, 0));
@@ -231,7 +232,7 @@ class JournalEntryReversalLifecycleTest {
     @Test
     @DisplayName("explicit reversalDate in a closed period is rejected and nothing changes")
     void reverse_explicitClosedDate_rejected() {
-        JournalEntry original = createPosted(LocalDateTime.of(2019, 10, 20, 11, 0));
+        JournalEntryResponse original = createPosted(LocalDateTime.of(2019, 10, 20, 11, 0));
         accountingPeriodService.closePeriod("2019-09");
 
         assertThatThrownBy(() -> journalEntryService.reverseJournalEntry(
@@ -239,7 +240,7 @@ class JournalEntryReversalLifecycleTest {
                 .isInstanceOf(AccountingPeriodClosedException.class)
                 .hasMessageContaining("2019-09");
 
-        JournalEntry reloaded = journalEntryService.getJournalEntry(original.getJournalEntryId());
+        JournalEntryResponse reloaded = journalEntryService.getJournalEntry(original.getJournalEntryId());
         assertThat(reloaded.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(reloaded.getReversedAt()).isNull();
         assertThat(journalEntryRepository.count()).isEqualTo(1);
@@ -248,10 +249,11 @@ class JournalEntryReversalLifecycleTest {
     @Test
     @DisplayName("default reversal date falls to the current open period when the original's period is closed")
     void reverse_defaultDate_fallsToCurrentPeriodWhenOriginalPeriodClosed() {
-        JournalEntry original = createPosted(LocalDateTime.of(2019, 11, 8, 16, 45));
+        JournalEntryResponse original = createPosted(LocalDateTime.of(2019, 11, 8, 16, 45));
         accountingPeriodService.closePeriod("2019-11");
 
-        JournalEntry reversal = journalEntryService.reverseJournalEntry(original.getJournalEntryId(), "LATE_FIX", null);
+        JournalEntryResponse reversal =
+                journalEntryService.reverseJournalEntry(original.getJournalEntryId(), "LATE_FIX", null);
 
         assertThat(YearMonth.from(reversal.getTransactionDate()))
                 .as("reversal dated in the current open period, not the closed original month")
@@ -267,7 +269,7 @@ class JournalEntryReversalLifecycleTest {
     @Test
     @DisplayName("concurrent double reversal: exactly one wins, the loser gets the conflict, no orphan reversal")
     void reverse_concurrentRace_exactlyOneWins() throws Exception {
-        JournalEntry original = createPosted(LocalDateTime.of(2019, 12, 2, 10, 0));
+        JournalEntryResponse original = createPosted(LocalDateTime.of(2019, 12, 2, 10, 0));
         UUID originalId = original.getJournalEntryId();
 
         CountDownLatch start = new CountDownLatch(1);
@@ -275,11 +277,11 @@ class JournalEntryReversalLifecycleTest {
         int successes = 0;
         int conflicts = 0;
         try {
-            Future<JournalEntry> first = pool.submit(() -> reverseAfter(start, originalId, "RACE-A"));
-            Future<JournalEntry> second = pool.submit(() -> reverseAfter(start, originalId, "RACE-B"));
+            Future<JournalEntryResponse> first = pool.submit(() -> reverseAfter(start, originalId, "RACE-A"));
+            Future<JournalEntryResponse> second = pool.submit(() -> reverseAfter(start, originalId, "RACE-B"));
             start.countDown();
 
-            for (Future<JournalEntry> future : List.of(first, second)) {
+            for (Future<JournalEntryResponse> future : List.of(first, second)) {
                 try {
                     assertThat(future.get(30, TimeUnit.SECONDS)).isNotNull();
                     successes++;
@@ -299,32 +301,34 @@ class JournalEntryReversalLifecycleTest {
         // event rolled back with its transaction.
         assertThat(journalEntryRepository.count()).isEqualTo(2);
         assertThat(outboxRepository.count()).isEqualTo(1);
-        JournalEntry reloadedOriginal = journalEntryService.getJournalEntry(originalId);
+        JournalEntryResponse reloadedOriginal = journalEntryService.getJournalEntry(originalId);
         assertThat(reloadedOriginal.getStatus()).isEqualTo(JournalEntryStatus.REVERSED);
         assertThat(reloadedOriginal.getReversedByJournalEntryId()).isNotNull();
     }
 
-    private JournalEntry reverseAfter(CountDownLatch start, UUID originalId, String reason)
+    private JournalEntryResponse reverseAfter(CountDownLatch start, UUID originalId, String reason)
             throws InterruptedException {
         start.await();
         return journalEntryService.reverseJournalEntry(originalId, reason, null);
     }
 
-    private JournalEntry createPosted(LocalDateTime transactionDate) {
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription("A3 reversal test");
-        entry.addLine(line(new BigDecimal("250.0000"), BigDecimal.ZERO));
-        entry.addLine(line(BigDecimal.ZERO, new BigDecimal("250.0000")));
-        JournalEntry draft = journalEntryService.createJournalEntry(entry);
+    private JournalEntryResponse createPosted(LocalDateTime transactionDate) {
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description("A3 reversal test")
+                .lines(List.of(
+                        line(new BigDecimal("250.0000"), BigDecimal.ZERO),
+                        line(BigDecimal.ZERO, new BigDecimal("250.0000"))))
+                .build();
+        JournalEntryResponse draft = journalEntryService.createJournalEntry(request);
         return journalEntryService.postJournalEntry(draft.getJournalEntryId());
     }
 
-    private JournalEntryLine line(BigDecimal debit, BigDecimal credit) {
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(glAccountId);
-        line.setDebitAmount(debit);
-        line.setCreditAmount(credit);
-        return line;
+    private JournalEntryCreateRequest.JournalEntryLineRequest line(BigDecimal debit, BigDecimal credit) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(glAccountId)
+                .debitAmount(debit)
+                .creditAmount(credit)
+                .build();
     }
 }

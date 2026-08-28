@@ -132,8 +132,8 @@ public class CustomerCreditReliefGLPostingEventHandler {
                     contraLineLabel,
                     null);
 
-            idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
-            postingLifecycleService.recordReliefPosting(event.getCreditTransactionId(), posted.getJournalEntryId());
+            idempotencyService.registerKey(idempotencyKey, posted);
+            postingLifecycleService.recordReliefPosting(event.getCreditTransactionId(), posted);
 
             log.info(
                     "Customer credit relief GL posting completed | requestId={} | type={} | creditId={} "
@@ -141,7 +141,7 @@ public class CustomerCreditReliefGLPostingEventHandler {
                     requestId,
                     type,
                     event.getCreditId(),
-                    posted.getJournalEntryId());
+                    posted);
 
         } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
             // Wave 2 period gate: propagate unwrapped so the failure reason stays visible in the

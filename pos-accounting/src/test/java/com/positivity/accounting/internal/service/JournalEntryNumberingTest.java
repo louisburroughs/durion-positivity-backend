@@ -4,9 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -80,11 +81,11 @@ class JournalEntryNumberingTest {
     @Test
     @DisplayName("posting assigns JE-{YYYYMM}-1 then -2 sequentially within one month")
     void posting_sameMonth_assignsSequentialNumbers() {
-        JournalEntry first = createDraft(LocalDateTime.of(2021, 3, 5, 10, 0));
-        JournalEntry second = createDraft(LocalDateTime.of(2021, 3, 25, 16, 30));
+        JournalEntryResponse first = createDraft(LocalDateTime.of(2021, 3, 5, 10, 0));
+        JournalEntryResponse second = createDraft(LocalDateTime.of(2021, 3, 25, 16, 30));
 
-        JournalEntry postedFirst = journalEntryService.postJournalEntry(first.getJournalEntryId());
-        JournalEntry postedSecond = journalEntryService.postJournalEntry(second.getJournalEntryId());
+        JournalEntryResponse postedFirst = journalEntryService.postJournalEntry(first.getJournalEntryId());
+        JournalEntryResponse postedSecond = journalEntryService.postJournalEntry(second.getJournalEntryId());
 
         assertThat(postedFirst.getEntryNumber()).isEqualTo("JE-202103-1");
         assertThat(postedSecond.getEntryNumber()).isEqualTo("JE-202103-2");
@@ -93,8 +94,8 @@ class JournalEntryNumberingTest {
     @Test
     @DisplayName("different transaction months use independent sequences")
     void posting_differentMonths_independentSequences() {
-        JournalEntry march = createDraft(LocalDateTime.of(2021, 4, 30, 23, 59));
-        JournalEntry april = createDraft(LocalDateTime.of(2021, 5, 1, 0, 0));
+        JournalEntryResponse march = createDraft(LocalDateTime.of(2021, 4, 30, 23, 59));
+        JournalEntryResponse april = createDraft(LocalDateTime.of(2021, 5, 1, 0, 0));
 
         assertThat(journalEntryService
                         .postJournalEntry(march.getJournalEntryId())
@@ -109,7 +110,7 @@ class JournalEntryNumberingTest {
     @Test
     @DisplayName("drafts remain unnumbered until posted")
     void draft_remainsUnnumbered() {
-        JournalEntry draft = createDraft(LocalDateTime.of(2021, 6, 10, 9, 0));
+        JournalEntryResponse draft = createDraft(LocalDateTime.of(2021, 6, 10, 9, 0));
 
         assertThat(draft.getEntryNumber()).isNull();
         assertThat(journalEntryService
@@ -124,9 +125,8 @@ class JournalEntryNumberingTest {
     @Test
     @DisplayName("PENDING entries cannot be posted and remain unnumbered")
     void pendingEntry_notPostable_remainsUnnumbered() {
-        JournalEntry pending = createDraft(LocalDateTime.of(2021, 7, 10, 9, 0));
-        pending.setStatus(JournalEntryStatus.PENDING);
-        journalEntryRepository.save(pending);
+        JournalEntryResponse pending = createDraft(LocalDateTime.of(2021, 7, 10, 9, 0));
+        setStatus(pending.getJournalEntryId(), JournalEntryStatus.PENDING);
 
         assertThatThrownBy(() -> journalEntryService.postJournalEntry(pending.getJournalEntryId()))
                 .isInstanceOf(IllegalStateException.class)
@@ -143,14 +143,13 @@ class JournalEntryNumberingTest {
     @DisplayName("pre-numbering POSTED entries (entryNumber null) are unaffected by new posts")
     void legacyPostedEntry_unaffectedByNewNumbering() {
         // Simulate an entry posted before A2 shipped: POSTED, no number.
-        JournalEntry legacy = createDraft(LocalDateTime.of(2021, 8, 3, 8, 0));
-        legacy.setStatus(JournalEntryStatus.POSTED);
-        journalEntryRepository.save(legacy);
+        JournalEntryResponse legacy = createDraft(LocalDateTime.of(2021, 8, 3, 8, 0));
+        setStatus(legacy.getJournalEntryId(), JournalEntryStatus.POSTED);
 
         // A new post in the same transaction month starts the sequence at 1;
         // legacy rows neither seed nor consume the counter.
-        JournalEntry fresh = createDraft(LocalDateTime.of(2021, 8, 20, 11, 0));
-        JournalEntry postedFresh = journalEntryService.postJournalEntry(fresh.getJournalEntryId());
+        JournalEntryResponse fresh = createDraft(LocalDateTime.of(2021, 8, 20, 11, 0));
+        JournalEntryResponse postedFresh = journalEntryService.postJournalEntry(fresh.getJournalEntryId());
 
         assertThat(postedFresh.getEntryNumber()).isEqualTo("JE-202108-1");
         assertThat(journalEntryService
@@ -162,28 +161,37 @@ class JournalEntryNumberingTest {
     @Test
     @DisplayName("assigned number is visible through the service read path")
     void assignedNumber_visibleViaServiceGet() {
-        JournalEntry draft = createDraft(LocalDateTime.of(2021, 9, 14, 14, 45));
+        JournalEntryResponse draft = createDraft(LocalDateTime.of(2021, 9, 14, 14, 45));
         journalEntryService.postJournalEntry(draft.getJournalEntryId());
 
-        JournalEntry reloaded = journalEntryService.getJournalEntry(draft.getJournalEntryId());
+        JournalEntryResponse reloaded = journalEntryService.getJournalEntry(draft.getJournalEntryId());
         assertThat(reloaded.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(reloaded.getEntryNumber()).isEqualTo("JE-202109-1");
     }
 
-    private JournalEntry createDraft(LocalDateTime transactionDate) {
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(transactionDate);
-        entry.setDescription("A2 numbering test");
-        entry.addLine(line(new BigDecimal("100.0000"), BigDecimal.ZERO));
-        entry.addLine(line(BigDecimal.ZERO, new BigDecimal("100.0000")));
-        return journalEntryService.createJournalEntry(entry);
+    private JournalEntryResponse createDraft(LocalDateTime transactionDate) {
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description("A2 numbering test")
+                .lines(java.util.List.of(
+                        line(new BigDecimal("100.0000"), BigDecimal.ZERO),
+                        line(BigDecimal.ZERO, new BigDecimal("100.0000"))))
+                .build();
+        return journalEntryService.createJournalEntry(request);
     }
 
-    private JournalEntryLine line(BigDecimal debit, BigDecimal credit) {
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(glAccountId);
-        line.setDebitAmount(debit);
-        line.setCreditAmount(credit);
-        return line;
+    /** Directly mutates a persisted entry's status, bypassing the service, to simulate legacy/PENDING rows. */
+    private void setStatus(UUID journalEntryId, JournalEntryStatus status) {
+        JournalEntry entity = journalEntryRepository.findById(journalEntryId).orElseThrow();
+        entity.setStatus(status);
+        journalEntryRepository.save(entity);
+    }
+
+    private JournalEntryCreateRequest.JournalEntryLineRequest line(BigDecimal debit, BigDecimal credit) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(glAccountId)
+                .debitAmount(debit)
+                .creditAmount(credit)
+                .build();
     }
 }

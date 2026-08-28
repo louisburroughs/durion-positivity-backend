@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
@@ -63,7 +62,7 @@ class PaymentApplicationGLPostingEventHandlerTest {
     private UUID undepositedFundsAccountId;
     private UUID arAccountId;
     private UUID journalEntryId;
-    private JournalEntry postedEntry;
+    private UUID postedEntry;
 
     @BeforeEach
     void setUp() {
@@ -81,8 +80,7 @@ class PaymentApplicationGLPostingEventHandlerTest {
                 .applicationTimestamp(Instant.parse("2026-03-15T09:59:00Z"))
                 .build();
 
-        postedEntry = new JournalEntry();
-        postedEntry.setJournalEntryId(journalEntryId);
+        postedEntry = journalEntryId;
     }
 
     private void stubAccountResolution() {

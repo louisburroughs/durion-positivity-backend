@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryMapper;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -94,6 +97,7 @@ class PostingEngineOrchestratorTest {
     private String testUserId;
     private AccountingEvent testEvent;
     private JournalEntry testJournalEntry;
+    private JournalEntryCreateRequest expectedCreateRequest;
     private Map<String, Object> testPayload;
 
     @BeforeEach
@@ -144,6 +148,12 @@ class PostingEngineOrchestratorTest {
         testJournalEntry.setDescription("Test journal entry");
         testJournalEntry.setStatus(JournalEntryStatus.DRAFT);
         testJournalEntry.setLines(createBalancedLines());
+
+        // The orchestrator converts the evaluator's transient entity draft to a
+        // JournalEntryCreateRequest before calling the (now DTO-based)
+        // JournalEntryService seam; precompute the same conversion so exact-argument
+        // stubs/verifies below match by value (JournalEntryCreateRequest is @Data).
+        expectedCreateRequest = JournalEntryMapper.toCreateRequest(testJournalEntry);
     }
 
     private List<JournalEntryLine> createBalancedLines() {
@@ -209,9 +219,9 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -223,7 +233,7 @@ class PostingEngineOrchestratorTest {
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getEvaluationDetails()).doesNotContainEntry("idempotent", true);
             verify(postingRuleEvaluator).evaluateEvent(testEvent, testMappingVersion);
-            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).createJournalEntry(expectedCreateRequest);
             verify(idempotencyService).registerKey(anyString(), eq(testEventId));
         }
 
@@ -237,7 +247,7 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
 
@@ -247,7 +257,7 @@ class PostingEngineOrchestratorTest {
             // Then
             assertThat(result.isSuccess()).isTrue();
             verify(postingRuleEvaluator).evaluateEvent(testEvent, testMappingVersion);
-            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).createJournalEntry(expectedCreateRequest);
             verify(idempotencyService).registerKey(anyString(), eq(testEventId));
         }
     }
@@ -331,12 +341,12 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
             createdEntry.setStatus(JournalEntryStatus.DRAFT);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
-            JournalEntry postedEntry = new JournalEntry();
+            JournalEntryResponse postedEntry = new JournalEntryResponse();
             postedEntry.setJournalEntryId(testJournalEntryId);
             postedEntry.setStatus(JournalEntryStatus.POSTED);
             when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
@@ -353,7 +363,7 @@ class PostingEngineOrchestratorTest {
                     .containsEntry("postingReference", testJournalEntryId.toString())
                     .containsEntry("autoPosted", true);
 
-            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).createJournalEntry(expectedCreateRequest);
             verify(journalEntryService).postJournalEntry(testJournalEntryId);
 
             verify(accountingEventRepository).save(eventCaptor.capture());
@@ -390,11 +400,11 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
-            JournalEntry postedEntry = new JournalEntry();
+            JournalEntryResponse postedEntry = new JournalEntryResponse();
             postedEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
 
@@ -428,10 +438,10 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdDraft = new JournalEntry();
+            JournalEntryResponse createdDraft = new JournalEntryResponse();
             createdDraft.setJournalEntryId(testJournalEntryId);
             createdDraft.setStatus(JournalEntryStatus.DRAFT);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdDraft);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdDraft);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -445,7 +455,7 @@ class PostingEngineOrchestratorTest {
                     .containsEntry("postingReference", testJournalEntryId.toString())
                     .containsEntry("autoPosted", false);
 
-            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).createJournalEntry(expectedCreateRequest);
             verify(journalEntryService, never()).postJournalEntry(any());
 
             verify(accountingEventRepository).save(eventCaptor.capture());
@@ -510,7 +520,7 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            when(journalEntryService.createJournalEntry(testJournalEntry))
+            when(journalEntryService.createJournalEntry(expectedCreateRequest))
                     .thenThrow(new RuntimeException("Failed to save journal entry"));
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -582,9 +592,9 @@ class PostingEngineOrchestratorTest {
             PostingResult evaluationResult = PostingResult.success(testJournalEntry, null);
             when(postingRuleEvaluator.evaluateEvent(testEvent, null)).thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -617,9 +627,9 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -648,9 +658,9 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
             when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
             when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -678,11 +688,11 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(evaluationResult);
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
-            when(journalEntryService.createJournalEntry(testJournalEntry)).thenReturn(createdEntry);
+            when(journalEntryService.createJournalEntry(expectedCreateRequest)).thenReturn(createdEntry);
 
-            JournalEntry postedEntry = new JournalEntry();
+            JournalEntryResponse postedEntry = new JournalEntryResponse();
             postedEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
 
@@ -700,7 +710,7 @@ class PostingEngineOrchestratorTest {
             verify(postingRuleEvaluator).evaluateEvent(testEvent, testMappingVersion);
 
             // 3. Journal entry creation and posting
-            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).createJournalEntry(expectedCreateRequest);
             verify(journalEntryService).postJournalEntry(testJournalEntryId);
 
             // 4. Event status update
@@ -808,7 +818,7 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(PostingResult.success(testJournalEntry, testMappingVersion));
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
 
@@ -818,7 +828,7 @@ class PostingEngineOrchestratorTest {
             // Then - drafts may be created into any period (gate at post time)
             assertThat(result.isSuccess()).isTrue();
             verify(accountingPeriodGate, never()).isPostingBlocked(any());
-            verify(journalEntryService).createJournalEntry(testJournalEntry);
+            verify(journalEntryService).createJournalEntry(expectedCreateRequest);
             verify(journalEntryService, never()).postJournalEntry(any());
         }
 
@@ -845,11 +855,11 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(PostingResult.success(testJournalEntry, testMappingVersion));
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
 
-            JournalEntry postedEntry = new JournalEntry();
+            JournalEntryResponse postedEntry = new JournalEntryResponse();
             postedEntry.setJournalEntryId(testJournalEntryId);
             postedEntry.setStatus(JournalEntryStatus.POSTED);
             when(journalEntryService.postJournalEntry(testJournalEntryId)).thenReturn(postedEntry);
@@ -876,7 +886,7 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(PostingResult.success(testJournalEntry, testMappingVersion));
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
             when(journalEntryService.postJournalEntry(testJournalEntryId))
@@ -914,7 +924,7 @@ class PostingEngineOrchestratorTest {
             when(postingRuleEvaluator.evaluateEvent(testEvent, testMappingVersion))
                     .thenReturn(PostingResult.success(testJournalEntry, testMappingVersion));
 
-            JournalEntry createdEntry = new JournalEntry();
+            JournalEntryResponse createdEntry = new JournalEntryResponse();
             createdEntry.setJournalEntryId(testJournalEntryId);
             when(journalEntryService.createJournalEntry(any())).thenReturn(createdEntry);
             when(journalEntryService.postJournalEntry(testJournalEntryId))

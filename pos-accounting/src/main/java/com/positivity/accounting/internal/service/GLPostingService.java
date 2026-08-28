@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -27,9 +26,9 @@ public interface GLPostingService {
      * @param description         Entry description
      * @param isPriorPeriod       True if prior period adjustment
      * @param originalPeriodId    Original period ID if prior period
-     * @return Posted journal entry
+     * @return posted journal entry's id's id
      */
-    JournalEntry postCreditMemoReversal(
+    UUID postCreditMemoReversal(
             UUID creditMemoId,
             UUID revenueAccountId,
             UUID taxPayableAccountId,
@@ -50,9 +49,9 @@ public interface GLPostingService {
      *
      * @param overrideJustification optional justification for posting into a
      *                              CLOSED period
-     * @return Posted journal entry
+     * @return posted journal entry's id's id
      */
-    JournalEntry postCreditMemoReversal(
+    UUID postCreditMemoReversal(
             @NonNull UUID creditMemoId,
             @NonNull UUID revenueAccountId,
             @NonNull UUID taxPayableAccountId,
@@ -78,9 +77,9 @@ public interface GLPostingService {
      * @param creditAmount       Revenue portion originally credited
      * @param taxReversed        Tax portion originally reversed
      * @param description        Journal entry description
-     * @return Posted journal entry
+     * @return posted journal entry's id's id
      */
-    JournalEntry postCreditMemoVoid(
+    UUID postCreditMemoVoid(
             @NonNull UUID creditMemoId,
             @NonNull UUID revenueAccountId,
             @NonNull UUID taxPayableAccountId,
@@ -110,9 +109,9 @@ public interface GLPostingService {
      *                                   from processing/clock time so outbox
      *                                   retries post into the correct period
      * @param description                Entry description
-     * @return Posted journal entry
+     * @return posted journal entry's id's id
      */
-    JournalEntry postPaymentApplication(
+    UUID postPaymentApplication(
             UUID paymentApplicationId,
             UUID undepositedFundsAccountId,
             UUID arAccountId,
@@ -130,9 +129,9 @@ public interface GLPostingService {
      *
      * @param overrideJustification optional justification for posting into a
      *                              CLOSED period
-     * @return Posted journal entry
+     * @return posted journal entry's id's id
      */
-    JournalEntry postPaymentApplication(
+    UUID postPaymentApplication(
             @NonNull UUID paymentApplicationId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
@@ -163,9 +162,9 @@ public interface GLPostingService {
      *                                   post into the correct period
      * @param description                entry description
      * @param overrideJustification      optional CLOSED-period override justification
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postCustomerCreditIssuance(
+    UUID postCustomerCreditIssuance(
             @NonNull UUID sourceEventId,
             @NonNull UUID creditId,
             @NonNull UUID undepositedFundsAccountId,
@@ -212,9 +211,9 @@ public interface GLPostingService {
      * @param contraLineLabel          audit label for the credited line (e.g.
      *                                 {@code "AR Reduction"} / {@code "Credit Refund"})
      * @param overrideJustification    optional CLOSED-period override justification
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postCustomerCreditRelief(
+    UUID postCustomerCreditRelief(
             @NonNull UUID sourceEventId,
             @NonNull UUID creditId,
             @NonNull UUID creditLiabilityAccountId,
@@ -248,9 +247,9 @@ public interface GLPostingService {
      *                              period
      * @param description           entry description (carries the scrap reason code)
      * @param overrideJustification optional CLOSED-period override justification
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postInventoryShrinkage(
+    UUID postInventoryShrinkage(
             @NonNull UUID sourceEventId,
             @NonNull UUID scrapId,
             @NonNull UUID shrinkageAccountId,
@@ -268,9 +267,9 @@ public interface GLPostingService {
      * period gate (story B2) applies inside posting.
      *
      * @param command settlement posting command
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postSettlement(@NonNull SettlementPostingCommand command);
+    UUID postSettlement(@NonNull SettlementPostingCommand command);
 
     /**
      * Post a reversible settlement write-off (story F1c, decision D-14): {@code
@@ -285,9 +284,9 @@ public interface GLPostingService {
      * @param transactionDate journal entry date
      * @param description entry description
      * @param overrideJustification optional CLOSED-period override justification
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postSettlementWriteOff(
+    UUID postSettlementWriteOff(
             @NonNull UUID sourceEventId,
             @NonNull UUID suspenseAccountId,
             @NonNull UUID adjustmentAccountId,
@@ -309,9 +308,9 @@ public interface GLPostingService {
      * @param transactionDate journal entry date
      * @param description entry description
      * @param overrideJustification optional CLOSED-period override justification
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postSettlementReclass(
+    UUID postSettlementReclass(
             @NonNull UUID sourceEventId,
             @NonNull UUID suspenseAccountId,
             @NonNull UUID undepositedFundsAccountId,
@@ -336,9 +335,9 @@ public interface GLPostingService {
      * @param transactionDate business transaction date (the session's close time)
      * @param description entry description
      * @param overrideJustification optional CLOSED-period override justification
-     * @return posted journal entry
+     * @return posted journal entry's id
      */
-    JournalEntry postRegisterOverShort(
+    UUID postRegisterOverShort(
             @NonNull UUID sourceEventId,
             @NonNull UUID sessionId,
             @NonNull UUID debitAccountId,

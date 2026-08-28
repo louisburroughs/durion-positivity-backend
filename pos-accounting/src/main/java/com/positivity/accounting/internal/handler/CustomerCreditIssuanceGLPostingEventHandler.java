@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.handler;
 
 import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.service.GLMappingResolver;
@@ -119,7 +118,7 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
             String description = "Customer credit issuance for overpayment on application request "
                     + applicationRequestId + " (credit " + event.getCreditId() + ")";
 
-            JournalEntry posted = glPostingService.postCustomerCreditIssuance(
+            UUID postedJournalEntryId = glPostingService.postCustomerCreditIssuance(
                     sourceEventId,
                     event.getCreditId(),
                     undepositedFundsAccountId,
@@ -129,14 +128,14 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
                     description,
                     null);
 
-            idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
+            idempotencyService.registerKey(idempotencyKey, postedJournalEntryId);
 
             log.info(
                     "Customer credit issuance GL posting completed | applicationRequestId={} | creditId={} "
                             + "| journalEntryId={}",
                     applicationRequestId,
                     event.getCreditId(),
-                    posted.getJournalEntryId());
+                    postedJournalEntryId);
 
         } catch (AccountingPeriodClosedException | AccountingPeriodHardLockedException e) {
             // Wave 2 period gate: propagate unwrapped so the failure reason stays

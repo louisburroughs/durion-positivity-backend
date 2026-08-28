@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryMapper;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
@@ -84,7 +85,16 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      *                                  invalid
      */
     @Override
-    public JournalEntry createJournalEntry(JournalEntry entry) {
+    public JournalEntryResponse createJournalEntry(JournalEntryCreateRequest request) {
+        return JournalEntryMapper.toResponse(createEntity(JournalEntryMapper.toEntity(request)));
+    }
+
+    /**
+     * Entity-level creation backing {@link #createJournalEntry(JournalEntryCreateRequest)}; kept
+     * separate so the balance/GL-account validation and persistence logic reads independently of
+     * the DTO conversion at the public seam.
+     */
+    private JournalEntry createEntity(JournalEntry entry) {
         // Generate ID if not present
         if (entry.getJournalEntryId() == null) {
             entry.setJournalEntryId(UUIDv7Generator.generate());
@@ -123,8 +133,8 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      */
     @Override
     @Transactional(readOnly = true)
-    public JournalEntry getJournalEntry(UUID journalEntryId) {
-        return findById(journalEntryId);
+    public JournalEntryResponse getJournalEntry(UUID journalEntryId) {
+        return JournalEntryMapper.toResponse(findById(journalEntryId));
     }
 
     @Override
@@ -197,7 +207,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * @throws IllegalStateException if entry is not in DRAFT status
      */
     @Override
-    public JournalEntry updateJournalEntry(UUID journalEntryId, JournalEntry updates) {
+    public JournalEntryResponse updateJournalEntry(UUID journalEntryId, JournalEntryCreateRequest updates) {
         JournalEntry entry = findById(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
@@ -206,24 +216,26 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             throw new IllegalStateException(msg);
         }
 
+        JournalEntry updateEntity = JournalEntryMapper.toEntity(updates);
+
         // Validate updated entry is balanced
-        validateBalance(updates);
+        validateBalance(updateEntity);
 
         // Allow description updates only
-        entry.setDescription(updates.getDescription());
+        entry.setDescription(updateEntity.getDescription());
         entry.setUpdatedAt(Instant.now(clock));
 
         // Lines can be updated (add/remove as long as entry remains balanced)
         // For now, disallow line updates; require delete + recreate for complex changes
-        if (updates.getLines() != null && !updates.getLines().isEmpty()) {
+        if (updateEntity.getLines() != null && !updateEntity.getLines().isEmpty()) {
             // Keep the managed collection instance to avoid orphan-removal dereference
             // exceptions during flush.
             entry.getLines().clear();
-            entry.getLines().addAll(updates.getLines());
+            entry.getLines().addAll(updateEntity.getLines());
             initializeLineMetadata(entry);
         }
 
-        return journalEntryRepository.save(entry);
+        return JournalEntryMapper.toResponse(journalEntryRepository.save(entry));
     }
 
     /**
@@ -231,7 +243,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * paths). Delegates to {@link #postJournalEntry(UUID, String)}.
      */
     @Override
-    public JournalEntry postJournalEntry(UUID journalEntryId) {
+    public JournalEntryResponse postJournalEntry(UUID journalEntryId) {
         return postJournalEntry(journalEntryId, null);
     }
 
@@ -256,7 +268,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      *                               unbalanced
      */
     @Override
-    public JournalEntry postJournalEntry(UUID journalEntryId, @Nullable String overrideJustification) {
+    public JournalEntryResponse postJournalEntry(UUID journalEntryId, @Nullable String overrideJustification) {
         JournalEntry entry = findById(journalEntryId);
 
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
@@ -288,7 +300,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                 saved.getJournalEntryId(),
                 saved.getEntryNumber(),
                 saved.getLines().size());
-        return saved;
+        return JournalEntryMapper.toResponse(saved);
     }
 
     // ===== POSTED-ENTRY NUMBERING (story A2, issue #942, decision D-1) =====
@@ -380,13 +392,13 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * full B2 period gate (hard lock, closed period, permissioned override).
      */
     @Override
-    public JournalEntry reverseJournalEntry(
+    public JournalEntryResponse reverseJournalEntry(
             @NonNull UUID originalEntryId, @NonNull String reversalReason, @Nullable LocalDate reversalDate) {
         return reverseJournalEntry(originalEntryId, reversalReason, reversalDate, null);
     }
 
     @Override
-    public JournalEntry reverseJournalEntry(
+    public JournalEntryResponse reverseJournalEntry(
             @NonNull UUID originalEntryId,
             @NonNull String reversalReason,
             @Nullable LocalDate reversalDate,
@@ -467,19 +479,20 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                 savedReversal.getJournalEntryId(),
                 savedReversal.getEntryNumber(),
                 reversalTransactionDate);
-        return savedReversal;
+        return JournalEntryMapper.toResponse(savedReversal);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<JournalEntry> findOriginalBySourceEvent(@NonNull UUID sourceEventId) {
+    public Optional<JournalEntryResponse> findOriginalBySourceEvent(@NonNull UUID sourceEventId) {
         // A reversal entry shares the original's sourceEventId; exclude it by
         // its non-null reversalJournalEntry link so only the original cash
         // receipt is returned. Posting is idempotent per source event, so at
         // most one non-reversal entry can exist.
         return journalEntryRepository.findBySourceEvent(sourceEventId).stream()
                 .filter(entry -> entry.getReversalJournalEntry() == null)
-                .findFirst();
+                .findFirst()
+                .map(JournalEntryMapper::toResponse);
     }
 
     /**
@@ -564,27 +577,31 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<JournalEntry> listJournalEntries(Pageable pageable, @Nullable String entryNumber) {
-        if (entryNumber == null || entryNumber.isBlank()) {
-            return journalEntryRepository.findAll(pageable);
-        }
-        return journalEntryRepository.findByEntryNumber(entryNumber, pageable);
+    public Page<JournalEntryResponse> listJournalEntries(Pageable pageable, @Nullable String entryNumber) {
+        Page<JournalEntry> page = (entryNumber == null || entryNumber.isBlank())
+                ? journalEntryRepository.findAll(pageable)
+                : journalEntryRepository.findByEntryNumber(entryNumber, pageable);
+        return page.map(JournalEntryMapper::toResponse);
     }
 
     /**
      * Find all posted entries for audit or reconciliation.
      */
     @Override
-    public Page<JournalEntry> listPostedEntries(Pageable pageable) {
-        return journalEntryRepository.findByStatus(JournalEntryStatus.POSTED, pageable);
+    public Page<JournalEntryResponse> listPostedEntries(Pageable pageable) {
+        return journalEntryRepository
+                .findByStatus(JournalEntryStatus.POSTED, pageable)
+                .map(JournalEntryMapper::toResponse);
     }
 
     /**
      * Find entries by status (DRAFT, POSTED, REVERSED).
      */
     @Override
-    public List<JournalEntry> findByStatus(JournalEntryStatus status) {
-        return journalEntryRepository.findByStatus(status);
+    public List<JournalEntryResponse> findByStatus(JournalEntryStatus status) {
+        return journalEntryRepository.findByStatus(status).stream()
+                .map(JournalEntryMapper::toResponse)
+                .toList();
     }
 
     // ===== VALIDATION =====

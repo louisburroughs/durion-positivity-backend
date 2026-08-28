@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.CustomerCreditReliefGLPostingEvent;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.service.CustomerCreditPostingLifecycleService;
@@ -165,10 +164,8 @@ class CustomerCreditReliefGLPostingEventHandlerTest {
                 .thenReturn(CONTRA_ACCOUNT);
     }
 
-    private static JournalEntry postedEntry() {
-        JournalEntry entry = new JournalEntry();
-        entry.setJournalEntryId(JOURNAL_ENTRY_ID);
-        return entry;
+    private static UUID postedEntry() {
+        return JOURNAL_ENTRY_ID;
     }
 
     private static CustomerCreditReliefGLPostingEvent event(CustomerCreditTransactionType type, UUID invoiceId) {

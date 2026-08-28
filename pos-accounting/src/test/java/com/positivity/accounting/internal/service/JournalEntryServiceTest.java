@@ -11,6 +11,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
@@ -132,19 +134,19 @@ class JournalEntryServiceTest {
     @DisplayName("createJournalEntry - creates balanced entry successfully")
     void createJournalEntry_balanced_success() {
         // Arrange
-        JournalEntry entry = createBalancedEntry();
+        JournalEntryCreateRequest request = createBalancedRequest();
 
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        JournalEntry result = service.createJournalEntry(entry);
+        JournalEntryResponse result = service.createJournalEntry(request);
 
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.DRAFT);
         assertThat(result.getCreatedAt()).isNotNull();
-        assertThat(result.getUpdatedAt()).isNotNull();
+        assertThat(result.getModifiedAt()).isNotNull();
         verify(journalEntryRepository).save(any(JournalEntry.class));
         verify(glAccountService).validateAccountForPosting(eq(testGLAccountId1), eq(testTransactionDate));
         verify(glAccountService).validateAccountForPosting(eq(testGLAccountId2), eq(testTransactionDate));
@@ -153,15 +155,15 @@ class JournalEntryServiceTest {
     @Test
     @DisplayName("createJournalEntry - generates ID if not present")
     void createJournalEntry_generatesId() {
-        // Arrange
-        JournalEntry entry = createBalancedEntry();
-        entry.setJournalEntryId(null);
+        // Arrange: JournalEntryCreateRequest never carries a journalEntryId, so every
+        // create always generates a fresh one.
+        JournalEntryCreateRequest request = createBalancedRequest();
 
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        JournalEntry result = service.createJournalEntry(entry);
+        JournalEntryResponse result = service.createJournalEntry(request);
 
         // Assert
         assertThat(result.getJournalEntryId()).isNotNull();
@@ -171,10 +173,10 @@ class JournalEntryServiceTest {
     @DisplayName("createJournalEntry - rejects unbalanced entry")
     void createJournalEntry_unbalanced_throwsException() {
         // Arrange
-        JournalEntry entry = createUnbalancedEntry();
+        JournalEntryCreateRequest request = createUnbalancedRequest();
 
         // Act & Assert
-        assertThatThrownBy(() -> service.createJournalEntry(entry))
+        assertThatThrownBy(() -> service.createJournalEntry(request))
                 .isInstanceOf(UnbalancedEntryException.class)
                 .hasMessageContaining("unbalanced");
     }
@@ -183,13 +185,13 @@ class JournalEntryServiceTest {
     @DisplayName("createJournalEntry - rejects entry with no lines")
     void createJournalEntry_noLines_throwsException() {
         // Arrange
-        JournalEntry entry = new JournalEntry();
-        entry.setJournalEntryId(testJournalEntryId);
-        entry.setTransactionDate(testTransactionDate);
-        entry.setLines(new ArrayList<>());
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(testTransactionDate)
+                .lines(new ArrayList<>())
+                .build();
 
         // Act & Assert
-        assertThatThrownBy(() -> service.createJournalEntry(entry))
+        assertThatThrownBy(() -> service.createJournalEntry(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must have at least one line");
     }
@@ -198,13 +200,13 @@ class JournalEntryServiceTest {
     @DisplayName("createJournalEntry - rejects entry with invalid GL account")
     void createJournalEntry_invalidGLAccount_throwsException() {
         // Arrange
-        JournalEntry entry = createBalancedEntry();
+        JournalEntryCreateRequest request = createBalancedRequest();
         doThrow(new IllegalArgumentException("GL account not active"))
                 .when(glAccountService)
                 .validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
 
         // Act & Assert
-        assertThatThrownBy(() -> service.createJournalEntry(entry))
+        assertThatThrownBy(() -> service.createJournalEntry(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("GL account not active");
     }
@@ -219,10 +221,10 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
 
         // Act
-        JournalEntry result = service.getJournalEntry(testJournalEntryId);
+        JournalEntryResponse result = service.getJournalEntry(testJournalEntryId);
 
         // Assert
-        assertThat(result).isEqualTo(entry);
+        assertThat(result.getJournalEntryId()).isEqualTo(entry.getJournalEntryId());
         verify(journalEntryRepository).findById(testJournalEntryId);
     }
 
@@ -324,19 +326,20 @@ class JournalEntryServiceTest {
         JournalEntry existingEntry = createBalancedEntry();
         existingEntry.setStatus(JournalEntryStatus.DRAFT);
 
-        JournalEntry updates = new JournalEntry();
-        updates.setDescription("Updated description");
-        updates.setLines(createBalancedLines());
+        JournalEntryCreateRequest updates = JournalEntryCreateRequest.builder()
+                .description("Updated description")
+                .lines(createBalancedLineRequests())
+                .build();
 
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(existingEntry));
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        JournalEntry result = service.updateJournalEntry(testJournalEntryId, updates);
+        JournalEntryResponse result = service.updateJournalEntry(testJournalEntryId, updates);
 
         // Assert
         assertThat(result.getDescription()).isEqualTo("Updated description");
-        assertThat(result.getUpdatedAt()).isNotNull();
+        assertThat(result.getModifiedAt()).isNotNull();
         verify(journalEntryRepository).save(any(JournalEntry.class));
     }
 
@@ -347,8 +350,9 @@ class JournalEntryServiceTest {
         JournalEntry existingEntry = createBalancedEntry();
         existingEntry.setStatus(JournalEntryStatus.POSTED);
 
-        JournalEntry updates = new JournalEntry();
-        updates.setDescription("Updated description");
+        JournalEntryCreateRequest updates = JournalEntryCreateRequest.builder()
+                .description("Updated description")
+                .build();
 
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(existingEntry));
 
@@ -380,12 +384,12 @@ class JournalEntryServiceTest {
         when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
 
         // Act
-        JournalEntry result = service.postJournalEntry(testJournalEntryId);
+        JournalEntryResponse result = service.postJournalEntry(testJournalEntryId);
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(result.getPostedAt()).isNotNull();
-        assertThat(result.getUpdatedAt()).isNotNull();
+        assertThat(result.getModifiedAt()).isNotNull();
         assertThat(result.getEntryNumber()).isEqualTo("JE-202401-5");
         assertThat(sequence.getNextValue()).isEqualTo(6L);
         verify(journalEntryRepository).save(any(JournalEntry.class));
@@ -437,7 +441,7 @@ class JournalEntryServiceTest {
         when(accountingPeriodService.isPeriodOpen(any(LocalDate.class))).thenReturn(true);
 
         // Act
-        JournalEntry reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
 
         // Assert - reversal entry: immediately POSTED, own number, linked back
         assertThat(reversal).isNotNull();
@@ -452,7 +456,8 @@ class JournalEntryServiceTest {
         assertThat(reversal.getLines()).hasSize(2);
 
         // Verify debits and credits are swapped
-        JournalEntryLine reversalLine1 = reversal.getLines().get(0);
+        JournalEntryResponse.JournalEntryLineResponse reversalLine1 =
+                reversal.getLines().get(0);
         JournalEntryLine originalLine1 = original.getLines().get(0);
         assertThat(reversalLine1.getDebitAmount()).isEqualTo(originalLine1.getCreditAmount());
         assertThat(reversalLine1.getCreditAmount()).isEqualTo(originalLine1.getDebitAmount());
@@ -561,7 +566,7 @@ class JournalEntryServiceTest {
         arrangeReversalPersistence();
 
         // Act
-        JournalEntry reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", explicitDate);
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", explicitDate);
 
         // Assert
         assertThat(reversal.getTransactionDate()).isEqualTo(explicitDate.atStartOfDay());
@@ -595,7 +600,7 @@ class JournalEntryServiceTest {
         arrangeReversalPersistence();
 
         // Act
-        JournalEntry reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
+        JournalEntryResponse reversal = service.reverseJournalEntry(testJournalEntryId, "CORRECTION", null);
 
         // Assert: reversal dated now (fixed clock), numbered in the current month
         assertThat(reversal.getTransactionDate()).isEqualTo(LocalDateTime.now(TEST_CLOCK));
@@ -634,7 +639,7 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findAll(pageable)).thenReturn(page);
 
         // Act
-        Page<JournalEntry> result = service.listJournalEntries(pageable, null);
+        Page<JournalEntryResponse> result = service.listJournalEntries(pageable, null);
 
         // Assert
         assertThat(result.getContent()).hasSize(2);
@@ -651,7 +656,7 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findAll(pageable)).thenReturn(page);
 
         // Act
-        Page<JournalEntry> result = service.listJournalEntries(pageable, "  ");
+        Page<JournalEntryResponse> result = service.listJournalEntries(pageable, "  ");
 
         // Assert
         assertThat(result.getContent()).hasSize(1);
@@ -671,7 +676,7 @@ class JournalEntryServiceTest {
                 .thenReturn(new PageImpl<>(List.of(posted)));
 
         // Act
-        Page<JournalEntry> result = service.listJournalEntries(pageable, "JE-202607-1");
+        Page<JournalEntryResponse> result = service.listJournalEntries(pageable, "JE-202607-1");
 
         // Assert
         assertThat(result.getContent()).hasSize(1);
@@ -691,7 +696,7 @@ class JournalEntryServiceTest {
                 .thenReturn(page);
 
         // Act
-        Page<JournalEntry> result = service.listPostedEntries(pageable);
+        Page<JournalEntryResponse> result = service.listPostedEntries(pageable);
 
         // Assert
         assertThat(result.getContent()).hasSize(1);
@@ -706,7 +711,7 @@ class JournalEntryServiceTest {
         when(journalEntryRepository.findByStatus(JournalEntryStatus.DRAFT)).thenReturn(entries);
 
         // Act
-        List<JournalEntry> result = service.findByStatus(JournalEntryStatus.DRAFT);
+        List<JournalEntryResponse> result = service.findByStatus(JournalEntryStatus.DRAFT);
 
         // Assert
         assertThat(result).hasSize(1);
@@ -756,28 +761,46 @@ class JournalEntryServiceTest {
         return lines;
     }
 
-    private JournalEntry createUnbalancedEntry() {
-        JournalEntry entry = new JournalEntry();
-        entry.setJournalEntryId(testJournalEntryId);
-        entry.setTransactionDate(testTransactionDate);
-        entry.setDescription("Unbalanced entry");
+    private JournalEntryCreateRequest createBalancedRequest() {
+        return JournalEntryCreateRequest.builder()
+                .transactionDate(testTransactionDate)
+                .description("Test entry")
+                .sourceEventId(testSourceEventId)
+                .lines(createBalancedLineRequests())
+                .build();
+    }
 
-        List<JournalEntryLine> lines = new ArrayList<>();
-        JournalEntryLine line1 = new JournalEntryLine();
-        line1.setLineId(UUID.randomUUID());
-        line1.setGlAccountId(testGLAccountId1);
-        line1.setDebitAmount(new BigDecimal("100.00"));
-        line1.setCreditAmount(BigDecimal.ZERO);
-        lines.add(line1);
+    private List<JournalEntryCreateRequest.JournalEntryLineRequest> createBalancedLineRequests() {
+        return List.of(
+                JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                        .glAccountId(testGLAccountId1)
+                        .debitAmount(new BigDecimal("100.00"))
+                        .creditAmount(BigDecimal.ZERO)
+                        .description("Debit line")
+                        .build(),
+                JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                        .glAccountId(testGLAccountId2)
+                        .debitAmount(BigDecimal.ZERO)
+                        .creditAmount(new BigDecimal("100.00"))
+                        .description("Credit line")
+                        .build());
+    }
 
-        JournalEntryLine line2 = new JournalEntryLine();
-        line2.setLineId(UUID.randomUUID());
-        line2.setGlAccountId(testGLAccountId2);
-        line2.setDebitAmount(BigDecimal.ZERO);
-        line2.setCreditAmount(new BigDecimal("50.00")); // Unbalanced!
-        lines.add(line2);
-
-        entry.setLines(lines);
-        return entry;
+    private JournalEntryCreateRequest createUnbalancedRequest() {
+        return JournalEntryCreateRequest.builder()
+                .transactionDate(testTransactionDate)
+                .description("Unbalanced entry")
+                .lines(List.of(
+                        JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                                .glAccountId(testGLAccountId1)
+                                .debitAmount(new BigDecimal("100.00"))
+                                .creditAmount(BigDecimal.ZERO)
+                                .build(),
+                        JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                                .glAccountId(testGLAccountId2)
+                                .debitAmount(BigDecimal.ZERO)
+                                .creditAmount(new BigDecimal("50.00")) // Unbalanced!
+                                .build()))
+                .build();
     }
 }

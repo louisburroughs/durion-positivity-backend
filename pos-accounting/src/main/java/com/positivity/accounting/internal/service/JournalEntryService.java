@@ -1,7 +1,8 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import java.time.LocalDate;
 import java.util.List;
@@ -20,12 +21,12 @@ public interface JournalEntryService {
      * GL accounts are validated but not locked (allow posting to DRAFT entries
      * simultaneously).
      *
-     * @param entry journal entry with lines to create
+     * @param request journal entry with lines to create
      * @return created entry in DRAFT status
      * @throws IllegalArgumentException if entry is unbalanced or GL accounts
      *                                  invalid
      */
-    JournalEntry createJournalEntry(JournalEntry entry);
+    JournalEntryResponse createJournalEntry(JournalEntryCreateRequest request);
 
     /**
      * Retrieves an existing journal entry by ID.
@@ -36,7 +37,7 @@ public interface JournalEntryService {
      * Spring proxy and the {@code readOnly} hint would not be applied.
      * </p>
      */
-    JournalEntry getJournalEntry(UUID journalEntryId);
+    JournalEntryResponse getJournalEntry(UUID journalEntryId);
 
     /**
      * Retrieves traceability details for a journal entry, including related entries
@@ -56,7 +57,7 @@ public interface JournalEntryService {
      * @return updated entry
      * @throws IllegalStateException if entry is not in DRAFT status
      */
-    JournalEntry updateJournalEntry(UUID journalEntryId, JournalEntry updates);
+    JournalEntryResponse updateJournalEntry(UUID journalEntryId, JournalEntryCreateRequest updates);
 
     /**
      * Posts a draft journal entry to GL without a period override —
@@ -68,7 +69,7 @@ public interface JournalEntryService {
      * @throws IllegalStateException if entry is not in DRAFT status or is
      *                               unbalanced
      */
-    JournalEntry postJournalEntry(UUID journalEntryId);
+    JournalEntryResponse postJournalEntry(UUID journalEntryId);
 
     /**
      * Posts a draft journal entry to GL (transitions to POSTED).
@@ -99,7 +100,7 @@ public interface JournalEntryService {
      *         if the transaction date's period is CLOSED and no valid
      *         override applies (422: PERIOD_CLOSED)
      */
-    JournalEntry postJournalEntry(@NonNull UUID journalEntryId, @Nullable String overrideJustification);
+    JournalEntryResponse postJournalEntry(@NonNull UUID journalEntryId, @Nullable String overrideJustification);
 
     /**
      * Reverses a posted journal entry by creating an inverse entry (story A3,
@@ -138,7 +139,7 @@ public interface JournalEntryService {
      *         if the resolved reversal date falls in a CLOSED period (422:
      *         PERIOD_CLOSED)
      */
-    JournalEntry reverseJournalEntry(
+    JournalEntryResponse reverseJournalEntry(
             @NonNull UUID originalEntryId, @NonNull String reversalReason, @Nullable LocalDate reversalDate);
 
     /**
@@ -168,7 +169,7 @@ public interface JournalEntryService {
      *         if the resolved reversal date is before the hard-lock date
      *         (422: PERIOD_HARD_LOCKED, no override)
      */
-    JournalEntry reverseJournalEntry(
+    JournalEntryResponse reverseJournalEntry(
             @NonNull UUID originalEntryId,
             @NonNull String reversalReason,
             @Nullable LocalDate reversalDate,
@@ -189,7 +190,7 @@ public interface JournalEntryService {
      * @return the original entry for the source event, or empty if none is
      *         posted yet
      */
-    Optional<JournalEntry> findOriginalBySourceEvent(@NonNull UUID sourceEventId);
+    Optional<JournalEntryResponse> findOriginalBySourceEvent(@NonNull UUID sourceEventId);
 
     /**
      * Lists journal entries with pagination and optional filtering.
@@ -202,15 +203,15 @@ public interface JournalEntryService {
      *                    never match.
      * @return page of matching journal entries
      */
-    Page<JournalEntry> listJournalEntries(@NonNull Pageable pageable, @Nullable String entryNumber);
+    Page<JournalEntryResponse> listJournalEntries(@NonNull Pageable pageable, @Nullable String entryNumber);
 
     /**
      * Find all posted entries for audit or reconciliation.
      */
-    Page<JournalEntry> listPostedEntries(Pageable pageable);
+    Page<JournalEntryResponse> listPostedEntries(Pageable pageable);
 
     /**
      * Find entries by status (DRAFT, POSTED, REVERSED).
      */
-    List<JournalEntry> findByStatus(JournalEntryStatus status);
+    List<JournalEntryResponse> findByStatus(JournalEntryStatus status);
 }

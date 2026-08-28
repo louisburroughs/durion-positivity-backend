@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.SettlementGLPostingEvent;
+import com.positivity.accounting.internal.dto.SettlementLineResponse;
 import com.positivity.accounting.internal.entity.ExtPaymentSettlementConfig;
 import com.positivity.accounting.internal.entity.ProcessorSettlement;
 import com.positivity.accounting.internal.entity.ProcessorSettlementLine;
@@ -244,14 +245,15 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProcessorSettlementLine> listLines(@NonNull String settlementId, boolean unmatchedOnly) {
-        return unmatchedOnly
+    public List<SettlementLineResponse> listLines(@NonNull String settlementId, boolean unmatchedOnly) {
+        List<ProcessorSettlementLine> lines = unmatchedOnly
                 ? lineRepository.findBySettlementIdAndMatchStatus(settlementId, SettlementLineMatchStatus.UNMATCHED)
                 : lineRepository.findBySettlementId(settlementId);
+        return lines.stream().map(SettlementLineResponse::from).toList();
     }
 
     @Override
-    public ProcessorSettlementLine manualMatchToReceivable(@NonNull UUID lineId, @NonNull UUID receivablePaymentId) {
+    public SettlementLineResponse manualMatchToReceivable(@NonNull UUID lineId, @NonNull UUID receivablePaymentId) {
         ProcessorSettlementLine line = requireUnmatchedLine(lineId);
         ReceivablePayment payment = receivablePaymentRepository
                 .findById(receivablePaymentId)
@@ -280,11 +282,11 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
 
         adjustSettlementAfterMatch(line.getSettlementId(), line.getGrossAmount());
         log.info("Manually matched settlement line {} to receivable payment {}", lineId, receivablePaymentId);
-        return saved;
+        return SettlementLineResponse.from(saved);
     }
 
     @Override
-    public ProcessorSettlementLine writeOffLine(@NonNull UUID lineId, @NonNull String reason) {
+    public SettlementLineResponse writeOffLine(@NonNull UUID lineId, @NonNull String reason) {
         if (reason.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Write-off reason is required");
         }
@@ -316,12 +318,12 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
 
         line.setMatchStatus(SettlementLineMatchStatus.WRITTEN_OFF);
         line.setWriteoffReason(reason);
-        line.setWriteoffJournalEntryId(posted.getJournalEntryId());
+        line.setWriteoffJournalEntryId(posted);
         ProcessorSettlementLine saved = lineRepository.save(line);
 
         adjustSettlementAfterMatch(line.getSettlementId(), null);
         log.info("Wrote off settlement line {} (amount {}): {}", lineId, line.getGrossAmount(), reason);
-        return saved;
+        return SettlementLineResponse.from(saved);
     }
 
     private ProcessorSettlementLine requireUnmatchedLine(@NonNull UUID lineId) {

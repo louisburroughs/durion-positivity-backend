@@ -5,6 +5,8 @@ import com.positivity.accounting.internal.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationLineResponse;
 import com.positivity.accounting.internal.dto.BankReconciliationListResponse;
 import com.positivity.accounting.internal.dto.BankReconciliationResponse;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.dto.ReconciliationAuditResponse;
 import com.positivity.accounting.internal.dto.ReconciliationMatchRequest;
@@ -15,7 +17,6 @@ import com.positivity.accounting.internal.entity.BankReconciliationAdjustment;
 import com.positivity.accounting.internal.entity.BankReconciliationGlMatch;
 import com.positivity.accounting.internal.entity.BankReconciliationLine;
 import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.BankReconciliationLineStatus;
@@ -372,17 +373,13 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         UUID cashAccountId = recon.getGlAccountId();
         UUID counterAccountId = glMappingResolver.resolveGLAccount(POSTING_CATEGORY, type.name(), txDate);
 
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(txDate);
-        entry.setSourceEventId(UUIDv7Generator.generate());
         String desc = "Bank reconciliation adjustment (" + type + ")"
                 + (request.getDescription() != null && !request.getDescription().isBlank()
                         ? ": " + request.getDescription()
                         : "");
-        entry.setDescription(desc);
 
         BigDecimal abs = amount.abs();
-        List<JournalEntryLine> lines = new ArrayList<>();
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
         // Positive amount increases the reconciled cash (Dr cash / Cr counter); negative decreases it
         // (Cr cash / Dr counter). The cash account is the reconciled account; the counter account is
         // the type's mapped expense/income/clearing account.
@@ -393,10 +390,16 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
             lines.add(debit(counterAccountId, abs, desc));
             lines.add(credit(cashAccountId, abs, desc));
         }
-        entry.setLines(lines);
 
-        JournalEntry created = journalEntryService.createJournalEntry(entry);
-        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
+        JournalEntryCreateRequest journalEntryRequest = JournalEntryCreateRequest.builder()
+                .transactionDate(txDate)
+                .sourceEventId(UUIDv7Generator.generate())
+                .description(desc)
+                .lines(lines)
+                .build();
+
+        JournalEntryResponse created = journalEntryService.createJournalEntry(journalEntryRequest);
+        JournalEntryResponse posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
 
         BankReconciliationAdjustment adjustment = new BankReconciliationAdjustment();
         adjustment.setReconciliation(recon);
@@ -597,22 +600,24 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         return line.getDebitAmount().subtract(line.getCreditAmount());
     }
 
-    private static JournalEntryLine debit(UUID accountId, BigDecimal amount, String description) {
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(accountId);
-        line.setDebitAmount(amount);
-        line.setCreditAmount(BigDecimal.ZERO);
-        line.setDescription(description);
-        return line;
+    private static JournalEntryCreateRequest.JournalEntryLineRequest debit(
+            UUID accountId, BigDecimal amount, String description) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(accountId)
+                .debitAmount(amount)
+                .creditAmount(BigDecimal.ZERO)
+                .description(description)
+                .build();
     }
 
-    private static JournalEntryLine credit(UUID accountId, BigDecimal amount, String description) {
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(accountId);
-        line.setDebitAmount(BigDecimal.ZERO);
-        line.setCreditAmount(amount);
-        line.setDescription(description);
-        return line;
+    private static JournalEntryCreateRequest.JournalEntryLineRequest credit(
+            UUID accountId, BigDecimal amount, String description) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(accountId)
+                .debitAmount(BigDecimal.ZERO)
+                .creditAmount(amount)
+                .description(description)
+                .build();
     }
 
     private String currentUser() {

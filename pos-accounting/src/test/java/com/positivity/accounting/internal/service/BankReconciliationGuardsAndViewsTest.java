@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationListResponse;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.dto.ReconciliationAuditResponse;
 import com.positivity.accounting.internal.dto.ReconciliationMatchRequest;
@@ -474,10 +476,14 @@ class BankReconciliationGuardsAndViewsTest {
                             "INTEREST_EARNED",
                             LocalDate.of(2026, 6, 30).atStartOfDay()))
                     .thenReturn(counterAccountId);
-            JournalEntry created = new JournalEntry(UUID.randomUUID());
+            JournalEntryResponse created = JournalEntryResponse.builder()
+                    .journalEntryId(UUID.randomUUID())
+                    .build();
             when(journalEntryService.createJournalEntry(any())).thenReturn(created);
             when(journalEntryService.postJournalEntry(created.getJournalEntryId(), null))
-                    .thenReturn(new JournalEntry(UUID.randomUUID()));
+                    .thenReturn(JournalEntryResponse.builder()
+                            .journalEntryId(UUID.randomUUID())
+                            .build());
             when(lineRepository.findByReconciliation_ReconciliationId(RECON_ID)).thenReturn(List.of());
             when(adjustmentRepository.findByReconciliation_ReconciliationId(RECON_ID))
                     .thenReturn(List.of());
@@ -492,9 +498,10 @@ class BankReconciliationGuardsAndViewsTest {
                             .description("  ")
                             .build());
 
-            ArgumentCaptor<JournalEntry> jeCaptor = ArgumentCaptor.forClass(JournalEntry.class);
+            ArgumentCaptor<JournalEntryCreateRequest> jeCaptor =
+                    ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
             verify(journalEntryService).createJournalEntry(jeCaptor.capture());
-            JournalEntry je = jeCaptor.getValue();
+            JournalEntryCreateRequest je = jeCaptor.getValue();
             // Interest earned increases the bank balance: Dr cash / Cr income.
             assertThat(je.getLines().get(0).getGlAccountId()).isEqualTo(ACCOUNT_ID);
             assertThat(je.getLines().get(0).getDebitAmount()).isEqualByComparingTo("3.2500");

@@ -3,10 +3,10 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.accounting.internal.config.TestSecurityConfig;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
@@ -142,20 +142,22 @@ class JournalEntryNumberingConcurrencyIT {
         return journalEntryService.postJournalEntry(journalEntryId).getEntryNumber();
     }
 
-    private JournalEntry createDraft() {
-        JournalEntry entry = new JournalEntry();
-        entry.setTransactionDate(TX_DATE);
-        entry.setDescription("A2 concurrency IT");
-        entry.addLine(line(new BigDecimal("42.0000"), BigDecimal.ZERO));
-        entry.addLine(line(BigDecimal.ZERO, new BigDecimal("42.0000")));
-        return journalEntryService.createJournalEntry(entry);
+    private JournalEntryResponse createDraft() {
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(TX_DATE)
+                .description("A2 concurrency IT")
+                .lines(java.util.List.of(
+                        line(new BigDecimal("42.0000"), BigDecimal.ZERO),
+                        line(BigDecimal.ZERO, new BigDecimal("42.0000"))))
+                .build();
+        return journalEntryService.createJournalEntry(request);
     }
 
-    private JournalEntryLine line(BigDecimal debit, BigDecimal credit) {
-        JournalEntryLine line = new JournalEntryLine();
-        line.setGlAccountId(glAccountId);
-        line.setDebitAmount(debit);
-        line.setCreditAmount(credit);
-        return line;
+    private JournalEntryCreateRequest.JournalEntryLineRequest line(BigDecimal debit, BigDecimal credit) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(glAccountId)
+                .debitAmount(debit)
+                .creditAmount(credit)
+                .build();
     }
 }

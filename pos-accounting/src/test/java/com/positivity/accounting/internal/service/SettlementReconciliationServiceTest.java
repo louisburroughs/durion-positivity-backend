@@ -233,13 +233,10 @@ class SettlementReconciliationServiceTest {
         when(settlementRepository.findById("stl_123")).thenReturn(Optional.of(postedSettlement()));
         when(glMappingResolver.resolveGLAccount(anyString(), anyString(), any()))
                 .thenReturn(UUID.randomUUID());
-        com.positivity.accounting.internal.entity.JournalEntry posted =
-                new com.positivity.accounting.internal.entity.JournalEntry();
-        posted.setJournalEntryId(UUID.randomUUID());
         when(glPostingService.postSettlementWriteOff(any(), any(), any(), any(), any(), anyString(), any()))
-                .thenReturn(posted);
+                .thenReturn(UUID.randomUUID());
 
-        ProcessorSettlementLine result = service.writeOffLine(lineId, "unidentifiable micro-deposit");
+        var result = service.writeOffLine(lineId, "unidentifiable micro-deposit");
 
         assertThat(result.getMatchStatus()).isEqualTo(SettlementLineMatchStatus.WRITTEN_OFF);
         assertThat(result.getWriteoffReason()).isEqualTo("unidentifiable micro-deposit");

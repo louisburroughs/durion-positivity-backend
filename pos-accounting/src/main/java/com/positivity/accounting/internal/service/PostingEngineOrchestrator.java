@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.positivity.accounting.internal.dto.JournalEntryMapper;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -272,12 +274,14 @@ public class PostingEngineOrchestrator {
             @NonNull JournalEntry journalEntry, boolean autoPost, @NonNull UUID eventId) {
         if (autoPost) {
             log.info("Auto-posting journal entry for event {}", eventId);
-            JournalEntry createdEntry = journalEntryService.createJournalEntry(journalEntry);
-            JournalEntry postedEntry = journalEntryService.postJournalEntry(createdEntry.getJournalEntryId());
+            JournalEntryResponse createdEntry =
+                    journalEntryService.createJournalEntry(JournalEntryMapper.toCreateRequest(journalEntry));
+            JournalEntryResponse postedEntry = journalEntryService.postJournalEntry(createdEntry.getJournalEntryId());
             return postedEntry.getJournalEntryId().toString();
         }
         log.info("Creating draft journal entry for event {}", eventId);
-        JournalEntry draftEntry = journalEntryService.createJournalEntry(journalEntry);
+        JournalEntryResponse draftEntry =
+                journalEntryService.createJournalEntry(JournalEntryMapper.toCreateRequest(journalEntry));
         return draftEntry.getJournalEntryId().toString();
     }
 

@@ -1,6 +1,5 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -100,7 +99,7 @@ public class RegisterOverShortPostingService {
                 + fact.sessionId() + " (terminal " + fact.terminalId() + ", counted " + fact.countedCash()
                 + " vs theoretical " + fact.theoreticalCash() + ")";
 
-        JournalEntry posted = glPostingService.postRegisterOverShort(
+        UUID posted = glPostingService.postRegisterOverShort(
                 toSourceEventId(fact.sessionId()),
                 fact.sessionId(),
                 debitAccountId,
@@ -110,7 +109,7 @@ public class RegisterOverShortPostingService {
                 description,
                 null);
 
-        idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
+        idempotencyService.registerKey(idempotencyKey, posted);
 
         log.info(
                 "Register over/short GL posting completed | sessionId={} | terminalId={} | direction={} | amount={} "
@@ -119,7 +118,7 @@ public class RegisterOverShortPostingService {
                 fact.terminalId(),
                 shortage ? "SHORTAGE" : "OVERAGE",
                 amount,
-                posted.getJournalEntryId());
+                posted);
     }
 
     /**

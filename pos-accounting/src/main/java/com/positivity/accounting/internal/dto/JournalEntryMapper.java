@@ -103,4 +103,38 @@ public final class JournalEntryMapper {
         line.setDimensions(request.getDimensions());
         return line;
     }
+
+    /**
+     * Converts a transient {@link JournalEntry} draft (as built by the posting
+     * rule engine) to a create-request DTO, so entity-based draft producers can
+     * still call the DTO-based {@link JournalEntryService#createJournalEntry}
+     * seam without the service interface itself naming the entity type.
+     */
+    public static JournalEntryCreateRequest toCreateRequest(@NonNull JournalEntry entity) {
+        JournalEntryCreateRequest.JournalEntryCreateRequestBuilder builder = JournalEntryCreateRequest.builder()
+                .transactionDate(entity.getTransactionDate())
+                .description(entity.getDescription())
+                .sourceEventId(entity.getSourceEventId())
+                .sourceEventType(entity.getSourceEventType())
+                .postingRuleSetId(entity.getPostingRuleSetId())
+                .postingRuleVersionId(entity.getPostingRuleVersionId());
+
+        if (entity.getLines() != null) {
+            builder.lines(entity.getLines().stream()
+                    .map(JournalEntryMapper::toLineRequest)
+                    .toList());
+        }
+
+        return builder.build();
+    }
+
+    private static JournalEntryCreateRequest.JournalEntryLineRequest toLineRequest(@NonNull JournalEntryLine line) {
+        return JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                .glAccountId(line.getGlAccountId())
+                .debitAmount(line.getDebitAmount())
+                .creditAmount(line.getCreditAmount())
+                .description(line.getDescription())
+                .dimensions(line.getDimensions())
+                .build();
+    }
 }

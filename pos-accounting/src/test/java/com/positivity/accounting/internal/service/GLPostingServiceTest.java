@@ -7,8 +7,8 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -73,6 +73,13 @@ class GLPostingServiceTest {
         testJournalEntryId = UUID.randomUUID();
     }
 
+    private void stubCreate(ArgumentCaptor<JournalEntryCreateRequest> captor) {
+        when(journalEntryService.createJournalEntry(captor.capture()))
+                .thenReturn(JournalEntryResponse.builder()
+                        .journalEntryId(testJournalEntryId)
+                        .build());
+    }
+
     // ===== CREDIT MEMO POSTING TESTS =====
 
     @Test
@@ -83,21 +90,19 @@ class GLPostingServiceTest {
         BigDecimal taxReversed = new BigDecimal("10.00");
         String description = "Credit memo reversal";
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
 
-        JournalEntry posted = new JournalEntry();
-        posted.setJournalEntryId(testJournalEntryId);
-        posted.setStatus(JournalEntryStatus.POSTED);
+        JournalEntryResponse posted = JournalEntryResponse.builder()
+                .journalEntryId(testJournalEntryId)
+                .status(JournalEntryStatus.POSTED)
+                .build();
         when(journalEntryService.postJournalEntry(eq(testJournalEntryId), isNull()))
                 .thenReturn(posted);
 
         // Act
-        JournalEntry result = service.postCreditMemoReversal(
+        UUID result = service.postCreditMemoReversal(
                 testCreditMemoId,
                 testRevenueAccountId,
                 testTaxAccountId,
@@ -109,25 +114,25 @@ class GLPostingServiceTest {
                 null);
 
         // Assert
-        assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
+        assertThat(result).isEqualTo(testJournalEntryId);
 
-        JournalEntry createdEntry = entryCaptor.getValue();
+        JournalEntryCreateRequest createdEntry = entryCaptor.getValue();
         assertThat(createdEntry.getLines()).hasSize(3);
         assertThat(createdEntry.getSourceEventId()).isEqualTo(testCreditMemoId);
 
         // Verify debits
         BigDecimal totalDebits = createdEntry.getLines().stream()
-                .map(JournalEntryLine::getDebitAmount)
+                .map(JournalEntryCreateRequest.JournalEntryLineRequest::getDebitAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalDebits).isEqualByComparingTo(new BigDecimal("110.00"));
 
         // Verify credits
         BigDecimal totalCredits = createdEntry.getLines().stream()
-                .map(JournalEntryLine::getCreditAmount)
+                .map(JournalEntryCreateRequest.JournalEntryLineRequest::getCreditAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalCredits).isEqualByComparingTo(new BigDecimal("110.00"));
 
-        verify(journalEntryService).createJournalEntry(any(JournalEntry.class));
+        verify(journalEntryService).createJournalEntry(any(JournalEntryCreateRequest.class));
         verify(journalEntryService).postJournalEntry(eq(testJournalEntryId), isNull());
     }
 
@@ -138,13 +143,11 @@ class GLPostingServiceTest {
         BigDecimal creditAmount = new BigDecimal("100.00");
         BigDecimal taxReversed = new BigDecimal("10.00");
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postCreditMemoReversal(
@@ -159,8 +162,8 @@ class GLPostingServiceTest {
                 null);
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
-        JournalEntryLine revenueLine = entry.getLines().stream()
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
+        JournalEntryCreateRequest.JournalEntryLineRequest revenueLine = entry.getLines().stream()
                 .filter(line -> line.getGlAccountId().equals(testRevenueAccountId))
                 .findFirst()
                 .orElseThrow();
@@ -176,13 +179,11 @@ class GLPostingServiceTest {
         BigDecimal creditAmount = new BigDecimal("100.00");
         BigDecimal taxReversed = new BigDecimal("10.00");
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postCreditMemoReversal(
@@ -197,8 +198,8 @@ class GLPostingServiceTest {
                 null);
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
-        JournalEntryLine taxLine = entry.getLines().stream()
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
+        JournalEntryCreateRequest.JournalEntryLineRequest taxLine = entry.getLines().stream()
                 .filter(line -> line.getGlAccountId().equals(testTaxAccountId))
                 .findFirst()
                 .orElseThrow();
@@ -215,13 +216,11 @@ class GLPostingServiceTest {
         BigDecimal taxReversed = new BigDecimal("10.00");
         BigDecimal expectedTotal = creditAmount.add(taxReversed);
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postCreditMemoReversal(
@@ -236,8 +235,8 @@ class GLPostingServiceTest {
                 null);
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
-        JournalEntryLine arLine = entry.getLines().stream()
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
+        JournalEntryCreateRequest.JournalEntryLineRequest arLine = entry.getLines().stream()
                 .filter(line -> line.getGlAccountId().equals(testArAccountId))
                 .findFirst()
                 .orElseThrow();
@@ -250,13 +249,11 @@ class GLPostingServiceTest {
     @DisplayName("postCreditMemoReversal - includes prior period marker when flagged")
     void postCreditMemoReversal_priorPeriod_includesMarker() {
         // Arrange
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postCreditMemoReversal(
@@ -271,7 +268,7 @@ class GLPostingServiceTest {
                 "2025-12");
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
         assertThat(entry.getDescription()).contains("PRIOR PERIOD: 2025-12");
     }
 
@@ -279,13 +276,11 @@ class GLPostingServiceTest {
     @DisplayName("postCreditMemoReversal - excludes prior period marker when not flagged")
     void postCreditMemoReversal_currentPeriod_noMarker() {
         // Arrange
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postCreditMemoReversal(
@@ -300,7 +295,7 @@ class GLPostingServiceTest {
                 null);
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
         assertThat(entry.getDescription()).doesNotContain("PRIOR PERIOD");
     }
 
@@ -313,27 +308,25 @@ class GLPostingServiceTest {
         BigDecimal amount = new BigDecimal("150.00");
         String description = "Payment received";
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
 
-        JournalEntry posted = new JournalEntry();
-        posted.setJournalEntryId(testJournalEntryId);
-        posted.setStatus(JournalEntryStatus.POSTED);
+        JournalEntryResponse posted = JournalEntryResponse.builder()
+                .journalEntryId(testJournalEntryId)
+                .status(JournalEntryStatus.POSTED)
+                .build();
         when(journalEntryService.postJournalEntry(eq(testJournalEntryId), isNull()))
                 .thenReturn(posted);
 
         // Act
-        JournalEntry result = service.postPaymentApplication(
+        UUID result = service.postPaymentApplication(
                 testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, description);
 
         // Assert
-        assertThat(result.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
+        assertThat(result).isEqualTo(testJournalEntryId);
 
-        JournalEntry createdEntry = entryCaptor.getValue();
+        JournalEntryCreateRequest createdEntry = entryCaptor.getValue();
         assertThat(createdEntry.getLines()).hasSize(2);
         assertThat(createdEntry.getSourceEventId()).isEqualTo(testPaymentApplicationId);
         // The caller-supplied transaction date is threaded onto the entry
@@ -342,15 +335,15 @@ class GLPostingServiceTest {
 
         // Verify balance
         BigDecimal totalDebits = createdEntry.getLines().stream()
-                .map(JournalEntryLine::getDebitAmount)
+                .map(JournalEntryCreateRequest.JournalEntryLineRequest::getDebitAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalCredits = createdEntry.getLines().stream()
-                .map(JournalEntryLine::getCreditAmount)
+                .map(JournalEntryCreateRequest.JournalEntryLineRequest::getCreditAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalDebits).isEqualByComparingTo(totalCredits);
         assertThat(totalDebits).isEqualByComparingTo(amount);
 
-        verify(journalEntryService).createJournalEntry(any(JournalEntry.class));
+        verify(journalEntryService).createJournalEntry(any(JournalEntryCreateRequest.class));
         verify(journalEntryService).postJournalEntry(eq(testJournalEntryId), isNull());
     }
 
@@ -360,21 +353,19 @@ class GLPostingServiceTest {
         // Arrange
         BigDecimal amount = new BigDecimal("150.00");
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postPaymentApplication(
                 testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
-        JournalEntryLine cashLine = entry.getLines().stream()
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
+        JournalEntryCreateRequest.JournalEntryLineRequest cashLine = entry.getLines().stream()
                 .filter(line -> line.getGlAccountId().equals(testCashAccountId))
                 .findFirst()
                 .orElseThrow();
@@ -389,21 +380,19 @@ class GLPostingServiceTest {
         // Arrange
         BigDecimal amount = new BigDecimal("150.00");
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postPaymentApplication(
                 testPaymentApplicationId, testCashAccountId, testArAccountId, amount, TXN_DATE, "Test");
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
-        JournalEntryLine arLine = entry.getLines().stream()
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
+        JournalEntryCreateRequest.JournalEntryLineRequest arLine = entry.getLines().stream()
                 .filter(line -> line.getGlAccountId().equals(testArAccountId))
                 .findFirst()
                 .orElseThrow();
@@ -418,13 +407,11 @@ class GLPostingServiceTest {
         // Arrange
         String description = "Customer payment received";
 
-        ArgumentCaptor<JournalEntry> entryCaptor = ArgumentCaptor.forClass(JournalEntry.class);
-        when(journalEntryService.createJournalEntry(entryCaptor.capture())).thenAnswer(inv -> {
-            JournalEntry entry = inv.getArgument(0);
-            entry.setJournalEntryId(testJournalEntryId);
-            return entry;
-        });
-        when(journalEntryService.postJournalEntry(any(), isNull())).thenReturn(new JournalEntry());
+        ArgumentCaptor<JournalEntryCreateRequest> entryCaptor =
+                ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
+        stubCreate(entryCaptor);
+        when(journalEntryService.postJournalEntry(any(), isNull()))
+                .thenReturn(JournalEntryResponse.builder().build());
 
         // Act
         service.postPaymentApplication(
@@ -436,7 +423,7 @@ class GLPostingServiceTest {
                 description);
 
         // Assert
-        JournalEntry entry = entryCaptor.getValue();
+        JournalEntryCreateRequest entry = entryCaptor.getValue();
         assertThat(entry.getDescription()).isEqualTo(description);
     }
 }

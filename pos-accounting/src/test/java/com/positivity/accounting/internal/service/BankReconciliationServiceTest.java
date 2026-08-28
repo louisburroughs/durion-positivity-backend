@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.BankReconciliationImportRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationResponse;
+import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
+import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.ReconciliationAdjustmentRequest;
 import com.positivity.accounting.internal.dto.ReconciliationMatchRequest;
 import com.positivity.accounting.internal.entity.BankReconciliation;
@@ -550,8 +552,10 @@ class BankReconciliationServiceTest {
         LocalDateTime txDate = LocalDate.of(2026, 6, 30).atStartOfDay();
         when(glMappingResolver.resolveGLAccount(BankReconciliationServiceImpl.POSTING_CATEGORY, "BANK_FEE", txDate))
                 .thenReturn(COUNTER_ACCOUNT_ID);
-        JournalEntry created = new JournalEntry(UUID.randomUUID());
-        JournalEntry posted = new JournalEntry(UUID.randomUUID());
+        JournalEntryResponse created =
+                JournalEntryResponse.builder().journalEntryId(UUID.randomUUID()).build();
+        JournalEntryResponse posted =
+                JournalEntryResponse.builder().journalEntryId(UUID.randomUUID()).build();
         when(journalEntryService.createJournalEntry(any())).thenReturn(created);
         when(journalEntryService.postJournalEntry(created.getJournalEntryId(), null))
                 .thenReturn(posted);
@@ -567,14 +571,16 @@ class BankReconciliationServiceTest {
 
         service.addAdjustment(RECON_ID, request);
 
-        ArgumentCaptor<JournalEntry> jeCaptor = ArgumentCaptor.forClass(JournalEntry.class);
+        ArgumentCaptor<JournalEntryCreateRequest> jeCaptor = ArgumentCaptor.forClass(JournalEntryCreateRequest.class);
         verify(journalEntryService).createJournalEntry(jeCaptor.capture());
-        JournalEntry je = jeCaptor.getValue();
+        JournalEntryCreateRequest je = jeCaptor.getValue();
         assertThat(je.getLines()).hasSize(2);
-        BigDecimal totalDebit =
-                je.getLines().stream().map(JournalEntryLine::getDebitAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalCredit =
-                je.getLines().stream().map(JournalEntryLine::getCreditAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalDebit = je.getLines().stream()
+                .map(JournalEntryCreateRequest.JournalEntryLineRequest::getDebitAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCredit = je.getLines().stream()
+                .map(JournalEntryCreateRequest.JournalEntryLineRequest::getCreditAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalDebit).isEqualByComparingTo(totalCredit);
 
         ArgumentCaptor<BankReconciliationAdjustment> adjCaptor =

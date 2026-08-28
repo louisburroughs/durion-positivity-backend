@@ -1,7 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
-import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.ProcessorSettlement;
 import com.positivity.accounting.internal.entity.ProcessorSettlementLine;
 import com.positivity.accounting.internal.enums.SettlementLineMatchStatus;
@@ -139,20 +138,20 @@ public class SettlementPostingService {
                 description,
                 null);
 
-        JournalEntry posted = glPostingService.postSettlement(command);
+        UUID posted = glPostingService.postSettlement(command);
 
         settlement.setStatus(SettlementStatus.POSTED);
         settlement.setMatchedGross(matchedGross);
-        settlement.setJournalEntryId(posted.getJournalEntryId());
+        settlement.setJournalEntryId(posted);
         settlementRepository.save(settlement);
 
-        idempotencyService.registerKey(idempotencyKey, posted.getJournalEntryId());
+        idempotencyService.registerKey(idempotencyKey, posted);
 
         log.info(
                 "Settlement GL posting completed | settlementId={} | journalEntryId={} | matchedGross={} "
                         + "| unmatchedGross={}",
                 settlementId,
-                posted.getJournalEntryId(),
+                posted,
                 matchedGross,
                 unmatchedGross);
     }
