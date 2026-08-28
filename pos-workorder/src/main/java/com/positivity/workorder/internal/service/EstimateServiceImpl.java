@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -1017,7 +1018,11 @@ public class EstimateServiceImpl implements EstimateService {
         if (!((request.getQuantity() != null || uomCodeProvided) && item.getItemType() == EstimateItemType.PART)) {
             return;
         }
-        BigDecimal effectiveQuantity = request.getQuantity() != null ? request.getQuantity() : item.getQuantity();
+        // The quantity column is non-null, so a persisted item always carries one; requireNonNull
+        // states that invariant where the dataflow cannot see it.
+        BigDecimal effectiveQuantity = request.getQuantity() != null
+                ? request.getQuantity()
+                : Objects.requireNonNull(item.getQuantity(), "persisted estimate item has no quantity");
         String effectiveUomCode = uomCodeProvided ? normalizedRequestUomCode : item.getUomCode();
         partQuantityDivisibilityService.requirePermittedScale(
                 item.getProductId(),
