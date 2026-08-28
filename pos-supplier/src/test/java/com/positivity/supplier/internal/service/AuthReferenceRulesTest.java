@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.supplier.internal.exception.SupplierValidationException;
-import com.positivity.supplier.service.model.AuthConfigRequest;
-import com.positivity.supplier.service.model.SupplierAuthType;
+import com.positivity.supplier.internal.service.model.AuthConfigRequest;
+import com.positivity.supplier.internal.service.model.SupplierAuthType;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;

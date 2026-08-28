@@ -2,11 +2,11 @@ package com.positivity.supplier.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
+import com.positivity.supplier.internal.pricecatalog.service.SupplierPriceCatalogService;
+import com.positivity.supplier.internal.pricecatalog.service.model.PriceCatalogImportSummary;
+import com.positivity.supplier.internal.pricecatalog.service.model.UnmatchedPriceCatalogLineView;
 import com.positivity.supplier.internal.security.SupplierPermissions;
-import com.positivity.supplier.service.SupplierPriceCatalogService;
-import com.positivity.supplier.service.model.PagedResponse;
-import com.positivity.supplier.service.model.PriceCatalogImportSummary;
-import com.positivity.supplier.service.model.UnmatchedPriceCatalogLineView;
+import com.positivity.supplier.internal.service.model.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

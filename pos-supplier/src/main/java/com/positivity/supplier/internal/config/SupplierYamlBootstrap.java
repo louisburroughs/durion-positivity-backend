@@ -24,8 +24,8 @@ import com.positivity.supplier.internal.repository.SupplierEndpointBindingReposi
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.AuthReferenceRules;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
-import com.positivity.supplier.service.model.AuthConfigRequest;
-import com.positivity.supplier.service.model.SupplierAuthType;
+import com.positivity.supplier.internal.service.model.AuthConfigRequest;
+import com.positivity.supplier.internal.service.model.SupplierAuthType;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;

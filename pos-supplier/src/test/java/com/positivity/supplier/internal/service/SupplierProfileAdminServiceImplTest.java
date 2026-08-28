@@ -11,20 +11,20 @@ import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.service.model.AuthConfigRequest;
+import com.positivity.supplier.internal.service.model.AuthConfigView;
+import com.positivity.supplier.internal.service.model.CommercialAccountRequest;
+import com.positivity.supplier.internal.service.model.CommercialAccountView;
+import com.positivity.supplier.internal.service.model.EndpointBindingRequest;
+import com.positivity.supplier.internal.service.model.EndpointBindingView;
+import com.positivity.supplier.internal.service.model.PayloadCaptureLevel;
+import com.positivity.supplier.internal.service.model.ProfileSourceOfTruth;
+import com.positivity.supplier.internal.service.model.RetryBackoff;
+import com.positivity.supplier.internal.service.model.SupplierAccountRole;
+import com.positivity.supplier.internal.service.model.SupplierAuthType;
+import com.positivity.supplier.internal.service.model.VendorProfileRequest;
+import com.positivity.supplier.internal.service.model.VendorProfileView;
 import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
-import com.positivity.supplier.service.model.AuthConfigRequest;
-import com.positivity.supplier.service.model.AuthConfigView;
-import com.positivity.supplier.service.model.CommercialAccountRequest;
-import com.positivity.supplier.service.model.CommercialAccountView;
-import com.positivity.supplier.service.model.EndpointBindingRequest;
-import com.positivity.supplier.service.model.EndpointBindingView;
-import com.positivity.supplier.service.model.PayloadCaptureLevel;
-import com.positivity.supplier.service.model.ProfileSourceOfTruth;
-import com.positivity.supplier.service.model.RetryBackoff;
-import com.positivity.supplier.service.model.SupplierAccountRole;
-import com.positivity.supplier.service.model.SupplierAuthType;
-import com.positivity.supplier.service.model.VendorProfileRequest;
-import com.positivity.supplier.service.model.VendorProfileView;
 import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
@@ -535,7 +535,8 @@ class SupplierProfileAdminServiceImplTest {
                         true,
                         PayloadCaptureLevel.REDACTED,
                         java.util.Set.of(
-                                com.positivity.supplier.service.model.RedactionClassification.COMMERCIAL_PRICING)));
+                                com.positivity.supplier.internal.service.model.RedactionClassification
+                                        .COMMERCIAL_PRICING)));
 
         assertThat(created.capability()).isEqualTo("PRICE_CATALOG");
         assertThat(created.protocolFamily()).isEqualTo("EDIWHEEL_B");
@@ -543,7 +544,8 @@ class SupplierProfileAdminServiceImplTest {
         assertThat(created.schedule()).isEqualTo("0 0 4 * * *");
         assertThat(created.captureLevel()).isEqualTo(PayloadCaptureLevel.REDACTED);
         assertThat(created.redactionClassifications())
-                .containsExactly(com.positivity.supplier.service.model.RedactionClassification.COMMERCIAL_PRICING);
+                .containsExactly(
+                        com.positivity.supplier.internal.service.model.RedactionClassification.COMMERCIAL_PRICING);
 
         assertConflict(
                 () -> adminService.createBinding(

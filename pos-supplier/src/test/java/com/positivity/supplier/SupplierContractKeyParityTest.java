@@ -3,7 +3,7 @@ package com.positivity.supplier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
-import com.positivity.supplier.service.model.AuthConfigView;
+import com.positivity.supplier.internal.service.model.AuthConfigView;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -81,28 +81,28 @@ class SupplierContractKeyParityTest {
     static Stream<Arguments> mirroredEnums() {
         return Stream.of(
                 Arguments.of(
-                        com.positivity.supplier.service.model.PayloadCaptureLevel.class,
+                        com.positivity.supplier.internal.service.model.PayloadCaptureLevel.class,
                         com.positivity.supplier.internal.enums.PayloadCaptureLevel.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.RetryBackoff.class,
+                        com.positivity.supplier.internal.service.model.RetryBackoff.class,
                         com.positivity.supplier.internal.enums.RetryBackoff.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.SupplierAuthType.class,
+                        com.positivity.supplier.internal.service.model.SupplierAuthType.class,
                         com.positivity.supplier.internal.enums.SupplierAuthType.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.SupplierAccountRole.class,
+                        com.positivity.supplier.internal.service.model.SupplierAccountRole.class,
                         com.positivity.supplier.internal.enums.SupplierAccountRole.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.ProfileSourceOfTruth.class,
+                        com.positivity.supplier.internal.service.model.ProfileSourceOfTruth.class,
                         com.positivity.supplier.internal.enums.ProfileSourceOfTruth.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.AuditAccessKind.class,
+                        com.positivity.supplier.internal.service.model.AuditAccessKind.class,
                         com.positivity.supplier.internal.enums.AuditAccessKind.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.AuditPayloadOutcome.class,
+                        com.positivity.supplier.internal.service.model.AuditPayloadOutcome.class,
                         com.positivity.supplier.internal.enums.AuditPayloadOutcome.class),
                 Arguments.of(
-                        com.positivity.supplier.service.model.RedactionClassification.class,
+                        com.positivity.supplier.internal.service.model.RedactionClassification.class,
                         com.positivity.supplier.internal.enums.RedactionClassification.class));
     }
 

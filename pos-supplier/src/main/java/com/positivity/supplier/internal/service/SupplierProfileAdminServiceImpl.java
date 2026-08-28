@@ -13,21 +13,20 @@ import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.service.model.AuthConfigRequest;
+import com.positivity.supplier.internal.service.model.AuthConfigView;
+import com.positivity.supplier.internal.service.model.CommercialAccountRequest;
+import com.positivity.supplier.internal.service.model.CommercialAccountView;
+import com.positivity.supplier.internal.service.model.EndpointBindingRequest;
+import com.positivity.supplier.internal.service.model.EndpointBindingView;
+import com.positivity.supplier.internal.service.model.PayloadCaptureLevel;
+import com.positivity.supplier.internal.service.model.ProfileSourceOfTruth;
+import com.positivity.supplier.internal.service.model.RetryBackoff;
+import com.positivity.supplier.internal.service.model.SupplierAccountRole;
+import com.positivity.supplier.internal.service.model.SupplierAuthType;
+import com.positivity.supplier.internal.service.model.VendorProfileRequest;
+import com.positivity.supplier.internal.service.model.VendorProfileView;
 import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
-import com.positivity.supplier.service.SupplierProfileAdminService;
-import com.positivity.supplier.service.model.AuthConfigRequest;
-import com.positivity.supplier.service.model.AuthConfigView;
-import com.positivity.supplier.service.model.CommercialAccountRequest;
-import com.positivity.supplier.service.model.CommercialAccountView;
-import com.positivity.supplier.service.model.EndpointBindingRequest;
-import com.positivity.supplier.service.model.EndpointBindingView;
-import com.positivity.supplier.service.model.PayloadCaptureLevel;
-import com.positivity.supplier.service.model.ProfileSourceOfTruth;
-import com.positivity.supplier.service.model.RetryBackoff;
-import com.positivity.supplier.service.model.SupplierAccountRole;
-import com.positivity.supplier.service.model.SupplierAuthType;
-import com.positivity.supplier.service.model.VendorProfileRequest;
-import com.positivity.supplier.service.model.VendorProfileView;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -638,7 +637,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                         ? java.util.Set.of()
                         : binding.getRedactionClassifications().stream()
                                 .map(classification ->
-                                        com.positivity.supplier.service.model.RedactionClassification.valueOf(
+                                        com.positivity.supplier.internal.service.model.RedactionClassification.valueOf(
                                                 classification.name()))
                                 .collect(java.util.stream.Collectors.toSet()));
     }

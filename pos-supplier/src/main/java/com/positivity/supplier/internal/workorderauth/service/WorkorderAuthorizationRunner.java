@@ -18,7 +18,7 @@ import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizatio
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.spi.SupplierWorkorderAuthorizationPort;
-import com.positivity.supplier.service.model.FleetAuthorizationResponse;
+import com.positivity.supplier.internal.workorderauth.service.model.FleetAuthorizationResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
