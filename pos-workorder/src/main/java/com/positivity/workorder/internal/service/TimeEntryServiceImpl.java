@@ -46,7 +46,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         entry.setStatus(TimeEntryStatus.APPROVED);
         entry.setDecisionByUserId(actor);
         entry.setDecisionAtUtc(Instant.now(clock));
-        entry = timeEntryRepository.save(entry);
+        entry = timeEntryRepository.saveAndFlush(entry);
         eventPublisher.publishEvent(new TimeEntryApprovedEvent(
                 entry.getTimeEntryId(), entry.getWorkOrderId(), entry.getDecisionByUserId(), entry.getDecisionAtUtc()));
         return TimeEntryMapper.toResponse(entry);
@@ -67,7 +67,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         entry.setRejectionReason(request.getRejectionReason());
         entry.setDecisionByUserId(actor);
         entry.setDecisionAtUtc(Instant.now(clock));
-        entry = timeEntryRepository.save(entry);
+        entry = timeEntryRepository.saveAndFlush(entry);
         eventPublisher.publishEvent(new TimeEntryRejectedEvent(
                 entry.getTimeEntryId(),
                 entry.getWorkOrderId(),

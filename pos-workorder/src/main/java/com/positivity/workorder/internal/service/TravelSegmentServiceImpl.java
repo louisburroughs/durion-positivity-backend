@@ -103,7 +103,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         segment.setStatus(TravelSegmentStatus.COMPLETED);
         segment.setLastModifiedBy(actor);
         segment.setLastModifiedAt(endAt);
-        TravelSegment saved = travelSegmentRepository.save(segment);
+        TravelSegment saved = travelSegmentRepository.saveAndFlush(segment);
         eventPublisher.publishEvent(new TravelSegmentStoppedEvent(
                 saved.getTravelSegmentId(), saved.getTechnicianId(), saved.getEndAt(), saved.getDurationMinutes()));
         return TravelSegmentMapper.toResponse(saved);
@@ -131,7 +131,7 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
             throw new TravelSegmentNotFoundException(mobileWorkAssignmentId);
         }
         all.forEach(s -> s.setStatus(TravelSegmentStatus.SUBMITTED));
-        travelSegmentRepository.saveAll(all);
+        travelSegmentRepository.saveAllAndFlush(all);
         return TravelSegmentMapper.toResponses(all);
     }
 
