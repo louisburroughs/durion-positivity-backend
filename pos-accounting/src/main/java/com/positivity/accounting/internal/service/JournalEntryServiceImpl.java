@@ -235,7 +235,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
             initializeLineMetadata(entry);
         }
 
-        return JournalEntryMapper.toResponse(journalEntryRepository.save(entry));
+        return JournalEntryMapper.toResponse(journalEntryRepository.saveAndFlush(entry));
     }
 
     /**
@@ -294,7 +294,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         entry.setPostedAt(Instant.now(clock));
         entry.setUpdatedAt(Instant.now(clock));
 
-        JournalEntry saved = journalEntryRepository.save(entry);
+        JournalEntry saved = journalEntryRepository.saveAndFlush(entry);
         log.info(
                 "Posted journal entry {} as {} with total debits/credits: {}",
                 saved.getJournalEntryId(),

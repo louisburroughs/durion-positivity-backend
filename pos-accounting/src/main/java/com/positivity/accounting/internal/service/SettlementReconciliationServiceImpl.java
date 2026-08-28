@@ -278,7 +278,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         line.setMatchStatus(SettlementLineMatchStatus.MATCHED);
         line.setMatchedPaymentType(MatchedPaymentType.AR);
         line.setMatchedPaymentId(payment.getPaymentId());
-        ProcessorSettlementLine saved = lineRepository.save(line);
+        ProcessorSettlementLine saved = lineRepository.saveAndFlush(line);
 
         adjustSettlementAfterMatch(line.getSettlementId(), line.getGrossAmount());
         log.info("Manually matched settlement line {} to receivable payment {}", lineId, receivablePaymentId);
@@ -319,7 +319,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         line.setMatchStatus(SettlementLineMatchStatus.WRITTEN_OFF);
         line.setWriteoffReason(reason);
         line.setWriteoffJournalEntryId(posted);
-        ProcessorSettlementLine saved = lineRepository.save(line);
+        ProcessorSettlementLine saved = lineRepository.saveAndFlush(line);
 
         adjustSettlementAfterMatch(line.getSettlementId(), null);
         log.info("Wrote off settlement line {} (amount {}): {}", lineId, line.getGrossAmount(), reason);

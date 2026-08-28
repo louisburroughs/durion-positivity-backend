@@ -97,8 +97,8 @@ public final class JournalEntryMapper {
     private static JournalEntryLine toLineEntity(JournalEntryCreateRequest.@NonNull JournalEntryLineRequest request) {
         JournalEntryLine line = new JournalEntryLine();
         line.setGlAccountId(request.getGlAccountId());
-        line.setDebitAmount(request.getDebitAmount());
-        line.setCreditAmount(request.getCreditAmount());
+        line.setDebitAmount(request.getDebitAmount() == null ? BigDecimal.ZERO : request.getDebitAmount());
+        line.setCreditAmount(request.getCreditAmount() == null ? BigDecimal.ZERO : request.getCreditAmount());
         line.setDescription(request.getDescription());
         line.setDimensions(request.getDimensions());
         return line;

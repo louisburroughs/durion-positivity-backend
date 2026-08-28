@@ -26,7 +26,7 @@ public interface GLPostingService {
      * @param description         Entry description
      * @param isPriorPeriod       True if prior period adjustment
      * @param originalPeriodId    Original period ID if prior period
-     * @return posted journal entry's id's id
+     * @return posted journal entry's id
      */
     UUID postCreditMemoReversal(
             UUID creditMemoId,
@@ -49,7 +49,7 @@ public interface GLPostingService {
      *
      * @param overrideJustification optional justification for posting into a
      *                              CLOSED period
-     * @return posted journal entry's id's id
+     * @return posted journal entry's id
      */
     UUID postCreditMemoReversal(
             @NonNull UUID creditMemoId,
@@ -77,7 +77,7 @@ public interface GLPostingService {
      * @param creditAmount       Revenue portion originally credited
      * @param taxReversed        Tax portion originally reversed
      * @param description        Journal entry description
-     * @return posted journal entry's id's id
+     * @return posted journal entry's id
      */
     UUID postCreditMemoVoid(
             @NonNull UUID creditMemoId,
@@ -109,7 +109,7 @@ public interface GLPostingService {
      *                                   from processing/clock time so outbox
      *                                   retries post into the correct period
      * @param description                Entry description
-     * @return posted journal entry's id's id
+     * @return posted journal entry's id
      */
     UUID postPaymentApplication(
             UUID paymentApplicationId,
@@ -129,7 +129,7 @@ public interface GLPostingService {
      *
      * @param overrideJustification optional justification for posting into a
      *                              CLOSED period
-     * @return posted journal entry's id's id
+     * @return posted journal entry's id
      */
     UUID postPaymentApplication(
             @NonNull UUID paymentApplicationId,

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -73,6 +76,7 @@ class JournalEntryNumberingTest {
 
     @AfterEach
     void cleanUp() {
+        SecurityContextHolder.clearContext();
         journalEntryRepository.deleteAll();
         sequenceRepository.deleteAll();
         glAccountRepository.deleteById(glAccountId);
@@ -167,6 +171,35 @@ class JournalEntryNumberingTest {
         JournalEntryResponse reloaded = journalEntryService.getJournalEntry(draft.getJournalEntryId());
         assertThat(reloaded.getStatus()).isEqualTo(JournalEntryStatus.POSTED);
         assertThat(reloaded.getEntryNumber()).isEqualTo("JE-202109-1");
+    }
+
+    @Test
+    @DisplayName("posting sets modifiedBy to the posting user, reflecting post-flush state "
+            + "(regression: mapping the entity before its @PreUpdate callback ran would still show the creator)")
+    void posting_setsModifiedByToPostingActor_notCreator() {
+        authenticateAs("creator-user");
+        JournalEntryResponse draft = createDraft(LocalDateTime.of(2021, 10, 5, 10, 0));
+        assertThat(draft.getModifiedBy()).isEqualTo("creator-user");
+
+        authenticateAs("poster-user");
+        JournalEntryResponse posted = journalEntryService.postJournalEntry(draft.getJournalEntryId());
+
+        assertThat(posted.getModifiedBy())
+                .as("modifiedBy must reflect the acting user who posted (JournalEntry#onUpdate,"
+                        + " a @PreUpdate callback), not the creator captured before the callback ran")
+                .isEqualTo("poster-user");
+
+        // Confirm it isn't just an in-memory artifact of the returned DTO: a fresh read
+        // through the service sees the same, already-committed value.
+        JournalEntryResponse reloaded = journalEntryService.getJournalEntry(draft.getJournalEntryId());
+        assertThat(reloaded.getModifiedBy()).isEqualTo("poster-user");
+    }
+
+    private void authenticateAs(String username) {
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken(username, null);
+        authentication.setAuthenticated(true);
+        authentication.setDetails(Map.of("username", username));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     private JournalEntryResponse createDraft(LocalDateTime transactionDate) {

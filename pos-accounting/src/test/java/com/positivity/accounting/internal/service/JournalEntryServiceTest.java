@@ -332,7 +332,8 @@ class JournalEntryServiceTest {
                 .build();
 
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(existingEntry));
-        when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(journalEntryRepository.saveAndFlush(any(JournalEntry.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
         JournalEntryResponse result = service.updateJournalEntry(testJournalEntryId, updates);
@@ -340,7 +341,46 @@ class JournalEntryServiceTest {
         // Assert
         assertThat(result.getDescription()).isEqualTo("Updated description");
         assertThat(result.getModifiedAt()).isNotNull();
-        verify(journalEntryRepository).save(any(JournalEntry.class));
+        // Regression guard: the mapped response is built from the entity inside the same
+        // transaction, and JPA @PreUpdate callbacks (e.g. modifiedBy) only run at flush —
+        // save() alone would leave them stale (see updateJournalEntry_reflectsPostFlushModifiedBy).
+        verify(journalEntryRepository).saveAndFlush(any(JournalEntry.class));
+        verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+    }
+
+    @Test
+    @DisplayName("updateJournalEntry - modifiedBy reflects the acting user from the post-flush entity, "
+            + "not whatever was on it before save")
+    void updateJournalEntry_reflectsPostFlushModifiedBy() {
+        // Arrange: entry carries a stale modifiedBy (e.g. left over from creation by a
+        // different actor). save() returns the entity unchanged (no flush => @PreUpdate has
+        // not run yet, mirroring real JPA behavior for an already-managed entity).
+        // saveAndFlush() simulates @PreUpdate having fired: modifiedBy is overwritten to the
+        // current actor ("SYSTEM", unauthenticated in this test).
+        JournalEntry existingEntry = createBalancedEntry();
+        existingEntry.setStatus(JournalEntryStatus.DRAFT);
+        existingEntry.setModifiedBy("STALE_CREATOR");
+
+        JournalEntryCreateRequest updates = JournalEntryCreateRequest.builder()
+                .description("Updated description")
+                .lines(createBalancedLineRequests())
+                .build();
+
+        when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(existingEntry));
+        lenient()
+                .when(journalEntryRepository.save(any(JournalEntry.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(journalEntryRepository.saveAndFlush(any(JournalEntry.class))).thenAnswer(invocation -> {
+            JournalEntry entry = invocation.getArgument(0);
+            entry.setModifiedBy("SYSTEM"); // what JournalEntry#onUpdate (@PreUpdate) would set
+            return entry;
+        });
+
+        // Act
+        JournalEntryResponse result = service.updateJournalEntry(testJournalEntryId, updates);
+
+        // Assert
+        assertThat(result.getModifiedBy()).isEqualTo("SYSTEM");
     }
 
     @Test
@@ -373,7 +413,8 @@ class JournalEntryServiceTest {
 
         when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
         doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
-        when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(journalEntryRepository.saveAndFlush(any(JournalEntry.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         // Period gate (B2): no stub needed — the gate's locked finder
         // defaults to Optional.empty(), and a missing row counts as OPEN.
 
@@ -392,7 +433,43 @@ class JournalEntryServiceTest {
         assertThat(result.getModifiedAt()).isNotNull();
         assertThat(result.getEntryNumber()).isEqualTo("JE-202401-5");
         assertThat(sequence.getNextValue()).isEqualTo(6L);
-        verify(journalEntryRepository).save(any(JournalEntry.class));
+        // Regression guard: see postJournalEntry_reflectsPostFlushModifiedBy — save() alone
+        // would return the entity before @PreUpdate (modifiedBy) has run.
+        verify(journalEntryRepository).saveAndFlush(any(JournalEntry.class));
+        verify(journalEntryRepository, never()).save(any(JournalEntry.class));
+    }
+
+    @Test
+    @DisplayName("postJournalEntry - modifiedBy reflects the acting user from the post-flush entity, "
+            + "not whatever was on it before save")
+    void postJournalEntry_reflectsPostFlushModifiedBy() {
+        // Arrange: same simulation as updateJournalEntry_reflectsPostFlushModifiedBy — save()
+        // returns the entity unchanged (pre-flush), saveAndFlush() simulates @PreUpdate having
+        // set modifiedBy to the current actor.
+        JournalEntry entry = createBalancedEntry();
+        entry.setStatus(JournalEntryStatus.DRAFT);
+        entry.setModifiedBy("STALE_CREATOR");
+
+        when(journalEntryRepository.findById(testJournalEntryId)).thenReturn(Optional.of(entry));
+        doNothing().when(glAccountService).validateAccountForPosting(any(UUID.class), any(LocalDateTime.class));
+        lenient()
+                .when(journalEntryRepository.save(any(JournalEntry.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(journalEntryRepository.saveAndFlush(any(JournalEntry.class))).thenAnswer(invocation -> {
+            JournalEntry saved = invocation.getArgument(0);
+            saved.setModifiedBy("SYSTEM"); // what JournalEntry#onUpdate (@PreUpdate) would set
+            return saved;
+        });
+        AccountingSequence sequence = new AccountingSequence();
+        sequence.setScopeKey("JE-202401");
+        sequence.setNextValue(5L);
+        when(sequenceRepository.findByScopeKey("JE-202401")).thenReturn(Optional.of(sequence));
+
+        // Act
+        JournalEntryResponse result = service.postJournalEntry(testJournalEntryId);
+
+        // Assert
+        assertThat(result.getModifiedBy()).isEqualTo("SYSTEM");
     }
 
     @Test
@@ -465,6 +542,12 @@ class JournalEntryServiceTest {
         // Verify the original flip went through the guarded update
         verify(journalEntryRepository)
                 .markReversed(eq(testJournalEntryId), any(JournalEntry.class), any(Instant.class), eq("SYSTEM"));
+
+        // The reversal is a genuinely new entity (@PrePersist runs synchronously on save(),
+        // unlike @PreUpdate on an already-managed entity), so plain save() is sufficient here —
+        // no saveAndFlush needed, unlike updateJournalEntry/postJournalEntry.
+        verify(journalEntryRepository).save(any(JournalEntry.class));
+        verify(journalEntryRepository, never()).saveAndFlush(any(JournalEntry.class));
 
         // Verify the period row exists for the reversal date
         verify(accountingPeriodService).ensurePeriodExists(testTransactionDate.toLocalDate());

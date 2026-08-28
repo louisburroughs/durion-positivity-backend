@@ -81,6 +81,9 @@ class SettlementReconciliationServiceTest {
         ReflectionTestUtils.setField(service, "baseCurrency", "USD");
         lenient().when(lineRepository.save(any(ProcessorSettlementLine.class))).thenAnswer(i -> i.getArgument(0));
         lenient()
+                .when(lineRepository.saveAndFlush(any(ProcessorSettlementLine.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        lenient()
                 .when(settlementRepository.save(any(ProcessorSettlement.class)))
                 .thenAnswer(i -> i.getArgument(0));
     }
@@ -241,6 +244,40 @@ class SettlementReconciliationServiceTest {
         assertThat(result.getMatchStatus()).isEqualTo(SettlementLineMatchStatus.WRITTEN_OFF);
         assertThat(result.getWriteoffReason()).isEqualTo("unidentifiable micro-deposit");
         verify(glPostingService).postSettlementWriteOff(any(), any(), any(), any(), any(), anyString(), any());
+        // Regression guard: the response is mapped from the entity inside the same
+        // transaction, and updatedAt (@LastModifiedDate) only refreshes at flush — save()
+        // alone would leave it stale on an already-managed entity.
+        verify(lineRepository).saveAndFlush(any(ProcessorSettlementLine.class));
+        verify(lineRepository, never()).save(any(ProcessorSettlementLine.class));
+    }
+
+    @Test
+    @DisplayName("manualMatchToReceivable on a POSTED settlement matches the line and posts a reclass")
+    void manualMatch_postedSettlement_matchesAndPosts() {
+        UUID lineId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        ProcessorSettlementLine line = ProcessorSettlementLine.builder()
+                .lineId(lineId)
+                .settlementId("stl_123")
+                .grossAmount(new BigDecimal("100.00"))
+                .matchStatus(SettlementLineMatchStatus.UNMATCHED)
+                .build();
+        when(lineRepository.findById(lineId)).thenReturn(Optional.of(line));
+        when(settlementRepository.findById("stl_123")).thenReturn(Optional.of(postedSettlement()));
+        ReceivablePayment payment = new ReceivablePayment();
+        payment.setPaymentId(paymentId);
+        when(receivablePaymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(glMappingResolver.resolveGLAccount(anyString(), anyString(), any()))
+                .thenReturn(UUID.randomUUID());
+
+        var result = service.manualMatchToReceivable(lineId, paymentId);
+
+        assertThat(result.getMatchStatus()).isEqualTo(SettlementLineMatchStatus.MATCHED);
+        assertThat(result.getMatchedPaymentId()).isEqualTo(paymentId);
+        verify(glPostingService).postSettlementReclass(any(), any(), any(), any(), any(), anyString(), any());
+        // Regression guard: same post-flush mapping requirement as writeOffLine.
+        verify(lineRepository).saveAndFlush(any(ProcessorSettlementLine.class));
+        verify(lineRepository, never()).save(any(ProcessorSettlementLine.class));
     }
 
     @Test
