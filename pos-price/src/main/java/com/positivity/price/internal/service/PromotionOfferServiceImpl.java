@@ -107,7 +107,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         }
 
         offer.setStatus(PromotionStatus.ACTIVE);
-        return PromotionOfferMapper.toResponse(promotionOfferRepository.save(offer));
+        return PromotionOfferMapper.toResponse(promotionOfferRepository.saveAndFlush(offer));
     }
 
     @Override
@@ -120,7 +120,7 @@ public class PromotionOfferServiceImpl implements PromotionOfferService {
         }
 
         offer.setStatus(PromotionStatus.INACTIVE);
-        return PromotionOfferMapper.toResponse(promotionOfferRepository.save(offer));
+        return PromotionOfferMapper.toResponse(promotionOfferRepository.saveAndFlush(offer));
     }
 
     private @NonNull PromotionOffer findOfferById(@NonNull UUID promotionOfferId) {
