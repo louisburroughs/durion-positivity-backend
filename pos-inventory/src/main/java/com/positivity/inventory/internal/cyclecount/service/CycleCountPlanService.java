@@ -45,6 +45,16 @@ public interface CycleCountPlanService {
      * lifecycle-event consumers see this transition exactly like one made
      * through the status endpoint (whose controller method holds the same
      * annotation) instead of a silent status jump.
+     *
+     * <p>Emission timing caveat: because this is called inside the caller's
+     * still-open generation transaction, the event is emitted before that
+     * transaction commits — a commit-time rollback after this returns leaves a
+     * STARTED event with a PLANNED row (controller-level {@code @EmitEvent}s
+     * fire after the service transaction has committed and cannot skew this
+     * way). Accepted for now: the generation pass pre-validates its writes
+     * (plan row locked, existing keys preloaded), so post-emission rollback is
+     * confined to infrastructure failures, and lifecycle consumers already
+     * tolerate at-least-once delivery.
      */
     @NonNull
     CycleCountPlanResponse startForTaskGeneration(@NonNull UUID planId);

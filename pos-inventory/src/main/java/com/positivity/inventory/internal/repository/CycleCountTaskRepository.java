@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -31,5 +32,6 @@ public interface CycleCountTaskRepository extends JpaRepository<CycleCountTask, 
      * with the time-ordered UUIDv7 taskId as tiebreaker) — the order the plan
      * task listing endpoint documents.
      */
-    List<CycleCountTask> findByPlanIdOrderByCreatedAtAscTaskIdAsc(UUID planId);
+    @NonNull
+    List<CycleCountTask> findByPlanIdOrderByCreatedAtAscTaskIdAsc(@NonNull UUID planId);
 }

@@ -247,8 +247,10 @@ public class CycleCountPlanController {
                     Use this tool after createCycleCountPlan to hand the count to an auditor; the tasks it creates \
                     are then counted through submitCount on the cycle count endpoint.
                     Preconditions: the plan must exist and be in PLANNED or STARTED status.
-                    Required inputs: planId (UUID) path parameter and auditorId in the body — every generated task \
-                    is assigned to that auditor.
+                    Required inputs: planId (UUID) path parameter and auditorId in the body — every task created \
+                    by THIS pass is assigned to that auditor. Assignment is create-time-only: re-generating with \
+                    a different auditorId does not reassign the plan's existing tasks (they are reported in \
+                    tasksSkippedExisting and keep their original auditor).
                     Emits an INVENTORY_CYCLE_COUNT_TASK_GENERATE event, and a PLANNED plan that has tasks after \
                     the pass is transitioned to STARTED (also emitting INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE); \
                     a pass that finds no stocked (location, SKU) pair creates nothing and leaves the plan PLANNED. \

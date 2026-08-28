@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +27,7 @@ import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,8 +97,13 @@ class CycleCountTaskGenerationServiceImplTest {
                 .build();
     }
 
-    private InventoryLedgerEntryRepository.LocationOnHand onHand(String sku, String quantity) {
-        return new InventoryLedgerEntryRepository.LocationOnHand() {
+    private InventoryLedgerEntryRepository.LocationStockOnHand onHand(UUID locationId, String sku, String quantity) {
+        return new InventoryLedgerEntryRepository.LocationStockOnHand() {
+            @Override
+            public UUID getLocationId() {
+                return locationId;
+            }
+
             @Override
             public String getStockItemId() {
                 return sku;
@@ -151,8 +156,9 @@ class CycleCountTaskGenerationServiceImplTest {
         when(storageLocationRepository.findByParentStorageLocationIdIn(anyCollection()))
                 .thenReturn(List.of());
         when(taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(PLAN_ID)).thenReturn(List.of());
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(ZONE_A), anyCollection()))
-                .thenReturn(List.of(onHand("OIL-5W30-5QT", "24"), onHand("WIXF-57356", "12.5")));
+        when(ledgerRepository.findPositiveOnHandByLocationsChunked(anyCollection(), anyCollection()))
+                .thenReturn(Map.of(
+                        ZONE_A, List.of(onHand(ZONE_A, "OIL-5W30-5QT", "24"), onHand(ZONE_A, "WIXF-57356", "12.5"))));
         stubSaveAllEcho();
         when(planService.startForTaskGeneration(PLAN_ID)).thenReturn(startedPlanResponse());
 
@@ -188,8 +194,8 @@ class CycleCountTaskGenerationServiceImplTest {
                 .thenReturn(List.of());
         when(taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(PLAN_ID))
                 .thenReturn(List.of(existingTask(ZONE_A.toString(), "OIL-5W30-5QT")));
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(ZONE_A), anyCollection()))
-                .thenReturn(List.of(onHand("OIL-5W30-5QT", "24")));
+        when(ledgerRepository.findPositiveOnHandByLocationsChunked(anyCollection(), anyCollection()))
+                .thenReturn(Map.of(ZONE_A, List.of(onHand(ZONE_A, "OIL-5W30-5QT", "24"))));
 
         CycleCountTaskGenerationResponse response =
                 service.generateTasks(PLAN_ID, new GenerateCycleCountTasksRequest(AUDITOR));
@@ -214,10 +220,8 @@ class CycleCountTaskGenerationServiceImplTest {
                             : List.<ExtStorageLocationReplica>of();
                 });
         when(taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(PLAN_ID)).thenReturn(List.of());
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(ZONE_A), anyCollection()))
-                .thenReturn(List.of());
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(BIN_A1), anyCollection()))
-                .thenReturn(List.of(onHand("WIXF-57356", "12")));
+        when(ledgerRepository.findPositiveOnHandByLocationsChunked(anyCollection(), anyCollection()))
+                .thenReturn(Map.of(BIN_A1, List.of(onHand(BIN_A1, "WIXF-57356", "12"))));
         stubSaveAllEcho();
 
         CycleCountTaskGenerationResponse response =
@@ -237,8 +241,8 @@ class CycleCountTaskGenerationServiceImplTest {
         when(storageLocationRepository.findByParentStorageLocationIdIn(anyCollection()))
                 .thenReturn(List.of());
         when(taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(PLAN_ID)).thenReturn(List.of());
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(BIN_A1), anyCollection()))
-                .thenReturn(List.of());
+        when(ledgerRepository.findPositiveOnHandByLocationsChunked(anyCollection(), anyCollection()))
+                .thenReturn(Map.of());
 
         assertThat(service.generateTasks(PLAN_ID, new GenerateCycleCountTasksRequest(AUDITOR))
                         .getLocationsScanned())
@@ -246,13 +250,17 @@ class CycleCountTaskGenerationServiceImplTest {
 
         // Without replicas: the plan's own location id is the single count location.
         when(storageLocationRepository.findBySiteId(SITE_ID)).thenReturn(List.of());
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(SITE_ID), anyCollection()))
-                .thenReturn(List.of());
 
         CycleCountTaskGenerationResponse fallback =
                 service.generateTasks(PLAN_ID, new GenerateCycleCountTasksRequest(AUDITOR));
         assertThat(fallback.getLocationsScanned()).isEqualTo(1);
-        verify(ledgerRepository).findPositiveOnHandByLocation(eq(SITE_ID), anyCollection());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<UUID>> scannedLocations = ArgumentCaptor.forClass(Collection.class);
+        verify(ledgerRepository, org.mockito.Mockito.times(2))
+                .findPositiveOnHandByLocationsChunked(scannedLocations.capture(), anyCollection());
+        assertThat(scannedLocations.getAllValues().get(0)).containsExactly(BIN_A1);
+        assertThat(scannedLocations.getAllValues().get(1)).containsExactly(SITE_ID);
     }
 
     @Test
@@ -262,8 +270,8 @@ class CycleCountTaskGenerationServiceImplTest {
         when(storageLocationRepository.findByParentStorageLocationIdIn(anyCollection()))
                 .thenReturn(List.of());
         when(taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(PLAN_ID)).thenReturn(List.of());
-        when(ledgerRepository.findPositiveOnHandByLocation(eq(ZONE_A), anyCollection()))
-                .thenReturn(List.of());
+        when(ledgerRepository.findPositiveOnHandByLocationsChunked(anyCollection(), anyCollection()))
+                .thenReturn(Map.of());
 
         CycleCountTaskGenerationResponse response =
                 service.generateTasks(PLAN_ID, new GenerateCycleCountTasksRequest(AUDITOR));

@@ -85,12 +85,16 @@ public class CycleCountTaskGenerationServiceImpl implements CycleCountTaskGenera
             existingKeys.add(taskKey(existing.getBinLocation(), existing.getItemSku()));
         }
 
+        Map<UUID, List<InventoryLedgerEntryRepository.LocationStockOnHand>> onHandByLocation =
+                ledgerRepository.findPositiveOnHandByLocationsChunked(
+                        countLocations, InventoryLedgerEventType.onHandAffectingTypes());
+
         List<CycleCountTask> toCreate = new ArrayList<>();
         int skippedExisting = 0;
         for (UUID location : countLocations) {
             String binLocation = location.toString();
-            for (InventoryLedgerEntryRepository.LocationOnHand onHand : ledgerRepository.findPositiveOnHandByLocation(
-                    location, InventoryLedgerEventType.onHandAffectingTypes())) {
+            for (InventoryLedgerEntryRepository.LocationStockOnHand onHand :
+                    onHandByLocation.getOrDefault(location, List.of())) {
                 if (!existingKeys.add(taskKey(binLocation, onHand.getStockItemId()))) {
                     skippedExisting++;
                     continue;

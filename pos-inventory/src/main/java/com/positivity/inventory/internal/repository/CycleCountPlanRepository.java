@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -24,7 +25,7 @@ public interface CycleCountPlanRepository extends JpaRepository<CycleCountPlan, 
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM CycleCountPlan p WHERE p.planId = :planId")
-    Optional<CycleCountPlan> findWithLockByPlanId(@Param("planId") UUID planId);
+    Optional<CycleCountPlan> findWithLockByPlanId(@Param("planId") @NonNull UUID planId);
 
     @Query("""
             SELECT p FROM CycleCountPlan p
