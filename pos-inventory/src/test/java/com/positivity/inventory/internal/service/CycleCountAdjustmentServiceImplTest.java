@@ -119,7 +119,7 @@ class CycleCountAdjustmentServiceImplTest {
         @DisplayName("should create adjustment with PENDING_APPROVAL status when approval is required")
         void shouldCreatePendingAdjustmentWhenApprovalRequired() {
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
-                    .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                    .stockItemId("00000000-0000-0000-0000-000000000001")
                     .countedQuantity(new BigDecimal("15"))
                     .quantityOnHandBefore(new BigDecimal("10"))
                     .costAtTimeOfAdjustment(BigDecimal.TEN)
@@ -147,7 +147,7 @@ class CycleCountAdjustmentServiceImplTest {
         @Test
         @DisplayName("J3: costAtTimeOfAdjustment is sourced from the J1 engine, overriding a stale request cost")
         void shouldSourceCostFromEngineOverRequest() {
-            UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+            String stockItemId = "00000000-0000-0000-0000-000000000009";
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
                     .countedQuantity(new BigDecimal("15"))
@@ -155,12 +155,12 @@ class CycleCountAdjustmentServiceImplTest {
                     .costAtTimeOfAdjustment(new BigDecimal("99.0000")) // stale interim client value
                     .build();
 
-            when(costStateRepository.findByStockItemId(stockItemId.toString()))
+            when(costStateRepository.findByStockItemId(stockItemId))
                     .thenReturn(Optional.of(SkuCostState.builder()
-                            .stockItemId(stockItemId.toString())
+                            .stockItemId(stockItemId)
                             .avgCost(new BigDecimal("4.2500"))
                             .build()));
-            when(methodResolver.resolve(stockItemId.toString())).thenReturn(CostingMethod.AVERAGE);
+            when(methodResolver.resolve(stockItemId)).thenReturn(CostingMethod.AVERAGE);
             when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                     .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
             when(adjustmentRepository.save(any(CycleCountAdjustment.class)))
@@ -176,7 +176,7 @@ class CycleCountAdjustmentServiceImplTest {
         @Test
         @DisplayName("J3: STANDARD-costed SKU sources the configured standard cost from the engine")
         void shouldSourceStandardCostFromEngine() {
-            UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+            String stockItemId = "00000000-0000-0000-0000-00000000000a";
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
                     .countedQuantity(new BigDecimal("8"))
@@ -184,13 +184,13 @@ class CycleCountAdjustmentServiceImplTest {
                     .costAtTimeOfAdjustment(new BigDecimal("99.0000"))
                     .build();
 
-            when(costStateRepository.findByStockItemId(stockItemId.toString()))
+            when(costStateRepository.findByStockItemId(stockItemId))
                     .thenReturn(Optional.of(SkuCostState.builder()
-                            .stockItemId(stockItemId.toString())
+                            .stockItemId(stockItemId)
                             .avgCost(new BigDecimal("4.2500"))
                             .standardCost(new BigDecimal("6.0000"))
                             .build()));
-            when(methodResolver.resolve(stockItemId.toString())).thenReturn(CostingMethod.STANDARD);
+            when(methodResolver.resolve(stockItemId)).thenReturn(CostingMethod.STANDARD);
             when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
                     .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
             when(adjustmentRepository.save(any(CycleCountAdjustment.class)))
@@ -206,7 +206,7 @@ class CycleCountAdjustmentServiceImplTest {
         @Test
         @DisplayName("should create AUTO_APPROVED adjustment and post to ledger when no approval is required")
         void shouldAutoApproveAdjustmentWhenNoApprovalRequired() {
-            UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            String stockItemId = "00000000-0000-0000-0000-000000000001";
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
                     .countedQuantity(new BigDecimal("11"))
@@ -324,7 +324,7 @@ class CycleCountAdjustmentServiceImplTest {
         void shouldRejectPendingAdjustment() {
             CycleCountAdjustment adjustment = CycleCountAdjustment.builder()
                     .adjustmentId(adjustmentId)
-                    .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                    .stockItemId("00000000-0000-0000-0000-000000000001")
                     .reasonCode("CYCLE_COUNT_SHRINK")
                     .quantityChange(new BigDecimal("-2"))
                     .costAtTimeOfAdjustment(BigDecimal.ONE)

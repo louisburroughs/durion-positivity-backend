@@ -107,6 +107,10 @@ public interface InventoryLedgerEntryRepository
                 stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());
     }
 
+    default BigDecimal calculateOnHandQuantity(String stockItemId) {
+        return calculateOnHandQuantityForEventTypes(stockItemId, InventoryLedgerEventType.onHandAffectingTypes());
+    }
+
     @Query("""
                         SELECT COALESCE(SUM(e.changeInQuantity), 0)
                         FROM InventoryLedgerEntry e
@@ -170,6 +174,57 @@ public interface InventoryLedgerEntryRepository
             @Param("locationId") UUID locationId, @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
     interface LocationOnHand {
+        String getStockItemId();
+
+        BigDecimal getOnHandQuantity();
+    }
+
+    /**
+     * Grouped variant of {@link #findPositiveOnHandByLocation} over many locations at once:
+     * positive on-hand per (location, stockItemId), deterministically ordered. One round trip
+     * per chunk instead of one aggregation query per location — use
+     * {@link #findPositiveOnHandByLocationsChunked} rather than calling this directly.
+     */
+    @Query("""
+                        SELECT e.locationId AS locationId, e.stockItemId AS stockItemId,
+                               COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
+                        FROM InventoryLedgerEntry e
+                        WHERE e.locationId IN :locationIds
+                          AND e.eventType IN :eventTypes
+                        GROUP BY e.locationId, e.stockItemId
+                        HAVING COALESCE(SUM(e.changeInQuantity), 0) > 0
+                        ORDER BY e.locationId, e.stockItemId
+                        """)
+    List<LocationStockOnHand> findPositiveOnHandByLocations(
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
+
+    /**
+     * Chunk-safe {@link #findPositiveOnHandByLocations}, grouped per location. Locations with no
+     * positive on-hand are absent from the result (treat as empty); an empty {@code locationIds}
+     * short-circuits without executing SQL. Per-location lists keep the query's stockItemId order.
+     */
+    default Map<UUID, List<LocationStockOnHand>> findPositiveOnHandByLocationsChunked(
+            Collection<UUID> locationIds, Collection<InventoryLedgerEventType> eventTypes) {
+        if (locationIds == null || locationIds.isEmpty() || eventTypes == null || eventTypes.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> distinctIds = locationIds.stream().distinct().toList();
+        Map<UUID, List<LocationStockOnHand>> byLocation = new HashMap<>();
+        for (int start = 0; start < distinctIds.size(); start += LOCATION_ID_CHUNK_SIZE) {
+            List<UUID> chunk = distinctIds.subList(start, Math.min(start + LOCATION_ID_CHUNK_SIZE, distinctIds.size()));
+            for (LocationStockOnHand row : findPositiveOnHandByLocations(chunk, eventTypes)) {
+                byLocation
+                        .computeIfAbsent(row.getLocationId(), _ -> new java.util.ArrayList<>())
+                        .add(row);
+            }
+        }
+        return byLocation;
+    }
+
+    interface LocationStockOnHand {
+        UUID getLocationId();
+
         String getStockItemId();
 
         BigDecimal getOnHandQuantity();

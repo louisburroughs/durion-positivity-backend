@@ -86,7 +86,8 @@ public class CycleCountAdjustmentController {
                     Preconditions: countedQuantity must differ from quantityOnHandBefore (a zero variance is \
                     rejected), a supplied taskId must reference an existing cycle count task, and the auto-approve \
                     path additionally requires the linked task to have no unreviewed in-window stock movements.
-                    Required inputs: stockItemId (UUID), reasonCode, countedQuantity, quantityOnHandBefore, \
+                    Required inputs: stockItemId (the ledger's freeform stock reference text — a SKU code, or a \
+                    product UUID rendered as text; not a product id), reasonCode, countedQuantity, quantityOnHandBefore, \
                     costAtTimeOfAdjustment and createdByUserId; taskId is optional but enables conflict detection; \
                     the posted unit cost prefers the costing engine's per-SKU running cost and falls back to \
                     costAtTimeOfAdjustment only for a SKU the engine has not costed.
@@ -117,7 +118,7 @@ public class CycleCountAdjustmentController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Task-linked shortage", value = """
-                                                                    {"stockItemId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                    {"stockItemId":"OIL-5W30-5QT",
                                                                      "taskId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
                                                                      "reasonCode":"CYCLE_COUNT_VARIANCE",
                                                                      "countedQuantity":12,

@@ -82,7 +82,7 @@ class CycleCountServiceImplTest {
                 new CycleCountToleranceResolver(toleranceRepository),
                 uomConversionService,
                 new QuantityScaleGuard(uomConversionService),
-                baseUnitOfMeasureResolver);
+                new CycleCountTaskResponseMapper(baseUnitOfMeasureResolver));
     }
 
     @Test

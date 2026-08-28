@@ -236,8 +236,8 @@ class CycleCountConflictDetectionTest {
 
         UUID stockItemId = UUID.randomUUID();
         String sku = stockItemId.toString();
-        // Non-UUID bin ⇒ detection and recomputation both use the global
-        // (SKU-wide) on-hand math, like the adjustment posting path itself.
+        // Non-UUID bin ⇒ detection, recomputation, and the posted entry all
+        // use the global (SKU-wide) on-hand math with no ledger location.
         post(sku, null, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
         CycleCountTask task = task("BIN-I2-APPROVE", sku, 10);
         tick();
@@ -251,7 +251,7 @@ class CycleCountConflictDetectionTest {
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
 
         AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
-                .stockItemId(stockItemId)
+                .stockItemId(sku)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
                 .countedQuantity(new BigDecimal("5"))
@@ -280,6 +280,67 @@ class CycleCountConflictDetectionTest {
     }
 
     @Test
+    @DisplayName("CONFLICT approval on a location-bin task recomputes against that bin's on-hand, not the SKU's"
+            + " global stock, and the posted variance entry carries the bin's location")
+    void approvalOnConflict_locationBinTask_scopesRecomputeAndPostingToTheBin() {
+        ensureTier1ApprovalThreshold();
+
+        // Freeform SKU code, not a UUID: the ledger's stock reference is text, and since the
+        // stock_item_id widening the adjustment leg accepts it too — the exact path that was
+        // dead-ended while cycle_count_adjustment.stock_item_id was typed uuid.
+        String sku = "SKU-I2-BIN-" + UUID.randomUUID();
+        UUID binA = UUID.randomUUID();
+        UUID binB = UUID.randomUUID();
+        // Multi-bin SKU: 5 in bin A, 7 in bin B (global 12). The count is of bin A only.
+        post(sku, binA, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("5"), 5);
+        post(sku, binB, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("7"), 7);
+        CycleCountTask task = task(binA.toString(), sku, 5);
+        tick();
+        // In-window movement at bin A ⇒ CONFLICT; bin A's current on-hand becomes 4.
+        post(sku, binA, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-1"), 4);
+
+        CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
+                .taskId(task.getTaskId())
+                .auditorId(AUDITOR)
+                .actualQuantity(BigDecimal.valueOf(3))
+                .build());
+        assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
+
+        AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
+                .stockItemId(sku)
+                .taskId(task.getTaskId())
+                .reasonCode("CYCLE_COUNT_VARIANCE")
+                .countedQuantity(new BigDecimal("3"))
+                .quantityOnHandBefore(new BigDecimal("5")) // stale bin-A snapshot
+                .costAtTimeOfAdjustment(new BigDecimal("10.00"))
+                .createdByUserId(AUDITOR)
+                .build());
+        assertThat(created.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
+
+        AdjustmentResponse approved = adjustmentService.approveAdjustment(
+                created.getAdjustmentId(), ApproveAdjustmentRequest.builder().build(), null);
+
+        // Recomputed against bin A's CURRENT on-hand (4): counted 3 - 4 = -1.
+        // Never against the SKU's global 11 (which would have posted -8).
+        assertThat(approved.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
+        assertThat(approved.getQuantityChange()).isEqualByComparingTo("-1");
+        assertThat(approved.getQuantityOnHandBefore()).isEqualByComparingTo("4");
+
+        // The posted variance entry carries bin A's location, so bin A's ledger balance
+        // converges to the counted quantity and the next plan's snapshot sees the correction.
+        InventoryLedgerEntry posted =
+                ledgerRepository.findByAdjustmentId(created.getAdjustmentId()).orElseThrow();
+        assertThat(posted.getEventType()).isEqualTo(InventoryLedgerEventType.COUNT_VARIANCE_OUT);
+        assertThat(posted.getChangeInQuantity()).isEqualByComparingTo("-1");
+        assertThat(posted.getLocationId()).isEqualTo(binA);
+        assertThat(ledgerRepository.calculateOnHandQuantityAtLocation(sku, binA))
+                .isEqualByComparingTo("3");
+        // Bin B untouched.
+        assertThat(ledgerRepository.calculateOnHandQuantityAtLocation(sku, binB))
+                .isEqualByComparingTo("7");
+    }
+
+    @Test
     @DisplayName("movements after a clean count are detected at approval: task flagged CONFLICT, approval rejected")
     void approvalDetectsLateConflict_flagsTaskAndRejects() {
         ensureTier1ApprovalThreshold();
@@ -297,7 +358,7 @@ class CycleCountConflictDetectionTest {
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
 
         AdjustmentResponse created = adjustmentService.createAdjustment(CreateAdjustmentRequest.builder()
-                .stockItemId(stockItemId)
+                .stockItemId(sku)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
                 .countedQuantity(new BigDecimal("8"))

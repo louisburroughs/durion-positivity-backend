@@ -38,10 +38,15 @@ public class CycleCountAdjustment {
     private UUID adjustmentId;
 
     /**
-     * SKU identifier for the stock item being adjusted.
+     * Stock reference being adjusted: the same freeform text key the inventory
+     * ledger aggregates by ({@code inventory_ledger_entry.stock_item_id}) — a
+     * SKU code, or a catalog product UUID rendered as text. NOT a product id:
+     * SKU codes and product/catalog ids are different things, and the
+     * adjustment must post against exactly the key the counts and movements
+     * used.
      */
-    @Column(nullable = false)
-    private UUID stockItemId;
+    @Column(nullable = false, length = 255)
+    private String stockItemId;
 
     /**
      * Cycle count task this adjustment settles, when created from a task

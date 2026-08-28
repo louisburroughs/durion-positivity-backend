@@ -2,8 +2,12 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.cyclecount.service.CycleCountPlanService;
+import com.positivity.inventory.internal.cyclecount.service.CycleCountTaskGenerationService;
+import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
+import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountTaskGenerationResponse;
+import com.positivity.inventory.internal.dto.cyclecount.plan.GenerateCycleCountTasksRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.UpdateCycleCountPlanStatusRequest;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
@@ -42,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CycleCountPlanController {
 
     private final CycleCountPlanService cycleCountPlanService;
+    private final CycleCountTaskGenerationService cycleCountTaskGenerationService;
 
     @PostMapping
     @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_CREATE", apiVersion = "1")
@@ -222,5 +227,99 @@ public class CycleCountPlanController {
                     @RequestBody
                     UpdateCycleCountPlanStatusRequest request) {
         return ResponseEntity.ok(cycleCountPlanService.updateStatus(planId, request.getStatus()));
+    }
+
+    @PostMapping("/{planId}/tasks")
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_TASK_GENERATE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:initiate"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_INITIATE + "')")
+    @Operation(
+            operationId = "generateCycleCountTasks",
+            summary = "Generate count tasks for a cycle count plan",
+            description = """
+                    Expands the plan into ASSIGNED cycle count tasks: one task per (storage location, SKU) with \
+                    positive book stock in the plan's scope, snapshotting the ledger-derived on-hand as the \
+                    expected quantity for the blind count. Scope is the plan's zones (each zone plus its known \
+                    descendant storage locations) or, for a plan without zones, every known storage location of \
+                    the plan's site.
+                    Use this tool after createCycleCountPlan to hand the count to an auditor; the tasks it creates \
+                    are then counted through submitCount on the cycle count endpoint.
+                    Preconditions: the plan must exist and be in PLANNED or STARTED status.
+                    Required inputs: planId (UUID) path parameter and auditorId in the body — every task created \
+                    by THIS pass is assigned to that auditor. Assignment is create-time-only: re-generating with \
+                    a different auditorId does not reassign the plan's existing tasks (they are reported in \
+                    tasksSkippedExisting and keep their original auditor).
+                    Emits an INVENTORY_CYCLE_COUNT_TASK_GENERATE event, and a PLANNED plan that has tasks after \
+                    the pass is transitioned to STARTED (also emitting INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE); \
+                    a pass that finds no stocked (location, SKU) pair creates nothing and leaves the plan PLANNED. \
+                    Generation is idempotent per (plan, bin, SKU): calling it again only creates tasks for pairs \
+                    that gained stock since the last pass and reports the rest as skipped.
+                    Returns 404 when the plan does not exist, and 409 when the plan is in a status that does not \
+                    accept task generation.
+                    """,
+            tags = {"Cycle Count Plans"})
+    @ApiResponse(
+            responseCode = "201",
+            description = "Count tasks generated",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CycleCountTaskGenerationResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
+    @ApiResponse(responseCode = "409", description = "Plan status does not accept task generation")
+    public ResponseEntity<CycleCountTaskGenerationResponse> generateTasks(
+            @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Auditor the generated tasks are assigned to.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Assign to auditor", value = """
+                                                                    {"auditorId":"auditor-10042"}
+                                                                    """)))
+                    @jakarta.validation.Valid
+                    @RequestBody
+                    GenerateCycleCountTasksRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(cycleCountTaskGenerationService.generateTasks(planId, request));
+    }
+
+    @GetMapping("/{planId}/tasks")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"inventory:cycle_count:view"})
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
+    @Operation(
+            operationId = "listCycleCountPlanTasks",
+            summary = "List a cycle count plan's tasks",
+            description = """
+                    Returns every count task generated from the plan, in creation order, with each task's bin, \
+                    SKU, expected quantity, assigned auditor, and workflow status.
+                    Use this tool to review a plan's progress or find taskIds for submitCount; use \
+                    getCycleCountTasksByAuditor instead to see one auditor's queue across plans.
+                    Preconditions: the plan must exist.
+                    Required inputs: planId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array for a plan whose tasks have not been generated yet, and 404 \
+                    when the plan does not exist.
+                    """,
+            tags = {"Cycle Count Plans"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Cycle count tasks returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = CycleCountTaskResponse.class))))
+    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
+    public ResponseEntity<List<CycleCountTaskResponse>> listPlanTasks(
+            @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {
+        return ResponseEntity.ok(cycleCountTaskGenerationService.getTasksForPlan(planId));
     }
 }

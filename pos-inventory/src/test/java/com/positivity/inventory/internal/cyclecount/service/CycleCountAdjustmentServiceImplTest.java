@@ -83,7 +83,7 @@ class CycleCountAdjustmentServiceImplTest {
 
     private static final String ACTOR_USER_ID = "actor-person-id-001";
     private static final String ACTOR_USERNAME = "manager-user";
-    private static final UUID STOCK_ITEM_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final String STOCK_ITEM_ID = "SKU-ADJ-TEST-001";
     private Clock clock = Clock.systemDefaultZone();
 
     @BeforeEach
