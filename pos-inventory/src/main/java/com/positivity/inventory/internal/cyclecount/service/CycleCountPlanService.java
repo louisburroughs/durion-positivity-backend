@@ -38,6 +38,17 @@ public interface CycleCountPlanService {
     @NonNull
     CycleCountPlanResponse updateStatus(@NonNull UUID planId, @NonNull CycleCountPlanStatus newStatus);
 
+    /**
+     * The PLANNED → STARTED transition as task generation performs it. Same
+     * lifecycle validation as {@link #updateStatus}, but the implementation
+     * carries {@code @EmitEvent(INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE)} so
+     * lifecycle-event consumers see this transition exactly like one made
+     * through the status endpoint (whose controller method holds the same
+     * annotation) instead of a silent status jump.
+     */
+    @NonNull
+    CycleCountPlanResponse startForTaskGeneration(@NonNull UUID planId);
+
     @NonNull
     CycleCountPlanResponse getPlan(@NonNull UUID planId);
 

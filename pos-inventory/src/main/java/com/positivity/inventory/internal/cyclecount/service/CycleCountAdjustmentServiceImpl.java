@@ -238,7 +238,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 .orElseThrow(() -> new TaskNotFoundException(adjustment.getTaskId()));
 
         if (task.getStatus() == TaskStatus.CONFLICT) {
-            recomputeVarianceAgainstCurrentOnHand(adjustment);
+            recomputeVarianceAgainstCurrentOnHand(adjustment, task);
             return;
         }
 
@@ -251,12 +251,17 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
     /**
      * Replaces the stale snapshot math with current-on-hand math: quantityChange
-     * becomes countedQuantity - currentOnHand, using the same global on-hand
-     * aggregation the posting path uses for quantityAfter. The funnel's
-     * floor-at-zero matrix still applies when the recomputed variance posts.
+     * becomes countedQuantity - currentOnHand, using the same on-hand
+     * aggregation the posting path uses for quantityAfter — scoped to the
+     * task's storage location when its bin holds a location UUID (a count of
+     * bin A must never be reconciled against the SKU's stock in bins B and C),
+     * global otherwise. The funnel's floor-at-zero matrix still applies when
+     * the recomputed variance posts.
      */
-    private void recomputeVarianceAgainstCurrentOnHand(CycleCountAdjustment adjustment) {
-        BigDecimal currentOnHand = Quantities.nz(ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId()));
+    private void recomputeVarianceAgainstCurrentOnHand(CycleCountAdjustment adjustment, CycleCountTask task) {
+        BigDecimal currentOnHand = currentOnHand(
+                adjustment.getStockItemId(),
+                CycleCountConflictDetector.locationIdOf(task).orElse(null));
         BigDecimal recomputedChange = adjustment.getCountedQuantity().subtract(currentOnHand);
         log.info(
                 "Adjustment {} approved on CONFLICT task {}: variance recomputed against current on-hand"
@@ -302,8 +307,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         log.info("Posting adjustment {} to inventory ledger", adjustment.getAdjustmentId());
 
         try {
-            BigDecimal currentOnHand =
-                    Quantities.nz(ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId()));
+            UUID locationId = taskLocationOf(adjustment);
+            BigDecimal currentOnHand = currentOnHand(adjustment.getStockItemId(), locationId);
             BigDecimal quantityAfter = currentOnHand.add(adjustment.getQuantityChange());
 
             InventoryLedgerEventType eventType = Quantities.isPositive(adjustment.getQuantityChange())
@@ -312,6 +317,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
             InventoryLedgerEntry ledgerEntry = InventoryLedgerEntry.builder()
                     .stockItemId(adjustment.getStockItemId().toString())
+                    .locationId(locationId)
                     .adjustmentId(adjustment.getAdjustmentId())
                     .eventType(eventType)
                     .changeInQuantity(adjustment.getQuantityChange())
@@ -344,6 +350,32 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new AdjustmentLedgerPostingException(
                     adjustment.getAdjustmentId(), "Failed to post adjustment to ledger", e);
         }
+    }
+
+    /**
+     * The storage location an adjustment's variance posts against: the linked task's bin when it
+     * holds a location UUID (the form plan-driven task generation writes), {@code null} for
+     * task-less adjustments and free-text bins. Carrying this onto the posted
+     * {@code COUNT_VARIANCE_*} entry is what makes a bin-scoped expected-quantity snapshot
+     * converge: without it, the correction lands on the NULL-location key and the same shrinkage
+     * is re-detected by every subsequent plan for that bin.
+     */
+    private @Nullable UUID taskLocationOf(CycleCountAdjustment adjustment) {
+        if (adjustment.getTaskId() == null) {
+            return null;
+        }
+        return taskRepository
+                .findById(adjustment.getTaskId())
+                .flatMap(CycleCountConflictDetector::locationIdOf)
+                .orElse(null);
+    }
+
+    /** Current on-hand for the SKU — location-scoped when a location is known, global otherwise. */
+    private @NonNull BigDecimal currentOnHand(@NonNull UUID stockItemId, @Nullable UUID locationId) {
+        return Quantities.nz(
+                locationId != null
+                        ? ledgerRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId)
+                        : ledgerRepository.calculateOnHandQuantity(stockItemId));
     }
 
     /**

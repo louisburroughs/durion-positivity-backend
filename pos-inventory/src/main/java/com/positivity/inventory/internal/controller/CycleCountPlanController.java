@@ -249,9 +249,11 @@ public class CycleCountPlanController {
                     Preconditions: the plan must exist and be in PLANNED or STARTED status.
                     Required inputs: planId (UUID) path parameter and auditorId in the body — every generated task \
                     is assigned to that auditor.
-                    Emits an INVENTORY_CYCLE_COUNT_TASK_GENERATE event, and a PLANNED plan is transitioned to \
-                    STARTED. Generation is idempotent per (plan, bin, SKU): calling it again only creates tasks \
-                    for pairs that gained stock since the last pass and reports the rest as skipped.
+                    Emits an INVENTORY_CYCLE_COUNT_TASK_GENERATE event, and a PLANNED plan that has tasks after \
+                    the pass is transitioned to STARTED (also emitting INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE); \
+                    a pass that finds no stocked (location, SKU) pair creates nothing and leaves the plan PLANNED. \
+                    Generation is idempotent per (plan, bin, SKU): calling it again only creates tasks for pairs \
+                    that gained stock since the last pass and reports the rest as skipped.
                     Returns 404 when the plan does not exist, and 409 when the plan is in a status that does not \
                     accept task generation.
                     """,

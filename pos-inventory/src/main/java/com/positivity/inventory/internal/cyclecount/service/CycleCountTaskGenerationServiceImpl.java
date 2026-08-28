@@ -15,11 +15,13 @@ import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -32,13 +34,15 @@ import org.springframework.transaction.annotation.Transactional;
  * Default plan → task generation.
  *
  * <p>The expected-quantity snapshot is taken from the ledger's positive per-location on-hand
- * aggregation ({@code findPositiveOnHandByLocation}) at generation time — the same source of
- * truth the adjustment posting path aggregates against — so the conflict detector's window-delta
- * math (odoo-parity I2, #1026) lines up with it exactly: any on-hand-affecting entry recorded
- * after the task's {@code createdAt} is an interfering movement against this snapshot.
+ * aggregation ({@code findPositiveOnHandByLocation}) at generation time. Task {@code binLocation}
+ * is the storage-location UUID rendered as text — the form {@code CycleCountConflictDetector}
+ * location-scopes its window queries on and {@code CycleCountAdjustmentServiceImpl} resolves for
+ * variance recomputation and the posted {@code COUNT_VARIANCE_*} entry's location, so a task's
+ * whole count → conflict → adjustment lifecycle runs against one consistent location scope.
  *
- * <p>Task {@code binLocation} is the storage-location UUID rendered as text, which is precisely
- * the form {@code CycleCountConflictDetector} location-scopes its window queries on.
+ * <p>Generation row-locks the plan for the pass, so concurrent requests for one plan serialize:
+ * the later request observes the earlier one's tasks and skips them instead of racing the
+ * (plan, bin, SKU) unique constraint into a wholesale rollback.
  */
 @Service
 @RequiredArgsConstructor
@@ -59,13 +63,15 @@ public class CycleCountTaskGenerationServiceImpl implements CycleCountTaskGenera
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final ExtStorageLocationReplicaRepository storageLocationRepository;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final CycleCountTaskResponseMapper taskResponseMapper;
 
     @Override
     @Transactional
     public @NonNull CycleCountTaskGenerationResponse generateTasks(
             @NonNull UUID planId, @NonNull GenerateCycleCountTasksRequest request) {
-        CycleCountPlan plan =
-                planRepository.findById(planId).orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
+        CycleCountPlan plan = planRepository
+                .findWithLockByPlanId(planId)
+                .orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
 
         if (plan.getStatus() != CycleCountPlanStatus.PLANNED && plan.getStatus() != CycleCountPlanStatus.STARTED) {
             throw new IllegalStateException("Cannot generate tasks for cycle count plan " + planId + " in status "
@@ -74,33 +80,50 @@ public class CycleCountTaskGenerationServiceImpl implements CycleCountTaskGenera
 
         Set<UUID> countLocations = expandCountLocations(plan);
 
-        List<CycleCountTask> created = new ArrayList<>();
+        Set<String> existingKeys = new HashSet<>();
+        for (CycleCountTask existing : taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(planId)) {
+            existingKeys.add(taskKey(existing.getBinLocation(), existing.getItemSku()));
+        }
+
+        List<CycleCountTask> toCreate = new ArrayList<>();
         int skippedExisting = 0;
         for (UUID location : countLocations) {
             String binLocation = location.toString();
             for (InventoryLedgerEntryRepository.LocationOnHand onHand : ledgerRepository.findPositiveOnHandByLocation(
                     location, InventoryLedgerEventType.onHandAffectingTypes())) {
-                if (taskRepository.existsByPlanIdAndBinLocationAndItemSku(
-                        planId, binLocation, onHand.getStockItemId())) {
+                if (!existingKeys.add(taskKey(binLocation, onHand.getStockItemId()))) {
                     skippedExisting++;
                     continue;
                 }
-                created.add(taskRepository.save(CycleCountTask.builder()
+                toCreate.add(CycleCountTask.builder()
                         .planId(planId)
                         .binLocation(binLocation)
                         .itemSku(onHand.getStockItemId())
                         .expectedQuantity(onHand.getOnHandQuantity())
                         .auditorId(request.getAuditorId())
                         .status(TaskStatus.ASSIGNED)
-                        .build()));
+                        .build());
             }
         }
+        List<CycleCountTask> created = toCreate.isEmpty() ? List.of() : taskRepository.saveAll(toCreate);
 
+        boolean planHasTasks = !created.isEmpty() || skippedExisting > 0;
         CycleCountPlanStatus planStatus = plan.getStatus();
-        if (planStatus == CycleCountPlanStatus.PLANNED) {
-            planStatus = CycleCountPlanStatus.valueOf(planService
-                    .updateStatus(planId, CycleCountPlanStatus.STARTED)
-                    .getStatus());
+        if (planStatus == CycleCountPlanStatus.PLANNED && planHasTasks) {
+            planStatus = CycleCountPlanStatus.valueOf(
+                    planService.startForTaskGeneration(planId).getStatus());
+        }
+        if (!planHasTasks) {
+            // The scope resolved to no stocked (bin, SKU) pair at all. Leave the plan PLANNED —
+            // flipping it to STARTED would fabricate an in-progress count with nothing to count —
+            // and say so, since a 201 with zero tasks is otherwise easy to misread as success.
+            log.warn(
+                    "Cycle count task generation for plan {} found no stocked (location, SKU) pairs across {}"
+                            + " scanned locations; plan left in {} — check the plan's zones/site against where its"
+                            + " ledger stock is actually located",
+                    planId,
+                    countLocations.size(),
+                    planStatus);
         }
 
         log.info(
@@ -116,7 +139,7 @@ public class CycleCountTaskGenerationServiceImpl implements CycleCountTaskGenera
                 .locationsScanned(countLocations.size())
                 .tasksCreated(created.size())
                 .tasksSkippedExisting(skippedExisting)
-                .tasks(created.stream().map(this::toTaskResponse).toList())
+                .tasks(toResponses(created))
                 .build();
     }
 
@@ -126,8 +149,23 @@ public class CycleCountTaskGenerationServiceImpl implements CycleCountTaskGenera
         if (!planRepository.existsById(planId)) {
             throw new CycleCountPlanNotFoundException(planId);
         }
-        return taskRepository.findByPlanId(planId).stream()
-                .map(this::toTaskResponse)
+        return toResponses(taskRepository.findByPlanIdOrderByCreatedAtAscTaskIdAsc(planId));
+    }
+
+    private static String taskKey(String binLocation, String itemSku) {
+        return binLocation + '|' + itemSku;
+    }
+
+    /** Maps tasks with the base-UoM lookup memoized per distinct SKU instead of one call per task. */
+    private List<CycleCountTaskResponse> toResponses(List<CycleCountTask> tasks) {
+        Map<String, Optional<String>> uomBySku = new HashMap<>();
+        return tasks.stream()
+                .map(task -> taskResponseMapper.toResponse(
+                        task,
+                        uomBySku.computeIfAbsent(
+                                        task.getItemSku(),
+                                        sku -> Optional.ofNullable(baseUnitOfMeasureResolver.resolve(sku)))
+                                .orElse(null)))
                 .toList();
     }
 
@@ -165,29 +203,5 @@ public class CycleCountTaskGenerationServiceImpl implements CycleCountTaskGenera
             frontier = children;
         }
         return expanded;
-    }
-
-    private CycleCountTaskResponse toTaskResponse(CycleCountTask task) {
-        return CycleCountTaskResponse.builder()
-                .taskId(task.getTaskId())
-                .binLocation(task.getBinLocation())
-                .itemSku(task.getItemSku())
-                .itemDescription(task.getItemDescription())
-                .expectedQuantity(task.getExpectedQuantity())
-                .unitOfMeasure(baseUnitOfMeasureResolver.resolve(task.getItemSku()))
-                .auditorId(task.getAuditorId())
-                .planId(task.getPlanId())
-                .status(task.getStatus())
-                .latestCountEntryId(task.getLatestCountEntryId())
-                .countEntriesCount(task.getCountEntriesCount())
-                .createdAt(
-                        task.getCreatedAt() != null
-                                ? LocalDateTime.ofInstant(task.getCreatedAt(), ZoneOffset.UTC)
-                                : null)
-                .updatedAt(
-                        task.getUpdatedAt() != null
-                                ? LocalDateTime.ofInstant(task.getUpdatedAt(), ZoneOffset.UTC)
-                                : null)
-                .build();
     }
 }

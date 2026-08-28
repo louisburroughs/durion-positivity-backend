@@ -18,7 +18,6 @@ import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.repository.CountEntryRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
-import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.CycleCountConflictDetector;
 import com.positivity.inventory.internal.service.CycleCountToleranceResolver;
 import com.positivity.inventory.internal.service.Quantities;
@@ -28,8 +27,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -79,7 +76,7 @@ public class CycleCountServiceImpl implements CycleCountService {
     private final CycleCountToleranceResolver toleranceResolver;
     private final UomConversionService uomConversionService;
     private final QuantityScaleGuard scaleGuard;
-    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final CycleCountTaskResponseMapper taskResponseMapper;
 
     public CycleCountServiceImpl(
             CycleCountTaskRepository taskRepository,
@@ -89,7 +86,7 @@ public class CycleCountServiceImpl implements CycleCountService {
             CycleCountToleranceResolver toleranceResolver,
             UomConversionService uomConversionService,
             QuantityScaleGuard scaleGuard,
-            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
+            CycleCountTaskResponseMapper taskResponseMapper) {
         this.taskRepository = taskRepository;
         this.countEntryRepository = countEntryRepository;
         this.clock = clock;
@@ -97,7 +94,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         this.toleranceResolver = toleranceResolver;
         this.uomConversionService = uomConversionService;
         this.scaleGuard = scaleGuard;
-        this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
+        this.taskResponseMapper = taskResponseMapper;
     }
 
     @Override
@@ -221,7 +218,7 @@ public class CycleCountServiceImpl implements CycleCountService {
     @Override
     @Transactional(readOnly = true)
     public CycleCountTaskResponse getTask(UUID taskId) {
-        return toTaskResponse(getTaskEntity(taskId));
+        return taskResponseMapper.toResponse(getTaskEntity(taskId));
     }
 
     @Override
@@ -242,7 +239,7 @@ public class CycleCountServiceImpl implements CycleCountService {
             log.info("GET /v1/inventory/cycle-count/auditor/{}/tasks", maskForLog(auditorId));
         }
         return taskRepository.findByAuditorId(auditorId).stream()
-                .map(this::toTaskResponse)
+                .map(taskResponseMapper::toResponse)
                 .toList();
     }
 
@@ -487,30 +484,6 @@ public class CycleCountServiceImpl implements CycleCountService {
                 .countedAt(countEntry.getCountedAt())
                 .limitExceeded(limitExceeded)
                 .message(message)
-                .build();
-    }
-
-    private CycleCountTaskResponse toTaskResponse(CycleCountTask task) {
-        return CycleCountTaskResponse.builder()
-                .taskId(task.getTaskId())
-                .binLocation(task.getBinLocation())
-                .itemSku(task.getItemSku())
-                .itemDescription(task.getItemDescription())
-                .expectedQuantity(task.getExpectedQuantity())
-                .unitOfMeasure(baseUnitOfMeasureResolver.resolve(task.getItemSku()))
-                .auditorId(task.getAuditorId())
-                .planId(task.getPlanId())
-                .status(task.getStatus())
-                .latestCountEntryId(task.getLatestCountEntryId())
-                .countEntriesCount(task.getCountEntriesCount())
-                .createdAt(
-                        task.getCreatedAt() != null
-                                ? LocalDateTime.ofInstant(task.getCreatedAt(), ZoneOffset.UTC)
-                                : null)
-                .updatedAt(
-                        task.getUpdatedAt() != null
-                                ? LocalDateTime.ofInstant(task.getUpdatedAt(), ZoneOffset.UTC)
-                                : null)
                 .build();
     }
 

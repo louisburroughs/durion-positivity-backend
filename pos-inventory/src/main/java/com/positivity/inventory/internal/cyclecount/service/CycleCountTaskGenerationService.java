@@ -21,7 +21,9 @@ public interface CycleCountTaskGenerationService {
      * descendant storage locations) or, for a plan without zones, every replicated storage
      * location of the plan's site — falling back to the plan's own location id when no replicas
      * exist. Idempotent per (plan, bin, SKU): re-generation only tops up pairs that gained stock
-     * since the last pass. A PLANNED plan is transitioned to STARTED after generation.
+     * since the last pass, and the plan row is locked for the pass so concurrent requests
+     * serialize. A PLANNED plan is transitioned to STARTED once it has tasks; a pass that finds
+     * no stocked pair at all leaves the plan PLANNED rather than starting an empty count.
      *
      * @throws com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException when the
      *     plan does not exist
