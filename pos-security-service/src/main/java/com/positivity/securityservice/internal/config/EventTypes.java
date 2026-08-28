@@ -95,6 +95,13 @@ public final class EventTypes {
                                 "SECURITY_USER_PERSON_LINK_REQUEST", "Request a user-person link via people-contact")
                         .apiVersion("1")
                         .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_USER_BULK_INGEST", "Bulk provision user accounts with generated passwords")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("SECURITY_USER_PERSON_LINK_BULK_INGEST", "Bulk request user-person links")
+                        .apiVersion("1")
+                        .build(),
                 EventTypeRegistration.write("SECURITY_USER_ASSIGN_ROLES", "Assign roles to a user")
                         .build(),
 

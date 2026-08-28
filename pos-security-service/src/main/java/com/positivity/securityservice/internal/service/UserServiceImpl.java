@@ -10,6 +10,8 @@ import com.positivity.securityservice.internal.exception.DuplicateUsernameExcept
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int GENERATED_PASSWORD_BYTES = 32;
+
     private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
 
     private final UserRepository userRepository;
@@ -36,6 +42,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public UserDto createUserWithGeneratedPassword(String username, Set<String> roleNames) {
+        // 32 bytes from a cryptographically strong source, hashed by createUser like any other
+        // password and then dropped: it is never returned, logged, or persisted in plaintext.
+        byte[] entropy = new byte[GENERATED_PASSWORD_BYTES];
+        SECURE_RANDOM.nextBytes(entropy);
+        String generated = Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
+        return createUser(username, generated, roleNames);
+    }
+
+    @Override
     public UserDto createUser(String username, String password, Set<String> roleNames) {
         if (userRepository.existsByUsername(username)) {
             throw new DuplicateUsernameException("Username already exists");

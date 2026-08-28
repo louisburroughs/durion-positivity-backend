@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,9 @@ class SpringBatchBulkLoadLauncherTest {
     @Mock
     Job inventoryStockCountBulkLoadJob;
 
+    @Mock
+    Job convertedPackJob;
+
     /** The job beans as Spring would supply them: every batch job in the context, keyed by name. */
     private SpringBatchBulkLoadLauncher launcher() {
         Map<String, Job> jobsByName = new HashMap<>();
@@ -72,6 +76,19 @@ class SpringBatchBulkLoadLauncherTest {
         jobsByName.put("vehicleBulkLoadJob", vehicleBulkLoadJob);
         jobsByName.put("vehicleFitmentBulkLoadJob", vehicleFitmentBulkLoadJob);
         jobsByName.put("inventoryStockCountBulkLoadJob", inventoryStockCountBulkLoadJob);
+        // The converted packs; each only has to be present for its DomainType to dispatch.
+        for (String beanName : List.of(
+                "storageLocationBulkLoadJob",
+                "bayBulkLoadJob",
+                "mobileUnitBulkLoadJob",
+                "staffingAssignmentBulkLoadJob",
+                "putawayRuleBulkLoadJob",
+                "cycleCountPlanBulkLoadJob",
+                "securityUserBulkLoadJob",
+                "userPersonLinkBulkLoadJob",
+                "mechanicSkillBulkLoadJob")) {
+            jobsByName.put(beanName, convertedPackJob);
+        }
         return new SpringBatchBulkLoadLauncher(bulkLoadAuthorizationContext, jobOperator, jobsByName);
     }
 

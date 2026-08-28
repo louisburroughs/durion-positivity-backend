@@ -57,6 +57,9 @@ public final class DomainRecordFields {
         types.put(DomainType.STAFFING_ASSIGNMENT, StaffingAssignmentLoaderRecord.class);
         types.put(DomainType.PUTAWAY_RULE, PutawayRuleLoaderRecord.class);
         types.put(DomainType.CYCLE_COUNT_PLAN, CycleCountPlanLoaderRecord.class);
+        types.put(DomainType.SECURITY_USER, SecurityUserLoaderRecord.class);
+        types.put(DomainType.USER_PERSON_LINK, UserPersonLinkLoaderRecord.class);
+        types.put(DomainType.MECHANIC_SKILL, MechanicSkillLoaderRecord.class);
         return types;
     }
 

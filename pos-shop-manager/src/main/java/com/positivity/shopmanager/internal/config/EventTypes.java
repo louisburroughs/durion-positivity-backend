@@ -40,6 +40,9 @@ public final class EventTypes {
                 EventTypeRegistration.write("SHOP_MECHANIC_SKILLS_REPLACE", "Replace a mechanic's skill set")
                         .apiVersion("1")
                         .build(),
+                EventTypeRegistration.write("SHOP_MECHANIC_SKILLS_BULK_INGEST", "Bulk set mechanics' skill sets")
+                        .apiVersion("1")
+                        .build(),
 
                 // AppointmentsController - 5 events
                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATE", "Create an appointment")

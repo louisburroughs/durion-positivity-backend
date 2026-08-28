@@ -23,6 +23,11 @@ Usage:
       --token "$SEED_BEARER_TOKEN" [--location-code CLT-MAIN-001] \
       [--bootstrap-location] [--only customer/person-customers.csv] [--dry-run]
 
+Seeded user accounts get a password generated inside pos-security-service and
+returned to no one, so they have no usable login until someone goes through the
+reset path. That is deliberate: a bulk file is uploaded and stored, and a
+password column in it would exist at rest for as long as the upload does.
+
 The bearer token needs bulkImport:upload:execute plus the per-domain create
 permissions relayed to downstream services (location:read, location:write,
 crm:party:create, for the putaway-rules pack catalog:product:view plus
@@ -51,7 +56,7 @@ FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixture
 # that references them; customers before vehicles, whose owner names the loader
 # resolves against the live party directory as it loads.
 PACK_FILES = [
-    ("security/users.csv", "@security-users"),
+    ("security/users.csv", "SECURITY_USER"),
     ("location/locations.csv", "LOCATION"),
     ("location/storage-locations.csv", "STORAGE_LOCATION"),
     ("location/site-defaults.csv", "@site-defaults"),
@@ -59,8 +64,8 @@ PACK_FILES = [
     ("location/mobile-units.csv", "MOBILE_UNIT"),
     ("people/employees.csv", "PERSON"),
     ("people/staffing-assignments.csv", "STAFFING_ASSIGNMENT"),
-    ("security/user-person-links.csv", "@user-person-links"),
-    ("shop-manager/mechanic-skills.csv", "@mechanic-skills"),
+    ("security/user-person-links.csv", "USER_PERSON_LINK"),
+    ("shop-manager/mechanic-skills.csv", "MECHANIC_SKILL"),
     ("customer/person-customers.csv", "CUSTOMER"),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER"),
     ("vehicle/vehicles.csv", "VEHICLE"),
@@ -134,59 +139,6 @@ class Gateway:
             "POST", path, body=buffer.getvalue(), content_type=f"multipart/form-data; boundary={boundary}")
 
 
-
-
-PASSWORD_OVERRIDES = {}
-CREDENTIALS_OUT = "alpha-seed-credentials.csv"
-
-
-def run_security_users(gateway, relative_path, _location_id):
-    """API pack: provision demo users via POST /security-service/users.
-
-    No password material lives in the fixture: each user's password comes from
-    the --passwords-file override when present, otherwise it is generated here
-    and written to a local (gitignored) credentials file. Passwords travel
-    plaintext over TLS and are bcrypt-hashed server-side; an existing username
-    (409) counts as already provisioned, not a failure."""
-    import secrets
-
-    csv_path = os.path.join(FIXTURE_ROOT, relative_path)
-    with open(csv_path, newline="") as fh:
-        rows = list(csv.DictReader(fh))
-
-    created, skipped, failures = 0, 0, 0
-    generated = []
-    for row in rows:
-        username = row["username"]
-        password = PASSWORD_OVERRIDES.get(username)
-        was_generated = password is None
-        if was_generated:
-            password = secrets.token_urlsafe(14)
-        status_code, _ = gateway.post_json(
-            "/security-service/users",
-            {"username": username, "password": password, "roles": row["roles"].split(";")},
-            allow_error=True,
-        )
-        if status_code == 201:
-            created += 1
-            if was_generated:
-                generated.append((username, password))
-        elif status_code == 409:
-            skipped += 1
-        else:
-            print(f"  WARN: user {username}: HTTP {status_code}")
-            failures += 1
-
-    if generated:
-        fd = os.open(CREDENTIALS_OUT, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-        with os.fdopen(fd, "a") as fh:
-            writer = csv.writer(fh)
-            for username, password in generated:
-                writer.writerow([username, password])
-        print(f"  generated credentials for {len(generated)} user(s) -> {CREDENTIALS_OUT} (keep local; gitignored)")
-
-    print(f"  users: created={created} already-existed={skipped} failures={failures} of {len(rows)}")
-    return failures == 0
 
 
 def location_id_map(gateway):
@@ -281,83 +233,7 @@ def run_site_defaults(gateway, relative_path, _location_id):
     return failures == 0
 
 
-def run_mechanic_skills(gateway, relative_path, _location_id):
-    """API pack: replace-set each mechanic's skills via pos-shop-manager.
-
-    Runs after the staffing assignments: mechanics are projected from ACTIVE
-    TECHNICIAN assignments over Kafka, so a 404 here usually means the
-    projection has not caught up yet — re-run this pack once it has. Each PUT
-    replaces the full skill set, so re-runs converge."""
-    rows = read_fixture_rows(relative_path)
-    by_employee = {}
-    for row in rows:
-        by_employee.setdefault(row["employeeNumber"], []).append(
-            {"skillCode": row["skillCode"], "proficiencyLevel": int(row["proficiencyLevel"])})
-
-    updated, failures = 0, 0
-    for employee_number, skills in by_employee.items():
-        status_code, identity = gateway.get(
-            f"/people/employees/by-number/{urllib.parse.quote(employee_number)}", allow_error=True)
-        person_id = (identity or {}).get("personId") if status_code == 200 else None
-        if person_id is None:
-            print(f"  WARN: {employee_number}: employee not found — skills skipped")
-            failures += 1
-            continue
-        status_code, _ = gateway.put_json(
-            f"/shop-manager/mechanics/by-person/{person_id}/skills", {"skills": skills}, allow_error=True)
-        if status_code == 204:
-            updated += 1
-        elif status_code == 404:
-            print(f"  WARN: {employee_number}: mechanic projection not there yet — re-run after the feed catches up")
-            failures += 1
-        else:
-            print(f"  WARN: {employee_number}: HTTP {status_code}")
-            failures += 1
-    print(f"  mechanic skills: updated={updated} failures={failures} of {len(by_employee)} mechanics")
-    return failures == 0
-
-
-def run_user_person_links(gateway, relative_path, _location_id):
-    """API pack: link user accounts to their canonical persons.
-
-    Runs after the employees pack: usernames resolve to user ids via the user
-    directory, employee numbers to person ids via getEmployeeByNumber, then
-    PUT /users/{id}/person-link queues the people-contact link command (the
-    users.person_id projection lands asynchronously). Re-runs re-queue the
-    same link, which the link consumer upserts by username."""
-    _, users = gateway.get("/security-service/users")
-    user_ids = {u["username"]: u["id"] for u in users or []}
-
-    queued, failures = 0, 0
-    for row in read_fixture_rows(relative_path):
-        user_id = user_ids.get(row["username"])
-        if user_id is None:
-            print(f"  WARN: link {row['username']}: user not found")
-            failures += 1
-            continue
-        status_code, identity = gateway.get(
-            f"/people/employees/by-number/{urllib.parse.quote(row['employeeNumber'])}", allow_error=True)
-        person_id = (identity or {}).get("personId") if status_code == 200 else None
-        if person_id is None:
-            print(f"  WARN: link {row['username']}: employee {row['employeeNumber']} not found")
-            failures += 1
-            continue
-        status_code, _ = gateway._request(
-            "PUT", f"/security-service/users/{user_id}/person-link", body={"personId": person_id}, allow_error=True)
-        if 200 <= status_code < 300:
-            queued += 1
-        else:
-            print(f"  WARN: link {row['username']}: HTTP {status_code}")
-            failures += 1
-
-    print(f"  user-person links: queued={queued} failures={failures}")
-    return failures == 0
-
-
 API_PACKS = {
-    "@mechanic-skills": run_mechanic_skills,
-    "@security-users": run_security_users,
-    "@user-person-links": run_user_person_links,
     "@site-defaults": run_site_defaults,
 }
 
@@ -447,10 +323,6 @@ def main():
                         help="Run only these pack files (repeatable, e.g. customer/person-customers.csv)")
     parser.add_argument("--poll-timeout", type=int, default=600,
                         help="Seconds to wait for each job to finish (default: 600)")
-    parser.add_argument("--passwords-file", metavar="CSV",
-                        help="Local username,password CSV overriding generated passwords (never commit it)")
-    parser.add_argument("--credentials-out", default="alpha-seed-credentials.csv",
-                        help="Where generated credentials are written (default: alpha-seed-credentials.csv; gitignored)")
     parser.add_argument("--dry-run", action="store_true", help="List planned actions without calling the gateway")
     args = parser.parse_args()
 
@@ -472,14 +344,6 @@ def main():
         parser.error("--token or $SEED_BEARER_TOKEN is required")
 
     gateway = Gateway(args.gateway, args.token)
-
-    global CREDENTIALS_OUT
-    CREDENTIALS_OUT = args.credentials_out
-    if args.passwords_file:
-        with open(args.passwords_file, newline="") as fh:
-            for row in csv.reader(fh):
-                if len(row) >= 2 and row[0] and not row[0].startswith("#"):
-                    PASSWORD_OVERRIDES[row[0]] = row[1]
 
     location_id = args.location_id or resolve_location_id(gateway, args.location_code)
     if location_id is None:

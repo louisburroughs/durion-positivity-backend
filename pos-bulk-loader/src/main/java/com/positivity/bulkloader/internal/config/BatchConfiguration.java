@@ -18,6 +18,8 @@ import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrate
 import com.positivity.bulkloader.internal.domain.InventoryStockCountRecord;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
+import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderRecord;
+import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderRecord;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
@@ -25,17 +27,23 @@ import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.SecurityUserLoaderRecord;
+import com.positivity.bulkloader.internal.domain.SecurityUserLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderRecord;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StorageLocationLoaderRecord;
 import com.positivity.bulkloader.internal.domain.StorageLocationLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.UserPersonLinkLoaderRecord;
+import com.positivity.bulkloader.internal.domain.UserPersonLinkLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
 import com.positivity.bulkloader.internal.domain.VehicleLoaderStrategy;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +91,9 @@ public class BatchConfiguration {
     private final StaffingAssignmentLoaderStrategy staffingAssignmentLoaderStrategy;
     private final PutawayRuleLoaderStrategy putawayRuleLoaderStrategy;
     private final CycleCountPlanLoaderStrategy cycleCountPlanLoaderStrategy;
+    private final SecurityUserLoaderStrategy securityUserLoaderStrategy;
+    private final UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
+    private final MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
 
     // Eureka service ids resolved through the load-balanced builder (#641); the ingest
     // writers address sibling services by discovery instead of host:port base URLs.
@@ -109,6 +120,12 @@ public class BatchConfiguration {
 
     @Value("${pos.inventory.service-id:inventory}")
     private String inventoryServiceId;
+
+    @Value("${pos.security.service-id:security-service}")
+    private String securityServiceId;
+
+    @Value("${pos.shop-manager.service-id:shop-manager}")
+    private String shopManagerServiceId;
 
     @Bean
     public Job catalogBulkLoadJob(Step catalogBulkLoadStep) {
@@ -921,6 +938,178 @@ public class BatchConfiguration {
                 this::mapCycleCountPlanPayloads);
     }
 
+    @Bean
+    public Job securityUserBulkLoadJob(Step securityUserBulkLoadStep) {
+        return jobFactory.job("securityUserBulkLoadJob", securityUserBulkLoadStep);
+    }
+
+    @Bean
+    public Step securityUserBulkLoadStep(
+            ItemStreamReader<SecurityUserLoaderRecord> securityUserReader,
+            ItemProcessor<SecurityUserLoaderRecord, NumberedRecord<SecurityUserLoaderRecord>> securityUserItemProcessor,
+            ItemWriter<NumberedRecord<SecurityUserLoaderRecord>> securityUserBulkIngestWriter) {
+        return jobFactory.step(
+                "securityUserBulkLoadStep",
+                securityUserReader,
+                securityUserItemProcessor,
+                securityUserBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<SecurityUserLoaderRecord> securityUserReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(securityUserLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<SecurityUserLoaderRecord, NumberedRecord<SecurityUserLoaderRecord>> securityUserItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                securityUserLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<SecurityUserLoaderRecord>> securityUserBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "securityUserBulkIngestWriter",
+                        DomainType.SECURITY_USER,
+                        securityServiceId,
+                        "/v1/users/bulk-ingest",
+                        "security:user:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapSecurityUserPayloads);
+    }
+
+    @Bean
+    public Job userPersonLinkBulkLoadJob(Step userPersonLinkBulkLoadStep) {
+        return jobFactory.job("userPersonLinkBulkLoadJob", userPersonLinkBulkLoadStep);
+    }
+
+    @Bean
+    public Step userPersonLinkBulkLoadStep(
+            ItemStreamReader<UserPersonLinkLoaderRecord> userPersonLinkReader,
+            ItemProcessor<UserPersonLinkLoaderRecord, NumberedRecord<UserPersonLinkLoaderRecord>>
+                    userPersonLinkItemProcessor,
+            ItemWriter<NumberedRecord<UserPersonLinkLoaderRecord>> userPersonLinkBulkIngestWriter) {
+        return jobFactory.step(
+                "userPersonLinkBulkLoadStep",
+                userPersonLinkReader,
+                userPersonLinkItemProcessor,
+                userPersonLinkBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<UserPersonLinkLoaderRecord> userPersonLinkReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(userPersonLinkLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<UserPersonLinkLoaderRecord, NumberedRecord<UserPersonLinkLoaderRecord>>
+            userPersonLinkItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                userPersonLinkLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<UserPersonLinkLoaderRecord>> userPersonLinkBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "userPersonLinkBulkIngestWriter",
+                        DomainType.USER_PERSON_LINK,
+                        securityServiceId,
+                        "/v1/users/person-link/bulk-ingest",
+                        "security:user:edit"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapUserPersonLinkPayloads);
+    }
+
+    @Bean
+    public Job mechanicSkillBulkLoadJob(Step mechanicSkillBulkLoadStep) {
+        return jobFactory.job("mechanicSkillBulkLoadJob", mechanicSkillBulkLoadStep);
+    }
+
+    @Bean
+    public Step mechanicSkillBulkLoadStep(
+            ItemStreamReader<MechanicSkillLoaderRecord> mechanicSkillReader,
+            ItemProcessor<MechanicSkillLoaderRecord, NumberedRecord<MechanicSkillLoaderRecord>>
+                    mechanicSkillItemProcessor,
+            ItemWriter<NumberedRecord<MechanicSkillLoaderRecord>> mechanicSkillBulkIngestWriter) {
+        return jobFactory.step(
+                "mechanicSkillBulkLoadStep",
+                mechanicSkillReader,
+                mechanicSkillItemProcessor,
+                mechanicSkillBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<MechanicSkillLoaderRecord> mechanicSkillReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(mechanicSkillLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<MechanicSkillLoaderRecord, NumberedRecord<MechanicSkillLoaderRecord>>
+            mechanicSkillItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                mechanicSkillLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<MechanicSkillLoaderRecord>> mechanicSkillBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "mechanicSkillBulkIngestWriter",
+                        DomainType.MECHANIC_SKILL,
+                        shopManagerServiceId,
+                        "/v1/shop-manager/mechanics/bulk-ingest",
+                        "shop:schedule:edit"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapMechanicSkillPayloads);
+    }
+
     private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {
         List<LocationWriterPayload> payloads = new ArrayList<>(items.size());
         for (LocationRecord item : items) {
@@ -1061,6 +1250,51 @@ public class BatchConfiguration {
 
     private record OpeningStockWriterPayload(
             String sku, UUID locationId, java.math.BigDecimal quantity, String unitOfMeasure, String reasonCode) {}
+
+    private List<SecurityUserWriterPayload> mapSecurityUserPayloads(List<SecurityUserLoaderRecord> items) {
+        List<SecurityUserWriterPayload> payloads = new ArrayList<>(items.size());
+        for (SecurityUserLoaderRecord item : items) {
+            payloads.add(new SecurityUserWriterPayload(item.getUsername(), splitRoles(item.getRoles())));
+        }
+        return payloads;
+    }
+
+    /** Roles are written semicolon-separated so one CSV cell can hold several without quoting. */
+    private Set<String> splitRoles(String roles) {
+        Set<String> names = new LinkedHashSet<>();
+        for (String role : roles.split(";")) {
+            if (!role.isBlank()) {
+                names.add(role.trim());
+            }
+        }
+        return names;
+    }
+
+    private record SecurityUserWriterPayload(String username, Set<String> roles) {}
+
+    private List<UserPersonLinkWriterPayload> mapUserPersonLinkPayloads(List<UserPersonLinkLoaderRecord> items) {
+        List<UserPersonLinkWriterPayload> payloads = new ArrayList<>(items.size());
+        for (UserPersonLinkLoaderRecord item : items) {
+            payloads.add(new UserPersonLinkWriterPayload(
+                    item.getUsername(), UUID.fromString(item.getPersonId().trim())));
+        }
+        return payloads;
+    }
+
+    private record UserPersonLinkWriterPayload(String username, UUID personId) {}
+
+    private List<MechanicSkillWriterPayload> mapMechanicSkillPayloads(List<MechanicSkillLoaderRecord> items) {
+        List<MechanicSkillWriterPayload> payloads = new ArrayList<>(items.size());
+        for (MechanicSkillLoaderRecord item : items) {
+            payloads.add(new MechanicSkillWriterPayload(
+                    item.getPersonId().trim(),
+                    item.getSkillCode(),
+                    Integer.parseInt(item.getProficiencyLevel().trim())));
+        }
+        return payloads;
+    }
+
+    private record MechanicSkillWriterPayload(String personId, String skillCode, int proficiencyLevel) {}
 
     // ─── payload projections for the packs converted from API scripts ────────
     //

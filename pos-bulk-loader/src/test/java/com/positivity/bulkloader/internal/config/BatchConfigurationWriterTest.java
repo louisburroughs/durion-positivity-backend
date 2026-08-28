@@ -29,13 +29,16 @@ import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
+import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.SecurityUserLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StorageLocationLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.UserPersonLinkLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
@@ -115,6 +118,15 @@ class BatchConfigurationWriterTest {
     CycleCountPlanLoaderStrategy cycleCountPlanLoaderStrategy;
 
     @Mock
+    SecurityUserLoaderStrategy securityUserLoaderStrategy;
+
+    @Mock
+    UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
+
+    @Mock
+    MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
+
+    @Mock
     RestClient.Builder restClientBuilder;
 
     @Mock
@@ -171,7 +183,10 @@ class BatchConfigurationWriterTest {
                 mobileUnitLoaderStrategy,
                 staffingAssignmentLoaderStrategy,
                 putawayRuleLoaderStrategy,
-                cycleCountPlanLoaderStrategy);
+                cycleCountPlanLoaderStrategy,
+                securityUserLoaderStrategy,
+                userPersonLinkLoaderStrategy,
+                mechanicSkillLoaderStrategy);
     }
 
     // --- catalogBulkIngestWriter ---
