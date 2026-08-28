@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.security;
+package com.positivity.securityservice.internal.security.service;
 
 import java.util.Set;
 import java.util.UUID;

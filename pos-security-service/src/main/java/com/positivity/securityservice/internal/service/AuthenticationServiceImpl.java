@@ -4,7 +4,7 @@ import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.security.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;

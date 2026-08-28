@@ -10,7 +10,7 @@ import com.positivity.securityservice.internal.dto.AccountStateResponse;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.security.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

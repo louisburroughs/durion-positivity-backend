@@ -6,7 +6,7 @@ import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.internal.security.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.shared.id.UUIDv7Generator;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;

@@ -20,7 +20,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.security.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

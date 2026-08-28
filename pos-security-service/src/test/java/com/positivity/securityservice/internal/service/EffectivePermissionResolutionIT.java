@@ -8,7 +8,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.security.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.Set;

@@ -18,7 +18,7 @@ import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.internal.security.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
