@@ -2,16 +2,10 @@ package com.positivity.inventory.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,7 +28,7 @@ class PutawayRuleRetargetStaleDestinationMigrationTest {
     /** The destination that was never a storage_location row; see the migration header. */
     private static final String STALE_DESTINATION = "96dd346a-047c-86f5-3c9a-7c8cac53da86";
 
-    /** 'Main Parts Shelf' — the destination the seed has carried since 819a3e0bb. */
+    /** 'Main Parts Shelf' — the destination the since-retired Flyway seed carried (issue #1554). */
     private static final String CORRECTED_DESTINATION = "01960004-0001-7000-8000-000000000003";
 
     private Connection connection;
@@ -151,28 +145,5 @@ class PutawayRuleRetargetStaleDestinationMigrationTest {
                         "putaway_rule",
                         "rule_id = '" + rule(2) + "' AND destination_location_id = '" + CORRECTED_DESTINATION + "'"))
                 .isEqualTo(1);
-    }
-
-    /**
-     * The migration's target must be the destination the repeatable seed carries, read from the real
-     * seed file so the two cannot drift: if the seed is ever retargeted again, this fails until a new
-     * versioned migration ships the correction to existing databases (the seed's own header says
-     * why editing its VALUES list is not enough).
-     */
-    @Test
-    @DisplayName("#1543 - the migration's corrected destination matches the seeded ANY rule's")
-    void correctedDestinationMatchesTheSeed() throws IOException {
-        Path seed = Path.of(System.getProperty("user.dir"))
-                .resolve("src/main/resources/db/migration/R__seed_reference_inventory.sql");
-        String seedSql = Files.readString(seed, StandardCharsets.UTF_8);
-
-        Matcher seededAnyRule = Pattern.compile(
-                        "VALUES \\('6f46541c-937d-397a-076f-63e092cabed6'::uuid, \\d+, 'ANY', NULL,"
-                                + " '([0-9a-f-]{36})'::uuid")
-                .matcher(seedSql);
-        assertThat(seededAnyRule.find())
-                .as("the seeded ANY putaway rule insert in R__seed_reference_inventory.sql")
-                .isTrue();
-        assertThat(seededAnyRule.group(1)).isEqualTo(CORRECTED_DESTINATION);
     }
 }

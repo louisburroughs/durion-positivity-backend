@@ -112,13 +112,14 @@ older and relied on pgcrypto, re-create it after the schema reset:
 
 Scale pos-people back up on the **new image** (collapsed baseline).
 
-On startup Flyway runs `V1__baseline_people_schema.sql` then the repeatable seeds
-(`R__seed_reference_people`, `R__seed_people_operational_data`, `R__seed_timekeeping_approval_data`).
-Hibernate `ddl-auto=validate` then checks the entities against the fresh schema.
+On startup Flyway runs `V1__baseline_people_schema.sql` then the one remaining repeatable seed
+(`R__seed_reference_people` — the operational and timekeeping-approval seeds were retired in favor
+of the API seed pipeline, #1554). Hibernate `ddl-auto=validate` then checks the entities against
+the fresh schema.
 
 - [ ] pos-people pods healthy; `GET /api/people/actuator/health` → 200.
 - [ ] No Flyway error in logs; `flyway_schema_history` has exactly one row: version 1, success=true,
-      plus the three repeatables.
+      plus the single `R__seed_reference_people` repeatable.
 
 ---
 
