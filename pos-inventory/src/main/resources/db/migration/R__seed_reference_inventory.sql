@@ -39,6 +39,12 @@ ON CONFLICT (policy_id) DO NOTHING;
 -- An operator who deletes 6f46541c... and creates their own enabled ANY rule through the API will
 -- get this one re-inserted the next time the file's checksum changes, leaving two enabled ANY rules
 -- that the CRUD layer would have refused. Retarget this rule rather than replacing it.
+--
+-- The same DO NOTHING also means a correction edited into this VALUES list never reaches a database
+-- where the row already exists — the destination retarget above only ever applied to databases
+-- seeded from empty, which left every pre-existing environment broken (issue #1543). A correction
+-- to an already-seeded value needs a versioned migration; V46__retarget_stale_putaway_rule_destination.sql
+-- is the one that repairs this row's destination, and any future correction needs its own.
 INSERT INTO putaway_rule (rule_id, priority, match_type, match_value, destination_location_id, is_enabled, created_at, updated_at)
 VALUES ('6f46541c-937d-397a-076f-63e092cabed6'::uuid, 1, 'ANY', NULL, '01960004-0001-7000-8000-000000000003'::uuid, TRUE, NOW(), NOW())
 ON CONFLICT (rule_id) DO NOTHING;

@@ -15,6 +15,7 @@ import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.putaway.service.PutawayRuleServiceImpl;
+import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import java.util.List;
 import java.util.Optional;
@@ -44,11 +45,17 @@ class PutawayRuleServiceImplTest {
     @Mock
     private PutawayRuleRepository putawayRuleRepository;
 
+    @Mock
+    private ExtStorageLocationReplicaRepository extStorageLocationReplicaRepository;
+
     private PutawayRuleServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PutawayRuleServiceImpl(putawayRuleRepository);
+        service = new PutawayRuleServiceImpl(putawayRuleRepository, extStorageLocationReplicaRepository);
+        // Destinations resolve by default so the pre-#1543 cases keep exercising what they exercise;
+        // the DestinationValidation nest overrides this to test the refusal itself.
+        when(extStorageLocationReplicaRepository.existsById(any(UUID.class))).thenReturn(true);
         when(putawayRuleRepository.saveAndFlush(any(PutawayRule.class))).thenAnswer(inv -> {
             PutawayRule saved = inv.getArgument(0);
             if (saved.getRuleId() == null) {
@@ -183,6 +190,75 @@ class PutawayRuleServiceImplTest {
             assertThat(service.createRule(request(PutawayRuleMatchType.CATEGORY, TIRES_CATEGORY.toString()))
                             .getMatchType())
                     .isEqualTo("CATEGORY");
+        }
+    }
+
+    @Nested
+    @DisplayName("destination validation (#1543)")
+    class DestinationValidation {
+
+        @Test
+        @DisplayName("refuses creating an enabled rule aimed at a bin the replica has never seen")
+        void refusesAnUnknownDestinationOnCreate() {
+            when(extStorageLocationReplicaRepository.existsById(DESTINATION)).thenReturn(false);
+            when(extStorageLocationReplicaRepository.count()).thenReturn(5L);
+            PutawayRuleRequest request = request(PutawayRuleMatchType.ANY, null);
+
+            assertThatThrownBy(() -> service.createRule(request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining(DESTINATION.toString())
+                    .hasMessageContaining("does not exist");
+
+            verify(putawayRuleRepository, never()).saveAndFlush(any(PutawayRule.class));
+        }
+
+        @Test
+        @DisplayName("refuses retargeting an enabled rule at a bin the replica has never seen")
+        void refusesAnUnknownDestinationOnUpdate() {
+            when(putawayRuleRepository.findById(RULE_ID))
+                    .thenReturn(Optional.of(entity(RULE_ID, PutawayRuleMatchType.CATEGORY, 10)));
+            when(extStorageLocationReplicaRepository.existsById(DESTINATION)).thenReturn(false);
+            when(extStorageLocationReplicaRepository.count()).thenReturn(5L);
+            PutawayRuleRequest request = request(PutawayRuleMatchType.CATEGORY, TIRES_CATEGORY.toString());
+            String ruleId = RULE_ID.toString();
+
+            assertThatThrownBy(() -> service.updateRule(ruleId, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining(DESTINATION.toString());
+
+            verify(putawayRuleRepository, never()).saveAndFlush(any(PutawayRule.class));
+        }
+
+        @Test
+        @DisplayName("a DISABLED rule may say anything — retiring a rule whose bin is gone must stay possible")
+        void allowsAnUnknownDestinationOnADisabledRule() {
+            when(extStorageLocationReplicaRepository.existsById(DESTINATION)).thenReturn(false);
+            when(extStorageLocationReplicaRepository.count()).thenReturn(5L);
+            PutawayRuleRequest request = request(PutawayRuleMatchType.ANY, null);
+            request.setIsEnabled(false);
+
+            assertThat(service.createRule(request).getIsEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("an empty replica stands the check down: hydration lag must not become a config outage")
+        void allowsAnyDestinationWhileTheReplicaIsEmpty() {
+            when(extStorageLocationReplicaRepository.existsById(DESTINATION)).thenReturn(false);
+            when(extStorageLocationReplicaRepository.count()).thenReturn(0L);
+
+            assertThat(service.createRule(request(PutawayRuleMatchType.ANY, null))
+                            .getIsEnabled())
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("a resolvable destination passes without consulting the replica row count")
+        void acceptsAKnownDestinationWithoutCounting() {
+            when(extStorageLocationReplicaRepository.existsById(DESTINATION)).thenReturn(true);
+
+            service.createRule(request(PutawayRuleMatchType.CATEGORY, TIRES_CATEGORY.toString()));
+
+            verify(extStorageLocationReplicaRepository, never()).count();
         }
     }
 
