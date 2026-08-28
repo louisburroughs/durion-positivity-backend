@@ -14,24 +14,28 @@ tags:
   name: Principal Role Management
 - description: Endpoints for JWT authentication and token management per ADR-0011
   name: JWT API
+- description: Assign and revoke roles for users
+  name: User Role Management
+- description: User-facing authentication endpoints
+  name: Auth API
+- description: Bulk provision user accounts
+  name: User Bulk Ingest API
+- description: Asynchronous audit export job management
+  name: Audit Exports
 - description: Manage roles, permissions, and user assignments
   name: Role Management
 - description: Authorization decision endpoints for principal permissions
   name: Authorization
 - description: Endpoints for user management and authentication
   name: User API
-- description: Assign and revoke roles for users
-  name: User Role Management
 - description: Central permission registry for all services
   name: Permission Registry
-- description: User-facing authentication endpoints
-  name: Auth API
 - description: Administrative queue for blocked self-registration recovery and identity review cases
   name: Self-Registration Review API
+- description: Bulk link user accounts to persons
+  name: User Person Link Bulk Ingest API
 - description: Administrative endpoints for user account state management
   name: Admin Account-State API
-- description: Asynchronous audit export job management
-  name: Audit Exports
 - description: Audit event and pricing snapshot endpoints with immutable write-once behavior
   name: Audit
 paths:
@@ -4005,6 +4009,96 @@ paths:
       - Authorization
       x-required-permissions:
       - security:authorization:decide
+  /v1/users/bulk-ingest:
+    post:
+      description: 'Provisions many user accounts at once, each with its roles attached and a password generated inside the service.
+
+        Use this tool when standing up an environment''s accounts; use createUser instead when the account needs a known password.
+
+        Preconditions: every role named must already exist.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a username and at least one role. There is deliberately no password field: a bulk file is stored, and a password in it would exist at rest for as long as the upload does.
+
+        Emits a SECURITY_USER_BULK_INGEST event and a user-created event per row; the generated passwords are returned to no one, so these accounts have no usable login until someone goes through the password reset path.
+
+        Re-running the same file is safe: an existing username is reported as already provisioned rather than as a failure.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestUsers
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Accounts:
+                description: Accounts
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - roles:
+                    - TECHNICIAN
+                    username: jane.doe
+                  - roles:
+                    - SHOP_MGR
+                    username: sam.lee
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestUserBulkIngestRecord'
+        description: User accounts to provision. No password material is accepted.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request payload
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:user:create
+      summary: Provision User Accounts in Bulk
+      tags:
+      - User Bulk Ingest API
+      x-required-permissions:
+      - security:user:create
   /v1/users/permissions:
     get:
       description: 'Returns a paged list of registered permissions, optionally filtered to a single domain.
@@ -4715,6 +4809,92 @@ paths:
       - Permission Registry
       x-required-permissions:
       - security:permission:view
+  /v1/users/person-link/bulk-ingest:
+    post:
+      description: 'Queues many user-to-person links at once, resolving each row''s username to an account.
+
+        Use this tool when connecting seeded accounts to their staff records; use linkUserPerson instead for a single account.
+
+        Preconditions: each username must name an existing account. The person id is not validated here — pos-people-contact rejects an unknown person when it processes the command, which surfaces later rather than as a row failure.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a username and a personId.
+
+        Emits a SECURITY_USER_PERSON_LINK_BULK_INGEST event and queues a link command per row; linking is asynchronous, so a successful row means the link was accepted rather than applied and the accounts should be read back to confirm the projection landed.
+
+        Re-running the same file is safe: the consumer upserts by username.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestUserPersonLinks
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Links:
+                description: Links
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    username: jane.doe
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestUserPersonLinkBulkIngestRecord'
+        description: User-to-person links to queue.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request payload
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:user:edit
+      summary: Link User Accounts to Persons in Bulk
+      tags:
+      - User Person Link Bulk Ingest API
+      x-required-permissions:
+      - security:user:edit
   /v1/users/principals/{principalId}/roles/{roleId}:
     post:
       description: 'Links a free-form principal identifier to a role in the RBAC principal matrix consulted by getAuthorizationDecision.
@@ -6201,6 +6381,120 @@ components:
       required:
       - decision
       type: object
+    BulkIngestRequestUserBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/UserBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestUserPersonLinkBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/UserPersonLinkBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestResponse:
+      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
+      properties:
+        failureCount:
+          description: Number of records that failed ingest
+          example: 2
+          format: int32
+          type: integer
+        results:
+          description: Per-record outcomes in submission order
+          items:
+            $ref: '#/components/schemas/BulkIngestResult'
+          type: array
+        successCount:
+          description: Number of records ingested successfully
+          example: 98
+          format: int32
+          type: integer
+        totalSubmitted:
+          description: Total number of records submitted in the batch
+          example: 100
+          format: int32
+          type: integer
+      required:
+      - failureCount
+      - results
+      - successCount
+      - totalSubmitted
+      type: object
+    BulkIngestResult:
+      description: Per-record outcome of a bulk ingest submission
+      properties:
+        entityId:
+          description: Identifier of the entity created/updated for this record, when successful
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        errorCode:
+          description: Machine-readable error code when the record failed
+          example: VALIDATION_FAILED
+          type: string
+        errorMessage:
+          description: Human-readable error detail when the record failed
+          example: vin must be 17 characters
+          type: string
+        rowIndex:
+          description: Zero-based index of the record within the submitted batch
+          example: 0
+          format: int32
+          type: integer
+        success:
+          description: Whether this record was ingested successfully
+          example: true
+          type: boolean
+      required:
+      - rowIndex
+      - success
+      type: object
     CatalogVersionResponse:
       description: Current permission catalog version and size
       properties:
@@ -7180,6 +7474,28 @@ components:
       required:
       - token
       type: object
+    UserBulkIngestRecord:
+      description: One user account to provision, without password material
+      properties:
+        roles:
+          description: Existing role names to attach
+          example:
+          - TECHNICIAN
+          items:
+            minLength: 1
+            type: string
+          minItems: 1
+          type: array
+          uniqueItems: true
+        username:
+          description: Unique login name
+          example: jane.doe
+          minLength: 1
+          type: string
+      required:
+      - roles
+      - username
+      type: object
     UserDto:
       description: User account view returned by user-management endpoints
       properties:
@@ -7208,6 +7524,23 @@ components:
       required:
       - id
       - roles
+      - username
+      type: object
+    UserPersonLinkBulkIngestRecord:
+      description: One link between a user account and its canonical person
+      properties:
+        personId:
+          description: Canonical person the account belongs to
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        username:
+          description: Login name of the account to link
+          example: jane.doe
+          minLength: 1
+          type: string
+      required:
+      - personId
       - username
       type: object
     UserUpdateRequest:

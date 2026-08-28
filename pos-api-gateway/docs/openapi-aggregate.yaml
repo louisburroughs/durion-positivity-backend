@@ -563,6 +563,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountAdjustments~1{adjustmentId}~1reject
   /v1/inventory/cycleCountPlans:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans
+  /v1/inventory/cycleCountPlans/bulk-ingest:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1bulk-ingest
   /v1/inventory/cycleCountPlans/{planId}:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1{planId}
   /v1/inventory/cycleCountPlans/{planId}/status:
@@ -611,6 +613,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1lots~1{lotId}~1traceability
   /v1/inventory/meta/storage-types:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1meta~1storage-types
+  /v1/inventory/opening-stock/bulk-ingest:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1opening-stock~1bulk-ingest
   /v1/inventory/pick-lists:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1pick-lists
   /v1/inventory/pick-lists/{pickListId}:
@@ -635,6 +639,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}~1accept
   /v1/inventory/purchase-suggestions/{suggestionId}/dismiss:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}~1dismiss
+  /v1/inventory/putaway/bulk-ingest:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1putaway~1bulk-ingest
   /v1/inventory/putaway/rules:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1putaway~1rules
   /v1/inventory/putaway/rules/{ruleId}:
@@ -805,12 +811,16 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1refunds
   /v1/locations:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations
+  /v1/locations/bays/bulk-ingest:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1bays~1bulk-ingest
   /v1/locations/bulk-ingest:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1bulk-ingest
   /v1/locations/parents:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1parents
   /v1/locations/roster:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1roster
+  /v1/locations/storage-locations/bulk-ingest:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1storage-locations~1bulk-ingest
   /v1/locations/{childId}/parents/{parentId}:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{childId}~1parents~1{parentId}
   /v1/locations/{locationId}:
@@ -837,6 +847,8 @@ paths:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{siteId}~1storage-locations~1{storageLocationId}
   /v1/mobile-units:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1mobile-units
+  /v1/mobile-units/bulk-ingest:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1mobile-units~1bulk-ingest
   /v1/mobile-units/{id}:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1mobile-units~1{id}
   /v1/mobile-units/{id}/coverage-rules:
@@ -1053,6 +1065,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1staffing~1assignments
   /v1/people/staffing/assignments/{assignmentId}:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1staffing~1assignments~1{assignmentId}
+  /v1/people/staffing/bulk-ingest:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1staffing~1bulk-ingest
   /v1/people/time-periods:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1time-periods
   /v1/people/time-periods/{timePeriodId}/status:
@@ -1217,6 +1231,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1authorization~1decision
   /v1/users/authorization/person-decision:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1authorization~1person-decision
+  /v1/users/bulk-ingest:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1bulk-ingest
   /v1/users/permissions:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions
   /v1/users/permissions/catalog-version:
@@ -1235,6 +1251,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1validate~1{permissionName}
   /v1/users/permissions/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1{id}
+  /v1/users/person-link/bulk-ingest:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1person-link~1bulk-ingest
   /v1/users/principals/{principalId}/roles/{roleId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1principals~1{principalId}~1roles~1{roleId}
   /v1/users/{id}:
@@ -1273,6 +1291,8 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1reschedule
   /v1/schedules/view:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1view
+  /v1/shop-manager/mechanics/bulk-ingest:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1bulk-ingest
   /v1/shop-manager/mechanics/by-person/{personId}/skills:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1by-person~1{personId}~1skills
   /v1/shop-manager/{locationId}/technicians/{personId}/person:

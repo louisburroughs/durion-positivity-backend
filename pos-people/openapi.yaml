@@ -26,6 +26,8 @@ tags:
   name: Time Period Management API
 - description: Identity-compliance reports (ADR-0015 §4)
   name: People Compliance API
+- description: Bulk import person-to-location assignments
+  name: Staffing Assignment Bulk Ingest API
 - description: Employee profile and offboarding operations
   name: Employee API
 - description: Pay-period-based timekeeping approval operations
@@ -1364,6 +1366,72 @@ paths:
       - People - Staffing Assignments
       x-required-permissions:
       - people:employee:edit
+  /v1/people/staffing/bulk-ingest:
+    post:
+      description: 'Creates many staffing assignments at once, resolving each row''s employee number to a person.
+
+        Use this tool when standing up a location''s roster or seeding an environment; use createStaffingAssignment instead for a single assignment.
+
+        Preconditions: each employee number must resolve to a person with an ACTIVE employee record, each location must be active, and no assignment may overlap an existing one for the same person, location and role.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with an employeeNumber and a role; a record''s own locationId overrides the batch one, and effectiveFrom defaults to today.
+
+        Emits a PEOPLE_STAFFING_ASSIGNMENT_BULK_INGEST event and a staffing-assignment fact per row.
+
+        Note two side effects that make this not simply additive: a new primary demotes and end-dates an overlapping existing primary, and a person''s first active assignment is forced primary whatever the flag says.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestStaffingAssignments
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Location roster:
+                description: Location roster
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - employeeNumber: EMP-0001
+                    primary: true
+                    role: LOCATION_MANAGER
+                  - employeeNumber: EMP-0002
+                    primary: true
+                    role: TECHNICIAN
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestStaffingAssignmentBulkIngestRecord'
+        description: Staffing assignments to create.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - people:employee:edit
+      summary: Assign People to Locations in Bulk
+      tags:
+      - Staffing Assignment Bulk Ingest API
+      x-required-permissions:
+      - people:employee:edit
   /v1/people/time-periods:
     post:
       description: 'Creates a pay period for a tenant with an inclusive start and end date and an initial lifecycle status.
@@ -2596,6 +2664,34 @@ components:
       - locationId
       - records
       type: object
+    BulkIngestRequestStaffingAssignmentBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/StaffingAssignmentBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
     BulkIngestResponse:
       description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
       properties:
@@ -3250,6 +3346,42 @@ components:
           type: string
       required:
       - reason
+      type: object
+    StaffingAssignmentBulkIngestRecord:
+      description: One person's assignment to a location for a role
+      properties:
+        effectiveFrom:
+          description: First day of the assignment; defaults to today when omitted, since a seeded roster is current as of the load rather than backdated.
+          example: 2026-02-16
+          format: date
+          type: string
+        effectiveTo:
+          description: Last day of the assignment; open-ended when omitted
+          example: 2026-12-31
+          format: date
+          type: string
+        employeeNumber:
+          description: Employee number of the person being assigned. Resolved to a person id here, so a file can be written without knowing ids the pipeline generates.
+          example: EMP-0001
+          minLength: 1
+          type: string
+        locationId:
+          description: Location the person is assigned to. Defaults to the request's locationId when omitted.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+          format: uuid
+          type: string
+        primary:
+          description: Whether this is the person's primary assignment
+          example: true
+          type: boolean
+        role:
+          description: Role at that location
+          example: TECHNICIAN
+          minLength: 1
+          type: string
+      required:
+      - employeeNumber
+      - role
       type: object
     StaffingAssignmentResponse:
       description: Staffing assignment response

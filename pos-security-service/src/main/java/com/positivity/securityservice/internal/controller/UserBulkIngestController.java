@@ -74,9 +74,9 @@ public class UserBulkIngestController extends AbstractBulkIngestController<UserB
                     Required inputs: jobId (UUID), locationId (UUID) and records, each with a username and at \
                     least one role. There is deliberately no password field: a bulk file is stored, and a password \
                     in it would exist at rest for as long as the upload does.
-                    Emits a SECURITY_USER_BULK_INGEST event and a user-created event per row.
-                    The generated passwords are returned to no one, so these accounts have no usable login until \
-                    someone goes through the password reset path.
+                    Emits a SECURITY_USER_BULK_INGEST event and a user-created event per row; the generated \
+                    passwords are returned to no one, so these accounts have no usable login until someone goes \
+                    through the password reset path.
                     Re-running the same file is safe: an existing username is reported as already provisioned \
                     rather than as a failure.
                     Returns 200 with a per-record result; check each result rather than the status alone.

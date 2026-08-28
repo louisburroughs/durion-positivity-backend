@@ -22,8 +22,14 @@ tags:
   name: Bay API
 - description: Operations for managing location site default settings
   name: Site Defaults API
+- description: Bulk import service bays
+  name: Bay Bulk Ingest API
+- description: Bulk import mobile units
+  name: Mobile Unit Bulk Ingest API
 - description: Operations for managing service areas
   name: Service Area API
+- description: Bulk import a site's storage topology
+  name: Storage Location Bulk Ingest API
 - description: Operations related to locations and their relationships
   name: Location API
 paths:
@@ -131,6 +137,72 @@ paths:
       - Location API
       x-required-permissions:
       - location:write
+  /v1/locations/bays/bulk-ingest:
+    post:
+      description: 'Creates many service bays at once, one per record.
+
+        Use this tool when commissioning a location or seeding an environment; use createBay instead for a single bay.
+
+        Preconditions: each row''s location must exist, and bayType must name a known bay type.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a name, a bayType and maxConcurrentVehicles; a record''s own locationId overrides the batch one.
+
+        Emits a LOCATION_BAY_BULK_INGEST event and a bay-created event per row.
+
+        Re-running the same file is safe: a bay name already present at its location is reported as already existing rather than as a failure.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestBays
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Bays:
+                description: Bays
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - bayType: GENERAL_SERVICE
+                    maxConcurrentVehicles: 1
+                    name: Bay 1
+                  - bayType: ALIGNMENT
+                    maxConcurrentVehicles: 1
+                    name: Alignment Bay
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestBayBulkIngestRecord'
+        description: Service bays to create.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - location:bay:manage
+      summary: Create Service Bays in Bulk
+      tags:
+      - Bay Bulk Ingest API
+      x-required-permissions:
+      - location:bay:manage
   /v1/locations/bulk-ingest:
     post:
       description: 'Imports a batch of location records in one call, creating each row independently and reporting per-record success or failure.
@@ -298,6 +370,74 @@ paths:
       - Location API
       x-required-permissions:
       - location:read
+  /v1/locations/storage-locations/bulk-ingest:
+    post:
+      description: 'Creates many storage locations at once, resolving each row''s parent by name and applying a non-default status as a follow-up update.
+
+        Use this tool when commissioning a site or seeding an environment; use createStorageLocation instead for a single location, and patchStorageLocation to change one that already exists.
+
+        Preconditions: each row''s site must exist, and a row naming a parent must either follow that parent in the same batch or name one already at the site.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a name and a type; a record''s own siteId overrides the batch one.
+
+        Emits a LOCATION_STORAGE_LOCATION_BULK_INGEST event, and a storage-location fact per created row, which is what hydrates the pos-inventory replica.
+
+        Re-running the same file is safe: a name already present at its site is skipped, not failed, and an existing location is never modified — applying a changed status or capacity to a live location is an operator''s update, not a reseed.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestStorageLocations
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Shelf and bins:
+                description: Shelf and bins
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - name: Parts Shelf A
+                    storageCategoryCode: GENERAL
+                    type: SHELF
+                  - maxUnitCount: 500
+                    name: Bin A-01
+                    parentName: Parts Shelf A
+                    storageCategoryCode: SMALL_PARTS_BIN
+                    type: BIN
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestStorageLocationBulkIngestRecord'
+        description: Storage locations to create, parents before their children.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - location:write
+      summary: Create a Site's Storage Topology in Bulk
+      tags:
+      - Storage Location Bulk Ingest API
+      x-required-permissions:
+      - location:write
   /v1/locations/{childId}/parents/{parentId}:
     post:
       description: 'Creates a typed parent-child edge between two existing locations, giving the child at most one parent per relationship type.
@@ -1630,6 +1770,71 @@ paths:
       - Mobile Unit API
       x-required-permissions:
       - location:mobile-unit:manage
+  /v1/mobile-units/bulk-ingest:
+    post:
+      description: 'Creates many mobile units at once, one per record.
+
+        Use this tool when commissioning a fleet or seeding an environment; use createMobileUnit instead for a single unit.
+
+        Preconditions: each row''s base location must exist. A unit created ACTIVE must also carry a travel buffer policy, capabilities and coverage rules, which this record does not express — so seed units INACTIVE and activate them through createMobileUnit or a later update.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a name; a record''s own baseLocationId overrides the batch one.
+
+        Emits a LOCATION_MOBILE_UNIT_MANAGE event and a unit-created event per row.
+
+        Re-running the same file is safe: a name already present at its base location is reported as already existing rather than as a failure.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestMobileUnits
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Mobile units:
+                description: Mobile units
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - name: Van 01
+                    status: INACTIVE
+                  - name: Van 02
+                    notes: Mobile tyre fitting
+                    status: INACTIVE
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestMobileUnitBulkIngestRecord'
+        description: Mobile units to create.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - location:mobile-unit:manage
+      summary: Create Mobile Units in Bulk
+      tags:
+      - Mobile Unit Bulk Ingest API
+      x-required-permissions:
+      - location:mobile-unit:manage
   /v1/mobile-units/{id}:
     get:
       description: 'Returns a single mobile unit with its status, base location, capability ids and travel buffer policy reference.
@@ -2233,6 +2438,39 @@ paths:
       - location:travel-buffer-policy:manage
 components:
   schemas:
+    BayBulkIngestRecord:
+      description: One service bay to create at a location
+      properties:
+        bayType:
+          description: Bay type
+          example: GENERAL_SERVICE
+          minLength: 1
+          type: string
+        locationId:
+          description: Location the bay belongs to. Defaults to the request's locationId when omitted.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+          format: uuid
+          type: string
+        maxConcurrentVehicles:
+          description: How many vehicles the bay holds at once
+          example: 1
+          format: int32
+          minimum: 1
+          type: integer
+        name:
+          description: Name of the bay, unique within its location
+          example: Bay 1
+          minLength: 1
+          type: string
+        status:
+          description: Bay status; defaults to ACTIVE
+          example: ACTIVE
+          type: string
+      required:
+      - bayType
+      - maxConcurrentVehicles
+      - name
+      type: object
     BayCapacityRequest:
       description: Capacity configuration for a service bay
       properties:
@@ -2386,6 +2624,34 @@ components:
       - locationId
       - name
       type: object
+    BulkIngestRequestBayBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/BayBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
     BulkIngestRequestLocationBulkIngestRecord:
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
@@ -2407,6 +2673,62 @@ components:
           description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/LocationBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestMobileUnitBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/MobileUnitBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestStorageLocationBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/StorageLocationBulkIngestRecord'
           minItems: 1
           type: array
       required:
@@ -2993,6 +3315,30 @@ components:
       - exists
       - locationId
       type: object
+    MobileUnitBulkIngestRecord:
+      description: One mobile unit to create
+      properties:
+        baseLocationId:
+          description: Location the unit is based at. Defaults to the request's locationId when omitted.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+          format: uuid
+          type: string
+        name:
+          description: Name of the unit, unique for its base location
+          example: Van 01
+          minLength: 1
+          type: string
+        notes:
+          description: Free-text notes
+          example: Mobile tyre fitting
+          type: string
+        status:
+          description: Unit status; defaults to INACTIVE. A unit created ACTIVE must also carry a travel buffer policy, capabilities and coverage rules, none of which this record expresses — so an ACTIVE row is rejected by the service rather than created half-configured.
+          example: INACTIVE
+          type: string
+      required:
+      - name
+      type: object
     MobileUnitRequest:
       description: Request payload for creating or updating a mobile unit
       properties:
@@ -3401,6 +3747,76 @@ components:
           type: boolean
         unsorted:
           type: boolean
+      type: object
+    StorageLocationBulkIngestRecord:
+      description: One storage location to create at a site
+      properties:
+        allowNewProduct:
+          description: Mixing policy for new products
+          enum:
+          - MIXED
+          - SAME_PRODUCT_ONLY
+          - EMPTY_ONLY
+          example: MIXED
+          type: string
+        hazardContainment:
+          description: Whether the location has spill containment
+          example: false
+          type: boolean
+        maxUnitCount:
+          description: Maximum units the location holds. This is the cap only — the fill is real stock, never a declared number.
+          example: 500
+          format: int32
+          type: integer
+        name:
+          description: Name of the storage location, unique within its site
+          example: Bin A-01
+          minLength: 1
+          type: string
+        parentName:
+          description: Name of the parent location within the same site. Resolved against locations already at the site and those created earlier in the same batch, so a file may create a shelf and its bins in one call as long as the shelf comes first.
+          example: Parts Shelf A
+          type: string
+        siteId:
+          description: Site the location belongs to. Defaults to the request's locationId when omitted, so a single-site file need not repeat it.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+          format: uuid
+          type: string
+        status:
+          description: Status to apply. Creation always produces an ACTIVE location, so anything else is applied as a follow-up update.
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - MAINTENANCE
+          - QUARANTINED
+          example: INACTIVE
+          type: string
+        storageCategoryCode:
+          description: 'What the location is fit to hold, which is independent of its physical type: a tire rack and a bulk pallet area are both shelves or floors.'
+          enum:
+          - TIRE_RACK
+          - OIL_STORAGE
+          - BATTERY_RACK
+          - SMALL_PARTS_BIN
+          - BULK_FLOOR
+          - STAGING
+          - QUARANTINE
+          - GENERAL
+          example: SMALL_PARTS_BIN
+          type: string
+        type:
+          description: Physical topology of the location
+          enum:
+          - FLOOR
+          - SHELF
+          - BIN
+          - CAGE
+          - TRUCK
+          example: BIN
+          type: string
+      required:
+      - name
+      - type
       type: object
     StorageLocationPatchRequest:
       description: Partial update payload for a storage location; null fields are left unchanged

@@ -82,9 +82,9 @@ public class UserPersonLinkBulkIngestController extends AbstractBulkIngestContro
                     surfaces later rather than as a row failure.
                     Required inputs: jobId (UUID), locationId (UUID) and records, each with a username and a \
                     personId.
-                    Emits a SECURITY_USER_PERSON_LINK_BULK_INGEST event and queues a link command per row.
-                    Linking is asynchronous: a successful row means the link was accepted, not applied, so read \
-                    the accounts back to confirm the projection landed.
+                    Emits a SECURITY_USER_PERSON_LINK_BULK_INGEST event and queues a link command per row; \
+                    linking is asynchronous, so a successful row means the link was accepted rather than applied \
+                    and the accounts should be read back to confirm the projection landed.
                     Re-running the same file is safe: the consumer upserts by username.
                     Returns 200 with a per-record result; check each result rather than the status alone.
                     """)
