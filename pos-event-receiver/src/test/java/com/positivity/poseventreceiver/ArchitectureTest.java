@@ -7,11 +7,22 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import java.lang.annotation.Annotation;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * ArchUnit tests enforcing architecture rules for pos-event-receiver module.
@@ -30,6 +41,84 @@ public class ArchitectureTest {
 
                 public boolean test(JavaCall<?> input) {
                     return input.getTargetOwner().isEquivalentTo(UUID.class) && "randomUUID".equals(input.getName());
+                }
+            };
+
+    // --- Support for mapped_controller_methods_should_require_authorization ---
+    //
+    // pos-event-receiver has no spring-security dependency, so its controllers cannot carry
+    // @PreAuthorize. Instead EventsApiSecurityFilter (a plain servlet filter, see
+    // internal/config/EventsApiSecurityFilter.java) enforces the shared X-Events-Api-Secret
+    // header. That filter's actual guard is narrower than "every controller in this module":
+    // it lets all GET/HEAD/OPTIONS requests through unauthenticated (any path), and otherwise
+    // only checks the secret for requests whose path starts with /v1/events or /v1/eventTypes.
+    // A mutating endpoint mapped anywhere else would be unauthenticated in production AND, if the
+    // exemption were keyed on the controller package instead of the mapping path, invisible to
+    // this rule. So the exemption below is keyed on the method's own declared request-mapping
+    // path (class-level @RequestMapping path + method-level mapping path), mirroring the filter's
+    // real routing logic instead of the package the controller happens to live in.
+    private static final List<Class<? extends Annotation>> REQUEST_MAPPING_ANNOTATIONS =
+            List.of(RequestMapping.class, PostMapping.class, PutMapping.class, DeleteMapping.class, PatchMapping.class);
+
+    private static String[] mappingPathAttribute(Annotation mapping, String attribute) {
+        try {
+            return (String[]) mapping.annotationType().getMethod(attribute).invoke(mapping);
+        } catch (ReflectiveOperationException e) {
+            return new String[0];
+        }
+    }
+
+    private static String firstMappingPath(Annotation mapping) {
+        String[] values = mappingPathAttribute(mapping, "value");
+        if (values.length == 0) {
+            values = mappingPathAttribute(mapping, "path");
+        }
+        return values.length > 0 ? values[0] : "";
+    }
+
+    private static String classLevelMappingPath(JavaClass owner) {
+        return owner.tryGetAnnotationOfType(RequestMapping.class)
+                .map(ArchitectureTest::firstMappingPath)
+                .orElse("");
+    }
+
+    private static String methodLevelMappingPath(JavaMethod method) {
+        for (Class<? extends Annotation> mappingType : REQUEST_MAPPING_ANNOTATIONS) {
+            if (method.isAnnotatedWith(mappingType)) {
+                return firstMappingPath(method.getAnnotationOfType(mappingType));
+            }
+        }
+        return "";
+    }
+
+    // Endpoints EventsApiSecurityFilter actually protects: GET-mapped methods are exempt on any
+    // path (the filter's SAFE_METHODS allowlist lets all reads through unauthenticated), and every
+    // other mapped method is exempt only when its resolved path is under /v1/events or
+    // /v1/eventTypes -- the two prefixes the filter checks the shared secret against.
+    private static final DescribedPredicate<JavaMethod> GUARDED_BY_EVENTS_API_SECURITY_FILTER =
+            new DescribedPredicate<>("is mapped to GET (exempt on any path, per EventsApiSecurityFilter's SAFE_METHODS "
+                    + "allowlist) or to a path under /v1/events or /v1/eventTypes (the paths "
+                    + "EventsApiSecurityFilter checks the shared secret against)") {
+
+                @Override
+                public boolean test(JavaMethod method) {
+                    if (method.isAnnotatedWith(GetMapping.class)) {
+                        return true;
+                    }
+                    String path = classLevelMappingPath(method.getOwner()) + methodLevelMappingPath(method);
+                    return path.startsWith("/v1/events") || path.startsWith("/v1/eventTypes");
+                }
+            };
+
+    private static final DescribedPredicate<JavaMethod> ANNOTATED_WITH_PRE_AUTHORIZE =
+            new DescribedPredicate<>(
+                    "annotated with @PreAuthorize, or declared in a class annotated with @PreAuthorize") {
+
+                @Override
+                public boolean test(JavaMethod method) {
+                    return method.isAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+                            || method.getOwner()
+                                    .isAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize");
                 }
             };
 
@@ -137,27 +226,23 @@ public class ArchitectureTest {
             .areAnnotatedWith("org.springframework.web.bind.annotation.DeleteMapping")
             .or()
             .areAnnotatedWith("org.springframework.web.bind.annotation.PatchMapping")
-            .should()
-            .beAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
-            .orShould()
-            .beDeclaredInClassesThat()
-            .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
             // Documented exemption: pos-event-receiver is the internal event-ingestion hub
             // (not reached through the API gateway; see the architecture diagram in
             // CLAUDE.md) and carries no spring-security dependency at all, so its controllers
             // cannot declare @PreAuthorize. Authorization instead lives at the servlet-filter
-            // layer in EventsApiSecurityFilter, which validates the shared X-Events-Api-Secret
-            // header on every mutating request to /v1/events/** and /v1/eventTypes/**; GET
-            // reads are intentionally left open, matching the filter's own SAFE_METHODS
-            // allowlist. The exemption is scoped to this module's controller package only.
-            .orShould()
-            .beDeclaredInClassesThat()
-            .resideInAPackage("com.positivity.poseventreceiver.internal.controller..")
+            // layer in EventsApiSecurityFilter. The exemption below is keyed on each method's
+            // own declared request-mapping path (GUARDED_BY_EVENTS_API_SECURITY_FILTER above),
+            // not on the controller package, so a mapped method the filter does not actually
+            // guard -- e.g. a mutating endpoint added under some other path -- fails this rule
+            // instead of being silently exempted.
+            .should(ArchCondition.from(ANNOTATED_WITH_PRE_AUTHORIZE.or(GUARDED_BY_EVENTS_API_SECURITY_FILTER)))
             .allowEmptyShould(true)
             .because("all HTTP endpoints must declare authorization guards, except pos-event-receiver's"
-                    + " controllers: this module uses shared-secret auth via EventsApiSecurityFilter"
-                    + " (X-Events-Api-Secret) rather than gateway-issued JWT/@PreAuthorize, and has no"
-                    + " spring-security dependency to carry the annotation with");
+                    + " methods that EventsApiSecurityFilter actually protects: GET-mapped methods (its"
+                    + " SAFE_METHODS allowlist lets all reads through unauthenticated, on any path) and"
+                    + " methods mapped under /v1/events or /v1/eventTypes (the only paths the filter"
+                    + " checks the shared X-Events-Api-Secret header against); this module has no"
+                    + " spring-security dependency to carry a @PreAuthorize annotation with");
 
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices().matching(
