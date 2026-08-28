@@ -1,6 +1,6 @@
 package com.positivity.events;
 
-import com.positivity.events.service.EventEmissionService;
+import com.positivity.events.internal.service.EventEmissionService;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;

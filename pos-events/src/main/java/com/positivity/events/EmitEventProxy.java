@@ -1,6 +1,6 @@
 package com.positivity.events;
 
-import com.positivity.events.service.EventEmissionService;
+import com.positivity.events.internal.service.EventEmissionService;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;

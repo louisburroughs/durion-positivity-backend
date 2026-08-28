@@ -1,6 +1,6 @@
 package com.positivity.events;
 
-import com.positivity.events.service.EventEmissionService;
+import com.positivity.events.internal.service.EventEmissionService;
 import java.lang.reflect.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

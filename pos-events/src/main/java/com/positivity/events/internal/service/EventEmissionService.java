@@ -1,4 +1,4 @@
-package com.positivity.events.service;
+package com.positivity.events.internal.service;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.events.EmitEventAspect;
