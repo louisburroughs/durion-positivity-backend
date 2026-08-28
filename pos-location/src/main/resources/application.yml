@@ -12,6 +12,12 @@ spring:
       ddl-auto: validate
   flyway:
     out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
+    # R__seed_location_2_operational_data.sql was retired in favour of the alpha
+    # fixture packs (docs/DATA_SEED_STRATEGY.md, #1554). Environments that ran it
+    # keep its schema-history row, which default validation flags as "applied
+    # migration not resolved locally" and which fails startup. Ignore missing
+    # repeatables only - versioned-migration validation stays fully enforced.
+    ignore-migration-patterns: "repeatable:missing"
   kafka:
     bootstrap-servers:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
