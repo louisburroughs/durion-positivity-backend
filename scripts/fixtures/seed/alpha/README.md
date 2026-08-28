@@ -478,8 +478,11 @@ validation; the `ext_storage_location` replica is hydrated by the location pack'
 facts independently of this ordering.)
 
 Adjustments are deltas, so a naive re-run would double stock; the driver checks
-`GET /inventory/availability/by-sku?productSku=…&storageLocationId=…` first and
-skips any SKU already stocked at its destination, making re-runs converge.
+`GET /inventory/inventory/availability/by-sku?productSku=…&storageLocationId=…` first and
+skips any SKU already stocked at its destination, making re-runs converge. One edge: if a row's
+approve call fails after ingest, its PENDING adjustment is left behind while on-hand stays 0, so a
+re-run files a second adjustment for that key — cancel or approve the orphan first (approving it
+*after* a successful re-run would double that row's stock).
 
 **Known deltas:**
 

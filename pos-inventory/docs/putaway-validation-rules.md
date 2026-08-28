@@ -295,9 +295,11 @@ through the application layer, with an `@EmitEvent` audit trail, rather than by 
 keeps the rule's current enabled state, so a PUT that only retunes a priority cannot silently
 re-enable a rule somebody deliberately disabled.
 
-Only the terminal `ANY` rule is Flyway-seeded (`R__seed_reference_inventory.sql`). Category- and
-SKU-specific rules are Tier 2 per `docs/DATA_SEED_STRATEGY.md` §2 and enter through this API or the
-CSV fixture pack. The compatibility matrix, by contrast, is Tier 1 Flyway: it is service-private,
+No putaway rule is Flyway-seeded (#1554 retired the seeded terminal `ANY` rule along with the
+invented storage-location ids it pointed at). All rules — the terminal `ANY` fallback included —
+are Tier 2 per `docs/DATA_SEED_STRATEGY.md` §2 and enter through this API or the
+`scripts/fixtures/seed/alpha/inventory/putaway-rules.csv` fixture pack; a fresh environment has no
+rules (and putaway dead-ends with `NoPutawayRuleMatchException`) until that pack runs. The compatibility matrix, by contrast, is Tier 1 Flyway: it is service-private,
 environment-invariant, crosses no domain wall and has no audited lifecycle.
 
 ## Rollout: the replica ships empty
