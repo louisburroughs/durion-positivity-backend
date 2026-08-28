@@ -6,7 +6,6 @@ import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
-import com.positivity.vehicle.service.VehiclePreferencesService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Map;
 import java.util.Optional;

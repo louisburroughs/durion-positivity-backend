@@ -18,8 +18,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
-import com.positivity.vehicle.service.VehicleFactReplayService;
-import com.positivity.vehicle.service.VehicleService;
+import com.positivity.vehicle.internal.service.VehicleFactReplayService;
+import com.positivity.vehicle.internal.service.VehicleService;
 import jakarta.persistence.EntityNotFoundException;
 import java.net.URI;
 import java.util.Optional;

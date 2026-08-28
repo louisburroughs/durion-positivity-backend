@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
-import com.positivity.vehicle.service.VehicleSearchService;
+import com.positivity.vehicle.internal.service.VehicleSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

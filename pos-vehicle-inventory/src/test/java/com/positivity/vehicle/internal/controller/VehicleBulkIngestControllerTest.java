@@ -10,7 +10,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.VehicleBulkIngestRecord;
-import com.positivity.vehicle.service.VehicleService;
+import com.positivity.vehicle.internal.service.VehicleService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

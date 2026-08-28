@@ -4,7 +4,6 @@ import com.positivity.vehicle.internal.dao.VehicleDao;
 import com.positivity.vehicle.internal.dto.VehicleLegacyMapper;
 import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
-import com.positivity.vehicle.service.VehicleLegacyService;
 import java.time.Clock;
 import java.time.Year;
 import java.util.List;

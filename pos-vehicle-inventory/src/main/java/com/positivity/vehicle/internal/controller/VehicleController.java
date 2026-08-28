@@ -3,7 +3,7 @@ package com.positivity.vehicle.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
-import com.positivity.vehicle.service.VehicleLegacyService;
+import com.positivity.vehicle.internal.service.VehicleLegacyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

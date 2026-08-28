@@ -1,6 +1,5 @@
 package com.positivity.vehicle.internal.config;
 
-import com.positivity.vehicle.service.OutboxReplayService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

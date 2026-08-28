@@ -1,4 +1,4 @@
-package com.positivity.vehicle.service;
+package com.positivity.vehicle.internal.config;
 
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
