@@ -10,6 +10,8 @@ import com.positivity.bulkloader.internal.domain.CommercialCustomerLoaderStrateg
 import com.positivity.bulkloader.internal.domain.CommercialCustomerRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
+import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.InventoryStockCountRecord;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
@@ -62,6 +64,7 @@ public class BatchConfiguration {
     private final BasePriceLoaderStrategy basePriceLoaderStrategy;
     private final VehicleLoaderStrategy vehicleLoaderStrategy;
     private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
+    private final InventoryStockCountLoaderStrategy inventoryStockCountLoaderStrategy;
 
     // Eureka service ids resolved through the load-balanced builder (#641); the ingest
     // writers address sibling services by discovery instead of host:port base URLs.
@@ -85,6 +88,9 @@ public class BatchConfiguration {
 
     @Value("${pos.vehicle-fitment.service-id:vehicle-fitment}")
     private String vehicleFitmentServiceId;
+
+    @Value("${pos.inventory.service-id:inventory}")
+    private String inventoryServiceId;
 
     @Bean
     public Job catalogBulkLoadJob(Step catalogBulkLoadStep) {
@@ -507,6 +513,64 @@ public class BatchConfiguration {
                 this::mapFitmentPayloads);
     }
 
+    @Bean
+    public Job inventoryStockCountBulkLoadJob(Step inventoryStockCountBulkLoadStep) {
+        return jobFactory.job("inventoryStockCountBulkLoadJob", inventoryStockCountBulkLoadStep);
+    }
+
+    @Bean
+    public Step inventoryStockCountBulkLoadStep(
+            ItemStreamReader<InventoryStockCountRecord> inventoryStockCountReader,
+            ItemProcessor<InventoryStockCountRecord, NumberedRecord<InventoryStockCountRecord>>
+                    inventoryStockCountItemProcessor,
+            ItemWriter<NumberedRecord<InventoryStockCountRecord>> inventoryStockCountBulkIngestWriter) {
+        return jobFactory.step(
+                "inventoryStockCountBulkLoadStep",
+                inventoryStockCountReader,
+                inventoryStockCountItemProcessor,
+                inventoryStockCountBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<InventoryStockCountRecord> inventoryStockCountReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(inventoryStockCountLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<InventoryStockCountRecord, NumberedRecord<InventoryStockCountRecord>>
+            inventoryStockCountItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                inventoryStockCountLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<InventoryStockCountRecord>> inventoryStockCountBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "inventoryStockCountBulkIngestWriter",
+                        DomainType.INVENTORY_STOCK_COUNT,
+                        inventoryServiceId,
+                        "/v1/inventory/opening-stock/bulk-ingest",
+                        "inventory:adjustment:create,inventory:adjustment:approve"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapOpeningStockPayloads);
+    }
+
     private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {
         List<LocationWriterPayload> payloads = new ArrayList<>(items.size());
         for (LocationRecord item : items) {
@@ -625,6 +689,30 @@ public class BatchConfiguration {
             return null;
         }
     }
+
+    /**
+     * Projects opening-stock rows onto the ingest DTO.
+     *
+     * <p>The two name columns exist only so the file can be written without ids; by this point they
+     * have done their job and are dropped, and the quantity becomes a number. A row whose quantity
+     * will not parse cannot reach here — validation rejects it first — so this stays a
+     * straightforward conversion rather than another place errors can hide.
+     */
+    private List<OpeningStockWriterPayload> mapOpeningStockPayloads(List<InventoryStockCountRecord> items) {
+        List<OpeningStockWriterPayload> payloads = new ArrayList<>(items.size());
+        for (InventoryStockCountRecord item : items) {
+            payloads.add(new OpeningStockWriterPayload(
+                    item.getSku(),
+                    UUID.fromString(item.getLocationId().trim()),
+                    new java.math.BigDecimal(item.getQuantity().trim()),
+                    item.getUnitOfMeasure(),
+                    item.getReasonCode()));
+        }
+        return payloads;
+    }
+
+    private record OpeningStockWriterPayload(
+            String sku, UUID locationId, java.math.BigDecimal quantity, String unitOfMeasure, String reasonCode) {}
 
     private record LocationWriterPayload(
             String name,

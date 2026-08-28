@@ -2,6 +2,7 @@ package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -12,7 +13,6 @@ import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException
 import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.batch.core.launch.JobRestartException;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -22,36 +22,23 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
 
     private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
     private final JobOperator jobOperator;
-    private final Job catalogBulkLoadJob;
-    private final Job customerBulkLoadJob;
-    private final Job commercialCustomerBulkLoadJob;
-    private final Job locationBulkLoadJob;
-    private final Job peopleBulkLoadJob;
-    private final Job priceBulkLoadJob;
-    private final Job vehicleBulkLoadJob;
-    private final Job vehicleFitmentBulkLoadJob;
+
+    /**
+     * Every batch job in the context, keyed by bean name.
+     *
+     * <p>Injected as a map rather than one constructor parameter per domain: the loader is growing
+     * a domain per seed pack it absorbs, and a constructor that gains an argument each time makes
+     * every call site in every test churn for a change that has nothing to do with them.
+     */
+    private final Map<String, Job> jobsByName;
 
     public SpringBatchBulkLoadLauncher(
             BulkLoadAuthorizationContext bulkLoadAuthorizationContext,
             JobOperator jobOperator,
-            @Qualifier("catalogBulkLoadJob") Job catalogBulkLoadJob,
-            @Qualifier("customerBulkLoadJob") Job customerBulkLoadJob,
-            @Qualifier("commercialCustomerBulkLoadJob") Job commercialCustomerBulkLoadJob,
-            @Qualifier("locationBulkLoadJob") Job locationBulkLoadJob,
-            @Qualifier("peopleBulkLoadJob") Job peopleBulkLoadJob,
-            @Qualifier("priceBulkLoadJob") Job priceBulkLoadJob,
-            @Qualifier("vehicleBulkLoadJob") Job vehicleBulkLoadJob,
-            @Qualifier("vehicleFitmentBulkLoadJob") Job vehicleFitmentBulkLoadJob) {
+            Map<String, Job> jobsByName) {
         this.bulkLoadAuthorizationContext = bulkLoadAuthorizationContext;
         this.jobOperator = jobOperator;
-        this.catalogBulkLoadJob = catalogBulkLoadJob;
-        this.customerBulkLoadJob = customerBulkLoadJob;
-        this.commercialCustomerBulkLoadJob = commercialCustomerBulkLoadJob;
-        this.locationBulkLoadJob = locationBulkLoadJob;
-        this.peopleBulkLoadJob = peopleBulkLoadJob;
-        this.priceBulkLoadJob = priceBulkLoadJob;
-        this.vehicleBulkLoadJob = vehicleBulkLoadJob;
-        this.vehicleFitmentBulkLoadJob = vehicleFitmentBulkLoadJob;
+        this.jobsByName = jobsByName;
     }
 
     @Override
@@ -89,18 +76,32 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
         }
     }
 
+    /**
+     * The batch job that loads a domain.
+     *
+     * <p>Deliberately an exhaustive switch with no default: adding a {@link DomainType} constant
+     * then fails to compile until someone says which job runs it, which is the check that stops a
+     * domain being advertised to callers before it can actually be processed.
+     */
     private Job resolveJob(DomainType domainType) {
-        return switch (domainType) {
-            case CATALOG_PRODUCT -> catalogBulkLoadJob;
-            case CUSTOMER -> customerBulkLoadJob;
-            case COMMERCIAL_CUSTOMER -> commercialCustomerBulkLoadJob;
-            case LOCATION -> locationBulkLoadJob;
-            case PERSON -> peopleBulkLoadJob;
-            case BASE_PRICE -> priceBulkLoadJob;
-            case VEHICLE -> vehicleBulkLoadJob;
-            case VEHICLE_FITMENT -> vehicleFitmentBulkLoadJob;
-            case INVENTORY_STOCK_COUNT ->
-                throw new IllegalStateException("No Spring Batch job is configured for domain type: " + domainType);
-        };
+        String beanName =
+                switch (domainType) {
+                    case CATALOG_PRODUCT -> "catalogBulkLoadJob";
+                    case CUSTOMER -> "customerBulkLoadJob";
+                    case COMMERCIAL_CUSTOMER -> "commercialCustomerBulkLoadJob";
+                    case LOCATION -> "locationBulkLoadJob";
+                    case PERSON -> "peopleBulkLoadJob";
+                    case BASE_PRICE -> "priceBulkLoadJob";
+                    case VEHICLE -> "vehicleBulkLoadJob";
+                    case VEHICLE_FITMENT -> "vehicleFitmentBulkLoadJob";
+                    case INVENTORY_STOCK_COUNT -> "inventoryStockCountBulkLoadJob";
+                };
+
+        Job job = jobsByName.get(beanName);
+        if (job == null) {
+            throw new IllegalStateException(
+                    "No Spring Batch job bean named '%s' for domain type: %s".formatted(beanName, domainType));
+        }
+        return job;
     }
 }

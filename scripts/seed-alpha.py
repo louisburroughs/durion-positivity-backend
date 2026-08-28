@@ -27,8 +27,8 @@ The bearer token needs bulkImport:upload:execute plus the per-domain create
 permissions relayed to downstream services (location:read, location:write,
 crm:party:create, for the putaway-rules pack catalog:product:view plus
 inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
-pack inventory:adjustment:create, inventory:adjustment:approve and
-inventory:availability:read, and for the cycle-count-plans pack
+pack inventory:adjustment:create and inventory:adjustment:approve, and for the
+cycle-count-plans pack
 inventory:cycle_count:view and inventory:cycle_count:initiate).
 """
 
@@ -65,7 +65,7 @@ PACK_FILES = [
     ("vehicle/vehicles.csv", "VEHICLE"),
     ("catalog/products.csv", "CATALOG_PRODUCT"),
     ("inventory/putaway-rules.csv", "@putaway-rules"),
-    ("inventory/on-hand.csv", "@inventory-on-hand"),
+    ("inventory/on-hand.csv", "INVENTORY_STOCK_COUNT"),
     ("inventory/cycle-count-plans.csv", "@cycle-count-plans"),
 ]
 
@@ -600,93 +600,6 @@ def run_putaway_rules(gateway, relative_path, _location_id):
     return failures == 0
 
 
-def run_inventory_on_hand(gateway, relative_path, _location_id):
-    """API pack: seed initial on-hand stock through the adjustment flow
-    (issue #1554, replacing pos-inventory's Flyway inventory_ledger_entry seed).
-
-    Rows are keyed by (locationCode, storageLocationName) and resolved against
-    the site's storage-location list, then filed per site as one inventory
-    bulk-ingest batch (each accepted row becomes a PENDING adjustment request)
-    and approved row by row — the approval posts the ADJUSTMENT_IN ledger
-    entry, which is what actually creates on-hand and emits the facts the
-    ext_* replicas consume. Adjustments are deltas, so re-runs would double
-    stock; convergence comes from checking availability first and skipping any
-    SKU that already has on-hand at its destination.
-
-    Deltas vs the retired Flyway seed: entries post as ADJUSTMENT_IN rather
-    than GOODS_RECEIPT, and unit cost is not expressible through the ingest
-    record, so the seeded valuation baseline is gone — receive real stock for
-    costing demos. The token needs inventory:adjustment:create,
-    inventory:adjustment:approve and inventory:availability:read."""
-    location_ids = location_id_map(gateway)
-    storage_cache = {}
-    by_location = {}
-    for row in read_fixture_rows(relative_path):
-        by_location.setdefault(row["locationCode"], []).append(row)
-
-    filed, approved, skipped, failures = 0, 0, 0, 0
-    for code, rows in by_location.items():
-        site_id = location_ids.get(code)
-        if site_id is None:
-            print(f"  WARN: on-hand for {code}: location not found — {len(rows)} row(s) skipped")
-            failures += len(rows)
-            continue
-        names = storage_location_ids(gateway, location_ids, storage_cache, code)
-
-        records, record_rows = [], []
-        for row in rows:
-            storage_id = names.get(row["storageLocationName"])
-            if storage_id is None:
-                print(f"  WARN: on-hand {row['sku']}: {code}/{row['storageLocationName']} unresolved")
-                failures += 1
-                continue
-            query = urllib.parse.urlencode({"productSku": row["sku"], "storageLocationId": storage_id})
-            status_code, availability = gateway.get(
-                f"/inventory/inventory/availability/by-sku?{query}", allow_error=True)
-            if status_code == 200 and float((availability or {}).get("onHandQuantity") or 0) > 0:
-                skipped += 1
-                continue
-            records.append({
-                "sku": row["sku"],
-                "quantity": float(row["quantity"]),
-                "locationId": storage_id,
-                "unitOfMeasure": row["unitOfMeasure"],
-            })
-            record_rows.append(row)
-        if not records:
-            continue
-
-        status_code, response = gateway.post_json(
-            "/inventory/inventory/bulk-ingest",
-            {"jobId": str(uuid.uuid4()), "locationId": site_id, "records": records},
-            allow_error=True)
-        if status_code != 200:
-            print(f"  WARN: on-hand for {code}: bulk-ingest HTTP {status_code} — {len(records)} row(s) not filed")
-            failures += len(records)
-            continue
-
-        for result in (response or {}).get("results", []):
-            row = record_rows[result["rowIndex"]]
-            if not result.get("success"):
-                print(f"  WARN: on-hand {row['sku']}: {result.get('errorMessage', 'ingest failed')}")
-                failures += 1
-                continue
-            filed += 1
-            status_code, _ = gateway.post_json(
-                f"/inventory/inventory/adjustments/{result['entityId']}/approve", None, allow_error=True)
-            if 200 <= status_code < 300:
-                approved += 1
-            else:
-                # The stock does not exist until approval posts the ledger entry, so a
-                # PENDING leftover is a failure of this pack, not a partial success.
-                print(f"  WARN: on-hand {row['sku']}: adjustment {result['entityId']} filed but"
-                      f" approve returned HTTP {status_code} — stock not posted")
-                failures += 1
-
-    print(f"  on-hand: filed={filed} approved={approved} already-stocked={skipped} failures={failures}")
-    return failures == 0
-
-
 def run_cycle_count_plans(gateway, relative_path, _location_id):
     """API pack: create demo cycle count plans through the plan lifecycle
     (issue #1554, replacing the cycle_count_plan/cycle_count_plan_zone rows the
@@ -838,7 +751,6 @@ API_PACKS = {
     "@mobile-units": run_mobile_units,
     "@storage-locations": run_storage_locations,
     "@putaway-rules": run_putaway_rules,
-    "@inventory-on-hand": run_inventory_on_hand,
     "@cycle-count-plans": run_cycle_count_plans,
 }
 

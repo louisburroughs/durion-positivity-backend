@@ -312,6 +312,10 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("INVENTORY_BULK_INGEST", "Bulk ingest inventory stock counts")
                         .build(),
+                EventTypeRegistration.approval(
+                                "INVENTORY_OPENING_STOCK_BULK_INGEST",
+                                "Bulk establish opening on-hand stock (files and approves an adjustment per line)")
+                        .build(),
 
                 // SupplierStockHintController - 2 events (CAP-322, #1312)
                 EventTypeRegistration.fastRead(

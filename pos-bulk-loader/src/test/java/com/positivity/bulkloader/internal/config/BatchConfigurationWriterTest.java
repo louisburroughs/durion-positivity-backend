@@ -24,6 +24,7 @@ import com.positivity.bulkloader.internal.domain.CommercialCustomerLoaderStrateg
 import com.positivity.bulkloader.internal.domain.CommercialCustomerRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
+import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
@@ -87,6 +88,9 @@ class BatchConfigurationWriterTest {
     VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
 
     @Mock
+    InventoryStockCountLoaderStrategy inventoryStockCountLoaderStrategy;
+
+    @Mock
     RestClient.Builder restClientBuilder;
 
     @Mock
@@ -136,7 +140,8 @@ class BatchConfigurationWriterTest {
                 personLoaderStrategy,
                 basePriceLoaderStrategy,
                 vehicleLoaderStrategy,
-                vehicleFitmentLoaderStrategy);
+                vehicleFitmentLoaderStrategy,
+                inventoryStockCountLoaderStrategy);
     }
 
     // --- catalogBulkIngestWriter ---

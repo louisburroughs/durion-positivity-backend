@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -38,21 +39,32 @@ class AlphaFixtureHeadersMapTest {
 
     private final RuleBasedContentDetectionServiceImpl detection = new RuleBasedContentDetectionServiceImpl();
 
-    /** The loader-backed packs: the fixture file and the domain its bulk-load job runs as. */
+    /**
+     * The loader-backed packs: the fixture file, the domain its bulk-load job runs as, and any
+     * columns the loader is meant to drop.
+     *
+     * <p>The third argument exists so that dropping a column is a decision recorded here rather
+     * than something that happens by accident. A column named in it is documentation for whoever
+     * reads the CSV; a column that ends up unmapped without being named here fails the build.
+     */
     static List<Arguments> loaderBackedPacks() {
         return List.of(
-                Arguments.of("catalog/products.csv", DomainType.CATALOG_PRODUCT),
-                Arguments.of("customer/person-customers.csv", DomainType.CUSTOMER),
-                Arguments.of("customer/commercial-customers.csv", DomainType.COMMERCIAL_CUSTOMER),
-                Arguments.of("location/locations.csv", DomainType.LOCATION),
-                Arguments.of("people/employees.csv", DomainType.PERSON),
-                Arguments.of("vehicle/vehicles.csv", DomainType.VEHICLE));
+                Arguments.of("catalog/products.csv", DomainType.CATALOG_PRODUCT, Set.<String>of()),
+                Arguments.of("customer/person-customers.csv", DomainType.CUSTOMER, Set.<String>of()),
+                Arguments.of("customer/commercial-customers.csv", DomainType.COMMERCIAL_CUSTOMER, Set.<String>of()),
+                Arguments.of("location/locations.csv", DomainType.LOCATION, Set.<String>of()),
+                Arguments.of("people/employees.csv", DomainType.PERSON, Set.<String>of()),
+                Arguments.of("vehicle/vehicles.csv", DomainType.VEHICLE, Set.<String>of()),
+                // "description" names the product for a human reading the file; the SKU is what
+                // identifies it to the service.
+                Arguments.of("inventory/on-hand.csv", DomainType.INVENTORY_STOCK_COUNT, Set.of("description")));
     }
 
     @ParameterizedTest(name = "{0} -> {1}")
     @MethodSource("loaderBackedPacks")
     @DisplayName("every fixture column maps to a field of its domain record")
-    void everyFixtureColumnMapsToATargetField(String relativePath, DomainType domainType) throws IOException {
+    void everyFixtureColumnMapsToATargetField(String relativePath, DomainType domainType, Set<String> droppedOnPurpose)
+            throws IOException {
         List<String> headers = headersOf(relativePath);
         assertThat(headers).as("%s has no header row", relativePath).isNotEmpty();
 
@@ -60,6 +72,7 @@ class AlphaFixtureHeadersMapTest {
 
         List<String> unmapped = new ArrayList<>(headers);
         unmapped.removeAll(mappings.keySet());
+        unmapped.removeAll(droppedOnPurpose);
         assertThat(unmapped)
                 .as(
                         "%s columns %s map to no field of %s — the bulk-load job would drop them"
@@ -72,7 +85,8 @@ class AlphaFixtureHeadersMapTest {
     @ParameterizedTest(name = "{0} -> {1}")
     @MethodSource("loaderBackedPacks")
     @DisplayName("no two fixture columns compete for the same target field")
-    void fixtureColumnsMapOneToOne(String relativePath, DomainType domainType) throws IOException {
+    void fixtureColumnsMapOneToOne(String relativePath, DomainType domainType, Set<String> droppedOnPurpose)
+            throws IOException {
         List<String> headers = headersOf(relativePath);
         Map<String, String> mappings = detection.suggestMappings(headers, domainType);
 
@@ -81,7 +95,7 @@ class AlphaFixtureHeadersMapTest {
         assertThat(mappings.values())
                 .as("%s maps two columns onto one field", relativePath)
                 .doesNotHaveDuplicates();
-        assertThat(mappings).hasSameSizeAs(headers);
+        assertThat(mappings).hasSize(headers.size() - droppedOnPurpose.size());
     }
 
     /**

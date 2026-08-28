@@ -66,6 +66,12 @@
       "defaultValue": "vehicle-fitment"
     },
     {
+      "name": "pos.inventory.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service id for opening-stock bulk-ingest calls to pos-inventory, and for the storage-location lookups that resolve each row's destination.",
+      "defaultValue": "inventory"
+    },
+    {
       "name": "pos.events.base-url",
       "type": "java.lang.String",
       "description": "Base URL of the pos-events/event-receiver API.",

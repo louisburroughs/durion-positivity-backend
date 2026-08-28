@@ -57,6 +57,8 @@ public class BulkLoadJobController {
                     (one of CATALOG_PRODUCT, INVENTORY_STOCK_COUNT, LOCATION, CUSTOMER, COMMERCIAL_CUSTOMER, \
                     PERSON, BASE_PRICE, VEHICLE or VEHICLE_FITMENT); locationId (UUID) is optional at creation but \
                     must be set before processing can start.
+                    INVENTORY_STOCK_COUNT establishes opening on-hand stock: each line is filed and approved, so \
+                    the token must carry inventory:adjustment:approve as well as inventory:adjustment:create.
                     Emits a BULK_LOADER_JOB_CREATE event; no file content is stored by this call.
                     Returns 201 with the new job, and 409 when the operator already has an active bulk load job \
                     in progress.

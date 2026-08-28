@@ -185,6 +185,8 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     case "qty", QUANTITY_FIELD, "on_hand", "quantity_on_hand" -> QUANTITY_FIELD;
                     case "reason_code", "reason" -> "reasonCode";
                     case "uom", "unit_of_measure" -> "unitOfMeasure";
+                    case "location_code", "site", "site_code", "warehouse" -> "locationCode";
+                    case "bin", "storage_location", "storage_location_name", "location_name" -> "storageLocationName";
                     default -> null;
                 };
             case COMMERCIAL_CUSTOMER ->

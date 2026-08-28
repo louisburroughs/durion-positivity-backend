@@ -71,6 +71,8 @@ pos:
     service-id: ${POS_VEHICLE_INVENTORY_SERVICE_ID:vehicle-inventory}
   vehicle-fitment:
     service-id: ${POS_VEHICLE_FITMENT_SERVICE_ID:vehicle-fitment}
+  inventory:
+    service-id: ${POS_INVENTORY_SERVICE_ID:inventory}
 
 bulk-loader:
   storage:

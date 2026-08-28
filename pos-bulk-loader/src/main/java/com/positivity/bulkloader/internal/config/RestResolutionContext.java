@@ -65,10 +65,24 @@ public class RestResolutionContext implements ResolutionContext {
         }
     }
 
+    /**
+     * Deliberately not {@code computeIfAbsent}: a resolution often needs another resolution to get
+     * going — a storage location's name means nothing until its site's id is known — and running a
+     * loader inside {@code computeIfAbsent} mutates the map while it is computing, which
+     * {@link HashMap} answers with a {@link java.util.ConcurrentModificationException}. Looking up,
+     * computing, then storing lets lookups nest. The worst a race could cost here is a duplicate
+     * lookup, and the step is single-threaded anyway.
+     */
     @Override
     @NonNull
     @SuppressWarnings("unchecked")
     public <R> Optional<R> memoize(@NonNull String cacheKey, @NonNull Supplier<Optional<R>> loader) {
-        return (Optional<R>) cache.computeIfAbsent(cacheKey, _ -> loader.get());
+        Optional<?> cached = cache.get(cacheKey);
+        if (cached != null) {
+            return (Optional<R>) cached;
+        }
+        Optional<R> loaded = loader.get();
+        cache.put(cacheKey, loaded);
+        return loaded;
     }
 }

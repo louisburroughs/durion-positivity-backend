@@ -43,6 +43,7 @@ public final class DomainRecordFields {
     private static Map<DomainType, Class<?>> recordTypes() {
         Map<DomainType, Class<?>> types = new EnumMap<>(DomainType.class);
         types.put(DomainType.CATALOG_PRODUCT, CatalogProductRecord.class);
+        types.put(DomainType.INVENTORY_STOCK_COUNT, InventoryStockCountRecord.class);
         types.put(DomainType.CUSTOMER, CustomerPersonRecord.class);
         types.put(DomainType.COMMERCIAL_CUSTOMER, CommercialCustomerRecord.class);
         types.put(DomainType.LOCATION, LocationRecord.class);
