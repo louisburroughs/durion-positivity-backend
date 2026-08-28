@@ -241,11 +241,11 @@ public class CycleCountPlanController {
             description = """
                     Expands the plan into ASSIGNED cycle count tasks: one task per (storage location, SKU) with \
                     positive book stock in the plan's scope, snapshotting the ledger-derived on-hand as the \
-                    expected quantity for the blind count. Scope is the plan's zones (each zone plus its known \
+                    expected quantity for the blind count; scope is the plan's zones (each zone plus its known \
                     descendant storage locations) or, for a plan without zones, every known storage location of \
                     the plan's site.
-                    Use this tool after createCycleCountPlan to hand the count to an auditor; the tasks it creates \
-                    are then counted through submitCount on the cycle count endpoint.
+                    Use this tool after createCycleCountPlan to hand the count to an auditor; do not use it to \
+                    record counted quantities — submitCount on the cycle count endpoint does that instead.
                     Preconditions: the plan must exist and be in PLANNED or STARTED status.
                     Required inputs: planId (UUID) path parameter and auditorId in the body — every task created \
                     by THIS pass is assigned to that auditor. Assignment is create-time-only: re-generating with \

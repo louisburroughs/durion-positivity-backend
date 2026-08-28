@@ -567,6 +567,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1{planId}
   /v1/inventory/cycleCountPlans/{planId}/status:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1{planId}~1status
+  /v1/inventory/cycleCountPlans/{planId}/tasks:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1{planId}~1tasks
   /v1/inventory/cycleCountSchedules:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountSchedules
   /v1/inventory/cycleCountSchedules/{scheduleId}:
