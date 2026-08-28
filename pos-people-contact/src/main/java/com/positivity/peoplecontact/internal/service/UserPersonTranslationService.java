@@ -1,4 +1,4 @@
-package com.positivity.peoplecontact.service;
+package com.positivity.peoplecontact.internal.service;
 
 import java.util.Optional;
 import java.util.UUID;

@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.peoplecontact.internal.dto.PostalAddressDto;
 import com.positivity.peoplecontact.internal.enums.PartyType;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
-import com.positivity.peoplecontact.service.PostalAddressService;
+import com.positivity.peoplecontact.internal.service.PostalAddressService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

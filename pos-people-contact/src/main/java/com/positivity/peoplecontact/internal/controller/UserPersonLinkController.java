@@ -6,7 +6,7 @@ import com.positivity.peoplecontact.internal.dto.LinkUserToPersonRequest;
 import com.positivity.peoplecontact.internal.dto.PersonResponse;
 import com.positivity.peoplecontact.internal.dto.UserPersonLinkResponse;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
-import com.positivity.peoplecontact.service.UserPersonLinkService;
+import com.positivity.peoplecontact.internal.service.UserPersonLinkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

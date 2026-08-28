@@ -1,4 +1,4 @@
-package com.positivity.peoplecontact.service;
+package com.positivity.peoplecontact.internal.service;
 
 import com.positivity.peoplecontact.internal.dto.Person;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;

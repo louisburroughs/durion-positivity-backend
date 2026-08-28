@@ -1,4 +1,4 @@
-package com.positivity.peoplecontact.service;
+package com.positivity.peoplecontact.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,7 +9,6 @@ import com.positivity.peoplecontact.internal.entity.Person;
 import com.positivity.peoplecontact.internal.entity.UserPersonLink;
 import com.positivity.peoplecontact.internal.enums.UserLinkStatus;
 import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
-import com.positivity.peoplecontact.internal.service.UserPersonTranslationServiceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Optional;
 import java.util.UUID;

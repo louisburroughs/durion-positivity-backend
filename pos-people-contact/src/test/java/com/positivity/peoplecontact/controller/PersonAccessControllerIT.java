@@ -14,7 +14,7 @@ import com.positivity.peoplecontact.BaseIntegrationTest;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
-import com.positivity.peoplecontact.service.PeopleAccessControlService;
+import com.positivity.peoplecontact.internal.service.PeopleAccessControlService;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.List;

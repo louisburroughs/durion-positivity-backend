@@ -1,4 +1,4 @@
-package com.positivity.peoplecontact.service;
+package com.positivity.peoplecontact.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,7 +17,6 @@ import com.positivity.peoplecontact.internal.exception.UserAlreadyLinkedExceptio
 import com.positivity.peoplecontact.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
-import com.positivity.peoplecontact.internal.service.UserPersonLinkServiceImpl;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

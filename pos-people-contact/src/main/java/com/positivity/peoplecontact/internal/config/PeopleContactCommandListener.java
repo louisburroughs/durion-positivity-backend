@@ -5,8 +5,8 @@ import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1;
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
 import com.positivity.peoplecontact.internal.service.LinkCommandHandler;
+import com.positivity.peoplecontact.internal.service.OutboxReplayService;
 import com.positivity.peoplecontact.internal.service.PersonUpsertCommandHandler;
-import com.positivity.peoplecontact.service.OutboxReplayService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

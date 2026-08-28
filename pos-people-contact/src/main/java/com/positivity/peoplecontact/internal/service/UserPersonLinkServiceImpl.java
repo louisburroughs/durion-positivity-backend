@@ -10,7 +10,6 @@ import com.positivity.peoplecontact.internal.exception.UserAlreadyLinkedExceptio
 import com.positivity.peoplecontact.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
-import com.positivity.peoplecontact.service.UserPersonLinkService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.List;
 import java.util.UUID;

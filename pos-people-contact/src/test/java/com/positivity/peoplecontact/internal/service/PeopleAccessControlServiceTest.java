@@ -1,4 +1,4 @@
-package com.positivity.peoplecontact.service;
+package com.positivity.peoplecontact.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,7 +13,6 @@ import com.positivity.peoplecontact.internal.client.dto.User;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
-import com.positivity.peoplecontact.internal.service.PeopleAccessControlServiceImpl;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.List;

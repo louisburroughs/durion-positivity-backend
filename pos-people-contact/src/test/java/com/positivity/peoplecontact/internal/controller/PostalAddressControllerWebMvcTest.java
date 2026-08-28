@@ -15,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.peoplecontact.config.TestSecurityConfig;
 import com.positivity.peoplecontact.internal.dto.PostalAddressDto;
 import com.positivity.peoplecontact.internal.enums.PartyType;
-import com.positivity.peoplecontact.service.PostalAddressService;
+import com.positivity.peoplecontact.internal.service.PostalAddressService;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

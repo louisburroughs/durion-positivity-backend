@@ -6,7 +6,6 @@ import com.positivity.peoplecontact.internal.entity.ProcessedEvent;
 import com.positivity.peoplecontact.internal.exception.UserAlreadyLinkedException;
 import com.positivity.peoplecontact.internal.exception.UserPersonLinkNotFoundException;
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
-import com.positivity.peoplecontact.service.UserPersonLinkService;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;

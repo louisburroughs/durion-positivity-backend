@@ -1,4 +1,4 @@
-package com.positivity.peoplecontact.service;
+package com.positivity.peoplecontact.internal.service;
 
 import com.positivity.peoplecontact.internal.dto.PostalAddressDto;
 import com.positivity.peoplecontact.internal.enums.PartyType;
