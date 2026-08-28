@@ -326,8 +326,9 @@
 		-->
 		<!-- CVE-2026-42198, CVE-2026-54291 -->
 		<postgresql.version>42.7.13</postgresql.version>
-		<!-- CVE-2026-53434, CVE-2026-55276, CVE-2026-59083, CVE-2026-59084 et al. -->
-		<tomcat.version>11.0.24</tomcat.version>
+		<!-- CVE-2026-65182, CVE-2026-65637, CVE-2026-65905, CVE-2026-66299, CVE-2026-68525 et al.
+		     (2026-08-28 scan flagged 11.0.24; 11.0.25 is the fix release published 2026-08-20) -->
+		<tomcat.version>11.0.25</tomcat.version>
 		<!-- CVE-2026-56820, CVE-2026-44891 et al. (19 CVEs fixed in 4.2.16) -->
 		<netty.version>4.2.17.Final</netty.version>
 		<!-- CVE-2026-54512 .. CVE-2026-54518 (fixed in 3.1.4) -->
