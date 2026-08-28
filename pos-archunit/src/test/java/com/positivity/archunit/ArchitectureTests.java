@@ -410,9 +410,9 @@ class ArchitectureTests {
      * via a {@code ..service..} wildcard, because that wildcard also matches
      * {@code ..internal.service..} and would flag every implementation class in the platform.
      *
-     * <p><strong>Report mode</strong> while the migration is in flight: prints the per-module
-     * census (leaking types and leaked imports) that the #1541 waves burn down. Flipping
-     * {@link #D5_ENFORCED} makes it build-failing at zero after migration.
+     * <p><strong>Build-failing at zero</strong> since the #1541 migration completed
+     * ({@link #D5_ENFORCED}). The per-module census (leaking types and leaked imports) is still
+     * printed on every run, so any future leak is named before the failure.
      */
     @Test
     void publicServicePackagesShouldNotDependOnOwnInternalPackages() {
