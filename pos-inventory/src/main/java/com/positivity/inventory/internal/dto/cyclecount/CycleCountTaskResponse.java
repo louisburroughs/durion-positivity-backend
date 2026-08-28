@@ -65,6 +65,12 @@ public class CycleCountTaskResponse {
             requiredMode = NOT_REQUIRED)
     private String auditorId;
 
+    @Schema(
+            description = "Cycle count plan the task was generated from; null for tasks created outside a plan",
+            example = "01960003-0000-7000-8000-000000000003",
+            requiredMode = NOT_REQUIRED)
+    private UUID planId;
+
     @Schema(description = "Current status of the cycle count task", example = "ASSIGNED", requiredMode = REQUIRED)
     @NotNull
     private TaskStatus status;

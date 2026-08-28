@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.cyclecount.service;
 
+import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
@@ -98,6 +99,13 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
         }
 
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    @EmitEvent(id = "INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE", apiVersion = "1")
+    public @NonNull CycleCountPlanResponse startForTaskGeneration(@NonNull UUID planId) {
+        return updateStatus(planId, CycleCountPlanStatus.STARTED);
     }
 
     /**

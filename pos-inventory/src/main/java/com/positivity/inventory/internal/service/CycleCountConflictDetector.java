@@ -96,10 +96,11 @@ public class CycleCountConflictDetector {
     /**
      * Tasks store the bin as free text; when it holds a storage-location UUID
      * the window queries are location-scoped, otherwise they fall back to the
-     * SKU across all locations (consistent with the global on-hand math used
-     * by the adjustment posting path).
+     * SKU across all locations. {@code CycleCountAdjustmentServiceImpl} uses
+     * the same resolution so variance recomputation and ledger posting scope
+     * to exactly the location this detector scopes to.
      */
-    private Optional<UUID> locationIdOf(CycleCountTask task) {
+    public static Optional<UUID> locationIdOf(@NonNull CycleCountTask task) {
         try {
             return Optional.of(UUID.fromString(task.getBinLocation()));
         } catch (RuntimeException ex) {
