@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.events.EventTypeRegistration;
-import com.positivity.poseventreceiver.dao.EventDao;
+import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.entity.EventType;
 import java.util.List;
 import java.util.Optional;

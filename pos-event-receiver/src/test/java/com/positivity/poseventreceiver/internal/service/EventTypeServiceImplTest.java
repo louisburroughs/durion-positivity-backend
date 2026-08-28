@@ -8,7 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.poseventreceiver.dao.EventDao;
+import com.positivity.poseventreceiver.internal.dao.EventDao;
 import com.positivity.poseventreceiver.internal.dto.EventTypeRequest;
 import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
 import com.positivity.poseventreceiver.internal.entity.EventType;
