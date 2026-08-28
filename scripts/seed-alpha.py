@@ -28,11 +28,13 @@ permissions relayed to downstream services (location:read, location:write,
 crm:party:create, for the putaway-rules pack catalog:product:view plus
 inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
 pack inventory:adjustment:create, inventory:adjustment:approve and
-inventory:availability:read).
+inventory:availability:read, and for the cycle-count-plans pack
+inventory:cycle_count:view and inventory:cycle_count:initiate).
 """
 
 import argparse
 import csv
+import datetime
 import io
 import json
 import os
@@ -65,6 +67,7 @@ PACK_FILES = [
     ("catalog/products.csv", "CATALOG_PRODUCT", None),
     ("inventory/putaway-rules.csv", "@putaway-rules", None),
     ("inventory/on-hand.csv", "@inventory-on-hand", None),
+    ("inventory/cycle-count-plans.csv", "@cycle-count-plans", None),
 ]
 
 # The catalog pack, reused by the putaway-rules pack to resolve category and
@@ -370,7 +373,7 @@ def run_storage_locations(gateway, relative_path, _location_id):
     own defaults (undeclared capability reads back as GENERAL, containment
     false) rather than this script guessing them.
 
-    status and maxUnitCount/unitCount (issue #1554) are applied by a follow-up
+    status and maxUnitCount (issue #1554) are applied by a follow-up
     PATCH through the owning service, because POST always creates ACTIVE and
     uncapped: an INACTIVE row ('Retired Bin') keeps the decommissioned-
     destination refusal path testable, and the capacity descriptors keep the
@@ -433,17 +436,15 @@ def storage_location_patch(row):
 
     POST cannot express a non-ACTIVE status or a capacity descriptor, so those
     two columns are applied afterwards through the same owning-service surface
-    an operator would use. Capacity keys follow StorageCapacityJson
-    (maxUnitCount = the cap, unitCount = the current fill)."""
+    an operator would use. The capacity map carries only maxUnitCount (the
+    StorageCapacityJson cap); the fill is real on-hand stock, seeded by the
+    inventory on-hand pack, never a declared number."""
     patch = {}
     status = (row.get("status") or "").strip().upper()
     if status and status != "ACTIVE":
         patch["status"] = status
     if (row.get("maxUnitCount") or "").strip():
-        capacity = {"maxUnitCount": int(row["maxUnitCount"])}
-        if (row.get("unitCount") or "").strip():
-            capacity["unitCount"] = int(row["unitCount"])
-        patch["capacity"] = capacity
+        patch["capacity"] = {"maxUnitCount": int(row["maxUnitCount"])}
     return patch or None
 
 
@@ -692,7 +693,7 @@ def run_inventory_on_hand(gateway, relative_path, _location_id):
             query = urllib.parse.urlencode({"productSku": row["sku"], "storageLocationId": storage_id})
             status_code, availability = gateway.get(
                 f"/inventory/inventory/availability/by-sku?{query}", allow_error=True)
-            if status_code == 200 and float((availability or {}).get("onHand") or 0) > 0:
+            if status_code == 200 and float((availability or {}).get("onHandQuantity") or 0) > 0:
                 skipped += 1
                 continue
             records.append({
@@ -733,6 +734,75 @@ def run_inventory_on_hand(gateway, relative_path, _location_id):
                 failures += 1
 
     print(f"  on-hand: filed={filed} approved={approved} already-stocked={skipped} failures={failures}")
+    return failures == 0
+
+
+def run_cycle_count_plans(gateway, relative_path, _location_id):
+    """API pack: create demo cycle count plans through the plan lifecycle
+    (issue #1554, replacing the cycle_count_plan/cycle_count_plan_zone rows the
+    Flyway seed briefly carried against invented storage-location UUIDs).
+
+    Each row names its site and zones by business key: locationCode resolves
+    against the roster and every pipe-separated zoneNames entry against that
+    site's storage-location list, so the pack runs after the location pack.
+    scheduledDate is computed as today + scheduledDaysOut because the endpoint
+    requires a strictly future date — a fixed date would rot. Convergence: the
+    driver lists the site's existing plans first and skips a row whose planName
+    is already present, so re-runs create nothing. Plans are created in PLANNED
+    status only — task generation is a demo action, deliberately not seeded.
+    The token needs inventory:cycle_count:view (the plan list) and
+    inventory:cycle_count:initiate (the create)."""
+    location_ids = location_id_map(gateway)
+    storage_cache = {}
+    created, skipped, failures = 0, 0, 0
+    for row in read_fixture_rows(relative_path):
+        code, plan_name = row["locationCode"], row["planName"]
+        site_id = location_ids.get(code)
+        if site_id is None:
+            print(f"  WARN: cycle count plan '{plan_name}': location {code} not found")
+            failures += 1
+            continue
+        names = storage_location_ids(gateway, location_ids, storage_cache, code)
+        zone_ids, unresolved = [], []
+        for zone_name in row["zoneNames"].split("|"):
+            zone_id = names.get(zone_name)
+            if zone_id is None:
+                unresolved.append(zone_name)
+            else:
+                zone_ids.append(zone_id)
+        if unresolved:
+            print(f"  WARN: cycle count plan '{plan_name}': unresolved zone(s) {unresolved}")
+            failures += 1
+            continue
+
+        query = urllib.parse.urlencode({"locationId": site_id, "size": 200})
+        status_code, existing = gateway.get(f"/inventory/inventory/cycleCountPlans?{query}", allow_error=True)
+        if status_code != 200:
+            print(f"  WARN: cycle count plan '{plan_name}': cannot list existing plans"
+                  f" (HTTP {status_code}) — check inventory:cycle_count:view on the token")
+            failures += 1
+            continue
+        if any(plan.get("planName") == plan_name for plan in existing or []):
+            skipped += 1
+            continue
+
+        scheduled_date = datetime.date.today() + datetime.timedelta(days=int(row["scheduledDaysOut"]))
+        status_code, _ = gateway.post_json(
+            "/inventory/inventory/cycleCountPlans",
+            {
+                "locationId": site_id,
+                "zoneIds": zone_ids,
+                "planName": plan_name,
+                "scheduledDate": scheduled_date.isoformat(),
+            },
+            allow_error=True)
+        if 200 <= status_code < 300:
+            created += 1
+        else:
+            print(f"  WARN: cycle count plan '{plan_name}': HTTP {status_code}")
+            failures += 1
+
+    print(f"  cycle count plans: created={created} already-existed={skipped} failures={failures}")
     return failures == 0
 
 
@@ -819,6 +889,7 @@ API_PACKS = {
     "@storage-locations": run_storage_locations,
     "@putaway-rules": run_putaway_rules,
     "@inventory-on-hand": run_inventory_on_hand,
+    "@cycle-count-plans": run_cycle_count_plans,
 }
 
 

@@ -52,7 +52,8 @@ event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
 **location** → people → people-contact → **customer** → vehicle → catalog → price →
-inventory (putaway rules, then on-hand). Locations must be loaded (or already present)
+inventory (putaway rules, then on-hand, then cycle count plans). Locations must be
+loaded (or already present)
 first in any case — bulk-load jobs themselves require a valid `locationId`.
 
 ## Packs
@@ -191,7 +192,7 @@ until the alpha reseed is verified (§5.4).
 
 | File | Rows | Target |
 |---|---|---|
-| `products.csv` | 500 products (12 categories) | `POST /v1/catalog/bulk-ingest` (`domainType: CATALOG_PRODUCT`) |
+| `products.csv` | 501 products (12 categories; 500 from the seed plus WIXF-51394, added in #1554 for the on-hand pack) | `POST /v1/catalog/bulk-ingest` (`domainType: CATALOG_PRODUCT`) |
 
 Headers use the ingest record's field names directly, so the catalog job's flexible
 reader maps them 1:1. Each successful row publishes a product fact on
@@ -216,7 +217,7 @@ product landed uncategorized.
   match. Check `failureCount` and the per-row `results`, not just the HTTP status.
 - **Omitted name:** blank or absent is "unclassified" and resolves to null without
   error, so a row may legitimately carry neither.
-- All 500 rows in `products.csv` resolve today (verified by
+- All 501 rows in `products.csv` resolve today (verified by
   `AlphaFixtureCategoryNamesResolveTest`, which parses this CSV and the seed SQL at
   build time). Any future edit introducing an unseeded name fails that test rather
   than surfacing as a per-row ingest failure during a reseed.
@@ -252,7 +253,7 @@ so the very first location load in an empty alpha needs one location created via
 gateway API first (or use that location's id once the reference/security bootstrap
 provides one).
 
-Columns (`storage-locations.csv`): `locationCode,name,type,parentName,storageCategoryCode,hazardContainment,status,maxUnitCount,unitCount`.
+Columns (`storage-locations.csv`): `locationCode,name,type,parentName,storageCategoryCode,hazardContainment,status,maxUnitCount`.
 `type` is the physical topology (FLOOR/SHELF/BIN/CAGE/TRUCK) and is unchanged;
 `storageCategoryCode` is the putaway capability added in #1514 — what the location is
 fit to *hold* — so a rule can route tires to a tire rack and oil to oil storage.
@@ -279,14 +280,19 @@ category, so it is what the parts shelves and the van fall back to. Both columns
 are only sent when populated — an empty `storageCategoryCode` leaves the capability
 undeclared, which the service reports back as `GENERAL`.
 
-`status` and `maxUnitCount`/`unitCount` (issue #1554) cannot travel on the create:
+`status` and `maxUnitCount` (issue #1554) cannot travel on the create:
 `POST .../storage-locations` always creates ACTIVE and uncapped. Rows carrying them
 get a follow-up `PATCH` through the same owning-service endpoint an operator would
-use (each PATCH republishes the storage-location fact). The per-site `Retired Bin`
-rows (INACTIVE, `GENERAL`) keep "putaway must refuse a decommissioned destination"
-testable, and three CLT-MAIN bins carry the capacity cases that make the capacity
-paths reachable: Bin A-01 roomy (200/12), Bin A-02 one short of full (50/49),
-Bin A-03 exactly full (24/24) — the same trio the retired Flyway seed carried.
+use (each PATCH republishes the storage-location fact). The capacity map carries
+**only the cap** (`maxUnitCount`): a fill is never declared here — fills are real
+on-hand stock, created by `inventory/on-hand.csv` through the adjustment flow. The
+per-site `Retired Bin` rows (INACTIVE, `GENERAL`) keep "putaway must refuse a
+decommissioned destination" testable, and three CLT-MAIN bins carry the capacity
+cases that make the capacity paths reachable, with caps set against the totals the
+on-hand pack seeds into them: Bin A-01 roomy (363 units against a 500 cap),
+Bin A-02 one short of full (416/417), Bin A-03 exactly full (190/190) — the same
+trio of cases the retired Flyway seed carried. Editing the on-hand pack's CLT-MAIN
+bin rows means recomputing these three caps.
 Already-existing rows are never patched, so re-runs converge without overwriting
 operator edits; applying a changed status/capacity to a live row is an operator
 `PATCH`, not a reseed.
@@ -319,7 +325,8 @@ operator edits; applying a changed status/capacity to a live row is an operator
 | File | Rows | Target |
 |---|---|---|
 | `putaway-rules.csv` | 16 rules (12 category rules, 3 subcategory overrides, 1 terminal `ANY`) | gateway API pack (`POST /inventory/inventory/putaway/rules` per row) |
-| `on-hand.csv` | 58 initial-stock rows at CLT-MAIN-001 | gateway API pack (`POST /v1/inventory/bulk-ingest` per site, then `POST .../adjustments/{id}/approve` per row) |
+| `on-hand.csv` | 494 initial-stock rows across the three service centers (263 at CLT-MAIN-001, 111 at CLT-SOUTH-001, 120 at CLT-NORTH-001) | gateway API pack (`POST /v1/inventory/bulk-ingest` per site, then `POST .../adjustments/{id}/approve` per row) |
+| `cycle-count-plans.csv` | 1 demo cycle count plan | gateway API pack (`POST /inventory/inventory/cycleCountPlans` per row) |
 
 Columns: `priority,matchType,matchName,locationCode,destinationName,destinationStrategy,isEnabled`.
 
@@ -449,18 +456,26 @@ Columns: `sku,locationCode,storageLocationName,quantity,unitOfMeasure,descriptio
 
 Replaces the `inventory_ledger_entry` GOODS_RECEIPT rows the deleted
 `R__seed_reference_inventory.sql` sections carried, which were keyed to the deleted
-location seed's fixed bin UUIDs. The same 58 SKUs and quantities are retargeted onto
-this pack's topology by business key (fluids on the Fluids Shelf, filters and plugs
-spread over the small-parts bins, batteries on the Battery Rack, rotors on the Bulk
-Floor, tires on the tire racks).
+location seed's fixed bin UUIDs. Both of the seed's stock blocks are converted: the
+58 curated CLT-MAIN rows (fluids on the Fluids Shelf, filters and plugs spread over
+the small-parts bins, batteries on the Battery Rack, rotors on the Bulk Floor, tires
+on the tire racks) plus the ~450-row `inv_seed2:` bin-level block across all three
+service centers, its Flyway-only storage names mapped deterministically onto this
+pack's topology (shelves D/E fold into A/B, bin indexes wrap into 1–8, the named
+oil/battery/tire/bulk areas map to their fixture equivalents, and the secured cage
+and plain parts shelves land on Parts Shelf C/A). After mapping, duplicate
+(sku, site, storage location) keys are summed into one row each, and each SKU
+carries one consistent unit of measure file-wide.
 
 Stock enters through the production adjustment flow: the driver files one
 `POST /v1/inventory/bulk-ingest` batch per site (each accepted row becomes a PENDING
 adjustment request) and then approves each request, which posts the `ADJUSTMENT_IN`
 ledger entry — that posting is what creates on-hand and emits the facts the `ext_*`
-replicas consume. Runs **last**: destinations resolve against the location pack and
-SKUs must exist from the catalog pack (and destination validation reads the
-`ext_storage_location` replica, so location facts must have been consumed).
+replicas consume. Runs after `location/` and `catalog/`: destination ids are
+resolved against pos-location's live storage-location list, and the SKUs must exist
+from the catalog pack. (The adjustment path itself performs no storage-location
+validation; the `ext_storage_location` replica is hydrated by the location pack's
+facts independently of this ordering.)
 
 Adjustments are deltas, so a naive re-run would double stock; the driver checks
 `GET /inventory/availability/by-sku?productSku=…&storageLocationId=…` first and
@@ -474,3 +489,28 @@ skips any SKU already stocked at its destination, making re-runs converge.
   baseline is not carried; receive real stock for costing demos.
 - The token additionally needs `inventory:adjustment:create`,
   `inventory:adjustment:approve` and `inventory:availability:read`.
+
+#### `cycle-count-plans.csv` — demo cycle count plan (issue #1554)
+
+Columns: `planName,locationCode,zoneNames,scheduledDaysOut` (`zoneNames` is
+pipe-separated).
+
+Replaces the `cycle_count_plan`/`cycle_count_plan_zone` block the Flyway seed
+briefly carried on `main`, which referenced invented storage-location UUIDs — the
+exact pattern #1554 retires. The one fixture row schedules a PLANNED count of
+CLT-MAIN-001's Parts Shelf A bins (`Bin A-01`–`Bin A-08`).
+
+The driver (`run_cycle_count_plans`) resolves `locationCode` against the roster and
+each zone name against that site's live storage-location list, computes
+`scheduledDate` as today + `scheduledDaysOut` (the endpoint requires a strictly
+future date, so a fixed date would rot), and posts
+`POST /inventory/inventory/cycleCountPlans`. Runs **last**, after the location pack
+(zones must exist). Convergence: the site's existing plans are listed first and a
+row whose `planName` already appears is skipped, so re-runs create nothing.
+
+Only the plan is seeded: task generation
+(`POST .../cycleCountPlans/{planId}/tasks`) is the demo action itself and is
+deliberately left to the demo.
+
+The token needs `inventory:cycle_count:view` (list) and
+`inventory:cycle_count:initiate` (create).
