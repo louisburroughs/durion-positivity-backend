@@ -233,7 +233,10 @@ class ArchitectureTests {
                 // Configuration-properties holders are not service implementations. A nested
                 // binding type such as TaxProperties.ExternalService names the thing it configures,
                 // which is exactly what this rule is not about.
-                .resideOutsideOfPackages("..internal.service..", "..internal.config..")
+                // Subdomain-split service packages (internal.{subdomain}.service, e.g.
+                // pos-supplier's internal.order.service) are legitimate homes for service
+                // interfaces beside their implementations per ADR-0026 D3 (issue #1541).
+                .resideOutsideOfPackages("..internal.service..", "..internal.*.service..", "..internal.config..")
                 .should()
                 .haveSimpleNameNotEndingWith("Service")
                 .because(
