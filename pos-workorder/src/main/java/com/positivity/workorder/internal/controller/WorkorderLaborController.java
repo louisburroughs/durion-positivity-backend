@@ -5,7 +5,6 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.AdjustLaborRequest;
 import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
-import com.positivity.workorder.internal.dto.WorkorderLaborMapper;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderLaborService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -125,10 +124,8 @@ public class WorkorderLaborController {
             // Check if this is an idempotent replay
             boolean isIdempotent = idempotencyKey != null && !idempotencyKey.isBlank();
 
-            var entry = laborService.startLaborSession(
+            WorkorderLaborEntryResponse response = laborService.startLaborSession(
                     workorderId, serviceId, request.getTechnicianId(), request.getNotes(), username, idempotencyKey);
-
-            WorkorderLaborEntryResponse response = WorkorderLaborMapper.toResponse(entry);
 
             log.info(
                     "Started labor session {} for workorder {} service {} by technician {}",
@@ -198,9 +195,7 @@ public class WorkorderLaborController {
                     String idempotencyKey) {
 
         try {
-            var entry = laborService.stopLaborSession(entryId, idempotencyKey);
-
-            WorkorderLaborEntryResponse response = WorkorderLaborMapper.toResponse(entry);
+            WorkorderLaborEntryResponse response = laborService.stopLaborSession(entryId, idempotencyKey);
 
             log.info(
                     "Stopped labor session {} for workorder {} - {} hours worked",
@@ -249,10 +244,7 @@ public class WorkorderLaborController {
                     @PathVariable
                     UUID workorderId) {
 
-        var entries = laborService.getLaborHistory(workorderId);
-
-        List<WorkorderLaborEntryResponse> responses =
-                entries.stream().map(WorkorderLaborEntryResponse::fromEntity).toList();
+        List<WorkorderLaborEntryResponse> responses = laborService.getLaborHistory(workorderId);
 
         log.debug("Retrieved {} labor entries for workorder {}", responses.size(), workorderId);
 
@@ -323,10 +315,8 @@ public class WorkorderLaborController {
 
         try {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
-            var entry = laborService.adjustLaborHours(
+            WorkorderLaborEntryResponse response = laborService.adjustLaborHours(
                     entryId, request.getHoursWorked(), request.getAdjustmentReason(), username, idempotencyKey);
-
-            WorkorderLaborEntryResponse response = WorkorderLaborEntryResponse.fromEntity(entry);
 
             log.info(
                     "Adjusted labor entry {} to {} hours - reason: {}",

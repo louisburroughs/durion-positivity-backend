@@ -71,9 +71,7 @@ public class WorkorderController {
             scopes = {"workorder:workorder:view"})
     @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public List<WorkorderResponse> getAllWorkorders() {
-        return workorderService.getAllWorkorders().stream()
-                .map(WorkorderResponse::fromEntity)
-                .toList();
+        return workorderService.getAllWorkorders();
     }
 
     @Operation(operationId = "countWorkorders", summary = "Count Workorders by Status", description = """
@@ -144,7 +142,6 @@ public class WorkorderController {
                     UUID workorderId) {
         return workorderService
                 .getWorkorderById(workorderId)
-                .map(WorkorderResponse::fromEntity)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -195,7 +192,7 @@ public class WorkorderController {
         // Service handles entity creation internally, including idempotency check
         var created = workorderService.createWorkorderWithIdempotency(
                 request.getEstimateId(), request.getCustomerId(), idempotencyKey);
-        return ResponseEntity.ok(WorkorderResponse.fromEntity(created));
+        return ResponseEntity.ok(created);
     }
 
     @Operation(operationId = "deleteWorkorder", summary = "Delete a Workorder", description = """
@@ -243,10 +240,7 @@ public class WorkorderController {
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID workorderId) {
-        var history = workorderService.getTransitionHistory(workorderId);
-        return ResponseEntity.ok(history.stream()
-                .map(WorkorderStateTransitionResponse::fromEntity)
-                .toList());
+        return ResponseEntity.ok(workorderService.getTransitionHistory(workorderId));
     }
 
     @Operation(operationId = "getWorkorderSnapshots", summary = "Get Workorder Snapshot History", description = """
@@ -269,9 +263,7 @@ public class WorkorderController {
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID workorderId) {
-        var history = workorderService.getSnapshotHistory(workorderId);
-        return ResponseEntity.ok(
-                history.stream().map(WorkorderSnapshotResponse::fromEntity).toList());
+        return ResponseEntity.ok(workorderService.getSnapshotHistory(workorderId));
     }
 
     @Operation(
@@ -331,7 +323,7 @@ public class WorkorderController {
                     request.getSignatureMimeType(),
                     request.getSignerName(),
                     request.getNotes());
-            return ResponseEntity.ok(WorkorderResponse.fromEntity(approved));
+            return ResponseEntity.ok(approved);
         } catch (IllegalStateException | IllegalArgumentException _) {
             return ResponseEntity.badRequest().build();
         }

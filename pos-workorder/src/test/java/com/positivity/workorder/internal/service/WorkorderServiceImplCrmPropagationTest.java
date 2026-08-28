@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
@@ -134,7 +135,7 @@ class WorkorderServiceImplCrmPropagationTest {
     @Test
     @DisplayName("createWorkorder(null, customerId) — workorder has null crmPartyId and crmVehicleId")
     void createWorkorder_nullEstimateId_workorderHasNullCrmPartyIdAndVehicleId() {
-        Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
+        WorkorderResponse result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
         assertThat(result.getCrmPartyId()).isNull();
         assertThat(result.getCrmVehicleId()).isNull();
@@ -143,7 +144,7 @@ class WorkorderServiceImplCrmPropagationTest {
     @Test
     @DisplayName("createWorkorder(null, customerId) — workorder has empty crmContactIds (not null)")
     void createWorkorder_nullEstimateId_workorderHasEmptyCrmContactIds() {
-        Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
+        WorkorderResponse result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
         assertThat(result.getCrmContactIds()).isNotNull().isEmpty();
     }
@@ -256,7 +257,7 @@ class WorkorderServiceImplCrmPropagationTest {
         when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation())
                 .thenReturn(Optional.of(primaryLocation));
 
-        Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
+        WorkorderResponse result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
         assertThat(result.getShopId()).isEqualTo(primaryLocation);
         assertThat(result.getLocationId()).isEqualTo(primaryLocation);
@@ -267,7 +268,7 @@ class WorkorderServiceImplCrmPropagationTest {
     void createWorkorder_nullEstimateId_noPrimaryLocation_shopIdNull() {
         when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(Optional.empty());
 
-        Workorder result = workorderService.createWorkorder(null, CUSTOMER_ID);
+        WorkorderResponse result = workorderService.createWorkorder(null, CUSTOMER_ID);
 
         assertThat(result.getShopId()).isNull();
         assertThat(result.getLocationId()).isNull();

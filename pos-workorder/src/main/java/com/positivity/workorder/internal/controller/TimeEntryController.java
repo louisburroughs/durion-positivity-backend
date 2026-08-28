@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
-import com.positivity.workorder.internal.dto.TimeEntryMapper;
 import com.positivity.workorder.internal.dto.TimeEntryResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.TimeEntryService;
@@ -43,7 +42,7 @@ public class TimeEntryController {
                     SUBMITTED status.
                     """)
     public ResponseEntity<TimeEntryResponse> approveTimeEntry(@PathVariable UUID timeEntryId) {
-        return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.approveTimeEntry(timeEntryId)));
+        return ResponseEntity.ok(timeEntryService.approveTimeEntry(timeEntryId));
     }
 
     @PostMapping("/{timeEntryId}/reject")
@@ -82,6 +81,6 @@ public class TimeEntryController {
                     @Valid
                     @RequestBody
                     RejectTimeEntryRequest request) {
-        return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.rejectTimeEntry(timeEntryId, request)));
+        return ResponseEntity.ok(timeEntryService.rejectTimeEntry(timeEntryId, request));
     }
 }

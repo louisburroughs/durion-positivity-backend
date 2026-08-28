@@ -10,8 +10,9 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.dto.CreateTravelSegmentAdjustmentRequest;
 import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
+import com.positivity.workorder.internal.dto.TravelSegmentAdjustmentResponse;
+import com.positivity.workorder.internal.dto.TravelSegmentResponse;
 import com.positivity.workorder.internal.entity.TravelSegment;
-import com.positivity.workorder.internal.entity.TravelSegmentAdjustment;
 import com.positivity.workorder.internal.enums.TravelSegmentStatus;
 import com.positivity.workorder.internal.enums.TravelSegmentType;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
@@ -103,7 +104,7 @@ class TravelSegmentServiceImplTest {
                 .thenReturn(0L);
         when(travelSegmentRepository.save(any(TravelSegment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TravelSegment result = serviceImpl.startTravelSegment(validStartRequest());
+        TravelSegmentResponse result = serviceImpl.startTravelSegment(validStartRequest());
 
         assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.IN_PROGRESS);
         assertThat(result.getStartAt()).isNotNull();
@@ -127,7 +128,7 @@ class TravelSegmentServiceImplTest {
         when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
         when(travelSegmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        TravelSegment result = serviceImpl.stopTravelSegment(
+        TravelSegmentResponse result = serviceImpl.stopTravelSegment(
                 SEGMENT_ID, StopTravelSegmentRequest.builder().build());
 
         assertThat(result.getStatus()).isEqualTo(TravelSegmentStatus.COMPLETED);
@@ -258,7 +259,7 @@ class TravelSegmentServiceImplTest {
         when(travelSegmentRepository.findById(SEGMENT_ID)).thenReturn(Optional.of(segment));
         when(travelSegmentAdjustmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        TravelSegmentAdjustment result = serviceImpl.createAdjustment(SEGMENT_ID, validAdjustmentRequest());
+        TravelSegmentAdjustmentResponse result = serviceImpl.createAdjustment(SEGMENT_ID, validAdjustmentRequest());
 
         assertThat(result.getApprovalStatus()).isEqualTo("PENDING");
         assertThat(result.getAdjustedByUserId()).isNotNull();

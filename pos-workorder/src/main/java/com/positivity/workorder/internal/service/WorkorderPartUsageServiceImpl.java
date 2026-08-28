@@ -111,7 +111,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      */
     @Transactional
     @NonNull
-    public WorkorderPartUsageEvent issuePartQuantity(
+    public WorkorderPartUsageEventResponse issuePartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
@@ -126,9 +126,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                     idempotencyService.getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT, existingEventId.get());
-                return usageEventRepository
+                return toResponse(usageEventRepository
                         .findById(existingEventId.get())
-                        .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
+                        .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get())));
             }
         }
 
@@ -186,7 +186,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         registerDemand(workorder, part, quantity, uomCode);
 
         log.info("Issued part quantity for workorder {}", workorderId);
-        return event;
+        return toResponse(event);
     }
 
     /**
@@ -306,7 +306,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      */
     @Transactional
     @NonNull
-    public WorkorderPartUsageEvent consumePartQuantity(
+    public WorkorderPartUsageEventResponse consumePartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
@@ -321,9 +321,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                     idempotencyService.getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_CONSUME, idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT, existingEventId.get());
-                return usageEventRepository
+                return toResponse(usageEventRepository
                         .findById(existingEventId.get())
-                        .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
+                        .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get())));
             }
         }
 
@@ -386,7 +386,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         log.info("Consumed part quantity for workorder {}", workorderId);
-        return event;
+        return toResponse(event);
     }
 
     /**
@@ -405,7 +405,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      */
     @Transactional
     @NonNull
-    public WorkorderPartUsageEvent returnPartQuantity(
+    public WorkorderPartUsageEventResponse returnPartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
@@ -420,9 +420,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                     idempotencyService.getExistingPartUsageEventId(IDEMPOTENCY_OPERATION_PART_RETURN, idempotencyKey);
             if (existingEventId.isPresent()) {
                 log.info(IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT, existingEventId.get());
-                return usageEventRepository
+                return toResponse(usageEventRepository
                         .findById(existingEventId.get())
-                        .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get()));
+                        .orElseThrow(() -> new IllegalStateException(EVENT_NOT_FOUND + existingEventId.get())));
             }
         }
 
@@ -492,7 +492,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         log.info("Returned part quantity for workorder {}", workorderId);
-        return event;
+        return toResponse(event);
     }
 
     /**

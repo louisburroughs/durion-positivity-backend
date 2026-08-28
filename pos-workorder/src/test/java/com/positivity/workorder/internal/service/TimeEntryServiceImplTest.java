@@ -10,6 +10,7 @@ import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
+import com.positivity.workorder.internal.dto.TimeEntryResponse;
 import com.positivity.workorder.internal.entity.TimeEntry;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TimeEntryStatus;
@@ -99,7 +100,7 @@ class TimeEntryServiceImplTest {
     void approveEntry_succeeds() {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
         when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
-        TimeEntry result = timeEntryService.approveTimeEntry(TIME_ENTRY_ID);
+        TimeEntryResponse result = timeEntryService.approveTimeEntry(TIME_ENTRY_ID);
         assertThat(result.getStatus()).isEqualTo(TimeEntryStatus.APPROVED);
         assertThat(result.getDecisionByUserId()).isNotNull();
         assertThat(result.getDecisionAtUtc()).isNotNull();
@@ -130,7 +131,7 @@ class TimeEntryServiceImplTest {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
         when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
         RejectTimeEntryRequest request = new RejectTimeEntryRequest("Hours do not match timesheet record");
-        TimeEntry result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
+        TimeEntryResponse result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
         assertThat(result.getStatus()).isEqualTo(TimeEntryStatus.REJECTED);
         assertThat(result.getRejectionReason()).isEqualTo("Hours do not match timesheet record");
         assertThat(result.getDecisionByUserId()).isNotNull();
@@ -165,7 +166,7 @@ class TimeEntryServiceImplTest {
         when(timeEntryRepository.findById(TIME_ENTRY_ID)).thenReturn(Optional.of(submittedEntry()));
         when(timeEntryRepository.save(any(TimeEntry.class))).thenAnswer(inv -> inv.getArgument(0));
         RejectTimeEntryRequest request = new RejectTimeEntryRequest("Timesheet discrepancy");
-        TimeEntry result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
+        TimeEntryResponse result = timeEntryService.rejectTimeEntry(TIME_ENTRY_ID, request);
         assertThat(result.getStatus()).isEqualTo(TimeEntryStatus.REJECTED);
         assertThat(result.getRejectionReason()).isNotBlank();
         assertThat(result.getDecisionAtUtc()).isNotNull();

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
@@ -139,7 +140,7 @@ class WorkorderLaborServiceImplTest {
             givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
             givenServiceLine(WORKORDER_ID);
 
-            WorkorderLaborEntry entry =
+            WorkorderLaborEntryResponse entry =
                     service.startLaborSession(WORKORDER_ID, SERVICE_ID, TECHNICIAN_ID, "brake job", "jane.smith", null);
 
             assertThat(entry.getTechnicianId()).isEqualTo(TECHNICIAN_ID);
@@ -258,7 +259,7 @@ class WorkorderLaborServiceImplTest {
 
             assertThat(service.startLaborSession(
                             WORKORDER_ID, SERVICE_ID, TECHNICIAN_ID, null, "jane.smith", "start-key"))
-                    .isSameAs(existing);
+                    .isEqualTo(WorkorderLaborEntryResponse.fromEntity(existing));
             verify(laborRepository, never()).save(any());
         }
 
@@ -299,7 +300,7 @@ class WorkorderLaborServiceImplTest {
             WorkorderLaborEntry entry = openEntry(start);
             when(laborRepository.findById(ENTRY_ID)).thenReturn(Optional.of(entry));
 
-            WorkorderLaborEntry stopped = service.stopLaborSession(ENTRY_ID, null);
+            WorkorderLaborEntryResponse stopped = service.stopLaborSession(ENTRY_ID, null);
 
             assertThat(stopped.getEndTime()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
             assertThat(stopped.getHoursWorked()).isEqualByComparingTo("1.50");
@@ -349,7 +350,8 @@ class WorkorderLaborServiceImplTest {
                     .thenReturn(Optional.of(ENTRY_ID));
             when(laborRepository.findById(ENTRY_ID)).thenReturn(Optional.of(existing));
 
-            assertThat(service.stopLaborSession(ENTRY_ID, "stop-key")).isSameAs(existing);
+            assertThat(service.stopLaborSession(ENTRY_ID, "stop-key"))
+                    .isEqualTo(WorkorderLaborEntryResponse.fromEntity(existing));
             verify(laborRepository, never()).save(any());
         }
 
@@ -376,7 +378,7 @@ class WorkorderLaborServiceImplTest {
             WorkorderLaborEntry entry = openEntry(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
             when(laborRepository.findById(ENTRY_ID)).thenReturn(Optional.of(entry));
 
-            WorkorderLaborEntry adjusted =
+            WorkorderLaborEntryResponse adjusted =
                     service.adjustLaborHours(ENTRY_ID, new BigDecimal("2.25"), "customer disputed", "jane.smith", null);
 
             assertThat(adjusted.getHoursWorked()).isEqualByComparingTo("2.25");
@@ -429,7 +431,7 @@ class WorkorderLaborServiceImplTest {
             when(laborRepository.findById(ENTRY_ID)).thenReturn(Optional.of(existing));
 
             assertThat(service.adjustLaborHours(ENTRY_ID, BigDecimal.ONE, "reason", "jane.smith", "adjust-key"))
-                    .isSameAs(existing);
+                    .isEqualTo(WorkorderLaborEntryResponse.fromEntity(existing));
             verify(laborRepository, never()).save(any());
         }
 
@@ -454,6 +456,7 @@ class WorkorderLaborServiceImplTest {
         when(laborRepository.findByWorkorder_IdOrderByStartTimeDesc(WORKORDER_ID))
                 .thenReturn(List.of(entry));
 
-        assertThat(service.getLaborHistory(WORKORDER_ID)).containsExactly(entry);
+        assertThat(service.getLaborHistory(WORKORDER_ID))
+                .containsExactly(WorkorderLaborEntryResponse.fromEntity(entry));
     }
 }

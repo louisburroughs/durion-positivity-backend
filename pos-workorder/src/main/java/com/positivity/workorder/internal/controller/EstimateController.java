@@ -568,8 +568,7 @@ public class EstimateController {
                 return idempotentResponse;
             }
 
-            var workorder = workorderService.createWorkorder(estimateId, null);
-            WorkorderResponse response = WorkorderResponse.fromEntity(workorder);
+            WorkorderResponse response = workorderService.createWorkorder(estimateId, null);
 
             ResponseEntity<WorkorderResponse> raceConditionResponse =
                     registerIdempotencyKeyAndHandleRaceCondition(idempotencyKey, response);
@@ -681,7 +680,6 @@ public class EstimateController {
             UUID workorderId, Supplier<@Nullable ResponseEntity<WorkorderResponse>> fallback) {
         return workorderService
                 .getWorkorderById(workorderId)
-                .map(WorkorderResponse::fromEntity)
                 .map(ResponseEntity::ok)
                 .orElseGet(fallback);
     }

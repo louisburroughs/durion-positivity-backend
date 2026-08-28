@@ -1,6 +1,6 @@
 package com.positivity.workorder.internal.service;
 
-import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
+import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 public interface WorkorderLaborService {
 
     @NonNull
-    WorkorderLaborEntry startLaborSession(
+    WorkorderLaborEntryResponse startLaborSession(
             @NonNull UUID workorderId,
             @NonNull UUID serviceId,
             @NonNull UUID technicianId,
@@ -19,13 +19,13 @@ public interface WorkorderLaborService {
             @Nullable String idempotencyKey);
 
     @NonNull
-    WorkorderLaborEntry stopLaborSession(@NonNull UUID laborEntryId, @Nullable String idempotencyKey);
+    WorkorderLaborEntryResponse stopLaborSession(@NonNull UUID laborEntryId, @Nullable String idempotencyKey);
 
     @NonNull
-    List<WorkorderLaborEntry> getLaborHistory(@NonNull UUID workorderId);
+    List<WorkorderLaborEntryResponse> getLaborHistory(@NonNull UUID workorderId);
 
     @NonNull
-    WorkorderLaborEntry adjustLaborHours(
+    WorkorderLaborEntryResponse adjustLaborHours(
             @NonNull UUID laborEntryId,
             @NonNull BigDecimal adjustedHours,
             @NonNull String adjustmentReason,

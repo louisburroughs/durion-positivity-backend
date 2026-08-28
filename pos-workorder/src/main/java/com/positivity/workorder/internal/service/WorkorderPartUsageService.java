@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
-import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -15,7 +14,7 @@ public interface WorkorderPartUsageService {
      *     base unit, matching pre-#1415 behavior exactly (ADR-0055 stage 3)
      */
     @NonNull
-    WorkorderPartUsageEvent issuePartQuantity(
+    WorkorderPartUsageEventResponse issuePartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
@@ -27,7 +26,7 @@ public interface WorkorderPartUsageService {
      *     base unit, matching pre-#1415 behavior exactly (ADR-0055 stage 3)
      */
     @NonNull
-    WorkorderPartUsageEvent consumePartQuantity(
+    WorkorderPartUsageEventResponse consumePartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
@@ -39,7 +38,7 @@ public interface WorkorderPartUsageService {
      *     base unit, matching pre-#1415 behavior exactly (ADR-0055 stage 3)
      */
     @NonNull
-    WorkorderPartUsageEvent returnPartQuantity(
+    WorkorderPartUsageEventResponse returnPartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,

@@ -6,7 +6,6 @@ import com.positivity.workorder.internal.dto.StartTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.StopTravelSegmentRequest;
 import com.positivity.workorder.internal.dto.SubmitTravelSegmentsRequest;
 import com.positivity.workorder.internal.dto.TravelSegmentAdjustmentResponse;
-import com.positivity.workorder.internal.dto.TravelSegmentMapper;
 import com.positivity.workorder.internal.dto.TravelSegmentResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.TravelSegmentService;
@@ -77,8 +76,7 @@ public class TravelSegmentController {
                     @Valid
                     @RequestBody
                     StartTravelSegmentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(TravelSegmentMapper.toResponse(travelSegmentService.startTravelSegment(request)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(travelSegmentService.startTravelSegment(request));
     }
 
     @PostMapping("/{travelSegmentId}/stop")
@@ -114,8 +112,7 @@ public class TravelSegmentController {
                     @Valid
                     @RequestBody
                     StopTravelSegmentRequest request) {
-        return ResponseEntity.ok(
-                TravelSegmentMapper.toResponse(travelSegmentService.stopTravelSegment(travelSegmentId, request)));
+        return ResponseEntity.ok(travelSegmentService.stopTravelSegment(travelSegmentId, request));
     }
 
     @PostMapping("/submit/{mobileWorkAssignmentId}")
@@ -153,8 +150,7 @@ public class TravelSegmentController {
                     @Valid
                     @RequestBody
                     SubmitTravelSegmentsRequest request) {
-        return ResponseEntity.ok(
-                TravelSegmentMapper.toResponses(travelSegmentService.submitTravelSegments(mobileWorkAssignmentId)));
+        return ResponseEntity.ok(travelSegmentService.submitTravelSegments(mobileWorkAssignmentId));
     }
 
     @PostMapping("/{travelSegmentId}/adjustments")
@@ -198,7 +194,6 @@ public class TravelSegmentController {
                     @RequestBody
                     CreateTravelSegmentAdjustmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(TravelSegmentMapper.toAdjustmentResponse(
-                        travelSegmentService.createAdjustment(travelSegmentId, request)));
+                .body(travelSegmentService.createAdjustment(travelSegmentId, request));
     }
 }

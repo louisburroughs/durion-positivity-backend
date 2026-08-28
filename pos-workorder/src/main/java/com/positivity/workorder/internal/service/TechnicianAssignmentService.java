@@ -1,6 +1,6 @@
 package com.positivity.workorder.internal.service;
 
-import com.positivity.workorder.internal.entity.TechnicianAssignment;
+import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +11,11 @@ import org.jspecify.annotations.Nullable;
 public interface TechnicianAssignmentService {
 
     @NonNull
-    TechnicianAssignment assignTechnician(
+    TechnicianAssignmentRecord assignTechnician(
             @NonNull UUID workorderId, @NonNull UUID technicianId, @NonNull String assignedBy, @Nullable String notes);
 
     @NonNull
-    TechnicianAssignment reassignTechnician(
+    TechnicianAssignmentRecord reassignTechnician(
             @NonNull UUID workorderId,
             @NonNull UUID newTechnicianId,
             @NonNull String reassignedBy,
@@ -32,13 +32,13 @@ public interface TechnicianAssignmentService {
      *
      * @return the released assignment, or empty when there was no current assignment
      */
-    Optional<TechnicianAssignment> releaseAssignment(
+    Optional<TechnicianAssignmentRecord> releaseAssignment(
             @NonNull UUID workorderId, @NonNull String releasedBy, @Nullable String reason);
 
-    Optional<TechnicianAssignment> getCurrentAssignment(@NonNull UUID workorderId);
+    Optional<TechnicianAssignmentRecord> getCurrentAssignment(@NonNull UUID workorderId);
 
     @NonNull
-    List<TechnicianAssignment> getAssignmentHistory(@NonNull UUID workorderId);
+    List<TechnicianAssignmentRecord> getAssignmentHistory(@NonNull UUID workorderId);
 
     @NonNull
     Optional<UUID> getPreviousTechnicianId(@NonNull UUID workorderId);
