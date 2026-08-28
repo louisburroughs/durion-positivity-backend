@@ -1,14 +1,14 @@
 package com.positivity.invoice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.invoice.internal.config.InvoiceService;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.RevertRequest;
 import com.positivity.invoice.internal.security.InvoicePermissions;
-import com.positivity.invoice.service.InvoiceFinalizationService;
-import com.positivity.invoice.service.InvoiceService;
-import com.positivity.invoice.service.OrderInvoiceService;
+import com.positivity.invoice.internal.service.InvoiceFinalizationService;
+import com.positivity.invoice.internal.service.OrderInvoiceService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;

@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.security.InvoicePermissions;
-import com.positivity.invoice.service.InvoiceSearchService;
+import com.positivity.invoice.internal.service.InvoiceSearchService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

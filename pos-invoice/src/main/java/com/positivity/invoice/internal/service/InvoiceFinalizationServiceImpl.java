@@ -13,7 +13,6 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import java.math.BigDecimal;

@@ -21,8 +21,6 @@ import com.positivity.invoice.internal.payment.PaymentGatewayPort;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.RefundRecordRepository;
-import com.positivity.invoice.service.PaymentReversalService;
-import com.positivity.invoice.service.RefundPaymentResult;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;

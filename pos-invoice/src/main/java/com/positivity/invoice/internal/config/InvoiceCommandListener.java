@@ -2,8 +2,6 @@ package com.positivity.invoice.internal.config;
 
 import com.positivity.invoice.internal.entity.ProcessedEvent;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
-import com.positivity.invoice.service.InvoiceService;
-import com.positivity.invoice.service.OutboxReplayService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import java.time.Clock;
 import java.time.Duration;

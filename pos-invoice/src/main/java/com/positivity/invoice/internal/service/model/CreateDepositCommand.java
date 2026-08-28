@@ -1,4 +1,4 @@
-package com.positivity.invoice.service.model;
+package com.positivity.invoice.internal.service.model;
 
 import java.math.BigDecimal;
 import java.util.Objects;

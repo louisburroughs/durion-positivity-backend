@@ -1,8 +1,8 @@
-package com.positivity.invoice.service;
+package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.dto.DepositCreditSummary;
 import com.positivity.invoice.internal.enums.DepositSourceType;
-import com.positivity.invoice.service.model.CreateDepositCommand;
-import com.positivity.invoice.service.model.DepositCreditSummary;
+import com.positivity.invoice.internal.service.model.CreateDepositCommand;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

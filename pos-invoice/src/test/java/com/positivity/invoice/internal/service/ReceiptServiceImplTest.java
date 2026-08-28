@@ -130,7 +130,7 @@ class ReceiptServiceImplTest {
      */
     @Test
     void generateReceipt_success_createsReceiptWithExpectedFields() {
-        com.positivity.invoice.service.Receipt saved = receiptServiceImpl.generateReceipt(
+        com.positivity.invoice.internal.service.Receipt saved = receiptServiceImpl.generateReceipt(
                 INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
 
         assertThat(saved.getStatus()).isEqualTo(ReceiptStatus.GENERATED);
@@ -163,7 +163,7 @@ class ReceiptServiceImplTest {
     void generateReceipt_secondReceiptForInvoice_usesIncrementedReferenceSuffix() {
         when(receiptRepository.countByInvoice_Id(INVOICE_ID)).thenReturn(1L);
 
-        com.positivity.invoice.service.Receipt saved = receiptServiceImpl.generateReceipt(
+        com.positivity.invoice.internal.service.Receipt saved = receiptServiceImpl.generateReceipt(
                 INVOICE_ID, PAYMENT_INTENT_ID, TERMINAL_ID, TEMPLATE_ID, TEMPLATE_VERSION);
 
         assertThat(saved.getReference()).endsWith("-002");
@@ -259,7 +259,7 @@ class ReceiptServiceImplTest {
         var receipt = buildExistingReceipt(0);
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
 
-        com.positivity.invoice.service.Receipt saved =
+        com.positivity.invoice.internal.service.Receipt saved =
                 receiptServiceImpl.reprintReceipt(RECEIPT_ID, "CUSTOMER_REQUEST");
         assertThat(saved.getReprintCount()).isEqualTo(1);
         assertThat(saved.getLastReprintReason()).isEqualTo("CUSTOMER_REQUEST");
@@ -389,7 +389,7 @@ class ReceiptServiceImplTest {
         when(receiptRepository.findById(RECEIPT_ID)).thenReturn(Optional.of(receipt));
         withAuthorities("GENERATE_RECEIPT", "SUPERVISOR_OVERRIDE");
 
-        com.positivity.invoice.service.Receipt saved =
+        com.positivity.invoice.internal.service.Receipt saved =
                 receiptServiceImpl.reprintReceipt(RECEIPT_ID, "SUPERVISOR_APPROVED");
 
         assertThat(saved.getReprintCount()).isEqualTo(6);

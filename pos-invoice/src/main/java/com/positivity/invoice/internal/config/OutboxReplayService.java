@@ -1,4 +1,4 @@
-package com.positivity.invoice.service;
+package com.positivity.invoice.internal.config;
 
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;

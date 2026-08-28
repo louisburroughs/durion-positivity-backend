@@ -1,4 +1,4 @@
-package com.positivity.invoice.service;
+package com.positivity.invoice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,8 +16,6 @@ import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.internal.service.ElevationTokenService;
-import com.positivity.invoice.internal.service.InvoiceFinalizationServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;

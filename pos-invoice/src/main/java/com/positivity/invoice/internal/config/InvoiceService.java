@@ -1,4 +1,4 @@
-package com.positivity.invoice.service;
+package com.positivity.invoice.internal.config;
 
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;

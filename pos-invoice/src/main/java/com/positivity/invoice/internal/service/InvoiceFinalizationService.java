@@ -1,4 +1,4 @@
-package com.positivity.invoice.service;
+package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;

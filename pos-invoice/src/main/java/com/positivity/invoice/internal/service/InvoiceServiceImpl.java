@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.config.InvoiceEventPublisher;
+import com.positivity.invoice.internal.config.InvoiceService;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
@@ -12,7 +13,6 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.service.InvoiceService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;

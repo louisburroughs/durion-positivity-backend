@@ -1,4 +1,4 @@
-package com.positivity.invoice.service;
+package com.positivity.invoice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,9 +16,6 @@ import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.internal.service.CustomerReferenceService;
-import com.positivity.invoice.internal.service.InvoiceSearchServiceImpl;
-import com.positivity.invoice.internal.service.WorkorderReferenceService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
