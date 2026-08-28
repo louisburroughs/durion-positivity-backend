@@ -12,8 +12,6 @@ import com.positivity.accounting.internal.event.InvoicePostingFailed;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.ReconciliationRecordRepository;
-import com.positivity.accounting.service.OutboxService;
-import com.positivity.accounting.service.PaymentOutcomeProcessingService;
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.time.Clock;

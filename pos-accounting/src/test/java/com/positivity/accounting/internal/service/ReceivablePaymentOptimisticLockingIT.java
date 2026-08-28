@@ -13,7 +13,6 @@ import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
-import com.positivity.accounting.service.PaymentApplicationService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

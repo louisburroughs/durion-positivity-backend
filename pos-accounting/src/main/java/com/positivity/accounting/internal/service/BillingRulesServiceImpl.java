@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.entity.ExtCustomerBillingRules;
 import com.positivity.accounting.internal.repository.ExtCustomerBillingRulesRepository;
-import com.positivity.accounting.service.BillingRulesService;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;

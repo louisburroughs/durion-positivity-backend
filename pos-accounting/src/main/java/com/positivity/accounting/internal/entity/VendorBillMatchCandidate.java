@@ -45,7 +45,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * true)</li>
  * </ol>
  *
- * @see com.positivity.accounting.service.VendorBillService#selectMatchCandidate
+ * @see com.positivity.accounting.internal.service.VendorBillService#selectMatchCandidate
  */
 @Getter
 @Setter

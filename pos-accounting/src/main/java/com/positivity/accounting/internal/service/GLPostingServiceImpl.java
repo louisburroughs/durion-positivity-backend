@@ -3,8 +3,6 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.SettlementPostingCommand;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
-import com.positivity.accounting.service.GLPostingService;
-import com.positivity.accounting.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;

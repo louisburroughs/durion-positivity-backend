@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.VendorResponse;
-import com.positivity.accounting.service.VendorDirectoryService;
+import com.positivity.accounting.internal.service.VendorDirectoryService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

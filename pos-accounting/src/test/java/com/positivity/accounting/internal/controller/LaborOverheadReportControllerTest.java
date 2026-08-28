@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.LaborOverheadCostReport;
-import com.positivity.accounting.service.LaborOverheadReportService;
+import com.positivity.accounting.internal.service.LaborOverheadReportService;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

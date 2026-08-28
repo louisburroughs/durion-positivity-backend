@@ -4,7 +4,7 @@ import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotResponse;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotSummary;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotVerification;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.TaxLiabilitySnapshotService;
+import com.positivity.accounting.internal.service.TaxLiabilitySnapshotService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

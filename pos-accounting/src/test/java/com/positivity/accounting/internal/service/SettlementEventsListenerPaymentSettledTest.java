@@ -18,9 +18,6 @@ import com.positivity.accounting.internal.repository.PaymentApplicationRepositor
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
-import com.positivity.accounting.service.OutboxService;
-import com.positivity.accounting.service.PaymentApplicationService;
-import com.positivity.accounting.service.SettlementReconciliationService;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import java.math.BigDecimal;
 import java.time.Clock;

@@ -19,7 +19,7 @@ import org.hibernate.annotations.Immutable;
 /**
  * Append-only audit record for every accounting status synchronization event
  * processed
- * by {@link com.positivity.accounting.service.AccountingStatusSyncService}.
+ * by {@link com.positivity.accounting.internal.service.AccountingStatusSyncService}.
  *
  * <p>
  * Satisfies AC5 (CAP-251 Story #5): every sync event is persisted with audit

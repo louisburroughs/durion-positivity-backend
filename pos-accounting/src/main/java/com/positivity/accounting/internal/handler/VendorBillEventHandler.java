@@ -3,7 +3,7 @@ package com.positivity.accounting.internal.handler;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
-import com.positivity.accounting.service.VendorBillService;
+import com.positivity.accounting.internal.service.VendorBillService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;

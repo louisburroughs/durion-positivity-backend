@@ -4,7 +4,7 @@ import com.positivity.accounting.internal.dto.SettlementLineResponse;
 import com.positivity.accounting.internal.dto.SettlementManualMatchRequest;
 import com.positivity.accounting.internal.dto.SettlementWriteOffRequest;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.SettlementReconciliationService;
+import com.positivity.accounting.internal.service.SettlementReconciliationService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

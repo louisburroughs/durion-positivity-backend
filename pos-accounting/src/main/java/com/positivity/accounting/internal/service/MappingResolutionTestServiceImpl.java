@@ -14,8 +14,6 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
-import com.positivity.accounting.service.MappingResolutionTestService;
-import com.positivity.accounting.service.PostingRuleEvaluator;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;

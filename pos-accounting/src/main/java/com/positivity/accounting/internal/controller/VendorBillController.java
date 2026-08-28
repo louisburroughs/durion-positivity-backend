@@ -5,7 +5,7 @@ import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.VendorBillService;
+import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

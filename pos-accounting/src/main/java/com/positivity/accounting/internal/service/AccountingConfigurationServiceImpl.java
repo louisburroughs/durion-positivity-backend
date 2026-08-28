@@ -5,7 +5,6 @@ import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
-import com.positivity.accounting.service.AccountingConfigurationService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.LocalDate;
 import java.util.Optional;

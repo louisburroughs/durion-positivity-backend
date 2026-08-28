@@ -9,7 +9,6 @@ import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
-import com.positivity.accounting.service.MappingKeyService;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;

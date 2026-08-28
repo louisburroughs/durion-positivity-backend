@@ -19,7 +19,7 @@ import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
-import com.positivity.accounting.service.DefaultGLMappingService;
+import com.positivity.accounting.internal.service.DefaultGLMappingService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

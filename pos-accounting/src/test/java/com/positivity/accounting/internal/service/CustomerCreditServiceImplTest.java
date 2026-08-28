@@ -20,8 +20,6 @@ import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
-import com.positivity.accounting.service.AccountingPeriodService;
-import com.positivity.accounting.service.OutboxService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

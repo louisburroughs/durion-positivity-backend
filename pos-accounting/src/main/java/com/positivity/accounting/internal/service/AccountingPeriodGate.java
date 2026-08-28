@@ -6,8 +6,6 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
-import com.positivity.accounting.service.AccountingConfigurationService;
-import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.LocalDate;
 import java.time.YearMonth;

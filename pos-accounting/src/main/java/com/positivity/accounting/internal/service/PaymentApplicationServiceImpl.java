@@ -18,7 +18,6 @@ import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
-import com.positivity.accounting.service.OutboxService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -59,7 +58,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class PaymentApplicationServiceImpl implements com.positivity.accounting.service.PaymentApplicationService {
+public class PaymentApplicationServiceImpl
+        implements com.positivity.accounting.internal.service.PaymentApplicationService {
     private static final String PAYMENT_APPLICATION_NOT_FOUND_PREFIX = "Payment application not found: ";
 
     private static final String PAYMENT_NOT_FOUND = "Payment not found: ";

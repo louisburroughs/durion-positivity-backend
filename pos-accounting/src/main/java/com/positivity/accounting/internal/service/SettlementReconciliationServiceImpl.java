@@ -19,10 +19,6 @@ import com.positivity.accounting.internal.repository.ExtPaymentSettlementConfigR
 import com.positivity.accounting.internal.repository.ProcessorSettlementLineRepository;
 import com.positivity.accounting.internal.repository.ProcessorSettlementRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
-import com.positivity.accounting.service.GLMappingResolver;
-import com.positivity.accounting.service.GLPostingService;
-import com.positivity.accounting.service.OutboxService;
-import com.positivity.accounting.service.SettlementReconciliationService;
 import com.positivity.domainevents.payment.SettlementReportedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;

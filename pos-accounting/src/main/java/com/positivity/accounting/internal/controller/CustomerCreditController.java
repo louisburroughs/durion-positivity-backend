@@ -6,7 +6,7 @@ import com.positivity.accounting.internal.dto.CustomerCreditResponse;
 import com.positivity.accounting.internal.dto.CustomerCreditTransactionResponse;
 import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.CustomerCreditService;
+import com.positivity.accounting.internal.service.CustomerCreditService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;

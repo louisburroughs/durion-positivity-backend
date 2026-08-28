@@ -12,7 +12,7 @@ import com.positivity.accounting.internal.dto.ReconciliationUnmatchRequest;
 import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.BankReconciliationService;
+import com.positivity.accounting.internal.service.BankReconciliationService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

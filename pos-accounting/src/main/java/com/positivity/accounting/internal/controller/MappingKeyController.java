@@ -5,7 +5,7 @@ import com.positivity.accounting.internal.dto.MappingKeyListResponse;
 import com.positivity.accounting.internal.dto.MappingKeyResponse;
 import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.MappingKeyService;
+import com.positivity.accounting.internal.service.MappingKeyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
 import io.swagger.v3.oas.annotations.Operation;

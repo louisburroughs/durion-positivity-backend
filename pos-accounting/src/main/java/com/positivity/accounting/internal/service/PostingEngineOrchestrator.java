@@ -14,9 +14,6 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
-import com.positivity.accounting.service.IdempotencyService;
-import com.positivity.accounting.service.JournalEntryService;
-import com.positivity.accounting.service.PostingRuleEvaluator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

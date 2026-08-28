@@ -17,8 +17,6 @@ import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
-import com.positivity.accounting.service.EventIngestionService;
-import com.positivity.accounting.service.IdempotencyService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

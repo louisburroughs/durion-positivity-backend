@@ -22,8 +22,8 @@ import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundExce
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
-import com.positivity.accounting.service.AccountingConfigurationService;
-import com.positivity.accounting.service.AccountingPeriodService;
+import com.positivity.accounting.internal.service.AccountingConfigurationService;
+import com.positivity.accounting.internal.service.AccountingPeriodService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

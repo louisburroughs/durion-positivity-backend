@@ -23,7 +23,7 @@ import com.positivity.accounting.internal.exception.MatchAmountMismatchException
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotBalancedException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
-import com.positivity.accounting.service.BankReconciliationService;
+import com.positivity.accounting.internal.service.BankReconciliationService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;

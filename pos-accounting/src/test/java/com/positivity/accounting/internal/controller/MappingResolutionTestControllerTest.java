@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.MappingResolutionTestRequest;
 import com.positivity.accounting.internal.dto.MappingResolutionTestResponse;
-import com.positivity.accounting.service.MappingResolutionTestService;
+import com.positivity.accounting.internal.service.MappingResolutionTestService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;

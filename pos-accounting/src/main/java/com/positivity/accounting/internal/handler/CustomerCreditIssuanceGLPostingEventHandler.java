@@ -4,9 +4,9 @@ import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEve
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
-import com.positivity.accounting.service.GLMappingResolver;
-import com.positivity.accounting.service.GLPostingService;
-import com.positivity.accounting.service.IdempotencyService;
+import com.positivity.accounting.internal.service.GLMappingResolver;
+import com.positivity.accounting.internal.service.GLPostingService;
+import com.positivity.accounting.internal.service.IdempotencyService;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;

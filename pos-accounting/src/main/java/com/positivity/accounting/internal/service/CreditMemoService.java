@@ -1,0 +1,72 @@
+package com.positivity.accounting.internal.service;
+
+import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
+import com.positivity.accounting.internal.dto.CreditMemoResponse;
+import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.web.server.ResponseStatusException;
+
+public interface CreditMemoService {
+
+    /**
+     * Create a Credit Memo to reverse invoice charges.
+     *
+     * Phase 2.1 implementation with full integrations:
+     * - Invoice validation via the ext_invoice replica (ADR-0044)
+     * - GL posting via GLPostingService
+     * - Prior period adjustment logic via AccountingPeriodService
+     * - Invoice balance derived from accounting's own records (ADR-0044 R6)
+     *
+     * @param request     Credit Memo creation request
+     * @param currentUser User creating the Credit Memo
+     * @return Created Credit Memo details
+     * @throws ResponseStatusException 404 if invoice not found, 409 if business
+     *                                 rules violated
+     */
+    CreditMemoResponse createCreditMemo(CreateCreditMemoRequest request, String currentUser);
+
+    /**
+     * List Credit Memos with optional filters.
+     *
+     * @param customerId        Optional customer filter
+     * @param originalInvoiceId Optional invoice filter
+     * @param status            Optional status filter
+     * @param pageable          Pagination parameters
+     * @return Paginated Credit Memo list
+     */
+    Page<CreditMemoResponse> listCreditMemos(
+            UUID customerId, UUID originalInvoiceId, CreditMemoStatus status, Pageable pageable);
+
+    /**
+     * Get a Credit Memo by ID.
+     *
+     * @param creditMemoId Credit Memo identifier
+     * @return Credit Memo details
+     * @throws ResponseStatusException 404 if Credit Memo not found
+     */
+    CreditMemoResponse getCreditMemo(UUID creditMemoId);
+
+    /**
+     * Void a POSTED Credit Memo (issue #997 symmetry).
+     *
+     * <p>The void is a new economic event in the period it happens: the memo keeps its original
+     * posting-period contribution to the T8 liability report (no retroactive restatement of
+     * closed/frozen periods), and the void posts the mirror journal entry ({@code Dr AR / Cr
+     * Revenue + Cr Sales-Tax Payable}) dated now, in an open period. The invoice's outstanding
+     * balance is restored automatically (balance sums count POSTED memos only).
+     *
+     * <p>Only POSTED memos are voidable: an APPLIED memo has been consumed and must be handled
+     * through the customer-credit lifecycle; a VOIDED memo is terminal.
+     *
+     * @param creditMemoId Credit Memo identifier
+     * @param voidReason   Mandatory reason for the audit trail
+     * @param currentUser  User voiding the Credit Memo
+     * @return Voided Credit Memo details
+     * @throws ResponseStatusException 404 if not found; 409 if not POSTED
+     */
+    CreditMemoResponse voidCreditMemo(
+            @NonNull UUID creditMemoId, @NonNull String voidReason, @NonNull String currentUser);
+}

@@ -33,8 +33,6 @@ import com.positivity.accounting.internal.repository.BankReconciliationLineRepos
 import com.positivity.accounting.internal.repository.BankReconciliationRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
-import com.positivity.accounting.service.GLMappingResolver;
-import com.positivity.accounting.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

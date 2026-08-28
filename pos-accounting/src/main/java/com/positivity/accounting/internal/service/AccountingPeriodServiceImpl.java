@@ -12,7 +12,6 @@ import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
-import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

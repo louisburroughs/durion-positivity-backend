@@ -13,9 +13,6 @@ import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
-import com.positivity.accounting.service.AccountingPeriodService;
-import com.positivity.accounting.service.CustomerCreditService;
-import com.positivity.accounting.service.OutboxService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -281,7 +278,7 @@ public class CustomerCreditServiceImpl implements CustomerCreditService {
      * Reject a missing or non-positive amount before anything else runs.
      *
      * <p>HTTP callers are already covered by {@code @NotNull} + {@code @DecimalMin("0.01")} on
-     * the request DTOs, but {@link com.positivity.accounting.service.CustomerCreditService} is
+     * the request DTOs, but {@link com.positivity.accounting.internal.service.CustomerCreditService} is
      * in the module's public {@code service} package, so an in-process caller reaches this
      * method with bean validation never having run. A negative amount would otherwise pass the
      * open-amount gate ({@code -50 <= 100}), *increase* the credit's open amount, and enqueue a

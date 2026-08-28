@@ -44,7 +44,6 @@ import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.service.FinancialReportingService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

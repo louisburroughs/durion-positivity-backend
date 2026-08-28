@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
-import com.positivity.accounting.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;

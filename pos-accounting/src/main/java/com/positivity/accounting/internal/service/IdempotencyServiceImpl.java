@@ -2,7 +2,6 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.IdempotencyKey;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
-import com.positivity.accounting.service.IdempotencyService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

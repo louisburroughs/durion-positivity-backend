@@ -10,8 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
-import com.positivity.accounting.service.PaymentApplicationService;
-import com.positivity.accounting.service.SettlementReconciliationService;
 import com.positivity.domainevents.payment.SettlementProviderConfigV1;
 import com.positivity.domainevents.payment.SettlementReportedV1;
 import java.math.BigDecimal;

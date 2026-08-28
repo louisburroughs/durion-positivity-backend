@@ -22,7 +22,6 @@ import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.TaxLiabilitySnapshotRepository;
-import com.positivity.accounting.service.FinancialReportingService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

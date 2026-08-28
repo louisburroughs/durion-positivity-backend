@@ -10,7 +10,7 @@ import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.FinancialReportingService;
+import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

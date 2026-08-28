@@ -32,7 +32,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * forward (monotonic), which is what makes the lock irreversible.
  *
  * <p>The table ships empty; keys appear on first write through
- * {@link com.positivity.accounting.service.AccountingConfigurationService}.
+ * {@link com.positivity.accounting.internal.service.AccountingConfigurationService}.
  *
  * @see <a href=
  *      "domains/accounting/plan-odoo-parity-pos-accounting.md">Odoo Parity Plan -
