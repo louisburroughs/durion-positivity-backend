@@ -633,6 +633,31 @@ Note that re-running the alpha fixture pack is **not** a substitute:
 the site, so it declares capabilities on newly created bins only. Existing bins need the PATCH above
 (or a rebuild of the environment).
 
+**Site defaults must also be declared, or the staging bins are unreachable (issue #1557).**
+`StagingLocationResolver` resolves the receiving staging location as: the
+`pos.inventory.receiving.staging-location-id` property, then the site's declared default from the
+`location_ref` replica, then a hardcoded `00000000-0000-0000-0000-000000000002`. That last value is
+not a row in any `storage_location` table, and putaway refuses any receipt not booked at whatever
+the chain resolved — so with no site default, a receipt booked at the real `Staging Floor` is
+refused with `RECEIPT_NOT_STAGED`. `scripts/fixtures/seed/alpha/location/site-defaults.csv` declares
+them for every seeded site; on an environment seeded before that pack existed, declare them by hand:
+
+```bash
+curl -X PUT "https://<gateway>/location/locations/$SITE_ID/defaults" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1" \
+  -H 'Content-Type: application/json' \
+  -d '{"defaultStagingLocationId":"'$STAGING_ID'","defaultQuarantineLocationId":"'$QUARANTINE_ID'"}'
+```
+
+The two ids must differ and both must belong to the site. The write republishes the location fact,
+which is what carries the defaults into pos-inventory's `location_ref` replica — so verify on the
+consumer side, not just the producer:
+
+```sql
+-- pos-inventory. Both columns non-null for every site, or receiving is still broken there.
+SELECT location_id, code, default_staging_location_id, default_quarantine_location_id FROM location_ref;
+```
+
 **A row entirely absent from `ext_storage_location` is a different fault** (issue #1554): it meant
 the storage location was created without a fact being emitted, which only Flyway-seeded rows could
 do. The location operational seed is deleted; storage locations enter exclusively through

@@ -54,6 +54,7 @@ PACK_FILES = [
     ("security/users.csv", "@security-users"),
     ("location/locations.csv", "LOCATION"),
     ("location/storage-locations.csv", "@storage-locations"),
+    ("location/site-defaults.csv", "@site-defaults"),
     ("location/bays.csv", "@location-bays"),
     ("location/mobile-units.csv", "@mobile-units"),
     ("people/employees.csv", "PERSON"),
@@ -493,6 +494,63 @@ def resolve_catalog_ref(gateway, cache, exemplars, match_type, name):
     return ref_id
 
 
+def run_site_defaults(gateway, relative_path, _location_id):
+    """API pack: declare each site's default staging and quarantine locations (issue #1557).
+
+    Without this the sites have no defaults, and StagingLocationResolver falls
+    through to a hardcoded 00000000-...-002 that is not a row in any
+    storage_location table. Putaway refuses any receipt not booked at the
+    resolved staging location, so the staging bins this pipeline just created
+    are unreachable: a receipt booked at the real Staging Floor -- the one a
+    human or a UI would pick -- is refused with RECEIPT_NOT_STAGED.
+
+    Runs straight after the storage topology, because both names have to exist
+    before they can be pointed at, and before the inventory packs, which is
+    where receiving starts to matter. The endpoint is a create-or-replace
+    upsert, so re-runs converge; it also requires the two ids to differ and to
+    belong to the site, which is why they are resolved per site rather than
+    assumed."""
+    location_ids = location_id_map(gateway)
+    storage_cache = {}
+    configured, failures = 0, 0
+
+    for row in read_fixture_rows(relative_path):
+        code = row["locationCode"]
+        site_id = location_ids.get(code)
+        if site_id is None:
+            print(f"  WARN: site defaults for {code}: location not found")
+            failures += 1
+            continue
+
+        names = storage_location_ids(gateway, location_ids, storage_cache, code)
+        staging_id = names.get(row["stagingName"])
+        quarantine_id = names.get(row["quarantineName"])
+        missing = [
+            name
+            for name, resolved in ((row["stagingName"], staging_id), (row["quarantineName"], quarantine_id))
+            if resolved is None
+        ]
+        if missing:
+            print(f"  WARN: site defaults for {code}: unresolved storage location(s) {missing}")
+            failures += 1
+            continue
+
+        status_code, _ = gateway._request(
+            "PUT",
+            f"/location/locations/{site_id}/defaults",
+            body={"defaultStagingLocationId": staging_id, "defaultQuarantineLocationId": quarantine_id},
+            allow_error=True,
+        )
+        if 200 <= status_code < 300:
+            configured += 1
+        else:
+            print(f"  WARN: site defaults for {code}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  site defaults: configured={configured} failures={failures}")
+    return failures == 0
+
+
 def run_putaway_rules(gateway, relative_path, _location_id):
     """API pack: create the putaway rules that route received lines to a bin
     (issue #1514).
@@ -750,6 +808,7 @@ API_PACKS = {
     "@location-bays": run_location_bays,
     "@mobile-units": run_mobile_units,
     "@storage-locations": run_storage_locations,
+    "@site-defaults": run_site_defaults,
     "@putaway-rules": run_putaway_rules,
     "@cycle-count-plans": run_cycle_count_plans,
 }
