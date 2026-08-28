@@ -4,7 +4,6 @@ import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.entity.LlmApiConfig;
 import com.positivity.mcp.internal.repository.LlmApiConfigRepository;
-import com.positivity.mcp.service.LlmApiConfigService;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;

@@ -1,13 +1,12 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
+import com.positivity.mcp.internal.config.DocumentIngestionService;
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
 import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
 import com.positivity.mcp.internal.repository.RagPreloadRecordRepository;
-import com.positivity.mcp.service.DocumentIngestionJobStatus;
-import com.positivity.mcp.service.DocumentIngestionService;
-import com.positivity.mcp.service.StaticRagPreloadService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.io.IOException;

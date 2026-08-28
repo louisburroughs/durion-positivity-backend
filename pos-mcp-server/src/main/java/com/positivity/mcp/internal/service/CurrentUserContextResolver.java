@@ -1,8 +1,8 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.security.PermissionCodes;
-import com.positivity.mcp.service.CurrentUserContext;
-import com.positivity.mcp.service.McpRoleResolver;
+import com.positivity.mcp.internal.telemetry.McpRoleResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.Set;
 import java.util.TreeSet;

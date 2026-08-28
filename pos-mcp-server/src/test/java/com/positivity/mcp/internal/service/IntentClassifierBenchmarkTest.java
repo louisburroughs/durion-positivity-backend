@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.repository.NltiIntentRepository;
-import com.positivity.mcp.service.AuditLedgerService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.UUID;

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
-import com.positivity.mcp.service.RolePromptResolver.AssembledPrompt;
+import com.positivity.mcp.internal.service.RolePromptResolver.AssembledPrompt;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;

@@ -32,7 +32,6 @@ import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.repository.NltiWritePlanRepository;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
-import com.positivity.mcp.service.AuditLedgerService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;

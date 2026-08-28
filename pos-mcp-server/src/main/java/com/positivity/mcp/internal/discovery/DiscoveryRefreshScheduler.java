@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.discovery;
 
-import com.positivity.mcp.service.ToolRegistrationService;
+import com.positivity.mcp.internal.discovery.service.ToolRegistrationService;
 import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;

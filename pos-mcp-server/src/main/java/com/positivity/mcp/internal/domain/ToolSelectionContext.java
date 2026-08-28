@@ -8,7 +8,7 @@ import org.jspecify.annotations.NonNull;
  *     admin fast-path keyword matching; it does <strong>not</strong> gate {@code mcp_tool}
  *     candidate selection
  * @param permissionCodes the {@code mcp_tool_permission} gating signal — see
- *     {@code com.positivity.mcp.service.CurrentUserContext#permissionCodes()}
+ *     {@code com.positivity.mcp.internal.config.CurrentUserContext#permissionCodes()}
  */
 public record ToolSelectionContext(
         @NonNull String userInput,

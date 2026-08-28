@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
-import com.positivity.mcp.service.SystemPromptService;
+import com.positivity.mcp.internal.service.SystemPromptService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;

@@ -9,10 +9,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.discovery.OperationProxyFactory;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
-import com.positivity.mcp.service.CurrentUserContext;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;

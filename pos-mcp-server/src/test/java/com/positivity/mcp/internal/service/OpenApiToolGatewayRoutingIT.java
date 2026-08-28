@@ -3,7 +3,7 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.positivity.mcp.service.CurrentUserContext;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;

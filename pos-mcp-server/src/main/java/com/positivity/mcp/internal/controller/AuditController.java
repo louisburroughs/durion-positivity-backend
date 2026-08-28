@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.service.AuditLedgerService;
+import com.positivity.mcp.internal.service.AuditLedgerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;

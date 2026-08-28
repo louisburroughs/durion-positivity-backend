@@ -2,7 +2,6 @@ package com.positivity.mcp.internal.telemetry;
 
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.WriteSignal;
-import com.positivity.mcp.service.McpRoleResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

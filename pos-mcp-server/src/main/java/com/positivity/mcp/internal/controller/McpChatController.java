@@ -1,10 +1,10 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.mcp.internal.config.AgentOrchestrationService;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.CurrentUserContextResolver;
-import com.positivity.mcp.service.AgentOrchestrationService;
-import com.positivity.mcp.service.CurrentUserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;

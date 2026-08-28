@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.telemetry;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.Authentication;

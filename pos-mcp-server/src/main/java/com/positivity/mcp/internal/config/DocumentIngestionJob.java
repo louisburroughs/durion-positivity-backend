@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.config;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;

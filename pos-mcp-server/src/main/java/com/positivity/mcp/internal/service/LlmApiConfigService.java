@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;

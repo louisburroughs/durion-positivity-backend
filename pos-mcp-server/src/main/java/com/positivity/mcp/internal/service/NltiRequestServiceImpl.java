@@ -18,8 +18,6 @@ import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.WriteSignal;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryPublisher;
-import com.positivity.mcp.service.IntentParserService;
-import com.positivity.mcp.service.NltiRequestService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.Counter;

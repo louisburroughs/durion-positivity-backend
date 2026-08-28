@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
-import com.positivity.mcp.service.CurrentUserContext;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;

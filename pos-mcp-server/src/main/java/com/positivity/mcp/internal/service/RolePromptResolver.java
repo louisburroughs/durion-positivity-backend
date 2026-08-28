@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.service;
 
 import java.util.List;
 import org.jspecify.annotations.NonNull;

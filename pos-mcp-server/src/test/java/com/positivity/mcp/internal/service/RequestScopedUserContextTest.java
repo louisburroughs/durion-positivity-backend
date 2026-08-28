@@ -2,7 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.mcp.service.CurrentUserContext;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;

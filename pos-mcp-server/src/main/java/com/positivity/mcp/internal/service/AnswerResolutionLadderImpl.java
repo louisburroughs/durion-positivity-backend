@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.ScreenLink;
-import com.positivity.mcp.service.CurrentUserContext;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;

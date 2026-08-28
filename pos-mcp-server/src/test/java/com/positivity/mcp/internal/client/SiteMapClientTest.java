@@ -9,9 +9,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.positivity.mcp.internal.config.SiteMapProperties;
-import com.positivity.mcp.service.SiteMapUnavailableException;
-import com.positivity.mcp.service.model.SiteMap;
-import com.positivity.mcp.service.model.SiteMapSection;
+import com.positivity.mcp.internal.service.SiteMapUnavailableException;
+import com.positivity.mcp.internal.service.model.SiteMap;
+import com.positivity.mcp.internal.service.model.SiteMapSection;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

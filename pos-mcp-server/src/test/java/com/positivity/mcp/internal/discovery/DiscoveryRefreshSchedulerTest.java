@@ -4,7 +4,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.mcp.service.ToolRegistrationService;
+import com.positivity.mcp.internal.discovery.service.ToolRegistrationService;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 

@@ -1,4 +1,4 @@
-package com.positivity.mcp.service.model;
+package com.positivity.mcp.internal.service.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;

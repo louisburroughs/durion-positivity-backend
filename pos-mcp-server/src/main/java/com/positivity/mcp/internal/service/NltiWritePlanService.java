@@ -27,7 +27,6 @@ import com.positivity.mcp.internal.repository.NltiWritePlanRepository;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.WriteSignal;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryPublisher;
-import com.positivity.mcp.service.AuditLedgerService;
 import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;

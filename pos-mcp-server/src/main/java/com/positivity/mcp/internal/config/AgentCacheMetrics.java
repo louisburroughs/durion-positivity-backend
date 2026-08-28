@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.config;
 
 /**
  * Service-layer observability contract for reporting cached agent counts.

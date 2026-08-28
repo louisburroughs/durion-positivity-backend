@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.service;
 
-import com.positivity.mcp.service.McpRoleResolver;
+import com.positivity.mcp.internal.telemetry.McpRoleResolver;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;

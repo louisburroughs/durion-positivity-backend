@@ -1,7 +1,5 @@
 package com.positivity.mcp.internal.config;
 
-import com.positivity.mcp.service.SessionAgentCacheMetrics;
-import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

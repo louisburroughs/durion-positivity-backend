@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.service.SystemPromptService;
+import com.positivity.mcp.internal.service.SystemPromptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

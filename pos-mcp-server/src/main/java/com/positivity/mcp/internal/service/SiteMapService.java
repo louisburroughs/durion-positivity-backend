@@ -1,7 +1,7 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.service;
 
-import com.positivity.mcp.service.model.SiteMap;
-import com.positivity.mcp.service.model.SiteMapSection;
+import com.positivity.mcp.internal.service.model.SiteMap;
+import com.positivity.mcp.internal.service.model.SiteMapSection;
 import java.util.Collection;
 import java.util.List;
 import org.jspecify.annotations.NonNull;

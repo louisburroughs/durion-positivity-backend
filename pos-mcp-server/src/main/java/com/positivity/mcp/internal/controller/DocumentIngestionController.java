@@ -1,10 +1,10 @@
 package com.positivity.mcp.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.mcp.internal.config.DocumentIngestionJob;
+import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
+import com.positivity.mcp.internal.config.DocumentIngestionService;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.service.DocumentIngestionJob;
-import com.positivity.mcp.service.DocumentIngestionJobStatus;
-import com.positivity.mcp.service.DocumentIngestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

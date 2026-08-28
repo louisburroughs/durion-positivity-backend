@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.service;
 
 public interface StaticRagPreloadService {
 

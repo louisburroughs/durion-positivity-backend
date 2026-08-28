@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
-import com.positivity.mcp.service.LlmApiConfigService;
+import com.positivity.mcp.internal.service.LlmApiConfigService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;

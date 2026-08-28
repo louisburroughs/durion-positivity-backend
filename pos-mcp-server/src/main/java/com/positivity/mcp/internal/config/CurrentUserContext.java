@@ -1,4 +1,4 @@
-package com.positivity.mcp.service;
+package com.positivity.mcp.internal.config;
 
 import java.util.Set;
 import java.util.UUID;

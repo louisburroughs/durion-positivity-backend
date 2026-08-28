@@ -6,10 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
-import com.positivity.mcp.service.AgentOrchestrationService;
-import com.positivity.mcp.service.CurrentUserContext;
-import com.positivity.mcp.service.DocumentIngestionService;
-import com.positivity.mcp.service.StreamingAgentOrchestrationService;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Bean;

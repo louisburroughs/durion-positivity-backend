@@ -1,8 +1,8 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
-import com.positivity.mcp.service.CurrentUserContext;
-import com.positivity.mcp.service.RolePromptResolver;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
