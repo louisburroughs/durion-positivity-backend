@@ -633,6 +633,14 @@ Note that re-running the alpha fixture pack is **not** a substitute:
 the site, so it declares capabilities on newly created bins only. Existing bins need the PATCH above
 (or a rebuild of the environment).
 
+**A row entirely absent from `ext_storage_location` is a different fault** (issue #1554): it meant
+the storage location was created without a fact being emitted, which only Flyway-seeded rows could
+do. The location operational seed is deleted; storage locations enter exclusively through
+`POST .../storage-locations` (the fixture pack or the API), which publishes the fact at creation, so
+a fresh environment hydrates the replica as it seeds. On an environment that still carries
+fact-less pre-#1554 rows, the same PATCH above (any field, even a no-op value) republishes the fact
+and creates the missing replica row.
+
 **Order matters only in one direction**: the destination side is what the compatibility matrix reads,
 and the item side is what the rules match on. Neither blocks the other, so both can run
 independently, but until *both* have run a receipt routes by the `ANY` rule to a `GENERAL`-reading

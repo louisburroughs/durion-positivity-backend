@@ -1,0 +1,59 @@
+sku,locationCode,storageLocationName,quantity,unitOfMeasure,description
+MOBI-120764,CLT-MAIN-001,Fluids Shelf,24,EA,Mobil 1 Full Synthetic 5W-30 Motor Oil 5qt
+MOBI-14977,CLT-MAIN-001,Fluids Shelf,12,EA,Mobil 1 Extended Performance 5W-30 5qt
+VALV-787987,CLT-MAIN-001,Fluids Shelf,24,EA,Valvoline Advanced Full Synthetic 5W-20 5qt
+VALV-782253,CLT-MAIN-001,Fluids Shelf,12,EA,Valvoline High Mileage MaxLife 5W-30 5qt
+MOBI-72206,CLT-MAIN-001,Fluids Shelf,24,EA,Mobil 1 High Mileage 10W-40 5qt
+PRES-AF2100,CLT-MAIN-001,Fluids Shelf,12,GAL,Prestone 50/50 Antifreeze/Coolant 1-Gal
+PRES-AF6100,CLT-MAIN-001,Fluids Shelf,6,GAL,Prestone Extended Life Antifreeze 1-Gal
+VALV-ATF-ML-QT,CLT-MAIN-001,Fluids Shelf,12,QT,Valvoline MaxLife ATF Quart
+PRES-AS800Y,CLT-MAIN-001,Fluids Shelf,6,EA,Prestone Power Steering Fluid 12-oz
+VALV-601458,CLT-MAIN-001,Fluids Shelf,12,QT,Valvoline Brake Fluid DOT 3
+PRES-AS262Y,CLT-MAIN-001,Fluids Shelf,6,EA,Prestone Wiper Fluid AS262Y
+PRES-AS657Y,CLT-MAIN-001,Fluids Shelf,6,GAL,Prestone Bug Wash Wiper Fluid AS657Y
+PRES-AS105,CLT-MAIN-001,Fluids Shelf,6,GAL,Prestone All Season Washer Fluid AS105
+WIXF-XP57356,CLT-MAIN-001,Bin A-01,12,EA,WIX XP Extended Life Oil Filter 57356XP
+WIXF-XP51394,CLT-MAIN-001,Bin A-02,12,EA,WIX XP Extended Life Oil Filter 51394XP
+WIXF-57356,CLT-MAIN-001,Bin A-03,12,EA,WIX Standard Oil Filter 57356
+FRAM-XG7317,CLT-MAIN-001,Bin A-04,12,EA,Fram Ultra Synthetic Oil Filter XG7317
+FRAM-PH7317,CLT-MAIN-001,Bin A-05,12,EA,Fram Extra Guard Oil Filter PH7317
+PURO-PP10060,CLT-MAIN-001,Bin A-06,12,EA,Purolator PureONE Oil Filter PL10060
+BSCH-OFP3400,CLT-MAIN-001,Bin A-07,12,EA,Bosch Premium FILTECH Oil Filter 3400
+ACDL-PF63E,CLT-MAIN-001,Bin A-08,12,EA,ACDelco Gold Oil Filter PF63E
+MOTO-FL-500-S,CLT-MAIN-001,Bin A-01,12,EA,Motorcraft FL-500-S Oil Filter
+WIXF-51394,CLT-MAIN-001,Bin A-02,12,EA,WIX Standard Oil Filter 51394
+WIXF-42257,CLT-MAIN-001,Bin B-01,6,EA,WIX Air Filter 42257
+WIXF-46038,CLT-MAIN-001,Bin B-02,6,EA,WIX Cabin Air Filter 46038
+FRAM-CA8037,CLT-MAIN-001,Bin B-03,6,EA,Fram Fresh Breeze Cabin Air Filter CA8037
+BSCH-5063WS,CLT-MAIN-001,Bin B-04,6,EA,Bosch HEPA Cabin Air Filter 5063WS
+ACDL-A2873C,CLT-MAIN-001,Bin B-05,6,EA,ACDelco Gold Air Filter A2873C
+WIXF-49113,CLT-MAIN-001,Bin B-06,6,EA,WIX Cabin Air Filter 49113
+FRAM-CF10285,CLT-MAIN-001,Bin B-07,6,EA,Fram Fresh Breeze Cabin Filter CF10285
+BSCH-CAFC6061,CLT-MAIN-001,Bin B-08,6,EA,Bosch Cabin Air Filter CAFC6061
+WIXF-33481,CLT-MAIN-001,Bin B-01,6,EA,WIX Fuel Filter 33481
+BSCH-FF71047,CLT-MAIN-001,Bin B-02,6,EA,Bosch Fuel Filter 71047
+NGKP-TR55IX,CLT-MAIN-001,Bin C-01,16,EA,NGK Iridium IX Spark Plug TR55IX
+NGKP-BKR6EIX,CLT-MAIN-001,Bin C-02,16,EA,NGK Iridium IX Spark Plug BKR6EIX
+BSCH-SP9657,CLT-MAIN-001,Bin C-03,16,EA,Bosch Double Iridium Spark Plug 9657
+BSCH-SP4418,CLT-MAIN-001,Bin C-04,16,EA,Bosch Double Iridium Spark Plug 4418
+DENS-ITV20TT,CLT-MAIN-001,Bin C-05,16,EA,Denso Iridium TT Spark Plug ITV20TT
+ACDL-41-162,CLT-MAIN-001,Bin C-06,16,EA,ACDelco Professional Iridium Spark Plug 41-162
+BSCH-26A,CLT-MAIN-001,Bin C-07,12,EA,Bosch ICON Wiper Blade 26in
+BSCH-24A,CLT-MAIN-001,Bin C-08,12,EA,Bosch ICON Wiper Blade 24in
+BSCH-22A,CLT-MAIN-001,Bin C-01,12,EA,Bosch ICON Wiper Blade 22in
+DENS-160-3314,CLT-MAIN-001,Bin C-02,12,EA,Denso Wiper Blade 160-3314
+WAGN-MX882,CLT-MAIN-001,Parts Shelf A,8,EA,Wagner ThermoQuiet Ceramic Brake Pad MX882
+WAGN-QC1394,CLT-MAIN-001,Parts Shelf A,8,EA,Wagner QuickStop Ceramic Brake Pad ZD1394
+BREM-P83073N,CLT-MAIN-001,Parts Shelf A,8,EA,Brembo NAO Ceramic Brake Pad P83073N
+BSCH-BC905,CLT-MAIN-001,Parts Shelf A,8,EA,Bosch BC905 QuietCast Premium Ceramic Brake Pad
+ACDL-48AGM,CLT-MAIN-001,Battery Rack,4,EA,ACDelco Gold 48AGM AGM Battery
+INTS-MTP-65,CLT-MAIN-001,Battery Rack,4,EA,Interstate MT-65 Battery
+BREM-25988,CLT-MAIN-001,Bulk Floor,4,EA,Brembo Drilled Rotor 25988
+MICH-XC2-0001,CLT-MAIN-001,Tire Rack A,8,EA,Michelin CrossClimate2 205/55R16
+MICH-XC2-0002,CLT-MAIN-001,Tire Rack A,8,EA,Michelin CrossClimate2 215/55R17
+MICH-XC2-0003,CLT-MAIN-001,Tire Rack A,8,EA,Michelin CrossClimate2 225/45R18
+MICH-XC2-0006,CLT-MAIN-001,Tire Rack A,8,EA,Michelin CrossClimate2 265/70R17
+MICH-DEF-0006,CLT-MAIN-001,Tire Rack B,8,EA,Michelin Defender T+H 225/65R17
+MICH-DEF-0010,CLT-MAIN-001,Tire Rack B,8,EA,Michelin Defender T+H 235/60R18
+MICH-DEF-0011,CLT-MAIN-001,Tire Rack B,8,EA,Michelin Defender T+H 265/70R17
+MICH-PS4-0003,CLT-MAIN-001,Tire Rack B,4,EA,Michelin Pilot Sport 4S 245/40R18

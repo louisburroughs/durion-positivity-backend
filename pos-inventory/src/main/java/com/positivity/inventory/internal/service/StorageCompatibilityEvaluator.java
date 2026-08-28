@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       tightening of the #1514 contract's "GENERAL accepts every category".
  *       <p>It is defence in depth rather than a workaround for missing data: the seeded storage
  *       locations <em>do</em> declare capabilities
- *       ({@code pos-location R__seed_location_2_operational_data.sql}, the #1514 section), so on a
+ *       ({@code scripts/fixtures/seed/alpha/location/storage-locations.csv}, #1514/#1554), so on a
  *       seeded environment a battery routes to a {@code BATTERY_RACK} by rule and never reaches
  *       this gate. What the gate covers is every path that yields {@code GENERAL} without anyone
  *       having judged the location fit for acid: a storage location created through the API without

@@ -25,10 +25,8 @@ pos-customer/R__seed_customer_operational_data.sql tier2
 pos-inventory/R__seed_reference_inventory.sql tier1
 pos-invoice/R__seed_reference_invoice.sql tier1
 pos-location/R__seed_location_1_reference.sql tier1
-pos-location/R__seed_location_2_operational_data.sql tier2
 pos-people-contact/R__seed_people_contact_operational_data.sql tier2
 pos-people-contact/R__seed_reference_people_contact.sql tier1
-pos-people/R__seed_people_operational_data.sql tier2
 pos-people/R__seed_reference_people.sql tier1
 pos-price/R__seed_reference_price.sql tier1
 pos-security-service/R__seed_reference_security.sql tier1

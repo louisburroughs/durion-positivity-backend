@@ -25,8 +25,10 @@ Usage:
 
 The bearer token needs bulkImport:upload:execute plus the per-domain create
 permissions relayed to downstream services (location:read, location:write,
-crm:party:create, and — for the putaway-rules pack — catalog:product:view plus
-inventory:putaway_rule:view/inventory:putaway_rule:manage).
+crm:party:create, for the putaway-rules pack catalog:product:view plus
+inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
+pack inventory:adjustment:create, inventory:adjustment:approve and
+inventory:availability:read).
 """
 
 import argparse
@@ -62,6 +64,7 @@ PACK_FILES = [
     ("vehicle/vehicles.csv", "VEHICLE", "vehicles"),
     ("catalog/products.csv", "CATALOG_PRODUCT", None),
     ("inventory/putaway-rules.csv", "@putaway-rules", None),
+    ("inventory/on-hand.csv", "@inventory-on-hand", None),
 ]
 
 # The catalog pack, reused by the putaway-rules pack to resolve category and
@@ -109,6 +112,9 @@ class Gateway:
 
     def put_json(self, path, body, allow_error=False):
         return self._request("PUT", path, body=body, allow_error=allow_error)
+
+    def patch_json(self, path, body, allow_error=False):
+        return self._request("PATCH", path, body=body, allow_error=allow_error)
 
     def post_multipart_file(self, path, field_name, file_name, file_bytes):
         boundary = uuid.uuid4().hex
@@ -362,7 +368,15 @@ def run_storage_locations(gateway, relative_path, _location_id):
     the physical type, and hazardContainment flags the ones with a spill bund.
     Both are sent only when the column is populated, so the service applies its
     own defaults (undeclared capability reads back as GENERAL, containment
-    false) rather than this script guessing them."""
+    false) rather than this script guessing them.
+
+    status and maxUnitCount/unitCount (issue #1554) are applied by a follow-up
+    PATCH through the owning service, because POST always creates ACTIVE and
+    uncapped: an INACTIVE row ('Retired Bin') keeps the decommissioned-
+    destination refusal path testable, and the capacity descriptors keep the
+    capacity paths reachable. Each PATCH republishes the storage-location fact,
+    so the pos-inventory replica sees the final state. Rows that already exist
+    are never patched — the pack converges without overwriting operator edits."""
     location_ids = location_id_map(gateway)
     created, skipped, failures = 0, 0, 0
     by_location = {}
@@ -398,11 +412,39 @@ def run_storage_locations(gateway, relative_path, _location_id):
             if 200 <= status_code < 300 and response:
                 name_to_id[row["name"]] = response.get("id")
                 created += 1
+                patch = storage_location_patch(row)
+                if patch:
+                    status_code, _ = gateway.patch_json(
+                        f"/location/locations/{site_id}/storage-locations/{response.get('id')}",
+                        patch, allow_error=True)
+                    if not 200 <= status_code < 300:
+                        print(f"  WARN: storage {code}/{row['name']}: follow-up PATCH {sorted(patch)}"
+                              f" failed (HTTP {status_code}) — row created but left ACTIVE/uncapped")
+                        failures += 1
             else:
                 print(f"  WARN: storage {code}/{row['name']}: HTTP {status_code}")
                 failures += 1
     print(f"  storage locations: created={created} already-existed={skipped} failures={failures}")
     return failures == 0
+
+
+def storage_location_patch(row):
+    """The follow-up PATCH body for a freshly created storage location, or None.
+
+    POST cannot express a non-ACTIVE status or a capacity descriptor, so those
+    two columns are applied afterwards through the same owning-service surface
+    an operator would use. Capacity keys follow StorageCapacityJson
+    (maxUnitCount = the cap, unitCount = the current fill)."""
+    patch = {}
+    status = (row.get("status") or "").strip().upper()
+    if status and status != "ACTIVE":
+        patch["status"] = status
+    if (row.get("maxUnitCount") or "").strip():
+        capacity = {"maxUnitCount": int(row["maxUnitCount"])}
+        if (row.get("unitCount") or "").strip():
+            capacity["unitCount"] = int(row["unitCount"])
+        patch["capacity"] = capacity
+    return patch or None
 
 
 def storage_location_ids(gateway, location_ids, cache, location_code):
@@ -607,6 +649,93 @@ def run_putaway_rules(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_inventory_on_hand(gateway, relative_path, _location_id):
+    """API pack: seed initial on-hand stock through the adjustment flow
+    (issue #1554, replacing pos-inventory's Flyway inventory_ledger_entry seed).
+
+    Rows are keyed by (locationCode, storageLocationName) and resolved against
+    the site's storage-location list, then filed per site as one inventory
+    bulk-ingest batch (each accepted row becomes a PENDING adjustment request)
+    and approved row by row — the approval posts the ADJUSTMENT_IN ledger
+    entry, which is what actually creates on-hand and emits the facts the
+    ext_* replicas consume. Adjustments are deltas, so re-runs would double
+    stock; convergence comes from checking availability first and skipping any
+    SKU that already has on-hand at its destination.
+
+    Deltas vs the retired Flyway seed: entries post as ADJUSTMENT_IN rather
+    than GOODS_RECEIPT, and unit cost is not expressible through the ingest
+    record, so the seeded valuation baseline is gone — receive real stock for
+    costing demos. The token needs inventory:adjustment:create,
+    inventory:adjustment:approve and inventory:availability:read."""
+    location_ids = location_id_map(gateway)
+    storage_cache = {}
+    by_location = {}
+    for row in read_fixture_rows(relative_path):
+        by_location.setdefault(row["locationCode"], []).append(row)
+
+    filed, approved, skipped, failures = 0, 0, 0, 0
+    for code, rows in by_location.items():
+        site_id = location_ids.get(code)
+        if site_id is None:
+            print(f"  WARN: on-hand for {code}: location not found — {len(rows)} row(s) skipped")
+            failures += len(rows)
+            continue
+        names = storage_location_ids(gateway, location_ids, storage_cache, code)
+
+        records, record_rows = [], []
+        for row in rows:
+            storage_id = names.get(row["storageLocationName"])
+            if storage_id is None:
+                print(f"  WARN: on-hand {row['sku']}: {code}/{row['storageLocationName']} unresolved")
+                failures += 1
+                continue
+            query = urllib.parse.urlencode({"productSku": row["sku"], "storageLocationId": storage_id})
+            status_code, availability = gateway.get(
+                f"/inventory/inventory/availability/by-sku?{query}", allow_error=True)
+            if status_code == 200 and float((availability or {}).get("onHand") or 0) > 0:
+                skipped += 1
+                continue
+            records.append({
+                "sku": row["sku"],
+                "quantity": float(row["quantity"]),
+                "locationId": storage_id,
+                "unitOfMeasure": row["unitOfMeasure"],
+            })
+            record_rows.append(row)
+        if not records:
+            continue
+
+        status_code, response = gateway.post_json(
+            "/inventory/inventory/bulk-ingest",
+            {"jobId": str(uuid.uuid4()), "locationId": site_id, "records": records},
+            allow_error=True)
+        if status_code != 200:
+            print(f"  WARN: on-hand for {code}: bulk-ingest HTTP {status_code} — {len(records)} row(s) not filed")
+            failures += len(records)
+            continue
+
+        for result in (response or {}).get("results", []):
+            row = record_rows[result["rowIndex"]]
+            if not result.get("success"):
+                print(f"  WARN: on-hand {row['sku']}: {result.get('errorMessage', 'ingest failed')}")
+                failures += 1
+                continue
+            filed += 1
+            status_code, _ = gateway.post_json(
+                f"/inventory/inventory/adjustments/{result['entityId']}/approve", None, allow_error=True)
+            if 200 <= status_code < 300:
+                approved += 1
+            else:
+                # The stock does not exist until approval posts the ledger entry, so a
+                # PENDING leftover is a failure of this pack, not a partial success.
+                print(f"  WARN: on-hand {row['sku']}: adjustment {result['entityId']} filed but"
+                      f" approve returned HTTP {status_code} — stock not posted")
+                failures += 1
+
+    print(f"  on-hand: filed={filed} approved={approved} already-stocked={skipped} failures={failures}")
+    return failures == 0
+
+
 def run_mechanic_skills(gateway, relative_path, _location_id):
     """API pack: replace-set each mechanic's skills via pos-shop-manager.
 
@@ -689,6 +818,7 @@ API_PACKS = {
     "@mobile-units": run_mobile_units,
     "@storage-locations": run_storage_locations,
     "@putaway-rules": run_putaway_rules,
+    "@inventory-on-hand": run_inventory_on_hand,
 }
 
 
