@@ -6,11 +6,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.events.outbox.OutboxHealthContributor;
 import com.positivity.workorder.internal.config.OutboxHealthConfig;
 import com.positivity.workorder.internal.config.OutboxPurgeJob;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.lang.ref.Reference;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,7 +44,10 @@ class OutboxMetricsAndPurgeTest {
 
         // The Grafana domain-events alerts fire on these exact series names; the shared
         // contributor (#1458) must keep them identical to the retired OutboxMetrics.
-        new OutboxHealthConfig().outboxHealthContributor(repository, TEST_CLOCK, provider, Duration.ofMinutes(5));
+        // Micrometer gauges hold their state object weakly; keep the contributor strongly
+        // reachable past the last read or a GC between registration and value() reads NaN.
+        OutboxHealthContributor contributor = new OutboxHealthConfig()
+                .outboxHealthContributor(repository, TEST_CLOCK, provider, Duration.ofMinutes(5));
 
         assertThat(registry.get("workorder.outbox.pending").gauge().value()).isEqualTo(7.0);
         assertThat(registry.get("workorder.outbox.oldest.age.seconds").gauge().value())
@@ -51,6 +56,8 @@ class OutboxMetricsAndPurgeTest {
         when(repository.findFirstByPublishedAtIsNullOrderByIdAsc()).thenReturn(Optional.empty());
         assertThat(registry.get("workorder.outbox.oldest.age.seconds").gauge().value())
                 .isZero();
+
+        Reference.reachabilityFence(contributor);
     }
 
     @Test
