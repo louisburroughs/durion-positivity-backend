@@ -7,7 +7,7 @@ import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentMapper;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.TechnicianAssignmentService;
+import com.positivity.workorder.internal.service.TechnicianAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

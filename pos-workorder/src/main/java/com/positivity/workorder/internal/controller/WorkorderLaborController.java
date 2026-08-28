@@ -7,7 +7,7 @@ import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import com.positivity.workorder.internal.dto.WorkorderLaborMapper;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkorderLaborService;
+import com.positivity.workorder.internal.service.WorkorderLaborService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

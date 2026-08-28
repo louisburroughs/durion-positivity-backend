@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import com.positivity.workorder.internal.entity.WorkorderFleetAuthorization;
 import com.positivity.workorder.internal.enums.FleetAuthorizationStatus;
 import com.positivity.workorder.internal.repository.WorkorderFleetAuthorizationRepository;
-import com.positivity.workorder.service.TechnicianAssignmentService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

@@ -5,7 +5,7 @@ import com.positivity.workorder.internal.dto.WorkorderNumberRef;
 import com.positivity.workorder.internal.dto.WorkorderNumberResolveRequest;
 import com.positivity.workorder.internal.dto.WorkorderSearchResult;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkorderSearchService;
+import com.positivity.workorder.internal.service.WorkorderSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

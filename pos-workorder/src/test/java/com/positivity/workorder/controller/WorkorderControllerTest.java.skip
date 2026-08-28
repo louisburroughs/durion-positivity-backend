@@ -10,7 +10,7 @@ import com.positivity.workorder.internal.dto.CreateWorkorderRequest;
 import com.positivity.workorder.internal.dto.StartWorkorderRequest;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStatus;
-import com.positivity.workorder.service.WorkorderService;
+import com.positivity.workorder.internal.service.WorkorderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

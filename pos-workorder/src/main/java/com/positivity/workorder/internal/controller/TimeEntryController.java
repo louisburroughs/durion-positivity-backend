@@ -5,7 +5,7 @@ import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
 import com.positivity.workorder.internal.dto.TimeEntryMapper;
 import com.positivity.workorder.internal.dto.TimeEntryResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.TimeEntryService;
+import com.positivity.workorder.internal.service.TimeEntryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

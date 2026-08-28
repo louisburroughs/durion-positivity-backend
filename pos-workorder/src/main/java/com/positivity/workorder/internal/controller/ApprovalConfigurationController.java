@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.ApprovalConfigurationService;
+import com.positivity.workorder.internal.service.ApprovalConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

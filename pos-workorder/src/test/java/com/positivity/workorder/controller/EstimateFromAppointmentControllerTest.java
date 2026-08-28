@@ -12,7 +12,7 @@ import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
-import com.positivity.workorder.service.EstimateService;
+import com.positivity.workorder.internal.service.EstimateService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

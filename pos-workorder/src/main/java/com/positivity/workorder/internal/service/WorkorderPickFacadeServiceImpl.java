@@ -16,7 +16,6 @@ import com.positivity.workorder.internal.entity.ExtPickTaskReplica;
 import com.positivity.workorder.internal.enums.ConsumeItemStatus;
 import com.positivity.workorder.internal.repository.ExtPickListReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository;
-import com.positivity.workorder.service.WorkorderPickFacadeService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

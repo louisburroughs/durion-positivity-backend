@@ -6,7 +6,6 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.service.TechnicianAssignmentService;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;

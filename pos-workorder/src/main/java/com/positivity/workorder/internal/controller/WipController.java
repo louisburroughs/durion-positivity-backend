@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WipService;
+import com.positivity.workorder.internal.service.WipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;

@@ -13,7 +13,6 @@ import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionExc
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.repository.SubstituteAuditRepository;
 import com.positivity.workorder.internal.repository.SubstituteLinkRepository;
-import com.positivity.workorder.service.SubstituteLinkService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

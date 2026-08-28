@@ -1,6 +1,6 @@
 package com.positivity.workorder.internal.scheduled;
 
-import com.positivity.workorder.service.EstimateService;
+import com.positivity.workorder.internal.service.EstimateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

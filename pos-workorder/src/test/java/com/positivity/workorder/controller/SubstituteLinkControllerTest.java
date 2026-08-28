@@ -23,7 +23,7 @@ import com.positivity.workorder.internal.enums.SubstituteType;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
-import com.positivity.workorder.service.SubstituteLinkService;
+import com.positivity.workorder.internal.service.SubstituteLinkService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

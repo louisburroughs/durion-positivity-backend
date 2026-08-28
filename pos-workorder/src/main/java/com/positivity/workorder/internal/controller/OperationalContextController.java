@@ -7,7 +7,7 @@ import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.StartWorkorderRequest;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkorderService;
+import com.positivity.workorder.internal.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

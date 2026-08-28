@@ -5,7 +5,7 @@ import com.positivity.workorder.internal.dto.pick.CreateSubstituteLinkRequest;
 import com.positivity.workorder.internal.dto.pick.SubstituteLinkResponse;
 import com.positivity.workorder.internal.dto.pick.SuggestSubstitutesRequest;
 import com.positivity.workorder.internal.dto.pick.UpdateSubstituteLinkRequest;
-import com.positivity.workorder.service.SubstituteLinkService;
+import com.positivity.workorder.internal.service.SubstituteLinkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

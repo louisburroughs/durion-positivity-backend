@@ -3,7 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.*;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkorderPartUsageService;
+import com.positivity.workorder.internal.service.WorkorderPartUsageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

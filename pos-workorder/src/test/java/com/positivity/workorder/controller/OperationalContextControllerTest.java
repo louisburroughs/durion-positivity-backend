@@ -16,7 +16,7 @@ import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
-import com.positivity.workorder.service.WorkorderService;
+import com.positivity.workorder.internal.service.WorkorderService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

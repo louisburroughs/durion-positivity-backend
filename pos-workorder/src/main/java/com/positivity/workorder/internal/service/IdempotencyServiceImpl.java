@@ -2,7 +2,6 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.entity.IdempotencyKey;
 import com.positivity.workorder.internal.repository.IdempotencyKeyRepository;
-import com.positivity.workorder.service.IdempotencyService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

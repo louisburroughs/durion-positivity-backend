@@ -9,7 +9,7 @@ import com.positivity.workorder.internal.dto.pick.ResolveScanResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickListResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickTaskResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkorderPickFacadeService;
+import com.positivity.workorder.internal.service.WorkorderPickFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

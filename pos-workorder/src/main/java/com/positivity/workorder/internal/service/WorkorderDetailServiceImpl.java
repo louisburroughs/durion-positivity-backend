@@ -14,7 +14,6 @@ import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepositor
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkorderDetailService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;

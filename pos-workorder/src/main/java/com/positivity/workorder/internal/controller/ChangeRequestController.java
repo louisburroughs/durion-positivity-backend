@@ -7,7 +7,7 @@ import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.dto.DeclineChangeRequestDTO;
 import com.positivity.workorder.internal.dto.EmergencyOverrideDTO;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.ChangeRequestService;
+import com.positivity.workorder.internal.service.ChangeRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

@@ -3,7 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.DashboardResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.DashboardService;
+import com.positivity.workorder.internal.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Clock;

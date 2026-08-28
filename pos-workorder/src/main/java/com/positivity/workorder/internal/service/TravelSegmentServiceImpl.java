@@ -14,7 +14,6 @@ import com.positivity.workorder.internal.exception.TravelSegmentConflictExceptio
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.repository.TravelSegmentAdjustmentRepository;
 import com.positivity.workorder.internal.repository.TravelSegmentRepository;
-import com.positivity.workorder.service.TravelSegmentService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
