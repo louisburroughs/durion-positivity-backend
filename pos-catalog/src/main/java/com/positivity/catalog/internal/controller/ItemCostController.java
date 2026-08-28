@@ -4,7 +4,7 @@ import com.positivity.catalog.internal.dto.ItemCostAuditDto;
 import com.positivity.catalog.internal.dto.ItemCostsDto;
 import com.positivity.catalog.internal.dto.UpdateStandardCostRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.ItemCostService;
+import com.positivity.catalog.internal.service.ItemCostService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

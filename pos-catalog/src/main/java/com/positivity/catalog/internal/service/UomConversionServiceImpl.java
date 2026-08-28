@@ -8,7 +8,6 @@ import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.UomConversionRepository;
-import com.positivity.catalog.service.UomConversionService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;

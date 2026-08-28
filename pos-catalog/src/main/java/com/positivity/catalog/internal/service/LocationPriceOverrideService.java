@@ -1,4 +1,4 @@
-package com.positivity.catalog.service;
+package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
 import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;

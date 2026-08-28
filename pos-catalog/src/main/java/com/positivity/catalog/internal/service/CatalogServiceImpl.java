@@ -22,7 +22,6 @@ import com.positivity.catalog.internal.repository.CatalogRepository;
 import com.positivity.catalog.internal.repository.NonInventoryProductRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
-import com.positivity.catalog.service.CatalogService;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;

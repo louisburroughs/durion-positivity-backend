@@ -10,7 +10,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.catalog.config.TestSecurityConfig;
 import com.positivity.catalog.internal.dto.CatalogBulkIngestRecord;
 import com.positivity.catalog.internal.dto.ProductDto;
-import com.positivity.catalog.service.ProductMasterDataService;
+import com.positivity.catalog.internal.service.ProductMasterDataService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

@@ -8,7 +8,7 @@ import com.positivity.catalog.internal.dto.CatalogBulkIngestRecord;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CategoryNameResolver;
-import com.positivity.catalog.service.ProductMasterDataService;
+import com.positivity.catalog.internal.service.ProductMasterDataService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

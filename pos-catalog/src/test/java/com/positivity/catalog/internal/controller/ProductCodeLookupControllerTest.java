@@ -7,17 +7,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.catalog.config.TestSecurityConfig;
+import com.positivity.catalog.internal.config.ProductFactReplayService;
 import com.positivity.catalog.internal.dto.ProductCodeKind;
 import com.positivity.catalog.internal.dto.ProductCodeMatch;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
-import com.positivity.catalog.service.CatalogService;
-import com.positivity.catalog.service.LocationPriceOverrideService;
-import com.positivity.catalog.service.ProductCodeLookupService;
-import com.positivity.catalog.service.ProductDetailService;
-import com.positivity.catalog.service.ProductFactReplayService;
-import com.positivity.catalog.service.ProductLifecycleService;
-import com.positivity.catalog.service.ProductMasterDataService;
-import com.positivity.catalog.service.ProductSearchService;
+import com.positivity.catalog.internal.service.CatalogService;
+import com.positivity.catalog.internal.service.LocationPriceOverrideService;
+import com.positivity.catalog.internal.service.ProductCodeLookupService;
+import com.positivity.catalog.internal.service.ProductDetailService;
+import com.positivity.catalog.internal.service.ProductLifecycleService;
+import com.positivity.catalog.internal.service.ProductMasterDataService;
+import com.positivity.catalog.internal.service.ProductSearchService;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;

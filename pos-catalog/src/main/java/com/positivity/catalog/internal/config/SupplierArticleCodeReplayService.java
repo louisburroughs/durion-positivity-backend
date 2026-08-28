@@ -1,4 +1,4 @@
-package com.positivity.catalog.service;
+package com.positivity.catalog.internal.config;
 
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import java.time.Instant;

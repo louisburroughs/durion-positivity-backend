@@ -1,11 +1,11 @@
 package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
+import com.positivity.catalog.internal.config.ProductFactReplayService;
 import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.ProductFactReplayService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

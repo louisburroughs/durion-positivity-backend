@@ -2,7 +2,7 @@ package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.CatalogService;
+import com.positivity.catalog.internal.service.CatalogService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

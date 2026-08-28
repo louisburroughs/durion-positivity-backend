@@ -4,7 +4,7 @@ import com.positivity.catalog.internal.dto.SubstitutionGroupCreateRequestDto;
 import com.positivity.catalog.internal.dto.SubstitutionGroupDto;
 import com.positivity.catalog.internal.dto.SubstitutionGroupMemberRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.SubstitutionGroupService;
+import com.positivity.catalog.internal.service.SubstitutionGroupService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

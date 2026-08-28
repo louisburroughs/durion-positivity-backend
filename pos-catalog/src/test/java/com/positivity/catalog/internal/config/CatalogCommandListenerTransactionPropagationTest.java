@@ -10,9 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
-import com.positivity.catalog.service.ProductFactReplayService;
-import com.positivity.catalog.service.ServiceFactReplayService;
-import com.positivity.catalog.service.SupplierArticleCodeReplayService;
 import java.time.Instant;
 import org.aopalliance.aop.Advice;
 import org.junit.jupiter.api.Test;

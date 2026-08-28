@@ -12,7 +12,6 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupRepository;
-import com.positivity.catalog.service.SubstitutionGroupService;
 import com.positivity.domainevents.AggregateTouch;
 import java.time.Clock;
 import java.util.List;

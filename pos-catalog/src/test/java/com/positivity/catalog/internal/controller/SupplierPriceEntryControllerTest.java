@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.catalog.config.TestSecurityConfig;
 import com.positivity.catalog.internal.dto.SupplierPriceEntryDto;
 import com.positivity.catalog.internal.dto.SupplierPriceImportStatusDto;
-import com.positivity.catalog.service.SupplierPriceEntryService;
+import com.positivity.catalog.internal.service.SupplierPriceEntryService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;

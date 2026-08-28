@@ -4,7 +4,7 @@ import com.positivity.catalog.internal.dto.UomConversionCreateRequestDto;
 import com.positivity.catalog.internal.dto.UomConversionDto;
 import com.positivity.catalog.internal.dto.UomConversionUpdateRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.UomConversionService;
+import com.positivity.catalog.internal.service.UomConversionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

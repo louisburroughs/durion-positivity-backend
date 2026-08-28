@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.catalog.BaseContractIntegrationTest;
 import com.positivity.catalog.internal.dto.PurchaseOrderReceivedEventDto;
-import com.positivity.catalog.service.ItemCostService;
+import com.positivity.catalog.internal.service.ItemCostService;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;

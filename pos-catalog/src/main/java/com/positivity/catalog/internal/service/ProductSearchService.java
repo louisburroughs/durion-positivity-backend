@@ -1,4 +1,4 @@
-package com.positivity.catalog.service;
+package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
 import org.jspecify.annotations.NonNull;

@@ -1,4 +1,4 @@
-package com.positivity.catalog.service;
+package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.dto.SupplierPriceEntryDto;
 import com.positivity.catalog.internal.dto.SupplierPriceImportStatusDto;

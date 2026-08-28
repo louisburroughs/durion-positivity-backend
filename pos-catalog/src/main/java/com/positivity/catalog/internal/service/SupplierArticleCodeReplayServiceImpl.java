@@ -1,10 +1,10 @@
 package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
+import com.positivity.catalog.internal.config.SupplierArticleCodeReplayService;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.repository.SupplierArticleCodeRepository;
-import com.positivity.catalog.service.SupplierArticleCodeReplayService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

@@ -17,7 +17,6 @@ import com.positivity.catalog.internal.repository.ApprovalRequestRepository;
 import com.positivity.catalog.internal.repository.GuardrailPolicyRepository;
 import com.positivity.catalog.internal.repository.LocationPriceOverrideRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.LocationPriceOverrideService;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

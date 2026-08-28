@@ -1,8 +1,8 @@
 package com.positivity.catalog.internal.controller;
 
+import com.positivity.catalog.internal.config.SupplierArticleCodeReplayService;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.SupplierArticleCodeReplayService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
