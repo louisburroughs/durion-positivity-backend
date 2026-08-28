@@ -109,11 +109,14 @@ Every `pos-{domain}` module follows this package layout under `com.positivity.{d
 ```
 com.positivity.{domain}/
 ├── Pos{Domain}Application.java   ← @SpringBootApplication, MUST stay at this root level
-├── service/                      ← PUBLIC API surface (interfaces) usable by other modules
-│   └── model/
+├── service/                      ← GRANT surface (ADR-0026 D1–D5): ONLY types named by a
+│   └── model/                       cross-module grant in an ADR; empty/absent in most modules.
+│                                    Sole grant today: pos-supplier SupplierStockService (ADR-0044).
+│                                    Grant-surface types must not depend on internal.* (D4).
 └── internal/                     ← everything else; PRIVATE, never imported by other modules
     ├── controller/   (thin REST endpoints)
-    ├── service/       (business logic implementations)
+    ├── service/       (service interfaces + implementations; subdomain splits
+    │                   internal/{sub}/service allowed for large modules)
     ├── repository/    (Spring Data JPA)
     ├── entity/        (JPA entities)
     ├── dto/
@@ -126,8 +129,11 @@ com.positivity.{domain}/
     └── security/
 ```
 
-- Only `service.*` packages may be referenced from outside the module. Cross-module access is REST (gateway or
-  load-balanced) or async events — never direct repository/entity/DTO imports across modules.
+- Membership in `{domain}.service` is by grant, not convention (ADR-0026 D2): a type resides there only if an
+  ADR names it for cross-module use (in-process or as a REST contract spec). Residence confers no call
+  permission by itself — ADR-0044 governs cross-module transport (events, or scoped REST-edge grants).
+  Cross-module access is REST (gateway or load-balanced) or async events — never direct
+  repository/entity/DTO imports across modules.
 - Each module has `src/test/java/{package}/ArchitectureTest.java` enforcing this; `pos-archunit` enforces it
   cross-module. Run `./mvnw -pl pos-archunit -am -Dtest=ArchitectureTests test` after restructuring packages.
 - Use `@NonNull` (`org.jspecify.annotations.NonNull`) on all non-null service/DAO method params and return types
