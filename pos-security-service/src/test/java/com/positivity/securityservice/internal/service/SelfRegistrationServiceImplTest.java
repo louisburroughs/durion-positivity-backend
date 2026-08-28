@@ -21,7 +21,6 @@ import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStat
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.SelfRegistrationReviewService;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

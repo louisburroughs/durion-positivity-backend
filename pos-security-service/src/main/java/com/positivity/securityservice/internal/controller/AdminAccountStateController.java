@@ -3,7 +3,7 @@ package com.positivity.securityservice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.AccountStateResponse;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.AdminAccountStateService;
+import com.positivity.securityservice.internal.service.AdminAccountStateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

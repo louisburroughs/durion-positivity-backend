@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,7 +10,7 @@ import com.positivity.securityservice.internal.dto.AccountStateResponse;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.internal.service.AdminAccountStateServiceImpl;
+import com.positivity.securityservice.internal.security.JwtService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

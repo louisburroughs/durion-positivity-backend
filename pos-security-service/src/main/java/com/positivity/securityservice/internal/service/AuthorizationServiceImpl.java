@@ -5,7 +5,6 @@ import com.positivity.securityservice.internal.entity.PrincipalRole;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.AuthorizationService;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

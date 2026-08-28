@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.dto.PricingSnapshotDto;
 import com.positivity.securityservice.internal.dto.PricingSnapshotRequest;

@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,9 +18,7 @@ import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
-import com.positivity.securityservice.internal.service.JwtServiceImpl;
-import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
-import com.positivity.securityservice.internal.service.TokenRevocationManager;
+import com.positivity.securityservice.internal.security.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;

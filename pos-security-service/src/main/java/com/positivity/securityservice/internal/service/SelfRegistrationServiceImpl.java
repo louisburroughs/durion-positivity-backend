@@ -13,8 +13,6 @@ import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.SelfRegistrationReviewService;
-import com.positivity.securityservice.service.SelfRegistrationService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.LinkedHashSet;

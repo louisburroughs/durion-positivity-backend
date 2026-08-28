@@ -10,7 +10,6 @@ import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
-import com.positivity.securityservice.service.RolePermissionService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

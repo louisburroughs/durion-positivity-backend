@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;

@@ -12,7 +12,6 @@ import com.positivity.securityservice.internal.exception.PermissionNotFoundExcep
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
-import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;

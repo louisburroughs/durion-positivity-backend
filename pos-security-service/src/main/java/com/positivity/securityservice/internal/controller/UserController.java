@@ -5,7 +5,7 @@ import com.positivity.securityservice.internal.dto.CreateUserRequest;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.UserService;
+import com.positivity.securityservice.internal.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

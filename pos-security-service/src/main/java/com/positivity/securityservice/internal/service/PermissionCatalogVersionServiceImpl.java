@@ -2,7 +2,6 @@ package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.enums.PermissionCode;
-import com.positivity.securityservice.service.PermissionCatalogVersionService;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;

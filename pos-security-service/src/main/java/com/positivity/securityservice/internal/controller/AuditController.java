@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.config.AuditEventService;
 import com.positivity.securityservice.internal.dto.AuditEventCreatedResponse;
 import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
@@ -9,8 +10,7 @@ import com.positivity.securityservice.internal.dto.PricingSnapshotCreatedRespons
 import com.positivity.securityservice.internal.dto.PricingSnapshotDto;
 import com.positivity.securityservice.internal.dto.PricingSnapshotRequest;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.AuditEventService;
-import com.positivity.securityservice.service.PricingSnapshotService;
+import com.positivity.securityservice.internal.service.PricingSnapshotService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

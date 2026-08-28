@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;

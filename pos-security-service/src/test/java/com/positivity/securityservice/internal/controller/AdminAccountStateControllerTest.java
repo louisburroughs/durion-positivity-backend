@@ -13,8 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.internal.dto.AccountStateResponse;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
+import com.positivity.securityservice.internal.service.AdminAccountStateService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
-import com.positivity.securityservice.service.AdminAccountStateService;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;

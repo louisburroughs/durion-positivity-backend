@@ -3,7 +3,7 @@ package com.positivity.securityservice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.RoleManagementService;
+import com.positivity.securityservice.internal.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Set;

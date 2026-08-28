@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.service.RoleManagementService;
-import com.positivity.securityservice.service.RolePermissionService;
+import com.positivity.securityservice.internal.service.RoleManagementService;
+import com.positivity.securityservice.internal.service.RolePermissionService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;

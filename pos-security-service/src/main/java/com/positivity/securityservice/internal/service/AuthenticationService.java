@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 // Note: internal.dto types are referenced here by module convention — all service interfaces
 // in pos-security-service use internal.dto as the API contract type. Moving DTOs to a shared

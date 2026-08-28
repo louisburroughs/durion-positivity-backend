@@ -15,9 +15,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
-import com.positivity.securityservice.service.PermissionCatalogVersionService;
-import com.positivity.securityservice.service.PermissionRegistryService;
-import com.positivity.securityservice.service.PermissionService;
+import com.positivity.securityservice.internal.service.PermissionCatalogVersionService;
+import com.positivity.securityservice.internal.service.PermissionRegistryService;
+import com.positivity.securityservice.internal.service.PermissionService;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;

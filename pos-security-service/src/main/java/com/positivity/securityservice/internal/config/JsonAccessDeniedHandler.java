@@ -2,7 +2,6 @@ package com.positivity.securityservice.internal.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
-import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

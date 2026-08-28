@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.repository.RoleRepository;
-import com.positivity.securityservice.internal.service.RoleAuthorityServiceImpl;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;

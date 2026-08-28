@@ -1,4 +1,4 @@
-package com.positivity.securityservice.service;
+package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,7 +13,6 @@ import com.positivity.securityservice.internal.entity.PricingRuleTraceEntry;
 import com.positivity.securityservice.internal.entity.PricingSnapshot;
 import com.positivity.securityservice.internal.repository.PricingRuleTraceEntryRepository;
 import com.positivity.securityservice.internal.repository.PricingSnapshotRepository;
-import com.positivity.securityservice.internal.service.PricingSnapshotServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
