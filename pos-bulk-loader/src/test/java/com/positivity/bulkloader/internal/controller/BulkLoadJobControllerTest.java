@@ -14,7 +14,7 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
-import com.positivity.bulkloader.service.BulkLoadJobService;
+import com.positivity.bulkloader.internal.service.BulkLoadJobService;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

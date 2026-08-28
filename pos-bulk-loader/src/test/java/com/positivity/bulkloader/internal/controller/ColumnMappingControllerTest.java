@@ -13,7 +13,7 @@ import com.positivity.bulkloader.internal.dto.ColumnMappingApproveRequest;
 import com.positivity.bulkloader.internal.dto.ColumnMappingResponse;
 import com.positivity.bulkloader.internal.dto.ColumnMappingUpdateRequest;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
-import com.positivity.bulkloader.service.ColumnMappingService;
+import com.positivity.bulkloader.internal.service.ColumnMappingService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

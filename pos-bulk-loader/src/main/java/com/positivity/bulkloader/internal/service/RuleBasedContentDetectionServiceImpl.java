@@ -2,7 +2,6 @@ package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.enums.DomainType;
-import com.positivity.bulkloader.service.ContentDetectionService;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;

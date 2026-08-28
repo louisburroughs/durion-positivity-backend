@@ -3,7 +3,7 @@ package com.positivity.bulkloader.internal.controller;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.security.BulkImportPermissions;
-import com.positivity.bulkloader.service.BulkLoadJobService;
+import com.positivity.bulkloader.internal.service.BulkLoadJobService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

@@ -1,4 +1,4 @@
-package com.positivity.bulkloader.service;
+package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.dto.ColumnMappingApproveRequest;
 import com.positivity.bulkloader.internal.dto.ColumnMappingResponse;

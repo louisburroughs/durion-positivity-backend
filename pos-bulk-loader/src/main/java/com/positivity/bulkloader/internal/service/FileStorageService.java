@@ -1,4 +1,4 @@
-package com.positivity.bulkloader.service;
+package com.positivity.bulkloader.internal.service;
 
 import java.io.InputStream;
 import java.util.UUID;

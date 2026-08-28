@@ -4,8 +4,6 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
-import com.positivity.bulkloader.service.BulkLoadJobService;
-import com.positivity.bulkloader.service.TusUploadService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
