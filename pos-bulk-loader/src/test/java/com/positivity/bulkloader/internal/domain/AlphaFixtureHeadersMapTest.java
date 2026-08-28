@@ -57,7 +57,13 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("vehicle/vehicles.csv", DomainType.VEHICLE, Set.<String>of()),
                 // "description" names the product for a human reading the file; the SKU is what
                 // identifies it to the service.
-                Arguments.of("inventory/on-hand.csv", DomainType.INVENTORY_STOCK_COUNT, Set.of("description")));
+                Arguments.of("inventory/on-hand.csv", DomainType.INVENTORY_STOCK_COUNT, Set.of("description")),
+                Arguments.of("location/storage-locations.csv", DomainType.STORAGE_LOCATION, Set.<String>of()),
+                Arguments.of("location/bays.csv", DomainType.BAY, Set.<String>of()),
+                Arguments.of("location/mobile-units.csv", DomainType.MOBILE_UNIT, Set.<String>of()),
+                Arguments.of("people/staffing-assignments.csv", DomainType.STAFFING_ASSIGNMENT, Set.<String>of()),
+                Arguments.of("inventory/putaway-rules.csv", DomainType.PUTAWAY_RULE, Set.<String>of()),
+                Arguments.of("inventory/cycle-count-plans.csv", DomainType.CYCLE_COUNT_PLAN, Set.<String>of()));
     }
 
     @ParameterizedTest(name = "{0} -> {1}")

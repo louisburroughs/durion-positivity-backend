@@ -51,6 +51,12 @@ public final class DomainRecordFields {
         types.put(DomainType.BASE_PRICE, BasePriceRecord.class);
         types.put(DomainType.VEHICLE, VehicleBulkRecord.class);
         types.put(DomainType.VEHICLE_FITMENT, VehicleFitmentRecord.class);
+        types.put(DomainType.STORAGE_LOCATION, StorageLocationLoaderRecord.class);
+        types.put(DomainType.BAY, BayLoaderRecord.class);
+        types.put(DomainType.MOBILE_UNIT, MobileUnitLoaderRecord.class);
+        types.put(DomainType.STAFFING_ASSIGNMENT, StaffingAssignmentLoaderRecord.class);
+        types.put(DomainType.PUTAWAY_RULE, PutawayRuleLoaderRecord.class);
+        types.put(DomainType.CYCLE_COUNT_PLAN, CycleCountPlanLoaderRecord.class);
         return types;
     }
 

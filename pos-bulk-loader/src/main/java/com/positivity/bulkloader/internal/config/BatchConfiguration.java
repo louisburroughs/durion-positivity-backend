@@ -4,19 +4,31 @@ import com.positivity.bulkloader.internal.config.BulkIngestWriterFactory.JobPara
 import com.positivity.bulkloader.internal.config.BulkIngestWriterFactory.Target;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
+import com.positivity.bulkloader.internal.domain.BayLoaderRecord;
+import com.positivity.bulkloader.internal.domain.BayLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.domain.CommercialCustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CommercialCustomerRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
+import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderRecord;
+import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountRecord;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
+import com.positivity.bulkloader.internal.domain.MobileUnitLoaderRecord;
+import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
+import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderRecord;
+import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderRecord;
+import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.StorageLocationLoaderRecord;
+import com.positivity.bulkloader.internal.domain.StorageLocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
@@ -65,6 +77,12 @@ public class BatchConfiguration {
     private final VehicleLoaderStrategy vehicleLoaderStrategy;
     private final VehicleFitmentLoaderStrategy vehicleFitmentLoaderStrategy;
     private final InventoryStockCountLoaderStrategy inventoryStockCountLoaderStrategy;
+    private final StorageLocationLoaderStrategy storageLocationLoaderStrategy;
+    private final BayLoaderStrategy bayLoaderStrategy;
+    private final MobileUnitLoaderStrategy mobileUnitLoaderStrategy;
+    private final StaffingAssignmentLoaderStrategy staffingAssignmentLoaderStrategy;
+    private final PutawayRuleLoaderStrategy putawayRuleLoaderStrategy;
+    private final CycleCountPlanLoaderStrategy cycleCountPlanLoaderStrategy;
 
     // Eureka service ids resolved through the load-balanced builder (#641); the ingest
     // writers address sibling services by discovery instead of host:port base URLs.
@@ -571,6 +589,338 @@ public class BatchConfiguration {
                 this::mapOpeningStockPayloads);
     }
 
+    @Bean
+    public Job storageLocationBulkLoadJob(Step storageLocationBulkLoadStep) {
+        return jobFactory.job("storageLocationBulkLoadJob", storageLocationBulkLoadStep);
+    }
+
+    @Bean
+    public Step storageLocationBulkLoadStep(
+            ItemStreamReader<StorageLocationLoaderRecord> storageLocationReader,
+            ItemProcessor<StorageLocationLoaderRecord, NumberedRecord<StorageLocationLoaderRecord>>
+                    storageLocationItemProcessor,
+            ItemWriter<NumberedRecord<StorageLocationLoaderRecord>> storageLocationBulkIngestWriter) {
+        return jobFactory.step(
+                "storageLocationBulkLoadStep",
+                storageLocationReader,
+                storageLocationItemProcessor,
+                storageLocationBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<StorageLocationLoaderRecord> storageLocationReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(storageLocationLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<StorageLocationLoaderRecord, NumberedRecord<StorageLocationLoaderRecord>>
+            storageLocationItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                storageLocationLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<StorageLocationLoaderRecord>> storageLocationBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "storageLocationBulkIngestWriter",
+                        DomainType.STORAGE_LOCATION,
+                        locationServiceId,
+                        "/v1/locations/storage-locations/bulk-ingest",
+                        "location:write"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapStorageLocationPayloads);
+    }
+
+    @Bean
+    public Job bayBulkLoadJob(Step bayBulkLoadStep) {
+        return jobFactory.job("bayBulkLoadJob", bayBulkLoadStep);
+    }
+
+    @Bean
+    public Step bayBulkLoadStep(
+            ItemStreamReader<BayLoaderRecord> bayReader,
+            ItemProcessor<BayLoaderRecord, NumberedRecord<BayLoaderRecord>> bayItemProcessor,
+            ItemWriter<NumberedRecord<BayLoaderRecord>> bayBulkIngestWriter) {
+        return jobFactory.step("bayBulkLoadStep", bayReader, bayItemProcessor, bayBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<BayLoaderRecord> bayReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(bayLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<BayLoaderRecord, NumberedRecord<BayLoaderRecord>> bayItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                bayLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<BayLoaderRecord>> bayBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "bayBulkIngestWriter",
+                        DomainType.BAY,
+                        locationServiceId,
+                        "/v1/locations/bays/bulk-ingest",
+                        "location:bay:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapBayPayloads);
+    }
+
+    @Bean
+    public Job mobileUnitBulkLoadJob(Step mobileUnitBulkLoadStep) {
+        return jobFactory.job("mobileUnitBulkLoadJob", mobileUnitBulkLoadStep);
+    }
+
+    @Bean
+    public Step mobileUnitBulkLoadStep(
+            ItemStreamReader<MobileUnitLoaderRecord> mobileUnitReader,
+            ItemProcessor<MobileUnitLoaderRecord, NumberedRecord<MobileUnitLoaderRecord>> mobileUnitItemProcessor,
+            ItemWriter<NumberedRecord<MobileUnitLoaderRecord>> mobileUnitBulkIngestWriter) {
+        return jobFactory.step(
+                "mobileUnitBulkLoadStep", mobileUnitReader, mobileUnitItemProcessor, mobileUnitBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<MobileUnitLoaderRecord> mobileUnitReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(mobileUnitLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<MobileUnitLoaderRecord, NumberedRecord<MobileUnitLoaderRecord>> mobileUnitItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                mobileUnitLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<MobileUnitLoaderRecord>> mobileUnitBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "mobileUnitBulkIngestWriter",
+                        DomainType.MOBILE_UNIT,
+                        locationServiceId,
+                        "/v1/mobile-units/bulk-ingest",
+                        "location:mobile-unit:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapMobileUnitPayloads);
+    }
+
+    @Bean
+    public Job staffingAssignmentBulkLoadJob(Step staffingAssignmentBulkLoadStep) {
+        return jobFactory.job("staffingAssignmentBulkLoadJob", staffingAssignmentBulkLoadStep);
+    }
+
+    @Bean
+    public Step staffingAssignmentBulkLoadStep(
+            ItemStreamReader<StaffingAssignmentLoaderRecord> staffingAssignmentReader,
+            ItemProcessor<StaffingAssignmentLoaderRecord, NumberedRecord<StaffingAssignmentLoaderRecord>>
+                    staffingAssignmentItemProcessor,
+            ItemWriter<NumberedRecord<StaffingAssignmentLoaderRecord>> staffingAssignmentBulkIngestWriter) {
+        return jobFactory.step(
+                "staffingAssignmentBulkLoadStep",
+                staffingAssignmentReader,
+                staffingAssignmentItemProcessor,
+                staffingAssignmentBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<StaffingAssignmentLoaderRecord> staffingAssignmentReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(staffingAssignmentLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<StaffingAssignmentLoaderRecord, NumberedRecord<StaffingAssignmentLoaderRecord>>
+            staffingAssignmentItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                staffingAssignmentLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<StaffingAssignmentLoaderRecord>> staffingAssignmentBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "staffingAssignmentBulkIngestWriter",
+                        DomainType.STAFFING_ASSIGNMENT,
+                        peopleServiceId,
+                        "/v1/people/staffing/bulk-ingest",
+                        "people:employee:edit"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapStaffingAssignmentPayloads);
+    }
+
+    @Bean
+    public Job putawayRuleBulkLoadJob(Step putawayRuleBulkLoadStep) {
+        return jobFactory.job("putawayRuleBulkLoadJob", putawayRuleBulkLoadStep);
+    }
+
+    @Bean
+    public Step putawayRuleBulkLoadStep(
+            ItemStreamReader<PutawayRuleLoaderRecord> putawayRuleReader,
+            ItemProcessor<PutawayRuleLoaderRecord, NumberedRecord<PutawayRuleLoaderRecord>> putawayRuleItemProcessor,
+            ItemWriter<NumberedRecord<PutawayRuleLoaderRecord>> putawayRuleBulkIngestWriter) {
+        return jobFactory.step(
+                "putawayRuleBulkLoadStep", putawayRuleReader, putawayRuleItemProcessor, putawayRuleBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<PutawayRuleLoaderRecord> putawayRuleReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(putawayRuleLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<PutawayRuleLoaderRecord, NumberedRecord<PutawayRuleLoaderRecord>> putawayRuleItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                putawayRuleLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<PutawayRuleLoaderRecord>> putawayRuleBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "putawayRuleBulkIngestWriter",
+                        DomainType.PUTAWAY_RULE,
+                        inventoryServiceId,
+                        "/v1/inventory/putaway/bulk-ingest",
+                        "inventory:putaway_rule:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapPutawayRulePayloads);
+    }
+
+    @Bean
+    public Job cycleCountPlanBulkLoadJob(Step cycleCountPlanBulkLoadStep) {
+        return jobFactory.job("cycleCountPlanBulkLoadJob", cycleCountPlanBulkLoadStep);
+    }
+
+    @Bean
+    public Step cycleCountPlanBulkLoadStep(
+            ItemStreamReader<CycleCountPlanLoaderRecord> cycleCountPlanReader,
+            ItemProcessor<CycleCountPlanLoaderRecord, NumberedRecord<CycleCountPlanLoaderRecord>>
+                    cycleCountPlanItemProcessor,
+            ItemWriter<NumberedRecord<CycleCountPlanLoaderRecord>> cycleCountPlanBulkIngestWriter) {
+        return jobFactory.step(
+                "cycleCountPlanBulkLoadStep",
+                cycleCountPlanReader,
+                cycleCountPlanItemProcessor,
+                cycleCountPlanBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<CycleCountPlanLoaderRecord> cycleCountPlanReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(cycleCountPlanLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<CycleCountPlanLoaderRecord, NumberedRecord<CycleCountPlanLoaderRecord>>
+            cycleCountPlanItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                cycleCountPlanLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<CycleCountPlanLoaderRecord>> cycleCountPlanBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "cycleCountPlanBulkIngestWriter",
+                        DomainType.CYCLE_COUNT_PLAN,
+                        inventoryServiceId,
+                        "/v1/inventory/cycleCountPlans/bulk-ingest",
+                        "inventory:cycle_count:initiate"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapCycleCountPlanPayloads);
+    }
+
     private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {
         List<LocationWriterPayload> payloads = new ArrayList<>(items.size());
         for (LocationRecord item : items) {
@@ -694,9 +1044,7 @@ public class BatchConfiguration {
      * Projects opening-stock rows onto the ingest DTO.
      *
      * <p>The two name columns exist only so the file can be written without ids; by this point they
-     * have done their job and are dropped, and the quantity becomes a number. A row whose quantity
-     * will not parse cannot reach here — validation rejects it first — so this stays a
-     * straightforward conversion rather than another place errors can hide.
+     * have done their job and are dropped, and the quantity becomes a number.
      */
     private List<OpeningStockWriterPayload> mapOpeningStockPayloads(List<InventoryStockCountRecord> items) {
         List<OpeningStockWriterPayload> payloads = new ArrayList<>(items.size());
@@ -713,6 +1061,153 @@ public class BatchConfiguration {
 
     private record OpeningStockWriterPayload(
             String sku, UUID locationId, java.math.BigDecimal quantity, String unitOfMeasure, String reasonCode) {}
+
+    // ─── payload projections for the packs converted from API scripts ────────
+    //
+    // Each drops the business-key columns its strategy has already consumed and coerces the rest to
+    // the types the ingest DTO declares. Validation ran first, so the parses here cannot fail on a
+    // row that reached this point.
+
+    private List<StorageLocationWriterPayload> mapStorageLocationPayloads(List<StorageLocationLoaderRecord> items) {
+        List<StorageLocationWriterPayload> payloads = new ArrayList<>(items.size());
+        for (StorageLocationLoaderRecord item : items) {
+            payloads.add(new StorageLocationWriterPayload(
+                    UUID.fromString(item.getSiteId().trim()),
+                    item.getName(),
+                    blankToNull(item.getType()),
+                    blankToNull(item.getParentName()),
+                    blankToNull(item.getStorageCategoryCode()),
+                    parseBooleanOrNull(item.getHazardContainment()),
+                    blankToNull(item.getAllowNewProduct()),
+                    parseIntegerOrNull(item.getMaxUnitCount()),
+                    blankToNull(item.getStatus())));
+        }
+        return payloads;
+    }
+
+    private record StorageLocationWriterPayload(
+            UUID siteId,
+            String name,
+            String type,
+            String parentName,
+            String storageCategoryCode,
+            Boolean hazardContainment,
+            String allowNewProduct,
+            Integer maxUnitCount,
+            String status) {}
+
+    private List<BayWriterPayload> mapBayPayloads(List<BayLoaderRecord> items) {
+        List<BayWriterPayload> payloads = new ArrayList<>(items.size());
+        for (BayLoaderRecord item : items) {
+            payloads.add(new BayWriterPayload(
+                    UUID.fromString(item.getLocationId().trim()),
+                    item.getName(),
+                    item.getBayType(),
+                    parseIntegerOrNull(item.getMaxConcurrentVehicles()),
+                    blankToNull(item.getStatus())));
+        }
+        return payloads;
+    }
+
+    private record BayWriterPayload(
+            UUID locationId, String name, String bayType, Integer maxConcurrentVehicles, String status) {}
+
+    private List<MobileUnitWriterPayload> mapMobileUnitPayloads(List<MobileUnitLoaderRecord> items) {
+        List<MobileUnitWriterPayload> payloads = new ArrayList<>(items.size());
+        for (MobileUnitLoaderRecord item : items) {
+            payloads.add(new MobileUnitWriterPayload(
+                    UUID.fromString(item.getBaseLocationId().trim()),
+                    item.getName(),
+                    blankToNull(item.getStatus()),
+                    blankToNull(item.getNotes())));
+        }
+        return payloads;
+    }
+
+    private record MobileUnitWriterPayload(UUID baseLocationId, String name, String status, String notes) {}
+
+    private List<StaffingAssignmentWriterPayload> mapStaffingAssignmentPayloads(
+            List<StaffingAssignmentLoaderRecord> items) {
+        List<StaffingAssignmentWriterPayload> payloads = new ArrayList<>(items.size());
+        for (StaffingAssignmentLoaderRecord item : items) {
+            payloads.add(new StaffingAssignmentWriterPayload(
+                    item.getEmployeeNumber(),
+                    UUID.fromString(item.getLocationId().trim()),
+                    item.getRole(),
+                    parseBooleanOrNull(item.getPrimary()),
+                    blankToNull(item.getEffectiveFrom()),
+                    blankToNull(item.getEffectiveTo())));
+        }
+        return payloads;
+    }
+
+    private record StaffingAssignmentWriterPayload(
+            String employeeNumber,
+            UUID locationId,
+            String role,
+            Boolean primary,
+            String effectiveFrom,
+            String effectiveTo) {}
+
+    private List<PutawayRuleWriterPayload> mapPutawayRulePayloads(List<PutawayRuleLoaderRecord> items) {
+        List<PutawayRuleWriterPayload> payloads = new ArrayList<>(items.size());
+        for (PutawayRuleLoaderRecord item : items) {
+            payloads.add(new PutawayRuleWriterPayload(
+                    parseIntegerOrNull(item.getPriority()),
+                    item.getMatchType().trim(),
+                    parseUuidOrNull(item.getMatchValue()),
+                    UUID.fromString(item.getDestinationLocationId().trim()),
+                    blankToNull(item.getDestinationStrategy()),
+                    parseBooleanOrNull(item.getIsEnabled())));
+        }
+        return payloads;
+    }
+
+    private record PutawayRuleWriterPayload(
+            Integer priority,
+            String matchType,
+            UUID matchValue,
+            UUID destinationLocationId,
+            String destinationStrategy,
+            Boolean isEnabled) {}
+
+    private List<CycleCountPlanWriterPayload> mapCycleCountPlanPayloads(List<CycleCountPlanLoaderRecord> items) {
+        List<CycleCountPlanWriterPayload> payloads = new ArrayList<>(items.size());
+        for (CycleCountPlanLoaderRecord item : items) {
+            List<UUID> zoneIds = new ArrayList<>();
+            for (String zoneId : item.getZoneIds().split(",")) {
+                if (!zoneId.isBlank()) {
+                    zoneIds.add(UUID.fromString(zoneId.trim()));
+                }
+            }
+            payloads.add(new CycleCountPlanWriterPayload(
+                    UUID.fromString(item.getLocationId().trim()),
+                    item.getPlanName(),
+                    zoneIds,
+                    blankToNull(item.getScheduledDate()),
+                    parseIntegerOrNull(item.getScheduledDaysOut())));
+        }
+        return payloads;
+    }
+
+    private record CycleCountPlanWriterPayload(
+            UUID locationId, String planName, List<UUID> zoneIds, String scheduledDate, Integer scheduledDaysOut) {}
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private Boolean parseBooleanOrNull(String value) {
+        return value == null || value.isBlank() ? null : Boolean.valueOf(value.trim());
+    }
+
+    private Integer parseIntegerOrNull(String value) {
+        return value == null || value.isBlank() ? null : Integer.valueOf(value.trim());
+    }
+
+    private UUID parseUuidOrNull(String value) {
+        return value == null || value.isBlank() ? null : UUID.fromString(value.trim());
+    }
 
     private record LocationWriterPayload(
             String name,

@@ -95,6 +95,12 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
                     case VEHICLE -> "vehicleBulkLoadJob";
                     case VEHICLE_FITMENT -> "vehicleFitmentBulkLoadJob";
                     case INVENTORY_STOCK_COUNT -> "inventoryStockCountBulkLoadJob";
+                    case STORAGE_LOCATION -> "storageLocationBulkLoadJob";
+                    case BAY -> "bayBulkLoadJob";
+                    case MOBILE_UNIT -> "mobileUnitBulkLoadJob";
+                    case STAFFING_ASSIGNMENT -> "staffingAssignmentBulkLoadJob";
+                    case PUTAWAY_RULE -> "putawayRuleBulkLoadJob";
+                    case CYCLE_COUNT_PLAN -> "cycleCountPlanBulkLoadJob";
                 };
 
         Job job = jobsByName.get(beanName);

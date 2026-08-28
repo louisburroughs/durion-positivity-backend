@@ -18,18 +18,24 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.bulkloader.internal.domain.BasePriceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.BasePriceRecord;
+import com.positivity.bulkloader.internal.domain.BayLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.domain.CommercialCustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CommercialCustomerRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CustomerPersonRecord;
+import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
+import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
+import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.StorageLocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleBulkRecord;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.VehicleFitmentRecord;
@@ -91,6 +97,24 @@ class BatchConfigurationWriterTest {
     InventoryStockCountLoaderStrategy inventoryStockCountLoaderStrategy;
 
     @Mock
+    StorageLocationLoaderStrategy storageLocationLoaderStrategy;
+
+    @Mock
+    BayLoaderStrategy bayLoaderStrategy;
+
+    @Mock
+    MobileUnitLoaderStrategy mobileUnitLoaderStrategy;
+
+    @Mock
+    StaffingAssignmentLoaderStrategy staffingAssignmentLoaderStrategy;
+
+    @Mock
+    PutawayRuleLoaderStrategy putawayRuleLoaderStrategy;
+
+    @Mock
+    CycleCountPlanLoaderStrategy cycleCountPlanLoaderStrategy;
+
+    @Mock
     RestClient.Builder restClientBuilder;
 
     @Mock
@@ -141,7 +165,13 @@ class BatchConfigurationWriterTest {
                 basePriceLoaderStrategy,
                 vehicleLoaderStrategy,
                 vehicleFitmentLoaderStrategy,
-                inventoryStockCountLoaderStrategy);
+                inventoryStockCountLoaderStrategy,
+                storageLocationLoaderStrategy,
+                bayLoaderStrategy,
+                mobileUnitLoaderStrategy,
+                staffingAssignmentLoaderStrategy,
+                putawayRuleLoaderStrategy,
+                cycleCountPlanLoaderStrategy);
     }
 
     // --- catalogBulkIngestWriter ---
