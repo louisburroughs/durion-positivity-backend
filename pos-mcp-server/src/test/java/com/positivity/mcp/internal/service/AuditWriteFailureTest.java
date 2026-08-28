@@ -8,7 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.mcp.internal.entity.NltiAuditEvent;
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.repository.NltiAuditEventRepository;
 import io.micrometer.core.instrument.Counter;
@@ -86,7 +86,7 @@ class AuditWriteFailureTest {
     void append_whenRepositoryThrows_doesNotPropagateException() {
         when(auditEventRepository.save(any())).thenThrow(new RuntimeException("Connection refused"));
 
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
+        AuditEventAppend event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
 
         // Issue NLTI-007: audit write failure must not block execution path
         assertThatCode(() -> service.append(event)).doesNotThrowAnyException();
@@ -99,7 +99,7 @@ class AuditWriteFailureTest {
         Counter mockCounter = mock(Counter.class);
         when(meterRegistry.counter("nlt.audit.write_failures")).thenReturn(mockCounter);
 
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.EXECUTION_STEP);
+        AuditEventAppend event = buildEvent(EVENT_ID, NltiAuditEventType.EXECUTION_STEP);
 
         // Issue NLTI-007 AC-4: write failure must block destructive execution paths
         assertThatThrownBy(() -> service.append(event))
@@ -124,7 +124,7 @@ class AuditWriteFailureTest {
         Counter mockCounter = mock(Counter.class);
         when(meterRegistry.counter("nlt.audit.write_failures")).thenReturn(mockCounter);
 
-        NltiAuditEvent event = buildEvent(EVENT_ID, destructiveType);
+        AuditEventAppend event = buildEvent(EVENT_ID, destructiveType);
 
         // Issue NLTI-007 AC-4: all three destructive types must block execution on write failure
         assertThatThrownBy(() -> service.append(event))
@@ -149,7 +149,7 @@ class AuditWriteFailureTest {
         when(meterRegistry.counter("nlt.audit.write_failures")).thenReturn(mockCounter);
         when(auditEventRepository.save(any())).thenThrow(new RuntimeException("Timeout"));
 
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
+        AuditEventAppend event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
 
         // Issue NLTI-007: metric emission is required on audit write failure
         assertThatCode(() -> service.append(event)).doesNotThrowAnyException();
@@ -160,19 +160,14 @@ class AuditWriteFailureTest {
     // ─── Helper ──────────────────────────────────────────────────────────────
 
     /**
-     * Builds a minimal valid {@link NltiAuditEvent} for write-failure path tests.
+     * Builds a minimal valid {@link AuditEventAppend} for write-failure path tests.
      *
      * @param id   event UUID (hardcoded constant per ADR-0013)
      * @param type audit event type
-     * @return fully initialised entity with timestamps set
+     * @return append request with a fixed timestamp
      */
-    private static NltiAuditEvent buildEvent(UUID id, NltiAuditEventType type) {
-        NltiAuditEvent event = new NltiAuditEvent();
-        event.setId(id);
-        event.setCorrelationId(CORRELATION_ID);
-        event.setEventType(type);
-        event.setTimestamp(OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC));
-        event.setCreatedAt(OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC));
-        return event;
+    private static AuditEventAppend buildEvent(UUID id, NltiAuditEventType type) {
+        return new AuditEventAppend(
+                id, CORRELATION_ID, null, null, type, OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC), null);
     }
 }

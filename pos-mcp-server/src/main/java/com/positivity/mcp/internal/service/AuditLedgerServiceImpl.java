@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
@@ -41,22 +42,26 @@ public class AuditLedgerServiceImpl implements AuditLedgerService {
     }
 
     @Override
-    public void append(@NonNull NltiAuditEvent event) {
-        if (event.getTimestamp() == null) {
-            event.setTimestamp(OffsetDateTime.now(clock));
-        }
-
-        event.setActorSubjectId(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+    public void append(@NonNull AuditEventAppend event) {
+        NltiAuditEvent entity = new NltiAuditEvent();
+        entity.setId(event.id());
+        entity.setCorrelationId(event.correlationId());
+        entity.setSessionId(event.sessionId());
+        entity.setRequestId(event.requestId());
+        entity.setEventType(event.eventType());
+        entity.setTimestamp(event.timestamp() != null ? event.timestamp() : OffsetDateTime.now(clock));
+        entity.setActorSubjectId(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        entity.setPayloadRef(event.payloadRef());
 
         try {
-            UUID eventId = event.getId();
+            UUID eventId = entity.getId();
             if (eventId != null && (recentlyAppended.contains(eventId) || auditEventRepository.existsById(eventId))) {
                 return;
             }
             if (eventId != null) {
                 recentlyAppended.add(eventId);
             }
-            auditEventRepository.save(event);
+            auditEventRepository.save(entity);
         } catch (RuntimeException ex) {
             try {
                 meterRegistry.counter(AUDIT_WRITE_FAILURE_COUNTER).increment();
@@ -64,7 +69,7 @@ public class AuditLedgerServiceImpl implements AuditLedgerService {
                 // Metric emission failure must not block any path.
             }
             // For destructive execution events, propagate failure to block execution.
-            if (event.getEventType() != null && isDestructiveEventType(event.getEventType())) {
+            if (entity.getEventType() != null && isDestructiveEventType(entity.getEventType())) {
                 throw ex;
             }
         }

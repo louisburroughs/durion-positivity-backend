@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.entity.NltiAuditEvent;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -100,12 +102,16 @@ class AuditLedgerServiceTest {
     @Test
     @DisplayName("append with valid event delegates to repository.save()")
     void append_withValidEvent_delegatesToRepository() {
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
+        AuditEventAppend event = buildAppend(EVENT_ID, NltiAuditEventType.REQUEST);
 
         // Issue NLTI-007: impl must persist the event via repository
         service.append(event);
 
-        verify(auditEventRepository).save(event);
+        ArgumentCaptor<NltiAuditEvent> captor = forClass(NltiAuditEvent.class);
+        verify(auditEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isEqualTo(EVENT_ID);
+        assertThat(captor.getValue().getCorrelationId()).isEqualTo(CORRELATION_ID);
+        assertThat(captor.getValue().getEventType()).isEqualTo(NltiAuditEventType.REQUEST);
     }
 
     // ─── append: actor resolution from security context ──────────────────────
@@ -126,7 +132,7 @@ class AuditLedgerServiceTest {
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "audit-user"));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
+        AuditEventAppend event = buildAppend(EVENT_ID, NltiAuditEventType.REQUEST);
 
         service.append(event);
 
@@ -152,7 +158,7 @@ class AuditLedgerServiceTest {
         when(meterRegistry.counter("nlt.audit.write_failures")).thenReturn(counter);
         when(auditEventRepository.save(any())).thenThrow(new RuntimeException("DB down"));
 
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.REQUEST);
+        AuditEventAppend event = buildAppend(EVENT_ID, NltiAuditEventType.REQUEST);
 
         // Issue NLTI-007: service must catch exception, emit metric, and not rethrow
         assertThatCode(() -> service.append(event)).doesNotThrowAnyException();
@@ -171,7 +177,7 @@ class AuditLedgerServiceTest {
     @Test
     @DisplayName("append called twice with same eventId saves only once (idempotency)")
     void append_idempotent_whenSameEventIdAppendedTwice_savesOnce() {
-        NltiAuditEvent event = buildEvent(EVENT_ID, NltiAuditEventType.INTENT);
+        AuditEventAppend event = buildAppend(EVENT_ID, NltiAuditEventType.INTENT);
 
         // Issue NLTI-007: duplicate event id must not cause double write
         service.append(event);
@@ -280,6 +286,17 @@ class AuditLedgerServiceTest {
      * @param type audit event type
      * @return fully initialised entity with timestamps set
      */
+    private static AuditEventAppend buildAppend(UUID id, NltiAuditEventType type) {
+        return new AuditEventAppend(
+                id,
+                CORRELATION_ID,
+                SESSION_ID,
+                REQUEST_ID,
+                type,
+                OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC),
+                null);
+    }
+
     private static NltiAuditEvent buildEvent(UUID id, NltiAuditEventType type) {
         NltiAuditEvent event = new NltiAuditEvent();
         event.setId(id);

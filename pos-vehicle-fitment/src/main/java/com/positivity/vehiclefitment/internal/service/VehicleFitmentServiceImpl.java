@@ -1,5 +1,10 @@
 package com.positivity.vehiclefitment.internal.service;
 
+import com.positivity.vehiclefitment.internal.dto.MakeResponse;
+import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
+import com.positivity.vehiclefitment.internal.dto.ModelResponse;
+import com.positivity.vehiclefitment.internal.dto.VehicleFitmentMapper;
+import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
 import com.positivity.vehiclefitment.internal.entity.Make;
 import com.positivity.vehiclefitment.internal.entity.Manufacturer;
 import com.positivity.vehiclefitment.internal.entity.Model;
@@ -233,7 +238,13 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     @Override
-    public List<Manufacturer> getManufacturers() {
+    public List<ManufacturerResponse> getManufacturers() {
+        return fetchManufacturers().stream()
+                .map(VehicleFitmentMapper::toManufacturerResponse)
+                .toList();
+    }
+
+    private List<Manufacturer> fetchManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
         if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
             return cached;
@@ -260,7 +271,13 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     @Override
-    public List<Make> getMakesByManufacturer(UUID manufacturerId) {
+    public List<MakeResponse> getMakesByManufacturer(UUID manufacturerId) {
+        return fetchMakesByManufacturer(manufacturerId).stream()
+                .map(VehicleFitmentMapper::toMakeResponse)
+                .toList();
+    }
+
+    private List<Make> fetchMakesByManufacturer(UUID manufacturerId) {
         Manufacturer manufacturer = manufacturerRepository
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
@@ -291,7 +308,13 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     @Override
-    public List<Model> getModelsByMake(UUID makeId) {
+    public List<ModelResponse> getModelsByMake(UUID makeId) {
+        return fetchModelsByMake(makeId).stream()
+                .map(VehicleFitmentMapper::toModelResponse)
+                .toList();
+    }
+
+    private List<Model> fetchModelsByMake(UUID makeId) {
         Make make = makeRepository
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
@@ -322,7 +345,13 @@ public class VehicleFitmentServiceImpl implements VehicleFitmentService {
     }
 
     @Override
-    public List<VehicleType> getVehicleTypesForMake(UUID makeId) {
+    public List<VehicleTypeResponse> getVehicleTypesForMake(UUID makeId) {
+        return fetchVehicleTypesForMake(makeId).stream()
+                .map(VehicleFitmentMapper::toVehicleTypeResponse)
+                .toList();
+    }
+
+    private List<VehicleType> fetchVehicleTypesForMake(UUID makeId) {
         Make make = makeRepository
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));

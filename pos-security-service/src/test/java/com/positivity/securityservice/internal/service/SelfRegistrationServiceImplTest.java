@@ -12,10 +12,10 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.peoplecontact.UserPersonLinkCreateRequestedV1;
 import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
+import com.positivity.securityservice.internal.dto.SelfRegistrationAttemptSnapshot;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
@@ -162,23 +162,24 @@ class SelfRegistrationServiceImplTest {
     void selfRegister_replaysSuccessfulAttemptForSameIdempotencyKey() {
         UUID personId = UUID.fromString("00000000-0000-0000-0000-000000000111");
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000112");
-        SelfRegistrationAttempt attempt = new SelfRegistrationAttempt();
-        attempt.setIdempotencyKey("retry-001");
-        attempt.setRequestFingerprint("90347d3f97f7eba7e0c299d832330bc658c3de70865560154f2f585b8b00f42c");
-        attempt.setStatus(SelfRegistrationAttemptStatus.SUCCEEDED);
-        attempt.setUserId(userId);
-        attempt.setPersonId(personId);
-        attempt.setUsername("jane");
-        attempt.setLinkStatus("PENDING");
-        attempt.setMatchedExistingPerson(true);
-        attempt.setIssuedTokens(false);
-        attempt.setCrmCandidateCount(1);
-        attempt.setCrmAnyMatches(true);
-        attempt.setCrmSharedIdentityCandidateCount(1);
-        attempt.setCrmExactEmailMatch(true);
-        attempt.setCrmExactPhoneMatch(false);
-        attempt.setCrmExactNameMatch(true);
-        attempt.setCrmReviewRequired(true);
+        SelfRegistrationAttemptSnapshot attempt = SelfRegistrationAttemptSnapshot.builder()
+                .idempotencyKey("retry-001")
+                .requestFingerprint("90347d3f97f7eba7e0c299d832330bc658c3de70865560154f2f585b8b00f42c")
+                .status(SelfRegistrationAttemptStatus.SUCCEEDED)
+                .userId(userId)
+                .personId(personId)
+                .username("jane")
+                .linkStatus("PENDING")
+                .matchedExistingPerson(true)
+                .issuedTokens(false)
+                .crmCandidateCount(1)
+                .crmAnyMatches(true)
+                .crmSharedIdentityCandidateCount(1)
+                .crmExactEmailMatch(true)
+                .crmExactPhoneMatch(false)
+                .crmExactNameMatch(true)
+                .crmReviewRequired(true)
+                .build();
 
         when(selfRegistrationAttemptService.findByIdempotencyKey("retry-001")).thenReturn(Optional.of(attempt));
 

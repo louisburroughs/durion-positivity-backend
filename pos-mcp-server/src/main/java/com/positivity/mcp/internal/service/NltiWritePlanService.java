@@ -3,12 +3,12 @@ package com.positivity.mcp.internal.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.dto.AuditEventAppend;
 import com.positivity.mcp.internal.dto.IntentSlot;
 import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.dto.WritePlanResponseV1;
-import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.entity.NltiRequest;
 import com.positivity.mcp.internal.entity.NltiWritePlan;
 import com.positivity.mcp.internal.enums.ArgProvenance;
@@ -510,15 +510,14 @@ public class NltiWritePlanService {
             @NonNull UUID sessionId,
             @NonNull UUID requestId,
             @NonNull String payloadRef) {
-        NltiAuditEvent event = new NltiAuditEvent();
-        event.setId(UUIDv7Generator.generate());
-        event.setCorrelationId(correlationId);
-        event.setSessionId(sessionId);
-        event.setRequestId(requestId);
-        event.setEventType(type);
-        event.setTimestamp(OffsetDateTime.now(clock));
-        event.setPayloadRef(payloadRef);
-        auditLedgerService.append(event);
+        auditLedgerService.append(new AuditEventAppend(
+                UUIDv7Generator.generate(),
+                correlationId,
+                sessionId,
+                requestId,
+                type,
+                OffsetDateTime.now(clock),
+                payloadRef));
     }
 
     private @NonNull NltiResponseV1 pendingResponse(@NonNull NltiRequest request, @NonNull NltiWritePlan plan) {

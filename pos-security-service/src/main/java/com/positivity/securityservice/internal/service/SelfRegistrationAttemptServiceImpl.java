@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.dto.CrmMatchSummaryDto;
+import com.positivity.securityservice.internal.dto.SelfRegistrationAttemptSnapshot;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.entity.SelfRegistrationAttempt;
 import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
@@ -22,8 +23,10 @@ public class SelfRegistrationAttemptServiceImpl implements SelfRegistrationAttem
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull Optional<SelfRegistrationAttempt> findByIdempotencyKey(@NonNull String idempotencyKey) {
-        return selfRegistrationAttemptRepository.findByIdempotencyKey(idempotencyKey);
+    public @NonNull Optional<SelfRegistrationAttemptSnapshot> findByIdempotencyKey(@NonNull String idempotencyKey) {
+        return selfRegistrationAttemptRepository
+                .findByIdempotencyKey(idempotencyKey)
+                .map(this::toSnapshot);
     }
 
     @Override
@@ -76,6 +79,32 @@ public class SelfRegistrationAttemptServiceImpl implements SelfRegistrationAttem
         attempt.setConflictMessage(conflictMessage);
         attempt.setReferenceId(referenceId);
         selfRegistrationAttemptRepository.save(attempt);
+    }
+
+    private SelfRegistrationAttemptSnapshot toSnapshot(SelfRegistrationAttempt attempt) {
+        return SelfRegistrationAttemptSnapshot.builder()
+                .idempotencyKey(attempt.getIdempotencyKey())
+                .requestFingerprint(attempt.getRequestFingerprint())
+                .username(attempt.getUsername())
+                .status(attempt.getStatus())
+                .userId(attempt.getUserId())
+                .personId(attempt.getPersonId())
+                .linkStatus(attempt.getLinkStatus())
+                .matchedExistingPerson(attempt.isMatchedExistingPerson())
+                .issuedTokens(attempt.isIssuedTokens())
+                .crmCandidateCount(attempt.getCrmCandidateCount())
+                .crmAnyMatches(attempt.getCrmAnyMatches())
+                .crmIndividualCustomerCandidateCount(attempt.getCrmIndividualCustomerCandidateCount())
+                .crmCommercialContactCandidateCount(attempt.getCrmCommercialContactCandidateCount())
+                .crmSharedIdentityCandidateCount(attempt.getCrmSharedIdentityCandidateCount())
+                .crmExactEmailMatch(attempt.getCrmExactEmailMatch())
+                .crmExactPhoneMatch(attempt.getCrmExactPhoneMatch())
+                .crmExactNameMatch(attempt.getCrmExactNameMatch())
+                .crmReviewRequired(attempt.getCrmReviewRequired())
+                .conflictCode(attempt.getConflictCode())
+                .conflictMessage(attempt.getConflictMessage())
+                .referenceId(attempt.getReferenceId())
+                .build();
     }
 
     private void applyCrmSummary(SelfRegistrationAttempt attempt, @Nullable CrmMatchSummaryDto summary) {

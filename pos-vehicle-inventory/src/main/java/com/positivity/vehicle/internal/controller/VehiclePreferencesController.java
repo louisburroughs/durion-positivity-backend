@@ -2,7 +2,6 @@ package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
-import com.positivity.vehicle.internal.dto.VehicleCarePreferenceMapper;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.internal.service.VehiclePreferencesService;
@@ -89,7 +88,6 @@ public class VehiclePreferencesController {
         log.info("GET /v1/vehicles/{}/preferences", vehicleId);
         return preferencesService
                 .getPreferences(vehicleId)
-                .map(VehicleCarePreferenceMapper::toResponse)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -162,7 +160,7 @@ public class VehiclePreferencesController {
                 request.updatedByUserId());
 
         var preference = preferencesService.upsertPreferences(serviceRequest);
-        return ResponseEntity.ok(VehicleCarePreferenceMapper.toResponse(preference));
+        return ResponseEntity.ok(preference);
     }
 
     @Operation(
@@ -221,7 +219,7 @@ public class VehiclePreferencesController {
 
         var preference = preferencesService.mergePreferences(
                 vehicleId, partialPreferences, request.serviceIntervalMonths(), request.updatedByUserId());
-        return ResponseEntity.ok(VehicleCarePreferenceMapper.toResponse(preference));
+        return ResponseEntity.ok(preference);
     }
 
     @Operation(operationId = "deleteVehiclePreferences", summary = "Delete vehicle care preferences", description = """

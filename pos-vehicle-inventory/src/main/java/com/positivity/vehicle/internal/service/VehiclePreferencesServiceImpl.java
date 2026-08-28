@@ -3,6 +3,8 @@ package com.positivity.vehicle.internal.service;
 import com.positivity.domainevents.vehicle.VehicleCarePreferenceUpdatedV1;
 import com.positivity.vehicle.internal.config.CarePreferenceEventPublisher;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
+import com.positivity.vehicle.internal.dto.VehicleCarePreferenceMapper;
+import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
@@ -47,9 +49,9 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
      */
     @Override
     @Transactional(readOnly = true)
-    public Optional<VehicleCarePreference> getPreferences(@NonNull UUID vehicleId) {
+    public Optional<VehicleCarePreferenceResponse> getPreferences(@NonNull UUID vehicleId) {
         log.debug("Fetching preferences for vehicleId={}", vehicleId);
-        return preferencesRepository.findByVehicle_VehicleId(vehicleId);
+        return preferencesRepository.findByVehicle_VehicleId(vehicleId).map(VehicleCarePreferenceMapper::toResponse);
     }
 
     /**
@@ -57,7 +59,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
      */
     @Override
     @Transactional
-    public VehicleCarePreference upsertPreferences(@NonNull UpsertPreferencesRequest request) {
+    public VehicleCarePreferenceResponse upsertPreferences(@NonNull UpsertPreferencesRequest request) {
         log.info("Upserting preferences for vehicleId={}", request.getVehicleId());
 
         // Validate vehicle exists
@@ -108,7 +110,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
         carePreferenceEventPublisher.publishCarePreferenceUpserted(saved);
         log.info("Saved preferences: id={}, vehicleId={}", saved.getId(), saved.getVehicleId());
 
-        return saved;
+        return VehicleCarePreferenceMapper.toResponse(saved);
     }
 
     /**
@@ -116,7 +118,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
      */
     @Override
     @Transactional
-    public VehicleCarePreference mergePreferences(
+    public VehicleCarePreferenceResponse mergePreferences(
             @NonNull UUID vehicleId,
             @NonNull Map<String, Object> partialPreferences,
             Integer serviceIntervalMonths,
@@ -124,7 +126,8 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
 
         log.info("Merging preferences for vehicleId={}, keys={}", vehicleId, partialPreferences.keySet());
 
-        var existing = getPreferences(vehicleId)
+        var existing = preferencesRepository
+                .findByVehicle_VehicleId(vehicleId)
                 .orElseThrow(() -> new EntityNotFoundException("No preferences found for vehicle: " + vehicleId));
 
         Integer legacyInterval = extractLegacyInterval(partialPreferences);
@@ -150,7 +153,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
         carePreferenceEventPublisher.publishCarePreferenceUpserted(saved);
         log.info("Merged preferences: id={}, vehicleId={}", saved.getId(), saved.getVehicleId());
 
-        return saved;
+        return VehicleCarePreferenceMapper.toResponse(saved);
     }
 
     /**

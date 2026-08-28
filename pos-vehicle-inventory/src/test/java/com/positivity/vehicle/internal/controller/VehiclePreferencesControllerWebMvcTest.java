@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
-import com.positivity.vehicle.internal.entity.VehicleCarePreference;
+import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.internal.service.VehiclePreferencesService;
 import java.util.Map;
@@ -68,12 +68,12 @@ class VehiclePreferencesControllerWebMvcTest {
     @MockitoBean
     VehiclePreferencesService preferencesService;
 
-    private static VehicleCarePreference stored(Integer serviceIntervalMonths) {
-        VehicleCarePreference preference = new VehicleCarePreference();
-        preference.setId(PREFERENCE_ID);
-        preference.setPreferences(Map.of("preferredOil", "5W-30"));
-        preference.setServiceIntervalMonths(serviceIntervalMonths);
-        return preference;
+    private static VehicleCarePreferenceResponse stored(Integer serviceIntervalMonths) {
+        return VehicleCarePreferenceResponse.builder()
+                .id(PREFERENCE_ID)
+                .preferences(Map.of("preferredOil", "5W-30"))
+                .serviceIntervalMonths(serviceIntervalMonths)
+                .build();
     }
 
     @Test

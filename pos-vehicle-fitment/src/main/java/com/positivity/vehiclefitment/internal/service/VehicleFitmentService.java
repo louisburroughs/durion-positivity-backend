@@ -1,9 +1,9 @@
 package com.positivity.vehiclefitment.internal.service;
 
-import com.positivity.vehiclefitment.internal.entity.Make;
-import com.positivity.vehiclefitment.internal.entity.Manufacturer;
-import com.positivity.vehiclefitment.internal.entity.Model;
-import com.positivity.vehiclefitment.internal.entity.VehicleType;
+import com.positivity.vehiclefitment.internal.dto.MakeResponse;
+import com.positivity.vehiclefitment.internal.dto.ManufacturerResponse;
+import com.positivity.vehiclefitment.internal.dto.ModelResponse;
+import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariable;
 import com.positivity.vehiclefitment.internal.entity.VehicleVariableValue;
 import com.positivity.vehiclefitment.internal.service.dto.CreatePartFitmentRequest;
@@ -21,13 +21,17 @@ public interface VehicleFitmentService {
 
     List<VehicleVariableValue> getVehicleVariableValues(UUID variableId);
 
-    List<Manufacturer> getManufacturers();
+    @NonNull
+    List<ManufacturerResponse> getManufacturers();
 
-    List<Make> getMakesByManufacturer(UUID manufacturerId);
+    @NonNull
+    List<MakeResponse> getMakesByManufacturer(@NonNull UUID manufacturerId);
 
-    List<Model> getModelsByMake(UUID makeId);
+    @NonNull
+    List<ModelResponse> getModelsByMake(@NonNull UUID makeId);
 
-    List<VehicleType> getVehicleTypesForMake(UUID makeId);
+    @NonNull
+    List<VehicleTypeResponse> getVehicleTypesForMake(@NonNull UUID makeId);
 
     /**
      * Creates a new part fitment record, resolving vehicle entities by name.
