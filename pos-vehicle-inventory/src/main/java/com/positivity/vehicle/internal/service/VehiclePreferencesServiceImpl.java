@@ -106,7 +106,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
             log.info("Creating new preferences for vehicleId={}", request.getVehicleId());
         }
 
-        var saved = preferencesRepository.save(preference);
+        var saved = preferencesRepository.saveAndFlush(preference);
         carePreferenceEventPublisher.publishCarePreferenceUpserted(saved);
         log.info("Saved preferences: id={}, vehicleId={}", saved.getId(), saved.getVehicleId());
 
@@ -149,7 +149,7 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
             existing.setUpdatedByUserId(updatedByUserId);
         }
 
-        var saved = preferencesRepository.save(existing);
+        var saved = preferencesRepository.saveAndFlush(existing);
         carePreferenceEventPublisher.publishCarePreferenceUpserted(saved);
         log.info("Merged preferences: id={}, vehicleId={}", saved.getId(), saved.getVehicleId());
 

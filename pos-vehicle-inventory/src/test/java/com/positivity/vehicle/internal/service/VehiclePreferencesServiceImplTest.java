@@ -42,7 +42,7 @@ class VehiclePreferencesServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new VehiclePreferencesServiceImpl(preferencesRepository, vehicleRepository, publisher);
-        when(preferencesRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(preferencesRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     private UpsertPreferencesRequest request(Map<String, Object> preferences, Integer serviceIntervalMonths) {
@@ -200,7 +200,56 @@ class VehiclePreferencesServiceImplTest {
         service.upsertPreferences(request(new HashMap<>(), null));
 
         ArgumentCaptor<VehicleCarePreference> captor = ArgumentCaptor.forClass(VehicleCarePreference.class);
-        verify(preferencesRepository).save(captor.capture());
+        verify(preferencesRepository).saveAndFlush(captor.capture());
         verify(publisher).publishCarePreferenceUpserted(captor.getValue());
+    }
+
+    /**
+     * Regression test for a bug where mapping to the response DTO happened on an entity that
+     * had merely been passed to {@code save()} without a flush: on an UPDATE, {@code @LastModifiedDate}
+     * is applied by Hibernate's {@code @PreUpdate} callback, which for an already-managed entity only
+     * fires at flush/commit time. Reading {@code updatedAt} off the un-flushed entity therefore
+     * returned a stale value. The fix is {@code saveAndFlush}, which forces the callback to run before
+     * the entity is mapped to the response.
+     */
+    @Test
+    @DisplayName("Upsert of an existing record flushes before mapping so @LastModifiedDate is fresh in the response")
+    void upsertOfExistingRecordFlushesBeforeMapping() {
+        when(vehicleRepository.existsById(VEHICLE_ID)).thenReturn(true);
+        VehicleCarePreference stored = existing(4);
+        when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(stored));
+        // Simulate the @LastModifiedDate/@PreUpdate stamp that Hibernate only applies on flush.
+        java.time.Instant flushedUpdatedAt = java.time.Instant.parse("2026-08-28T12:00:00Z");
+        when(preferencesRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            VehicleCarePreference entity = inv.getArgument(0);
+            entity.setUpdatedAt(flushedUpdatedAt);
+            return entity;
+        });
+
+        VehicleCarePreferenceResponse saved = service.upsertPreferences(request(new HashMap<>(), 6));
+
+        assertThat(saved.getUpdatedAt()).isEqualTo(flushedUpdatedAt);
+        verify(preferencesRepository).saveAndFlush(any());
+        verify(preferencesRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Merge flushes before mapping so @LastModifiedDate is fresh in the response")
+    void mergeFlushesBeforeMapping() {
+        VehicleCarePreference stored = existing(4);
+        when(preferencesRepository.findByVehicle_VehicleId(VEHICLE_ID)).thenReturn(Optional.of(stored));
+        java.time.Instant flushedUpdatedAt = java.time.Instant.parse("2026-08-28T12:30:00Z");
+        when(preferencesRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            VehicleCarePreference entity = inv.getArgument(0);
+            entity.setUpdatedAt(flushedUpdatedAt);
+            return entity;
+        });
+
+        VehicleCarePreferenceResponse saved =
+                service.mergePreferences(VEHICLE_ID, new HashMap<>(Map.of("washPreference", "hand")), null, USER_ID);
+
+        assertThat(saved.getUpdatedAt()).isEqualTo(flushedUpdatedAt);
+        verify(preferencesRepository).saveAndFlush(any());
+        verify(preferencesRepository, never()).save(any());
     }
 }
