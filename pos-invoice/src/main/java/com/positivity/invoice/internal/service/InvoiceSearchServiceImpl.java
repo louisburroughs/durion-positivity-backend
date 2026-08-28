@@ -6,7 +6,6 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.service.InvoiceSearchService;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;

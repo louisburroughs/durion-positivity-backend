@@ -29,6 +29,7 @@ import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
 import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
+import com.positivity.inventory.internal.movement.service.TransferOrderServiceImpl;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;

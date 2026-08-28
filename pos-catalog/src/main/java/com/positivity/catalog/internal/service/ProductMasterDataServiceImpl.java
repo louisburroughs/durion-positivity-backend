@@ -19,7 +19,6 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.CategoryRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.SubcategoryRepository;
-import com.positivity.catalog.service.ProductMasterDataService;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;

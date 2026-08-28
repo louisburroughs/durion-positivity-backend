@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.ExportJobRequest;
 import com.positivity.accounting.internal.dto.ExportJobResponse;
-import com.positivity.accounting.service.TimekeepingExportService;
+import com.positivity.accounting.internal.service.TimekeepingExportService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

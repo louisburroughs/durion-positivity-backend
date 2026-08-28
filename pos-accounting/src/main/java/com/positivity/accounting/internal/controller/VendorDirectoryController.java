@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.VendorDirectoryService;
+import com.positivity.accounting.internal.service.VendorDirectoryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

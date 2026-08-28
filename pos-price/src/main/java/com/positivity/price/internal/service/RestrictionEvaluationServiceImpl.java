@@ -8,7 +8,6 @@ import com.positivity.price.internal.enums.EvaluationContext;
 import com.positivity.price.internal.enums.RestrictionDecision;
 import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
-import com.positivity.price.service.RestrictionEvaluationService;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;

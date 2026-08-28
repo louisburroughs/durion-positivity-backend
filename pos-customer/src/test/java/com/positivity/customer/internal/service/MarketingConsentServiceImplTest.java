@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.customer.internal.config.SuppressionService;
 import com.positivity.customer.internal.dto.MarketingConsentDecision;
 import com.positivity.customer.internal.dto.MarketingConsentSummaryResponse;
 import com.positivity.customer.internal.dto.UpdateMarketingConsentRequest;
@@ -27,7 +28,6 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.ConsentEventRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.SuppressionService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalTime;

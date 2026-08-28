@@ -8,7 +8,6 @@ import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.enums.TimePeriodStatus;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
-import com.positivity.people.service.TimePeriodManagementService;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;

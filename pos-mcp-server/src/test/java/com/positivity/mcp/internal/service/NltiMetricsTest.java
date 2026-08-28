@@ -11,7 +11,6 @@ import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
-import com.positivity.mcp.service.IntentParserService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;

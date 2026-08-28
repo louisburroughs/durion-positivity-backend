@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.tax.internal.dto.ExemptionCertificateRequest;
 import com.positivity.tax.internal.dto.ExemptionCertificateResponse;
 import com.positivity.tax.internal.security.TaxPermissions;
-import com.positivity.tax.service.ExemptionCertificateService;
+import com.positivity.tax.internal.service.ExemptionCertificateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.backorder.BackorderResponse;
 import com.positivity.inventory.internal.enums.BackorderStatus;
-import com.positivity.inventory.service.BackorderService;
+import com.positivity.inventory.internal.reservation.service.BackorderService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

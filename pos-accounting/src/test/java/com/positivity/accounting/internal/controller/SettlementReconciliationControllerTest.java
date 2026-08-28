@@ -23,7 +23,7 @@ import com.positivity.accounting.internal.exception.SettlementLineNotFoundExcept
 import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
 import com.positivity.accounting.internal.exception.SettlementNotPostedException;
 import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
-import com.positivity.accounting.service.SettlementReconciliationService;
+import com.positivity.accounting.internal.service.SettlementReconciliationService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

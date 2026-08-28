@@ -3,7 +3,6 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
 import com.positivity.securityservice.internal.dto.AuditExportRequest;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
-import com.positivity.securityservice.service.AuditExportService;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.UUID;

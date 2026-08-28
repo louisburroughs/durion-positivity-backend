@@ -11,7 +11,6 @@ import com.positivity.catalog.internal.enums.CostType;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ItemCostAuditRepository;
 import com.positivity.catalog.internal.repository.ItemCostRepository;
-import com.positivity.catalog.service.ItemCostService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

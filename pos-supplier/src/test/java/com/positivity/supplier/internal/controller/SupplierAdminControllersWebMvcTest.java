@@ -22,18 +22,18 @@ import com.positivity.supplier.internal.exception.SupplierExceptionHandler;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
-import com.positivity.supplier.service.SupplierProfileAdminService;
-import com.positivity.supplier.service.model.AuthConfigRequest;
-import com.positivity.supplier.service.model.AuthConfigView;
-import com.positivity.supplier.service.model.CommercialAccountView;
-import com.positivity.supplier.service.model.EndpointBindingRequest;
-import com.positivity.supplier.service.model.EndpointBindingView;
-import com.positivity.supplier.service.model.ProfileSourceOfTruth;
-import com.positivity.supplier.service.model.RetryBackoff;
-import com.positivity.supplier.service.model.SupplierAccountRole;
-import com.positivity.supplier.service.model.SupplierAuthType;
-import com.positivity.supplier.service.model.VendorProfileRequest;
-import com.positivity.supplier.service.model.VendorProfileView;
+import com.positivity.supplier.internal.service.SupplierProfileAdminService;
+import com.positivity.supplier.internal.service.model.AuthConfigRequest;
+import com.positivity.supplier.internal.service.model.AuthConfigView;
+import com.positivity.supplier.internal.service.model.CommercialAccountView;
+import com.positivity.supplier.internal.service.model.EndpointBindingRequest;
+import com.positivity.supplier.internal.service.model.EndpointBindingView;
+import com.positivity.supplier.internal.service.model.ProfileSourceOfTruth;
+import com.positivity.supplier.internal.service.model.RetryBackoff;
+import com.positivity.supplier.internal.service.model.SupplierAccountRole;
+import com.positivity.supplier.internal.service.model.SupplierAuthType;
+import com.positivity.supplier.internal.service.model.VendorProfileRequest;
+import com.positivity.supplier.internal.service.model.VendorProfileView;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -267,7 +267,7 @@ class SupplierAdminControllersWebMvcTest {
                             true,
                             null,
                             java.util.Set.of(
-                                    com.positivity.supplier.service.model.RedactionClassification
+                                    com.positivity.supplier.internal.service.model.RedactionClassification
                                             .CUSTOMER_IDENTIFIER)));
 
             mockMvc.perform(authed(

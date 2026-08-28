@@ -25,7 +25,6 @@ import com.positivity.location.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.LocationTypeRepository;
-import com.positivity.location.service.LocationService;
 import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.ZoneId;

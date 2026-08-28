@@ -1,6 +1,5 @@
 package com.positivity.invoice.internal.dto;
 
-import com.positivity.invoice.service.model.DepositCreditSummary;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;

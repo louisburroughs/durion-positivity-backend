@@ -9,7 +9,7 @@ import com.positivity.inventory.internal.dto.InventoryLedgerEntryDto;
 import com.positivity.inventory.internal.dto.LedgerPage;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.service.InventoryLedgerService;
+import com.positivity.inventory.internal.ledger.service.InventoryLedgerService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

@@ -1,0 +1,89 @@
+package com.positivity.location.internal.service;
+
+import com.positivity.location.internal.dto.StorageLocationPatchRequest;
+import com.positivity.location.internal.dto.StorageLocationRequest;
+import com.positivity.location.internal.dto.StorageLocationResponse;
+import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
+import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
+import com.positivity.location.internal.enums.StorageLocationStatus;
+import com.positivity.location.internal.enums.StorageLocationType;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+/**
+ * Public service contract for storage location topology operations.
+ *
+ * Issue: CAP-214 #39
+ */
+public interface StorageLocationService {
+
+    /**
+     * Creates a storage location for a site.
+     *
+     * @param siteId  site identifier from the route
+     * @param request create request payload
+     * @return created storage location
+     */
+    @NonNull
+    StorageLocationResponse createStorageLocation(@NonNull UUID siteId, @NonNull StorageLocationRequest request);
+
+    /**
+     * Retrieves one storage location.
+     *
+     * @param siteId            site identifier from the route
+     * @param storageLocationId storage location identifier
+     * @return storage location response
+     */
+    @NonNull
+    StorageLocationResponse getStorageLocation(@NonNull UUID siteId, @NonNull UUID storageLocationId);
+
+    /**
+     * Retrieves existence/active validation details for a storage location.
+     *
+     * @param storageLocationId storage location identifier
+     * @return validation details
+     */
+    @NonNull
+    StorageLocationValidationResponseDTO getStorageLocationValidation(@NonNull UUID storageLocationId);
+
+    /**
+     * Lists storage locations for a site with optional type filtering.
+     *
+     * @param siteId   site identifier from the route
+     * @param type     optional type filter
+     * @param status   optional status filter
+     * @param pageable pagination specification
+     * @return page of storage locations
+     */
+    @NonNull
+    Page<StorageLocationResponse> listStorageLocations(
+            @NonNull UUID siteId, StorageLocationType type, StorageLocationStatus status, @NonNull Pageable pageable);
+
+    /**
+     * Returns the complete storage-location topology of a site in one
+     * unpaginated fetch, including every status. Intended for topology
+     * consumers such as pos-inventory rollup (FR-3).
+     *
+     * Issue: CAP-214 #655
+     *
+     * @param siteId site identifier from the route
+     * @return flat list of all storage locations of the site
+     */
+    @NonNull
+    List<StorageLocationTopologyResponse> listStorageLocationTopology(@NonNull UUID siteId);
+
+    /**
+     * Patches storage location fields.
+     *
+     * @param siteId            site identifier from the route
+     * @param storageLocationId storage location identifier
+     * @param patch             patch payload
+     * @return updated storage location
+     */
+    @NonNull
+    StorageLocationResponse patchStorageLocation(
+            @NonNull UUID siteId, @NonNull UUID storageLocationId, @NonNull StorageLocationPatchRequest patch);
+}

@@ -1,10 +1,10 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.config.ConsumptionService;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

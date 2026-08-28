@@ -6,7 +6,6 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
-import com.positivity.inventory.service.InventoryAvailabilityService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;

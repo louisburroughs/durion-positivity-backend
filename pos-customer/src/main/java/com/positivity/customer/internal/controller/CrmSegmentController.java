@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.config.SegmentService;
 import com.positivity.customer.internal.dto.SegmentAttributeResponse;
 import com.positivity.customer.internal.dto.SegmentMembersRequest;
 import com.positivity.customer.internal.dto.SegmentResolutionResponse;
@@ -8,7 +9,6 @@ import com.positivity.customer.internal.dto.UpsertSegmentRequest;
 import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.SegmentService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

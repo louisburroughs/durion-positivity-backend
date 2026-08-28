@@ -1,7 +1,6 @@
 package com.positivity.peoplecontact.internal.service;
 
 import com.positivity.peoplecontact.internal.repository.OutboxEventRepository;
-import com.positivity.peoplecontact.service.OutboxReplayService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

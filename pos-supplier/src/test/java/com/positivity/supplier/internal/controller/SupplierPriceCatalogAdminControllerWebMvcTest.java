@@ -12,11 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.supplier.internal.config.SecurityConfig;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
+import com.positivity.supplier.internal.pricecatalog.service.SupplierPriceCatalogService;
+import com.positivity.supplier.internal.pricecatalog.service.model.PriceCatalogImportSummary;
+import com.positivity.supplier.internal.pricecatalog.service.model.UnmatchedPriceCatalogLineView;
 import com.positivity.supplier.internal.security.SupplierPermissions;
-import com.positivity.supplier.service.SupplierPriceCatalogService;
-import com.positivity.supplier.service.model.PagedResponse;
-import com.positivity.supplier.service.model.PriceCatalogImportSummary;
-import com.positivity.supplier.service.model.UnmatchedPriceCatalogLineView;
+import com.positivity.supplier.internal.service.model.PagedResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;

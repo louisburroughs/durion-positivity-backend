@@ -3,7 +3,6 @@ package com.positivity.peoplecontact.internal.service;
 import com.positivity.peoplecontact.internal.entity.UserPersonLink;
 import com.positivity.peoplecontact.internal.enums.UserLinkStatus;
 import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
-import com.positivity.peoplecontact.service.UserPersonTranslationService;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Optional;

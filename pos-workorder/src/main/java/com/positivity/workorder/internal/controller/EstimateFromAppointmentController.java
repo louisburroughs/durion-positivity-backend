@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.EstimateService;
+import com.positivity.workorder.internal.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -6,11 +6,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.inventory.internal.config.ConsumptionService;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
-import com.positivity.inventory.service.ConsumptionService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

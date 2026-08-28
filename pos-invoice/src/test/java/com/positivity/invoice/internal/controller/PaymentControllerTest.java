@@ -17,7 +17,7 @@ import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
 import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
-import com.positivity.invoice.service.PaymentService;
+import com.positivity.invoice.internal.service.PaymentService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

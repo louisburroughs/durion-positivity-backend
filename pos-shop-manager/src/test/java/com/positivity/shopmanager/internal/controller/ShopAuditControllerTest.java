@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
-import com.positivity.shopmanager.service.ShopAuditService;
+import com.positivity.shopmanager.internal.service.ShopAuditService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

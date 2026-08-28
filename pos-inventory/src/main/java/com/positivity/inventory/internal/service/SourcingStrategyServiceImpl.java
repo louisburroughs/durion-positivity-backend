@@ -9,7 +9,6 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.SourcingStrategyConfigRepository;
-import com.positivity.inventory.service.SourcingStrategyConfigService;
 import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.List;

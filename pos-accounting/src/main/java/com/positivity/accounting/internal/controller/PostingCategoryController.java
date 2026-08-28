@@ -5,7 +5,7 @@ import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.PostingCategoryService;
+import com.positivity.accounting.internal.service.PostingCategoryService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
 import io.swagger.v3.oas.annotations.Operation;

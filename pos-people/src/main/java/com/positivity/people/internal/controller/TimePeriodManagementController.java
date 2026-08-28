@@ -5,7 +5,7 @@ import com.positivity.people.internal.dto.CreateTimePeriodRequest;
 import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TransitionTimePeriodRequest;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.TimePeriodManagementService;
+import com.positivity.people.internal.service.TimePeriodManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

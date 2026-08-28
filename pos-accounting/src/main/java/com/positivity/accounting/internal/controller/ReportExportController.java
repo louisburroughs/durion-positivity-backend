@@ -4,7 +4,7 @@ import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.ReportExportService;
+import com.positivity.accounting.internal.service.ReportExportService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

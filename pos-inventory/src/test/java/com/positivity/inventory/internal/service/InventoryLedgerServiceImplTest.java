@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.dto.LedgerPage;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.ledger.service.InventoryLedgerServiceImpl;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;

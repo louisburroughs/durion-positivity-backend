@@ -7,7 +7,7 @@ import com.positivity.workorder.internal.dto.StartWorkSessionRequest;
 import com.positivity.workorder.internal.dto.StopWorkSessionRequest;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.WorkSessionService;
+import com.positivity.workorder.internal.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

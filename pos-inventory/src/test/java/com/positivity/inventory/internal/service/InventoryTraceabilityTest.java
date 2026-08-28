@@ -24,7 +24,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
 import com.positivity.inventory.internal.repository.WarrantyPartReturnHoldRepository;
-import com.positivity.inventory.service.InventoryTraceabilityService;
+import com.positivity.inventory.internal.tracking.service.InventoryTraceabilityService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

@@ -20,7 +20,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
-import com.positivity.accounting.service.JournalEntryService;
+import com.positivity.accounting.internal.service.JournalEntryService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;

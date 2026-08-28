@@ -1,7 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.workorder.internal.dto.WorkorderDetailResponse;
-import com.positivity.workorder.service.WorkorderDetailService;
+import com.positivity.workorder.internal.service.WorkorderDetailService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

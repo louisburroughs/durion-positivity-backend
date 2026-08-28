@@ -1,4 +1,4 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.positivity.order.internal.dto.ReturnOrderSummary;
 import com.positivity.order.internal.entity.ReturnOrder;
 import com.positivity.order.internal.entity.ReturnOrderStatus;
 import com.positivity.order.internal.entity.SalesOrder;
@@ -20,10 +21,8 @@ import com.positivity.order.internal.repository.ReturnOrderLineRepository;
 import com.positivity.order.internal.repository.ReturnOrderRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.internal.service.ReturnOrderServiceImpl;
-import com.positivity.order.service.model.CreateReturnCommand;
-import com.positivity.order.service.model.ReturnLineCommand;
-import com.positivity.order.service.model.ReturnOrderSummary;
+import com.positivity.order.internal.service.model.CreateReturnCommand;
+import com.positivity.order.internal.service.model.ReturnLineCommand;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

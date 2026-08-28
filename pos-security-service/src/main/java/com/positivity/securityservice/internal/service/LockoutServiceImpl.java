@@ -3,7 +3,6 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.config.LockoutPolicy;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.LockoutService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

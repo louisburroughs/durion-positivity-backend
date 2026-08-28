@@ -3,7 +3,7 @@ package com.positivity.customer.internal.controller;
 import com.positivity.customer.internal.dto.InquiryAcceptedResponse;
 import com.positivity.customer.internal.dto.SubmitInquiryRequest;
 import com.positivity.customer.internal.enums.InquiryStatus;
-import com.positivity.customer.service.InquiryService;
+import com.positivity.customer.internal.service.InquiryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

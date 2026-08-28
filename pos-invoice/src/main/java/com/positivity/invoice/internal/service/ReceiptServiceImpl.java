@@ -12,8 +12,6 @@ import com.positivity.invoice.internal.exception.ReprintLimitExceededException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.repository.ReceiptRepository;
-import com.positivity.invoice.service.Receipt;
-import com.positivity.invoice.service.ReceiptService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

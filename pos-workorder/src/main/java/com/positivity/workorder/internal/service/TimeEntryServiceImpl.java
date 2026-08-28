@@ -9,7 +9,6 @@ import com.positivity.workorder.internal.enums.TimeEntryStatus;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.repository.TimeEntryRepository;
-import com.positivity.workorder.service.TimeEntryService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;

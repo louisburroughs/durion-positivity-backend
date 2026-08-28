@@ -5,7 +5,7 @@ import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.dto.VoidCreditMemoRequest;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.CreditMemoService;
+import com.positivity.accounting.internal.service.CreditMemoService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;

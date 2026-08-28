@@ -4,7 +4,6 @@ import com.positivity.vehicle.internal.config.VehicleEventPublisher;
 import com.positivity.vehicle.internal.dto.VehicleFactReplayResultDto;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
-import com.positivity.vehicle.service.VehicleFactReplayService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

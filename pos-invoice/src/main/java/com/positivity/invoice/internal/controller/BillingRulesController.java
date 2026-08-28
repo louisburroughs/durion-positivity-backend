@@ -3,7 +3,7 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.BillingRulesDTO;
 import com.positivity.invoice.internal.security.InvoicePermissions;
-import com.positivity.invoice.service.BillingRulesService;
+import com.positivity.invoice.internal.service.BillingRulesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

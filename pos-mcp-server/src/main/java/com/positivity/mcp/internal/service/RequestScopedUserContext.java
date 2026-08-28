@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.service;
 
-import com.positivity.mcp.service.CurrentUserContext;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;

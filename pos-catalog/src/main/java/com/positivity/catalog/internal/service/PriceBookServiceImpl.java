@@ -22,7 +22,6 @@ import com.positivity.catalog.internal.repository.PriceBookRepository;
 import com.positivity.catalog.internal.repository.PriceBookRuleRepository;
 import com.positivity.catalog.internal.repository.ProductMsrpRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.PriceBookService;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

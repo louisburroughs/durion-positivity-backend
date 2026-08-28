@@ -1,7 +1,7 @@
 package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.CrmVehicleService;
+import com.positivity.customer.internal.service.CrmVehicleService;
 import com.positivity.shared.dto.VehicleResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

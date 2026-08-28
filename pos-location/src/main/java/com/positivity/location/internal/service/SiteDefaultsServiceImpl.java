@@ -6,7 +6,6 @@ import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
-import com.positivity.location.service.SiteDefaultsService;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

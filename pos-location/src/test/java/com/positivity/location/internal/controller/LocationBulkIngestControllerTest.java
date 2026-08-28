@@ -10,7 +10,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.location.config.TestSecurityConfig;
 import com.positivity.location.internal.dto.LocationBulkIngestRecord;
 import com.positivity.location.internal.dto.LocationResponseDTO;
-import com.positivity.location.service.LocationService;
+import com.positivity.location.internal.service.LocationService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

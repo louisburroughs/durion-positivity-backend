@@ -21,7 +21,6 @@ import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.BreakSegmentRepository;
 import com.positivity.workorder.internal.repository.WorkSessionRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.service.WorkSessionService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

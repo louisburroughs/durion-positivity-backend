@@ -13,7 +13,7 @@ import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
 import com.positivity.location.internal.enums.StorageLocationType;
-import com.positivity.location.service.StorageLocationService;
+import com.positivity.location.internal.service.StorageLocationService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

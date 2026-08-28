@@ -22,7 +22,7 @@ import com.positivity.bulkloader.internal.parser.FlexibleRecordItemReader;
 import com.positivity.bulkloader.internal.parser.RecordFileParserRegistry;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.bulkloader.internal.service.BulkLoadJobExecutionListener;
-import com.positivity.bulkloader.service.ColumnMappingService;
+import com.positivity.bulkloader.internal.service.ColumnMappingService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;

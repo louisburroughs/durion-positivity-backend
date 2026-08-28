@@ -7,7 +7,6 @@ import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
-import com.positivity.people.service.TimeEntryAdjustmentService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

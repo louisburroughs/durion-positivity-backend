@@ -2,9 +2,9 @@ package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
-import com.positivity.shopmanager.service.ConflictOverrideService;
-import com.positivity.shopmanager.service.dto.ConflictOverrideRequest;
-import com.positivity.shopmanager.service.dto.ConflictOverrideResponse;
+import com.positivity.shopmanager.internal.service.ConflictOverrideService;
+import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
+import com.positivity.shopmanager.internal.service.dto.ConflictOverrideResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

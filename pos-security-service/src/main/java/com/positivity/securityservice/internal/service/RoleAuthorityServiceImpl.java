@@ -1,7 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.repository.RoleRepository;
-import com.positivity.securityservice.service.RoleAuthorityService;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;

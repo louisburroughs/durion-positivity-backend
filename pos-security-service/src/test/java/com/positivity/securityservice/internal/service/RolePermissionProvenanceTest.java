@@ -6,8 +6,6 @@ import com.positivity.securityservice.PosSecurityServiceApplication;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.service.RoleManagementService;
-import com.positivity.securityservice.service.RolePermissionService;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;

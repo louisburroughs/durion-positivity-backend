@@ -18,7 +18,7 @@ import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
-import com.positivity.vehicle.service.VehiclePreferencesService;
+import com.positivity.vehicle.internal.service.VehiclePreferencesService;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;

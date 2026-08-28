@@ -9,7 +9,6 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
-import com.positivity.accounting.service.GLMappingService;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

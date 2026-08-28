@@ -11,7 +11,6 @@ import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
 import com.positivity.customer.internal.repository.PartyTagRepository;
-import com.positivity.customer.service.PartyTagService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

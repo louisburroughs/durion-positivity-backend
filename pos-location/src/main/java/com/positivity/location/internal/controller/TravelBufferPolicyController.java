@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.TravelBufferPolicyRequest;
 import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.TravelBufferPolicyService;
+import com.positivity.location.internal.service.TravelBufferPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

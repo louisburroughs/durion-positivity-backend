@@ -12,7 +12,6 @@ import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
-import com.positivity.location.service.BayService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

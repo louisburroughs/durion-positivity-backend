@@ -6,7 +6,7 @@ import com.positivity.securityservice.internal.dto.SelfRegistrationReviewCaseRes
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseStatus;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.SelfRegistrationReviewService;
+import com.positivity.securityservice.internal.service.SelfRegistrationReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

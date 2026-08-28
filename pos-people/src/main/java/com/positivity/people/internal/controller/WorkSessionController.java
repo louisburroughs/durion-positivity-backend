@@ -5,7 +5,7 @@ import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionRequest;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
-import com.positivity.people.service.WorkSessionService;
+import com.positivity.people.internal.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

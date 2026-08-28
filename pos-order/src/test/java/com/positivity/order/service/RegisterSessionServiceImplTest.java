@@ -1,4 +1,4 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
+import com.positivity.order.internal.dto.RegisterSessionSummary;
+import com.positivity.order.internal.dto.SessionReport;
 import com.positivity.order.internal.entity.CashMovement;
 import com.positivity.order.internal.entity.CashMovementType;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
@@ -24,11 +26,8 @@ import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.security.OrderPermissions;
-import com.positivity.order.internal.service.RegisterSessionServiceImpl;
-import com.positivity.order.service.model.CashMovementCommand;
-import com.positivity.order.service.model.OpenSessionCommand;
-import com.positivity.order.service.model.RegisterSessionSummary;
-import com.positivity.order.service.model.SessionReport;
+import com.positivity.order.internal.service.model.CashMovementCommand;
+import com.positivity.order.internal.service.model.OpenSessionCommand;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

@@ -13,7 +13,6 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

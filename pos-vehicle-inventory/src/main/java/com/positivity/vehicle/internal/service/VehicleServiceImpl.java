@@ -7,7 +7,6 @@ import com.positivity.vehicle.internal.config.VehicleEventPublisher;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
-import com.positivity.vehicle.service.VehicleService;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Optional;
 import java.util.UUID;

@@ -1,7 +1,6 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.TimePeriodRolloverResult;
-import com.positivity.people.service.TimePeriodManagementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

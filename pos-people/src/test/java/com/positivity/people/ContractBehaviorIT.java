@@ -20,7 +20,7 @@ import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.TimekeepingPolicyRepository;
 import com.positivity.people.internal.service.LocationReferenceService;
-import com.positivity.people.service.TimeEntryService;
+import com.positivity.people.internal.service.TimeEntryService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;

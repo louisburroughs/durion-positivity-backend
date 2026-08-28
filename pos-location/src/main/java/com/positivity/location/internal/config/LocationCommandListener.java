@@ -1,6 +1,5 @@
 package com.positivity.location.internal.config;
 
-import com.positivity.location.service.OutboxReplayService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

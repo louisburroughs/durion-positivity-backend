@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.positivity.mcp.service.CurrentUserContext;
-import com.positivity.mcp.service.StreamingAgentOrchestrationService;
+import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.config.StreamingAgentOrchestrationService;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;

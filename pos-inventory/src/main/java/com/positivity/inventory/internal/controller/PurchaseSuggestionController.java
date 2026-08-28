@@ -5,8 +5,8 @@ import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseS
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.DismissPurchaseSuggestionRequest;
 import com.positivity.inventory.internal.dto.purchasesuggestion.PurchaseSuggestionResponse;
+import com.positivity.inventory.internal.replenishment.service.PurchaseSuggestionService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.PurchaseSuggestionService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

@@ -4,7 +4,7 @@ import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.PaymentApplicationService;
+import com.positivity.accounting.internal.service.PaymentApplicationService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

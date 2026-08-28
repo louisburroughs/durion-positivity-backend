@@ -4,7 +4,7 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
-import com.positivity.shopmanager.service.ShopAuditService;
+import com.positivity.shopmanager.internal.service.ShopAuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

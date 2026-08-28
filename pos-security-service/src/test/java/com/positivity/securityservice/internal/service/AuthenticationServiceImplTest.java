@@ -13,9 +13,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.JwtService;
-import com.positivity.securityservice.service.JwtService.TokenPair;
-import com.positivity.securityservice.service.LockoutService;
+import com.positivity.securityservice.internal.security.service.JwtService;
+import com.positivity.securityservice.internal.security.service.JwtService.TokenPair;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;

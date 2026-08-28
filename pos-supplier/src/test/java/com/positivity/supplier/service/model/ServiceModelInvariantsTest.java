@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.internal.service.model.CommercialAccountRequest;
+import com.positivity.supplier.internal.service.model.EndpointBindingRequest;
+import com.positivity.supplier.internal.service.model.RetryBackoff;
+import com.positivity.supplier.internal.service.model.SupplierAccountRole;
+import com.positivity.supplier.internal.service.model.VendorProfileRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

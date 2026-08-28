@@ -11,7 +11,6 @@ import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.exception.TaxCalculationException;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
-import com.positivity.tax.service.TaxProviderClient;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.UUID;

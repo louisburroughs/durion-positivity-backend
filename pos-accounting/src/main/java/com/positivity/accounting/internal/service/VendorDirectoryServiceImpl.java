@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.repository.VendorRepository;
-import com.positivity.accounting.service.VendorDirectoryService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

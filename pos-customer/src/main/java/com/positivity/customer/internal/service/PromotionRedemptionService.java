@@ -1,0 +1,23 @@
+package com.positivity.customer.internal.service;
+
+import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
+import com.positivity.customer.internal.dto.RecordRedemptionRequest;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+
+/** Manages promotion redemption recording for the CRM domain. Issue: #94 */
+public interface PromotionRedemptionService {
+
+    /**
+     * Record a promotion redemption idempotently. Duplicate
+     * (promotionId+workorderId) throws DuplicateRedemptionException resulting in
+     * 409. Issue: #94
+     */
+    @NonNull
+    PromotionRedemptionResponse recordRedemption(@NonNull RecordRedemptionRequest request);
+
+    /** Get all redemptions for a customer. Issue: #94 */
+    @NonNull
+    List<PromotionRedemptionResponse> getRedemptionsByCustomer(@NonNull UUID customerId);
+}

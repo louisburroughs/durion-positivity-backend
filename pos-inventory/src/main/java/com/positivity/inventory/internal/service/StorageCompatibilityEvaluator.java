@@ -93,7 +93,7 @@ public class StorageCompatibilityEvaluator {
      * <p>A null code is not source-only: it means no post-#1514 fact has been seen for that
      * location yet and resolves to {@code GENERAL}, per the class javadoc.
      */
-    static boolean isSourceOnly(@Nullable String storageCategoryCode) {
+    public static boolean isSourceOnly(@Nullable String storageCategoryCode) {
         return storageCategoryCode != null && SOURCE_ONLY_CATEGORIES.contains(storageCategoryCode);
     }
 

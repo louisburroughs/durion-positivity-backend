@@ -29,7 +29,6 @@ import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.repository.SegmentMemberRepository;
 import com.positivity.customer.internal.repository.SegmentRepository;
-import com.positivity.customer.service.MarketingConsentService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

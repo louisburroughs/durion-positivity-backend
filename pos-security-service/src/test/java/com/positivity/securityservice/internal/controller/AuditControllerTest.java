@@ -8,14 +8,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.config.AuditEventService;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
+import com.positivity.securityservice.internal.service.AuditExportService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
-import com.positivity.securityservice.service.AuditEventService;
-import com.positivity.securityservice.service.AuditExportService;
-import com.positivity.securityservice.service.PricingSnapshotService;
+import com.positivity.securityservice.internal.service.PricingSnapshotService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;

@@ -8,7 +8,6 @@ import com.positivity.peoplecontact.internal.exception.SemanticValidationExcepti
 import com.positivity.peoplecontact.internal.repository.PartyPostalAddressRepository;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
-import com.positivity.peoplecontact.service.PostalAddressService;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;

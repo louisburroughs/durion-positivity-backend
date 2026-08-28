@@ -12,7 +12,7 @@ import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.ReceiptNotStagedException;
-import com.positivity.inventory.service.PutawayGenerationService;
+import com.positivity.inventory.internal.putaway.service.PutawayGenerationService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

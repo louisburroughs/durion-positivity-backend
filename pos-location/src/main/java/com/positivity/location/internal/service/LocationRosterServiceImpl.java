@@ -3,7 +3,6 @@ package com.positivity.location.internal.service;
 import com.positivity.location.internal.dto.LocationRef;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.service.LocationRosterService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;

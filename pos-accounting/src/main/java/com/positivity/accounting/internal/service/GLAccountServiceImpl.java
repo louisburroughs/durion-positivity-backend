@@ -13,7 +13,6 @@ import com.positivity.accounting.internal.exception.DuplicateAccountCodeExceptio
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
-import com.positivity.accounting.service.GLAccountService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;

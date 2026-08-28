@@ -3,7 +3,7 @@ package com.positivity.securityservice.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.securityservice.service.AuthorizationService;
+import com.positivity.securityservice.internal.service.AuthorizationService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;

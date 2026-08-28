@@ -5,7 +5,7 @@ import com.positivity.catalog.internal.dto.ProductMsrpDto;
 import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.ProductMsrpService;
+import com.positivity.catalog.internal.service.ProductMsrpService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

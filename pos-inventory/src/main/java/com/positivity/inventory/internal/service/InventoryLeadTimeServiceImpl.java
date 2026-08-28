@@ -5,7 +5,6 @@ import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityR
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
-import com.positivity.inventory.service.InventoryLeadTimeService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;

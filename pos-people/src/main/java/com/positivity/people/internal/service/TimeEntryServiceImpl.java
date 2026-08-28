@@ -5,7 +5,6 @@ import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
-import com.positivity.people.service.TimeEntryService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

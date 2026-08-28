@@ -6,7 +6,6 @@ import com.positivity.tax.internal.dto.ExemptionCertificateResponse;
 import com.positivity.tax.internal.entity.ExemptionCertificate;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
 import com.positivity.tax.internal.repository.ExemptionCertificateRepository;
-import com.positivity.tax.service.ExemptionCertificateService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;

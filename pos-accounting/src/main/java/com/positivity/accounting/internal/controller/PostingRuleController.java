@@ -5,7 +5,7 @@ import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
 import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
 import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.PostingRuleService;
+import com.positivity.accounting.internal.service.PostingRuleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

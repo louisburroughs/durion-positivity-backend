@@ -1,5 +1,8 @@
 package com.positivity.supplier.internal.adapter.michelins2s;
 
+import com.positivity.supplier.internal.domain.model.FleetContract;
+import com.positivity.supplier.internal.domain.model.FleetPolicy;
+import com.positivity.supplier.internal.domain.model.FleetVehicle;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.ProtocolVersion;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -7,9 +10,6 @@ import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.domain.model.SupplierWorkorderAuthorization;
 import com.positivity.supplier.internal.domain.model.WorkorderAuthorizationRequest;
 import com.positivity.supplier.internal.spi.SupplierAdapterCodec;
-import com.positivity.supplier.service.model.FleetContract;
-import com.positivity.supplier.service.model.FleetPolicy;
-import com.positivity.supplier.service.model.FleetVehicle;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;

@@ -11,7 +11,6 @@ import com.positivity.peoplecontact.internal.repository.PersonContactPointReposi
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.PersonSpecifications;
 import com.positivity.peoplecontact.internal.repository.UserPersonLinkRepository;
-import com.positivity.peoplecontact.service.PersonService;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;

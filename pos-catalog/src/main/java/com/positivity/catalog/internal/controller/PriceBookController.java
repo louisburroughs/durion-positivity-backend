@@ -7,7 +7,7 @@ import com.positivity.catalog.internal.dto.PriceBookRuleDto;
 import com.positivity.catalog.internal.dto.ResolvePriceRequestDto;
 import com.positivity.catalog.internal.dto.ResolvePriceResponseDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.PriceBookService;
+import com.positivity.catalog.internal.service.PriceBookService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

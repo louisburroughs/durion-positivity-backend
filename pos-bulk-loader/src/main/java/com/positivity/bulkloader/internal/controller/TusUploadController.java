@@ -1,7 +1,7 @@
 package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.security.BulkImportPermissions;
-import com.positivity.bulkloader.service.TusUploadService;
+import com.positivity.bulkloader.internal.service.TusUploadService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

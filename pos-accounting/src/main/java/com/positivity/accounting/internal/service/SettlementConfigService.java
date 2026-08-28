@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  * the service layer (ADR-0011/0026) — {@link SettlementConfigEventsListener} only
  * adapts the Kafka envelope to a call on this service (mirroring how {@link
  * SettlementEventsListener} delegates to {@link
- * com.positivity.accounting.service.SettlementReconciliationService}).
+ * com.positivity.accounting.internal.service.SettlementReconciliationService}).
  *
  * <p>Each record is the full current config for its {@code providerCode} (compaction
  * key, last-writer-wins), so the operation is a plain upsert.

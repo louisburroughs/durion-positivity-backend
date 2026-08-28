@@ -2,8 +2,8 @@ package com.positivity.accounting.internal.handler;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
+import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
-import com.positivity.accounting.service.EventIngestionService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

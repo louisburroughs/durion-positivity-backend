@@ -153,16 +153,20 @@ public class ArchitectureTest {
             .because("service.model carries immutable contract DTOs (records/enums) only,"
                     + " mirroring the pos-invoice service.model convention (ADR-0026)");
 
+    // ADR-0026 D4: the public service package is a grant surface. Grant-surface types may not
+    // depend on this module's internal implementation. pos-supplier holds the platform's single
+    // grant — SupplierStockService and its service.model records (ADR-0044 amendment 2026-08-10,
+    // ADR-0049 §4) — so this surface is non-empty and the rule bites for real.
+    // Package patterns are exact-anchored on purpose: "com.positivity.supplier.service.." must NOT
+    // match "com.positivity.supplier.internal.service".
     @ArchTest
-    static final ArchRule service_contract_should_not_depend_on_internal = noClasses()
+    static final ArchRule public_service_surface_should_not_depend_on_internal = noClasses()
             .that()
             .resideInAPackage("com.positivity.supplier.service..")
             .should()
             .dependOnClassesThat()
             .resideInAPackage("com.positivity.supplier.internal..")
-            .allowEmptyShould(true)
-            .because("the service contract surface is the cross-module public API and must not leak"
-                    + " internal canonical-model or implementation types (ADR-0026, ADR-0049 §4)");
+            .because("ADR-0026 D4: grant-surface types must not leak internal.* types to consuming modules");
 
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices().matching(

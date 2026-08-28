@@ -2,7 +2,6 @@ package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
-import com.positivity.mcp.service.RolePromptResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;

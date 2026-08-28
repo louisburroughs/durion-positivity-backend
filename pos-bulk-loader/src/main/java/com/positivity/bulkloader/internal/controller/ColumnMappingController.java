@@ -3,7 +3,7 @@ package com.positivity.bulkloader.internal.controller;
 import com.positivity.bulkloader.internal.dto.ColumnMappingApproveRequest;
 import com.positivity.bulkloader.internal.dto.ColumnMappingResponse;
 import com.positivity.bulkloader.internal.security.BulkImportPermissions;
-import com.positivity.bulkloader.service.ColumnMappingService;
+import com.positivity.bulkloader.internal.service.ColumnMappingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

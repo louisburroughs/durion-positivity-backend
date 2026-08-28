@@ -15,9 +15,10 @@ import com.positivity.inventory.internal.enums.PutawayDestinationStrategy;
 import com.positivity.inventory.internal.enums.PutawayFallbackReason;
 import com.positivity.inventory.internal.enums.PutawayTaskStatus;
 import com.positivity.inventory.internal.exception.LocationAtCapacityException;
+import com.positivity.inventory.internal.putaway.service.PutawayDestinationResolver;
+import com.positivity.inventory.internal.putaway.service.PutawayDestinationResolver.ResolvedDestination;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
-import com.positivity.inventory.internal.service.PutawayDestinationResolver.ResolvedDestination;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import java.math.BigDecimal;
 import java.util.List;
@@ -50,7 +51,7 @@ class PutawayDestinationResolverTest {
     private ProximitySourcingStrategy proximitySourcingStrategy;
 
     @Mock
-    private com.positivity.inventory.service.PutawayValidationService putawayValidationService;
+    private com.positivity.inventory.internal.putaway.service.PutawayValidationService putawayValidationService;
 
     private PutawayDestinationResolver resolver() {
         return new PutawayDestinationResolver(

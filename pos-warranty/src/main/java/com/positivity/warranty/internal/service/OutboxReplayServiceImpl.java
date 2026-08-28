@@ -1,7 +1,6 @@
 package com.positivity.warranty.internal.service;
 
 import com.positivity.warranty.internal.repository.OutboxEventRepository;
-import com.positivity.warranty.service.OutboxReplayService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.inventory.internal.costing.service.CostingMethodConfigService;
 import com.positivity.inventory.internal.dto.costing.CostingMethodConfigRequest;
 import com.positivity.inventory.internal.dto.costing.CostingMethodConfigResponse;
 import com.positivity.inventory.internal.entity.CostMethodChangeLog;
@@ -11,7 +12,6 @@ import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.CostingScopeType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.CostMethodChangeLogRepository;
-import com.positivity.inventory.service.CostingMethodConfigService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
-import com.positivity.invoice.service.InvoiceSearchService;
+import com.positivity.invoice.internal.service.InvoiceSearchService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

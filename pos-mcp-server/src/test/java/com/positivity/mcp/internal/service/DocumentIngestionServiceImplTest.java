@@ -8,10 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
 import com.positivity.mcp.internal.entity.DocumentIngestionJobEntity;
 import com.positivity.mcp.internal.entity.DocumentIngestionJobState;
 import com.positivity.mcp.internal.repository.DocumentIngestionJobRepository;
-import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;

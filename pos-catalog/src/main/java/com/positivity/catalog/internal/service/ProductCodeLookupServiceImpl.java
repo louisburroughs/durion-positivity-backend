@@ -7,7 +7,6 @@ import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.ProductCodeLookupService;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

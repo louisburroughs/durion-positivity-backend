@@ -6,8 +6,6 @@ import com.positivity.peoplecontact.internal.client.dto.UserRoleAssignmentReques
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
-import com.positivity.peoplecontact.service.PeopleAccessControlService;
-import com.positivity.peoplecontact.service.UserPersonTranslationService;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;

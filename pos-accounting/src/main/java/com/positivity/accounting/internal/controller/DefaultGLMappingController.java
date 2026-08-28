@@ -4,7 +4,7 @@ import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.DefaultGLMappingService;
+import com.positivity.accounting.internal.service.DefaultGLMappingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

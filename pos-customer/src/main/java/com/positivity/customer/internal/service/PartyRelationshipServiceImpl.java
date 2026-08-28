@@ -10,7 +10,6 @@ import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.PartyRelationshipService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;

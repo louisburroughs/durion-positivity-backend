@@ -14,7 +14,7 @@ import lombok.Data;
  * Request DTO for applying a price override.
  *
  * @deprecated Use
- *             {@link com.positivity.order.service.model.ApplyPriceOverrideRequest}
+ *             {@link com.positivity.order.internal.service.model.ApplyPriceOverrideRequest}
  *             instead.
  */
 @Deprecated(since = "2026-03")

@@ -4,7 +4,6 @@ import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.dto.VehicleSummary;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
-import com.positivity.vehicle.service.VehicleSearchService;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.service.OutboxReplayService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

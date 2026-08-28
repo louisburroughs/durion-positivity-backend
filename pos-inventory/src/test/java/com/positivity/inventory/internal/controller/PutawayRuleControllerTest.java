@@ -16,7 +16,7 @@ import com.positivity.inventory.internal.dto.putaway.PutawayRuleRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayRuleResponse;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.service.PutawayRuleService;
+import com.positivity.inventory.internal.putaway.service.PutawayRuleService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;

@@ -13,8 +13,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
-import com.positivity.mcp.service.CurrentUserContext;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;

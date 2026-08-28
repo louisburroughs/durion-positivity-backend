@@ -6,7 +6,6 @@ import com.positivity.shopmanager.internal.entity.StatusTimelineEntry;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
-import com.positivity.shopmanager.service.WorkorderStatusEventService;
 import java.util.ArrayList;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;

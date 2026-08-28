@@ -13,11 +13,10 @@ import com.positivity.supplier.internal.repository.AuditAccessRepository;
 import com.positivity.supplier.internal.repository.ExchangeAuditMetadata;
 import com.positivity.supplier.internal.repository.ExchangeAuditRawPayloadRepository;
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
-import com.positivity.supplier.service.SupplierExchangeAuditService;
-import com.positivity.supplier.service.model.ExchangeAuditAccessView;
-import com.positivity.supplier.service.model.ExchangeAuditPayloadView;
-import com.positivity.supplier.service.model.ExchangeAuditSummary;
-import com.positivity.supplier.service.model.PagedResponse;
+import com.positivity.supplier.internal.service.model.ExchangeAuditAccessView;
+import com.positivity.supplier.internal.service.model.ExchangeAuditPayloadView;
+import com.positivity.supplier.internal.service.model.ExchangeAuditSummary;
+import com.positivity.supplier.internal.service.model.PagedResponse;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -199,7 +198,7 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
         PayloadCaptureLevel captureLevel = metadata.captureLevel();
         return new ExchangeAuditPayloadView(
                 exchangeAuditId,
-                com.positivity.supplier.service.model.PayloadCaptureLevel.valueOf(captureLevel.name()),
+                com.positivity.supplier.internal.service.model.PayloadCaptureLevel.valueOf(captureLevel.name()),
                 captureLevel == PayloadCaptureLevel.REDACTED,
                 requestPayload,
                 responsePayload);
@@ -301,7 +300,7 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
                 metadata.startedAt(),
                 metadata.durationMs(),
                 metadata.failureDetail(),
-                com.positivity.supplier.service.model.PayloadCaptureLevel.valueOf(
+                com.positivity.supplier.internal.service.model.PayloadCaptureLevel.valueOf(
                         metadata.captureLevel().name()),
                 metadata.requestPayloadPresent(),
                 metadata.responsePayloadPresent(),
@@ -318,9 +317,9 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
                 entity.getCapability().name(),
                 entity.getAccessedBy(),
                 entity.getAccessedAt(),
-                com.positivity.supplier.service.model.AuditAccessKind.valueOf(
+                com.positivity.supplier.internal.service.model.AuditAccessKind.valueOf(
                         entity.getAccessKind().name()),
-                com.positivity.supplier.service.model.AuditPayloadOutcome.valueOf(
+                com.positivity.supplier.internal.service.model.AuditPayloadOutcome.valueOf(
                         entity.getPayloadOutcome().name()),
                 entity.getCorrelationId());
     }

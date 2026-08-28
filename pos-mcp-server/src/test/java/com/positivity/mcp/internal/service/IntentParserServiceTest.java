@@ -16,7 +16,6 @@ import com.positivity.mcp.internal.enums.NltiIntentStatus;
 import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
 import com.positivity.mcp.internal.repository.NltiIntentRepository;
-import com.positivity.mcp.service.AuditLedgerService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;

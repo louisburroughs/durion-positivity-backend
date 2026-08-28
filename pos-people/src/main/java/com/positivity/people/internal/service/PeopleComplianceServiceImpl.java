@@ -7,7 +7,6 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.enums.UserLinkStatus;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
-import com.positivity.people.service.PeopleComplianceService;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;

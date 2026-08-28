@@ -1,9 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.service.GLMappingResolver;
-import com.positivity.accounting.service.GLPostingService;
-import com.positivity.accounting.service.IdempotencyService;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -35,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The journal entry's transaction date is the fact's {@code occurredAt} (business time), never
  * processing/clock time, so redeliveries post into the same accounting period and resolve the same
  * effective-dated GL mapping. The Wave 2 period gate applies inside
- * {@link com.positivity.accounting.service.JournalEntryService#postJournalEntry}; a CLOSED or
+ * {@link com.positivity.accounting.internal.service.JournalEntryService#postJournalEntry}; a CLOSED or
  * hard-locked period propagates unwrapped to the listener for container retry / DLQ.
  *
  * <p>The scrap {@code reasonCode} rides into the entry description verbatim — unknown reason codes

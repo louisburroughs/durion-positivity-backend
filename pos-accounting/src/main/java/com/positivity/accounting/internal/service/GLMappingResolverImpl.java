@@ -6,7 +6,6 @@ import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
-import com.positivity.accounting.service.GLMappingResolver;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;

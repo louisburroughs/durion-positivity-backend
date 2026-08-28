@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.audit.dto.AuditTrailResponse;
 import com.positivity.accounting.internal.audit.entity.AuditTrailEntry;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository;
-import com.positivity.accounting.service.AuditTrailQueryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

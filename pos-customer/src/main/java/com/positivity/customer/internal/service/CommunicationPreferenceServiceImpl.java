@@ -7,7 +7,6 @@ import com.positivity.customer.internal.entity.CommunicationPreference;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.CommunicationPreferenceService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;

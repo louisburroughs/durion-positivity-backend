@@ -40,7 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Staffing assignment reads, updates and endings. Creation's primary-flag defaulting is covered
- * by {@code com.positivity.people.service.StaffingAssignmentServiceTest}; this class covers the
+ * by {@code com.positivity.people.internal.service.StaffingAssignmentServiceTest}; this class covers the
  * rest of the lifecycle — overlap conflicts, person/location validation, primary demotion on
  * update, and ending an open-ended assignment.
  */

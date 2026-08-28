@@ -5,7 +5,6 @@ import com.positivity.inventory.internal.entity.CycleCountAdjustment;
 import com.positivity.inventory.internal.enums.ApprovalFlowType;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.inventory.internal.repository.ApprovalThresholdConfigRepository;
-import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;

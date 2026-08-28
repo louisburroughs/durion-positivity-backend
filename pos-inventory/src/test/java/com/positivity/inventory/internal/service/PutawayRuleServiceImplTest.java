@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.enums.PutawayDestinationStrategy;
 import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.putaway.service.PutawayRuleServiceImpl;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import java.util.List;

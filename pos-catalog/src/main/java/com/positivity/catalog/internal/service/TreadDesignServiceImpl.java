@@ -11,7 +11,6 @@ import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.TreadDesignImageRepository;
 import com.positivity.catalog.internal.repository.TreadDesignRepository;
 import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
-import com.positivity.catalog.service.TreadDesignService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

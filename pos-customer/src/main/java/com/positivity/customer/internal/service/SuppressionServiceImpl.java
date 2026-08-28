@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.config.SuppressionService;
 import com.positivity.customer.internal.dto.AddSuppressionRequest;
 import com.positivity.customer.internal.dto.PagedResponse;
 import com.positivity.customer.internal.dto.SuppressionEntryResponse;
@@ -8,7 +9,6 @@ import com.positivity.customer.internal.enums.ConsentChangeSource;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.repository.SuppressionEntryRepository;
-import com.positivity.customer.service.SuppressionService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

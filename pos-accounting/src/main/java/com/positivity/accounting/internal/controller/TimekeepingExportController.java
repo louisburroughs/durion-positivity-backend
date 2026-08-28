@@ -3,7 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.ExportJobRequest;
 import com.positivity.accounting.internal.dto.ExportJobResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.service.TimekeepingExportService;
+import com.positivity.accounting.internal.service.TimekeepingExportService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

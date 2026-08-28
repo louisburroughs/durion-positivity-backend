@@ -1,0 +1,50 @@
+package com.positivity.price.internal.service;
+
+import com.positivity.price.internal.dto.AddEligibilityRuleRequest;
+import com.positivity.price.internal.dto.EligibilityDecision;
+import com.positivity.price.internal.entity.PromotionEligibilityRule;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
+/** Manages eligibility rules and evaluates promotion eligibility. Issue: #96 */
+public interface EligibilityEvaluationService {
+
+    /** Add an eligibility rule to a promotion. Issue: #96 */
+    @NonNull
+    PromotionEligibilityRule addRule(@NonNull UUID promotionId, @NonNull AddEligibilityRuleRequest request);
+
+    /** Get all eligibility rules for a promotion. Issue: #96 */
+    @NonNull
+    List<PromotionEligibilityRule> getRules(@NonNull UUID promotionId);
+
+    /**
+     * Delete an eligibility rule by ID, verifying it belongs to the given
+     * promotion. Issue: #96
+     */
+    void deleteRule(@NonNull UUID promotionId, @NonNull UUID ruleId);
+
+    /**
+     * Evaluate promotion eligibility for a given account and vehicle context.
+     * Issue: #96
+     */
+    @NonNull
+    default EligibilityDecision evaluateEligibility(
+            @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId) {
+        return evaluateEligibility(promotionId, accountId, vehicleId, null, null);
+    }
+
+    /**
+     * Evaluate promotion eligibility for a given account, vehicle, and campaign
+     * context. The audience type and campaign code gate offers bound to marketing
+     * campaigns. Issue: #1134
+     */
+    @NonNull
+    EligibilityDecision evaluateEligibility(
+            @NonNull UUID promotionId,
+            @Nullable UUID accountId,
+            @Nullable UUID vehicleId,
+            @Nullable String audienceType,
+            @Nullable String campaignCode);
+}

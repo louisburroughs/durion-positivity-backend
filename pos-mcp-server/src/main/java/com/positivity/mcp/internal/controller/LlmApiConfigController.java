@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
-import com.positivity.mcp.service.LlmApiConfigService;
+import com.positivity.mcp.internal.service.LlmApiConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

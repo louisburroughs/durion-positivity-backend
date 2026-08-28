@@ -4,7 +4,7 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.PersonService;
+import com.positivity.customer.internal.service.PersonService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

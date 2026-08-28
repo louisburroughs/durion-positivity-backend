@@ -1,7 +1,7 @@
 package com.positivity.shopmanager.internal.config;
 
 import com.positivity.shopmanager.internal.dto.WorkorderStatusChangedEvent;
-import com.positivity.shopmanager.service.WorkorderStatusEventService;
+import com.positivity.shopmanager.internal.service.WorkorderStatusEventService;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;

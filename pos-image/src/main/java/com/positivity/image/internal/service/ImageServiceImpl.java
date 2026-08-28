@@ -5,7 +5,6 @@ import com.positivity.image.internal.dto.ImageFileView;
 import com.positivity.image.internal.entity.ImageEntity;
 import com.positivity.image.internal.repository.ImageContentRepository;
 import com.positivity.image.internal.repository.ImageRepository;
-import com.positivity.image.service.ImageService;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 

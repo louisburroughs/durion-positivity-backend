@@ -11,7 +11,7 @@ import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentLinesUnavailableException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
-import com.positivity.inventory.service.ReceivingService;
+import com.positivity.inventory.internal.receiving.service.ReceivingService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

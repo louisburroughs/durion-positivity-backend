@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.config.PickListService;
 import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
@@ -11,7 +12,6 @@ import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
-import com.positivity.inventory.service.PickListService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.util.List;
 import java.util.Map;

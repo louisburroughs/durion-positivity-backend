@@ -8,7 +8,7 @@ import com.positivity.people.internal.dto.TimeEntryAdjustment;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.exception.NotFoundException;
-import com.positivity.people.service.TimeEntryAdjustmentService;
+import com.positivity.people.internal.service.TimeEntryAdjustmentService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;

@@ -12,7 +12,6 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
-import com.positivity.catalog.service.ProductUomService;
 import com.positivity.domainevents.AggregateTouch;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

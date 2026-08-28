@@ -15,7 +15,7 @@ import com.positivity.inventory.internal.dto.rollup.SiteRollupSummary;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
-import com.positivity.inventory.service.LocationInventoryRollupService;
+import com.positivity.inventory.internal.rollup.service.LocationInventoryRollupService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

@@ -7,7 +7,7 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.PrincipalRole;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
-import com.positivity.securityservice.service.AuthorizationService.Decision;
+import com.positivity.securityservice.internal.service.AuthorizationService.Decision;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

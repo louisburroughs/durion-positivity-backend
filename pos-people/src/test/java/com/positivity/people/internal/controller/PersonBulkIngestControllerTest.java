@@ -10,7 +10,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.people.config.TestSecurityConfig;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.PersonBulkIngestRecord;
-import com.positivity.people.service.EmployeeService;
+import com.positivity.people.internal.service.EmployeeService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

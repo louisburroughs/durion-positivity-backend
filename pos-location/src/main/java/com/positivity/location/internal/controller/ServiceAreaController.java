@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.ServiceAreaService;
+import com.positivity.location.internal.service.ServiceAreaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

@@ -8,7 +8,7 @@ import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
-import com.positivity.accounting.service.PostingCategoryService;
+import com.positivity.accounting.internal.service.PostingCategoryService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

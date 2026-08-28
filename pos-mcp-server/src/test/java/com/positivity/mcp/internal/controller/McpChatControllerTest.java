@@ -12,10 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.mcp.internal.config.AgentOrchestrationService;
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.CurrentUserContextResolver;
-import com.positivity.mcp.service.AgentOrchestrationService;
-import com.positivity.mcp.service.CurrentUserContext;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;

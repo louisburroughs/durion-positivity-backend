@@ -9,9 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.JournalEntry;
-import com.positivity.accounting.service.GLMappingResolver;
-import com.positivity.accounting.service.GLPostingService;
-import com.positivity.accounting.service.IdempotencyService;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.time.Clock;

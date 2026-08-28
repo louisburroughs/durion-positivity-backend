@@ -8,7 +8,6 @@ import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.PersonService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.LocalDate;

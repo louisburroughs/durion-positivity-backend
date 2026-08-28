@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
-import com.positivity.securityservice.service.AuditEventService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

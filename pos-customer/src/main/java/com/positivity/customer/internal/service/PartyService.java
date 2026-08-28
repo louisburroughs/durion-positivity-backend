@@ -1,0 +1,103 @@
+package com.positivity.customer.internal.service;
+
+import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
+import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
+import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
+import com.positivity.customer.internal.dto.CreateVehicleForPartyResponse;
+import com.positivity.customer.internal.dto.DuplicateCheckResponse;
+import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.GetPartyResponse;
+import com.positivity.customer.internal.dto.MergePartiesRequest;
+import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.PartyNameRef;
+import com.positivity.customer.internal.dto.SearchPartiesRequest;
+import com.positivity.customer.internal.dto.SearchPartiesResponse;
+import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
+import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
+import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
+import com.positivity.customer.internal.entity.CommercialParty;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Pageable;
+
+public interface PartyService {
+
+    CreateCommercialAccountResponse createCommercialAccount(CreateCommercialAccountRequest request);
+
+    GetPartyResponse getParty(UUID partyId);
+
+    @NonNull
+    SearchPartiesResponse browseParties(@NonNull Pageable pageable);
+
+    /**
+     * Browse the unified customer directory with optional server-side filtering
+     * (name, status, party type, customer number) and sorting (by name or
+     * customer number), paged.
+     */
+    @NonNull
+    SearchPartiesResponse browseParties(
+            @NonNull Pageable pageable,
+            String name,
+            String status,
+            String partyType,
+            String customerNumber,
+            String sortField,
+            String sortOrder);
+
+    SearchPartiesResponse searchParties(SearchPartiesRequest request);
+
+    /**
+     * Batch-resolve party ids to display names for sibling-service finder enrichment.
+     * Commercial parties resolve to {@code displayName ?? legalName}; person parties resolve to the
+     * canonical person full name via pos-people. Unknown or unresolvable ids are omitted.
+     */
+    @NonNull
+    List<PartyNameRef> resolveNames(@NonNull List<UUID> partyIds);
+
+    MergePartiesResponse mergeParties(UUID survivorPartyId, MergePartiesRequest request);
+
+    GetCommunicationPreferencesResponse getCommunicationPreferences(UUID partyId);
+
+    UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
+            UUID partyId, UpsertCommunicationPreferencesRequest request);
+
+    CreateVehicleForPartyResponse createVehicleForParty(UUID partyId, CreateVehicleForPartyRequest request);
+
+    CommercialParty findPartyById(UUID partyId);
+
+    com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO buildSnapshotForParty(UUID partyId);
+
+    /**
+     * Returns the billing rule reference for a commercial party.
+     * Returns {@link BillingRuleRef#defaults()} when the party has no configured
+     * rules.
+     * Returns {@code null} when the party does not exist.
+     *
+     * @param partyId the party UUID
+     * @return the BillingRuleRef or null if party not found
+     */
+    @Nullable
+    BillingRuleRef getBillingRulesForParty(@NonNull UUID partyId);
+
+    /**
+     * Check for potential duplicate parties by legal name.
+     *
+     * @param legalName the legal name to search for duplicates (min length 2)
+     * @return DuplicateCheckResponse with match results
+     */
+    @NonNull
+    DuplicateCheckResponse checkPartyDuplicates(@NonNull String legalName);
+
+    /**
+     * Upsert (create or update) billing rules for a commercial party.
+     *
+     * @param partyId the party UUID (must exist)
+     * @param request the billing rules to apply
+     * @return the updated BillingRuleRef
+     */
+    @NonNull
+    BillingRuleRef upsertBillingRulesForParty(@NonNull UUID partyId, @NonNull UpsertBillingRulesRequest request);
+}

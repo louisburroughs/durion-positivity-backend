@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.config.PickListService;
 import com.positivity.inventory.internal.dto.picklist.ConfirmPickTaskRequest;
 import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
@@ -8,7 +9,6 @@ import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
 import com.positivity.inventory.internal.dto.picklist.UpdatePickListStatusRequest;
 import com.positivity.inventory.internal.enums.PickListStatus;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.PickListService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

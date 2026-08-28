@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
 import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
-import com.positivity.inventory.service.AllocationReallocationService;
+import com.positivity.inventory.internal.reservation.service.AllocationReallocationService;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

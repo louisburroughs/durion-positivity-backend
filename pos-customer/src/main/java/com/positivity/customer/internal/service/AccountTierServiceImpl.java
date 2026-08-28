@@ -7,7 +7,6 @@ import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.AccountTier;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
-import com.positivity.customer.service.AccountTierService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

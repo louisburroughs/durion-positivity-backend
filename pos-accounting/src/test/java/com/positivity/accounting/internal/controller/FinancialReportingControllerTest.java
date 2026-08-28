@@ -16,7 +16,7 @@ import com.positivity.accounting.internal.dto.AgedReceivablesReport;
 import com.positivity.accounting.internal.dto.AgingSummary;
 import com.positivity.accounting.internal.dto.GeneralLedgerReport;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
-import com.positivity.accounting.service.FinancialReportingService;
+import com.positivity.accounting.internal.service.FinancialReportingService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;

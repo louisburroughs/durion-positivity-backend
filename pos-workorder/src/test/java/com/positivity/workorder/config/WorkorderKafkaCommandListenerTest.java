@@ -4,11 +4,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.positivity.workorder.internal.config.KafkaCommandListener;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
-import com.positivity.workorder.service.OutboxReplayService;
-import com.positivity.workorder.service.WorkorderInvoiceService;
+import com.positivity.workorder.internal.service.KafkaCommandListener;
+import com.positivity.workorder.internal.service.OutboxReplayService;
+import com.positivity.workorder.internal.service.WorkorderInvoiceService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;

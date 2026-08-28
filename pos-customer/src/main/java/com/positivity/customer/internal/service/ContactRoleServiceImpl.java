@@ -8,7 +8,6 @@ import com.positivity.customer.internal.entity.ContactRoleAssignment;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.ContactRoleService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

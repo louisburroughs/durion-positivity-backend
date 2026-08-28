@@ -2,7 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.RolePermissionService;
+import com.positivity.securityservice.internal.service.RolePermissionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

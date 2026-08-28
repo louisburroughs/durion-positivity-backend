@@ -9,7 +9,6 @@ import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductReplacementEntity;
 import com.positivity.catalog.internal.repository.ProductReplacementRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
-import com.positivity.catalog.service.ProductDetailService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;

@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.controller.DashboardController;
 import com.positivity.workorder.internal.dto.DashboardResponse;
-import com.positivity.workorder.service.DashboardService;
+import com.positivity.workorder.internal.service.DashboardService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;

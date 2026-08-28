@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
 import com.positivity.inventory.internal.enums.ShortageResolutionOption;
-import com.positivity.inventory.service.ShortageResolutionService;
+import com.positivity.inventory.internal.reservation.service.ShortageResolutionService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

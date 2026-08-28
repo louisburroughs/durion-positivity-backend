@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.mcp.internal.dto.AuditEventResponse;
 import com.positivity.mcp.internal.dto.AuditQuery;
 import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
-import com.positivity.mcp.service.AuditLedgerService;
+import com.positivity.mcp.internal.service.AuditLedgerService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

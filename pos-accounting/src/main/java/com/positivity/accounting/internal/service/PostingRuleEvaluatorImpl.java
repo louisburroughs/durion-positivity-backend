@@ -16,8 +16,6 @@ import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
-import com.positivity.accounting.service.GLMappingResolver;
-import com.positivity.accounting.service.PostingRuleEvaluator;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

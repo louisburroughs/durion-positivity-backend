@@ -5,8 +5,8 @@ import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
-import com.positivity.securityservice.service.AuthenticationService;
-import com.positivity.securityservice.service.SelfRegistrationService;
+import com.positivity.securityservice.internal.service.AuthenticationService;
+import com.positivity.securityservice.internal.service.SelfRegistrationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * Handles credential-based login and token-refresh requests,
  * delegating to
- * {@link com.positivity.securityservice.service.AuthenticationService}.
+ * {@link com.positivity.securityservice.internal.service.AuthenticationService}.
  *
  * @since 1.0
  */

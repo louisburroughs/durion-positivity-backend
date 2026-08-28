@@ -1,4 +1,4 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,10 +28,7 @@ import com.positivity.order.internal.exception.InvoicingUnavailableException;
 import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.internal.service.OrderStateMachine;
-import com.positivity.order.internal.service.OrderTotalsCalculator;
-import com.positivity.order.internal.service.SalesOrderServiceImpl;
-import com.positivity.order.service.model.CheckoutResult;
+import com.positivity.order.internal.service.model.CheckoutResult;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

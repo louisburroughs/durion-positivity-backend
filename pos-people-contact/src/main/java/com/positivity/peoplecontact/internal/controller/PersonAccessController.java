@@ -5,7 +5,7 @@ import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.dto.PersonRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
-import com.positivity.peoplecontact.service.PeopleAccessControlService;
+import com.positivity.peoplecontact.internal.service.PeopleAccessControlService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

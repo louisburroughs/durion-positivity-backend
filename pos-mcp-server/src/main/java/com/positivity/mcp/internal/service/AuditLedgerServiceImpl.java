@@ -6,7 +6,6 @@ import com.positivity.mcp.internal.entity.NltiAuditEvent;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.exception.InvalidAuditEventTypeException;
 import com.positivity.mcp.internal.repository.NltiAuditEventRepository;
-import com.positivity.mcp.service.AuditLedgerService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;

@@ -7,7 +7,7 @@ import com.positivity.price.internal.dto.EligibilityDecisionResponse;
 import com.positivity.price.internal.dto.EligibilityRuleResponse;
 import com.positivity.price.internal.dto.PromotionEligibilityRuleMapper;
 import com.positivity.price.internal.security.PricingPermissions;
-import com.positivity.price.service.EligibilityEvaluationService;
+import com.positivity.price.internal.service.EligibilityEvaluationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

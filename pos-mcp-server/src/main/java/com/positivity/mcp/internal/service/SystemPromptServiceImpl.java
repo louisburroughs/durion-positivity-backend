@@ -5,7 +5,6 @@ import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
-import com.positivity.mcp.service.SystemPromptService;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;

@@ -3,7 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.SupplierPriceEntryDto;
 import com.positivity.catalog.internal.dto.SupplierPriceImportStatusDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.SupplierPriceEntryService;
+import com.positivity.catalog.internal.service.SupplierPriceEntryService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

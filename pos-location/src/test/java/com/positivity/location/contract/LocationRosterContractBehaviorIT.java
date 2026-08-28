@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.dto.LocationRef;
-import com.positivity.location.service.LocationRosterService;
+import com.positivity.location.internal.service.LocationRosterService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

@@ -14,7 +14,7 @@ import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
-import com.positivity.securityservice.service.UserService;
+import com.positivity.securityservice.internal.service.UserService;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;

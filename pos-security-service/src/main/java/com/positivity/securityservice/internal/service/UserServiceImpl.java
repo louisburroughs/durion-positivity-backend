@@ -10,7 +10,6 @@ import com.positivity.securityservice.internal.exception.DuplicateUsernameExcept
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.UserService;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;

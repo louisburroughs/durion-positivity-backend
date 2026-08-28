@@ -7,7 +7,7 @@ import com.positivity.customer.internal.dto.PagedResponse;
 import com.positivity.customer.internal.dto.UpdateMarketingConsentRequest;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.MarketingConsentService;
+import com.positivity.customer.internal.service.MarketingConsentService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

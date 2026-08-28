@@ -14,7 +14,7 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.CustomerBulkIngestRecord;
 import com.positivity.customer.internal.enums.ContactPointType;
-import com.positivity.customer.service.PersonService;
+import com.positivity.customer.internal.service.PersonService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

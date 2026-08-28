@@ -5,7 +5,7 @@ import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
 import com.positivity.location.internal.security.LocationPermissions;
-import com.positivity.location.service.MobileUnitService;
+import com.positivity.location.internal.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

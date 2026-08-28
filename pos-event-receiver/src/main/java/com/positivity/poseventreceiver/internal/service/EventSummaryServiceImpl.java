@@ -2,7 +2,6 @@ package com.positivity.poseventreceiver.internal.service;
 
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventHourlyRepository;
-import com.positivity.poseventreceiver.service.EventSummaryService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

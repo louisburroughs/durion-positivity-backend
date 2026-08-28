@@ -20,7 +20,6 @@ import com.positivity.customer.internal.exception.CrmUnprocessableEntityExceptio
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.InquiryRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.PartyService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.config.AuditEventService;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
@@ -20,8 +21,6 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import com.positivity.securityservice.service.AuditEventService;
-import com.positivity.securityservice.service.RoleManagementService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;

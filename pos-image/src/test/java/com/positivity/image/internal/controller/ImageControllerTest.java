@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.positivity.image.internal.dto.ImageFileView;
-import com.positivity.image.service.ImageService;
-import com.positivity.image.service.ImageStorageService;
+import com.positivity.image.internal.service.ImageService;
+import com.positivity.image.internal.service.ImageStorageService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;

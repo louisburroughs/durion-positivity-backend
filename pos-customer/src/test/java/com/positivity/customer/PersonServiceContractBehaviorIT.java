@@ -21,7 +21,7 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.service.PersonDirectoryService;
-import com.positivity.customer.service.PersonService;
+import com.positivity.customer.internal.service.PersonService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;

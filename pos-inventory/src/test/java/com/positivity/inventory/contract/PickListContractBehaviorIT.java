@@ -9,10 +9,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.inventory.internal.config.PickListService;
 import com.positivity.inventory.internal.dto.picklist.CreatePickListRequest;
 import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.enums.PickListStatus;
-import com.positivity.inventory.service.PickListService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

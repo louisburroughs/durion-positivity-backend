@@ -21,7 +21,7 @@ import org.jspecify.annotations.NonNull;
  * The reversing entry is not hand-built: the handler locates the original
  * cash-receipt entry by its posting key ({@code applicationRequestId} →
  * {@code sourceEventId}) and delegates to A3's
- * {@link com.positivity.accounting.service.JournalEntryService#reverseJournalEntry}
+ * {@link com.positivity.accounting.internal.service.JournalEntryService#reverseJournalEntry}
  * (issue #943), which inverts every line, flips the original POSTED → REVERSED,
  * and runs the resolved reversal date through the B2 period gate (issue #944).
  *

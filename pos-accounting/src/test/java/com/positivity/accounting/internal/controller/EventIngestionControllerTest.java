@@ -12,7 +12,7 @@ import com.positivity.accounting.internal.dto.ContractField;
 import com.positivity.accounting.internal.dto.EventEnvelopeContract;
 import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
-import com.positivity.accounting.service.EventIngestionService;
+import com.positivity.accounting.internal.service.EventIngestionService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

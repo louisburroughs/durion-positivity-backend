@@ -7,7 +7,7 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.BasePriceBulkIngestRecord;
 import com.positivity.price.internal.security.PricingPermissions;
-import com.positivity.price.service.BasePriceService;
+import com.positivity.price.internal.service.BasePriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

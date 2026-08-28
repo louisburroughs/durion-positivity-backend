@@ -1,7 +1,7 @@
 package com.positivity.price.internal.controller;
 
 import com.positivity.price.internal.dto.PricingSnapshotResponse;
-import com.positivity.price.service.PricingSnapshotService;
+import com.positivity.price.internal.service.PricingSnapshotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -14,7 +14,7 @@ import com.positivity.inventory.internal.dto.reservation.PromoteAllocationReques
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
-import com.positivity.inventory.service.ReservationService;
+import com.positivity.inventory.internal.reservation.service.ReservationService;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

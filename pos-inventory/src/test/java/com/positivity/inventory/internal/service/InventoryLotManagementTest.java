@@ -13,6 +13,7 @@ import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.tracking.service.InventoryLotServiceImpl;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;

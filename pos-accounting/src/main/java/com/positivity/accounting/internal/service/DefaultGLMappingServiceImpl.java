@@ -7,8 +7,6 @@ import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
-import com.positivity.accounting.service.DefaultGLMappingService;
-import com.positivity.accounting.service.GLAccountService;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;

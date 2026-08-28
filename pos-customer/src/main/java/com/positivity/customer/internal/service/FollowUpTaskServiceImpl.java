@@ -12,7 +12,6 @@ import com.positivity.customer.internal.exception.CrmUnprocessableEntityExceptio
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
-import com.positivity.customer.service.FollowUpTaskService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;

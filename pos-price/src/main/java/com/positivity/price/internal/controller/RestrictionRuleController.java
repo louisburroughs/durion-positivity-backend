@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
 import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.internal.security.PricingPermissions;
-import com.positivity.price.service.RestrictionRuleService;
+import com.positivity.price.internal.service.RestrictionRuleService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

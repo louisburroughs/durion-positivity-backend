@@ -12,7 +12,6 @@ import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
-import com.positivity.order.service.PurchaseOrderService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;

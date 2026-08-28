@@ -7,7 +7,6 @@ import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
 import com.positivity.invoice.internal.enums.PaymentTerms;
 import com.positivity.invoice.internal.repository.BillingRulesRepository;
-import com.positivity.invoice.service.BillingRulesService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;

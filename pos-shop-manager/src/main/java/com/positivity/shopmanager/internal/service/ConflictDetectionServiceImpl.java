@@ -3,7 +3,6 @@ package com.positivity.shopmanager.internal.service;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
-import com.positivity.shopmanager.service.ConflictDetectionService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

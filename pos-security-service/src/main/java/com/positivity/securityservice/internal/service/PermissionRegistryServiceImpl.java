@@ -6,7 +6,6 @@ import com.positivity.securityservice.internal.dto.PermissionRegistrationRespons
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.service.PermissionRegistryService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;

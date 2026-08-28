@@ -6,10 +6,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.ScreenLink;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.LadderResult;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.Rung;
-import com.positivity.mcp.service.CurrentUserContext;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;

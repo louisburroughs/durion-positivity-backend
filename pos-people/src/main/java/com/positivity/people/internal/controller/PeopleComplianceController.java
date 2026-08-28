@@ -3,7 +3,7 @@ package com.positivity.people.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.PeopleComplianceService;
+import com.positivity.people.internal.service.PeopleComplianceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;

@@ -32,7 +32,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -231,7 +233,10 @@ class ArchitectureTests {
                 // Configuration-properties holders are not service implementations. A nested
                 // binding type such as TaxProperties.ExternalService names the thing it configures,
                 // which is exactly what this rule is not about.
-                .resideOutsideOfPackages("..internal.service..", "..internal.config..")
+                // Subdomain-split service packages (internal.{subdomain}.service, e.g.
+                // pos-supplier's internal.order.service) are legitimate homes for service
+                // interfaces beside their implementations per ADR-0026 D3 (issue #1541).
+                .resideOutsideOfPackages("..internal.service..", "..internal.*.service..", "..internal.config..")
                 .should()
                 .haveSimpleNameNotEndingWith("Service")
                 .because(
@@ -366,6 +371,216 @@ class ArchitectureTests {
                     + " (set via -D" + DTO_SUFFIX_MAX_PROPERTY + ")";
             Assertions.fail(message);
         }
+    }
+
+    /**
+     * ADR-0026 D5 enforcement switch (#1541). {@code false} = report mode: the rule prints the
+     * per-module leak census but never fails the build. The #1541 migration moved every ungranted
+     * service interface to {@code internal.service}, so the rule now gates at <strong>zero</strong>
+     * — there is deliberately no threshold parameter to loosen.
+     */
+    private static final boolean D5_ENFORCED = true;
+
+    /**
+     * ADR-0026 D4 grant-surface census (#1541): the exact set of granted types, keyed by fully
+     * qualified name, each entry carrying the amendment that granted it. Mirrors the explicit
+     * grant maps in {@link DomainWallsTest} — an entry without a justification is how a grant
+     * list quietly stops meaning anything.
+     *
+     * <p>Today the platform has exactly one granted type: {@code SupplierStockService}, per the
+     * ADR-0044 amendment dated 2026-08-10 ("Live supplier stock inquiry is the single approved
+     * synchronous cross-module supplier read"). Adding an entry here requires an ADR amendment.
+     */
+    private static final Map<String, String> GRANTED_GRANT_SURFACE_TYPES = Map.of(
+            "com.positivity.supplier.service.SupplierStockService",
+            "sole granted type — ADR-0044 amendment 2026-08-10: live supplier stock inquiry is the"
+                    + " single approved synchronous cross-module supplier read");
+
+    /** Package roots a granted grant-surface type may depend on besides its own grant surface. */
+    private static final List<String> GRANT_SURFACE_ALLOWED_SHARED_ROOTS = List.of(
+            "com.positivity.shared", // pos-shared-dtos
+            "com.positivity.domainevents" // pos-domain-events
+            );
+
+    /**
+     * ADR-0026 D5 producer-side rule (#1541): no type in a module's PUBLIC service package may
+     * depend on that same module's {@code internal.*} packages. The public surface is
+     * {@code com.positivity.<module>.service} and {@code com.positivity.<module>.service.model}
+     * only — resolved from the module root via {@link #publicServiceModuleOf(JavaClass)}, never
+     * via a {@code ..service..} wildcard, because that wildcard also matches
+     * {@code ..internal.service..} and would flag every implementation class in the platform.
+     *
+     * <p><strong>Build-failing at zero</strong> since the #1541 migration completed
+     * ({@link #D5_ENFORCED}). The per-module census (leaking types and leaked imports) is still
+     * printed on every run, so any future leak is named before the failure.
+     */
+    @Test
+    void publicServicePackagesShouldNotDependOnOwnInternalPackages() {
+        Map<String, Set<String>> leakingTypesByModule = new TreeMap<>();
+        Map<String, Integer> leakedImportsByModule = new TreeMap<>();
+        Map<String, Integer> leakedImportsByInternalArea = new TreeMap<>();
+        List<String> violationDetails = new ArrayList<>();
+        int publicServiceTypeCount = 0;
+
+        for (JavaClass origin : allClasses) {
+            String module = publicServiceModuleOf(origin);
+            if (module == null) {
+                continue;
+            }
+            publicServiceTypeCount++;
+            String internalRoot = "com.positivity." + module + ".internal";
+            Set<String> leakedTargets = new TreeSet<>();
+            for (Dependency dependency : origin.getDirectDependenciesFromSelf()) {
+                JavaClass targetClass = dependency.getTargetClass();
+                String targetPackage = targetClass.getPackageName();
+                if (!targetPackage.equals(internalRoot) && !targetPackage.startsWith(internalRoot + ".")) {
+                    continue;
+                }
+                if (leakedTargets.add(targetClass.getName())) {
+                    leakedImportsByInternalArea.merge(internalArea(internalRoot, targetPackage), 1, Integer::sum);
+                    violationDetails.add(origin.getName() + " -> " + targetClass.getName());
+                }
+            }
+            if (!leakedTargets.isEmpty()) {
+                leakingTypesByModule
+                        .computeIfAbsent(module, key -> new TreeSet<>())
+                        .add(origin.getName());
+                leakedImportsByModule.merge(module, leakedTargets.size(), Integer::sum);
+            }
+        }
+
+        int totalLeakingTypes =
+                leakingTypesByModule.values().stream().mapToInt(Set::size).sum();
+        int totalLeakedImports = leakedImportsByModule.values().stream()
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        StringBuilder report = new StringBuilder("[ArchUnit][ADR-0026 D5] Public service/service.model types depending"
+                + " on their own module's internal.* (issue #1541):\n");
+        leakingTypesByModule.forEach((module, types) -> report.append("[ArchUnit][ADR-0026 D5]   module=")
+                .append(module)
+                .append(" leakingTypes=")
+                .append(types.size())
+                .append(" leakedImports=")
+                .append(leakedImportsByModule.get(module))
+                .append('\n'));
+        report.append("[ArchUnit][ADR-0026 D5]   leaked imports by internal area: ")
+                .append(leakedImportsByInternalArea)
+                .append('\n');
+        report.append("[ArchUnit][ADR-0026 D5] TOTAL publicServiceTypes=")
+                .append(publicServiceTypeCount)
+                .append(" leakingTypes=")
+                .append(totalLeakingTypes)
+                .append(" leakedImports=")
+                .append(totalLeakedImports);
+        System.out.println(report);
+
+        if (D5_ENFORCED) {
+            Assertions.assertTrue(
+                    violationDetails.isEmpty(),
+                    "ADR-0026 D5: public service packages must not depend on their own module's internal"
+                            + " packages. Offenders:\n" + String.join("\n", violationDetails));
+        }
+    }
+
+    /**
+     * ADR-0026 D4 regression guard (#1541), build-failing: every granted grant-surface type in
+     * {@link #GRANTED_GRANT_SURFACE_TYPES} may depend only on its own public grant surface
+     * ({@code <module>.service} / {@code <module>.service.model}), the shared contract libraries
+     * (pos-shared-dtos, pos-domain-events), and non-platform types (JDK, annotations). In
+     * particular it may not reach any {@code com.positivity} internal package or another
+     * module's packages.
+     */
+    @Test
+    void grantedGrantSurfaceTypesShouldOnlyDependOnGrantSurfaceAndSharedContracts() {
+        List<String> violations = new ArrayList<>();
+
+        for (Map.Entry<String, String> granted : GRANTED_GRANT_SURFACE_TYPES.entrySet()) {
+            Assertions.assertFalse(
+                    granted.getValue() == null || granted.getValue().isBlank(),
+                    "Grant entry " + granted.getKey() + " must record the ADR amendment that granted it");
+            Assertions.assertTrue(
+                    allClasses.contain(granted.getKey()),
+                    "Granted grant-surface type " + granted.getKey()
+                            + " no longer exists — update GRANTED_GRANT_SURFACE_TYPES (and the granting ADR)");
+
+            JavaClass grantedType = allClasses.get(granted.getKey());
+            String module = publicServiceModuleOf(grantedType);
+            Assertions.assertNotNull(
+                    module,
+                    "Granted type " + granted.getKey()
+                            + " must live in its module's public service package (ADR-0026 D1)");
+
+            String publicRoot = "com.positivity." + module + ".service";
+            for (Dependency dependency : grantedType.getDirectDependenciesFromSelf()) {
+                String targetPackage = dependency.getTargetClass().getPackageName();
+                if (isAllowedGrantSurfaceDependency(targetPackage, publicRoot)) {
+                    continue;
+                }
+                violations.add(granted.getKey() + " -> "
+                        + dependency.getTargetClass().getName() + " (" + dependency.getDescription() + ")");
+            }
+        }
+
+        Assertions.assertTrue(
+                violations.isEmpty(),
+                "ADR-0026 D4: granted grant-surface types may depend only on their own service.model,"
+                        + " pos-shared-dtos, pos-domain-events, and non-platform types. Offenders:\n"
+                        + String.join("\n", violations));
+    }
+
+    /** Whether a granted grant-surface type may depend on a class in this package (ADR-0026 D4). */
+    private static boolean isAllowedGrantSurfaceDependency(String targetPackage, String publicRoot) {
+        if (!targetPackage.startsWith("com.positivity.")) {
+            // JDK and third-party types (annotations, etc.) — not platform surface.
+            return true;
+        }
+        if (targetPackage.contains(".internal.") || targetPackage.endsWith(".internal")) {
+            return false;
+        }
+        if (targetPackage.equals(publicRoot)
+                || targetPackage.equals(publicRoot + ".model")
+                || targetPackage.startsWith(publicRoot + ".model.")) {
+            return true;
+        }
+        return GRANT_SURFACE_ALLOWED_SHARED_ROOTS.stream()
+                .anyMatch(root -> targetPackage.equals(root) || targetPackage.startsWith(root + "."));
+    }
+
+    /**
+     * The module root when this class sits in a module's PUBLIC service surface, else
+     * {@code null}. Anchored exactly: the package must be {@code com.positivity.<root>.service},
+     * {@code com.positivity.<root>.service.model}, or below {@code service.model} — where
+     * {@code <root>} is the single package segment directly after {@code com.positivity}. A
+     * package such as {@code com.positivity.supplier.internal.service} therefore never matches
+     * (its module root is {@code supplier}, and its package is not
+     * {@code com.positivity.supplier.service}); the explicit {@code .internal.} check is
+     * belt-and-braces on top of that.
+     */
+    private static String publicServiceModuleOf(JavaClass javaClass) {
+        String packageName = javaClass.getPackageName();
+        if (packageName.contains(".internal.") || packageName.endsWith(".internal")) {
+            return null;
+        }
+        String module = moduleName(packageName);
+        if (module == null) {
+            return null;
+        }
+        String publicRoot = "com.positivity." + module + ".service";
+        boolean isPublicSurface = packageName.equals(publicRoot)
+                || packageName.equals(publicRoot + ".model")
+                || packageName.startsWith(publicRoot + ".model.");
+        return isPublicSurface ? module : null;
+    }
+
+    /** First package segment under {@code <module>.internal}, for the leak census breakdown. */
+    private static String internalArea(String internalRoot, String targetPackage) {
+        if (targetPackage.equals(internalRoot)) {
+            return "(root)";
+        }
+        String remainder = targetPackage.substring(internalRoot.length() + 1);
+        int nextDot = remainder.indexOf('.');
+        return "internal." + (nextDot < 0 ? remainder : remainder.substring(0, nextDot));
     }
 
     private static String moduleName(String packageName) {

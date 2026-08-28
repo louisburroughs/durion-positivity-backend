@@ -2,8 +2,6 @@ package com.positivity.mcp.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.mcp.service.SessionAgentCacheMetrics;
-import com.positivity.mcp.service.StreamingSessionAgentCacheMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;

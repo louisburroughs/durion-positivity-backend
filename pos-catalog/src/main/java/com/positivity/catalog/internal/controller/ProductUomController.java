@@ -4,7 +4,7 @@ import com.positivity.catalog.internal.dto.ProductUomCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUomDto;
 import com.positivity.catalog.internal.dto.ProductUomUpdateRequestDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.ProductUomService;
+import com.positivity.catalog.internal.service.ProductUomService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

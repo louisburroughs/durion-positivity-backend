@@ -16,7 +16,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
-import com.positivity.workorder.service.WorkexecTimeTrackingService;
+import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;

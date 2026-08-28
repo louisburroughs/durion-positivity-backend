@@ -10,7 +10,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
-import com.positivity.inventory.service.StockMovementService;
+import com.positivity.inventory.internal.movement.service.StockMovementService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

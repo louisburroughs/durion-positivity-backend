@@ -2,7 +2,7 @@ package com.positivity.documents.internal.controller;
 
 import com.positivity.documents.internal.dto.RenderRequest;
 import com.positivity.documents.internal.security.DocumentsPermissions;
-import com.positivity.documents.service.PdfRenderingService;
+import com.positivity.documents.internal.service.PdfRenderingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

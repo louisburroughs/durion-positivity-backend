@@ -100,7 +100,7 @@ class ReplicaAndManifestListenerContractTest {
     private ExtPersonReplicaRepository personRepository;
 
     @Mock
-    private com.positivity.shopmanager.service.MechanicSyncService mechanicSyncService;
+    private com.positivity.shopmanager.internal.service.MechanicSyncService mechanicSyncService;
 
     @Mock
     private KafkaTemplate<String, String> kafkaTemplate;

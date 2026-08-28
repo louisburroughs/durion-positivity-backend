@@ -11,9 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.mcp.service.DocumentIngestionJob;
-import com.positivity.mcp.service.DocumentIngestionJobStatus;
-import com.positivity.mcp.service.DocumentIngestionService;
+import com.positivity.mcp.internal.config.DocumentIngestionJob;
+import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
+import com.positivity.mcp.internal.config.DocumentIngestionService;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Optional;

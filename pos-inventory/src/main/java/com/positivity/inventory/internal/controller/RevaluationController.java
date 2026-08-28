@@ -1,12 +1,12 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.costing.service.RevaluationService;
 import com.positivity.inventory.internal.dto.revaluation.CreateRevaluationRequest;
 import com.positivity.inventory.internal.dto.revaluation.RejectRevaluationRequest;
 import com.positivity.inventory.internal.dto.revaluation.RevaluationResponse;
 import com.positivity.inventory.internal.enums.RevaluationStatus;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.RevaluationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

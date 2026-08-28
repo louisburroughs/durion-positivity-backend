@@ -10,7 +10,6 @@ import com.positivity.securityservice.internal.entity.PricingRuleTraceEntry;
 import com.positivity.securityservice.internal.entity.PricingSnapshot;
 import com.positivity.securityservice.internal.repository.PricingRuleTraceEntryRepository;
 import com.positivity.securityservice.internal.repository.PricingSnapshotRepository;
-import com.positivity.securityservice.service.PricingSnapshotService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.price.BaseContractIntegrationTest;
 import com.positivity.price.internal.dto.PricingSnapshotCreateRequest;
-import com.positivity.price.service.PricingSnapshotService;
+import com.positivity.price.internal.service.PricingSnapshotService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

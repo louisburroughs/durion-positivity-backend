@@ -2,7 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.securityservice.internal.dto.AuthorizationDecisionResponse;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
-import com.positivity.securityservice.service.AuthorizationService;
+import com.positivity.securityservice.internal.service.AuthorizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

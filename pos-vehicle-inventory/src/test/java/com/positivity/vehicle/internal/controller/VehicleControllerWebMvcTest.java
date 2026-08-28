@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
-import com.positivity.vehicle.service.VehicleLegacyService;
+import com.positivity.vehicle.internal.service.VehicleLegacyService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

@@ -1,0 +1,48 @@
+package com.positivity.order.internal.service.model;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
+import org.jspecify.annotations.NonNull;
+
+public record SalesOrderSummary(
+        @NonNull String orderId,
+        String orderNumber,
+        String locationId,
+        String label,
+        String customerId,
+        String vehicleId,
+        String customerValidationStatus,
+        @NonNull String clerkId,
+        @NonNull String terminalId,
+        @NonNull String status,
+        @NonNull BigDecimal subtotal,
+        BigDecimal discountTotal,
+        BigDecimal taxTotal,
+        BigDecimal grandTotal,
+        boolean taxStale,
+        String orderDiscountType,
+        BigDecimal orderDiscountValue,
+        String orderDiscountReasonCode,
+        String generalNote,
+        Instant quoteExpiresAt,
+        String invoiceId,
+        String invoiceNumber,
+        BigDecimal amountPaid,
+        BigDecimal balanceDue,
+        Instant createdAt,
+        Instant updatedAt,
+        String createdBy,
+        String updatedBy,
+        List<SalesOrderLineSummary> lines) {
+
+    public SalesOrderSummary {
+        Objects.requireNonNull(orderId, "orderId must not be null");
+        Objects.requireNonNull(clerkId, "clerkId must not be null");
+        Objects.requireNonNull(terminalId, "terminalId must not be null");
+        Objects.requireNonNull(status, "status must not be null");
+        Objects.requireNonNull(subtotal, "subtotal must not be null");
+        lines = Objects.requireNonNullElse(lines, List.of());
+    }
+}

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
-import com.positivity.accounting.service.OutboxService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;

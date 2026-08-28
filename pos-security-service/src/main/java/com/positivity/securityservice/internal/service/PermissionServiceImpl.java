@@ -4,7 +4,6 @@ import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.service.PermissionService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

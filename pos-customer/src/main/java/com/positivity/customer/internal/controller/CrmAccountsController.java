@@ -21,8 +21,8 @@ import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesReques
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
-import com.positivity.customer.service.AccountTierService;
-import com.positivity.customer.service.PartyService;
+import com.positivity.customer.internal.service.AccountTierService;
+import com.positivity.customer.internal.service.PartyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
 import io.swagger.v3.oas.annotations.Operation;

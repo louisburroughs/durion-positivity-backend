@@ -23,9 +23,9 @@ import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetExc
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
-import com.positivity.workorder.service.EstimateService;
-import com.positivity.workorder.service.IdempotencyService;
-import com.positivity.workorder.service.WorkorderService;
+import com.positivity.workorder.internal.service.EstimateService;
+import com.positivity.workorder.internal.service.IdempotencyService;
+import com.positivity.workorder.internal.service.WorkorderService;
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.util.List;

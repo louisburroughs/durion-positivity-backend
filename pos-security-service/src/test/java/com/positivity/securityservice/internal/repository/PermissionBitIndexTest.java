@@ -9,7 +9,7 @@ import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.enums.PermissionCode;
-import com.positivity.securityservice.service.PermissionRegistryService;
+import com.positivity.securityservice.internal.service.PermissionRegistryService;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;

@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.inventory.internal.config.ConsumptionService;
+import com.positivity.inventory.internal.config.PickListGenerationService;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemLine;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.picklist.ConfirmPickTaskRequest;
@@ -35,6 +37,8 @@ import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.LotInsufficientStockException;
 import com.positivity.inventory.internal.exception.LotNumberRequiredException;
 import com.positivity.inventory.internal.exception.LotUnknownException;
+import com.positivity.inventory.internal.receiving.service.ReceivingService;
+import com.positivity.inventory.internal.receiving.service.ReturnServiceImpl;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtWorkorderPartReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtWorkorderReplicaRepository;
@@ -45,10 +49,6 @@ import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
-import com.positivity.inventory.internal.service.ReturnServiceImpl;
-import com.positivity.inventory.service.ConsumptionService;
-import com.positivity.inventory.service.PickListGenerationService;
-import com.positivity.inventory.service.ReceivingService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Instant;

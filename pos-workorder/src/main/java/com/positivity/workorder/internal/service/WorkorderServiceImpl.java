@@ -35,9 +35,6 @@ import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepositor
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-import com.positivity.workorder.service.IdempotencyService;
-import com.positivity.workorder.service.PromotionValidationService;
-import com.positivity.workorder.service.WorkorderService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.Year;

@@ -43,7 +43,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Exception intake and listing. Resolution and acknowledgement flows are covered by
- * {@code com.positivity.people.service.TimeEntryExceptionServiceTest}; this class covers
+ * {@code com.positivity.people.internal.service.TimeEntryExceptionServiceTest}; this class covers
  * creation, the read side, and the audit-write failure paths that must not fail the action.
  */
 @ExtendWith(MockitoExtension.class)

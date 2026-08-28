@@ -5,7 +5,6 @@ import com.positivity.shared.enums.InvoiceGroupingStrategy;
 import com.positivity.workorder.internal.dto.BillingRulesDTO;
 import com.positivity.workorder.internal.entity.ExtBillingRulesReplica;
 import com.positivity.workorder.internal.repository.ExtBillingRulesReplicaRepository;
-import com.positivity.workorder.service.BillingRulesClientService;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

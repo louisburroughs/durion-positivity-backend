@@ -6,7 +6,7 @@ import com.positivity.vehiclefitment.internal.dto.ModelResponse;
 import com.positivity.vehiclefitment.internal.dto.VehicleFitmentMapper;
 import com.positivity.vehiclefitment.internal.dto.VehicleTypeResponse;
 import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
-import com.positivity.vehiclefitment.service.VehicleFitmentService;
+import com.positivity.vehiclefitment.internal.service.VehicleFitmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

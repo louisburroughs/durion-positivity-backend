@@ -11,7 +11,6 @@ import com.positivity.marketing.internal.exception.MarketingResourceNotFoundExce
 import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityException;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
-import com.positivity.marketing.service.MessageTemplateService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.List;
 import java.util.UUID;

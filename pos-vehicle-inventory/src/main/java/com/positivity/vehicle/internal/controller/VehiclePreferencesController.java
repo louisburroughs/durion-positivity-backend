@@ -5,7 +5,7 @@ import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceMapper;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
-import com.positivity.vehicle.service.VehiclePreferencesService;
+import com.positivity.vehicle.internal.service.VehiclePreferencesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

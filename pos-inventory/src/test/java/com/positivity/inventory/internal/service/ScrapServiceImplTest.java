@@ -30,7 +30,7 @@ import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationE
 import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ScrapRecordRepository;
-import com.positivity.inventory.service.ApprovalThresholdEvaluator;
+import com.positivity.inventory.internal.scrap.service.ScrapServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -79,7 +79,7 @@ class ScrapServiceImplTest {
     private InventoryFactPublisher inventoryFactPublisher;
 
     @Mock
-    private com.positivity.inventory.service.ReplenishmentService replenishmentService;
+    private com.positivity.inventory.internal.replenishment.service.ReplenishmentService replenishmentService;
 
     @Mock
     private CostingMethodResolver methodResolver;

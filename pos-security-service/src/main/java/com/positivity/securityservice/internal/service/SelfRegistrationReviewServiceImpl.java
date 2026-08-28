@@ -8,7 +8,6 @@ import com.positivity.securityservice.internal.enums.SelfRegistrationCaseStatus;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.repository.SelfRegistrationReviewCaseRepository;
-import com.positivity.securityservice.service.SelfRegistrationReviewService;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;

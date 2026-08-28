@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.cyclecount.service.CycleCountService;
 import com.positivity.inventory.internal.dto.cyclecount.CountEntryResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CountResponse;
 import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
@@ -8,7 +9,6 @@ import com.positivity.inventory.internal.dto.cyclecount.InterferingMovementRespo
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.CycleCountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

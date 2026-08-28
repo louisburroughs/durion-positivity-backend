@@ -10,13 +10,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.config.DocumentIngestionJob;
+import com.positivity.mcp.internal.config.DocumentIngestionJobStatus;
+import com.positivity.mcp.internal.config.DocumentIngestionService;
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
 import com.positivity.mcp.internal.entity.RagPreloadRecord;
 import com.positivity.mcp.internal.enums.RagPreloadStatus;
 import com.positivity.mcp.internal.repository.RagPreloadRecordRepository;
-import com.positivity.mcp.service.DocumentIngestionJob;
-import com.positivity.mcp.service.DocumentIngestionJobStatus;
-import com.positivity.mcp.service.DocumentIngestionService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;

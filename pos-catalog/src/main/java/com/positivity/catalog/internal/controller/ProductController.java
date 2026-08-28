@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.controller;
 
+import com.positivity.catalog.internal.config.ProductFactReplayService;
 import com.positivity.catalog.internal.dto.CatalogSearchResultDto;
 import com.positivity.catalog.internal.dto.EffectiveLocationPriceResponseDto;
 import com.positivity.catalog.internal.dto.GuardrailPolicyUpsertRequestDto;
@@ -20,14 +21,13 @@ import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
-import com.positivity.catalog.service.CatalogService;
-import com.positivity.catalog.service.LocationPriceOverrideService;
-import com.positivity.catalog.service.ProductCodeLookupService;
-import com.positivity.catalog.service.ProductDetailService;
-import com.positivity.catalog.service.ProductFactReplayService;
-import com.positivity.catalog.service.ProductLifecycleService;
-import com.positivity.catalog.service.ProductMasterDataService;
-import com.positivity.catalog.service.ProductSearchService;
+import com.positivity.catalog.internal.service.CatalogService;
+import com.positivity.catalog.internal.service.LocationPriceOverrideService;
+import com.positivity.catalog.internal.service.ProductCodeLookupService;
+import com.positivity.catalog.internal.service.ProductDetailService;
+import com.positivity.catalog.internal.service.ProductLifecycleService;
+import com.positivity.catalog.internal.service.ProductMasterDataService;
+import com.positivity.catalog.internal.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

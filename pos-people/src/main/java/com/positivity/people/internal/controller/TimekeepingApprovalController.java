@@ -7,7 +7,7 @@ import com.positivity.people.internal.dto.TimePeriodDecisionResponse;
 import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimekeepingEntryDto;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.TimekeepingApprovalService;
+import com.positivity.people.internal.service.TimekeepingApprovalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

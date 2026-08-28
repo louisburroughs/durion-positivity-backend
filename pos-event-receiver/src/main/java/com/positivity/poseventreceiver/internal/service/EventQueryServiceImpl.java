@@ -4,7 +4,6 @@ import com.positivity.poseventreceiver.internal.dto.EmittedEventResponse;
 import com.positivity.poseventreceiver.internal.dto.PagedResponse;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
-import com.positivity.poseventreceiver.service.EventQueryService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

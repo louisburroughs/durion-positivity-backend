@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.bulkloader.config.TestSecurityConfig;
-import com.positivity.bulkloader.service.TusUploadService;
+import com.positivity.bulkloader.internal.service.TusUploadService;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

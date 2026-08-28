@@ -1,7 +1,6 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.entity.StorageLocationEntity;
-import com.positivity.location.service.StorageLocationInventoryTransferService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

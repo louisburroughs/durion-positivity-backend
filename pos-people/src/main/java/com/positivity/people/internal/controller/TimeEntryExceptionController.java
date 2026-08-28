@@ -7,7 +7,7 @@ import com.positivity.people.internal.dto.TimeEntryExceptionResolveRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.dto.TimeEntryExceptionWaiveRequest;
 import com.positivity.people.internal.security.PeoplePermissions;
-import com.positivity.people.service.TimeEntryExceptionService;
+import com.positivity.people.internal.service.TimeEntryExceptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

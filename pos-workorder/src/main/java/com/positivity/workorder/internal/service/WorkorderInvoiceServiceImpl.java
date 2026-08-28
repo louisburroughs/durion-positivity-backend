@@ -15,7 +15,6 @@ import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
-import com.positivity.workorder.service.WorkorderInvoiceService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;

@@ -1,7 +1,6 @@
 package com.positivity.shopmanager.internal.service;
 
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
-import com.positivity.shopmanager.service.AppointmentLoadService;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

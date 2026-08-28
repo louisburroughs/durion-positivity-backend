@@ -4,7 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
-import com.positivity.shopmanager.service.AppointmentsService;
+import com.positivity.shopmanager.internal.service.AppointmentsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

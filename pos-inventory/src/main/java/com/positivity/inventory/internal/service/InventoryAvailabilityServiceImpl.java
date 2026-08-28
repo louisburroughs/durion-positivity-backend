@@ -9,7 +9,6 @@ import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityR
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
-import com.positivity.inventory.service.InventoryAvailabilityService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

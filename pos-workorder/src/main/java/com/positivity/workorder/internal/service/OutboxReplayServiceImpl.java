@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
-import com.positivity.workorder.service.OutboxReplayService;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

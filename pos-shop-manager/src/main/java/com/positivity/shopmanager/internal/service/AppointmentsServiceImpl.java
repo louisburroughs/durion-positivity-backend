@@ -41,9 +41,6 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
-import com.positivity.shopmanager.service.AppointmentLoadService;
-import com.positivity.shopmanager.service.AppointmentsService;
-import com.positivity.shopmanager.service.SourceEligibilityService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;

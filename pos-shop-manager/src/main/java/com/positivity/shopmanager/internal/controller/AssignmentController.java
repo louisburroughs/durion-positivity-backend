@@ -2,9 +2,9 @@ package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
-import com.positivity.shopmanager.service.AssignmentService;
-import com.positivity.shopmanager.service.dto.AssignmentResponse;
-import com.positivity.shopmanager.service.dto.CreateAssignmentRequest;
+import com.positivity.shopmanager.internal.service.AssignmentService;
+import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
+import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

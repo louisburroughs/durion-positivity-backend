@@ -5,7 +5,6 @@ import com.positivity.workorder.internal.dto.WorkorderSearchResult;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import com.positivity.workorder.service.WorkorderSearchService;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;

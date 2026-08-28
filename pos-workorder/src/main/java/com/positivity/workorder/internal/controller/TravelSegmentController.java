@@ -9,7 +9,7 @@ import com.positivity.workorder.internal.dto.TravelSegmentAdjustmentResponse;
 import com.positivity.workorder.internal.dto.TravelSegmentMapper;
 import com.positivity.workorder.internal.dto.TravelSegmentResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
-import com.positivity.workorder.service.TravelSegmentService;
+import com.positivity.workorder.internal.service.TravelSegmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;

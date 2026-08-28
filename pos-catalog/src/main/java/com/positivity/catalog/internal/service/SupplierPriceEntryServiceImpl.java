@@ -6,7 +6,6 @@ import com.positivity.catalog.internal.entity.SupplierPriceEntryEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportEntity;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportRepository;
-import com.positivity.catalog.service.SupplierPriceEntryService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;

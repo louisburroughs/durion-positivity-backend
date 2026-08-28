@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.price.internal.dto.ApplyPromotionRequest;
 import com.positivity.price.internal.dto.ApplyPromotionResponse;
+import com.positivity.price.internal.dto.EligibilityDecision;
 import com.positivity.price.internal.dto.EstimateContext;
 import com.positivity.price.internal.dto.LineItemContext;
 import com.positivity.price.internal.entity.PromotionOffer;
@@ -19,8 +20,6 @@ import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
 import com.positivity.price.internal.repository.PromotionOfferRepository;
-import com.positivity.price.service.EligibilityDecision;
-import com.positivity.price.service.EligibilityEvaluationService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

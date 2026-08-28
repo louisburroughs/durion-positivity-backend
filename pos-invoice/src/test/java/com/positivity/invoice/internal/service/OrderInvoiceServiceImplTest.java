@@ -14,7 +14,7 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
-import com.positivity.invoice.service.model.CreateDepositCommand;
+import com.positivity.invoice.internal.service.model.CreateDepositCommand;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceLineItem;
 import com.positivity.shared.dto.OrderInvoiceResponse;
@@ -63,7 +63,7 @@ class OrderInvoiceServiceImplTest {
     private com.positivity.invoice.internal.repository.PaymentIntentRepository paymentIntentRepository;
 
     @Mock
-    private com.positivity.invoice.service.DepositCreditService depositCreditService;
+    private com.positivity.invoice.internal.service.DepositCreditService depositCreditService;
 
     private OrderInvoiceServiceImpl service;
 
@@ -118,8 +118,9 @@ class OrderInvoiceServiceImplTest {
 
         service.createInvoiceForOrder(depositTake);
 
-        org.mockito.ArgumentCaptor<com.positivity.invoice.service.model.CreateDepositCommand> cmd =
-                org.mockito.ArgumentCaptor.forClass(com.positivity.invoice.service.model.CreateDepositCommand.class);
+        org.mockito.ArgumentCaptor<com.positivity.invoice.internal.service.model.CreateDepositCommand> cmd =
+                org.mockito.ArgumentCaptor.forClass(
+                        com.positivity.invoice.internal.service.model.CreateDepositCommand.class);
         verify(depositCreditService).createDeposit(cmd.capture());
         assertThat(cmd.getValue().orderId()).isEqualTo(ORDER_ID);
         assertThat(cmd.getValue().sourceType()).isEqualTo("WORKORDER");

@@ -7,8 +7,6 @@ import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
-import com.positivity.accounting.service.IdempotencyService;
-import com.positivity.accounting.service.InvoicePaymentStatusService;
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.time.Clock;

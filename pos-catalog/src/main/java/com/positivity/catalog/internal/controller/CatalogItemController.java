@@ -1,11 +1,11 @@
 package com.positivity.catalog.internal.controller;
 
+import com.positivity.catalog.internal.config.ServiceFactReplayService;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CatalogServiceImpl;
-import com.positivity.catalog.service.ServiceFactReplayService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;

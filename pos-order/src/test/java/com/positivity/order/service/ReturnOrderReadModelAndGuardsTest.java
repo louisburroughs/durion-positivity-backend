@@ -1,4 +1,4 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.order.internal.client.PaymentReversalResult;
 import com.positivity.order.internal.client.ReversePaymentCommand;
+import com.positivity.order.internal.dto.ReturnableLineView;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RefundMethod;
 import com.positivity.order.internal.entity.ReturnOrder;
@@ -26,8 +27,6 @@ import com.positivity.order.internal.repository.ReturnOrderLineRepository;
 import com.positivity.order.internal.repository.ReturnOrderRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.internal.service.ReturnOrderServiceImpl;
-import com.positivity.order.service.model.ReturnableLineView;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

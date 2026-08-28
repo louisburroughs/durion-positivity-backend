@@ -15,7 +15,7 @@ import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
 import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
 import com.positivity.inventory.internal.enums.LocationSyncOutcome;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
-import com.positivity.inventory.service.LocationSyncService;
+import com.positivity.inventory.internal.location.service.LocationSyncService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

@@ -4,7 +4,6 @@ import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
-import com.positivity.accounting.service.PaymentApplicationService;
 import jakarta.persistence.OptimisticLockException;
 import java.math.BigDecimal;
 import java.time.Instant;

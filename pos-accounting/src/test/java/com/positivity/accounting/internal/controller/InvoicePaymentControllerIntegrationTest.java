@@ -8,9 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.accounting.BaseIntegrationTest;
-import com.positivity.accounting.service.BillingRulesService;
-import com.positivity.accounting.service.InvoicePaymentStatusService;
-import com.positivity.accounting.service.InvoiceRegenerationService;
+import com.positivity.accounting.internal.service.BillingRulesService;
+import com.positivity.accounting.internal.service.InvoicePaymentStatusService;
+import com.positivity.accounting.internal.service.InvoiceRegenerationService;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

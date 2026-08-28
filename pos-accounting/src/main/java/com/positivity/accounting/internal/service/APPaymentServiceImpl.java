@@ -20,8 +20,6 @@ import com.positivity.accounting.internal.repository.APPaymentAllocationReposito
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.service.APPaymentService;
-import com.positivity.accounting.service.OutboxService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;

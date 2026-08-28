@@ -11,8 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.entity.ProcessedEvent;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
-import com.positivity.invoice.service.InvoiceService;
-import com.positivity.invoice.service.OutboxReplayService;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import java.time.Clock;
