@@ -78,23 +78,4 @@
         <cve>CVE-2026-18022</cve>
     </suppress>
 
-    <!--
-        tomcat-embed-core-11.0.24 — CVE-2026-66299
-        DoS via uncontrolled resource consumption in the WebSocket chat example of Tomcat's
-        examples web application.  Embedded Tomcat as used by Spring Boot never ships the
-        examples webapp, so the vulnerable code is not deployed.  The fix release (11.0.25)
-        is announced but not yet published to Maven Central (latest is 11.0.24).  Remove this
-        suppression and bump tomcat.version once 11.0.25 is available.
-
-        Pinned to version 11.0.24 (the artifact wildcard stays because CPE matching flags the
-        sibling embed artifacts — websocket, el — which version-lock with core) so that any
-        tomcat.version bump forces this suppression to be re-evaluated rather than silently
-        carrying over.
-    -->
-    <suppress>
-        <notes>Examples-webapp-only CVE; examples are never shipped with embedded Tomcat; fix release 11.0.25 not on Maven Central yet.</notes>
-        <gav regex="true">^org\.apache\.tomcat\.embed:tomcat-embed-[^:]+:11\.0\.24$</gav>
-        <cve>CVE-2026-66299</cve>
-    </suppress>
-
 </suppressions>
