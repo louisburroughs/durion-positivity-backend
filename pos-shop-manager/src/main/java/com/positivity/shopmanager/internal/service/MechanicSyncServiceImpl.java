@@ -10,8 +10,7 @@ import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
-import com.positivity.shopmanager.service.MechanicSyncService;
-import com.positivity.shopmanager.service.dto.HrMechanicEvent;
+import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -210,7 +209,7 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         }
         processHrEvent(HrMechanicEvent.builder()
                 .eventId(com.positivity.shared.id.UUIDv7Generator.generate())
-                .eventType(com.positivity.shopmanager.service.enums.HrEventType.MECHANIC_SKILLS_UPDATED)
+                .eventType(com.positivity.shopmanager.internal.service.enums.HrEventType.MECHANIC_SKILLS_UPDATED)
                 .personId(personId)
                 .version(Instant.now(clock).toEpochMilli())
                 .occurredAt(Instant.now(clock))

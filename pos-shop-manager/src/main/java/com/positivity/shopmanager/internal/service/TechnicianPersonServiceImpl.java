@@ -10,7 +10,6 @@ import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
 import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.TechnicianRepository;
-import com.positivity.shopmanager.service.TechnicianPersonService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

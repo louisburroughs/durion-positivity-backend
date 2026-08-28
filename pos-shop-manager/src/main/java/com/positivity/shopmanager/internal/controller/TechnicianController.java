@@ -3,7 +3,7 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
-import com.positivity.shopmanager.service.TechnicianPersonService;
+import com.positivity.shopmanager.internal.service.TechnicianPersonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

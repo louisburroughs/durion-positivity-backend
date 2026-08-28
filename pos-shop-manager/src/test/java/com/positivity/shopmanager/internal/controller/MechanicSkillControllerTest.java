@@ -8,8 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.shopmanager.service.MechanicSyncService;
-import com.positivity.shopmanager.service.dto.HrMechanicEvent;
+import com.positivity.shopmanager.internal.service.MechanicSyncService;
+import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

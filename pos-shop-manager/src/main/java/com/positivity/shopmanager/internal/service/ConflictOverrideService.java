@@ -1,0 +1,18 @@
+package com.positivity.shopmanager.internal.service;
+
+import com.positivity.shopmanager.internal.security.ShopPermissions;
+import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
+import com.positivity.shopmanager.internal.service.dto.ConflictOverrideResponse;
+import org.jspecify.annotations.NonNull;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+public interface ConflictOverrideService {
+    /**
+     * Executes a conflict override: flags the appointment and records the override audit trail.
+     * Requires canonical schedule-editing authority (AC-2).
+     */
+    @PreAuthorize("hasAnyAuthority('" + ShopPermissions.SCHEDULE_EDIT + "', '" + ShopPermissions.APPOINTMENTS_RESCHEDULE
+            + "')")
+    @NonNull
+    ConflictOverrideResponse execute(@NonNull ConflictOverrideRequest request);
+}

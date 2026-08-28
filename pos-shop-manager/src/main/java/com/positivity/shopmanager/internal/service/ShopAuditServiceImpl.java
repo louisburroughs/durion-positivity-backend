@@ -6,7 +6,6 @@ import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
 import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
 import com.positivity.shopmanager.internal.repository.ShopAuditRepository;
-import com.positivity.shopmanager.service.ShopAuditService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
