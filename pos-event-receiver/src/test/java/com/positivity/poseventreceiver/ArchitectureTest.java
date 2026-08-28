@@ -1,4 +1,4 @@
-package com.positivity.event_receiver;
+package com.positivity.poseventreceiver;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
@@ -19,10 +19,10 @@ import java.util.UUID;
  * Enforces:
  * - Internal package encapsulation
  * - Service layer as only public API
- * - Controller -> Service -> Repository layering
+ * - Controller -> Service -> Dao -> Repository layering
  * - No circular dependencies
  */
-@AnalyzeClasses(packages = "com.positivity.event_receiver", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(packages = "com.positivity.poseventreceiver", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
@@ -73,10 +73,15 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("entities should be independent of business logic");
 
+    // pos-event-receiver's dao layer (EventDaoImpl) sits between service and repository and is
+    // expected to depend on ..internal.repository..; it is added to the allow-list alongside
+    // ..service.. and ..internal.config.. rather than treated as a violation (mirrors
+    // pos-marketing / pos-vehicle-inventory / pos-warranty, which have the same dao layer).
     @ArchTest
     static final ArchRule repositories_should_only_be_accessed_from_services_or_config = noClasses()
             .that()
-            .resideOutsideOfPackages("..service..", "..internal.repository..", "..internal.config..")
+            .resideOutsideOfPackages(
+                    "..service..", "..internal.dao..", "..internal.repository..", "..internal.config..")
             .should()
             .dependOnClassesThat()
             .resideInAPackage("..internal.repository..")
@@ -88,7 +93,7 @@ public class ArchitectureTest {
             .that()
             .areAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")
             .should()
-            .resideInAPackage("com.positivity.event_receiver")
+            .resideInAPackage("com.positivity.poseventreceiver")
             .andShould()
             .resideOutsideOfPackages("..internal..", "..service..")
             .allowEmptyShould(true)
@@ -97,7 +102,7 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule only_service_layer_should_be_public_api = classes()
             .that()
-            .resideInAPackage("com.positivity.event_receiver.service..")
+            .resideInAPackage("com.positivity.poseventreceiver.service..")
             .should()
             .bePublic()
             .allowEmptyShould(true)
@@ -137,17 +142,34 @@ public class ArchitectureTest {
             .orShould()
             .beDeclaredInClassesThat()
             .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+            // Documented exemption: pos-event-receiver is the internal event-ingestion hub
+            // (not reached through the API gateway; see the architecture diagram in
+            // CLAUDE.md) and carries no spring-security dependency at all, so its controllers
+            // cannot declare @PreAuthorize. Authorization instead lives at the servlet-filter
+            // layer in EventsApiSecurityFilter, which validates the shared X-Events-Api-Secret
+            // header on every mutating request to /v1/events/** and /v1/eventTypes/**; GET
+            // reads are intentionally left open, matching the filter's own SAFE_METHODS
+            // allowlist. The exemption is scoped to this module's controller package only.
+            .orShould()
+            .beDeclaredInClassesThat()
+            .resideInAPackage("com.positivity.poseventreceiver.internal.controller..")
             .allowEmptyShould(true)
-            .because("all HTTP endpoints must declare authorization guards");
+            .because("all HTTP endpoints must declare authorization guards, except pos-event-receiver's"
+                    + " controllers: this module uses shared-secret auth via EventsApiSecurityFilter"
+                    + " (X-Events-Api-Secret) rather than gateway-issued JWT/@PreAuthorize, and has no"
+                    + " spring-security dependency to carry the annotation with");
 
     @ArchTest
     static final ArchRule packages_should_be_free_of_cycles = slices().matching(
-                    "com.positivity.event_receiver.internal.(*)..")
+                    "com.positivity.poseventreceiver.internal.(*)..")
             .should()
             .beFreeOfCycles()
             .allowEmptyShould(true)
             .because("cyclic dependencies make modules harder to maintain and evolve");
 
+    // Accepts either the modern @UUIDv7Id Hibernate id-generator annotation (used by
+    // EmittedEvent and EventType) or the legacy UUIDv7Generator.generate() @PrePersist call,
+    // mirroring pos-order's rule -- pos-event-receiver's UUID-keyed entities use @UUIDv7Id.
     @ArchTest
     static final ArchRule entities_should_depend_on_uuidv7_generator = classes()
             .that()
@@ -157,6 +179,9 @@ public class ArchitectureTest {
             .should()
             .dependOnClassesThat()
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Generator")
+            .orShould()
+            .dependOnClassesThat()
+            .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
             .allowEmptyShould(true)
             .because("ADR-0013 mandates UUID v7 generation for all entity identifiers");
 

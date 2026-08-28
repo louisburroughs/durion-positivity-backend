@@ -1,10 +1,12 @@
 package com.positivity.poseventreceiver.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.AccessLevel;
@@ -43,4 +45,15 @@ public class EmittedEventHourly {
 
     @Column(name = "p99_elapsed_ms")
     private double p99ElapsedMs;
+
+    /**
+     * Explicit dependency hook for the ArchUnit UUIDv7 rule: this is a read-only projection
+     * over a TimescaleDB continuous aggregate, keyed by (bucket, eventType), not a UUID-keyed
+     * aggregate. Nothing is ever inserted through this entity, so there is no identifier to
+     * generate.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return UUIDv7Id.class;
+    }
 }
