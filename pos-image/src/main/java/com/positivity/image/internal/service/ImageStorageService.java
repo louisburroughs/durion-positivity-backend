@@ -1,6 +1,6 @@
-package com.positivity.image.service;
+package com.positivity.image.internal.service;
 
-import com.positivity.image.service.model.StoredImage;
+import com.positivity.image.internal.service.model.StoredImage;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;

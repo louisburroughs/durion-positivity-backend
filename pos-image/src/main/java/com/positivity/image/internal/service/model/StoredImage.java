@@ -1,4 +1,4 @@
-package com.positivity.image.service.model;
+package com.positivity.image.internal.service.model;
 
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;

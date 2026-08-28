@@ -11,7 +11,7 @@ import com.positivity.image.internal.entity.ImageContentEntity;
 import com.positivity.image.internal.entity.ImageEntity;
 import com.positivity.image.internal.repository.ImageContentRepository;
 import com.positivity.image.internal.repository.ImageRepository;
-import com.positivity.image.service.model.StoredImage;
+import com.positivity.image.internal.service.model.StoredImage;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

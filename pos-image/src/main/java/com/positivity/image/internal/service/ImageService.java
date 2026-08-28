@@ -1,4 +1,4 @@
-package com.positivity.image.service;
+package com.positivity.image.internal.service;
 
 import com.positivity.image.internal.dto.ImageContentView;
 import com.positivity.image.internal.dto.ImageFileView;
