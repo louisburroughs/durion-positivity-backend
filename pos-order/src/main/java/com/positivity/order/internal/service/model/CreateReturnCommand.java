@@ -1,4 +1,4 @@
-package com.positivity.order.service.model;
+package com.positivity.order.internal.service.model;
 
 import java.util.List;
 import java.util.Objects;

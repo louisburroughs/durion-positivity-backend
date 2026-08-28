@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.security.OrderPermissions;
-import com.positivity.order.service.OrderCancellationService;
-import com.positivity.order.service.model.CancellationResult;
+import com.positivity.order.internal.service.OrderCancellationService;
+import com.positivity.order.internal.service.model.CancellationResult;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

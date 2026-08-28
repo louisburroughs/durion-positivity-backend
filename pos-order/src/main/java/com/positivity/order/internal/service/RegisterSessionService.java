@@ -1,10 +1,10 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
-import com.positivity.order.service.model.CashMovementCommand;
-import com.positivity.order.service.model.CashMovementSummary;
-import com.positivity.order.service.model.OpenSessionCommand;
-import com.positivity.order.service.model.RegisterSessionSummary;
-import com.positivity.order.service.model.SessionReport;
+import com.positivity.order.internal.dto.CashMovementSummary;
+import com.positivity.order.internal.dto.RegisterSessionSummary;
+import com.positivity.order.internal.dto.SessionReport;
+import com.positivity.order.internal.service.model.CashMovementCommand;
+import com.positivity.order.internal.service.model.OpenSessionCommand;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;

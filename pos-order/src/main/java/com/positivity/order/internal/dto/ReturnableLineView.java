@@ -1,4 +1,4 @@
-package com.positivity.order.service.model;
+package com.positivity.order.internal.dto;
 
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;

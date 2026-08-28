@@ -1,8 +1,8 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
-import com.positivity.order.service.model.CreateReturnCommand;
-import com.positivity.order.service.model.ReturnOrderSummary;
-import com.positivity.order.service.model.ReturnableLineView;
+import com.positivity.order.internal.dto.ReturnOrderSummary;
+import com.positivity.order.internal.dto.ReturnableLineView;
+import com.positivity.order.internal.service.model.CreateReturnCommand;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;

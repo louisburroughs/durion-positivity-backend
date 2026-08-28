@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.order.service.SalesOrderService;
-import com.positivity.order.service.model.AddItemCommand;
-import com.positivity.order.service.model.CreateCartCommand;
-import com.positivity.order.service.model.CreateCartResult;
-import com.positivity.order.service.model.SalesOrderLineSummary;
-import com.positivity.order.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.SalesOrderService;
+import com.positivity.order.internal.service.model.AddItemCommand;
+import com.positivity.order.internal.service.model.CreateCartCommand;
+import com.positivity.order.internal.service.model.CreateCartResult;
+import com.positivity.order.internal.service.model.SalesOrderLineSummary;
+import com.positivity.order.internal.service.model.SalesOrderSummary;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -499,7 +499,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
         when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
-                .thenReturn(new com.positivity.order.service.model.CheckoutResult(
+                .thenReturn(new com.positivity.order.internal.service.model.CheckoutResult(
                         checkedOutSummary(orderId, invoiceId), false));
 
         mockMvc.perform(withGatewayAuth(
@@ -518,7 +518,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
         when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
-                .thenReturn(new com.positivity.order.service.model.CheckoutResult(
+                .thenReturn(new com.positivity.order.internal.service.model.CheckoutResult(
                         checkedOutSummary(orderId, invoiceId), true));
 
         mockMvc.perform(withGatewayAuth(

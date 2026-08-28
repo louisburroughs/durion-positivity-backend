@@ -1,12 +1,12 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
-import com.positivity.order.service.model.AddItemCommand;
-import com.positivity.order.service.model.CheckoutResult;
-import com.positivity.order.service.model.CreateCartCommand;
-import com.positivity.order.service.model.CreateCartResult;
-import com.positivity.order.service.model.OrderDiscountCommand;
-import com.positivity.order.service.model.SalesOrderLineSummary;
-import com.positivity.order.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.model.AddItemCommand;
+import com.positivity.order.internal.service.model.CheckoutResult;
+import com.positivity.order.internal.service.model.CreateCartCommand;
+import com.positivity.order.internal.service.model.CreateCartResult;
+import com.positivity.order.internal.service.model.OrderDiscountCommand;
+import com.positivity.order.internal.service.model.SalesOrderLineSummary;
+import com.positivity.order.internal.service.model.SalesOrderSummary;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

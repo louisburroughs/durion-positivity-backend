@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
+import com.positivity.order.internal.service.PurchaseOrderService;
 import com.positivity.order.internal.service.PurchaseOrderTransmissionService;
-import com.positivity.order.service.PurchaseOrderService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

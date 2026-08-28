@@ -1,4 +1,4 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,11 +20,11 @@ import com.positivity.order.internal.repository.ApprovalRecordRepository;
 import com.positivity.order.internal.repository.PriceOverrideRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.service.model.ApplyPriceOverrideRequest;
-import com.positivity.order.service.model.ApproveOverrideCommand;
-import com.positivity.order.service.model.PriceOverrideDetail;
-import com.positivity.order.service.model.PriceOverrideResult;
-import com.positivity.order.service.model.RejectOverrideCommand;
+import com.positivity.order.internal.service.model.ApplyPriceOverrideRequest;
+import com.positivity.order.internal.service.model.ApproveOverrideCommand;
+import com.positivity.order.internal.service.model.PriceOverrideDetail;
+import com.positivity.order.internal.service.model.PriceOverrideResult;
+import com.positivity.order.internal.service.model.RejectOverrideCommand;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
 import java.util.List;

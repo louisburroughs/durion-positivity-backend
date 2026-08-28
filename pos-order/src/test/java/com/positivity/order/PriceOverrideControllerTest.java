@@ -10,9 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.security.PriceOverridePermissions;
-import com.positivity.order.service.PriceOverrideService;
-import com.positivity.order.service.model.PriceOverrideDetail;
-import com.positivity.order.service.model.PriceOverrideResult;
+import com.positivity.order.internal.service.PriceOverrideService;
+import com.positivity.order.internal.service.model.PriceOverrideDetail;
+import com.positivity.order.internal.service.model.PriceOverrideResult;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

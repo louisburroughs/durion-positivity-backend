@@ -1,4 +1,4 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,12 +26,9 @@ import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.internal.service.OrderNumberService;
-import com.positivity.order.internal.service.OrderStateMachine;
-import com.positivity.order.internal.service.SalesOrderServiceImpl;
-import com.positivity.order.service.model.CreateCartCommand;
-import com.positivity.order.service.model.SalesOrderLineSummary;
-import com.positivity.order.service.model.SalesOrderSummary;
+import com.positivity.order.internal.service.model.CreateCartCommand;
+import com.positivity.order.internal.service.model.SalesOrderLineSummary;
+import com.positivity.order.internal.service.model.SalesOrderSummary;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

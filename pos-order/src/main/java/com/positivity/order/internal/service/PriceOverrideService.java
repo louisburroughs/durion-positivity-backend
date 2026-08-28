@@ -1,10 +1,10 @@
-package com.positivity.order.service;
+package com.positivity.order.internal.service;
 
-import com.positivity.order.service.model.ApplyPriceOverrideRequest;
-import com.positivity.order.service.model.ApproveOverrideCommand;
-import com.positivity.order.service.model.PriceOverrideDetail;
-import com.positivity.order.service.model.PriceOverrideResult;
-import com.positivity.order.service.model.RejectOverrideCommand;
+import com.positivity.order.internal.service.model.ApplyPriceOverrideRequest;
+import com.positivity.order.internal.service.model.ApproveOverrideCommand;
+import com.positivity.order.internal.service.model.PriceOverrideDetail;
+import com.positivity.order.internal.service.model.PriceOverrideResult;
+import com.positivity.order.internal.service.model.RejectOverrideCommand;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

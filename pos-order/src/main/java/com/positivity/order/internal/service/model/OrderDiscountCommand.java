@@ -1,4 +1,4 @@
-package com.positivity.order.service.model;
+package com.positivity.order.internal.service.model;
 
 import java.math.BigDecimal;
 import java.util.Objects;

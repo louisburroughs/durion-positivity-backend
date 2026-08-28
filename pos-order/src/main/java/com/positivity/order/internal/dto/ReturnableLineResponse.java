@@ -1,6 +1,5 @@
 package com.positivity.order.internal.dto;
 
-import com.positivity.order.service.model.ReturnableLineView;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 
