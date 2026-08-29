@@ -210,6 +210,12 @@ public class WorkSessionServiceImpl implements WorkSessionService {
      * <p>The attendance window is the server-stamped session window, so it is gross time.
      * Breaks are carried alongside rather than deducted here, leaving consumers free to report
      * either gross attendance or net worked time.
+     *
+     * <p>The entry lands in {@code PENDING_APPROVAL}, which is the state an approver acts on:
+     * the approvals screen selects, enables its actions on, and transitions only entries in
+     * that state. {@code SUBMITTED} stays a legal status other producers may use, and
+     * {@link TimeEntryServiceImpl} still accepts it, but an entry written in it would sit
+     * unapprovable in the approval UI while the API alone would take a decision on it.
      */
     private void recordTimeEntry(WorkSession session, WorkSessionSubmitRequest request) {
         TimeEntry entry = new TimeEntry();
@@ -219,7 +225,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         entry.setAttendanceStartAt(session.getStartedAt());
         entry.setAttendanceEndAt(session.getEndedAt());
         entry.setBreakMinutes(request.getBreakMinutes());
-        entry.setStatus(TimeEntryStatus.SUBMITTED);
+        entry.setStatus(TimeEntryStatus.PENDING_APPROVAL);
         timeEntryRepository.save(entry);
     }
 

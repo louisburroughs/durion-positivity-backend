@@ -390,7 +390,9 @@ class WorkSessionServiceTest {
         assertThat(entry.getAttendanceStartAt()).isEqualTo(Instant.parse("2026-01-01T08:00:00Z"));
         assertThat(entry.getAttendanceEndAt()).isEqualTo(Instant.parse("2026-01-01T16:00:00Z"));
         assertThat(entry.getBreakMinutes()).isEqualTo(30);
-        assertThat(entry.getStatus()).isEqualTo(TimeEntryStatus.SUBMITTED);
+        // Not SUBMITTED: the approvals screen only selects and acts on PENDING_APPROVAL, so an
+        // entry written as SUBMITTED would be approvable through the API but not through the UI.
+        assertThat(entry.getStatus()).isEqualTo(TimeEntryStatus.PENDING_APPROVAL);
     }
 
     @Test
@@ -424,7 +426,7 @@ class WorkSessionServiceTest {
         ArgumentCaptor<TimeEntry> captor = ArgumentCaptor.forClass(TimeEntry.class);
         verify(timeEntryRepository).save(captor.capture());
         assertThat(captor.getValue().getLocationId()).isNull();
-        assertThat(captor.getValue().getStatus()).isEqualTo(TimeEntryStatus.SUBMITTED);
+        assertThat(captor.getValue().getStatus()).isEqualTo(TimeEntryStatus.PENDING_APPROVAL);
     }
 
     @Test
