@@ -434,6 +434,11 @@ jobs:
           # because silently rotating it orphans every payload sealed with the old key.
           SUPPLIER_AUDIT_ENC_KEY: ${{ secrets.SUPPLIER_AUDIT_ENC_KEY }}
         run: |
+          # base64 carries no whitespace, and `openssl rand -base64 32` ends in a newline that a
+          # careless `gh secret set` keeps. Left in, it is interpolated raw into the --parameters
+          # JSON below, where a literal newline inside a string is invalid and the deploy dies in
+          # the AWS CLI before deploy-backend.sh ever runs.
+          SUPPLIER_AUDIT_ENC_KEY="$(printf '%s' "${SUPPLIER_AUDIT_ENC_KEY}" | tr -d '[:space:]')"
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
