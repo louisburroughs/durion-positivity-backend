@@ -284,6 +284,7 @@ DOMAIN_SERVICES=(
   pos-inventory
   pos-invoice
   pos-location
+  pos-marketing
   pos-mcp-server
   pos-order
   pos-people

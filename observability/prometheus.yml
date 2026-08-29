@@ -67,6 +67,17 @@ scrape_configs:
           service: 'pos-accounting'
           application: 'pos-accounting'
 
+  - job_name: 'pos-bulk-loader'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-bulk-loader:8080']
+        labels:
+          service: 'pos-bulk-loader'
+          application: 'pos-bulk-loader'
+
   - job_name: 'pos-catalog'
     metrics_path: '/actuator/prometheus'
     basic_auth:
@@ -88,6 +99,17 @@ scrape_configs:
         labels:
           service: 'pos-customer'
           application: 'pos-customer'
+
+  - job_name: 'pos-documents'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-documents:8092']
+        labels:
+          service: 'pos-documents'
+          application: 'pos-documents'
 
   - job_name: 'pos-event-receiver'
     metrics_path: '/actuator/prometheus'
@@ -151,6 +173,17 @@ scrape_configs:
   # SecurityConfiguration @Imports GatewaySecurityConfig, whose @Order(1) chain requires
   # httpBasic + hasRole('ACTUATOR_METRICS') on /actuator/prometheus, and the service
   # inherits *pos-security-client-env so the credentials below are the ones it expects.
+  - job_name: 'pos-marketing'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-marketing:8080']
+        labels:
+          service: 'pos-marketing'
+          application: 'pos-marketing'
+
   - job_name: 'pos-mcp-server'
     metrics_path: '/actuator/prometheus'
     basic_auth:
@@ -162,6 +195,17 @@ scrape_configs:
           service: 'pos-mcp-server'
           application: 'pos-mcp-server'
 
+  - job_name: 'pos-order'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-order:8080']
+        labels:
+          service: 'pos-order'
+          application: 'pos-order'
+
   - job_name: 'pos-people'
     metrics_path: '/actuator/prometheus'
     basic_auth:
@@ -172,6 +216,17 @@ scrape_configs:
         labels:
           service: 'pos-people'
           application: 'pos-people'
+
+  - job_name: 'pos-people-contact'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-people-contact:8080']
+        labels:
+          service: 'pos-people-contact'
+          application: 'pos-people-contact'
 
   - job_name: 'pos-price'
     metrics_path: '/actuator/prometheus'
@@ -206,6 +261,28 @@ scrape_configs:
           service: 'pos-shop-manager'
           application: 'pos-shop-manager'
 
+  - job_name: 'pos-supplier'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-supplier:8080']
+        labels:
+          service: 'pos-supplier'
+          application: 'pos-supplier'
+
+  - job_name: 'pos-tax'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-tax:8091']
+        labels:
+          service: 'pos-tax'
+          application: 'pos-tax'
+
   - job_name: 'pos-vehicle-inventory'
     metrics_path: '/actuator/prometheus'
     basic_auth:
@@ -216,6 +293,17 @@ scrape_configs:
         labels:
           service: 'pos-vehicle-inventory'
           application: 'pos-vehicle-inventory'
+
+  - job_name: 'pos-warranty'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-warranty:8080']
+        labels:
+          service: 'pos-warranty'
+          application: 'pos-warranty'
 
   - job_name: 'pos-workorder'
     metrics_path: '/actuator/prometheus'
