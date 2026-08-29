@@ -1224,7 +1224,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ItemCostAuditDto'
+                items:
+                  $ref: '#/components/schemas/ItemCostAuditDto'
+                type: array
           description: Found
       security:
       - bearerAuth:
@@ -1648,7 +1650,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceBookRuleDto'
+                items:
+                  $ref: '#/components/schemas/PriceBookRuleDto'
+                type: array
           description: Rule list returned
       security:
       - bearerAuth:
@@ -3218,7 +3222,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductMsrpDto'
+                items:
+                  $ref: '#/components/schemas/ProductMsrpDto'
+                type: array
           description: MSRP records returned
       security:
       - bearerAuth:
@@ -3573,7 +3579,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDto'
+                items:
+                  $ref: '#/components/schemas/ProductDto'
+                type: array
           description: Substitute parts returned
         '404':
           content:

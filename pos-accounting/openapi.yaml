@@ -340,7 +340,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditTrailResponse'
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+                type: array
           description: Audit entries retrieved successfully
         '400':
           content:
@@ -404,7 +406,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditTrailResponse'
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+                type: array
           description: Audit entries retrieved successfully
         '404':
           content:
@@ -526,7 +530,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditTrailResponse'
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+                type: array
           description: Audit entries retrieved successfully
         '404':
           content:
@@ -582,7 +588,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditTrailResponse'
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+                type: array
           description: Audit entries retrieved successfully
         '404':
           content:
@@ -718,7 +726,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditTrailResponse'
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+                type: array
           description: Audit entries retrieved successfully
         '400':
           content:
@@ -863,7 +873,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditTrailResponse'
+                items:
+                  $ref: '#/components/schemas/AuditTrailResponse'
+                type: array
           description: Audit entries retrieved successfully
         '400':
           content:
@@ -7450,7 +7462,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VendorBillMatchCandidateResponse'
+                items:
+                  $ref: '#/components/schemas/VendorBillMatchCandidateResponse'
+                type: array
           description: Match candidates returned
       security:
       - bearerAuth:

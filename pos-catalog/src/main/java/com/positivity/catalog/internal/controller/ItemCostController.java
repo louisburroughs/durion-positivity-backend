@@ -8,6 +8,7 @@ import com.positivity.catalog.internal.service.ItemCostService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -124,7 +125,9 @@ public class ItemCostController {
             responseCode = "200",
             description = "Found",
             content =
-                    @Content(mediaType = "application/json", schema = @Schema(implementation = ItemCostAuditDto.class)))
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = ItemCostAuditDto.class))))
     public ResponseEntity<List<ItemCostAuditDto>> getAuditHistory(
             @Parameter(required = true) @PathVariable UUID itemId) {
         return ResponseEntity.ok(itemCostService.getAuditHistory(itemId));

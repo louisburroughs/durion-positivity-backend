@@ -645,7 +645,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkexecTimerEntryResponse'
+                items:
+                  $ref: '#/components/schemas/WorkexecTimerEntryResponse'
+                type: array
           description: Active timers returned successfully
         '400':
           content:
@@ -4194,7 +4196,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                items:
+                  $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                type: array
           description: Adjustment history retrieved successfully (newest first)
         '404':
           content:
@@ -4698,7 +4702,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                items:
+                  $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                type: array
           description: Usage history retrieved successfully
         '404':
           content:

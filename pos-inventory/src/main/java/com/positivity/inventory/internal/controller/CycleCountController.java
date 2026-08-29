@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -240,7 +241,7 @@ public class CycleCountController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = CountEntryResponse.class)))
+                            array = @ArraySchema(schema = @Schema(implementation = CountEntryResponse.class))))
     public ResponseEntity<List<CountEntryResponse>> getCountHistory(
             @Parameter(description = "Task ID") @PathVariable UUID taskId) {
         List<CountEntryResponse> history = cycleCountService.getCountHistory(taskId);
@@ -287,9 +288,7 @@ public class CycleCountController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            array =
-                                    @io.swagger.v3.oas.annotations.media.ArraySchema(
-                                            schema = @Schema(implementation = InterferingMovementResponse.class))))
+                            array = @ArraySchema(schema = @Schema(implementation = InterferingMovementResponse.class))))
     @ApiResponse(
             responseCode = "404",
             description = "Task not found",
@@ -332,7 +331,7 @@ public class CycleCountController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = CycleCountTaskResponse.class)))
+                            array = @ArraySchema(schema = @Schema(implementation = CycleCountTaskResponse.class))))
     public ResponseEntity<List<CycleCountTaskResponse>> getAuditorTasks(
             @Parameter(description = "Auditor ID") @PathVariable String auditorId) {
         List<CycleCountTaskResponse> tasks = cycleCountService.getTasksByAuditor(auditorId);

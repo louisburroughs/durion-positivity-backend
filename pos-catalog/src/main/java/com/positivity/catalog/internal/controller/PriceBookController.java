@@ -11,6 +11,7 @@ import com.positivity.catalog.internal.service.PriceBookService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -307,7 +308,9 @@ public class PriceBookController {
             responseCode = "200",
             description = "Rule list returned",
             content =
-                    @Content(mediaType = "application/json", schema = @Schema(implementation = PriceBookRuleDto.class)))
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = PriceBookRuleDto.class))))
     public ResponseEntity<List<PriceBookRuleDto>> listRules(
             @Parameter(required = true) @PathVariable UUID priceBookId) {
         return ResponseEntity.ok(priceBookService.listRules(priceBookId));

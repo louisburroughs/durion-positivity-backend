@@ -9,6 +9,7 @@ import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.internal.service.UserPersonLinkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -238,7 +239,7 @@ public class UserPersonLinkController {
     @ApiResponse(
             responseCode = "200",
             description = "Links found",
-            content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = UserPersonLinkResponse.class))))
     @ApiResponse(responseCode = "404", description = "Link or person not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

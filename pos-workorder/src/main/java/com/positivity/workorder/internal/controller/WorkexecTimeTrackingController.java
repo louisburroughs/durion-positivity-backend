@@ -12,6 +12,7 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -221,7 +222,8 @@ public class WorkexecTimeTrackingController {
     @ApiResponse(
             responseCode = "200",
             description = "Active timers returned successfully",
-            content = @Content(schema = @Schema(implementation = WorkexecTimerEntryResponse.class)))
+            content =
+                    @Content(array = @ArraySchema(schema = @Schema(implementation = WorkexecTimerEntryResponse.class))))
     @ApiResponse(responseCode = "400", description = "Missing or invalid authenticated user id")
     public ResponseEntity<Object> getActiveTimerEntries() {
 

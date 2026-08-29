@@ -6,6 +6,7 @@ import com.positivity.poseventreceiver.internal.dto.EventTypeResponse;
 import com.positivity.poseventreceiver.internal.service.EventTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -62,7 +63,7 @@ public class EventTypeController {
     @ApiResponse(
             responseCode = "200",
             description = "List of event types returned successfully",
-            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventTypeResponse.class))))
     public ResponseEntity<List<EventTypeResponse>> getAllEventTypes() {
         log.info("Fetching all event types");
         return ResponseEntity.ok(eventTypeService.getAllEventTypes());
@@ -88,7 +89,7 @@ public class EventTypeController {
     @ApiResponse(
             responseCode = "200",
             description = "List of active event types returned successfully",
-            content = @Content(schema = @Schema(implementation = EventTypeResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventTypeResponse.class))))
     public ResponseEntity<List<EventTypeResponse>> getActiveEventTypes() {
         log.info("Fetching active event types");
         return ResponseEntity.ok(eventTypeService.getActiveEventTypes());

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
 import com.positivity.poseventreceiver.internal.service.EventSummaryService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -59,7 +60,7 @@ public class EventSummaryController {
     @ApiResponse(
             responseCode = "200",
             description = "Summary returned successfully",
-            content = @Content(schema = @Schema(implementation = EventSummaryResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventSummaryResponse.class))))
     public ResponseEntity<List<EventSummaryResponse>> getLastHourSummary() {
         log.info("Fetching event summary for the last hour");
         return ResponseEntity.ok(eventSummaryService.getLastHourSummary());
@@ -88,7 +89,7 @@ public class EventSummaryController {
     @ApiResponse(
             responseCode = "200",
             description = "Summary returned successfully",
-            content = @Content(schema = @Schema(implementation = EventSummaryResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventSummaryResponse.class))))
     public ResponseEntity<List<EventSummaryResponse>> getLastDaySummary() {
         log.info("Fetching event summary for the last day");
         return ResponseEntity.ok(eventSummaryService.getLastDaySummary());
@@ -117,7 +118,7 @@ public class EventSummaryController {
     @ApiResponse(
             responseCode = "200",
             description = "Summary returned successfully",
-            content = @Content(schema = @Schema(implementation = EventSummaryResponse.class)))
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventSummaryResponse.class))))
     public ResponseEntity<List<EventSummaryResponse>> getLastWeekSummary() {
         log.info("Fetching event summary for the last week");
         return ResponseEntity.ok(eventSummaryService.getLastWeekSummary());

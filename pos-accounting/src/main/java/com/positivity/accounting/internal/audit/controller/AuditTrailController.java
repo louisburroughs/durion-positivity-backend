@@ -10,6 +10,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -293,7 +294,9 @@ public class AuditTrailController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = AuditTrailResponse.class))),
+                                        array =
+                                                @ArraySchema(
+                                                        schema = @Schema(implementation = AuditTrailResponse.class)))),
                 @ApiResponse(responseCode = "404", description = "Order not found"),
                 @ApiResponse(responseCode = "500", description = "Internal server error")
             })
@@ -331,7 +334,9 @@ public class AuditTrailController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = AuditTrailResponse.class))),
+                                        array =
+                                                @ArraySchema(
+                                                        schema = @Schema(implementation = AuditTrailResponse.class)))),
                 @ApiResponse(responseCode = "404", description = "Invoice not found"),
                 @ApiResponse(responseCode = "500", description = "Internal server error")
             })
@@ -370,7 +375,9 @@ public class AuditTrailController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = AuditTrailResponse.class))),
+                                        array =
+                                                @ArraySchema(
+                                                        schema = @Schema(implementation = AuditTrailResponse.class)))),
                 @ApiResponse(responseCode = "400", description = "Invalid date range or exception type"),
                 @ApiResponse(responseCode = "500", description = "Internal server error")
             })
@@ -415,7 +422,9 @@ public class AuditTrailController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = AuditTrailResponse.class))),
+                                        array =
+                                                @ArraySchema(
+                                                        schema = @Schema(implementation = AuditTrailResponse.class)))),
                 @ApiResponse(responseCode = "400", description = "Invalid date range or actor ID"),
                 @ApiResponse(responseCode = "404", description = "Actor not found"),
                 @ApiResponse(responseCode = "500", description = "Internal server error")
@@ -460,7 +469,9 @@ public class AuditTrailController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = AuditTrailResponse.class))),
+                                        array =
+                                                @ArraySchema(
+                                                        schema = @Schema(implementation = AuditTrailResponse.class)))),
                 @ApiResponse(responseCode = "400", description = "Invalid date range"),
                 @ApiResponse(responseCode = "500", description = "Internal server error")
             })
