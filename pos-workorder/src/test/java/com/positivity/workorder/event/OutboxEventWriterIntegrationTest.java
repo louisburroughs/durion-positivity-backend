@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.positivity.workorder.internal.config.OutboxEventWriter;
-import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
 import com.positivity.workorder.internal.domain.WorkSessionStoppedEvent;
 import com.positivity.workorder.internal.entity.OutboxEvent;
@@ -37,7 +36,6 @@ class OutboxEventWriterIntegrationTest {
     private static final Instant EVENT_TIME = Instant.parse("2026-07-08T12:00:00Z");
     private static final UUID SAMPLE_ID = UUID.fromString("01980001-0000-7000-8000-000000000001");
     private static final UUID MECHANIC_ID = UUID.fromString("01980001-0000-7000-8000-000000000002");
-    private static final UUID WORKORDER_ID = UUID.fromString("01980001-0000-7000-8000-000000000003");
 
     @TestConfiguration
     static class Config {
@@ -149,10 +147,10 @@ class OutboxEventWriterIntegrationTest {
 
         assertThatExceptionOfType(IllegalTransactionStateException.class)
                 .isThrownBy(() -> writer.publish(
-                        "workorder.time-entry.approved.v1",
-                        TimeEntryApprovedEvent.SCHEMA_VERSION,
+                        "workorder.work-session.started.v1",
+                        WorkSessionStartedEvent.SCHEMA_VERSION,
                         SAMPLE_ID,
-                        new TimeEntryApprovedEvent(SAMPLE_ID, WORKORDER_ID, "user-1", EVENT_TIME)));
+                        workSessionStarted()));
     }
 
     /** The payload type whose SCHEMA_VERSION the publish calls above pass — kept in step. */

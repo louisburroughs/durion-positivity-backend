@@ -1527,10 +1527,6 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1numbers:resolve
   /v1/workorders/search:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1search
-  /v1/workorders/timeEntries/{timeEntryId}/approve:
-    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1timeEntries~1{timeEntryId}~1approve
-  /v1/workorders/timeEntries/{timeEntryId}/reject:
-    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1timeEntries~1{timeEntryId}~1reject
   /v1/workorders/travelSegments/start:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1travelSegments~1start
   /v1/workorders/travelSegments/submit/{mobileWorkAssignmentId}:

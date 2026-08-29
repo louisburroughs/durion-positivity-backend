@@ -441,18 +441,6 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
-    // ==================== TIME ENTRY EVENTS (Story #66) ====================
-
-    public static final EventTypeRegistration WORKORDER_TIME_ENTRY_APPROVED = EventTypeRegistration.approval(
-                    "WORKORDER_TIME_ENTRY_APPROVED", "Approve a submitted time entry")
-            .apiVersion("1")
-            .build();
-
-    public static final EventTypeRegistration WORKORDER_TIME_ENTRY_REJECTED = EventTypeRegistration.approval(
-                    "WORKORDER_TIME_ENTRY_REJECTED", "Reject a submitted time entry")
-            .apiVersion("1")
-            .build();
-
     // ==================== SUBSTITUTE LINK EVENTS (CAP-171 Story #45)
     // ====================
 
@@ -615,9 +603,6 @@ public final class EventTypes {
             WORKORDER_TRAVEL_SEGMENT_STOP,
             WORKORDER_TRAVEL_SEGMENT_SUBMIT,
             WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT,
-            // Time entry events (Story #66)
-            WORKORDER_TIME_ENTRY_APPROVED,
-            WORKORDER_TIME_ENTRY_REJECTED,
             // Substitute link events (CAP-171 Story #45)
             WORKORDER_SUBSTITUTE_LINK_CREATE,
             WORKORDER_SUBSTITUTE_LINK_UPDATE,

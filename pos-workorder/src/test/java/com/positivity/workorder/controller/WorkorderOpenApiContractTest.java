@@ -31,8 +31,6 @@ class WorkorderOpenApiContractTest extends BaseContractIntegrationTest {
         assertOperationDescription(paths, "/v1/workorders/travelSegments/{travelSegmentId}/stop", "post");
         assertOperationDescription(paths, "/v1/workorders/travelSegments/submit/{mobileWorkAssignmentId}", "post");
         assertOperationDescription(paths, "/v1/workorders/travelSegments/{travelSegmentId}/adjustments", "post");
-        assertOperationDescription(paths, "/v1/workorders/timeEntries/{timeEntryId}/approve", "post");
-        assertOperationDescription(paths, "/v1/workorders/timeEntries/{timeEntryId}/reject", "post");
         assertOperationSummaryAndDescription(paths, "/v1/workorders/estimates/{estimateId}", "patch");
         assertOperationDescription(paths, "/v1/workorders/{workorderId}/picked-items", "get");
         assertOperationDescription(paths, "/v1/workorders/{workorderId}/pick-list", "get");
