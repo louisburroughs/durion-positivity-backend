@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.service.WorkorderPartAdjustmentService;
 import com.positivity.workorder.internal.service.WorkorderSubstitutionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -273,7 +274,14 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(
             responseCode = "200",
             description = "Adjustment history retrieved successfully (newest first)",
-            content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
+            content =
+                    @Content(
+                            array =
+                                    @ArraySchema(
+                                            schema =
+                                                    @Schema(
+                                                            implementation =
+                                                                    WorkorderPartAdjustmentEventResponse.class))))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     public ResponseEntity<List<WorkorderPartAdjustmentEventResponse>> getAdjustmentHistory(
             @PathVariable @NonNull UUID workorderId,

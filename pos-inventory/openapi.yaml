@@ -1076,7 +1076,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CycleCountTaskResponse'
+                items:
+                  $ref: '#/components/schemas/CycleCountTaskResponse'
+                type: array
           description: Tasks retrieved successfully
       security:
       - bearerAuth:
@@ -1291,7 +1293,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CountEntryResponse'
+                items:
+                  $ref: '#/components/schemas/CountEntryResponse'
+                type: array
           description: History retrieved successfully
       security:
       - bearerAuth:

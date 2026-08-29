@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -394,7 +395,11 @@ public class VendorBillController {
     @ApiResponse(
             responseCode = "200",
             description = "Match candidates returned",
-            content = @Content(schema = @Schema(implementation = VendorBillMatchCandidateResponse.class)))
+            content =
+                    @Content(
+                            array =
+                                    @ArraySchema(
+                                            schema = @Schema(implementation = VendorBillMatchCandidateResponse.class))))
     public ResponseEntity<List<VendorBillMatchCandidateResponse>> listMatchCandidates(
             @Parameter(description = "Invoice event identifier", example = "550e8400-e29b-41d4-a716-446655440020")
                     @NonNull

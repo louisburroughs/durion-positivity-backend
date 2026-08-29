@@ -1104,7 +1104,10 @@ public class ProductController {
     @ApiResponse(
             responseCode = "200",
             description = "Substitute parts returned",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductDto.class)))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = ProductDto.class))))
     @ApiResponse(responseCode = "404", description = "Product not found")
     public ResponseEntity<List<ProductDto>> getPartSubstitutes(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {

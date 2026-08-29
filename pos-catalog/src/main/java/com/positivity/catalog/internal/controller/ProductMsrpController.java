@@ -9,6 +9,7 @@ import com.positivity.catalog.internal.service.ProductMsrpService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -195,7 +196,10 @@ public class ProductMsrpController {
     @ApiResponse(
             responseCode = "200",
             description = "MSRP records returned",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ProductMsrpDto.class)))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = ProductMsrpDto.class))))
     public ResponseEntity<List<ProductMsrpDto>> listMsrp(@Parameter(required = true) @PathVariable UUID productId) {
         return ResponseEntity.ok(productMsrpService.getAllMsrp(productId));
     }

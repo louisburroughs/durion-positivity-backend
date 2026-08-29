@@ -36,7 +36,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                items:
+                  $ref: '#/components/schemas/EventTypeResponse'
+                type: array
           description: List of event types returned successfully
       summary: List all registered event types
       tags:
@@ -111,7 +113,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventTypeResponse'
+                items:
+                  $ref: '#/components/schemas/EventTypeResponse'
+                type: array
           description: List of active event types returned successfully
       summary: List only active event types
       tags:
@@ -480,7 +484,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventSummaryResponse'
+                items:
+                  $ref: '#/components/schemas/EventSummaryResponse'
+                type: array
           description: Summary returned successfully
       summary: Get event summary for the last day
       tags:
@@ -506,7 +512,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventSummaryResponse'
+                items:
+                  $ref: '#/components/schemas/EventSummaryResponse'
+                type: array
           description: Summary returned successfully
       summary: Get event summary for the last hour
       tags:
@@ -532,7 +540,9 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: '#/components/schemas/EventSummaryResponse'
+                items:
+                  $ref: '#/components/schemas/EventSummaryResponse'
+                type: array
           description: Summary returned successfully
       summary: Get event summary for the last week
       tags:

@@ -475,7 +475,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                items:
+                  $ref: '#/components/schemas/UserPersonLinkResponse'
+                type: array
           description: Links found
         '404':
           content:
