@@ -191,7 +191,23 @@ class ReviewQueueServiceImplTest {
 
         assertThatThrownBy(() -> service.submitCorrections(JOB_ID, request, OPERATOR_ID))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("FAILED state");
+                .hasMessageContaining("FAILED or PARTIAL state");
+    }
+
+    @Test
+    void submitCorrections_whenJobPartial_isAccepted() {
+        // The case the gate used to miss: the batch finished, but the owning service rejected
+        // rows. Those rejected rows are the whole point of the correction endpoint.
+        BulkLoadJob job = bulkLoadJob(JOB_ID, OPERATOR_ID, JobStatus.PARTIAL);
+        BulkCorrectionRequest request =
+                BulkCorrectionRequest.builder().corrections(List.of()).build();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        BulkCorrectionResponse response = service.submitCorrections(JOB_ID, request, OPERATOR_ID);
+
+        assertThat(response.getJobId()).isEqualTo(JOB_ID);
+        assertThat(response.getSubmittedCount()).isZero();
     }
 
     @Test

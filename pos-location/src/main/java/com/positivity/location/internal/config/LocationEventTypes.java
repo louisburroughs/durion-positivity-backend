@@ -123,6 +123,14 @@ public final class LocationEventTypes {
                     "LOCATION_BULK_INGEST", "Bulk ingest locations")
             .build();
 
+    public static final EventTypeRegistration LOCATION_STORAGE_LOCATION_BULK_INGEST = EventTypeRegistration.write(
+                    "LOCATION_STORAGE_LOCATION_BULK_INGEST", "Bulk ingest a site's storage topology")
+            .build();
+
+    public static final EventTypeRegistration LOCATION_BAY_BULK_INGEST = EventTypeRegistration.write(
+                    "LOCATION_BAY_BULK_INGEST", "Bulk ingest service bays")
+            .build();
+
     // Issue: #885
     public static final EventTypeRegistration LOCATION_RESPONSIBLE_PERSON_GET = EventTypeRegistration.fastRead(
                     "LOCATION_RESPONSIBLE_PERSON_GET", "Get the person responsible for a location")
@@ -166,6 +174,8 @@ public final class LocationEventTypes {
                 // Site Defaults events
                 LOCATION_SITE_DEFAULTS_PUT,
                 LOCATION_SITE_DEFAULTS_GET,
-                LOCATION_BULK_INGEST);
+                LOCATION_BULK_INGEST,
+                LOCATION_STORAGE_LOCATION_BULK_INGEST,
+                LOCATION_BAY_BULK_INGEST);
     }
 }

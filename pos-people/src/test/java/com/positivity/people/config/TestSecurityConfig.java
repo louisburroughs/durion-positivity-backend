@@ -35,7 +35,9 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("ROLE_ADMIN"),
             new SimpleGrantedAuthority("ROLE_PEOPLE_VIEW"),
             new SimpleGrantedAuthority("ROLE_PEOPLE_EDIT"),
-            new SimpleGrantedAuthority("people:employee:create"));
+            new SimpleGrantedAuthority("people:employee:create"),
+            new SimpleGrantedAuthority("people:employee:edit"),
+            new SimpleGrantedAuthority("people:employee:view"));
 
     @Bean(name = "gatewaySecurityFilterChain")
     @Primary

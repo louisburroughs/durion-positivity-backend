@@ -50,7 +50,13 @@ public class BulkLoadJobResponse {
     @NotNull
     private DomainType domainType;
 
-    @Schema(description = "Current lifecycle status of the job", example = "PROCESSING", requiredMode = REQUIRED)
+    @Schema(
+            description = "Current lifecycle status of the job. COMPLETED means every row was accepted;"
+                    + " PARTIAL means the run finished but some rows were rejected — inspect failureCount and the"
+                    + " job's audit records; FAILED means the run itself did not finish. PARTIAL and FAILED both"
+                    + " accept corrections and a retry.",
+            example = "PROCESSING",
+            requiredMode = REQUIRED)
     @NotNull
     private JobStatus status;
 

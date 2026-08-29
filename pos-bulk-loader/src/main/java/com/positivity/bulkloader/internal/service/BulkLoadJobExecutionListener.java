@@ -2,7 +2,9 @@ package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.NoSuchElementException;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Component;
 public class BulkLoadJobExecutionListener implements JobExecutionListener {
 
     private final BulkLoadJobRepository bulkLoadJobRepository;
+    private final BulkLoadRecordAuditRepository auditRepository;
     private final Clock clock;
 
     @Override
@@ -37,23 +40,48 @@ public class BulkLoadJobExecutionListener implements JobExecutionListener {
                 .orElseThrow(() -> new NoSuchElementException("BulkLoadJob not found: " + jobId));
 
         long processedRows = 0L;
-        long successCount = 0L;
-        long failureCount = 0L;
+        long writtenRows = 0L;
+        long skippedRows = 0L;
         for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
             processedRows += stepExecution.getReadCount();
-            successCount += stepExecution.getWriteCount();
-            failureCount += stepExecution.getProcessSkipCount()
+            writtenRows += stepExecution.getWriteCount();
+            skippedRows += stepExecution.getProcessSkipCount()
                     + stepExecution.getWriteSkipCount()
                     + stepExecution.getReadSkipCount();
         }
+
+        // Spring Batch's writeCount counts rows this job *sent*, not rows the owning service
+        // accepted, so it reported a full success for a chunk every row of which was rejected.
+        // The audit rows the writers now persist carry the real outcome; the step metrics remain
+        // the fallback for a run that produced none (an empty file, or a step that died before
+        // its first write).
+        long auditedSuccesses = auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.APPROVED);
+        long auditedFailures = auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.PENDING);
+        boolean haveAuditRows = auditedSuccesses + auditedFailures > 0;
+
+        long successCount = haveAuditRows ? auditedSuccesses : writtenRows;
+        // A row skipped before the call never reaches the audit table, so it is counted here in
+        // both branches; otherwise a validation-rejected row would vanish from the totals.
+        long failureCount = (haveAuditRows ? auditedFailures : 0L) + skippedRows;
 
         bulkLoadJob.setProcessedRows(processedRows);
         bulkLoadJob.setSuccessCount(successCount);
         bulkLoadJob.setFailureCount(failureCount);
         bulkLoadJob.setCompletedAt(Instant.now(clock));
-        bulkLoadJob.setStatus(
-                jobExecution.getStatus() == BatchStatus.COMPLETED ? JobStatus.COMPLETED : JobStatus.FAILED);
+        bulkLoadJob.setStatus(resolveStatus(jobExecution.getStatus(), failureCount));
         bulkLoadJobRepository.save(bulkLoadJob);
+    }
+
+    /**
+     * FAILED means the batch itself did not finish; PARTIAL means it did but rejected rows.
+     * Keeping them apart is what makes the review queue reachable — corrections are for rows,
+     * and a run that lost rows must not read as COMPLETED.
+     */
+    private JobStatus resolveStatus(BatchStatus batchStatus, long failureCount) {
+        if (batchStatus != BatchStatus.COMPLETED) {
+            return JobStatus.FAILED;
+        }
+        return failureCount > 0 ? JobStatus.PARTIAL : JobStatus.COMPLETED;
     }
 
     private UUID parseJobId(String jobIdValue) {

@@ -8,7 +8,9 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -38,11 +40,14 @@ class BulkLoadJobExecutionListenerTest {
     @Mock
     BulkLoadJobRepository bulkLoadJobRepository;
 
+    @Mock
+    BulkLoadRecordAuditRepository auditRepository;
+
     @InjectMocks
     BulkLoadJobExecutionListener listener;
 
     @Test
-    void afterJob_whenCompleted_updatesCountsAndStatus() {
+    void afterJob_whenCompletedWithSkips_reportsPartialFromStepMetrics() {
         UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000041");
         BulkLoadJob bulkLoadJob = new BulkLoadJob();
         bulkLoadJob.setId(jobId);
@@ -69,9 +74,11 @@ class BulkLoadJobExecutionListenerTest {
         listener.afterJob(jobExecution);
 
         assertThat(bulkLoadJob.getProcessedRows()).isEqualTo(7L);
+        // No audit rows for this job, so the step metrics stand in.
         assertThat(bulkLoadJob.getSuccessCount()).isEqualTo(5L);
         assertThat(bulkLoadJob.getFailureCount()).isEqualTo(2L);
-        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.COMPLETED);
+        // Two rows were skipped, so the run did not do what was asked of it.
+        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.PARTIAL);
         assertThat(bulkLoadJob.getCompletedAt()).isNotNull();
         verify(bulkLoadJobRepository).save(bulkLoadJob);
     }
@@ -97,6 +104,102 @@ class BulkLoadJobExecutionListenerTest {
         assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.FAILED);
         assertThat(bulkLoadJob.getCompletedAt()).isNotNull();
         verify(bulkLoadJobRepository).save(bulkLoadJob);
+    }
+
+    @Test
+    void afterJob_whenAuditRowsExist_countsThemRatherThanWriteCount() {
+        // The defect this listener change exists for: writeCount counts rows *sent*, so a chunk
+        // the owning service rejected in full still reported a clean run.
+        UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000043");
+        BulkLoadJob bulkLoadJob = new BulkLoadJob();
+        bulkLoadJob.setId(jobId);
+        bulkLoadJob.setStatus(JobStatus.PROCESSING);
+
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob",
+                15L,
+                25L,
+                new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
+        jobExecution.setStatus(BatchStatus.COMPLETED);
+
+        StepExecution stepExecution =
+                MetaDataInstanceFactory.createStepExecution(jobExecution, "catalogBulkLoadStep", 35L);
+        stepExecution.setReadCount(10);
+        stepExecution.setWriteCount(10);
+        jobExecution.addStepExecution(stepExecution);
+
+        when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
+        when(auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.APPROVED))
+                .thenReturn(6L);
+        when(auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.PENDING))
+                .thenReturn(4L);
+
+        listener.afterJob(jobExecution);
+
+        assertThat(bulkLoadJob.getSuccessCount()).isEqualTo(6L);
+        assertThat(bulkLoadJob.getFailureCount()).isEqualTo(4L);
+        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.PARTIAL);
+    }
+
+    @Test
+    void afterJob_whenEveryAuditRowApproved_reportsCompleted() {
+        UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000044");
+        BulkLoadJob bulkLoadJob = new BulkLoadJob();
+        bulkLoadJob.setId(jobId);
+        bulkLoadJob.setStatus(JobStatus.PROCESSING);
+
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob",
+                16L,
+                26L,
+                new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
+        jobExecution.setStatus(BatchStatus.COMPLETED);
+
+        StepExecution stepExecution =
+                MetaDataInstanceFactory.createStepExecution(jobExecution, "catalogBulkLoadStep", 36L);
+        stepExecution.setReadCount(3);
+        stepExecution.setWriteCount(3);
+        jobExecution.addStepExecution(stepExecution);
+
+        when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
+        when(auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.APPROVED))
+                .thenReturn(3L);
+        when(auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.PENDING))
+                .thenReturn(0L);
+
+        listener.afterJob(jobExecution);
+
+        assertThat(bulkLoadJob.getSuccessCount()).isEqualTo(3L);
+        assertThat(bulkLoadJob.getFailureCount()).isZero();
+        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.COMPLETED);
+    }
+
+    @Test
+    void afterJob_whenBatchFailed_staysFailedEvenWithApprovedRows() {
+        // A batch that died partway may still have accepted rows; the run itself did not finish,
+        // so FAILED — not PARTIAL — is what an operator has to act on.
+        UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000045");
+        BulkLoadJob bulkLoadJob = new BulkLoadJob();
+        bulkLoadJob.setId(jobId);
+        bulkLoadJob.setStatus(JobStatus.PROCESSING);
+
+        JobExecution jobExecution = MetaDataInstanceFactory.createJobExecution(
+                "catalogBulkLoadJob",
+                17L,
+                27L,
+                new JobParametersBuilder().addString("jobId", jobId.toString()).toJobParameters());
+        jobExecution.setStatus(BatchStatus.FAILED);
+
+        when(bulkLoadJobRepository.findById(jobId)).thenReturn(Optional.of(bulkLoadJob));
+        when(auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.APPROVED))
+                .thenReturn(2L);
+        when(auditRepository.countByJobIdAndReviewStatus(jobId, ReviewStatus.PENDING))
+                .thenReturn(0L);
+
+        listener.afterJob(jobExecution);
+
+        assertThat(bulkLoadJob.getSuccessCount()).isEqualTo(2L);
+        assertThat(bulkLoadJob.getStatus()).isEqualTo(JobStatus.FAILED);
     }
 
     @Test

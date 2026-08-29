@@ -72,13 +72,23 @@ service owns outright; no other service ever hears about them, so no event is mi
 All `*_operational_*` seed data (and catalog items — see §2) moves out of Flyway into an
 **alpha seed pipeline** that writes through service APIs:
 
-- **Preferred channel: `pos-bulk-loader`.** It already posts CSV-derived chunks to owning
-  services' `/v1/{domain}/bulk-ingest` endpoints over load-balanced REST, and those endpoints
-  already run in the application layer — `CatalogBulkIngestController` is `@EmitEvent`-annotated
-  and publishes a product fact per row. Loader strategies exist today for catalog products,
-  base prices, customers/persons, people, vehicles, and vehicle fitment.
+- **Preferred channel: `pos-bulk-loader`.** It posts CSV-derived chunks to owning services'
+  `/v1/{domain}/bulk-ingest` endpoints over load-balanced REST, and those endpoints run in the
+  application layer — `CatalogBulkIngestController` is `@EmitEvent`-annotated and publishes a
+  product fact per row. Loader domains exist for catalog products, base prices,
+  customers/persons, people, vehicles, vehicle fitment, opening stock, storage locations, bays,
+  mobile units, staffing assignments, putaway rules, cycle count plans, users, user-person links
+  and mechanic skills (#1558).
+
+  Two things make this genuinely better than scripting the same calls, and both were added in
+  #1558. A file may name what it references — a location code, a storage location's name, an
+  employee number, a catalog class — and the loader resolves it as it loads, so one file works in
+  any environment. And every row's outcome is recorded: `bulk_load_record_audit` carries what the
+  owning service said about it, which is what makes the review queue and its correction endpoint
+  reachable. A job that rejected rows reports `PARTIAL`, not `COMPLETED`.
 - **Fallback channel: plain gateway API calls** (scripted, `X-API-Version: 1`, a dedicated
-  `seed-operator` service account) for domains with no bulk-ingest endpoint yet.
+  `seed-operator` service account) for domains with no bulk-ingest endpoint yet. One pack still
+  uses it: `location/site-defaults.csv`, which calls a single idempotent upsert per site.
 
 The pipeline is:
 
@@ -170,6 +180,12 @@ replicas.
 - Later environments need no gating logic because synthetic data has no path into them; the
   only ingestion route (bulk loader) is also the production-correct one.
 - Cross-service UUID choreography disappears from fixtures; identity flows through APIs.
-- Costs: bulk-ingest coverage must grow (location today; workorder/order demo flows if alpha
-  wants them), the driver script is new operational surface, and an alpha reseed is a
-  one-time disruption.
+- Costs: the driver script is new operational surface, and an alpha reseed is a one-time
+  disruption. Bulk-ingest coverage has since grown to cover every pack but one (#1558): nine
+  endpoints were added across pos-location, pos-people, pos-inventory, pos-security-service and
+  pos-shop-manager, and `seed-alpha.py` went from ten row-by-row API packs to one. Workorder and
+  order demo flows would still need endpoints if alpha wants them.
+- One conversion is deliberately not made: `security/users.csv` carries no password, and the
+  endpoint generates one that is returned to no one. A bulk file is uploaded and stored, so a
+  password column in it would exist at rest for as long as the upload does. Seeded accounts
+  therefore have roles but no usable login until someone goes through the reset path.

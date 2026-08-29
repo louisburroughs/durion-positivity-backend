@@ -22,6 +22,8 @@ tags:
   name: Picking Lists
 - description: Pick list and pick task management endpoints
   name: Pick Lists
+- description: Bulk establish opening on-hand quantities
+  name: Inventory Opening Stock API
 - description: Execute putaway tasks with validation and audit events
   name: Putaway Execution
 - description: Location roster sync trigger and audit log endpoints
@@ -38,6 +40,8 @@ tags:
   name: Inventory Bulk Ingest API
 - description: Inventory return-to-stock endpoints
   name: Returns
+- description: Bulk import cycle count plans
+  name: Cycle Count Plan Bulk Ingest API
 - description: Inventory reference-data read endpoints
   name: Inventory Reference Data
 - description: Approval-gated manual cost revaluation (odoo-parity J4)
@@ -48,6 +52,8 @@ tags:
   name: Inventory Management
 - description: On-hand valuation read endpoints (odoo-parity J2)
   name: Inventory Valuation
+- description: Bulk import putaway routing rules
+  name: Putaway Rule Bulk Ingest API
 - description: Cross-site transfer orders with in-transit tracking
   name: Transfer Orders
 - description: Scrap (write-off) documents with value-threshold approval and SCRAP_OUT posting
@@ -1855,6 +1861,71 @@ paths:
       summary: Create cycle count plan
       tags:
       - Cycle Count Plans
+      x-required-permissions:
+      - inventory:cycle_count:initiate
+  /v1/inventory/cycleCountPlans/bulk-ingest:
+    post:
+      description: 'Creates many cycle count plans at once, one per record, each in PLANNED status.
+
+        Use this tool when standing up a counting programme or seeding an environment; use createCycleCountPlan instead for a single plan, and generateCycleCountTasks to turn a plan into work.
+
+        Preconditions: each site must exist and each row must name at least one zone.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a planName and zoneIds; give either a scheduledDate strictly in the future or a scheduledDaysOut, which is counted from today so a replayed file never asks for a past date.
+
+        Emits an INVENTORY_CYCLE_COUNT_PLAN_BULK_INGEST event and a plan-created event per row.
+
+        Re-running the same file is safe: a plan whose name is already present at that site is recognised rather than duplicated, since nothing in the schema makes plan names unique.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestCycleCountPlans
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Quarterly plan:
+                description: Quarterly plan
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - planName: Q1 Fast Movers
+                    scheduledDaysOut: 30
+                    zoneIds:
+                    - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                    - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestCycleCountPlanBulkIngestRecord'
+        description: Cycle count plans to create.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      summary: Create Cycle Count Plans in Bulk
+      tags:
+      - Cycle Count Plan Bulk Ingest API
       x-required-permissions:
       - inventory:cycle_count:initiate
   /v1/inventory/cycleCountPlans/{planId}:
@@ -3756,6 +3827,76 @@ paths:
       - Inventory Reference Data
       x-required-permissions:
       - inventory:location:view
+  /v1/inventory/opening-stock/bulk-ingest:
+    post:
+      description: 'Establishes opening on-hand quantities for many products at once, filing an adjustment per line and approving it so the ledger entry posts and the stock actually exists.
+
+        Use this tool when commissioning a site or seeding an environment; use bulkIngestInventoryAdjustments instead to file adjustments that a human must review and approve.
+
+        Preconditions: the caller holds both inventory:adjustment:create and inventory:adjustment:approve, and each line''s storage location exists.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with sku and a positive quantity; a record''s own locationId names the storage location the stock sits in and overrides the batch one.
+
+        Emits an INVENTORY_OPENING_STOCK_BULK_INGEST event, and one ADJUSTMENT_IN ledger entry per line, which is what hydrates the availability and replica views.
+
+        Re-running the same file is safe: a line whose product already has on-hand at its destination is skipped, because adjustments are deltas and posting again would double the stock.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestOpeningStock
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Opening stock batch:
+                description: Opening stock batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                    quantity: 24
+                    sku: MOBI-120764
+                    unitOfMeasure: EA
+                  - locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                    quantity: 12
+                    sku: WIXF-51394
+                    unitOfMeasure: EA
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestOpeningStockBulkIngestRecord'
+        description: Opening stock lines to establish.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - inventory:adjustment:create
+        - inventory:adjustment:approve
+      summary: Establish Opening On-Hand Stock in Bulk
+      tags:
+      - Inventory Opening Stock API
+      x-required-permissions:
+      - inventory:adjustment:create
+      - inventory:adjustment:approve
   /v1/inventory/pick-lists:
     get:
       description: 'Returns every pick list linked to a workorder.
@@ -4602,6 +4743,75 @@ paths:
       - Purchase Suggestions
       x-required-permissions:
       - inventory:replenishment:manage
+  /v1/inventory/putaway/bulk-ingest:
+    post:
+      description: 'Creates many putaway rules at once, one per record.
+
+        Use this tool when configuring a site''s routing or seeding an environment; use createPutawayRule instead for a single rule.
+
+        Preconditions: every tier except ANY must carry a matchValue, ANY must not, and an enabled rule''s destination must exist in the storage-location replica unless that replica is still empty.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with a priority, a matchType and a destinationLocationId.
+
+        Emits an INVENTORY_PUTAWAY_RULE_BULK_INGEST event and a rule-created event per row.
+
+        At most one enabled ANY rule may exist; a second is reported as already configured, carrying the existing rule''s id so it can be checked — an ANY rule pointing somewhere unintended refuses every unclassified line rather than catching it.
+
+        Returns 200 with a per-record result; check each result rather than the status alone.
+
+        '
+      operationId: bulkIngestPutawayRules
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Category rule and terminal fallback:
+                description: Category rule and terminal fallback
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - destinationLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                    destinationStrategy: FIXED
+                    matchType: CATEGORY
+                    matchValue: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20
+                    priority: 10
+                  - destinationLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                    destinationStrategy: FIXED
+                    matchType: ANY
+                    priority: 100
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestPutawayRuleBulkIngestRecord'
+        description: Putaway rules to create.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Forbidden
+      security:
+      - bearerAuth:
+        - inventory:putaway_rule:manage
+      summary: Create Putaway Rules in Bulk
+      tags:
+      - Putaway Rule Bulk Ingest API
+      x-required-permissions:
+      - inventory:putaway_rule:manage
   /v1/inventory/putaway/rules:
     get:
       description: 'Returns every putaway rule, enabled or not, in the order the matcher tries them: tier precedence first (SKU, then SUBCATEGORY, then CATEGORY, then ANY), then ascending priority within a tier.
@@ -8960,6 +9170,34 @@ components:
           format: uuid
           type: string
       type: object
+    BulkIngestRequestCycleCountPlanBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/CycleCountPlanBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
     BulkIngestRequestInventoryBulkIngestRecord:
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
@@ -8981,6 +9219,62 @@ components:
           description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/InventoryBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestOpeningStockBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/OpeningStockBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestPutawayRuleBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/PutawayRuleBulkIngestRecord'
           minItems: 1
           type: array
       required:
@@ -10150,6 +10444,41 @@ components:
       - sessionStatus
       - workorderId
       - workorderLineId
+      type: object
+    CycleCountPlanBulkIngestRecord:
+      description: 'One cycle count plan: which zones are counted, and when'
+      properties:
+        locationId:
+          description: Site the plan belongs to. Defaults to the request's locationId when omitted.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+          format: uuid
+          type: string
+        planName:
+          description: Name of the plan, used to recognise it on a re-run
+          example: Q1 Fast Movers
+          minLength: 1
+          type: string
+        scheduledDate:
+          description: Exact date to schedule the count for. Must be strictly in the future. Prefer scheduledDaysOut for a file that will be replayed, since a fixed date rots.
+          example: 2026-06-01
+          format: date
+          type: string
+        scheduledDaysOut:
+          description: Days from today to schedule the count. Used when scheduledDate is omitted, so a seeded plan is always validly in the future however long after authoring it runs.
+          example: 30
+          format: int32
+          minimum: 1
+          type: integer
+        zoneIds:
+          description: Storage locations the plan walks
+          items:
+            format: uuid
+            type: string
+          minItems: 1
+          type: array
+      required:
+      - planName
+      - zoneIds
       type: object
     CycleCountPlanResponse:
       description: A cycle count plan describing scheduled counts for a location and its current state
@@ -11321,6 +11650,36 @@ components:
       - itemId
       - quantity
       type: object
+    OpeningStockBulkIngestRecord:
+      description: One product's opening on-hand quantity at one storage location
+      properties:
+        locationId:
+          description: Storage location the stock sits in. Defaults to the request's locationId when omitted, which is only useful for a site with no storage topology.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+          format: uuid
+          type: string
+        quantity:
+          description: 'Opening quantity. Must be positive: this establishes stock that is not there yet, so a zero or negative line has nothing to establish and is rejected rather than silently posting a no-op or a withdrawal.'
+          example: 24
+          minimum: 0.0
+          type: number
+        reasonCode:
+          description: Ledger reason code; defaults to OPENING_BALANCE when omitted
+          example: OPENING_BALANCE
+          type: string
+        sku:
+          description: SKU of the product being stocked
+          example: MOBI-120764
+          minLength: 1
+          type: string
+        unitOfMeasure:
+          description: Unit of measure for the quantity
+          example: EA
+          type: string
+      required:
+      - quantity
+      - sku
+      type: object
     PickListResponse:
       description: Pick list details returned after creation, generation, or lookup
       properties:
@@ -11692,6 +12051,51 @@ components:
       required:
       - productId
       - quantity
+      type: object
+    PutawayRuleBulkIngestRecord:
+      description: 'One putaway rule: which received lines go where'
+      properties:
+        destinationLocationId:
+          description: Storage location matched lines are routed to
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+          format: uuid
+          type: string
+        destinationStrategy:
+          description: How a destination is chosen within the rule
+          enum:
+          - FIXED
+          - LAST_USED
+          - CLOSEST_AVAILABLE
+          example: FIXED
+          type: string
+        isEnabled:
+          description: Whether the rule is in effect; defaults to true
+          example: true
+          type: boolean
+        matchType:
+          description: What the rule matches on
+          enum:
+          - SKU
+          - SUBCATEGORY
+          - CATEGORY
+          - ANY
+          example: CATEGORY
+          type: string
+        matchValue:
+          description: The catalog id the rule matches. Required for every tier except ANY, which is the terminal fallback and must not carry one.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20
+          format: uuid
+          type: string
+        priority:
+          description: Resolution order within a tier; lower wins
+          example: 10
+          format: int32
+          minimum: 0
+          type: integer
+      required:
+      - destinationLocationId
+      - matchType
+      - priority
       type: object
     PutawayRuleRequest:
       description: 'A putaway rule: what a received line must be for this rule to govern it, and where that line should then be suggested to go'

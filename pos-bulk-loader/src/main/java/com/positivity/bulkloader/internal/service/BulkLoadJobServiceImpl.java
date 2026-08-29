@@ -8,8 +8,10 @@ import com.positivity.bulkloader.internal.exception.JobOwnershipViolationExcepti
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,17 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
             JobStatus.MAPPING_REVIEW,
             JobStatus.DEDUP,
             JobStatus.PROCESSING);
+
+    /**
+     * States a job cannot leave by uploading or cancelling. Kept as one set so PARTIAL — added
+     * when a run finishes with rejected rows — is treated as terminal everywhere at once, rather
+     * than in three separate condition chains that could drift apart.
+     */
+    private static final Set<JobStatus> TERMINAL_STATUSES =
+            EnumSet.of(JobStatus.COMPLETED, JobStatus.PARTIAL, JobStatus.FAILED, JobStatus.CANCELLED);
+
+    /** Terminal states a run can be retried from: the work stopped short, so re-running it means something. */
+    private static final Set<JobStatus> RETRYABLE_STATUSES = EnumSet.of(JobStatus.FAILED, JobStatus.PARTIAL);
 
     private final BulkLoadJobRepository jobRepository;
     private final BulkLoadBatchLauncher bulkLoadBatchLauncher;
@@ -78,9 +91,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() == JobStatus.CANCELLED
-                || job.getStatus() == JobStatus.COMPLETED
-                || job.getStatus() == JobStatus.FAILED) {
+        if (TERMINAL_STATUSES.contains(job.getStatus())) {
             throw new IllegalStateException("Job cannot accept uploads in terminal state: " + job.getStatus());
         }
 
@@ -110,9 +121,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() == JobStatus.COMPLETED
-                || job.getStatus() == JobStatus.CANCELLED
-                || job.getStatus() == JobStatus.FAILED) {
+        if (TERMINAL_STATUSES.contains(job.getStatus())) {
             throw new IllegalStateException("Job is already in terminal state: " + job.getStatus());
         }
 
@@ -127,9 +136,9 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
         }
-        if (job.getStatus() != JobStatus.FAILED) {
+        if (!RETRYABLE_STATUSES.contains(job.getStatus())) {
             throw new IllegalStateException(
-                    "Job can only be retried from FAILED state, current state: " + job.getStatus());
+                    "Job can only be retried from FAILED or PARTIAL state, current state: " + job.getStatus());
         }
 
         long activeCount = jobRepository.countByOperatorIdAndStatusIn(operatorId, ACTIVE_STATUSES);

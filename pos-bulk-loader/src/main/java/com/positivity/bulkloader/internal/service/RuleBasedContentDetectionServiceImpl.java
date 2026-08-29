@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.service;
 
+import com.positivity.bulkloader.internal.domain.DomainRecordFields;
 import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import java.util.EnumMap;
@@ -127,7 +128,21 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
         return collapsed.substring(start, end);
     }
 
+    /**
+     * The target field a source column feeds, or null when the column has no home in this domain.
+     *
+     * <p>Two sources, in order: the hand-written synonym table below, which translates genuinely
+     * different spellings ({@code zip} → {@code postalCode}); then the record's own field names,
+     * for the ordinary case of a header that already names its field. Without the second source a
+     * column nobody thought to add to the table is dropped in silence — which is how the LOCATION
+     * table came to omit {@code addressLine2} and {@code active} unnoticed.
+     */
     private String inferTargetField(String normalized, DomainType domain) {
+        String synonym = inferFromSynonyms(normalized, domain);
+        return synonym != null ? synonym : DomainRecordFields.matchCanonicalField(normalized, domain);
+    }
+
+    private String inferFromSynonyms(String normalized, DomainType domain) {
         return switch (domain) {
             case CATALOG_PRODUCT ->
                 switch (normalized) {
@@ -170,6 +185,8 @@ public class RuleBasedContentDetectionServiceImpl implements ContentDetectionSer
                     case "qty", QUANTITY_FIELD, "on_hand", "quantity_on_hand" -> QUANTITY_FIELD;
                     case "reason_code", "reason" -> "reasonCode";
                     case "uom", "unit_of_measure" -> "unitOfMeasure";
+                    case "location_code", "site", "site_code", "warehouse" -> "locationCode";
+                    case "bin", "storage_location", "storage_location_name", "location_name" -> "storageLocationName";
                     default -> null;
                 };
             case COMMERCIAL_CUSTOMER ->

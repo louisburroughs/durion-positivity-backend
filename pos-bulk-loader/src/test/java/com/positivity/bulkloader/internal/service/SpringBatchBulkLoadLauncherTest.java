@@ -8,6 +8,9 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,19 +58,43 @@ class SpringBatchBulkLoadLauncherTest {
     @Mock
     Job vehicleFitmentBulkLoadJob;
 
+    @Mock
+    Job inventoryStockCountBulkLoadJob;
+
+    @Mock
+    Job convertedPackJob;
+
+    /** The job beans as Spring would supply them: every batch job in the context, keyed by name. */
+    private SpringBatchBulkLoadLauncher launcher() {
+        Map<String, Job> jobsByName = new HashMap<>();
+        jobsByName.put("catalogBulkLoadJob", catalogBulkLoadJob);
+        jobsByName.put("customerBulkLoadJob", customerBulkLoadJob);
+        jobsByName.put("commercialCustomerBulkLoadJob", commercialCustomerBulkLoadJob);
+        jobsByName.put("locationBulkLoadJob", locationBulkLoadJob);
+        jobsByName.put("peopleBulkLoadJob", peopleBulkLoadJob);
+        jobsByName.put("priceBulkLoadJob", priceBulkLoadJob);
+        jobsByName.put("vehicleBulkLoadJob", vehicleBulkLoadJob);
+        jobsByName.put("vehicleFitmentBulkLoadJob", vehicleFitmentBulkLoadJob);
+        jobsByName.put("inventoryStockCountBulkLoadJob", inventoryStockCountBulkLoadJob);
+        // The converted packs; each only has to be present for its DomainType to dispatch.
+        for (String beanName : List.of(
+                "storageLocationBulkLoadJob",
+                "bayBulkLoadJob",
+                "mobileUnitBulkLoadJob",
+                "staffingAssignmentBulkLoadJob",
+                "putawayRuleBulkLoadJob",
+                "cycleCountPlanBulkLoadJob",
+                "securityUserBulkLoadJob",
+                "userPersonLinkBulkLoadJob",
+                "mechanicSkillBulkLoadJob")) {
+            jobsByName.put(beanName, convertedPackJob);
+        }
+        return new SpringBatchBulkLoadLauncher(bulkLoadAuthorizationContext, jobOperator, jobsByName);
+    }
+
     @Test
     void launch_whenVehicleDomain_usesVehicleJobAndStoragePathParameters() throws Exception {
-        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-                bulkLoadAuthorizationContext,
-                jobOperator,
-                catalogBulkLoadJob,
-                customerBulkLoadJob,
-                commercialCustomerBulkLoadJob,
-                locationBulkLoadJob,
-                peopleBulkLoadJob,
-                priceBulkLoadJob,
-                vehicleBulkLoadJob,
-                vehicleFitmentBulkLoadJob);
+        SpringBatchBulkLoadLauncher launcher = launcher();
         BulkLoadJob job = new BulkLoadJob();
         UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000021");
         job.setId(jobId);
@@ -97,17 +124,7 @@ class SpringBatchBulkLoadLauncherTest {
 
     @Test
     void launch_whenLocationIdMissing_throwsIllegalArgumentException() {
-        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-                bulkLoadAuthorizationContext,
-                jobOperator,
-                catalogBulkLoadJob,
-                customerBulkLoadJob,
-                commercialCustomerBulkLoadJob,
-                locationBulkLoadJob,
-                peopleBulkLoadJob,
-                priceBulkLoadJob,
-                vehicleBulkLoadJob,
-                vehicleFitmentBulkLoadJob);
+        SpringBatchBulkLoadLauncher launcher = launcher();
         BulkLoadJob job = new BulkLoadJob();
         job.setId(UUID.fromString("00000000-0000-0000-0000-000000000023"));
         job.setOperatorId("operator-vehicle");
@@ -120,18 +137,11 @@ class SpringBatchBulkLoadLauncherTest {
     }
 
     @Test
-    void launch_whenUnsupportedDomain_throwsIllegalState() {
-        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-                bulkLoadAuthorizationContext,
-                jobOperator,
-                catalogBulkLoadJob,
-                customerBulkLoadJob,
-                commercialCustomerBulkLoadJob,
-                locationBulkLoadJob,
-                peopleBulkLoadJob,
-                priceBulkLoadJob,
-                vehicleBulkLoadJob,
-                vehicleFitmentBulkLoadJob);
+    void launch_whenInventoryStockCountDomain_usesTheOpeningStockJob() throws Exception {
+        // This domain was declared, advertised in the create-job docs and inferable by the content
+        // sniffer, while throwing on process. It is now wired, so the test that pinned the throw
+        // pins the dispatch instead.
+        SpringBatchBulkLoadLauncher launcher = launcher();
         BulkLoadJob job = new BulkLoadJob();
         job.setId(UUID.fromString("00000000-0000-0000-0000-000000000022"));
         job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000032"));
@@ -139,24 +149,34 @@ class SpringBatchBulkLoadLauncherTest {
         job.setDomainType(DomainType.INVENTORY_STOCK_COUNT);
         job.setOriginalFilePath("00000000-0000-0000-0000-000000000022/stock-counts.csv");
 
+        when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(jobExecution);
+
+        launcher.launch(job, null);
+
+        verify(jobOperator).start(org.mockito.Mockito.same(inventoryStockCountBulkLoadJob), any(JobParameters.class));
+    }
+
+    @Test
+    void launch_whenTheJobBeanIsMissing_saysWhichOne() {
+        // Guards the map lookup that replaced eight constructor arguments: a domain whose job bean
+        // is absent must name the bean, not fail with a bare NullPointerException.
+        SpringBatchBulkLoadLauncher launcher =
+                new SpringBatchBulkLoadLauncher(bulkLoadAuthorizationContext, jobOperator, Map.of());
+        BulkLoadJob job = new BulkLoadJob();
+        job.setId(UUID.fromString("00000000-0000-0000-0000-000000000024"));
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000034"));
+        job.setOperatorId("operator-vehicle");
+        job.setDomainType(DomainType.VEHICLE);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000024/vehicles.csv");
+
         assertThatThrownBy(() -> launcher.launch(job, null))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("No Spring Batch job is configured");
+                .hasMessageContaining("vehicleBulkLoadJob");
     }
 
     @Test
     void launch_whenCommercialCustomerDomain_usesCommercialCustomerJob() throws Exception {
-        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-                bulkLoadAuthorizationContext,
-                jobOperator,
-                catalogBulkLoadJob,
-                customerBulkLoadJob,
-                commercialCustomerBulkLoadJob,
-                locationBulkLoadJob,
-                peopleBulkLoadJob,
-                priceBulkLoadJob,
-                vehicleBulkLoadJob,
-                vehicleFitmentBulkLoadJob);
+        SpringBatchBulkLoadLauncher launcher = launcher();
         BulkLoadJob job = new BulkLoadJob();
         job.setId(UUID.fromString("00000000-0000-0000-0000-000000000026"));
         job.setDomainType(DomainType.COMMERCIAL_CUSTOMER);
@@ -173,17 +193,7 @@ class SpringBatchBulkLoadLauncherTest {
 
     @Test
     void launch_whenLocationDomain_usesLocationJob() throws Exception {
-        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-                bulkLoadAuthorizationContext,
-                jobOperator,
-                catalogBulkLoadJob,
-                customerBulkLoadJob,
-                commercialCustomerBulkLoadJob,
-                locationBulkLoadJob,
-                peopleBulkLoadJob,
-                priceBulkLoadJob,
-                vehicleBulkLoadJob,
-                vehicleFitmentBulkLoadJob);
+        SpringBatchBulkLoadLauncher launcher = launcher();
         BulkLoadJob job = new BulkLoadJob();
         UUID jobId = UUID.fromString("00000000-0000-0000-0000-000000000025");
         job.setId(jobId);
@@ -213,17 +223,7 @@ class SpringBatchBulkLoadLauncherTest {
 
     @Test
     void launch_whenJobLauncherFails_clearsAuthorizationContext() throws Exception {
-        SpringBatchBulkLoadLauncher launcher = new SpringBatchBulkLoadLauncher(
-                bulkLoadAuthorizationContext,
-                jobOperator,
-                catalogBulkLoadJob,
-                customerBulkLoadJob,
-                commercialCustomerBulkLoadJob,
-                locationBulkLoadJob,
-                peopleBulkLoadJob,
-                priceBulkLoadJob,
-                vehicleBulkLoadJob,
-                vehicleFitmentBulkLoadJob);
+        SpringBatchBulkLoadLauncher launcher = launcher();
         BulkLoadJob job = new BulkLoadJob();
         job.setId(UUID.fromString("00000000-0000-0000-0000-000000000024"));
         job.setDomainType(DomainType.CATALOG_PRODUCT);

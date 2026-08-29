@@ -36,12 +36,24 @@ scripts/seed-alpha.py --gateway ... --bootstrap-location
 
 Per pack file it creates a bulk-load job (`POST /bulk-loader/bulk-jobs`), uploads the
 CSV, starts processing, and polls the job to a terminal state, reporting the row
-counters. The token needs `bulkImport:upload:execute` plus the relayed per-domain
+counters. A job that finished but rejected rows reports `PARTIAL` rather than `COMPLETED`;
+every rejected row has an audit record naming what the owning service said about it
+(`GET /bulk-loader/bulk-jobs/{id}/audit`), and those rows can be corrected and retried. The token needs `bulkImport:upload:execute` plus the relayed per-domain
 create permissions (`location:write`, `crm:party:create`). Bulk-load jobs require a
 `locationId`: the driver resolves `--location-code` (default `CLT-MAIN-001`) against
 the location roster, and `--bootstrap-location` creates it from `locations.csv` via
 the gateway API when the roster is empty (that row then reports one expected
 duplicate failure in the LOCATION job).
+
+Sixteen of the seventeen packs load this way. The exception is
+`location/site-defaults.csv`, which calls one idempotent upsert per site
+(`PUT /v1/locations/{id}/defaults`) and is marked `@site-defaults` in the driver.
+
+Nothing in any pack is an environment-specific id. Files name what they reference — a
+location code, a storage location's name, an employee number, a SKU, a catalog class — and
+the loader resolves each against the live services as the file loads. A name that resolves
+to nothing fails its row rather than loading a record pointing somewhere else, which is why
+the run order below is a real dependency order rather than a convention.
 
 Manual per-domain flow (what the driver automates): upload the CSV to
 `pos-bulk-loader`, create a job with the matching `domainType` and alpha
@@ -51,7 +63,8 @@ Afterwards, verify: row counts on the owner, `replica_drift_total` flat, expecte
 event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
-**location** → people → people-contact → **customer** → vehicle → catalog → price →
+**location** (sites, storage topology, site defaults, bays, mobile units) → people →
+people-contact → **customer** → vehicle → catalog → price → catalog → price →
 inventory (putaway rules, then on-hand, then cycle count plans). Locations must be
 loaded (or already present)
 first in any case — bulk-load jobs themselves require a valid `locationId`.
@@ -236,12 +249,48 @@ product landed uncategorized.
   files stay. The products file itself stays until the alpha reseed is verified
   (§5.4).
 
+### `price/` — from `pos-catalog R__seed_reference_catalog_4_pricing.sql`
+
+| File | Rows | Target |
+|---|---|---|
+| `base-prices.csv` | 500 MSRPs, one per catalog product | `POST /v1/price/bulk-ingest` (`domainType: BASE_PRICE`) |
+
+Columns: `sku,msrp,currency,effectiveFrom`. The amounts are the seed's own `product_msrp`
+values, not invented ones, so alpha prices what the catalog actually sells at.
+
+**Keyed by SKU, not product id.** Product ids are generated when the catalog pack loads, so a
+file carrying them would only work against the environment it was written for. The loader
+resolves each SKU against the live catalog, which is why this pack runs after
+`catalog/products.csv`. A SKU that is not in the catalog fails its row rather than loading a
+price attached to nothing.
+
+Two formats the endpoint is strict about, and which its own schema examples get wrong:
+`effectiveFrom` is parsed with `Instant.parse`, so it must be a full ISO-8601 instant
+(`2024-01-01T00:00:00Z`) rather than the bare date the example shows; and `productId` in that
+example is `P001`, which is not a UUID. `AlphaFixtureBasePricesTest` reads this file and
+`catalog/products.csv` together at build time and pins both formats, so a rename or a reformat
+fails the build rather than a reseed.
+
+**Not converted:** `item_cost` from the same seed file. Cost is not a base price — it belongs
+to the costing/valuation path, which has no ingest endpoint — so the seed file stays for it.
+
+### `vehicle-fitment/` — deliberately absent
+
+`VEHICLE_FITMENT` is a wired loader domain with no fixture pack, and this is on purpose rather
+than an oversight. `part_fitment_entity.part_number_id` is a bare `BIGINT` with no table behind
+it in pos-vehicle-fitment: it is an identifier owned elsewhere, and nothing in the alpha catalog
+produces one (catalog products are keyed by UUID and SKU). A fixture would therefore have to
+invent part numbers, and the result would look like real fitment coverage while matching no
+product in the environment — worse than having no pack at all. Converting it needs a decision
+about where part numbers come from first.
+
 ### `location/` — from `pos-location R__seed_location_2_operational_data.sql`
 
 | File | Rows | Target |
 |---|---|---|
 | `locations.csv` | 5 sites (3 service centers, mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
 | `storage-locations.csv` | 190 (38 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves, 1 retired bin) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order; `status`/capacity applied by follow-up `PATCH`) |
+| `site-defaults.csv` | 5 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
 | `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
 | `mobile-units.csv` | 9 mobile units | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
 
@@ -297,13 +346,36 @@ Already-existing rows are never patched, so re-runs converge without overwriting
 operator edits; applying a changed status/capacity to a live row is an operator
 `PATCH`, not a reseed.
 
+Columns (`site-defaults.csv`): `locationCode,stagingName,quarantineName`.
+
+**Site defaults are what make the staging bins reachable (issue #1557).** Until this
+pack existed nothing called `PUT /v1/locations/{id}/defaults`, so
+`location_ref.default_staging_location_id` was null on every environment the pipeline
+built. `StagingLocationResolver` then fell through to a hardcoded
+`00000000-0000-0000-0000-000000000002`, which is not a row in any `storage_location`
+table — and putaway refuses any receipt not booked at the resolved staging location. The
+staging bins this pack's sibling creates were therefore unreachable: a receipt booked at
+the real `Staging Floor`, which is what an operator or a UI would pick, was refused with
+`RECEIPT_NOT_STAGED`.
+
+The pack runs immediately after `storage-locations.csv` (both names must exist before
+they can be pointed at) and before the inventory packs (where receiving starts to
+matter). The endpoint is a create-or-replace upsert, so re-runs converge. It rejects two
+equal ids and ids that do not belong to the site, so both are resolved per site rather
+than assumed. `AlphaFixtureSiteDefaultsTest` reads this file and
+`storage-locations.csv` together at build time: every site must declare defaults, both
+names must exist at that site, they must differ, and each must carry the storage category
+for the role it is given — a rename on either side fails the build instead of silently
+leaving the defaults null.
+
 **Known deltas / not yet converted:**
 
 - The storage mix is deliberately uniform across all 5 sites (a richer, realistic
   garage topology replacing the seed's thinner ad-hoc spread); the seed's
-  staging/quarantine **back-references on the location row**
-  (`default_staging_location_id`/`default_quarantine_location_id`) are not set —
-  no API writes them today. #1514 kept that uniformity: the Flyway seed adds its
+  staging/quarantine back-references on the location row
+  (`default_staging_location_id`/`default_quarantine_location_id`) are now set by
+  `site-defaults.csv` above (issue #1557); the note that no API wrote them was stale —
+  `PUT /v1/locations/{id}/defaults` has existed since CAP-214. #1514 kept that uniformity: the Flyway seed adds its
   oil storage and battery racks to the 3 service centers only, whereas this
   fixture gives all 5 sites the full set.
 - **`allowNewProduct` is not a fixture column**, so every row lands on the
@@ -325,7 +397,7 @@ operator edits; applying a changed status/capacity to a live row is an operator
 | File | Rows | Target |
 |---|---|---|
 | `putaway-rules.csv` | 16 rules (12 category rules, 3 subcategory overrides, 1 terminal `ANY`) | gateway API pack (`POST /inventory/inventory/putaway/rules` per row) |
-| `on-hand.csv` | 494 initial-stock rows across the three service centers (263 at CLT-MAIN-001, 111 at CLT-SOUTH-001, 120 at CLT-NORTH-001) | gateway API pack (`POST /v1/inventory/bulk-ingest` per site, then `POST .../adjustments/{id}/approve` per row) |
+| `on-hand.csv` | 494 initial-stock rows across the three service centers (263 at CLT-MAIN-001, 111 at CLT-SOUTH-001, 120 at CLT-NORTH-001) | `POST /v1/inventory/opening-stock/bulk-ingest` (`domainType: INVENTORY_STOCK_COUNT`) |
 | `cycle-count-plans.csv` | 1 demo cycle count plan | gateway API pack (`POST /inventory/inventory/cycleCountPlans` per row) |
 
 Columns: `priority,matchType,matchName,locationCode,destinationName,destinationStrategy,isEnabled`.

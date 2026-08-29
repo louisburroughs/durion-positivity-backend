@@ -12,6 +12,16 @@ public interface UserService {
 
     UserDto createUser(String username, String password, Set<String> roleNames);
 
+    /**
+     * Creates a user with a strong password generated here and returned to no one.
+     *
+     * <p>For provisioning accounts in bulk, where the alternative is carrying password material in
+     * an uploaded file that is written to disk and never deleted. The account exists and holds its
+     * roles; whoever is to use it obtains a password through the ordinary reset path, so no
+     * credential is ever written down as a side effect of seeding.
+     */
+    UserDto createUserWithGeneratedPassword(String username, Set<String> roleNames);
+
     Optional<UserAuthContext> getUserByUsername(String username);
 
     Optional<UserDto> getUserById(UUID id);

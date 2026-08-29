@@ -211,7 +211,33 @@ class BulkLoadJobServiceImplTest {
 
         assertThatThrownBy(() -> service.retryJob(JOB_ID, OPERATOR_ID))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("FAILED state");
+                .hasMessageContaining("FAILED or PARTIAL state");
+    }
+
+    @Test
+    void retryJob_whenJobPartial_isAllowed() {
+        // A run that lost rows is exactly the run worth re-running.
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.PARTIAL);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.retryJob(JOB_ID, OPERATOR_ID);
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(job.getFailureCount()).isZero();
+    }
+
+    @Test
+    void cancelJob_whenJobPartial_isRefusedAsTerminal() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.PARTIAL);
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+
+        assertThatThrownBy(() -> service.cancelJob(JOB_ID, OPERATOR_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("terminal state");
     }
 
     @Test

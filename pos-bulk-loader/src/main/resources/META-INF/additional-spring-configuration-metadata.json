@@ -66,6 +66,24 @@
       "defaultValue": "vehicle-fitment"
     },
     {
+      "name": "pos.security.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service id for user and person-link bulk-ingest calls to pos-security-service. Distinct from pos.security.base-url, which is the direct URL used for startup permission registration before discovery is available.",
+      "defaultValue": "security-service"
+    },
+    {
+      "name": "pos.shop-manager.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service id for mechanic-skill bulk-ingest calls to pos-shop-manager.",
+      "defaultValue": "shop-manager"
+    },
+    {
+      "name": "pos.inventory.service-id",
+      "type": "java.lang.String",
+      "description": "Eureka service id for opening-stock bulk-ingest calls to pos-inventory, and for the storage-location lookups that resolve each row's destination.",
+      "defaultValue": "inventory"
+    },
+    {
       "name": "pos.events.base-url",
       "type": "java.lang.String",
       "description": "Base URL of the pos-events/event-receiver API.",

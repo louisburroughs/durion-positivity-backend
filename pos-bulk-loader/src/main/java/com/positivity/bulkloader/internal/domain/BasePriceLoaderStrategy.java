@@ -22,15 +22,30 @@ public class BasePriceLoaderStrategy implements DomainLoaderStrategy<BasePriceRe
         basePrice.setMsrp(row.get("msrp"));
         basePrice.setCurrency(row.get("currency"));
         basePrice.setEffectiveFrom(row.get("effectiveFrom"));
+        basePrice.setSku(row.get("sku"));
         return basePrice;
+    }
+
+    /**
+     * Resolves a SKU to the product id the price endpoint expects.
+     *
+     * <p>Product ids are generated when the catalog loads, so a price file that carried them would
+     * only work against the environment it was written for. Naming the product by SKU keeps the
+     * file portable and makes the catalog pack a genuine prerequisite rather than a coincidence.
+     */
+    @Override
+    @NonNull
+    public BasePriceRecord resolve(@NonNull BasePriceRecord item, @NonNull ResolutionContext context) {
+        if (LoaderValues.isBlank(item.getProductId()) && LoaderValues.isPresent(item.getSku())) {
+            CatalogResolutions.productId(context, item.getSku()).ifPresent(item::setProductId);
+        }
+        return item;
     }
 
     @Override
     public List<String> validate(@NonNull BasePriceRecord item) {
         List<String> errors = new ArrayList<>();
-        if (item.getProductId() == null || item.getProductId().isBlank()) {
-            errors.add("productId is required");
-        }
+        LoaderValues.requireUuid(item.getProductId(), "productId", "a sku that resolves to one", errors);
         if (item.getMsrp() == null || item.getMsrp().isBlank()) {
             errors.add("msrp is required");
         }

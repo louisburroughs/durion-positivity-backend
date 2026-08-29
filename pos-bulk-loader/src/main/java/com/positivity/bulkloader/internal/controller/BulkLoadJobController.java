@@ -50,13 +50,15 @@ public class BulkLoadJobController {
                     with the target domain and expected file name recorded.
                     Use this tool when starting a new bulk import from a file; do not use uploadJobFile, which \
                     attaches the file to a job that already exists, and do not use retryBulkLoadJob, which re-queues \
-                    a FAILED job.
+                    a FAILED or PARTIAL job.
                     Preconditions: the operator must have no other job in an active state (CREATED, UPLOADING, \
                     DETECTING, MAPPING_REVIEW, DEDUP or PROCESSING); only one active job per operator is allowed.
                     Required inputs: fileName (name of the source file that will be uploaded later) and domainType \
-                    (one of CATALOG_PRODUCT, INVENTORY_STOCK_COUNT, LOCATION, CUSTOMER, PERSON, BASE_PRICE, VEHICLE \
-                    or VEHICLE_FITMENT); locationId (UUID) is optional at creation but must be set before processing \
-                    can start.
+                    (one of CATALOG_PRODUCT, INVENTORY_STOCK_COUNT, LOCATION, CUSTOMER, COMMERCIAL_CUSTOMER, \
+                    PERSON, BASE_PRICE, VEHICLE or VEHICLE_FITMENT); locationId (UUID) is optional at creation but \
+                    must be set before processing can start.
+                    INVENTORY_STOCK_COUNT establishes opening on-hand stock: each line is filed and approved, so \
+                    the token must carry inventory:adjustment:approve as well as inventory:adjustment:create.
                     Emits a BULK_LOADER_JOB_CREATE event; no file content is stored by this call.
                     Returns 201 with the new job, and 409 when the operator already has an active bulk load job \
                     in progress.
@@ -133,14 +135,14 @@ public class BulkLoadJobController {
     @Operation(operationId = "cancelBulkLoadJob", summary = "Cancel a Running Bulk Load Job", description = """
                     Cancels an in-flight bulk load job by moving it to the terminal CANCELLED state.
                     Use this tool to abandon a job that is no longer wanted; do not use retryBulkLoadJob, which \
-                    re-queues a FAILED job rather than stopping one.
+                    re-queues a FAILED or PARTIAL job rather than stopping one.
                     Preconditions: the job must belong to the authenticated operator and must not already be in a \
-                    terminal state (COMPLETED, CANCELLED or FAILED).
+                    terminal state (COMPLETED, PARTIAL, CANCELLED or FAILED).
                     Required inputs: jobId (UUID) as a path parameter; there is no request body.
                     Emits a BULK_LOADER_JOB_CANCEL event and sets the job status to CANCELLED; rows already imported \
                     are not rolled back.
                     Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when \
-                    the job is already COMPLETED, CANCELLED or FAILED.
+                    the job is already COMPLETED, PARTIAL, CANCELLED or FAILED.
                     """)
     @ApiResponse(responseCode = "200", description = "Job cancelled")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
@@ -155,25 +157,25 @@ public class BulkLoadJobController {
     @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_JOB_RETRY", apiVersion = "1")
     @Operation(operationId = "retryBulkLoadJob", summary = "Retry a Failed Bulk Load Job", description = """
-                    Resets a FAILED bulk load job back to CREATED and clears its progress counters so it can be \
-                    processed again.
+                    Resets a FAILED or PARTIAL bulk load job back to CREATED and clears its progress counters so \
+                    it can be processed again.
                     Use this tool after fixing the cause of a failure, typically via submitCorrections; do not use \
                     cancelBulkLoadJob, which terminates a job instead of re-queuing it.
-                    Preconditions: the job must belong to the authenticated operator, must be in FAILED state, and \
-                    the operator must have no other active job.
+                    Preconditions: the job must belong to the authenticated operator, must be in FAILED or PARTIAL \
+                    state, and the operator must have no other active job.
                     Required inputs: jobId (UUID) as a path parameter; there is no request body.
                     Emits a BULK_LOADER_JOB_RETRY event and resets startedAt, completedAt, totalRows and all row \
                     counters; processing does not start until startJobProcessing is called again.
                     Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when \
-                    the job is not in FAILED state or the operator already has an active job.
+                    the job is not in FAILED or PARTIAL state or the operator already has an active job.
                     """)
     @ApiResponse(responseCode = "200", description = "Job reset and re-queued for retry")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
     @ApiResponse(responseCode = "404", description = "Job not found")
-    @ApiResponse(responseCode = "409", description = "Job is not in FAILED state")
+    @ApiResponse(responseCode = "409", description = "Job is not in FAILED or PARTIAL state")
     public ResponseEntity<BulkLoadJobResponse> retryJob(
             @io.swagger.v3.oas.annotations.Parameter(
-                            description = "ID of the failed bulk load job to retry",
+                            description = "ID of the failed or partially-failed bulk load job to retry",
                             required = true)
                     @PathVariable
                     @NonNull
