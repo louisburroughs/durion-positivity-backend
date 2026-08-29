@@ -68,6 +68,52 @@ require_env_entry() {
   fi
 }
 
+# pos-supplier seals its exchange-audit payloads with SUPPLIER_AUDIT_ENC_KEY (ADR-0050 §7)
+# and refuses to start without one outside the dev/test profiles. Deploying it with the key
+# absent would fail late, in the tier --wait, after every image had already been pulled — and
+# a key that changes between deploys makes every payload written under the old one
+# permanently unreadable, reported as an authentication failure (i.e. as possible tampering).
+# So resolve it up front: a value passed in by the workflow wins and is persisted, otherwise
+# the one already on the box must be there and non-empty.
+require_supplier_audit_key() {
+  local existing
+  existing="$(grep -E "^SUPPLIER_AUDIT_ENC_KEY=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+  existing="${existing%\'}"
+  existing="${existing#\'}"
+
+  if [[ -n "${SUPPLIER_AUDIT_ENC_KEY:-}" ]]; then
+    if ! [[ "${SUPPLIER_AUDIT_ENC_KEY}" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+      echo "ERROR: SUPPLIER_AUDIT_ENC_KEY must be 32 bytes of base64 (openssl rand -base64 32)." >&2
+      exit 1
+    fi
+    if [[ -n "${existing}" && "${existing}" != "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
+      echo "ERROR: SUPPLIER_AUDIT_ENC_KEY differs from the key already on this box." >&2
+      echo "Rotating it here would orphan every exchange-audit payload sealed with the old" >&2
+      echo "key. Rotate deliberately instead: move the current key into" >&2
+      echo "SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS as '<keyId>:<base64>' and bump" >&2
+      echo "SUPPLIER_AUDIT_ENC_KEY_ID before changing this value." >&2
+      exit 1
+    fi
+    local quoted
+    quoted="$(env_single_quote "${SUPPLIER_AUDIT_ENC_KEY}")"
+    if grep -q "^SUPPLIER_AUDIT_ENC_KEY=" "${ENV_FILE}"; then
+      sed -i "s|^SUPPLIER_AUDIT_ENC_KEY=.*|SUPPLIER_AUDIT_ENC_KEY=${quoted}|" "${ENV_FILE}"
+    else
+      printf 'SUPPLIER_AUDIT_ENC_KEY=%s\n' "${quoted}" >> "${ENV_FILE}"
+    fi
+    return 0
+  fi
+
+  if [[ -z "${existing}" ]]; then
+    echo "ERROR: SUPPLIER_AUDIT_ENC_KEY is empty or missing in ${ENV_FILE} and none was" >&2
+    echo "supplied by the deploy. pos-supplier will not start without it. Generate one with" >&2
+    echo "  openssl rand -base64 32" >&2
+    echo "and set it as the SUPPLIER_AUDIT_ENC_KEY repository secret (or add it to the" >&2
+    echo "on-box env file) before deploying." >&2
+    exit 1
+  fi
+}
+
 should_run_docker_prune() {
   if ! [[ "${DOCKER_PRUNE_INTERVAL_HOURS}" =~ ^[0-9]+$ ]]; then
     echo "Skipping Docker prune: DOCKER_PRUNE_INTERVAL_HOURS must be an integer, got '${DOCKER_PRUNE_INTERVAL_HOURS}'." >&2
@@ -244,6 +290,7 @@ DOMAIN_SERVICES=(
   pos-people-contact
   pos-price
   pos-shop-manager
+  pos-supplier
   pos-tax
   pos-warranty
   pos-workorder
@@ -270,6 +317,7 @@ if [[ "${MODE}" == "config-only" ]]; then
   require_env_entry BACKEND_TAG
   require_env_entry ECR_REGISTRY
   require_env_entry SECURITY_SEED_ADMIN_PASSWORD_HASH
+  require_supplier_audit_key
 else
   if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
     sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=${IMAGE_TAG}/" "${ENV_FILE}"
@@ -299,6 +347,8 @@ else
   else
     printf 'ECR_REGISTRY=%s\n' "${ECR_REGISTRY}" >> "${ENV_FILE}"
   fi
+
+  require_supplier_audit_key
 
   aws ecr get-login-password --region us-east-1 \
     | docker login --username AWS --password-stdin "${ECR_REGISTRY}"

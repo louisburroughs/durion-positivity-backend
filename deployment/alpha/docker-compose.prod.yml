@@ -217,6 +217,11 @@ services:
     environment:
       POS_SHOP_MANAGER_KAFKA_ENABLED: "true"
 
+  pos-supplier:
+    image: ${ECR_REGISTRY}/durion/pos-supplier:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+
   pos-tax:
     image: ${ECR_REGISTRY}/durion/pos-tax:${BACKEND_TAG}
     restart: unless-stopped
