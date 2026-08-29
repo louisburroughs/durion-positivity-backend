@@ -3,16 +3,23 @@ package com.positivity.people.internal.service;
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -41,10 +48,16 @@ public class WorkSessionServiceImpl implements WorkSessionService {
 
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
+    private final TimeEntryRepository timeEntryRepository;
+
+    private final EmployeeLocationAssignmentRepository locationAssignmentRepository;
+
     public WorkSessionServiceImpl(
             WorkSessionRepository workSessionRepository,
             WorkSessionBreakRepository workSessionBreakRepository,
             ExtPersonReplicaRepository extPersonReplicaRepository,
+            TimeEntryRepository timeEntryRepository,
+            EmployeeLocationAssignmentRepository locationAssignmentRepository,
             Clock clock) {
         this.clock = clock;
         this.workSessionRepository =
@@ -53,6 +66,9 @@ public class WorkSessionServiceImpl implements WorkSessionService {
                 Objects.requireNonNull(workSessionBreakRepository, "workSessionBreakRepository must not be null");
         this.extPersonReplicaRepository =
                 Objects.requireNonNull(extPersonReplicaRepository, "extPersonReplicaRepository must not be null");
+        this.timeEntryRepository = Objects.requireNonNull(timeEntryRepository, "timeEntryRepository must not be null");
+        this.locationAssignmentRepository =
+                Objects.requireNonNull(locationAssignmentRepository, "locationAssignmentRepository must not be null");
     }
 
     @Override
@@ -181,7 +197,45 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         session.setSubmittedAt(request.getSubmittedAt());
         session.setActor(resolvedActor);
 
-        return toWorkSessionDto(workSessionRepository.save(session));
+        WorkSession submitted = workSessionRepository.save(session);
+        recordTimeEntry(submitted, request);
+        return toWorkSessionDto(submitted);
+    }
+
+    /**
+     * A submitted session is the employee's time entry (#1564). This is the only producer of
+     * {@code time_entry} rows, which the approval, adjustment, exception, and payroll-export
+     * surfaces all read; before it existed those surfaces had nothing to act on.
+     *
+     * <p>The attendance window is the server-stamped session window, so it is gross time.
+     * Breaks are carried alongside rather than deducted here, leaving consumers free to report
+     * either gross attendance or net worked time.
+     */
+    private void recordTimeEntry(WorkSession session, WorkSessionSubmitRequest request) {
+        TimeEntry entry = new TimeEntry();
+        entry.setWorkSessionId(session.getSessionId());
+        entry.setPersonId(session.getPersonId());
+        entry.setLocationId(resolveLocationId(session));
+        entry.setAttendanceStartAt(session.getStartedAt());
+        entry.setAttendanceEndAt(session.getEndedAt());
+        entry.setBreakMinutes(request.getBreakMinutes());
+        entry.setStatus(TimeEntryStatus.SUBMITTED);
+        timeEntryRepository.save(entry);
+    }
+
+    /**
+     * Attendance reporting and the payroll export both filter on location, so an entry without
+     * one is invisible to them. Resolve the assignment in effect on the day the session ended;
+     * the query orders primary assignments first, so the primary one wins when a person holds
+     * several. A person with no active assignment still gets an entry that can be approved.
+     */
+    private UUID resolveLocationId(WorkSession session) {
+        Instant endedAt = session.getEndedAt() == null ? Instant.now(clock) : session.getEndedAt();
+        LocalDate onDate = endedAt.atZone(ZoneOffset.UTC).toLocalDate();
+        return locationAssignmentRepository.findActiveByPersonIdAndDate(session.getPersonId(), onDate).stream()
+                .findFirst()
+                .map(EmployeeLocationAssignment::getLocationId)
+                .orElse(null);
     }
 
     private String resolveActorFromSecurityContext() {
