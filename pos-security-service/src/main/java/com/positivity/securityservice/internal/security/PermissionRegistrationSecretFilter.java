@@ -33,7 +33,6 @@ public class PermissionRegistrationSecretFilter extends OncePerRequestFilter {
 
     private static final String SECRET_HEADER = "X-Permissions-Api-Secret";
     private static final String REGISTER_PATH = "/v1/permissions/register";
-    private static final String REGISTER_ALIAS_PATH = "/v1/users/permissions/register";
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
     private static final String REQUIRED_AUTHORITY = "security:permission:register";
 
@@ -96,7 +95,7 @@ public class PermissionRegistrationSecretFilter extends OncePerRequestFilter {
     }
 
     private boolean isProtectedPath(String path) {
-        return REGISTER_PATH.equals(path) || REGISTER_ALIAS_PATH.equals(path);
+        return REGISTER_PATH.equals(path);
     }
 
     private void writeUnauthorized(

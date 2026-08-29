@@ -29,7 +29,7 @@ class PermissionRegistrationSecretFilterTest {
     private static final String SECRET = "s3cr3t-value";
     private static final String SECRET_HEADER = "X-Permissions-Api-Secret";
     private static final String REGISTER_PATH = "/v1/permissions/register";
-    private static final String ALIAS_PATH = "/v1/users/permissions/register";
+    private static final String RETIRED_ALIAS_PATH = "/v1/users/permissions/register";
     private static final Instant NOW = Instant.parse("2026-03-01T12:00:00Z");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -68,8 +68,8 @@ class PermissionRegistrationSecretFilterTest {
     }
 
     @Test
-    void guardsTheAliasPathAsWell() throws Exception {
-        MockHttpServletRequest request = request("POST", ALIAS_PATH);
+    void rejectsAPostThatCarriesNoSecretHeaderAtAll() throws Exception {
+        MockHttpServletRequest request = request("POST", REGISTER_PATH);
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
@@ -77,6 +77,20 @@ class PermissionRegistrationSecretFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         verify(chain, never()).doFilter(request, response);
+    }
+
+    // The controller no longer answers on /v1/users/permissions, so the filter must not
+    // treat that path as protected either: it falls through to the normal chain and 404s.
+    @Test
+    void noLongerGuardsTheRetiredAliasPath() throws Exception {
+        MockHttpServletRequest request = request("POST", RETIRED_ALIAS_PATH);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter(SECRET).doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     @Test

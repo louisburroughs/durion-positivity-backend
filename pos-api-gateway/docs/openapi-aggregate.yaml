@@ -1233,24 +1233,6 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1authorization~1person-decision
   /v1/users/bulk-ingest:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1bulk-ingest
-  /v1/users/permissions:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions
-  /v1/users/permissions/catalog-version:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1catalog-version
-  /v1/users/permissions/decode:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1decode
-  /v1/users/permissions/domain/{domain}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1domain~1{domain}
-  /v1/users/permissions/exists/{permissionName}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1exists~1{permissionName}
-  /v1/users/permissions/register:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1register
-  /v1/users/permissions/registerPermissions:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1registerPermissions
-  /v1/users/permissions/validate/{permissionName}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1validate~1{permissionName}
-  /v1/users/permissions/{id}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1permissions~1{id}
   /v1/users/person-link/bulk-ingest:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1person-link~1bulk-ingest
   /v1/users/principals/{principalId}/roles/{roleId}:
