@@ -117,6 +117,89 @@ class PeopleReportsServiceTest {
     }
 
     @Test
+    void getApprovedTimeForExport_deductsBreakMinutesFromTheAttendanceWindow() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        UUID approvedId = UUID.fromString("00000000-0000-0000-0000-000000000031");
+
+        // 8.5h on site with a 45 minute break is 7.75h worked, not 8.5h.
+        TimeEntry approved = new TimeEntry();
+        approved.setTimeEntryId(approvedId);
+        approved.setPersonId(personUuid);
+        approved.setLocationId(locationId);
+        approved.setStatus(TimeEntryStatus.APPROVED);
+        approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
+        approved.setAttendanceEndAt(Instant.parse("2026-02-10T16:30:00Z"));
+        approved.setBreakMinutes(45);
+        approved.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
+        approved.setApprovedBy("manager-1");
+
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(extPersonReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(ExtPersonReplica.builder()
+                        .personId(personUuid)
+                        .firstName("Jane")
+                        .lastName("Doe")
+                        .aggregateVersion(0)
+                        .updatedAt(Instant.now())
+                        .build()));
+        when(timeEntryRepository.findApprovedForExport(
+                        eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
+                .thenReturn(List.of(approved));
+
+        List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(
+                LocalDate.parse("2026-02-10"),
+                LocalDate.parse("2026-02-10"),
+                List.of(locationId),
+                "test-actor",
+                "corr-1");
+
+        assertEquals("7.75", result.get(0).hoursWorked().toPlainString());
+    }
+
+    @Test
+    void getApprovedTimeForExport_whenBreaksExceedTheWindow_reportsZeroRatherThanNegativeHours() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000009");
+        UUID approvedId = UUID.fromString("00000000-0000-0000-0000-000000000041");
+
+        TimeEntry approved = new TimeEntry();
+        approved.setTimeEntryId(approvedId);
+        approved.setPersonId(personUuid);
+        approved.setLocationId(locationId);
+        approved.setStatus(TimeEntryStatus.APPROVED);
+        approved.setAttendanceStartAt(Instant.parse("2026-02-10T08:00:00Z"));
+        approved.setAttendanceEndAt(Instant.parse("2026-02-10T08:30:00Z"));
+        approved.setBreakMinutes(90);
+        approved.setApprovedAt(Instant.parse("2026-02-11T01:15:00Z"));
+        approved.setApprovedBy("manager-1");
+
+        when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);
+        when(locationReferenceService.getLocationName(locationId)).thenReturn("North Shop");
+        when(extPersonReplicaRepository.findAllById(any()))
+                .thenReturn(List.of(ExtPersonReplica.builder()
+                        .personId(personUuid)
+                        .firstName("Jane")
+                        .lastName("Doe")
+                        .aggregateVersion(0)
+                        .updatedAt(Instant.now())
+                        .build()));
+        when(timeEntryRepository.findApprovedForExport(
+                        eq(TimeEntryStatus.APPROVED), any(), any(), eq(List.of(locationId))))
+                .thenReturn(List.of(approved));
+
+        List<ApprovedTimeExportResponse> result = service.getApprovedTimeForExport(
+                LocalDate.parse("2026-02-10"),
+                LocalDate.parse("2026-02-10"),
+                List.of(locationId),
+                "test-actor",
+                "corr-1");
+
+        assertEquals("0.00", result.get(0).hoursWorked().toPlainString());
+    }
+
+    @Test
     void getApprovedTimeForExport_emptyResultReturns200EquivalentList() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(true);

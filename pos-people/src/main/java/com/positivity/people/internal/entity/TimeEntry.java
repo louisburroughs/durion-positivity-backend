@@ -55,6 +55,13 @@ public class TimeEntry {
     @Column(name = "timesheet_id")
     private String timesheetId;
 
+    /**
+     * The work session whose submission produced this entry (#1564), or null for entries
+     * from another source. Unique, so a replayed submit cannot record the same session twice.
+     */
+    @Column(name = "work_session_id", columnDefinition = "UUID", unique = true)
+    private UUID workSessionId;
+
     @Column(name = "location_id")
     private UUID locationId;
 
@@ -63,6 +70,13 @@ public class TimeEntry {
 
     @Column(name = "attendance_end_at")
     private Instant attendanceEndAt;
+
+    /**
+     * Break time taken inside the attendance window. The window is gross wall-clock time, so
+     * consumers reporting worked time (the payroll export) subtract this to get net minutes.
+     */
+    @Column(name = "break_minutes")
+    private Integer breakMinutes;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")

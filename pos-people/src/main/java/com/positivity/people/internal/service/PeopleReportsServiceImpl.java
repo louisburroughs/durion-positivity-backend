@@ -122,9 +122,12 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                         && entry.getAttendanceEndAt() != null
                         && !entry.getAttendanceEndAt().isBefore(entry.getAttendanceStartAt()))
                 .map(entry -> {
-                    BigDecimal hoursWorked = BigDecimal.valueOf(
-                                    Duration.between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt())
-                                            .toMinutes())
+                    // The attendance window is gross wall-clock time, so breaks taken inside it
+                    // are deducted here to export worked hours rather than time on site (#1564).
+                    long grossMinutes = Duration.between(entry.getAttendanceStartAt(), entry.getAttendanceEndAt())
+                            .toMinutes();
+                    long breakMinutes = entry.getBreakMinutes() == null ? 0L : entry.getBreakMinutes();
+                    BigDecimal hoursWorked = BigDecimal.valueOf(Math.max(0L, grossMinutes - breakMinutes))
                             .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
                     String employeeId = getPersonIdString(entry);

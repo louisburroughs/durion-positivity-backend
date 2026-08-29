@@ -9,20 +9,28 @@ import static org.mockito.Mockito.when;
 import com.positivity.people.internal.dto.BreakDto;
 import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
+import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.WorkSession;
 import com.positivity.people.internal.entity.WorkSessionBreak;
+import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
+import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.repository.WorkSessionBreakRepository;
 import com.positivity.people.internal.repository.WorkSessionRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -40,6 +48,12 @@ class WorkSessionServiceTest {
     @Mock
     private ExtPersonReplicaRepository extPersonReplicaRepository;
 
+    @Mock
+    private TimeEntryRepository timeEntryRepository;
+
+    @Mock
+    private EmployeeLocationAssignmentRepository locationAssignmentRepository;
+
     private WorkSessionService service;
 
     private UUID personId;
@@ -47,11 +61,25 @@ class WorkSessionServiceTest {
     @BeforeEach
     void setUp() {
         service = new WorkSessionServiceImpl(
-                workSessionRepository, workSessionBreakRepository, extPersonReplicaRepository, Clock.systemUTC());
+                workSessionRepository,
+                workSessionBreakRepository,
+                extPersonReplicaRepository,
+                timeEntryRepository,
+                locationAssignmentRepository,
+                Clock.systemUTC());
         personId = UUID.fromString("10000000-0000-0000-0000-000000000001");
         org.mockito.Mockito.lenient()
                 .when(extPersonReplicaRepository.existsById(personId))
                 .thenReturn(true);
+    }
+
+    private static EmployeeLocationAssignment assignmentAt(UUID locationId) {
+        // Built field-by-field rather than via the builder: the builder requires the employee
+        // association, which this service never reads.
+        EmployeeLocationAssignment assignment = new EmployeeLocationAssignment();
+        assignment.setLocationId(locationId);
+        assignment.setPrimary(true);
+        return assignment;
     }
 
     @Test
@@ -321,6 +349,82 @@ class WorkSessionServiceTest {
             assertThat(result.getSubmittedAt()).isEqualTo(Instant.parse("2026-01-01T16:05:00Z"));
             verify(workSessionRepository).save(any(WorkSession.class));
         }
+    }
+
+    @Test
+    void submitSession_whenSessionEnded_writesTimeEntryAtTheAssignedLocation() {
+        UUID sessionId = UUID.fromString("55555555-5555-5555-5555-555555555555");
+        UUID locationId = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        WorkSession ended = new WorkSession();
+        ended.setSessionId(sessionId);
+        ended.setPersonId(personId);
+        ended.setStatus("ENDED");
+        ended.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
+        ended.setEndedAt(Instant.parse("2026-01-01T16:00:00Z"));
+
+        WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();
+        request.setBillableMinutes(450);
+        request.setBreakMinutes(30);
+        request.setSubmittedAt(Instant.parse("2026-01-01T16:05:00Z"));
+
+        when(workSessionRepository.findById(sessionId)).thenReturn(Optional.of(ended));
+        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
+        when(locationAssignmentRepository.findActiveByPersonIdAndDate(personId, LocalDate.of(2026, 1, 1)))
+                .thenReturn(List.of(assignmentAt(locationId)));
+
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock
+                    .when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .thenReturn("worker.user");
+
+            service.submitSession(sessionId, request);
+        }
+
+        ArgumentCaptor<TimeEntry> captor = ArgumentCaptor.forClass(TimeEntry.class);
+        verify(timeEntryRepository).save(captor.capture());
+        TimeEntry entry = captor.getValue();
+
+        assertThat(entry.getWorkSessionId()).isEqualTo(sessionId);
+        assertThat(entry.getPersonId()).isEqualTo(personId);
+        assertThat(entry.getLocationId()).isEqualTo(locationId);
+        assertThat(entry.getAttendanceStartAt()).isEqualTo(Instant.parse("2026-01-01T08:00:00Z"));
+        assertThat(entry.getAttendanceEndAt()).isEqualTo(Instant.parse("2026-01-01T16:00:00Z"));
+        assertThat(entry.getBreakMinutes()).isEqualTo(30);
+        assertThat(entry.getStatus()).isEqualTo(TimeEntryStatus.SUBMITTED);
+    }
+
+    @Test
+    void submitSession_whenPersonHasNoActiveAssignment_stillWritesTimeEntryWithoutLocation() {
+        UUID sessionId = UUID.fromString("77777777-7777-7777-7777-777777777777");
+        WorkSession ended = new WorkSession();
+        ended.setSessionId(sessionId);
+        ended.setPersonId(personId);
+        ended.setStatus("ENDED");
+        ended.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
+        ended.setEndedAt(Instant.parse("2026-01-01T16:00:00Z"));
+
+        WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();
+        request.setBillableMinutes(480);
+        request.setBreakMinutes(0);
+        request.setSubmittedAt(Instant.parse("2026-01-01T16:05:00Z"));
+
+        when(workSessionRepository.findById(sessionId)).thenReturn(Optional.of(ended));
+        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
+        when(locationAssignmentRepository.findActiveByPersonIdAndDate(personId, LocalDate.of(2026, 1, 1)))
+                .thenReturn(List.of());
+
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock
+                    .when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .thenReturn("worker.user");
+
+            service.submitSession(sessionId, request);
+        }
+
+        ArgumentCaptor<TimeEntry> captor = ArgumentCaptor.forClass(TimeEntry.class);
+        verify(timeEntryRepository).save(captor.capture());
+        assertThat(captor.getValue().getLocationId()).isNull();
+        assertThat(captor.getValue().getStatus()).isEqualTo(TimeEntryStatus.SUBMITTED);
     }
 
     @Test
