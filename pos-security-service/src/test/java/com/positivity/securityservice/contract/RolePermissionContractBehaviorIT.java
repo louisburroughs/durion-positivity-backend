@@ -61,7 +61,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
                         "id", "pricing:price_book:edit",
                         "description", "Edit price book entries"))));
 
-        mockMvc.perform(withSystemAdminAuth(post("/v1/users/permissions/registerPermissions")
+        mockMvc.perform(withSystemAdminAuth(post("/v1/permissions/registerPermissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isOk());
@@ -77,7 +77,7 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
                         "id", "invalid_key",
                         "description", "Invalid key"))));
 
-        mockMvc.perform(withSystemAdminAuth(post("/v1/users/permissions/registerPermissions")
+        mockMvc.perform(withSystemAdminAuth(post("/v1/permissions/registerPermissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isBadRequest());
@@ -91,18 +91,18 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
         String payload = objectMapper.writeValueAsString(
                 Map.of("permissions", List.of(Map.of("id", permissionKey, "description", "Edit price book entries"))));
 
-        mockMvc.perform(withSystemAdminAuth(post("/v1/users/permissions/registerPermissions")
+        mockMvc.perform(withSystemAdminAuth(post("/v1/permissions/registerPermissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(withSystemAdminAuth(post("/v1/users/permissions/registerPermissions")
+        mockMvc.perform(withSystemAdminAuth(post("/v1/permissions/registerPermissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isOk());
 
         String queryResponse = mockMvc.perform(
-                        withSystemAdminAuth(get("/v1/users/permissions").param("domain", "pricing")))
+                        withSystemAdminAuth(get("/v1/permissions").param("domain", "pricing")))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
