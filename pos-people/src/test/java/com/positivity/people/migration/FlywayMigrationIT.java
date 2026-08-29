@@ -40,9 +40,11 @@ class FlywayMigrationIT {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         // HR-only schema (ADR-0044 Phase 3.2, #875): identity tables dropped, replicas + outbox
-        // created; employees survive the split.
+        // created; the admin.alpha employment record survives the split. The bulk staffing seed
+        // was retired in #1554 — operational people now enter through the fixture API pipeline —
+        // so the Flyway-owned rows are the admin.alpha bootstrap only.
         assertThat(jdbc.queryForObject("SELECT count(*) FROM employee", Integer.class))
-                .isGreaterThanOrEqualTo(39);
+                .isGreaterThanOrEqualTo(1);
         assertThat(droppedTable(jdbc, "person")).isTrue();
         assertThat(droppedTable(jdbc, "person_contact_point")).isTrue();
         assertThat(droppedTable(jdbc, "user_person_links")).isTrue();
@@ -53,11 +55,19 @@ class FlywayMigrationIT {
         assertThat(hasColumn(jdbc, "event_outbox", "record_key")).isTrue();
         assertThat(hasColumn(jdbc, "processed_events", "owner")).isTrue();
 
-        // Dev-bootstrap replica seeds loaded (names + usernames for HR views).
+        // Dev-bootstrap replica seeds loaded (names + usernames for HR views), and the employment
+        // record joins to its replica person — the seed's cross-table keys still line up.
         assertThat(jdbc.queryForObject("SELECT count(*) FROM ext_people_contact_person", Integer.class))
-                .isGreaterThanOrEqualTo(39);
+                .isGreaterThanOrEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM ext_people_contact_user_link", Integer.class))
                 .isGreaterThanOrEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM employee e"
+                                + " JOIN ext_people_contact_person p ON p.person_id = e.person_id"
+                                + " JOIN ext_people_contact_user_link l ON l.person_id = e.person_id"
+                                + " WHERE l.username = 'admin.alpha'",
+                        Integer.class))
+                .isEqualTo(1);
     }
 
     private boolean hasColumn(JdbcTemplate jdbc, String table, String column) {
