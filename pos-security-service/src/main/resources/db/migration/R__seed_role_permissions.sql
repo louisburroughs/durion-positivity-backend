@@ -255,6 +255,14 @@
 --   pricing:normalization:edit. pricing:rule:view and
 --   vehicle-inventory:registry:view/registry:create already carried the
 --   correct holder set from earlier waves and needed no new grants.
+-- * inventory:cycle_count:initiate/view/complete (#1563) were granted to ADMIN
+--   alone, with every inventory role holding only
+--   inventory:cycle_count_tolerance:manage -- a role that plans a count could
+--   not initiate, read or record one. All three now also go to
+--   INVENTORY_MANAGER, INVENTORY_CONTROLLER, INVENTORY_LEAD and
+--   LOCATION_MANAGER, matching the decision on the issue. This baseline is
+--   additive only (see IDEMPOTENCY below), so an existing database needs
+--   V32__grant_cycle_count_to_inventory_roles.sql alongside this change.
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -1386,6 +1394,9 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:create'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:override'),
     ('INVENTORY_CONTROLLER', 'inventory:adjustment:view'),
+    ('INVENTORY_CONTROLLER', 'inventory:cycle_count:complete'),
+    ('INVENTORY_CONTROLLER', 'inventory:cycle_count:initiate'),
+    ('INVENTORY_CONTROLLER', 'inventory:cycle_count:view'),
     ('INVENTORY_CONTROLLER', 'inventory:cycle_count_tolerance:manage'),
     ('INVENTORY_CONTROLLER', 'inventory:location:sync'),
     ('INVENTORY_CONTROLLER', 'inventory:lot:manage'),
@@ -1432,6 +1443,9 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'inventory:asn:view'),
     ('INVENTORY_LEAD', 'inventory:availability:read'),
     ('INVENTORY_LEAD', 'inventory:availability:search'),
+    ('INVENTORY_LEAD', 'inventory:cycle_count:complete'),
+    ('INVENTORY_LEAD', 'inventory:cycle_count:initiate'),
+    ('INVENTORY_LEAD', 'inventory:cycle_count:view'),
     ('INVENTORY_LEAD', 'inventory:goods_receipt:create'),
     ('INVENTORY_LEAD', 'inventory:goods_receipt:view'),
     ('INVENTORY_LEAD', 'inventory:issue:parts'),
@@ -1472,6 +1486,9 @@ FROM (VALUES
     ('INVENTORY_MANAGER', 'inventory:adjustment:approve'),
     ('INVENTORY_MANAGER', 'inventory:adjustment:create'),
     ('INVENTORY_MANAGER', 'inventory:adjustment:view'),
+    ('INVENTORY_MANAGER', 'inventory:cycle_count:complete'),
+    ('INVENTORY_MANAGER', 'inventory:cycle_count:initiate'),
+    ('INVENTORY_MANAGER', 'inventory:cycle_count:view'),
     ('INVENTORY_MANAGER', 'inventory:cycle_count_tolerance:manage'),
     ('INVENTORY_MANAGER', 'inventory:location:sync'),
     ('INVENTORY_MANAGER', 'inventory:lot:manage'),
@@ -1528,6 +1545,9 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'crm:tag:view'),
     ('LOCATION_MANAGER', 'crm:vehicle:view'),
     ('LOCATION_MANAGER', 'inventory:availability:read'),
+    ('LOCATION_MANAGER', 'inventory:cycle_count:complete'),
+    ('LOCATION_MANAGER', 'inventory:cycle_count:initiate'),
+    ('LOCATION_MANAGER', 'inventory:cycle_count:view'),
     ('LOCATION_MANAGER', 'inventory:pick_list:create'),
     ('LOCATION_MANAGER', 'inventory:pick_list:execute'),
     ('LOCATION_MANAGER', 'inventory:pick_list:view'),
