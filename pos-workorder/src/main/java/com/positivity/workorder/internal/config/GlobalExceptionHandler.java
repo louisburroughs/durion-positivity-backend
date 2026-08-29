@@ -13,8 +13,6 @@ import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsist
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
-import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
-import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
@@ -264,16 +262,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleTravelSegmentConflict(
             TravelSegmentConflictException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.CONFLICT, "TRAVEL_SEGMENT_CONFLICT", ex.getMessage(), request);
-    }
-
-    @ExceptionHandler(TimeEntryNotFoundException.class)
-    public ResponseEntity<ApiError> handleTimeEntryNotFound(TimeEntryNotFoundException ex, HttpServletRequest request) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, "TIME_ENTRY_NOT_FOUND", ex.getMessage(), request);
-    }
-
-    @ExceptionHandler(TimeEntryStateException.class)
-    public ResponseEntity<ApiError> handleTimeEntryState(TimeEntryStateException ex, HttpServletRequest request) {
-        return buildErrorResponse(HttpStatus.CONFLICT, "TIME_ENTRY_INVALID_STATE", ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateSubstituteLinkException.class)

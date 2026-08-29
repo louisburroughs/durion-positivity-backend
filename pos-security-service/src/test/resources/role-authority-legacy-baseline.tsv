@@ -287,8 +287,6 @@ ADMIN	workorder:operationalContext:override
 ADMIN	workorder:parts:add
 ADMIN	workorder:parts:consume
 ADMIN	workorder:parts:view
-ADMIN	workorder:timeEntry:approve
-ADMIN	workorder:timeEntry:reject
 ADMIN	workorder:wip:view
 ADMIN	workorder:wip:view_all_locations
 ADMIN	workorder:workorder:approve
@@ -343,8 +341,6 @@ GENERAL_MANAGER	pricing:promotion:view
 GENERAL_MANAGER	security:permission:view
 GENERAL_MANAGER	security:role:assign
 GENERAL_MANAGER	security:role:view
-GENERAL_MANAGER	workorder:timeEntry:approve
-GENERAL_MANAGER	workorder:timeEntry:reject
 LOCATION_MANAGER	appointments:cancel
 LOCATION_MANAGER	appointments:create
 LOCATION_MANAGER	appointments:reschedule
@@ -411,8 +407,6 @@ LOCATION_MANAGER	workorder:operationalContext:override
 LOCATION_MANAGER	workorder:parts:add
 LOCATION_MANAGER	workorder:parts:consume
 LOCATION_MANAGER	workorder:parts:view
-LOCATION_MANAGER	workorder:timeEntry:approve
-LOCATION_MANAGER	workorder:timeEntry:reject
 LOCATION_MANAGER	workorder:wip:view
 LOCATION_MANAGER	workorder:workorder:approve
 LOCATION_MANAGER	workorder:workorder:assign-technician
@@ -433,8 +427,6 @@ MANAGER	pricing:promotion:view
 MANAGER	security:permission:view
 MANAGER	security:role:assign
 MANAGER	security:role:view
-MANAGER	workorder:timeEntry:approve
-MANAGER	workorder:timeEntry:reject
 SERVICE_ADVISOR	appointments:cancel
 SERVICE_ADVISOR	appointments:create
 SERVICE_ADVISOR	appointments:reschedule
@@ -472,8 +464,6 @@ SERVICE_ADVISOR	workorder:estimate_snapshot:view
 SERVICE_ADVISOR	workorder:invoice:view
 SERVICE_ADVISOR	workorder:labor:view
 SERVICE_ADVISOR	workorder:parts:view
-SERVICE_ADVISOR	workorder:timeEntry:approve
-SERVICE_ADVISOR	workorder:timeEntry:reject
 SERVICE_ADVISOR	workorder:wip:view
 SERVICE_ADVISOR	workorder:workorder:approve
 SERVICE_ADVISOR	workorder:workorder:complete

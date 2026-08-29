@@ -54,8 +54,6 @@ tags:
   name: Estimate API
 - description: Endpoints for Work-In-Progress status visibility
   name: WIP Dashboard
-- description: Endpoints for approving and rejecting submitted time entries
-  name: Time Entry API
 paths:
   /v1/workexec:
     get:
@@ -2629,94 +2627,6 @@ paths:
       - Workorder Search
       x-required-permissions:
       - workorder:workorder:view
-  /v1/workorders/timeEntries/{timeEntryId}/approve:
-    post:
-      description: 'Approves a SUBMITTED time entry, stamping the approving user and decision timestamp so the hours can flow onward in the workorder timekeeping workflow.
-
-        Use this tool when a supervisor accepts a technician''s submitted hours; do not use rejectTimeEntry, which marks the entry REJECTED with a reason instead.
-
-        Preconditions: the time entry must exist and be in SUBMITTED status; entries already APPROVED or REJECTED cannot be re-decided.
-
-        Required inputs: timeEntryId (UUID) as a path parameter; there is no request body, and the approver identity is taken from the security context.
-
-        Emits a WORKORDER_TIME_ENTRY_APPROVED event recording the decision.
-
-        Returns 404 when no time entry exists for the id, and 409 when the entry is not in SUBMITTED status.
-
-        '
-      operationId: approveTimeEntry
-      parameters:
-      - in: path
-        name: timeEntryId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TimeEntryResponse'
-          description: OK
-      security:
-      - bearerAuth:
-        - workorder:timeEntry:approve
-      summary: Approve a Submitted Time Entry
-      tags:
-      - Time Entry API
-      x-required-permissions:
-      - workorder:timeEntry:approve
-  /v1/workorders/timeEntries/{timeEntryId}/reject:
-    post:
-      description: 'Rejects a SUBMITTED time entry, recording the rejection reason, the deciding user, and the decision timestamp for technician follow-up.
-
-        Use this tool when submitted hours are wrong and must be sent back; do not use approveTimeEntry, which accepts the entry as-is.
-
-        Preconditions: the time entry must exist and be in SUBMITTED status; entries already APPROVED or REJECTED cannot be re-decided.
-
-        Required inputs: timeEntryId (UUID) as a path parameter and a body with a non-blank rejectionReason; the deciding identity is taken from the security context.
-
-        Emits a WORKORDER_TIME_ENTRY_REJECTED event carrying the rejection reason.
-
-        Returns 404 when no time entry exists for the id, and 409 when the entry is not in SUBMITTED status.
-
-        '
-      operationId: rejectTimeEntry
-      parameters:
-      - in: path
-        name: timeEntryId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      requestBody:
-        content:
-          application/json:
-            examples:
-              Rejection:
-                description: Rejection
-                value:
-                  rejectionReason: Hours overlap an existing approved entry for the same day
-            schema:
-              $ref: '#/components/schemas/RejectTimeEntryRequest'
-        description: Rejection details explaining why the submitted hours are being sent back.
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TimeEntryResponse'
-          description: OK
-      security:
-      - bearerAuth:
-        - workorder:timeEntry:reject
-      summary: Reject a Submitted Time Entry
-      tags:
-      - Time Entry API
-      x-required-permissions:
-      - workorder:timeEntry:reject
   /v1/workorders/travelSegments/start:
     post:
       description: 'Starts an IN_PROGRESS travel segment for a mobile technician, stamping the start time from the server clock and recording who created it.
@@ -7739,17 +7649,6 @@ components:
       required:
       - newTechnicianId
       type: object
-    RejectTimeEntryRequest:
-      description: Request body for rejecting a time entry
-      properties:
-        rejectionReason:
-          description: Mandatory reason for rejection
-          example: Hours exceed approved estimate
-          minLength: 1
-          type: string
-      required:
-      - rejectionReason
-      type: object
     ReopenWorkorderRequest:
       description: Request payload for controlled workorder reopen
       properties:
@@ -8260,80 +8159,6 @@ components:
           description: Work order ID
           example: 550e8400-e29b-41d4-a716-446655440001
           type: string
-      type: object
-    TimeEntryResponse:
-      description: Response representation of a time entry
-      properties:
-        createdAt:
-          description: Timestamp when the time entry was created
-          example: 2026-01-15 09:30:00+00:00
-          format: date-time
-          type: string
-        decisionAtUtc:
-          description: UTC timestamp when the approval decision was made
-          example: 2026-01-15 09:30:00+00:00
-          format: date-time
-          type: string
-        decisionByUserId:
-          description: Identifier of the user who approved or rejected the entry
-          example: 01960003-0000-7000-8000-000000000001
-          type: string
-        endAt:
-          description: Timestamp when the time entry ended
-          example: 2026-01-15 09:30:00+00:00
-          format: date-time
-          type: string
-        personId:
-          description: Identifier of the person the time entry belongs to
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-        rejectionReason:
-          description: Reason supplied when the time entry was rejected
-          example: Hours exceed scheduled shift
-          type: string
-        startAt:
-          description: Timestamp when the time entry started
-          example: 2026-01-15 09:30:00+00:00
-          format: date-time
-          type: string
-        status:
-          description: Current status of the time entry
-          enum:
-          - DRAFT
-          - SUBMITTED
-          - APPROVED
-          - REJECTED
-          example: SUBMITTED
-          type: string
-        submittedAt:
-          description: Timestamp when the time entry was submitted
-          example: 2026-01-15 09:30:00+00:00
-          format: date-time
-          type: string
-        timeEntryId:
-          description: Unique identifier of the time entry
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-        updatedAt:
-          description: Timestamp when the time entry was last updated
-          example: 2026-01-15 09:30:00+00:00
-          format: date-time
-          type: string
-        workOrderId:
-          description: Identifier of the workorder associated with the time entry
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-      required:
-      - createdAt
-      - personId
-      - startAt
-      - status
-      - timeEntryId
-      - updatedAt
-      - workOrderId
       type: object
     TravelSegmentAdjustmentResponse:
       description: Response representation of a travel segment time adjustment

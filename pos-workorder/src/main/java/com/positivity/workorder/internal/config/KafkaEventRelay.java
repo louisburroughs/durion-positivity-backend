@@ -1,8 +1,6 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.domainevents.workorder.JobTimeRecordedV1;
-import com.positivity.workorder.internal.domain.TimeEntryApprovedEvent;
-import com.positivity.workorder.internal.domain.TimeEntryRejectedEvent;
 import com.positivity.workorder.internal.domain.TravelSegmentStartedEvent;
 import com.positivity.workorder.internal.domain.TravelSegmentStoppedEvent;
 import com.positivity.workorder.internal.domain.WorkSessionStartedEvent;
@@ -70,18 +68,6 @@ public class KafkaEventRelay {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onJobTimeRecorded(JobTimeRecordedV1 event) {
         producer.publish(JobTimeRecordedV1.EVENT_TYPE, JobTimeRecordedV1.SCHEMA_VERSION, event.laborEntryId(), event);
-    }
-
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
-    public void onTimeEntryApproved(TimeEntryApprovedEvent event) {
-        producer.publish(
-                "workorder.time-entry.approved.v1", TimeEntryApprovedEvent.SCHEMA_VERSION, event.timeEntryId(), event);
-    }
-
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
-    public void onTimeEntryRejected(TimeEntryRejectedEvent event) {
-        producer.publish(
-                "workorder.time-entry.rejected.v1", TimeEntryRejectedEvent.SCHEMA_VERSION, event.timeEntryId(), event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)

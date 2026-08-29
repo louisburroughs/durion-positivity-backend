@@ -700,7 +700,15 @@ public enum PermissionCode {
     PRICING__PROMOTION__VIEW(342, "pricing:promotion:view"),
 
     // ── Workorder (new) ────────────────────────────────────────────────────────
+    /**
+     * Superseded by {@code people:timeEntry:approve}. pos-workorder's time_entry table
+     * had no writer, so the endpoint this guarded could only answer 404; employee time
+     * entries live in pos-people. Audit doc §3, #1564.
+     */
+    @Deprecated
     WORKORDER__TIMEENTRY__APPROVE(343, "workorder:timeEntry:approve"),
+    /** @deprecated see {@link #WORKORDER__TIMEENTRY__APPROVE}; superseded by {@code people:timeEntry:reject} */
+    @Deprecated
     WORKORDER__TIMEENTRY__REJECT(344, "workorder:timeEntry:reject"),
     // ── Workorder (new) ────────────────────────────────────────────────────────
     WORKORDER__LABOR__ADD_ON_BEHALF(345, "workorder:labor:add_on_behalf"),

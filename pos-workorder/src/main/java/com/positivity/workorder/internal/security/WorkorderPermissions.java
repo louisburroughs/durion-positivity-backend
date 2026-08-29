@@ -113,12 +113,6 @@ public final class WorkorderPermissions {
     /** View parts on workorder. */
     public static final String PARTS_VIEW = "workorder:parts:view";
 
-    /** Approve timeEntry. */
-    public static final String TIMEENTRY_APPROVE = "workorder:timeEntry:approve";
-
-    /** Reject timeEntry. */
-    public static final String TIMEENTRY_REJECT = "workorder:timeEntry:reject";
-
     /** View work-in-progress dashboard for workorders. */
     public static final String WIP_VIEW = "workorder:wip:view";
 

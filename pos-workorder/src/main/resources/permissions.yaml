@@ -78,8 +78,10 @@ permissions:
     description: "View parts on workorder"
   - name: "workorder:timeEntry:approve"
     description: "Approve timeEntry"
+    deprecated: true
   - name: "workorder:timeEntry:reject"
     description: "Reject timeEntry"
+    deprecated: true
   - name: "workorder:wip:view"
     description: "View work-in-progress dashboard for workorders"
   - name: "workorder:wip:view_all_locations"
