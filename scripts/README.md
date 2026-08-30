@@ -375,7 +375,9 @@ collects (#1580).
 ```
 
 **Checks:**
-- Modules with a `Dockerfile` that have no compose service
+- Modules with a `Dockerfile` that have no compose service, and deployed modules whose `Dockerfile`
+  is gone (anchoring on the `Dockerfile` means a module that loses one would otherwise drop out of
+  every other check rather than fail it)
 - Each of the four remaining lists, in both directions: a deployed service with no entry, and an
   entry for a service that is not deployed
 - Gateway `lb://` routes pointing at a service in no deploy list (they can only 503)
@@ -420,6 +422,12 @@ long enough for a human to investigate (#1578, #1579).
   `DomainTopics.events/commands/manifest("domain")` calls, and `*_TOPIC = "..."` constants (produced)
 - `<topic>.dlq` for every consumed topic — the DLQ set is not declared anywhere, it is implied by
   `record.topic() + ".dlq"` in the twelve `KafkaErrorHandlingConfig` classes (ADR-0044 §4)
+
+A `DomainTopics` call taking a constant (`DomainTopics.events(ORDER_DOMAIN)`) is resolved against
+the same file — the names are not globally unique, `OWNER` being `"supplier"` in one pos-catalog
+class and `"inventory"` in another. A reference that cannot be resolved to a literal is a hard
+error, never a silent omission: dropping one quietly reproduces the gap this script exists to
+close.
 
 **Notes:**
 - Retention follows the suffix: `.dlq` 30d, `.manifest.v1` 3d, everything else 7d.

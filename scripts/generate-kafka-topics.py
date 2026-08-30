@@ -79,7 +79,14 @@ NON_CONFORMING_NOTE = {
 
 # A @KafkaListener annotation spans several lines, so match across them.
 LISTENER_TOPICS = re.compile(r"@KafkaListener\((?:[^()]|\([^()]*\))*?topics\s*=\s*\"([^\"]+)\"", re.S)
-DOMAIN_TOPICS_CALL = re.compile(r"DomainTopics\.(events|commands|manifest)\(\s*\"([a-z][a-z0-9-]*)\"\s*\)")
+# The domain argument is a literal in most call sites and a constant in a few
+# (DomainTopics.events(ORDER_DOMAIN)). Both forms are matched; a constant is
+# resolved against the same file, because the names are not globally unique —
+# OWNER is "supplier" in one pos-catalog class and "inventory" in another.
+DOMAIN_TOPICS_CALL = re.compile(
+    r"DomainTopics\.(events|commands|manifest)\(\s*(?:\"([a-z][a-z0-9-]*)\"|([A-Z][A-Z0-9_]*))\s*\)"
+)
+STRING_CONSTANT = re.compile(r"\b([A-Z][A-Z0-9_]*)\s*=\s*\"([^\"]*)\"")
 TOPIC_CONSTANT = re.compile(r"[A-Z][A-Z0-9_]*_TOPIC\s*=\s*\"([^\"]+)\"")
 YAML_TOPIC_LINE = re.compile(r"^\s*[a-z0-9-]*topic:\s*(\S+)\s*(?:#.*)?$")
 PLACEHOLDER = re.compile(r"^\$\{([^:}]+)(?::(.*))?\}$")
@@ -135,9 +142,14 @@ def resolve(raw: str, by_leaf_key: dict[str, str] | None = None) -> str | None:
 
 
 def collect() -> tuple[set[str], set[str]]:
-    """Return (consumed, produced) topic-name sets."""
+    """Return (consumed, produced) topic-name sets.
+
+    A topic this cannot resolve is an error, never a silent omission: quietly
+    dropping one reproduces exactly the gap this script exists to close.
+    """
     consumed: set[str] = set()
     produced: set[str] = set()
+    unresolved: list[str] = []
 
     for module in module_dirs():
         yaml_topics, by_leaf_key = yaml_topic_properties(module)
@@ -148,16 +160,35 @@ def collect() -> tuple[set[str], set[str]]:
             continue
         for path in sorted(sources.rglob("*.java")):
             text = path.read_text(encoding="utf-8")
+            where = path.relative_to(ROOT)
+
             for raw in LISTENER_TOPICS.findall(text):
                 topic = resolve(raw, by_leaf_key)
                 if topic:
                     consumed.add(topic)
-            for kind, domain in DOMAIN_TOPICS_CALL.findall(text):
-                produced.add(f"{domain}.{kind}.v1")
+                else:
+                    unresolved.append(f"{where}: @KafkaListener topics = \"{raw}\"")
+
+            constants = dict(STRING_CONSTANT.findall(text))
+            for kind, literal, constant in DOMAIN_TOPICS_CALL.findall(text):
+                domain = literal or constants.get(constant)
+                if domain and TOPIC_NAME.match(domain):
+                    produced.add(f"{domain}.{kind}.v1")
+                else:
+                    unresolved.append(f"{where}: DomainTopics.{kind}({constant})")
+
             for raw in TOPIC_CONSTANT.findall(text):
                 topic = resolve(raw)
                 if topic:
                     produced.add(topic)
+
+    if unresolved:
+        sys.exit(
+            "ERROR: could not resolve these topic references to a literal name.\n"
+            "Provisioning them is not optional — resolve them here, or the topics\n"
+            "they name land on broker defaults with nothing to notice:\n  "
+            + "\n  ".join(dict.fromkeys(unresolved))
+        )
 
     return consumed, produced
 

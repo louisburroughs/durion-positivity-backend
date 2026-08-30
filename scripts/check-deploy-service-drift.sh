@@ -235,6 +235,14 @@ report "module has a Dockerfile but no compose service" \
   "$missing_compose" \
   "Add a service to ${COMPOSE} with build.context ./<module>, or add an ALLOWLIST entry in $0 saying why it is not deployed."
 
+# The other direction. Anchoring the universe on the Dockerfile means a module
+# that loses one drops out of every check above rather than failing them, so it
+# needs its own: a deployed service whose Dockerfile is gone builds nothing.
+missing_dockerfile=$(comm -13 <(echo "$dockerfile_modules") <(echo "$compose_backend_modules") || true)
+report "module is wired for deployment but has no Dockerfile" \
+  "$missing_dockerfile" \
+  "Restore <module>/Dockerfile, or remove the module from all five deploy lists. The ECR build resolves the image from <module>/Dockerfile and fails without it."
+
 check_list() {
   # check_list <label> <expected-newline-list> <actual-newline-list> <remedy-missing> <remedy-stale>
   local label="$1" expected="$2" actual="$3" remedy_missing="$4" remedy_stale="$5"
