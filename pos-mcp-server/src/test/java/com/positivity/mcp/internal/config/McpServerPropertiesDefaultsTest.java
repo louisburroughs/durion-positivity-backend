@@ -72,7 +72,9 @@ class McpServerPropertiesDefaultsTest {
         new ApplicationContextRunner()
                 .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
                 .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.agent.candidate-tool-limit"))
-                        .isEqualTo("8"));
+                        // W1.4 (analytics-capability-plan.md §3): widened from 8 so analytical
+                        // intents stop starving multi-domain questions of candidate tools.
+                        .isEqualTo("16"));
     }
 
     private static org.springframework.context.ApplicationContextInitializer<

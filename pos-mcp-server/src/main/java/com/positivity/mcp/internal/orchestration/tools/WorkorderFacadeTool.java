@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.tool.annotation.Tool;
@@ -38,13 +39,36 @@ public class WorkorderFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search workorders by customer, status, or vehicle criteria")
-    public String searchWorkorders(@ToolParam(description = "Search query for workorders") @NonNull String query) {
-        return restClient
-                .get()
-                .uri(workorderSearchUriTemplate, Map.of("query", query))
-                .retrieve()
-                .body(String.class);
+    @Tool(
+            description = "Search workorders by a free-text query matched against customer name or a literal "
+                    + "workorder id (a query that parses as a UUID is treated as a workorder id), optionally "
+                    + "narrowed by an exact customerId and/or vehicleId. These are the only filters — there is "
+                    + "no status or date filtering. Returns only the first page of matches (default size 25).")
+    public String searchWorkorders(
+            @ToolParam(description = "Free-text query matching customer name or a literal workorder id") @NonNull
+                    String query,
+            @ToolParam(
+                            description = "Optional exact customer id (UUID) filter, combinable with the query",
+                            required = false)
+                    String customerId,
+            @ToolParam(
+                            description = "Optional exact vehicle id (UUID) filter, combinable with the query",
+                            required = false)
+                    String vehicleId) {
+        StringBuilder template = new StringBuilder(workorderSearchUriTemplate);
+        Map<String, String> uriParams = new HashMap<>();
+        uriParams.put("query", query);
+        appendQueryParam(template, uriParams, "customerId", customerId);
+        appendQueryParam(template, uriParams, "vehicleId", vehicleId);
+        return restClient.get().uri(template.toString(), uriParams).retrieve().body(String.class);
+    }
+
+    private static void appendQueryParam(
+            StringBuilder template, Map<String, String> uriParams, String name, String value) {
+        if (value != null && !value.isBlank()) {
+            template.append('&').append(name).append("={").append(name).append('}');
+            uriParams.put(name, value);
+        }
     }
 
     @Tool(

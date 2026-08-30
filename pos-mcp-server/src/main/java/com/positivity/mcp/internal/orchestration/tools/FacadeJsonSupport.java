@@ -46,15 +46,30 @@ final class FacadeJsonSupport {
      * Collapse the invoice line rows returned by {@code GET /v1/invoices/items/search} into one
      * entry per owning invoice: grouped by {@code invoiceId} (falling back to
      * {@code invoiceNumber}), keeping the invoice-identifying fields plus a {@code lineCount} of
-     * matched lines.
+     * matched lines. The result is wrapped in a truncation envelope because the backing endpoint
+     * bounds its answer to the newest {@code lineCap} line rows: {@code truncated} is true when
+     * the scan hit that bound (so older invoices may exist beyond it), and
+     * {@code coveredFrom}/{@code coveredTo} carry the oldest and newest {@code invoiceCreatedAt}
+     * actually scanned (null when the rows carry no timestamps).
      */
-    static @NonNull String distinctInvoicesFromLineRows(@NonNull String json) {
+    static @NonNull String distinctInvoicesFromLineRows(@NonNull String json, int lineCap) {
         JsonNode root = readTree(json);
         if (root == null || !root.isArray()) {
             return json;
         }
         Map<String, ObjectNode> byInvoice = new LinkedHashMap<>();
+        String coveredFrom = null;
+        String coveredTo = null;
         for (JsonNode line : root) {
+            String createdAt = text(line, "invoiceCreatedAt");
+            if (createdAt != null) {
+                if (coveredFrom == null || createdAt.compareTo(coveredFrom) < 0) {
+                    coveredFrom = createdAt;
+                }
+                if (coveredTo == null || createdAt.compareTo(coveredTo) > 0) {
+                    coveredTo = createdAt;
+                }
+            }
             String key = text(line, "invoiceId") != null ? text(line, "invoiceId") : text(line, "invoiceNumber");
             if (key == null) {
                 continue;
@@ -69,7 +84,16 @@ final class FacadeJsonSupport {
         }
         ArrayNode invoices = MAPPER.createArrayNode();
         byInvoice.values().forEach(invoices::add);
-        return write(invoices, json);
+        ObjectNode envelope = MAPPER.createObjectNode();
+        envelope.put("truncated", root.size() >= lineCap);
+        envelope.put("coveredFrom", coveredFrom);
+        envelope.put("coveredTo", coveredTo);
+        envelope.set("invoices", invoices);
+        try {
+            return MAPPER.writeValueAsString(envelope);
+        } catch (JsonProcessingException exception) {
+            return json;
+        }
     }
 
     /**

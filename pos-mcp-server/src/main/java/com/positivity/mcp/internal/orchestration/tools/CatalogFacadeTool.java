@@ -40,7 +40,9 @@ public class CatalogFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search catalog products by free-text query matching name, SKU, part number, or keyword")
+    @Tool(
+            description = "Search catalog products by free-text query matching name, SKU, part number, or "
+                    + "keyword. Returns only the first page of matches (default size 20).")
     public String searchCatalog(@ToolParam(description = "Search query for catalog products") @NonNull String query) {
         return restClient
                 .get()
@@ -51,7 +53,8 @@ public class CatalogFacadeTool {
 
     @Tool(
             description = "List catalog products in a category. category is the category name or code used by "
-                    + "the product search's category filter.")
+                    + "the product search's category filter. Returns only the first page of matches (default "
+                    + "size 20).")
     public String getCatalogByCategory(
             @ToolParam(description = "Catalog category name or code") @NonNull String category) {
         return restClient

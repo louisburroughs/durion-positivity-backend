@@ -43,7 +43,7 @@ public class VehicleFacadeTool {
     @Tool(
             description = "Search vehicles by VIN, make, model, year, or plate. The query must be at least 3 "
                     + "characters; the vehicle service additionally requires 6 characters for VIN-shaped "
-                    + "fragments.")
+                    + "fragments. Returns at most the first 25 matches (the service's default result limit).")
     public String searchVehicles(
             @ToolParam(description = "Search query, minimum 3 characters (6 for VIN fragments)") @NonNull
                     String query) {

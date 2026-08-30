@@ -41,7 +41,8 @@ public class OrderFacadeTool {
     @Tool(
             description = "List sales orders (carts), optionally filtered by status (an order status name such "
                     + "as DRAFT), clerkId, or terminalId. These are the only filters — there is no customer, "
-                    + "date-range, or free-text order search. Results are paginated.")
+                    + "date-range, or free-text order search. Returns only the first page of results (default "
+                    + "size 20).")
     public String listOrders(
             @ToolParam(description = "Optional order status name, e.g. DRAFT", required = false) String status,
             @ToolParam(description = "Optional clerk identifier", required = false) String clerkId,

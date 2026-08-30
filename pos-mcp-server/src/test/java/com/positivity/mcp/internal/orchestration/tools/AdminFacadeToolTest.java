@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -43,8 +44,23 @@ class AdminFacadeToolTest {
                 builder,
                 BASE_URL,
                 BASE_URL,
+                contract("listUsers").template(),
                 contract("getUserPermissions").template(),
                 contract("getAuditLog").template());
+    }
+
+    @Test
+    @DisplayName("listUsers calls the security-service users list path, not the bare base URL")
+    void listUsers_callsUsersListPath() {
+        mockServer
+                .expect(requestTo(BASE_URL + "/security-service/v1/users"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        String result = tool.listUsers();
+
+        assertThat(result).isEqualTo("[]");
+        mockServer.verify();
     }
 
     @Test

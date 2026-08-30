@@ -52,8 +52,9 @@ public class CustomerFacadeTool {
 
     @Tool(
             description = "Search the unified customer directory (commercial accounts and individual customers) "
-                    + "by name. The match is case-insensitive contains on the customer name; results are "
-                    + "paginated.")
+                    + "by name. The match is case-insensitive contains on the customer name; status, party "
+                    + "type, and customer number cannot be filtered here. Returns only the first page of "
+                    + "matches (default size 20).")
     public String searchCustomers(@ToolParam(description = "Customer name (or part of it)") @NonNull String query) {
         return restClient
                 .get()
@@ -68,7 +69,9 @@ public class CustomerFacadeTool {
                     + "(the CRM party snapshot), interactions (the interaction timeline, newest first), "
                     + "invoices (the customer's invoice line items), and workorders (the customer's "
                     + "workorders). Every section is optional: one the caller is not authorized for, or "
-                    + "that fails, reports its own status while the rest still answer.")
+                    + "that fails, reports its own status while the rest still answer. Sections are bounded: "
+                    + "invoices carries only the newest 200 invoice line items, interactions the first page "
+                    + "(default size 50), and workorders the first page (default size 25).")
     public String getCustomerHistory(
             @ToolParam(description = "The customer's party id (UUID)") @NonNull String customerId) {
         Map<String, String> uriParams = Map.of("partyId", customerId);

@@ -57,7 +57,8 @@ public class HrFacadeTool {
             description = "Search employees by a case-insensitive substring match against first name, last "
                     + "name, preferred name, and employee number. query may be blank to list every employee. "
                     + "Use this tool for listing or typeahead lookups; use getEmployee instead when the "
-                    + "employee's id is already known.")
+                    + "employee's id is already known. Returns only the first page of matches (default size "
+                    + "20).")
     public String searchEmployees(
             @ToolParam(description = "Case-insensitive substring match; blank lists all employees", required = false)
                     String query) {
