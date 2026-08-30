@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -63,10 +65,10 @@ final class FacadeJsonSupport {
         for (JsonNode line : root) {
             String createdAt = text(line, "invoiceCreatedAt");
             if (createdAt != null) {
-                if (coveredFrom == null || createdAt.compareTo(coveredFrom) < 0) {
+                if (coveredFrom == null || compareTimestamps(createdAt, coveredFrom) < 0) {
                     coveredFrom = createdAt;
                 }
-                if (coveredTo == null || createdAt.compareTo(coveredTo) > 0) {
+                if (coveredTo == null || compareTimestamps(createdAt, coveredTo) > 0) {
                     coveredTo = createdAt;
                 }
             }
@@ -89,10 +91,29 @@ final class FacadeJsonSupport {
         envelope.put("coveredFrom", coveredFrom);
         envelope.put("coveredTo", coveredTo);
         envelope.set("invoices", invoices);
+        // Fallback stays envelope-shaped: returning the raw line rows here would hand the model
+        // an un-flagged, possibly truncated array — the exact silent-truncation failure this
+        // envelope exists to prevent.
+        return write(
+                envelope,
+                "{\"truncated\":" + (root.size() >= lineCap)
+                        + ",\"coveredFrom\":null,\"coveredTo\":null,\"invoices\":[],"
+                        + "\"error\":\"invoice line rows could not be re-serialized\"}");
+    }
+
+    /**
+     * Order two {@code invoiceCreatedAt} values on the instant timeline when both parse as
+     * offset timestamps; lexicographic order is only the fallback. Mixed offsets (e.g.
+     * {@code +02:00} beside {@code Z}) or varying fractional precision would otherwise misorder
+     * the covered-range endpoints.
+     */
+    private static int compareTimestamps(String left, String right) {
         try {
-            return MAPPER.writeValueAsString(envelope);
-        } catch (JsonProcessingException exception) {
-            return json;
+            return OffsetDateTime.parse(left)
+                    .toInstant()
+                    .compareTo(OffsetDateTime.parse(right).toInstant());
+        } catch (DateTimeParseException exception) {
+            return left.compareTo(right);
         }
     }
 
@@ -108,11 +129,7 @@ final class FacadeJsonSupport {
         }
         ObjectNode projected = MAPPER.createObjectNode();
         copyIfPresent(root, projected, "workorderId", "id", "workorderNumber", "status");
-        try {
-            return MAPPER.writeValueAsString(projected);
-        } catch (JsonProcessingException exception) {
-            return json;
-        }
+        return write(projected, json);
     }
 
     private static JsonNode readTree(String json) {
@@ -123,9 +140,9 @@ final class FacadeJsonSupport {
         }
     }
 
-    private static String write(ArrayNode array, String fallback) {
+    private static String write(JsonNode node, String fallback) {
         try {
-            return MAPPER.writeValueAsString(array);
+            return MAPPER.writeValueAsString(node);
         } catch (JsonProcessingException exception) {
             return fallback;
         }

@@ -13,8 +13,11 @@ import org.springframework.web.client.RestClient;
 public class InvoiceFacadeTool {
 
     /**
-     * The backing {@code searchInvoiceLines} endpoint bounds its answer to the newest 200 line
-     * rows; a response of exactly this many rows means the scan hit the bound.
+     * Default for the backing {@code searchInvoiceLines} bound (newest 200 line rows); a response
+     * of exactly this many rows means the scan hit the bound. The pos-invoice cap is server-side
+     * and not discoverable from the response, so the effective value is configurable
+     * ({@code pos.invoice.customer-invoice-line-cap}) and must be kept aligned with the backend
+     * — a drifted value inverts the {@code truncated} signal in both directions.
      */
     static final int CUSTOMER_INVOICE_LINE_CAP = 200;
 
@@ -22,17 +25,21 @@ public class InvoiceFacadeTool {
     private final String invoiceUriTemplate;
     private final String invoiceSearchUriTemplate;
     private final String customerInvoicesUriTemplate;
+    private final int customerInvoiceLineCap;
 
     public InvoiceFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.invoice.base-url}") @NonNull String baseUrl,
             @Value("${pos.invoice.invoice-uri-template}") @NonNull String invoiceUriTemplate,
             @Value("${pos.invoice.search-uri-template}") @NonNull String invoiceSearchUriTemplate,
-            @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate) {
+            @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate,
+            @Value("${pos.invoice.customer-invoice-line-cap:" + CUSTOMER_INVOICE_LINE_CAP + "}")
+                    int customerInvoiceLineCap) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.invoiceUriTemplate = invoiceUriTemplate;
         this.invoiceSearchUriTemplate = invoiceSearchUriTemplate;
         this.customerInvoicesUriTemplate = customerInvoicesUriTemplate;
+        this.customerInvoiceLineCap = customerInvoiceLineCap;
     }
 
     @Tool(description = "Get invoice details by invoice ID")
@@ -77,6 +84,6 @@ public class InvoiceFacadeTool {
                 .body(String.class);
         return lineRows == null
                 ? null
-                : FacadeJsonSupport.distinctInvoicesFromLineRows(lineRows, CUSTOMER_INVOICE_LINE_CAP);
+                : FacadeJsonSupport.distinctInvoicesFromLineRows(lineRows, customerInvoiceLineCap);
     }
 }

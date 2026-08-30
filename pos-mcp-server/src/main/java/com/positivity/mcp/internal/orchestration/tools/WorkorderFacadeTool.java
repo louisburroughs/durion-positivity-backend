@@ -66,7 +66,13 @@ public class WorkorderFacadeTool {
     private static void appendQueryParam(
             StringBuilder template, Map<String, String> uriParams, String name, String value) {
         if (value != null && !value.isBlank()) {
-            template.append('&').append(name).append("={").append(name).append('}');
+            // The default template carries ?q={query}, but the property is env-overridable — a
+            // path-only override must not get the filter glued onto its last path segment.
+            template.append(template.indexOf("?") >= 0 ? '&' : '?')
+                    .append(name)
+                    .append("={")
+                    .append(name)
+                    .append('}');
             uriParams.put(name, value);
         }
     }

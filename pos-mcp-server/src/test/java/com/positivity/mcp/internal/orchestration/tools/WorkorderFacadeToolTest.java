@@ -107,6 +107,26 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
+    @DisplayName("searchWorkorders starts the query string with '?' when the configured template has none")
+    void searchWorkorders_usesQuestionMarkOnQuerylessTemplate() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        WorkorderFacadeTool pathOnlyTool = new WorkorderFacadeTool(
+                builder,
+                BASE_URL,
+                contract("getWorkorder").template(),
+                "/workorder/v1/workorders/search",
+                contract("getWorkorderStatus").template());
+        server.expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?customerId=" + CUSTOMER_ID))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null);
+
+        server.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
     @DisplayName("getWorkorderStatus sends GET /workorders/{workorderId} (same endpoint as getWorkorder)")
     void getWorkorderStatus_sendsGetToWorkorderEndpoint() {
         FacadeContractManifest.Entry entry = contract("getWorkorderStatus");

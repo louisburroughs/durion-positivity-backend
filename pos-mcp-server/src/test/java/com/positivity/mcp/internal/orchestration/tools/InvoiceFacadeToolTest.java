@@ -40,7 +40,8 @@ class InvoiceFacadeToolTest {
                 BASE_URL,
                 contract("getInvoice").template(),
                 contract("searchInvoices").template(),
-                contract("getInvoicesByCustomer").template());
+                contract("getInvoicesByCustomer").template(),
+                InvoiceFacadeTool.CUSTOMER_INVOICE_LINE_CAP);
     }
 
     @Test
@@ -104,6 +105,31 @@ class InvoiceFacadeToolTest {
                 .contains("\"coveredFrom\":\"2026-07-01T09:30:00Z\"")
                 .contains("\"coveredTo\":\"2026-08-20T10:00:00Z\"")
                 .contains("\"invoices\":[");
+    }
+
+    @Test
+    @DisplayName("covered range orders mixed-offset timestamps on the instant timeline, not lexicographically")
+    void getInvoicesByCustomer_coveredRangeHandlesMixedOffsets() {
+        FacadeContractManifest.Entry entry = contract("getInvoicesByCustomer");
+        // Lexicographically "+02:00" sorts before "Z", but 10:00+02:00 == 08:00Z is the EARLIER
+        // instant and 09:00Z is the later one.
+        String lineRows = """
+                [
+                  {"invoiceId":"%s","invoiceCreatedAt":"2026-08-20T10:00:00+02:00"},
+                  {"invoiceId":"%s","invoiceCreatedAt":"2026-08-20T09:00:00Z"}
+                ]
+                """.formatted(INVOICE_A, INVOICE_B);
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("customerId", PARTY_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(lineRows, MediaType.APPLICATION_JSON));
+
+        String result = tool.getInvoicesByCustomer(PARTY_ID);
+
+        mockServer.verify();
+        assertThat(result)
+                .contains("\"coveredFrom\":\"2026-08-20T10:00:00+02:00\"")
+                .contains("\"coveredTo\":\"2026-08-20T09:00:00Z\"");
     }
 
     @Test
