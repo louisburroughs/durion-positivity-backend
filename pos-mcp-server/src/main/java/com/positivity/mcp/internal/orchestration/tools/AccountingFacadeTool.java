@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
@@ -19,6 +21,8 @@ public class AccountingFacadeTool {
     private final String incomeStatementUriTemplate;
     private final String balanceSheetUriTemplate;
     private final String trialBalanceUriTemplate;
+    private final String agedReceivablesUriTemplate;
+    private final String agedPayablesUriTemplate;
 
     public AccountingFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -27,13 +31,17 @@ public class AccountingFacadeTool {
             @Value("${pos.accounting.general-ledger-uri-template}") @NonNull String generalLedgerUriTemplate,
             @Value("${pos.accounting.income-statement-uri-template}") @NonNull String incomeStatementUriTemplate,
             @Value("${pos.accounting.balance-sheet-uri-template}") @NonNull String balanceSheetUriTemplate,
-            @Value("${pos.accounting.trial-balance-uri-template}") @NonNull String trialBalanceUriTemplate) {
+            @Value("${pos.accounting.trial-balance-uri-template}") @NonNull String trialBalanceUriTemplate,
+            @Value("${pos.accounting.aged-receivables-uri-template}") @NonNull String agedReceivablesUriTemplate,
+            @Value("${pos.accounting.aged-payables-uri-template}") @NonNull String agedPayablesUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.accountBalanceUriTemplate = accountBalanceUriTemplate;
         this.generalLedgerUriTemplate = generalLedgerUriTemplate;
         this.incomeStatementUriTemplate = incomeStatementUriTemplate;
         this.balanceSheetUriTemplate = balanceSheetUriTemplate;
         this.trialBalanceUriTemplate = trialBalanceUriTemplate;
+        this.agedReceivablesUriTemplate = agedReceivablesUriTemplate;
+        this.agedPayablesUriTemplate = agedPayablesUriTemplate;
     }
 
     @Tool(
@@ -107,5 +115,60 @@ public class AccountingFacadeTool {
                                 .retrieve()
                                 .body(String.class))
                 .render();
+    }
+
+    @Tool(
+            description = "Get the Aged Receivables report: the platform's per-customer accounts-receivable "
+                    + "(A/R) aging aggregate as of a date. Returns one row per customer with an open "
+                    + "balance — customerId, customerName, current (0-30 days), days31To60, days61To90, "
+                    + "days90Plus, totalOutstanding — plus grand totals across all rows. Use this for "
+                    + "past-due, outstanding-balance, and customer-concentration questions instead of "
+                    + "aggregating individual invoices. Calling with a PAST asOfDate reconstructs the "
+                    + "point-in-time A/R balance, so a month-end trend is one call per month-end date "
+                    + "(e.g. 2026-04-30, then 2026-05-31, then 2026-06-30). Rows are empty when no open "
+                    + "receivables exist as of the date.")
+    public String getAgedReceivables(
+            @ToolParam(description = "As-of date, YYYY-MM-DD (past dates = historical)") @NonNull String asOfDate) {
+        return restClient
+                .get()
+                .uri(agedReceivablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
+                .retrieve()
+                .body(String.class);
+    }
+
+    @Tool(
+            description = "Get the Aged Payables report: the platform's per-vendor accounts-payable (A/P) "
+                    + "aging aggregate as of a date. Returns one row per vendor with an open balance — "
+                    + "vendorId, vendorName, current (0-30 days), days31To60, days61To90, days90Plus, "
+                    + "totalOutstanding — plus grand totals across all rows. Use this for past-due, "
+                    + "outstanding-balance, and vendor-concentration questions about what the business "
+                    + "owes, instead of aggregating individual vendor bills. Calling with a PAST asOfDate "
+                    + "reconstructs the point-in-time A/P balance, so a month-end trend is one call per "
+                    + "month-end date (e.g. 2026-04-30, then 2026-05-31, then 2026-06-30). Rows are empty "
+                    + "when no open payables exist as of the date.")
+    public String getAgedPayables(
+            @ToolParam(description = "As-of date, YYYY-MM-DD (past dates = historical)") @NonNull String asOfDate) {
+        return restClient
+                .get()
+                .uri(agedPayablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
+                .retrieve()
+                .body(String.class);
+    }
+
+    /**
+     * Validates the LLM-supplied {@code asOfDate} is a real ISO date before any request is built;
+     * anything else is rejected with a message stating the accepted form so the model can
+     * self-correct (mirrors the {@link ReportingPeriods} validation style).
+     */
+    private static @NonNull String validatedAsOfDate(@NonNull String asOfDate) {
+        String trimmed = asOfDate.trim();
+        try {
+            LocalDate.parse(trimmed);
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid asOfDate '" + asOfDate + "': pass an ISO date in YYYY-MM-DD form (e.g. 2026-06-30)",
+                    exception);
+        }
+        return trimmed;
     }
 }

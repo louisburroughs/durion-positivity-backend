@@ -38,7 +38,8 @@ public class ExaWebSearchTool {
 
     @Tool(
             description = "Search the web for current information about automotive parts, "
-                    + "industry news, product specifications, or general knowledge")
+                    + "industry news, product specifications, or general knowledge. Returns a bounded set of "
+                    + "top results (default 5).")
     public @NonNull String webSearch(@ToolParam(description = "The search query") @NonNull String query) {
         if (apiKey.isBlank()) {
             logger.warn("EXA_API_KEY is not configured; skipping web search for query='{}'", query);

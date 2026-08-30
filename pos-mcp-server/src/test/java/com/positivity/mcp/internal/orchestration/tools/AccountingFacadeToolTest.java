@@ -56,7 +56,9 @@ class AccountingFacadeToolTest {
                 contract("getGeneralLedger").template(),
                 summary.leg("incomeStatement").template(),
                 summary.leg("balanceSheet").template(),
-                summary.leg("trialBalance").template());
+                summary.leg("trialBalance").template(),
+                contract("getAgedReceivables").template(),
+                contract("getAgedPayables").template());
     }
 
     @Test
@@ -214,6 +216,76 @@ class AccountingFacadeToolTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getAgedReceivables sends GET aged-receivables?asOfDate and returns body")
+    void getAgedReceivables_sendsGetWithAsOfDate() {
+        FacadeContractManifest.Entry entry = contract("getAgedReceivables");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("asOfDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"asOfDate\":\"2026-06-30\",\"rows\":[{\"customerName\":\"Acme\",\"days90Plus\":120.00}]}",
+                        MediaType.APPLICATION_JSON));
+
+        String result = tool.getAgedReceivables("2026-06-30");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("Acme").contains("days90Plus");
+    }
+
+    @Test
+    @DisplayName("getAgedPayables sends GET aged-payables?asOfDate and returns body")
+    void getAgedPayables_sendsGetWithAsOfDate() {
+        FacadeContractManifest.Entry entry = contract("getAgedPayables");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("asOfDate", "2026-03-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"rows\":[{\"vendorName\":\"PartsCo\",\"totalOutstanding\":50.00}]}",
+                        MediaType.APPLICATION_JSON));
+
+        String result = tool.getAgedPayables("2026-03-31");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("PartsCo").contains("totalOutstanding");
+    }
+
+    @Test
+    @DisplayName("getAgedReceivables trims the asOfDate before building the request URI")
+    void getAgedReceivables_trimsAsOfDate() {
+        FacadeContractManifest.Entry entry = contract("getAgedReceivables");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("asOfDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getAgedReceivables(" 2026-06-30 ");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getAgedReceivables rejects a malformed asOfDate without issuing a request")
+    void getAgedReceivables_rejectsMalformedDate() {
+        assertThatThrownBy(() -> tool.getAgedReceivables("06/30/2026"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY-MM-DD")
+                .hasMessageContaining("06/30/2026");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getAgedPayables rejects a non-existent calendar date without issuing a request")
+    void getAgedPayables_rejectsImpossibleDate() {
+        assertThatThrownBy(() -> tool.getAgedPayables("2026-02-30"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY-MM-DD");
 
         mockServer.verify();
     }

@@ -48,8 +48,9 @@ public class ShopManagerFacadeTool {
                     + "argument IS a locationId. Returns a JSON envelope with three sections: location (the "
                     + "shop's location record: name, code, address, active flag), schedule (today's schedule "
                     + "board with appointments grouped into resource lanes), and openWorkorders (the shop's "
-                    + "work-in-progress workorders). The location section is required — the status is "
-                    + "degraded without it; a failed schedule or workorder section degrades only itself.")
+                    + "work-in-progress workorders, first page only, default size 25). The location section "
+                    + "is required — the status is degraded without it; a failed schedule or workorder "
+                    + "section degrades only itself.")
     public String getShopStatus(@ToolParam(description = "The shop's location id (UUID)") @NonNull String shopId) {
         String today = LocalDate.now(clock).toString();
         return ToolComposition.named("shopStatus")
@@ -82,8 +83,9 @@ public class ShopManagerFacadeTool {
             description = "Get the active work queue for a shop by its location id (UUID) — the shopId "
                     + "argument IS a locationId. Returns a JSON envelope with two sections: openWorkorders "
                     + "(the shop's work-in-progress workorders: approved, assigned, in progress, awaiting "
-                    + "parts or approval) and schedule (today's schedule board for context). The "
-                    + "openWorkorders section is required — the status is degraded without it.")
+                    + "parts or approval — first page only, default size 25) and schedule (today's schedule "
+                    + "board for context). The openWorkorders section is required — the status is degraded "
+                    + "without it.")
     public String getShopQueue(@ToolParam(description = "The shop's location id (UUID)") @NonNull String shopId) {
         String today = LocalDate.now(clock).toString();
         return ToolComposition.named("shopQueue")

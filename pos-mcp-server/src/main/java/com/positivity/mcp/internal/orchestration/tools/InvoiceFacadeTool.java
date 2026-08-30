@@ -12,21 +12,34 @@ import org.springframework.web.client.RestClient;
 @Component
 public class InvoiceFacadeTool {
 
+    /**
+     * Default for the backing {@code searchInvoiceLines} bound (newest 200 line rows); a response
+     * of exactly this many rows means the scan hit the bound. The pos-invoice cap is server-side
+     * and not discoverable from the response, so the effective value is configurable
+     * ({@code pos.invoice.customer-invoice-line-cap}) and must be kept aligned with the backend
+     * — a drifted value inverts the {@code truncated} signal in both directions.
+     */
+    static final int CUSTOMER_INVOICE_LINE_CAP = 200;
+
     private final RestClient restClient;
     private final String invoiceUriTemplate;
     private final String invoiceSearchUriTemplate;
     private final String customerInvoicesUriTemplate;
+    private final int customerInvoiceLineCap;
 
     public InvoiceFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.invoice.base-url}") @NonNull String baseUrl,
             @Value("${pos.invoice.invoice-uri-template}") @NonNull String invoiceUriTemplate,
             @Value("${pos.invoice.search-uri-template}") @NonNull String invoiceSearchUriTemplate,
-            @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate) {
+            @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate,
+            @Value("${pos.invoice.customer-invoice-line-cap:" + CUSTOMER_INVOICE_LINE_CAP + "}")
+                    int customerInvoiceLineCap) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.invoiceUriTemplate = invoiceUriTemplate;
         this.invoiceSearchUriTemplate = invoiceSearchUriTemplate;
         this.customerInvoicesUriTemplate = customerInvoicesUriTemplate;
+        this.customerInvoiceLineCap = customerInvoiceLineCap;
     }
 
     @Tool(description = "Get invoice details by invoice ID")
@@ -38,8 +51,15 @@ public class InvoiceFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Search invoices by status, customer, date, or amount")
-    public String searchInvoices(@ToolParam(description = "Search query for invoices") @NonNull String query) {
+    @Tool(
+            description = "Search invoices by a free-text term matched against the invoice number, customer "
+                    + "name, or workorder number. Free-text match only — this tool cannot filter by status, "
+                    + "date, or amount, and returns only the first page of matches (default size 25, newest "
+                    + "first).")
+    public String searchInvoices(
+            @ToolParam(description = "Free-text term matching invoice number, customer name, or workorder number")
+                    @NonNull
+                    String query) {
         return restClient
                 .get()
                 .uri(invoiceSearchUriTemplate, Map.of("query", query))
@@ -49,9 +69,12 @@ public class InvoiceFacadeTool {
 
     @Tool(
             description = "Get the distinct invoices linked to a customer by party id (UUID). Built from the "
-                    + "customer's newest invoice line items (bounded to the newest 200 lines), de-duplicated by "
-                    + "invoice; each entry carries invoiceId, invoiceNumber, invoiceStatus, invoiceCreatedAt, "
-                    + "and the number of matched lines.")
+                    + "customer's newest invoice line items — bounded to the newest 200 lines — de-duplicated "
+                    + "by invoice; each entry carries invoiceId, invoiceNumber, invoiceStatus, "
+                    + "invoiceCreatedAt, and the number of matched lines. The result is an envelope: truncated "
+                    + "(true when the 200-line bound was hit, meaning older invoices may be missing — check it "
+                    + "before treating counts or totals as complete), coveredFrom/coveredTo (the "
+                    + "invoiceCreatedAt span actually scanned), and invoices (the de-duplicated entries).")
     public String getInvoicesByCustomer(
             @ToolParam(description = "The customer's party id (UUID)") @NonNull String customerId) {
         String lineRows = restClient
@@ -59,6 +82,8 @@ public class InvoiceFacadeTool {
                 .uri(customerInvoicesUriTemplate, Map.of("customerId", customerId))
                 .retrieve()
                 .body(String.class);
-        return lineRows == null ? null : FacadeJsonSupport.distinctInvoicesFromLineRows(lineRows);
+        return lineRows == null
+                ? null
+                : FacadeJsonSupport.distinctInvoicesFromLineRows(lineRows, customerInvoiceLineCap);
     }
 }

@@ -21,6 +21,8 @@ class WorkorderFacadeToolTest {
 
     private static final String BASE_URL = "http://api-gateway";
     private static final String WORKORDER_ID = "01960003-0000-7000-8000-0000000000e0";
+    private static final String CUSTOMER_ID = "01960003-0000-7000-8000-000000000050";
+    private static final String VEHICLE_ID = "01960003-0000-7000-8000-000000000077";
 
     private MockRestServiceServer mockServer;
     private WorkorderFacadeTool tool;
@@ -57,7 +59,7 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
-    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} and returns body")
+    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} when no id filters are given")
     void searchWorkorders_sendsGetToSearchEndpoint() {
         FacadeContractManifest.Entry entry = contract("searchWorkorders");
         mockServer
@@ -65,9 +67,62 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("brakes");
+        String result = tool.searchWorkorders("brakes", null, null);
 
         mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders appends customerId and vehicleId as query params when supplied")
+    void searchWorkorders_appendsCustomerAndVehicleFilters() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", "smith"))
+                        + "&customerId=" + CUSTOMER_ID
+                        + "&vehicleId=" + VEHICLE_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders omits blank id filters from the request URI")
+    void searchWorkorders_omitsBlankFilters() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "smith")) + "&vehicleId=" + VEHICLE_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders starts the query string with '?' when the configured template has none")
+    void searchWorkorders_usesQuestionMarkOnQuerylessTemplate() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        WorkorderFacadeTool pathOnlyTool = new WorkorderFacadeTool(
+                builder,
+                BASE_URL,
+                contract("getWorkorder").template(),
+                "/workorder/v1/workorders/search",
+                contract("getWorkorderStatus").template());
+        server.expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?customerId=" + CUSTOMER_ID))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null);
+
+        server.verify();
         assertThat(result).isNotEmpty();
     }
 

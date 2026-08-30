@@ -40,7 +40,8 @@ class InvoiceFacadeToolTest {
                 BASE_URL,
                 contract("getInvoice").template(),
                 contract("searchInvoices").template(),
-                contract("getInvoicesByCustomer").template());
+                contract("getInvoicesByCustomer").template(),
+                InvoiceFacadeTool.CUSTOMER_INVOICE_LINE_CAP);
     }
 
     @Test
@@ -74,14 +75,17 @@ class InvoiceFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getInvoicesByCustomer fetches line rows and de-duplicates them by owning invoice")
+    @DisplayName("getInvoicesByCustomer de-duplicates line rows and reports truncated=false below the 200-line cap")
     void getInvoicesByCustomer_deduplicatesLineRowsByInvoice() {
         FacadeContractManifest.Entry entry = contract("getInvoicesByCustomer");
         String lineRows = """
                 [
-                  {"invoiceId":"%s","invoiceNumber":"INV-1","invoiceStatus":"POSTED","invoiceItemId":"i1"},
-                  {"invoiceId":"%s","invoiceNumber":"INV-1","invoiceStatus":"POSTED","invoiceItemId":"i2"},
-                  {"invoiceId":"%s","invoiceNumber":"INV-2","invoiceStatus":"DRAFT","invoiceItemId":"i3"}
+                  {"invoiceId":"%s","invoiceNumber":"INV-1","invoiceStatus":"POSTED",\
+                "invoiceCreatedAt":"2026-08-20T10:00:00Z","invoiceItemId":"i1"},
+                  {"invoiceId":"%s","invoiceNumber":"INV-1","invoiceStatus":"POSTED",\
+                "invoiceCreatedAt":"2026-08-20T10:00:00Z","invoiceItemId":"i2"},
+                  {"invoiceId":"%s","invoiceNumber":"INV-2","invoiceStatus":"DRAFT",\
+                "invoiceCreatedAt":"2026-07-01T09:30:00Z","invoiceItemId":"i3"}
                 ]
                 """.formatted(INVOICE_A, INVOICE_A, INVOICE_B);
         mockServer
@@ -96,6 +100,87 @@ class InvoiceFacadeToolTest {
         assertThat(result).containsOnlyOnce(INVOICE_A).containsOnlyOnce(INVOICE_B);
         assertThat(result).contains("\"lineCount\":2").contains("\"lineCount\":1");
         assertThat(result).doesNotContain("invoiceItemId");
+        assertThat(result)
+                .contains("\"truncated\":false")
+                .contains("\"coveredFrom\":\"2026-07-01T09:30:00Z\"")
+                .contains("\"coveredTo\":\"2026-08-20T10:00:00Z\"")
+                .contains("\"invoices\":[");
+    }
+
+    @Test
+    @DisplayName("covered range orders mixed-offset timestamps on the instant timeline, not lexicographically")
+    void getInvoicesByCustomer_coveredRangeHandlesMixedOffsets() {
+        FacadeContractManifest.Entry entry = contract("getInvoicesByCustomer");
+        // Lexicographically "+02:00" sorts before "Z", but 10:00+02:00 == 08:00Z is the EARLIER
+        // instant and 09:00Z is the later one.
+        String lineRows = """
+                [
+                  {"invoiceId":"%s","invoiceCreatedAt":"2026-08-20T10:00:00+02:00"},
+                  {"invoiceId":"%s","invoiceCreatedAt":"2026-08-20T09:00:00Z"}
+                ]
+                """.formatted(INVOICE_A, INVOICE_B);
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("customerId", PARTY_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(lineRows, MediaType.APPLICATION_JSON));
+
+        String result = tool.getInvoicesByCustomer(PARTY_ID);
+
+        mockServer.verify();
+        assertThat(result)
+                .contains("\"coveredFrom\":\"2026-08-20T10:00:00+02:00\"")
+                .contains("\"coveredTo\":\"2026-08-20T09:00:00Z\"");
+    }
+
+    @Test
+    @DisplayName("getInvoicesByCustomer reports truncated=true when the backing call returns the 200-line cap")
+    void getInvoicesByCustomer_flagsTruncationAtLineCap() {
+        FacadeContractManifest.Entry entry = contract("getInvoicesByCustomer");
+        StringBuilder lineRows = new StringBuilder("[");
+        for (int i = 0; i < InvoiceFacadeTool.CUSTOMER_INVOICE_LINE_CAP; i++) {
+            if (i > 0) {
+                lineRows.append(',');
+            }
+            lineRows.append("{\"invoiceId\":\"")
+                    .append(INVOICE_A)
+                    .append("\",\"invoiceNumber\":\"INV-1\",\"invoiceStatus\":\"POSTED\",")
+                    .append("\"invoiceCreatedAt\":\"2026-08-")
+                    .append(String.format("%02d", (i % 28) + 1))
+                    .append("T00:00:00Z\"}");
+        }
+        lineRows.append(']');
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("customerId", PARTY_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(lineRows.toString(), MediaType.APPLICATION_JSON));
+
+        String result = tool.getInvoicesByCustomer(PARTY_ID);
+
+        mockServer.verify();
+        assertThat(result)
+                .contains("\"truncated\":true")
+                .contains("\"coveredFrom\":\"2026-08-01T00:00:00Z\"")
+                .contains("\"coveredTo\":\"2026-08-28T00:00:00Z\"")
+                .contains("\"lineCount\":" + InvoiceFacadeTool.CUSTOMER_INVOICE_LINE_CAP);
+    }
+
+    @Test
+    @DisplayName("getInvoicesByCustomer reports null covered range when line rows carry no timestamps")
+    void getInvoicesByCustomer_nullCoveredRangeWithoutTimestamps() {
+        FacadeContractManifest.Entry entry = contract("getInvoicesByCustomer");
+        String lineRows = "[{\"invoiceId\":\"" + INVOICE_A + "\",\"invoiceNumber\":\"INV-1\"}]";
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("customerId", PARTY_ID))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(lineRows, MediaType.APPLICATION_JSON));
+
+        String result = tool.getInvoicesByCustomer(PARTY_ID);
+
+        mockServer.verify();
+        assertThat(result)
+                .contains("\"truncated\":false")
+                .contains("\"coveredFrom\":null")
+                .contains("\"coveredTo\":null");
     }
 
     @Test

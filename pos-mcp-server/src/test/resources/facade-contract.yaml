@@ -72,6 +72,25 @@ AccountingFacadeTool.getFinancialSummary:
       route: accounting
       downstreamPath: "/v1/accounting/reports/financial/trial-balance?asOf={}"
 
+AccountingFacadeTool.getAgedReceivables:
+  verb: GET
+  baseUrlProperty: pos.accounting.base-url
+  templateProperty: pos.accounting.aged-receivables-uri-template
+  template: "/accounting/v1/accounting/reports/financial/aged-receivables?asOfDate={asOfDate}"
+  route: accounting
+  downstreamPath: "/v1/accounting/reports/financial/aged-receivables?asOfDate={}"
+  # W1.2 (analytics-capability-plan §3): per-customer A/R aging; a past asOfDate reconstructs
+  # the point-in-time balance.
+
+AccountingFacadeTool.getAgedPayables:
+  verb: GET
+  baseUrlProperty: pos.accounting.base-url
+  templateProperty: pos.accounting.aged-payables-uri-template
+  template: "/accounting/v1/accounting/reports/financial/aged-payables?asOfDate={asOfDate}"
+  route: accounting
+  downstreamPath: "/v1/accounting/reports/financial/aged-payables?asOfDate={}"
+  # W1.2: per-vendor A/P aging mirror of getAgedReceivables.
+
 AdminFacadeTool.getSystemStatus:
   verb: NONE
   route: NONE
@@ -81,11 +100,10 @@ AdminFacadeTool.getSystemStatus:
 AdminFacadeTool.listUsers:
   verb: GET
   baseUrlProperty: pos.security.users.base-url
-  template: ""
+  templateProperty: pos.security.users-list-path
+  template: "/security-service/v1/users"
   route: security-service
-  downstreamPath: ""
-  # Calls the bare users base URL; the deployment env var (POS_SECURITY_USERS_BASE_URL)
-  # supplies the full users endpoint.
+  downstreamPath: "/v1/users"
 
 AdminFacadeTool.getUserPermissions:
   verb: GET

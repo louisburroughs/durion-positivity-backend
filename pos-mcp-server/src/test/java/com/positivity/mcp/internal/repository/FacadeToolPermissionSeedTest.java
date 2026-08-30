@@ -23,7 +23,9 @@ import org.junit.jupiter.api.Test;
  * {@code V18} (initial seed) → {@code V29} (AUTHENTICATED removals) → {@code V35} (retarget) →
  * {@code V36} (ADR-0057 availability code) → {@code V37} (full re-derivation from the real
  * downstream endpoints after the #1519 Wave 2/3 retargeting; per-tool delete-and-reinsert) →
- * {@code V38} (adds {@code tax:rates:view} to TaxFacadeTool for the restored getTaxRate, #1522).
+ * {@code V38} (adds {@code tax:rates:view} to TaxFacadeTool for the restored getTaxRate, #1522) →
+ * {@code V39} (re-derives AccountingFacadeTool for the W1.2 aging facades; permission-net-neutral —
+ * both aged endpoints reuse {@code reporting:view:financial-statements}).
  *
  * <p>{@link #EXPECTED} is the Wave 4 derivation table — per tool, the union of the merged
  * class+method {@code @PreAuthorize} permission codes across every downstream endpoint the tool's
@@ -213,6 +215,9 @@ class FacadeToolPermissionSeedTest {
         String v38 = read("V38__facade_rate_lookup_permission.sql");
         parseFullDeletes(v38).forEach(grants::remove);
         mergeSeed(grants, v38);
+        String v39 = read("V39__aged_reports_facade_tools.sql");
+        parseFullDeletes(v39).forEach(grants::remove);
+        mergeSeed(grants, v39);
         return grants;
     }
 
