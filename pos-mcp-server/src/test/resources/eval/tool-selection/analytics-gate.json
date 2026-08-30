@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "q13-ar-pareto",
+      "utterance": "Which customers make up most of our accounts receivable balance, and how much of each is past due?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "invoice:manage",
+          "workorder:workorder:view",
+          "security:user:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": ["AccountingFacadeTool"],
+        "forbidden_tool_ids": ["AdminFacadeTool"],
+        "k": 5
+      },
+      "tags": ["analytics-gate", "wave1", "facade", "regression", "admin-fast-path"],
+      "notes": "Plan §6 Q13 — the Wave 1 full-pass gate. Answered today by AccountingFacadeTool.getAgedReceivables(asOfDate) (V39; the model does the Pareto in-context). REGRESSION LOCK: a live alpha smoke of this exact phrasing selected AdminFacadeTool ALONE because the ToolRegistryService admin fast path matches the bare keyword 'accounts' (ADMIN_QUERY_KEYWORDS) and returns AdminFacadeTool as the sole candidate, suppressing every other tool. Fix is PR #1588 (branch claude/mcp-admin-fastpath-hijack, unmerged at the time of writing) — this fixture fails on the pre-fix selector both on hit@5 (expected tool absent) and on the forbidden assertion (AdminFacadeTool selected). The actor deliberately holds security:user:view so AdminFacadeTool is permission-gated IN; without it the fast path cannot fire and the fixture would not reproduce the incident."
+    },
+    {
+      "fixture_id": "q13-admin-user-account-active",
+      "utterance": "Is this user account still active?",
+      "actor": {
+        "role": "ROLE_SYSTEM_ADMINISTRATOR",
+        "permission_codes": [
+          "security:user:view",
+          "security:permission:view",
+          "security:audit:view",
+          "accounting:coa:view",
+          "reporting:view:financial-statements"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": ["AdminFacadeTool"],
+        "k": 5
+      },
+      "tags": ["analytics-gate", "facade", "regression", "admin-fast-path"],
+      "notes": "Counterpart to q13-ar-pareto: a genuine identity/admin question must still route to AdminFacadeTool (V37 gating: security:user:view / security:permission:view / security:audit:view). Together the two fixtures pin the #1588 fix from both sides — narrowing the admin trigger must not also break real admin routing."
+    },
+    {
+      "fixture_id": "q05-open-workorders-for-past-due-customers",
+      "utterance": "Which customers are more than 60 days past due, and what open work orders do we currently have for them?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "workorder:workorder:view",
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": ["AccountingFacadeTool", "WorkorderFacadeTool"],
+        "k": 5
+      },
+      "tags": ["analytics-gate", "wave1-partial", "multi-domain", "facade"],
+      "notes": "Plan §6 Q5 — Wave 1 PARTIAL pass. Aging (AccountingFacadeTool) identifies the 60+ day customers; per-customer searchWorkorders (WorkorderFacadeTool) supplies the work orders with client-side status filtering. Full pass waits on W2 E12 (status/date/technician params on WO search). Primary (scored for hit@5 / MRR) is AccountingFacadeTool because the aging call is the entry point."
+    },
+    {
+      "fixture_id": "q10-rising-sales-rising-past-due",
+      "utterance": "Which customers have rising sales but also rising past-due balances over the last three months?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "invoice:manage",
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": ["AccountingFacadeTool", "InvoiceFacadeTool"],
+        "k": 5
+      },
+      "tags": ["analytics-gate", "wave1-partial", "multi-domain", "facade"],
+      "notes": "Plan §6 Q10 — Wave 1 PARTIAL pass: the past-due half is answerable via three historical getAgedReceivables calls; the sales-trend half needs W2 E1 (revenue-by-customer) and the answer must say so. Selection-wise only the entry tool is asserted as primary (AccountingFacadeTool); InvoiceFacadeTool is listed because the model legitimately reaches for it on the sales half even though the backing aggregate does not exist yet."
+    },
+    {
+      "fixture_id": "q14-ar-balance-and-dso-by-month",
+      "utterance": "What was our accounts receivable balance and DSO at each month-end for the last 12 months?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "security:user:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": ["AccountingFacadeTool"],
+        "forbidden_tool_ids": ["AdminFacadeTool"],
+        "k": 5
+      },
+      "tags": ["analytics-gate", "wave1-partial", "facade", "admin-fast-path"],
+      "notes": "Plan §6 Q14 — Wave 1 PARTIAL pass: the balance trend is 12 historical getAgedReceivables calls; DSO is deferred to Wave 3. Second admin-fast-path lock: the phrase 'accounts receivable' again trips the bare 'accounts' keyword, so this fixture reproduces the #1588 hijack for a different persona. NOTE (code-vs-plan conflict): FinancialReportingServiceImpl.generateAgedReceivables uses each invoice's CURRENT balance with historical aging dates, so a back-dated asOfDate does NOT reconstruct a true point-in-time balance — the plan §3 W1.2 claim and the getAgedReceivables tool description overstate this. Selection is still correct; the arithmetic half of the gate is not."
+    }
+  ]
+}

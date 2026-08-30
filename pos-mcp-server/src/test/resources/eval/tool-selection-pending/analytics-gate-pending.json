@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "q01-top-technicians-labor-revenue-last-month",
+      "utterance": "Who were our top technicians by labor revenue last month, and what was their average billed hours per completed work order?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["workorder:workorder:view", "people:employee:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["WorkorderFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q1, budget 2. Blocked on W2 E5 GET /workorders/analytics/technician-labor promoted to WorkorderFacadeTool (W2.3). Not scored today."
+    },
+    {
+      "fixture_id": "q02-technician-performance-three-month-comparison",
+      "utterance": "Compare each technician's completed work orders, billed hours and labor revenue over the last three months.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["workorder:workorder:view", "people:employee:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["WorkorderFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave3"],
+      "notes": "Plan §6 Q2, budget 2. Blocked on the W3.2 technicianPerformance composition (early W2 pass allowed via 3 × E5). If that composition is hosted on ReportingFacadeTool alongside revenueReport rather than on WorkorderFacadeTool, update expected.tool_ids when it ships."
+    },
+    {
+      "fixture_id": "q03-technicians-with-reopened-workorders",
+      "utterance": "Which technicians had the most work orders reopened within seven days of completion this quarter?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["workorder:workorder:view", "people:employee:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["WorkorderFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q3, budget 2. Blocked on W2 E6 (/workorders/analytics/reopened) plus E7 status-transition projection (design decision D4)."
+    },
+    {
+      "fixture_id": "q04-avg-workorder-to-invoice-lag-by-month",
+      "utterance": "What was the average time from work order creation to invoice, by month, for the last six months?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["invoice:manage", "workorder:workorder:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["InvoiceFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q4, budget 7 (6 × E4 in Wave 2, 1 call in Wave 3 via groupBy). Blocked on W2 E4 (/invoices/analytics/invoicing-lag)."
+    },
+    {
+      "fixture_id": "q06-customer-revenue-parts-labor-margin",
+      "utterance": "Show me revenue, parts cost, labor cost and gross margin by customer for last month.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["workorder:workorder:view", "invoice:manage", "crm:party:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["WorkorderFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2", "wave3-risk"],
+      "notes": "Plan §6 Q6, budget 2. Blocked on W2 E13 (/workorders/analytics/customer-margin) and contingent on design decision D2 — if invoice lines do not carry workorderId the margin projection becomes an event-fed replica and Q6 moves to the Wave 3 gate, and the owning facade may change to InvoiceFacadeTool."
+    },
+    {
+      "fixture_id": "q07-top-customers-year-over-year",
+      "utterance": "Who were our top customers by revenue over the last twelve months compared with the twelve months before that?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": ["invoice:manage", "crm:party:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["InvoiceFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q7, budget 3. Blocked on W2 E1 (/invoices/analytics/revenue-by-customer) promoted to InvoiceFacadeTool (W2.3)."
+    },
+    {
+      "fixture_id": "q08-lapsed-high-value-customers",
+      "utterance": "Which customers have not bought anything in the last 90 days but spent more than $10,000 with us in the prior year?",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": ["invoice:manage", "crm:party:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["InvoiceFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q8, budget 3. Blocked on W2 E1 — needs the lastInvoiceDate column on the revenue-by-customer row."
+    },
+    {
+      "fixture_id": "q09-top-customers-revenue-balance-days-to-pay",
+      "utterance": "For our top 20 customers, show revenue, invoice count, average invoice value, outstanding balance and average days to pay.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:manage",
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["InvoiceFacadeTool", "AccountingFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2", "multi-domain"],
+      "notes": "Plan §6 Q9, budget 4. Balance half is answerable today via aging; revenue/count/average need W2 E1 and days-to-pay needs W2 E10 (/accounting/payment-applications), so the question as a whole is pending."
+    },
+    {
+      "fixture_id": "q11-weekly-invoiced-vs-collected",
+      "utterance": "How much did we invoice versus collect each week for the last twelve weeks, and what is the collection rate?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["invoice:manage", "accounting:coa:view", "reporting:view:financial-statements"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["InvoiceFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2", "wave3"],
+      "notes": "Plan §6 Q11, budget 13 in Wave 2 (12 × E2 loop, at the budget edge) collapsing to 2 in Wave 3 via E2 groupBy=week. Blocked on W2 E2 and design decision D3 (which module owns customer cash received)."
+    },
+    {
+      "fixture_id": "q12-payment-lag-cohorts",
+      "utterance": "Of the invoices we issued in the last six months, how many were paid within 30 days, 31 to 60 days, 61 to 90 days, or are still unpaid?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["invoice:manage", "accounting:coa:view"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["InvoiceFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q12, budget 2. Blocked on W2 E3 (/invoices/analytics/payment-lag-cohorts). Fixture dataset must populate all four cohorts (plan §2.3)."
+    },
+    {
+      "fixture_id": "q15-top-vendors-six-month-year-over-year",
+      "utterance": "Who were our largest vendors by spend over the last six months compared with the same six months last year?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["accounting:coa:view", "reporting:view:financial-statements"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["AccountingFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q15, budget 3. Blocked on W2 E8 (/accounting/analytics/vendor-spend) promoted to AccountingFacadeTool (W2.3)."
+    },
+    {
+      "fixture_id": "q16-vendor-bills-due-next-14-days",
+      "utterance": "Which vendor bills are due in the next 14 days, and how much cash do we need each day to cover them?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["accounting:coa:view", "accounting:ap:view", "reporting:view:financial-statements"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["AccountingFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q16, budget 2. Blocked on W2 E9 — today pos-accounting exposes only GET /accounting/vendor-bills/{billId}; there is no list route at all. Aged payables gives per-vendor totals but no per-bill due dates, so this is not a Wave 1 partial."
+    },
+    {
+      "fixture_id": "q17-vendors-average-bill-increase-yoy",
+      "utterance": "Which vendors have increased their average bill amount by more than 10% year over year?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["accounting:coa:view", "accounting:ap:view", "reporting:view:financial-statements"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["AccountingFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave2"],
+      "notes": "Plan §6 Q17, budget 3. Blocked on W2 E8 (avgBillAmount column) over two windows."
+    },
+    {
+      "fixture_id": "q18-weekly-cash-in-vs-out",
+      "utterance": "Show weekly cash in versus cash out for the last quarter and flag any week where we were cash negative.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["invoice:manage", "accounting:coa:view", "reporting:view:financial-statements"],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["AccountingFacadeTool", "InvoiceFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave3", "multi-domain"],
+      "notes": "Plan §6 Q18: Wave 2 loops (27 calls) are over budget, so this is formally a Wave 3 gate — E2 plus an A/P weekly groupBy, budget 3."
+    },
+    {
+      "fixture_id": "q19-revenue-per-technician-hour-by-customer",
+      "utterance": "Compare revenue against technician hours by customer and tell me our revenue per technician hour.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "invoice:manage",
+          "workorder:workorder:view",
+          "reporting:view:financial-statements",
+          "inventory:on_hand:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": { "tool_ids": ["ReportingFacadeTool"], "k": 5 },
+      "tags": ["analytics-gate", "pending", "wave3", "multi-domain"],
+      "notes": "Plan §6 Q19, budget 2. Blocked on the W3.2 customerEfficiency composition (E1 ⨝ E5-by-customer). Expected tool is ReportingFacadeTool because the existing compositions (revenueReport, customerHistory) are hosted there; move to WorkorderFacadeTool if the composition lands elsewhere."
+    },
+    {
+      "fixture_id": "q20-twelve-month-business-summary",
+      "utterance": "Give me a twelve-month business summary with revenue, work orders completed, technician hours, collections, accounts receivable, vendor spend and payments, and flag any trends.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "invoice:manage",
+          "workorder:workorder:view",
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "inventory:on_hand:view",
+          "security:user:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": ["ReportingFacadeTool"],
+        "forbidden_tool_ids": ["AdminFacadeTool"],
+        "k": 5
+      },
+      "tags": ["analytics-gate", "pending", "wave3", "admin-fast-path"],
+      "notes": "Plan §6 Q20, budget 2. Blocked on the W3.2 businessSummary composition (seven metrics, parallel fan-out, degraded-member semantics). Also carries the #1588 admin-fast-path shape: the phrase 'accounts receivable' trips the bare 'accounts' keyword, so this fixture doubles as a hijack lock once it moves into the scored suite."
+    }
+  ]
+}
