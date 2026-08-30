@@ -22,6 +22,8 @@ tags:
   name: Work Sessions API
 - description: Time entry adjustments and related APIs
   name: People - TimeEntries
+- description: List, approve and reject attendance time entries (clock-in, clock-out, breaks)
+  name: Time Entry Approval API
 - description: Pay-period lifecycle management for timekeeping approval
   name: Time Period Management API
 - description: Identity-compliance reports (ADR-0015 §4)
@@ -1551,6 +1553,104 @@ paths:
       - Time Period Management API
       x-required-permissions:
       - people:timePeriod:transition
+  /v1/people/timeEntries:
+    get:
+      description: 'Returns a page of attendance time entries — clock-in, clock-out and the break minutes inside that window — with each entry''s status and approval decision, oldest submission first.
+
+        Use this tool to build the approvals queue or to find the timeEntryId an approve or reject call needs; do not use listWorkexecWorkSessions, which returns time a technician spent on a workorder task. A time entry is attendance only and carries no workorder reference, so this endpoint cannot answer how long a job took.
+
+        Preconditions: none; a page with an empty items list is returned rather than an error when nothing matches.
+
+        Required inputs: none are mandatory. status, workDate, employeeId and locationId each narrow the result and are unfiltered when omitted; workDate is a calendar day resolved in timeZone, which defaults to UTC; page defaults to 0 and size to 20 with a maximum of 100.
+
+        Emits a PEOPLE_TIME_ENTRY_LIST audit event but changes no state.
+
+        Returns 200 with the page envelope, and 400 when timeZone is not a known zone id or the paging parameters are out of range.
+
+        '
+      operationId: listTimeEntries
+      parameters:
+      - description: Keep only entries in this status; omit for every status
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          type: string
+      - description: Calendar day of the clock-in, resolved in timeZone
+        example: 2026-01-15
+        in: query
+        name: workDate
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Zone whose calendar day workDate names; defaults to UTC
+        example: America/Chicago
+        in: query
+        name: timeZone
+        required: false
+        schema:
+          type: string
+      - description: Keep only this person's entries
+        in: query
+        name: employeeId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Keep only entries clocked at this location
+        in: query
+        name: locationId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Zero-based page index
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          format: int32
+          minimum: 0
+          type: integer
+      - description: Page size, up to 100
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          exclusiveMinimum: 0
+          format: int32
+          maximum: 100
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseTimeEntrySummary'
+          description: Time entries returned (possibly empty)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseTimeEntrySummary'
+          description: Invalid filter or paging parameter
+      security:
+      - bearerAuth:
+        - people:timeEntry:view
+      summary: List Attendance Time Entries For Approval
+      tags:
+      - Time Entry Approval API
+      x-required-permissions:
+      - people:timeEntry:view
   /v1/people/timeEntries/adjustments:
     post:
       description: 'Creates a PENDING adjustment against a time entry, proposing either replacement start and end timestamps or a signed minutes delta.
@@ -1784,6 +1884,62 @@ paths:
       - Time Entry Approval API
       x-required-permissions:
       - people:timeEntry:reject
+  /v1/people/timeEntries/{timeEntryId}:
+    get:
+      description: 'Returns a single attendance time entry by id, with its clock-in, clock-out, break minutes, status and approval decision.
+
+        Use this tool for the detail view opened from an approvals-queue row; do not use listTimeEntries, which pages over many entries, and do not use getTimeEntryAdjustments, which returns the proposed corrections attached to an entry rather than the entry itself.
+
+        Preconditions: an entry must exist for the supplied timeEntryId.
+
+        Required inputs: timeEntryId (UUID) path parameter; timeZone is optional and defaults to UTC, affecting only the derived workDate.
+
+        Emits a PEOPLE_TIME_ENTRY_GET audit event but changes no state.
+
+        Returns 404 when no entry has that id, and 400 when timeZone is not a known zone id.
+
+        '
+      operationId: getTimeEntry
+      parameters:
+      - in: path
+        name: timeEntryId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Zone the derived workDate is resolved in; defaults to UTC
+        in: query
+        name: timeZone
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeEntrySummary'
+          description: Time entry returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeEntrySummary'
+          description: Invalid timeZone
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeEntrySummary'
+          description: Time entry not found
+      security:
+      - bearerAuth:
+        - people:timeEntry:view
+      summary: Get One Attendance Time Entry
+      tags:
+      - Time Entry Approval API
+      x-required-permissions:
+      - people:timeEntry:view
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     get:
       description: 'Lists all adjustments recorded against one time entry, in any status.
@@ -3209,6 +3365,41 @@ components:
       - totalElements
       - totalPages
       type: object
+    PagedResponseTimeEntrySummary:
+      description: A page of results
+      properties:
+        items:
+          description: Items on this page
+          items:
+            $ref: '#/components/schemas/TimeEntrySummary'
+          type: array
+        page:
+          description: Zero-based page index
+          example: 0
+          format: int32
+          type: integer
+        size:
+          description: Requested page size
+          example: 20
+          format: int32
+          type: integer
+        totalElements:
+          description: Total matching items across all pages
+          example: 42
+          format: int64
+          type: integer
+        totalPages:
+          description: Total number of pages
+          example: 3
+          format: int32
+          type: integer
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
+      type: object
     PeopleAvailabilityResponse:
       description: Availability of a person at a location for a given date based on staffing assignments
       properties:
@@ -3726,6 +3917,70 @@ components:
           type: string
       required:
       - waiveReason
+      type: object
+    TimeEntrySummary:
+      description: An attendance time entry (clock-in, clock-out, breaks) with its approval decision
+      properties:
+        breakMinutes:
+          description: Break minutes taken inside the attendance window; the window is gross time
+          example: 30
+          format: int32
+          type: integer
+        decisionAtUtc:
+          description: When the entry was approved or rejected
+          format: date-time
+          type: string
+        decisionByUserId:
+          description: Who approved or rejected; null while no decision has been taken
+          type: string
+        employeeId:
+          description: Person the attendance belongs to
+          format: uuid
+          type: string
+        endAtUtc:
+          description: Clock-out instant; null while the person is still clocked in
+          format: date-time
+          type: string
+        locationId:
+          description: Location the person was clocked in at
+          format: uuid
+          type: string
+        rejectionReason:
+          description: Why the entry was rejected; present only when status is REJECTED
+          type: string
+        startAtUtc:
+          description: Clock-in instant
+          format: date-time
+          type: string
+        status:
+          description: Approval status
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          type: string
+        submittedAtUtc:
+          description: When the employee submitted the entry for approval
+          format: date-time
+          type: string
+        timeEntryId:
+          description: Time entry identifier
+          format: uuid
+          type: string
+        workDate:
+          description: Calendar day of the clock-in, in the zone the query was filtered by
+          example: 2026-01-15
+          format: date
+          type: string
+        workSessionId:
+          description: Work session that produced the entry, when it came from the clock surface
+          format: uuid
+          type: string
+      required:
+      - status
+      - timeEntryId
       type: object
     TimePeriodApprovalDto:
       description: Aggregated approval state for a person within a time period

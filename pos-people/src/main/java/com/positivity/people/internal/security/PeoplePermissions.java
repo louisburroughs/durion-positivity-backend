@@ -50,6 +50,9 @@ public final class PeoplePermissions {
     /** Reject timeEntry. */
     public static final String TIMEENTRY_REJECT = "people:timeEntry:reject";
 
+    /** View timeEntry. */
+    public static final String TIMEENTRY_VIEW = "people:timeEntry:view";
+
     /** Acknowledge timeException. */
     public static final String TIMEEXCEPTION_ACKNOWLEDGE = "people:timeException:acknowledge";
 

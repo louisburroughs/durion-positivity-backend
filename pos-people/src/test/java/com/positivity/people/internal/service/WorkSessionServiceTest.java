@@ -393,6 +393,44 @@ class WorkSessionServiceTest {
         // Not SUBMITTED: the approvals screen only selects and acts on PENDING_APPROVAL, so an
         // entry written as SUBMITTED would be approvable through the API but not through the UI.
         assertThat(entry.getStatus()).isEqualTo(TimeEntryStatus.PENDING_APPROVAL);
+        // The approvals queue displays and orders by this, so it comes across from the session
+        // rather than being left for the reader to join back to work_session (#1573).
+        assertThat(entry.getSubmittedAt()).isEqualTo(Instant.parse("2026-01-01T16:05:00Z"));
+    }
+
+    @Test
+    void submitSession_whenRequestOmitsSubmittedAt_stampsTheEntryFromTheServerClock() {
+        UUID sessionId = UUID.fromString("88888888-8888-8888-8888-888888888888");
+        WorkSession ended = new WorkSession();
+        ended.setSessionId(sessionId);
+        ended.setPersonId(personId);
+        ended.setStatus("ENDED");
+        ended.setStartedAt(Instant.parse("2026-01-01T08:00:00Z"));
+        ended.setEndedAt(Instant.parse("2026-01-01T16:00:00Z"));
+
+        // submittedAt is client-supplied and optional; an entry without one would sit at the far
+        // end of the queue's ordering, so the server stamps it instead of writing a null.
+        WorkSessionSubmitRequest request = new WorkSessionSubmitRequest();
+        request.setBillableMinutes(480);
+        request.setBreakMinutes(0);
+
+        when(workSessionRepository.findById(sessionId)).thenReturn(Optional.of(ended));
+        when(workSessionRepository.save(any(WorkSession.class))).thenAnswer(i -> i.getArgument(0));
+        when(locationAssignmentRepository.findActiveByPersonIdAndDate(personId, LocalDate.of(2026, 1, 1)))
+                .thenReturn(List.of());
+
+        Instant before = Instant.now();
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock
+                    .when(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"))
+                    .thenReturn("worker.user");
+
+            service.submitSession(sessionId, request);
+        }
+
+        ArgumentCaptor<TimeEntry> captor = ArgumentCaptor.forClass(TimeEntry.class);
+        verify(timeEntryRepository).save(captor.capture());
+        assertThat(captor.getValue().getSubmittedAt()).isBetween(before, Instant.now());
     }
 
     @Test

@@ -72,7 +72,13 @@ public final class EventTypes {
                                 "PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE", "Approve a pending time entry adjustment")
                         .build(),
 
-                // TimeEntryApprovalController - 2 events
+                // TimeEntryApprovalController - 4 events
+                EventTypeRegistration.search(
+                                "PEOPLE_TIME_ENTRY_LIST",
+                                "List attendance time entries (clock-in, clock-out, breaks) for approval")
+                        .build(),
+                EventTypeRegistration.fastRead("PEOPLE_TIME_ENTRY_GET", "Get one attendance time entry")
+                        .build(),
                 EventTypeRegistration.approval("PEOPLE_TIME_ENTRY_APPROVE", "Batch approve time entries")
                         .build(),
                 EventTypeRegistration.approval("PEOPLE_TIME_ENTRY_REJECT", "Batch reject time entries")

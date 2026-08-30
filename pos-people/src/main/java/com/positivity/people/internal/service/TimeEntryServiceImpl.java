@@ -1,20 +1,30 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
+import com.positivity.people.internal.dto.TimeEntrySummary;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimeEntryAudit;
+import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +64,88 @@ public class TimeEntryServiceImpl implements TimeEntryService {
     private final TimeEntryRepository repository;
 
     private final TimeEntryAuditRepository auditRepository;
+
+    /**
+     * Bounds used when the caller supplies no day filter. The window is always compared rather
+     * than null-checked, because a null timestamp parameter carries no type Postgres can infer
+     * inside a comparison. {@code Instant.MIN}/{@code MAX} are unusable for this — they fall
+     * outside the range a timestamp column can hold — so these are the widest bounds that
+     * survive a round trip, and no attendance instant a clock can produce falls outside them.
+     */
+    private static final Instant UNBOUNDED_START = Instant.parse("0001-01-01T00:00:00Z");
+
+    private static final Instant UNBOUNDED_END = Instant.parse("9999-12-31T23:59:59Z");
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public PagedResponse<TimeEntrySummary> listTimeEntries(
+            TimeEntryStatus status,
+            LocalDate workDate,
+            ZoneId zoneId,
+            UUID employeeId,
+            UUID locationId,
+            int page,
+            int size) {
+        ZoneId resolvedZone = zoneId == null ? ZoneOffset.UTC : zoneId;
+        Instant windowStart = workDate == null
+                ? UNBOUNDED_START
+                : workDate.atStartOfDay(resolvedZone).toInstant();
+        Instant windowEnd = workDate == null
+                ? UNBOUNDED_END
+                : workDate.plusDays(1).atStartOfDay(resolvedZone).toInstant();
+
+        // The ordering lives in the query, so the page request carries no sort of its own.
+        Page<TimeEntry> found = repository.findForApprovalQueue(
+                status, employeeId, locationId, windowStart, windowEnd, PageRequest.of(page, size));
+
+        List<TimeEntrySummary> items =
+                found.getContent().stream().map(e -> toSummary(e, resolvedZone)).toList();
+        return new PagedResponse<>(items, page, size, found.getTotalElements(), found.getTotalPages());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @NonNull
+    public TimeEntrySummary getTimeEntry(@NonNull UUID timeEntryId, @NonNull ZoneId zoneId) {
+        Objects.requireNonNull(timeEntryId, "timeEntryId must not be null");
+        TimeEntry entry = repository
+                .findById(timeEntryId)
+                .orElseThrow(() -> new NotFoundException("No time entry found for timeEntryId=" + timeEntryId));
+        return toSummary(entry, zoneId == null ? ZoneOffset.UTC : zoneId);
+    }
+
+    /**
+     * Collapses the entity's approved/rejected pairs into the one decision the approvals screen
+     * shows. {@code status} already says which of the two it was, so carrying both pairs would
+     * only restate it — and an entry can only ever hold one, since a decision is terminal.
+     *
+     * <p>{@code workDate} is derived rather than stored: the entry holds instants, and the day a
+     * shift belongs to depends on the zone the viewer is working in.
+     */
+    private TimeEntrySummary toSummary(TimeEntry e, ZoneId zone) {
+        boolean rejected = e.getStatus() == TimeEntryStatus.REJECTED;
+        String decisionBy = rejected ? e.getRejectedBy() : e.getApprovedBy();
+        Instant decisionAt = rejected ? e.getRejectedAt() : e.getApprovedAt();
+        LocalDate workDate = e.getAttendanceStartAt() == null
+                ? null
+                : e.getAttendanceStartAt().atZone(zone).toLocalDate();
+
+        return new TimeEntrySummary(
+                e.getTimeEntryId(),
+                e.getPersonId(),
+                e.getLocationId(),
+                workDate,
+                e.getAttendanceStartAt(),
+                e.getAttendanceEndAt(),
+                e.getBreakMinutes(),
+                e.getStatus(),
+                e.getSubmittedAt(),
+                decisionBy,
+                decisionAt,
+                e.getRejectionReason(),
+                e.getWorkSessionId());
+    }
 
     private void recordAudit(String id, String action, String actorId, String correlationId, String details) {
 

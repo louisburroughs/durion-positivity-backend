@@ -1,9 +1,9 @@
-generatedAt: "2026-08-29T11:40:59.790680+00:00"
+generatedAt: "2026-08-30T19:41:35.655571+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 457
-  uniquePermissionCount: 457
+  permissionCount: 458
+  uniquePermissionCount: 458
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -642,7 +642,7 @@ manifests:
     domain: "people"
     serviceName: "pos-people"
     version: "1.0"
-    permissionCount: 23
+    permissionCount: 24
     permissions:
       - name: "people:availability:view"
         description: "View availability"
@@ -672,6 +672,8 @@ manifests:
         description: "Approve timeEntry"
       - name: "people:timeEntry:reject"
         description: "Reject timeEntry"
+      - name: "people:timeEntry:view"
+        description: "View timeEntry"
       - name: "people:timeException:acknowledge"
         description: "Acknowledge timeException"
       - name: "people:timeException:create"
@@ -2873,6 +2875,12 @@ permissions:
     source: "pos-people/src/main/resources/permissions.yaml"
   - name: "people:timeEntry:reject"
     description: "Reject timeEntry"
+    domain: "people"
+    serviceName: "pos-people"
+    module: "pos-people"
+    source: "pos-people/src/main/resources/permissions.yaml"
+  - name: "people:timeEntry:view"
+    description: "View timeEntry"
     domain: "people"
     serviceName: "pos-people"
     module: "pos-people"
