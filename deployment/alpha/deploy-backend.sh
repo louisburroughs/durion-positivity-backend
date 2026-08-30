@@ -117,6 +117,7 @@ require_supplier_audit_key() {
     else
       printf 'SUPPLIER_AUDIT_ENC_KEY=%s\n' "${quoted}" >> "${ENV_FILE}"
     fi
+    drop_shell_copy_of_audit_key
     return 0
   fi
 
@@ -128,6 +129,21 @@ require_supplier_audit_key() {
     echo "on-box env file) before deploying." >&2
     exit 1
   fi
+  drop_shell_copy_of_audit_key
+}
+
+# Compose ranks the shell environment ABOVE --env-file, so an exported
+# SUPPLIER_AUDIT_ENC_KEY shadows the one this script just made authoritative in the env
+# file. The deploy workflow always passes the variable, so when the repository secret is
+# unset it arrives set-but-empty and every ${SUPPLIER_AUDIT_ENC_KEY} in the compose files
+# resolves to "" — pos-supplier then starts with no key and fails closed, while the env
+# file that everyone inspects looks perfectly correct (#1577). Unsetting it once the key is
+# persisted leaves exactly one source of truth: the env file.
+#
+# Only the bare ${SUPPLIER_AUDIT_ENC_KEY} is exposed to this; the sibling KEY_ID and
+# PREVIOUS_KEYS use ${VAR:-default}, which falls back when a variable is set-but-empty.
+drop_shell_copy_of_audit_key() {
+  unset SUPPLIER_AUDIT_ENC_KEY
 }
 
 # Reads a value out of the env file, stripping one layer of the single quotes

@@ -439,10 +439,18 @@ jobs:
           # JSON below, where a literal newline inside a string is invalid and the deploy dies in
           # the AWS CLI before deploy-backend.sh ever runs.
           SUPPLIER_AUDIT_ENC_KEY="$(printf '%s' "${SUPPLIER_AUDIT_ENC_KEY}" | tr -d '[:space:]')"
+          # Pass the variable ONLY when the secret has a value. An empty assignment still
+          # exports the name on the host, and compose ranks the shell above --env-file, so an
+          # empty export silently shadows the real key in the on-box env file and pos-supplier
+          # starts with none — while that file, and the guard that reads it, look correct.
+          SUPPLIER_KEY_ASSIGNMENT=""
+          if [[ -n "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT="SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' "
+          fi
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' ${SUPPLIER_KEY_ASSIGNMENT}PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"
