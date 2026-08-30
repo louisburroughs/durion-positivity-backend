@@ -1,2 +1,2 @@
 com.positivity.events.TimeConfig
-com.positivity.events.PosEventsApplication
+com.positivity.events.PosEventsAutoConfiguration

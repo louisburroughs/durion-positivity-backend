@@ -26,6 +26,9 @@ Utility scripts for development, operations, testing, and deployment.
 | [`verify-observability.sh`](#verify-observabilitysh) | Observability | Check Jaeger, Prometheus, Grafana, and OTEL Collector health |
 | [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
 | [`check-openapi-inventory-drift.sh`](#check-openapi-inventory-driftsh) | API | Verify every spec-producing module is registered in `module-inventory.yaml` |
+| [`check-deploy-service-drift.sh`](#check-deploy-service-driftsh) | Deployment | Verify every deployable service is registered in all five deploy lists |
+| [`generate-kafka-topics.py`](#generate-kafka-topicspy) | Kafka | Derive the `kafka-topic-init` topic map from the topics services configure and consume |
+| [`check-kafka-topic-drift.sh`](#check-kafka-topic-driftsh) | Kafka | Verify `kafka-topic-init` provisions every topic the code uses |
 | [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
 | [`export-permission-registrations-yaml.py`](#export-permission-registrations-yamlpy) | Permissions | Aggregate all `permissions.yaml` manifests into one report |
 | [`redeploy-backend-tag.sh`](#redeploy-backend-tagsh) | Deployment | Update `BACKEND_TAG` and redeploy services on the alpha EC2 host |
@@ -352,6 +355,94 @@ Verifies that every module with a committed `openapi.yaml` is registered in
 - Exits non-zero on either kind of drift; runs in CI alongside the other drift guards.
 - Registration mode is not checked — only presence. A module that cannot be made `STRICT`-clean should be registered `REPORT_ONLY` or `EXCEPTION` rather than left out.
 - `EXEMPT_MODULES` in the script exists for specs the validator cannot load at all; prefer an `EXCEPTION` entry with a reason in the inventory itself.
+
+---
+
+### `check-deploy-service-drift.sh`
+
+Verifies that every deployable service is registered in all five lists a deploy depends on:
+the root `docker-compose.yml` service, `ALL_SERVICES_JSON` in `.github/workflows/build-push-ecr.yml`,
+the alpha image override, the alpha start order, and a Prometheus scrape job.
+
+Nothing made those lists agree, and the same drift was fixed by hand three times (pos-supplier,
+pos-marketing, and eight services missing scrape jobs). A service half-wired this way builds and
+merges clean, then either never gets an image, never starts on alpha, or emits metrics nothing
+collects (#1580).
+
+**Usage:**
+```bash
+./scripts/check-deploy-service-drift.sh
+```
+
+**Checks:**
+- Modules with a `Dockerfile` that have no compose service
+- Each of the four remaining lists, in both directions: a deployed service with no entry, and an
+  entry for a service that is not deployed
+- Gateway `lb://` routes pointing at a service in no deploy list (they can only 503)
+- Stale `ALLOWLIST` entries — a module listed as not-deployed that is in fact wired up, or that no
+  longer has a `Dockerfile`
+
+**Notes:**
+- Exits non-zero on any drift; runs in CI alongside the other drift guards.
+- The universe is anchored on "has a `Dockerfile`", not "has a compose service": deploy drift happens
+  at the transition from not-deployed to deployed, which the latter cannot see.
+- Built-but-undeployed modules carry an `ALLOWLIST` entry in the script with a status and a reason.
+  Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.
+- The module <-> compose-service mapping is read from each service's `build.context`, so
+  `pos-service-discovery` running as the compose service `eureka-server` needs no special case.
+
+---
+
+### `generate-kafka-topics.py`
+
+Derives the `kafka-topic-init` topic map in `docker-compose.yml` from the topics services actually
+configure and consume, and rewrites the block between the generated-topics markers.
+
+The list used to be hand-written and had drifted to 14 entries against ~35 configured topics. Topics
+absent from it are created implicitly by the broker at Kafka defaults — 1 partition,
+`cleanup.policy=delete`, 7-day retention. For events and commands that matches the intent, but 30
+DLQs were running at 7 days instead of 30, on exactly the topics whose contents are meant to survive
+long enough for a human to investigate (#1578, #1579).
+
+**Usage:**
+```bash
+./scripts/generate-kafka-topics.py            # print the generated block
+./scripts/generate-kafka-topics.py --apply    # rewrite docker-compose.yml
+./scripts/generate-kafka-topics.py --check    # exit 1 with a diff if the block is stale
+./scripts/generate-kafka-topics.py --list     # print "<topic> <retention-ms>" lines
+```
+
+**Sources:**
+- `@KafkaListener(topics = ...)` defaults across `pos-*/src/main/java` (consumed), with
+  `${property}` placeholders resolved against the module's `application.yml` when the annotation
+  carries no inline default
+- `*topic` property defaults in `pos-*/src/main/resources/application.yml`,
+  `DomainTopics.events/commands/manifest("domain")` calls, and `*_TOPIC = "..."` constants (produced)
+- `<topic>.dlq` for every consumed topic — the DLQ set is not declared anywhere, it is implied by
+  `record.topic() + ".dlq"` in the twelve `KafkaErrorHandlingConfig` classes (ADR-0044 §4)
+
+**Notes:**
+- Retention follows the suffix: `.dlq` 30d, `.manifest.v1` 3d, everything else 7d.
+- Run it after adding a listener or a `*-topic` property, and commit `docker-compose.yml`.
+
+---
+
+### `check-kafka-topic-drift.sh`
+
+CI entry point for `generate-kafka-topics.py --check`. Fails when the committed topic block in
+`docker-compose.yml` no longer matches what the code implies.
+
+`kafka-topic-init` is not a local-dev convenience: `deployment/alpha/deploy-backend.sh` runs it in
+both the full and the config-only deploy mode, so its list is the config every topic actually gets on
+alpha.
+
+**Usage:**
+```bash
+./scripts/check-kafka-topic-drift.sh
+```
+
+**Notes:**
+- Fix a failure with `./scripts/generate-kafka-topics.py --apply` and commit `docker-compose.yml`.
 
 ---
 
