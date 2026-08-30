@@ -84,7 +84,8 @@ class LocalFileStorageServiceImplTest {
 
     @Test
     void retrieve_aMissingFileIsAnError() {
-        assertThatThrownBy(() -> service.retrieve(jobId + "/absent.csv"))
+        assertThatThrownBy(() ->
+                        service.retrieve(Path.of(jobId.toString(), "absent.csv").toString()))
                 .isInstanceOf(UncheckedIOException.class)
                 .hasMessageContaining("absent.csv");
     }

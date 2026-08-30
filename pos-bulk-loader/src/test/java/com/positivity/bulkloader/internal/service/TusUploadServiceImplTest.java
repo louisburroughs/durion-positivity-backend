@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -119,10 +121,9 @@ class TusUploadServiceImplTest {
 
         service.createUpload(jobId, "../../etc/pa$$wd", 8L, OPERATOR);
 
-        verify(tusUploadRepository).save(org.mockito.ArgumentMatchers.argThat(upload -> {
-            assertThat(upload.getFileName()).isEqualTo("pa__wd");
-            return true;
-        }));
+        ArgumentCaptor<TusUpload> saved = ArgumentCaptor.forClass(TusUpload.class);
+        verify(tusUploadRepository).save(saved.capture());
+        assertThat(saved.getValue().getFileName()).isEqualTo("pa__wd");
     }
 
     // ─── info ────────────────────────────────────────────────────────────────
@@ -172,6 +173,9 @@ class TusUploadServiceImplTest {
                 .thenReturn(1);
 
         service.appendChunk(upload.getId(), 0L, stream("abcd"), 4L);
+        // advanceOffset is the mocked compare-and-set, so it does not move the entity the way
+        // the real UPDATE would; setting it here is what makes the second call the resumption
+        // the test is about rather than a conflict.
         upload.setUploadOffset(4L);
         service.appendChunk(upload.getId(), 4L, stream("efgh"), 4L);
 
@@ -276,7 +280,7 @@ class TusUploadServiceImplTest {
         TusUpload good = existing(8L, 16L, false, NOW.minusSeconds(120));
         Files.createFile(storageRoot.resolve(".tus").resolve(good.getId().toString()));
         when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW)).thenReturn(List.of(bad, good));
-        org.mockito.Mockito.doThrow(new IllegalStateException("row is locked"))
+        doThrow(new IllegalStateException("row is locked"))
                 .when(tusUploadRepository)
                 .delete(bad);
 
