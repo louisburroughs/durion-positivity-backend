@@ -23,6 +23,14 @@ public class ToolRegistryService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistryService.class);
     private static final int MAX_QUERY_PREVIEW_LENGTH = 160;
     private static final String ADMIN_FACADE_TOOL = "AdminFacadeTool";
+    /**
+     * Bare nouns that identify an administration question. {@code account}/{@code accounts} are
+     * deliberately absent: they collide with the accounting domain's core vocabulary ("accounts
+     * receivable", "chart of accounts", "GL account"), and because the fast path returns
+     * {@code AdminFacadeTool} <em>alone</em>, a collision silently suppressed every accounting
+     * tool for the whole request. Admin senses of the word are carried by
+     * {@link #ADMIN_QUERY_PHRASES} instead.
+     */
     private static final Set<String> ADMIN_QUERY_KEYWORDS = Set.of(
             "user",
             "users",
@@ -31,14 +39,13 @@ public class ToolRegistryService {
             "permission",
             "permissions",
             "access",
-            "account",
-            "accounts",
             "audit",
             "audits",
             "registered",
             "registration",
             "login",
             "logins");
+
     private static final Set<String> ADMIN_QUERY_PHRASES = Set.of(
             "who has access",
             "who can access",
@@ -46,7 +53,40 @@ public class ToolRegistryService {
             "access review",
             "user count",
             "registered users",
-            "account state");
+            "account state",
+            "user account",
+            "user accounts",
+            "account access",
+            "disable account",
+            "deactivate account");
+
+    /**
+     * Vocabulary that puts a question in a business domain the {@code AdminFacadeTool} cannot
+     * answer. Any hit vetoes the fast path outright, so a query that mixes an admin keyword with
+     * domain vocabulary ("who has access to the receivables ledger") still reaches semantic
+     * ranking rather than being collapsed to the admin tool alone.
+     */
+    private static final Set<String> FAST_PATH_VETO_TERMS = Set.of(
+            "receivable",
+            "receivables",
+            "payable",
+            "payables",
+            "invoice",
+            "invoices",
+            "invoiced",
+            "ledger",
+            "revenue",
+            "past due",
+            "past-due",
+            "outstanding balance",
+            "aging",
+            "aged",
+            "balance sheet",
+            "income statement",
+            "chart of accounts",
+            "gl account",
+            "workorder",
+            "work order");
 
     private final ToolMetadataRepository repository;
     private final EmbeddingModel embeddingModel;
@@ -194,6 +234,20 @@ public class ToolRegistryService {
             return List.of();
         }
 
+        Set<String> vetoTerms = matchedVetoTerms(context.userInput());
+        if (!vetoTerms.isEmpty()) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "MCP tool fast-path vetoed by domain vocabulary role={} workflow={} matchedTerms={} vetoTerms={} queryPreview=\"{}\"",
+                        context.role(),
+                        context.workflowState(),
+                        matchedTerms,
+                        vetoTerms,
+                        preview(context.userInput()));
+            }
+            return List.of();
+        }
+
         List<ToolMetadata> adminTools = gatedTools.stream()
                 .filter(tool -> ADMIN_FACADE_TOOL.equals(tool.name()))
                 .toList();
@@ -233,6 +287,17 @@ public class ToolRegistryService {
         for (String phrase : ADMIN_QUERY_PHRASES) {
             if (normalized.contains(phrase)) {
                 matches.add(phrase);
+            }
+        }
+        return matches;
+    }
+
+    private @NonNull Set<String> matchedVetoTerms(@NonNull String userInput) {
+        String normalized = userInput.toLowerCase(Locale.ROOT);
+        Set<String> matches = new TreeSet<>();
+        for (String term : FAST_PATH_VETO_TERMS) {
+            if (normalized.contains(term)) {
+                matches.add(term);
             }
         }
         return matches;
