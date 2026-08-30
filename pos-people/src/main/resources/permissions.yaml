@@ -30,6 +30,8 @@ permissions:
     description: "Approve timeEntry"
   - name: "people:timeEntry:reject"
     description: "Reject timeEntry"
+  - name: "people:timeEntry:view"
+    description: "View timeEntry"
   - name: "people:timeException:acknowledge"
     description: "Acknowledge timeException"
   - name: "people:timeException:create"

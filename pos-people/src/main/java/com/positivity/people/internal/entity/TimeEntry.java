@@ -30,7 +30,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {
             @Index(name = "idx_time_entry_attendance_window", columnList = "attendance_start_at, attendance_end_at"),
             @Index(name = "idx_time_entry_location_start", columnList = "location_id, attendance_start_at"),
-            @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at")
+            @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at"),
+            @Index(name = "idx_time_entry_status_start", columnList = "status, attendance_start_at")
         })
 public class TimeEntry {
 
@@ -81,6 +82,13 @@ public class TimeEntry {
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private TimeEntryStatus status;
+
+    /**
+     * When the employee submitted the time for approval (#1573). Copied from the work session
+     * on submit; null only for an entry nobody has submitted yet.
+     */
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
 
     @Column(name = "approved_by")
     private String approvedBy;

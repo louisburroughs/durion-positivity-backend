@@ -54,6 +54,9 @@ class FlywayMigrationIT {
         assertThat(hasColumn(jdbc, "ext_people_contact_user_link", "username")).isTrue();
         assertThat(hasColumn(jdbc, "event_outbox", "record_key")).isTrue();
         assertThat(hasColumn(jdbc, "processed_events", "owner")).isTrue();
+        // V11 (#1573): the approvals queue displays and orders by this, and Hibernate validates
+        // the mapping, so a missing column fails context startup rather than the assertion.
+        assertThat(hasColumn(jdbc, "time_entry", "submitted_at")).isTrue();
 
         // Dev-bootstrap replica seeds loaded (names + usernames for HR views), and the employment
         // record joins to its replica person — the seed's cross-table keys still line up.

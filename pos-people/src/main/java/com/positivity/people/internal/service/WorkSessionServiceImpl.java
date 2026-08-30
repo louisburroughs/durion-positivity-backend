@@ -211,6 +211,10 @@ public class WorkSessionServiceImpl implements WorkSessionService {
      * Breaks are carried alongside rather than deducted here, leaving consumers free to report
      * either gross attendance or net worked time.
      *
+     * <p>{@code submittedAt} mirrors the session's submission stamp, which the approvals queue
+     * both displays and orders by. The client may supply it, so fall back to the server clock
+     * rather than writing an entry the queue cannot sort.
+     *
      * <p>The entry lands in {@code PENDING_APPROVAL}, which is the state an approver acts on:
      * the approvals screen selects, enables its actions on, and transitions only entries in
      * that state. {@code SUBMITTED} stays a legal status other producers may use, and
@@ -226,6 +230,7 @@ public class WorkSessionServiceImpl implements WorkSessionService {
         entry.setAttendanceEndAt(session.getEndedAt());
         entry.setBreakMinutes(request.getBreakMinutes());
         entry.setStatus(TimeEntryStatus.PENDING_APPROVAL);
+        entry.setSubmittedAt(session.getSubmittedAt() == null ? Instant.now(clock) : session.getSubmittedAt());
         timeEntryRepository.save(entry);
     }
 

@@ -10,7 +10,9 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 ## Responsibilities
 
 - Manage employee employment records (identity attributes live in pos-people-contact)
-- Track time entries, adjustments, and exceptions per employee
+- Track time entries — attendance only: clock-in, clock-out and breaks — plus their adjustments
+  and exceptions per employee. Time a technician spends on a workorder task is a separate record
+  owned by pos-workorder; a time entry carries no workorder reference (#1573).
 - Record work sessions (clock-in/clock-out) and compute job time totals
 - Manage staffing assignments across locations
 - Evaluate employee availability for scheduling
@@ -40,6 +42,11 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - `GET /v1/people/users/{userId}/person` — person record for a user ID
 - `GET /v1/people/{assignmentId}` — retrieve a staffing assignment
 - `DELETE /v1/people/{assignmentId}` — remove a staffing assignment
+- `GET /v1/people/timeEntries` — attendance time entries (clock-in, clock-out, breaks) for the
+  approvals queue, filterable by `status`, `workDate` (+ `timeZone`), `employeeId` and
+  `locationId`, oldest submission first (auth: `people:timeEntry:view`)
+- `GET /v1/people/timeEntries/{timeEntryId}` — one attendance time entry
+  (auth: `people:timeEntry:view`)
 - `GET /v1/people/{timeEntryId}/adjustments` — adjustments for a time entry
 - `GET /v1/people/approvedTime` — approved time summary
 - `POST /v1/people/bulk-ingest` — bulk import employees (auth: `people:employee:create`)
