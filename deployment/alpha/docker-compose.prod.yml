@@ -159,6 +159,14 @@ services:
     environment:
       POS_LOCATION_KAFKA_ENABLED: "true"
 
+  pos-marketing:
+    image: ${ECR_REGISTRY}/durion/pos-marketing:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # No POS_MARKETING_KAFKA_ENABLED override: unlike the services above, the base
+    # compose already defaults this flag on, so the campaign/redemption publisher and
+    # the customer.events.v1 suppression replica are live as committed.
+
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped
@@ -216,6 +224,11 @@ services:
     # CUSTOMER_NOT_FOUND however long the caller waits.
     environment:
       POS_SHOP_MANAGER_KAFKA_ENABLED: "true"
+
+  pos-supplier:
+    image: ${ECR_REGISTRY}/durion/pos-supplier:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
 
   pos-tax:
     image: ${ECR_REGISTRY}/durion/pos-tax:${BACKEND_TAG}

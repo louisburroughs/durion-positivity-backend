@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-marketing","pos-mcp-server","pos-order","pos-people","pos-people-contact","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-tax","pos-vehicle-inventory","pos-warranty","pos-workorder"]'
+          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-marketing","pos-mcp-server","pos-order","pos-people","pos-people-contact","pos-price","pos-security-service","pos-service-discovery","pos-shop-manager","pos-supplier","pos-tax","pos-vehicle-inventory","pos-warranty","pos-workorder"]'
           echo "all-services=${ALL_SERVICES_JSON}" >> "$GITHUB_OUTPUT"
           FORCE_FULL_REBUILD=false
 
@@ -427,11 +427,22 @@ jobs:
       - name: Deploy backend services on alpha host
         env:
           SECURITY_SEED_ADMIN_PASSWORD_HASH: ${{ secrets.SECURITY_SEED_ADMIN_PASSWORD_HASH }}
+          # pos-supplier refuses to start without its exchange-audit key (ADR-0050 §7).
+          # Optional here: deploy-backend.sh persists it on first use and afterwards accepts
+          # the copy already in the on-box env file, so an unset secret is not a failure once
+          # the key has been provisioned. It rejects a value that differs from the stored one,
+          # because silently rotating it orphans every payload sealed with the old key.
+          SUPPLIER_AUDIT_ENC_KEY: ${{ secrets.SUPPLIER_AUDIT_ENC_KEY }}
         run: |
+          # base64 carries no whitespace, and `openssl rand -base64 32` ends in a newline that a
+          # careless `gh secret set` keeps. Left in, it is interpolated raw into the --parameters
+          # JSON below, where a literal newline inside a string is invalid and the deploy dies in
+          # the AWS CLI before deploy-backend.sh ever runs.
+          SUPPLIER_AUDIT_ENC_KEY="$(printf '%s' "${SUPPLIER_AUDIT_ENC_KEY}" | tr -d '[:space:]')"
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"
