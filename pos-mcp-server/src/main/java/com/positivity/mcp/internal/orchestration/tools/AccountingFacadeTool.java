@@ -120,15 +120,23 @@ public class AccountingFacadeTool {
     @Tool(
             description = "Get the Aged Receivables report: the platform's per-customer accounts-receivable "
                     + "(A/R) aging aggregate as of a date. Returns one row per customer with an open "
-                    + "balance — customerId, customerName, current (0-30 days), days31To60, days61To90, "
-                    + "days90Plus, totalOutstanding — plus grand totals across all rows. Use this for "
-                    + "past-due, outstanding-balance, and customer-concentration questions instead of "
-                    + "aggregating individual invoices. Calling with a PAST asOfDate reconstructs the "
-                    + "point-in-time A/R balance, so a month-end trend is one call per month-end date "
-                    + "(e.g. 2026-04-30, then 2026-05-31, then 2026-06-30). Rows are empty when no open "
-                    + "receivables exist as of the date.")
+                    + "balance — customerId, current (0-30 days), days31To60, days61To90, days90Plus, "
+                    + "totalOutstanding — plus grand totals across all rows. Use this for past-due, "
+                    + "outstanding-balance, and customer-concentration questions instead of aggregating "
+                    + "individual invoices. The customerName field is always null on this report; resolve "
+                    + "names separately with the customer directory if the answer needs them. Age is "
+                    + "measured from invoice creation, NOT from the invoice due date, so \"60 days past "
+                    + "due\" here means 60 days since the invoice was raised. IMPORTANT — a past asOfDate "
+                    + "does NOT reconstruct the historical balance: each invoice contributes its CURRENT "
+                    + "open balance, only the aging buckets are keyed to asOfDate. Do not use a series of "
+                    + "past dates to build an A/R balance trend; the earlier points would restate today's "
+                    + "balances. Rows are empty when no open receivables exist as of the date.")
     public String getAgedReceivables(
-            @ToolParam(description = "As-of date, YYYY-MM-DD (past dates = historical)") @NonNull String asOfDate) {
+            @ToolParam(
+                            description = "As-of date, YYYY-MM-DD. Buckets age against this date; balances "
+                                    + "are always current, never historical.")
+                    @NonNull
+                    String asOfDate) {
         return restClient
                 .get()
                 .uri(agedReceivablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
@@ -142,12 +150,17 @@ public class AccountingFacadeTool {
                     + "vendorId, vendorName, current (0-30 days), days31To60, days61To90, days90Plus, "
                     + "totalOutstanding — plus grand totals across all rows. Use this for past-due, "
                     + "outstanding-balance, and vendor-concentration questions about what the business "
-                    + "owes, instead of aggregating individual vendor bills. Calling with a PAST asOfDate "
-                    + "reconstructs the point-in-time A/P balance, so a month-end trend is one call per "
-                    + "month-end date (e.g. 2026-04-30, then 2026-05-31, then 2026-06-30). Rows are empty "
-                    + "when no open payables exist as of the date.")
+                    + "owes, instead of aggregating individual vendor bills. IMPORTANT — a past asOfDate "
+                    + "does NOT reconstruct the historical balance: each bill contributes its CURRENT open "
+                    + "balance, only the aging buckets are keyed to asOfDate. Do not use a series of past "
+                    + "dates to build an A/P balance trend; the earlier points would restate today's "
+                    + "balances. Rows are empty when no open payables exist as of the date.")
     public String getAgedPayables(
-            @ToolParam(description = "As-of date, YYYY-MM-DD (past dates = historical)") @NonNull String asOfDate) {
+            @ToolParam(
+                            description = "As-of date, YYYY-MM-DD. Buckets age against this date; balances "
+                                    + "are always current, never historical.")
+                    @NonNull
+                    String asOfDate) {
         return restClient
                 .get()
                 .uri(agedPayablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
