@@ -190,6 +190,62 @@ class ToolRegistryServiceTest {
     }
 
     @Test
+    @DisplayName("admin fast-path does not hijack an accounts-receivable question (bare 'accounts' is not a keyword)")
+    void resolveCandidateTools_accountsReceivableQuestion_doesNotUseAdminFastPath() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "Which customers make up most of our accounts receivable balance, "
+                        + "and how much of each is past due?",
+                "ROLE_SYSTEM_ADMINISTRATOR",
+                "IDLE",
+                ADMIN_PERMISSIONS);
+        float[] vector = new float[] {0.7f, 0.1f};
+
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(ADMIN_PERMISSIONS), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(SAMPLE_TOOL);
+    }
+
+    @Test
+    @DisplayName("domain vocabulary vetoes the fast-path even when an admin keyword is present")
+    void resolveCandidateTools_adminKeywordWithDomainVocabulary_vetoesFastPath() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "Who has access to the receivables ledger?", "ROLE_SYSTEM_ADMINISTRATOR", "IDLE", ADMIN_PERMISSIONS);
+        float[] vector = new float[] {0.2f, 0.9f};
+
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(ADMIN_PERMISSIONS), eq("IDLE")))
+                .thenReturn(List.of(SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(SAMPLE_TOOL);
+    }
+
+    @Test
+    @DisplayName("admin fast-path still fires for a genuine user-account question")
+    void resolveCandidateTools_userAccountQuestion_usesAdminFastPath() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "Is this user account still active?", "ROLE_SYSTEM_ADMINISTRATOR", "IDLE", ADMIN_PERMISSIONS);
+
+        when(repository.findEnabledByPermissionsAndWorkflow(ADMIN_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(ADMIN_TOOL, SAMPLE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 2);
+
+        assertThat(result).containsExactly(ADMIN_TOOL);
+    }
+
+    @Test
     @DisplayName("resolveCandidateTools does not use admin fast-path when caller lacks AdminFacadeTool permission")
     void resolveCandidateTools_withoutAdminPermission_doesNotUseAdminFastPath() {
         ToolSelectionContext context = new ToolSelectionContext(

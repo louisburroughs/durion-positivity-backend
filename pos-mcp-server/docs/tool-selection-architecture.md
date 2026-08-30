@@ -63,9 +63,18 @@ Order of operations inside `ToolRegistryService.resolveCandidateTools`:
 
 1. **Gate first**: `findEnabledByPermissionsAndWorkflow(permissionCodes, workflowState)` — only
    tools the caller is authorized for in the active workflow state enter consideration.
-2. **Admin fast path**: if the query matches admin keywords/phrases *and* `AdminFacadeTool`
-   survived the gate, it is returned alone. This is the explicit confidence-based deterministic
-   recovery path; it never bypasses permission gating.
+2. **Admin fast path**: if the query matches admin keywords/phrases, is *not* vetoed by
+   business-domain vocabulary, *and* `AdminFacadeTool` survived the gate, it is returned alone.
+   This is the explicit confidence-based deterministic recovery path; it never bypasses
+   permission gating.
+
+   Because the fast path returns the admin tool **alone**, a false positive suppresses every
+   other candidate for the whole request. Two guards keep that from firing on business
+   questions: `account`/`accounts` are not bare keywords (they collide with "accounts
+   receivable", "chart of accounts", "GL account" — the admin senses live in
+   `ADMIN_QUERY_PHRASES` as "user account", "account state", …), and `FAST_PATH_VETO_TERMS`
+   vetoes the path outright when finance/workorder vocabulary is present, so a mixed query
+   ("who has access to the receivables ledger") still reaches semantic ranking.
 3. **Gated semantic ranking**: ANN search is restricted to the gated set
    (`findTopKByEmbeddingForPermissions`), so unauthorized tools can never crowd authorized ones
    out of the candidate window. Candidates are scored (`semantic rank + priority − latency −
