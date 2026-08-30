@@ -121,7 +121,18 @@ jobs:
               | cut -d'/' -f1 \
               | sort -u \
               | while read -r module; do
-                  [[ -n "${module}" && -f "${module}/Dockerfile" ]] && echo "${module}"
+                  # Membership in ALL_SERVICES_JSON decides, not the presence of a
+                  # Dockerfile. pos-events carried one while being a shared library,
+                  # so a PR touching only pos-events/ selected it here and pushed a
+                  # non-runnable image under the commit tag, even though the
+                  # full-rebuild branch above never builds it (#1581). Both branches
+                  # now read the same list, so a stray Dockerfile cannot reintroduce
+                  # that disagreement. scripts/check-deploy-service-drift.sh keeps
+                  # the list itself honest in the other direction.
+                  [[ -n "${module}" ]] || continue
+                  if jq -e --arg m "${module}" 'index($m) != null' >/dev/null <<< "${ALL_SERVICES_JSON}"; then
+                    echo "${module}"
+                  fi
                 done \
               | jq -R -s -c 'split("\n")[:-1]'
           )"

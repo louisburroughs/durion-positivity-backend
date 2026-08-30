@@ -178,6 +178,19 @@ jobs:
         # green build. Fail fast here instead (#1262).
         run: ./scripts/check-openapi-inventory-drift.sh
 
+      - name: Enforce deploy-list registration
+        # Deploying a service means adding it to five independent lists (compose,
+        # ALL_SERVICES_JSON, the alpha override, the alpha start order, and a
+        # Prometheus scrape job). Nothing made them agree, and the same drift was
+        # fixed by hand three times. Fail fast here instead (#1580).
+        run: ./scripts/check-deploy-service-drift.sh
+
+      - name: Enforce Kafka topic provisioning coverage
+        # kafka-topic-init is the authoritative topic provisioner on alpha, so a
+        # topic missing from it lands on broker defaults — which for a DLQ means
+        # 7-day retention instead of the intended 30 (#1578, #1579).
+        run: ./scripts/check-kafka-topic-drift.sh
+
       - name: Configure build cache (PR pilot)
         # Build Cache Extension pilot, PR builds only (spec §4.5). PRs skip the
         # commit-stamped revision: a version that changes every commit would poison

@@ -279,6 +279,16 @@ services:
 
   kafka-topic-init:
     # #838 Q6/Q7/Q9: provision domain-event topics with delete retention, 1 partition.
+    #
+    # This is the authoritative provisioner for alpha too, not just local compose:
+    # deploy-backend.sh runs it in both the full and the config-only deploy mode.
+    # The topic list below is therefore the config every topic actually gets, and a
+    # topic missing from it lands on broker defaults instead (7d retention) — which
+    # for a DLQ is four times shorter than intended (#1578, #1579).
+    #
+    # The list is GENERATED from the topics services configure and consume. Run
+    # `scripts/generate-kafka-topics.py --apply` after adding a @KafkaListener or a
+    # *-topic property; scripts/check-kafka-topic-drift.sh fails CI on a stale block.
     image: apache/kafka:3.9.0
     container_name: kafka-topic-init
     depends_on:
@@ -288,30 +298,149 @@ services:
     command:
       - |
         set -e
-        declare -A topics=(
-          ["workorder.events.v1"]=604800000
-          ["workorder.commands.v1"]=604800000
-          ["workorder.manifest.v1"]=259200000
-          ["workorder.events.v1.dlq"]=2592000000
-          ["workorder.commands.v1.dlq"]=2592000000
-          ["workorder.manifest.v1.dlq"]=2592000000
-          ["customer.events.v1"]=604800000
-          ["customer.events.v1.dlq"]=2592000000
-          ["people-contact.events.v1"]=604800000
-          ["people-contact.commands.v1"]=604800000
-          ["people-contact.manifest.v1"]=259200000
-          ["people-contact.events.v1.dlq"]=2592000000
-          ["invoice.events.v1"]=604800000
-          ["invoice.events.v1.dlq"]=2592000000
-        )
-        for t in "$${!topics[@]}"; do
-          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists \
-            --topic "$$t" --partitions 1 --replication-factor 1 || true
-          /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 --alter \
-            --entity-type topics --entity-name "$$t" \
-            --add-config "retention.ms=$${topics[$$t]},cleanup.policy=delete"
+        BOOTSTRAP=kafka:29092
+        # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
+        # 74 topics (37 DLQ). Regenerate with
+        # scripts/generate-kafka-topics.py --apply after adding a listener or a
+        # *-topic property; CI fails on a stale block.
+        #
+        # Retention by suffix: .dlq 30d, .manifest.v1 3d, everything else 7d.
+        #
+        # Names that do not follow ADR-0044 section 3:
+        #   payment.settlement-config.v1 — compacted config feed, not {domain}.{kind}.v1
+        #   sender.outcomes.v1 — externally owned feed, consumed only
+        #   workorder-events — pre-ADR-0044 name; consumed by pos-customer, published by nothing
+        TOPICS="
+        catalog.commands.v1              604800000
+        catalog.commands.v1.dlq          2592000000
+        catalog.events.v1                604800000
+        catalog.events.v1.dlq            2592000000
+        catalog.manifest.v1              259200000
+        catalog.manifest.v1.dlq          2592000000
+        customer.commands.v1             604800000
+        customer.commands.v1.dlq         2592000000
+        customer.events.v1               604800000
+        customer.events.v1.dlq           2592000000
+        customer.manifest.v1             259200000
+        customer.manifest.v1.dlq         2592000000
+        inventory.commands.v1            604800000
+        inventory.commands.v1.dlq        2592000000
+        inventory.events.v1              604800000
+        inventory.events.v1.dlq          2592000000
+        inventory.manifest.v1            259200000
+        inventory.manifest.v1.dlq        2592000000
+        invoice.commands.v1              604800000
+        invoice.commands.v1.dlq          2592000000
+        invoice.events.v1                604800000
+        invoice.events.v1.dlq            2592000000
+        invoice.manifest.v1              259200000
+        invoice.manifest.v1.dlq          2592000000
+        location.commands.v1             604800000
+        location.commands.v1.dlq         2592000000
+        location.events.v1               604800000
+        location.events.v1.dlq           2592000000
+        location.manifest.v1             259200000
+        location.manifest.v1.dlq         2592000000
+        marketing.events.v1              604800000
+        marketing.events.v1.dlq          2592000000
+        order.commands.v1                604800000
+        order.commands.v1.dlq            2592000000
+        order.events.v1                  604800000
+        order.events.v1.dlq              2592000000
+        payment.events.v1                604800000
+        payment.events.v1.dlq            2592000000
+        payment.settlement-config.v1     604800000
+        payment.settlement-config.v1.dlq 2592000000
+        people-contact.commands.v1       604800000
+        people-contact.commands.v1.dlq   2592000000
+        people-contact.events.v1         604800000
+        people-contact.events.v1.dlq     2592000000
+        people-contact.manifest.v1       259200000
+        people-contact.manifest.v1.dlq   2592000000
+        people.commands.v1               604800000
+        people.commands.v1.dlq           2592000000
+        people.events.v1                 604800000
+        people.events.v1.dlq             2592000000
+        people.manifest.v1               259200000
+        people.manifest.v1.dlq           2592000000
+        sender.outcomes.v1               604800000
+        sender.outcomes.v1.dlq           2592000000
+        supplier.commands.v1             604800000
+        supplier.commands.v1.dlq         2592000000
+        supplier.events.v1               604800000
+        supplier.events.v1.dlq           2592000000
+        vehicle.commands.v1              604800000
+        vehicle.commands.v1.dlq          2592000000
+        vehicle.events.v1                604800000
+        vehicle.events.v1.dlq            2592000000
+        vehicle.manifest.v1              259200000
+        vehicle.manifest.v1.dlq          2592000000
+        warranty.events.v1               604800000
+        warranty.events.v1.dlq           2592000000
+        workorder-events                 604800000
+        workorder-events.dlq             2592000000
+        workorder.commands.v1            604800000
+        workorder.commands.v1.dlq        2592000000
+        workorder.events.v1              604800000
+        workorder.events.v1.dlq          2592000000
+        workorder.manifest.v1            259200000
+        workorder.manifest.v1.dlq        2592000000
+        "
+        # END GENERATED TOPICS
+
+        # One --describe reads every topic's config in a single JVM start, so a
+        # steady-state run costs one process instead of two per topic (~70 topics
+        # here). A topic whose config we cannot read falls through to create+alter,
+        # i.e. to the unconditional behaviour this replaced: slower, never wrong.
+        EXISTING="$$(/opt/kafka/bin/kafka-topics.sh --bootstrap-server "$$BOOTSTRAP" --describe 2>/dev/null || true)"
+
+        created=0; retuned=0; unchanged=0
+
+        set -f
+        set -- $$TOPICS
+        while [ "$$#" -ge 2 ]; do
+          topic="$$1"; retention="$$2"; shift 2
+          want="retention.ms=$$retention,cleanup.policy=delete"
+
+          # Non-indented lines are the per-topic summary; the indented ones below
+          # each are per-partition. Exact field match, so no topic name is treated
+          # as a pattern.
+          info="$$(printf '%s\n' "$$EXISTING" | awk -F'\t' -v t="Topic: $$topic" '
+            $$1 == t {
+              cfg = ""
+              for (i = 1; i <= NF; i++) if ($$i ~ /^Configs: /) { cfg = $$i; sub(/^Configs: /, "", cfg) }
+              print "FOUND " cfg
+              exit
+            }')"
+
+          if [ -z "$$info" ]; then
+            # Absent, or a describe output we could not parse. --create is a no-op
+            # for a topic that already exists, so the alter still has to run: that
+            # is what corrects retention on topics the broker auto-created.
+            /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$$BOOTSTRAP" --create --if-not-exists \
+              --topic "$$topic" --partitions 1 --replication-factor 1 \
+              --config "retention.ms=$$retention" --config cleanup.policy=delete >/dev/null || true
+            /opt/kafka/bin/kafka-configs.sh --bootstrap-server "$$BOOTSTRAP" --alter \
+              --entity-type topics --entity-name "$$topic" --add-config "$$want" >/dev/null
+            created=$$((created + 1))
+            continue
+          fi
+
+          config="$${info#FOUND }"
+          case ",$$config," in
+            *",retention.ms=$$retention,"*)
+              case ",$$config," in
+                *",cleanup.policy=delete,"*) unchanged=$$((unchanged + 1)); continue ;;
+              esac
+              ;;
+          esac
+
+          /opt/kafka/bin/kafka-configs.sh --bootstrap-server "$$BOOTSTRAP" --alter \
+            --entity-type topics --entity-name "$$topic" --add-config "$$want" >/dev/null
+          retuned=$$((retuned + 1))
         done
-        echo "topic init complete"
+
+        echo "topic init complete: $$created created, $$retuned retuned, $$unchanged already correct"
     restart: "no"
     logging: *logging
     networks:

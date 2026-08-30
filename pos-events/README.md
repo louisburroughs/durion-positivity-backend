@@ -135,7 +135,7 @@ The dependency is already centralized in the root `pos-dependencies` BOM. Just r
 **Verify activation** (optional, in application logs):
 
 ```text
-Registering auto-configuration: PosEventsApplication
+Registering auto-configuration: PosEventsAutoConfiguration
 Registering bean: emitEventAspect
 Registering bean: emitEventProxyFactory
 ```
@@ -226,13 +226,13 @@ The following modules currently use pos-events:
 
 ```ascii
 com.positivity.events/
-├── EmitEvent.java              (public: annotation)
-├── EventEmitted.java           (public: event record)
-├── PosEventsApplication.java   (public: auto-configuration)
-├── TimeConfig.java             (public: Clock auto-configuration)
-├── EmitEventAspect.java        (internal: aspect implementation)
-├── EmitEventProxy.java         (internal: proxy logic)
-└── EmitEventProxyFactory.java  (public: factory bean)
+├── EmitEvent.java                    (public: annotation)
+├── EventEmitted.java                 (public: event record)
+├── PosEventsAutoConfiguration.java   (public: auto-configuration)
+├── TimeConfig.java                   (public: Clock auto-configuration)
+├── EmitEventAspect.java              (internal: aspect implementation)
+├── EmitEventProxy.java               (internal: proxy logic)
+└── EmitEventProxyFactory.java        (public: factory bean)
 
 com.positivity.time/
 ├── ScaledClock.java            (public: accelerated Clock implementation)
@@ -245,7 +245,7 @@ com.positivity.time/
 - `EmitEvent` annotation
 - `EventEmitted` record
 - `EmitEventProxyFactory` bean
-- `PosEventsApplication` (auto-configuration, transparent to consumers)
+- `PosEventsAutoConfiguration` (auto-configuration, transparent to consumers)
 - `TimeConfig` (auto-configuration, transparent to consumers)
 - `ScaledClock`, `MetricTime`, and `TimeSource`
 

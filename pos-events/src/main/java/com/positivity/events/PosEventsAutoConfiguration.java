@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration(after = TimeConfig.class)
 @RequiredArgsConstructor
-public class PosEventsApplication {
+public class PosEventsAutoConfiguration {
 
     private final Clock clock;
     private final ApplicationEventPublisher publisher;
