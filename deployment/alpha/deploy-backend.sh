@@ -130,6 +130,32 @@ require_supplier_audit_key() {
   fi
 }
 
+# Reads a value out of the env file, stripping one layer of the single quotes
+# env_single_quote may have added.
+env_value() {
+  local v
+  v="$(grep -E "^$1=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+  v="${v%\'}"
+  v="${v#\'}"
+  printf '%s' "$(trim_space "${v}")"
+}
+
+# Both deploy modes need this. It used to live only in the full-deploy branch, on the
+# assumption that config-only never pulls — true only while every service named below
+# already had its image on the box from an earlier full deploy. The first sync that named
+# a service which had never been deployed (pos-supplier and pos-marketing, #1577) had to
+# pull, had no credentials, and fell through to building the image on the host, where the
+# failure surfaced as an unrelated-looking "compose build requires buildx 0.17.0 or later".
+ecr_login() {
+  local registry="$1"
+  if [[ -z "${registry}" ]]; then
+    echo "ERROR: ECR registry is empty; cannot authenticate to pull images." >&2
+    exit 1
+  fi
+  aws ecr get-login-password --region us-east-1 \
+    | docker login --username AWS --password-stdin "${registry}"
+}
+
 should_run_docker_prune() {
   if ! [[ "${DOCKER_PRUNE_INTERVAL_HOURS}" =~ ^[0-9]+$ ]]; then
     echo "Skipping Docker prune: DOCKER_PRUNE_INTERVAL_HOURS must be an integer, got '${DOCKER_PRUNE_INTERVAL_HOURS}'." >&2
@@ -184,7 +210,7 @@ reconcile_databases() {
   fi
 
   echo "Ensuring postgres is up for database reconciliation"
-  docker compose "${COMPOSE_ARGS[@]}" up -d postgres
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build postgres
 
   local attempt
   for attempt in $(seq 1 60); do
@@ -335,6 +361,7 @@ if [[ "${MODE}" == "config-only" ]]; then
   require_env_entry ECR_REGISTRY
   require_env_entry SECURITY_SEED_ADMIN_PASSWORD_HASH
   require_supplier_audit_key
+  ecr_login "$(env_value ECR_REGISTRY)"
 else
   if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
     sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=${IMAGE_TAG}/" "${ENV_FILE}"
@@ -367,8 +394,7 @@ else
 
   require_supplier_audit_key
 
-  aws ecr get-login-password --region us-east-1 \
-    | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
+  ecr_login "${ECR_REGISTRY}"
 fi
 
 cd "${BACKEND_DIR}"
@@ -379,46 +405,69 @@ COMPOSE_ARGS=(
   --env-file "${ENV_FILE}"
 )
 
-# Config-only sync (#1457): no image pulls, no --force-recreate for the JVM services —
-# compose's config-hash diff recreates exactly the containers whose merged config changed
-# and leaves the rest running. The full deploy's tier order is kept so a sweeping change
-# (e.g. to the shared logging anchor, which touches every service) still starts JVMs in
-# gated batches instead of all at once. Observability containers ARE force-recreated
-# (mirroring the full deploy): their configs are bind-mounted files this sync just
-# refreshed, which compose's config hash cannot see. kafka-topic-init and database
-# reconciliation also run, so topic-definition and init-databases.sql changes —
-# config-only changes too — take effect.
+# Config-only sync (#1457): no --force-recreate for the JVM services — compose's
+# config-hash diff recreates exactly the containers whose merged config changed and
+# leaves the rest running. It does pull, contrary to how this once worked: the images
+# are almost always already on the box, but a sync that adds a service to the compose
+# lists needs the one image that is not, and silently skipping that pull is what broke
+# #1577. The full deploy's tier order is kept so a sweeping change (e.g. to the shared
+# logging anchor, which touches every service) still starts JVMs in gated batches
+# instead of all at once. Observability containers ARE force-recreated (mirroring the
+# full deploy): their configs are bind-mounted files this sync just refreshed, which
+# compose's config hash cannot see. kafka-topic-init and database reconciliation also
+# run, so topic-definition and init-databases.sql changes — config-only changes too —
+# take effect.
 if [[ "${MODE}" == "config-only" ]]; then
   echo "Config-only sync: recreating only containers whose compose config changed."
 
+  # Resolve every image up front, before a single container is touched. A config-only sync
+  # that adds a service can only work if that service has an image at the BACKEND_TAG the
+  # box is already pinned to — and a service built for the first time in the same commit
+  # does not, because its image is only published by the build that runs after the merge.
+  # Without this the run half-applied: it recreated the early tiers, then failed in the
+  # batch holding the new service and left the later tiers on their old containers (#1577).
+  # Pulls are no-ops for images already present, so this costs nothing on a normal sync.
+  echo "Verifying every backend image exists at the pinned BACKEND_TAG"
+  if ! docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"; then
+    echo "" >&2
+    echo "ERROR: at least one backend image is missing at BACKEND_TAG=$(env_value BACKEND_TAG)." >&2
+    echo "Nothing has been changed on this host." >&2
+    echo "" >&2
+    echo "A service added to docker-compose.yml, the alpha override and DOMAIN_SERVICES in" >&2
+    echo "the same commit has no image at the tag this box is pinned to: config-only sync" >&2
+    echo "cannot deploy it. Run the build-push-ecr workflow on main with deploy_alpha=true," >&2
+    echo "which builds and publishes every service at the new tag and then deploys it." >&2
+    exit 1
+  fi
+
   echo "Applying config to postgres"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" postgres
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" postgres
 
   render_prometheus_secret
 
   echo "Applying config to observability services: ${OBSERVABILITY_SERVICES[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${OBSERVABILITY_SERVICES[@]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate "${OBSERVABILITY_SERVICES[@]}"
 
   echo "Applying config to Kafka broker and exporter"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" kafka
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" kafka
 
   echo "Provisioning Kafka topics"
   docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
 
-  docker compose "${COMPOSE_ARGS[@]}" up -d kafka-exporter
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build kafka-exporter
 
   reconcile_databases
 
   echo "Applying config to core services: ${CORE_SERVICES[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
 
   echo "Applying config to platform services: ${PLATFORM_SERVICES[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
 
   for ((i = 0; i < ${#DOMAIN_SERVICES[@]}; i += DOMAIN_BATCH_SIZE)); do
     BATCH=("${DOMAIN_SERVICES[@]:i:DOMAIN_BATCH_SIZE}")
     echo "Applying config to domain services (batch $((i / DOMAIN_BATCH_SIZE + 1))): ${BATCH[*]}"
-    docker compose "${COMPOSE_ARGS[@]}" up -d --wait --wait-timeout "${WAIT_TIMEOUT}" "${BATCH[@]}"
+    docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${BATCH[@]}"
   done
 
   docker compose "${COMPOSE_ARGS[@]}" ps
@@ -438,7 +487,7 @@ fi
 if [[ -n "${DESIRED_POSTGRES_IMAGE}" && "${CURRENT_POSTGRES_IMAGE}" != "${DESIRED_POSTGRES_IMAGE}" ]]; then
   echo "Reconciling postgres image: current='${CURRENT_POSTGRES_IMAGE:-<none>}' desired='${DESIRED_POSTGRES_IMAGE}'"
   docker compose "${COMPOSE_ARGS[@]}" pull postgres
-  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate postgres
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate postgres
 fi
 
 render_prometheus_secret
@@ -447,7 +496,7 @@ echo "Pulling observability services: ${OBSERVABILITY_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${OBSERVABILITY_SERVICES[@]}"
 
 echo "Starting observability services: ${OBSERVABILITY_SERVICES[*]}"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate "${OBSERVABILITY_SERVICES[@]}"
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate "${OBSERVABILITY_SERVICES[@]}"
 
 # Kafka domain-event backbone (ADR-0044, #838). Broker data lives on the
 # kafka-data volume, so --force-recreate is safe. --wait blocks on the
@@ -456,13 +505,13 @@ echo "Pulling Kafka services: ${KAFKA_SERVICES[*]}"
 docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${KAFKA_SERVICES[@]}" kafka-topic-init
 
 echo "Starting Kafka broker"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate --wait kafka
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate --wait kafka
 
 echo "Provisioning Kafka topics"
 docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
 
 echo "Starting Kafka exporter"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate kafka-exporter
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate kafka-exporter
 
 reconcile_databases
 
@@ -472,17 +521,17 @@ docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
 # --wait blocks until every named service is healthy and fails the deploy if one
 # goes unhealthy — a real gate instead of exiting 0 with half the stack down.
 echo "Starting core services: ${CORE_SERVICES[*]}"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate \
   --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
 
 echo "Starting platform services: ${PLATFORM_SERVICES[*]}"
-docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate \
   --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
 
 for ((i = 0; i < ${#DOMAIN_SERVICES[@]}; i += DOMAIN_BATCH_SIZE)); do
   BATCH=("${DOMAIN_SERVICES[@]:i:DOMAIN_BATCH_SIZE}")
   echo "Starting domain services (batch $((i / DOMAIN_BATCH_SIZE + 1))): ${BATCH[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --force-recreate \
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate \
     --wait --wait-timeout "${WAIT_TIMEOUT}" "${BATCH[@]}"
 done
 
