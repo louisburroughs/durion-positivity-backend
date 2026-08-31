@@ -29,8 +29,19 @@ SET TIME ZONE 'UTC';
 --
 -- RoleBaselineDriftTest asserts the floor and the baseline file together still cover every expected
 -- role, which is what replaces Flyway's guarantee that every environment got the same set.
-INSERT INTO roles (id, name, description, created_at, created_by)
-VALUES ('7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, 'ADMIN', 'ADMIN seeded role', NOW(), 'seed-generator')
+-- Persona metadata is set here, not in V35. Flyway runs every versioned migration before any
+-- repeatable one, so on a fresh database V35's UPDATE ... WHERE name = 'ADMIN' executes before this
+-- INSERT and matches nothing — the floor would end up unranked, and being unranked it would sort
+-- behind every ranked role, inverting the intended SYSTEM_ADMINISTRATOR < ADMIN < ... order for any
+-- admin who also holds an operational role. Carrying the persona on the INSERT is what makes a fresh
+-- database match an existing one. (#1613)
+INSERT INTO roles (id, name, description, created_at, created_by,
+                   persona_title, persona_focus, persona_tone, mcp_persona_rank)
+VALUES ('7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, 'ADMIN', 'ADMIN seeded role', NOW(), 'seed-generator',
+        'platform administrator',
+        'access administration, governance, and operational controls',
+        'secure, explicit, and attentive to approval, audit, and blast-radius',
+        20)
 ON CONFLICT (name) DO NOTHING;
 -- GENERAL_MANAGER, INVENTORY_CONTROLLER, INVENTORY_LEAD, INVENTORY_MANAGER and MANAGER
 -- were created at startup by pos-security-service's RoleInitializer (generated ids)
@@ -38,8 +49,13 @@ ON CONFLICT (name) DO NOTHING;
 -- that and has always been seeded here. The five migrated ids are UUIDv5 of
 -- "durion-positivity://roles/<NAME>" so a regenerated seed reproduces them; databases
 -- populated before #1440 keep their original generated ids (ON CONFLICT DO NOTHING).
-INSERT INTO roles (id, name, description, created_at, created_by)
-VALUES ('e9b3e6ba-af10-08ff-0376-1f2fa60d5093'::uuid, 'SYSTEM_ADMINISTRATOR', 'Canonical persona: System Administrator', NOW(), 'seed-generator')
+INSERT INTO roles (id, name, description, created_at, created_by,
+                   persona_title, persona_focus, persona_tone, mcp_persona_rank)
+VALUES ('e9b3e6ba-af10-08ff-0376-1f2fa60d5093'::uuid, 'SYSTEM_ADMINISTRATOR', 'Canonical persona: System Administrator', NOW(), 'seed-generator',
+        'system administrator',
+        'platform configuration, service operations, and change safety',
+        'secure, precise, and change-aware',
+        10)
 ON CONFLICT (name) DO NOTHING;
 
 -- Users

@@ -59,7 +59,13 @@ public class RoleLoaderStrategy implements DomainLoaderStrategy<RoleLoaderRecord
             "enable",
             "disable",
             "authorize",
-            "roleplay");
+            "act as",
+            "roleplay",
+            "you are",
+            "your instructions",
+            "system prompt",
+            "do not",
+            "don't");
 
     @Override
     public DomainType getDomainType() {
@@ -106,6 +112,10 @@ public class RoleLoaderStrategy implements DomainLoaderStrategy<RoleLoaderRecord
             errors.add(field + " must be a single line with no control characters");
             return;
         }
+        if (!value.equals(value.strip())) {
+            errors.add(field + " must not start or end with whitespace");
+            return;
+        }
         if (value.length() > max) {
             errors.add("%s must be at most %d characters".formatted(field, max));
             return;
@@ -120,7 +130,16 @@ public class RoleLoaderStrategy implements DomainLoaderStrategy<RoleLoaderRecord
         }
     }
 
-    /** Whole-word match, so "approval" does not trip on a term and "overrun" does not trip "run". */
+    /**
+     * Matches at a word boundary and absorbs trailing word characters, so "grant" also catches
+     * "granting" while "overrun" does not trip "run".
+     *
+     * <p>The trailing-inflection part matters for parity: {@code PersonaTextValidator} uses
+     * {@code \b<term>\w*\b}, so a loader that required a non-word character right after the term
+     * would accept "granting exceptions" and let the row through to an endpoint that rejects it —
+     * and that rejection is a 400 for the whole batch, with no row attribution, which is the opposite
+     * of what validating here is for.
+     */
     private static boolean containsWord(String text, String term) {
         int from = 0;
         while (true) {
@@ -129,9 +148,7 @@ public class RoleLoaderStrategy implements DomainLoaderStrategy<RoleLoaderRecord
                 return false;
             }
             boolean startsWord = at == 0 || !Character.isLetterOrDigit(text.charAt(at - 1));
-            int end = at + term.length();
-            boolean endsWord = end >= text.length() || !Character.isLetterOrDigit(text.charAt(end));
-            if (startsWord && endsWord) {
+            if (startsWord) {
                 return true;
             }
             from = at + 1;

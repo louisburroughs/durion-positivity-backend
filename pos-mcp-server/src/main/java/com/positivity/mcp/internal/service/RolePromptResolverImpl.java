@@ -143,15 +143,19 @@ public class RolePromptResolverImpl implements RolePromptResolver {
      * <p>Only after the fetch also fails is this a real sync gap.
      */
     private @NonNull Optional<String> resolveRolePersona(@NonNull String role) {
-        Optional<String> persisted = systemPromptRepository.findByName(role).map(SystemPrompt::getContent);
-        if (persisted.isPresent()) {
-            return persisted;
-        }
-
+        // Eligibility is checked before the persisted row, not after. A role that has been marked
+        // ineligible may still have a row from when it was eligible, and reading the row first would
+        // serve that stale persona forever — the flag would appear to do nothing, which is the one
+        // thing decision 2 needs it to do.
         if (snapshotHolder.get().isIneligible(role)) {
             LOGGER.debug("MCP role excluded from persona resolution role={}; assembling without ROLE layer", role);
             recordFallback(REASON_PERSONA_INELIGIBLE, role);
             return Optional.empty();
+        }
+
+        Optional<String> persisted = systemPromptRepository.findByName(role).map(SystemPrompt::getContent);
+        if (persisted.isPresent()) {
+            return persisted;
         }
 
         if (personaRefresher.refreshRole(role)) {

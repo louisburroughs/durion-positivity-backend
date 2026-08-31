@@ -205,6 +205,7 @@ class RoleBaselineDriftTest {
         for (Map<String, String> row : readCsv(FIXTURES.resolve("role-permissions.csv"))) {
             baseline.put(row.get("roleName"), splitPermissions(row.get("permissions")));
         }
+        assertThat(baseline).as("no grants parsed out of role-permissions.csv").isNotEmpty();
         return baseline;
     }
 
@@ -238,6 +239,15 @@ class RoleBaselineDriftTest {
         return value == null || value.isBlank() ? null : value;
     }
 
+    /**
+     * Roles created by the migrations.
+     *
+     * <p>The {@code isNotEmpty} is load-bearing, not decoration: every caller compares set
+     * membership, and a set-membership assertion over an empty set passes. These names come out of a
+     * regex over SQL whose formatting can legitimately change (a quoted identifier, a CTE), and this
+     * PR already shipped one guard that passed while comparing two identically-truncated sets. If the
+     * extraction stops matching, this fails loudly instead of going green over nothing.
+     */
     private static Set<String> seededRoleNames() throws IOException {
         Set<String> names = new LinkedHashSet<>();
         try (var files = Files.list(MIGRATIONS)) {
@@ -254,6 +264,9 @@ class RoleBaselineDriftTest {
         // V23 drops candidate roles that were never ratified; a name only ever inserted by a
         // migration that a later one deletes is not part of the baseline.
         names.removeAll(droppedRoleNames());
+        assertThat(names)
+                .as("no roles parsed out of %s — the extraction is broken", MIGRATIONS)
+                .isNotEmpty();
         return names;
     }
 

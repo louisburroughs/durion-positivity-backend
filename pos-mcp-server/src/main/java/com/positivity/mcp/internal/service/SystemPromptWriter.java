@@ -39,7 +39,16 @@ public class SystemPromptWriter {
         this.systemPromptRepository = systemPromptRepository;
     }
 
-    /** Fail-soft: a row that cannot be written is logged, never propagated to the caller. */
+    /**
+     * Fail-soft: a row that cannot be written is logged, never propagated to the caller.
+     *
+     * <p>{@code saveAndFlush}, not {@code save}, is what makes that true. A plain {@code save} only
+     * queues the insert; a unique-constraint violation on {@code system_prompts.name} would then
+     * surface at commit — after this catch block, in the transaction interceptor — and propagate out
+     * of a method whose whole contract is that it does not. Flushing inside the try brings the
+     * failure back where it can be caught. That race is reachable: two concurrent requests from
+     * users of a newly created role both miss, both fetch, and both try to insert the same row.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void upsert(@NonNull String name, @NonNull String content) {
         try {
@@ -48,7 +57,7 @@ public class SystemPromptWriter {
                 SystemPrompt prompt = existing.get();
                 if (!content.equals(prompt.getContent())) {
                     prompt.setContent(content);
-                    systemPromptRepository.save(prompt);
+                    systemPromptRepository.saveAndFlush(prompt);
                     LOGGER.info("Updated role persona prompt name={}", name);
                 }
                 return;
@@ -57,10 +66,30 @@ public class SystemPromptWriter {
             SystemPrompt prompt = new SystemPrompt();
             prompt.setName(name);
             prompt.setContent(content);
-            systemPromptRepository.save(prompt);
+            systemPromptRepository.saveAndFlush(prompt);
             LOGGER.info("Seeded role persona prompt name={}", name);
         } catch (Exception exception) {
+            // The losing side of that race lands here. The winner wrote the same rendered persona,
+            // so the outcome is already correct and the request continues.
             LOGGER.warn("Failed to persist role persona prompt name={}", name, exception);
+        }
+    }
+
+    /**
+     * Drops a role's persona row, for a role that is no longer eligible for one.
+     *
+     * <p>Absent is the normal case and not an error: most roles never had a row to remove.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void remove(@NonNull String name) {
+        try {
+            systemPromptRepository.findByName(name).ifPresent(prompt -> {
+                systemPromptRepository.delete(prompt);
+                systemPromptRepository.flush();
+                LOGGER.info("Removed role persona prompt name={} (role is no longer persona-eligible)", name);
+            });
+        } catch (Exception exception) {
+            LOGGER.warn("Failed to remove role persona prompt name={}", name, exception);
         }
     }
 }

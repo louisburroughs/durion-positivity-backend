@@ -174,7 +174,9 @@ class RolePromptResolverImplTest {
     void assemble_ineligibleRole_recordsPersonaIneligibleMetric() {
         when(systemPromptRepository.findByName(MASTER_NAME))
                 .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
-        when(systemPromptRepository.findByName("ROLE_CUSTOMER")).thenReturn(Optional.empty());
+        // No stub for ROLE_CUSTOMER on purpose: an ineligible role must be recognised before the
+        // persisted row is consulted, so that lookup never happens. A stub here would be flagged as
+        // unnecessary — which is exactly the signal that the ordering is right.
         RolePromptResolverImpl ineligibleAware = TestSnapshots.resolver(
                 systemPromptRepository,
                 meterRegistry,

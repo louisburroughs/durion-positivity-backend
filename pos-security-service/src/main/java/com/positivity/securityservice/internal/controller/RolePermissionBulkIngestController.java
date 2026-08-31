@@ -140,24 +140,41 @@ public class RolePermissionBulkIngestController extends AbstractBulkIngestContro
                 continue;
             }
 
-            try {
-                for (String permission : record.permissions()) {
+            // Per permission, not per row. A row here carries a role's whole grant set — several
+            // hundred for ADMIN — each applied in its own transaction. Letting the first unresolvable
+            // permission abort the loop would commit the grants before it, skip every grant after it,
+            // and report one opaque failure; a re-run would stop at the same place. Collecting the
+            // failures instead means the row applies everything it can and names exactly what it
+            // could not.
+            List<String> rejected = new ArrayList<>();
+            for (String permission : record.permissions()) {
+                try {
                     roleManagementService.assignPermissionToRole(roleId, permission);
+                } catch (Exception exception) {
+                    log.warn(
+                            "Failed to grant permission {} to role {} at row {}: {}",
+                            permission,
+                            record.roleName(),
+                            i,
+                            exception.getMessage());
+                    rejected.add(permission);
                 }
+            }
+
+            if (rejected.isEmpty()) {
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(roleId)
                         .success(true)
                         .build());
                 successCount++;
-            } catch (Exception exception) {
-                log.warn("Failed to grant permissions at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
+            } else {
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
+                        .entityId(roleId)
                         .success(false)
                         .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "Role permission ingest failed" : message)
+                        .errorMessage("Could not grant to " + record.roleName() + ": " + String.join(", ", rejected))
                         .build());
                 failureCount++;
             }

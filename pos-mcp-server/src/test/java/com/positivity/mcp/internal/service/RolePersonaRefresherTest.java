@@ -35,7 +35,7 @@ class RolePersonaRefresherTest {
         holder = TestSnapshots.emptyHolder();
         repository = Mockito.mock(SystemPromptRepository.class);
         Mockito.when(repository.findByName(Mockito.anyString())).thenReturn(Optional.empty());
-        Mockito.when(repository.save(Mockito.any(SystemPrompt.class))).thenAnswer(i -> i.getArgument(0));
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class))).thenAnswer(i -> i.getArgument(0));
         refresher = new RolePersonaRefresher(source, holder, new SystemPromptWriter(repository));
     }
 
@@ -133,7 +133,7 @@ class RolePersonaRefresherTest {
 
         refresher.refreshAll();
 
-        Mockito.verify(repository, Mockito.never()).save(Mockito.any(SystemPrompt.class));
+        Mockito.verify(repository, Mockito.never()).saveAndFlush(Mockito.any(SystemPrompt.class));
     }
 
     @Test
@@ -142,7 +142,7 @@ class RolePersonaRefresherTest {
         Mockito.reset(repository);
         Mockito.when(repository.findByName("ROLE_ADMIN")).thenThrow(new IllegalStateException("boom"));
         Mockito.when(repository.findByName("ROLE_TECHNICIAN")).thenReturn(Optional.empty());
-        Mockito.when(repository.save(Mockito.any(SystemPrompt.class))).thenAnswer(i -> i.getArgument(0));
+        Mockito.when(repository.saveAndFlush(Mockito.any(SystemPrompt.class))).thenAnswer(i -> i.getArgument(0));
         source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
                 Instant.EPOCH, List.of(TestSnapshots.eligible("ADMIN", 20), TestSnapshots.eligible("TECHNICIAN", 80))));
 
@@ -151,9 +151,56 @@ class RolePersonaRefresherTest {
         assertThat(savedNames()).containsExactly("ROLE_TECHNICIAN");
     }
 
+    /** saveAndFlush, not save: SystemPromptWriter flushes inside its try so it can catch. */
+    @Test
+    @DisplayName("a role that turns ineligible has its persona row removed, not just left behind")
+    void ineligibleTransitionRemovesTheRow() {
+        // The flag is settable through PUT /v1/roles/{id}. Without the removal the row keeps being
+        // served by prompt assembly and no later sync clears it, so marking a role ineligible would
+        // silently do nothing for any role that already had a persona.
+        SystemPrompt existing = new SystemPrompt();
+        existing.setName("ROLE_CUSTOMER");
+        existing.setContent("stale persona");
+        Mockito.when(repository.findByName("ROLE_CUSTOMER")).thenReturn(Optional.of(existing));
+
+        refresher.applyPersona(new RolePersona("CUSTOMER", null, null, null, null, null, false));
+
+        Mockito.verify(repository).delete(existing);
+        assertThat(holder.get().isIneligible("ROLE_CUSTOMER")).isTrue();
+    }
+
+    @Test
+    @DisplayName("a full sync sweeps away the rows of roles that are no longer eligible")
+    void fullSyncSweepsIneligibleRows() {
+        SystemPrompt existing = new SystemPrompt();
+        existing.setName("ROLE_CUSTOMER");
+        existing.setContent("stale persona");
+        Mockito.when(repository.findByName("ROLE_CUSTOMER")).thenReturn(Optional.of(existing));
+        source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
+                Instant.EPOCH,
+                List.of(
+                        TestSnapshots.eligible("ADMIN", 20),
+                        new RolePersona("CUSTOMER", null, null, null, null, null, false))));
+
+        refresher.refreshAll();
+
+        Mockito.verify(repository).delete(existing);
+    }
+
+    @Test
+    @DisplayName("a role named USER is ignored rather than overwriting the ROLE_USER fallback")
+    void roleNamedUserCannotHijackTheFallback() {
+        // RoleAuthorities.toAuthority("USER") is exactly the built-in fallback identity's prompt key,
+        // so writing it would repurpose the persona every unresolved caller gets.
+        refresher.applyPersona(TestSnapshots.eligible("USER", 10));
+
+        assertThat(savedNames()).isEmpty();
+        assertThat(holder.get().isKnown("ROLE_USER")).isFalse();
+    }
+
     private List<String> savedNames() {
         var captor = org.mockito.ArgumentCaptor.forClass(SystemPrompt.class);
-        Mockito.verify(repository, Mockito.atLeast(0)).save(captor.capture());
+        Mockito.verify(repository, Mockito.atLeast(0)).saveAndFlush(captor.capture());
         return captor.getAllValues().stream().map(SystemPrompt::getName).toList();
     }
 

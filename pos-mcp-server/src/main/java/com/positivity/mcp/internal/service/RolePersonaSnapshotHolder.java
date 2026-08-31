@@ -65,9 +65,11 @@ public class RolePersonaSnapshotHolder {
 
     private double snapshotAgeSeconds() {
         RolePersonaSnapshot snapshot = current.get();
-        if (snapshot.isEmpty()) {
-            // No snapshot has ever landed. Reporting age from the epoch would look like an
-            // absurdly stale sync rather than an absent one, so report it as a distinct value.
+        // Instant.EPOCH marks a snapshot no full pull has ever produced — either the initial empty
+        // one, or one that only ever received single-role merges from the on-miss path. Both report
+        // the -1 sentinel rather than an age measured from 1970, which would read as a unit bug to
+        // whoever writes the alert instead of "no full pull has landed".
+        if (snapshot.isEmpty() || Instant.EPOCH.equals(snapshot.generatedAt())) {
             return -1d;
         }
         return Duration.between(snapshot.generatedAt(), Instant.now(clock)).toSeconds();

@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -37,6 +38,10 @@ class RolePersonaReconciliationTest {
     private static final Path MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
     private static final Path PERSONA_BACKFILL = MIGRATIONS.resolve("V35__backfill_role_persona_metadata.sql");
 
+    /** The bulk-load baseline — canonical for every role outside the bootstrap floor (#1613 D8). */
+    private static final Path BASELINE_ROLES =
+            Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "roles.csv");
+
     private static final Pattern ROLE_INSERT =
             Pattern.compile("INSERT\\s+INTO\\s+roles\\b(.*?);", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
     private static final Pattern ROLE_DELETE = Pattern.compile(
@@ -54,16 +59,28 @@ class RolePersonaReconciliationTest {
             Pattern.CASE_INSENSITIVE);
 
     @Test
-    @DisplayName("every seeded role either gets a persona or is explicitly excluded from resolution")
+    @DisplayName("every provisioned role either gets a persona or is explicitly excluded from resolution")
     void everySeededRoleIsAccountedFor() throws IOException {
-        Set<String> seeded = new TreeSet<>(seededRoleNames());
+        // Both provisioning paths, not just SQL. This PR made the baseline file the canonical source
+        // for every role outside the bootstrap floor, so a guard that reads only db/migration would
+        // police six roles and wave the other eleven through — including any role added later.
+        Set<String> provisioned = new TreeSet<>(seededRoleNames());
+        provisioned.addAll(baselineRoleNames());
+
+        // Vacuity guard: every assertion below is trivially true on an empty set, and these sets come
+        // out of regexes over files whose formatting can change. Assert the extraction found something
+        // before trusting what it says.
+        assertThat(provisioned)
+                .as("no roles parsed out of the migrations or the baseline file")
+                .isNotEmpty();
 
         Set<String> accountedFor = new TreeSet<>(personaBackfilledRoles());
         accountedFor.addAll(ineligibleRoles());
+        accountedFor.addAll(baselinePersonaRoles());
 
         // The failure message names the roles, because "a role is missing a persona" is only
         // actionable if you know which one.
-        assertThat(seeded)
+        assertThat(provisioned)
                 .as("roles with neither persona metadata nor an explicit ineligible flag")
                 .allSatisfy(role -> assertThat(accountedFor).contains(role));
     }
@@ -101,6 +118,57 @@ class RolePersonaReconciliationTest {
                         "INVENTORY_MANAGER",
                         "MANAGER",
                         "SHOP_MANAGER");
+    }
+
+    /** Role names listed in the bulk-load baseline file. */
+    private static Set<String> baselineRoleNames() throws IOException {
+        return baselineRows().stream()
+                .map(row -> row[0])
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * Baseline roles that carry a persona decision: either a curated slot, or an explicit
+     * {@code mcpPersonaEligible=false}.
+     */
+    private static Set<String> baselinePersonaRoles() throws IOException {
+        Set<String> decided = new LinkedHashSet<>();
+        for (String[] row : baselineRows()) {
+            boolean hasSlot = row.length > 4 && !(row[2].isBlank() && row[3].isBlank() && row[4].isBlank());
+            boolean explicitlyIneligible = row.length > 6 && "false".equalsIgnoreCase(row[6].trim());
+            if (hasSlot || explicitlyIneligible) {
+                decided.add(row[0]);
+            }
+        }
+        return decided;
+    }
+
+    /** Minimal CSV split: these fixtures quote only embedded commas. */
+    private static List<String[]> baselineRows() throws IOException {
+        List<String> lines = Files.readAllLines(BASELINE_ROLES, StandardCharsets.UTF_8);
+        List<String[]> rows = new java.util.ArrayList<>();
+        for (String line : lines.subList(1, lines.size())) {
+            if (line.isBlank()) {
+                continue;
+            }
+            List<String> values = new java.util.ArrayList<>();
+            StringBuilder current = new StringBuilder();
+            boolean quoted = false;
+            for (int i = 0; i < line.length(); i++) {
+                char c = line.charAt(i);
+                if (c == '"') {
+                    quoted = !quoted;
+                } else if (c == ',' && !quoted) {
+                    values.add(current.toString());
+                    current.setLength(0);
+                } else {
+                    current.append(c);
+                }
+            }
+            values.add(current.toString());
+            rows.add(values.toArray(String[]::new));
+        }
+        return rows;
     }
 
     private static Set<String> personaBackfilledRoles() throws IOException {

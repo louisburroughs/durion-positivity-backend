@@ -107,26 +107,50 @@ public class RolePersonaRefresher {
      * safe without a processed-event table.
      */
     public void applyPersona(@NonNull RolePersona persona) {
+        String authority = RoleAuthorities.toAuthority(persona.name());
+        if (SystemPromptDefaults.ROLE_USER_PROMPT_NAME.equals(authority)) {
+            // A role literally named USER normalizes to ROLE_USER, the key of the built-in fallback
+            // persona that every unresolved caller gets. Writing an operator-authored persona over
+            // that row would silently repurpose the fallback platform-wide.
+            LOGGER.warn(
+                    "Ignoring synced role name={} — it collides with the reserved {} fallback identity",
+                    persona.name(),
+                    SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
+            return;
+        }
         snapshotHolder.merge(persona);
         if (persona.mcpPersonaEligible()) {
-            systemPromptWriter.upsert(RoleAuthorities.toAuthority(persona.name()), RolePersonaRenderer.render(persona));
+            systemPromptWriter.upsert(authority, RolePersonaRenderer.render(persona));
+        } else {
+            // A role can go eligible -> ineligible through PUT /v1/roles/{id}. Leaving the row behind
+            // would keep serving the persona it is no longer supposed to have, and no later sync
+            // would ever remove it.
+            systemPromptWriter.remove(authority);
         }
     }
 
     /**
-     * Writes one row per eligible role.
+     * Writes one row per eligible role, and removes the row of any role that is no longer eligible.
      *
-     * <p>Deliberately not wrapped in a single transaction: each row is saved on its own so one bad
+     * <p>Deliberately not wrapped in a single transaction: each row is written on its own so one bad
      * persona cannot roll back the rest of the sync, which matters because this runs at startup and
      * a partial refresh is worth more than none.
      *
-     * <p>Rows for roles that have disappeared upstream are left alone. Resolution reads the snapshot,
-     * so a stale row is never selected, and deleting rows here would also delete a persona an
-     * administrator had edited through {@code SystemPromptController}.
+     * <p>The removal half is not optional. A role can be marked ineligible through
+     * {@code PUT /v1/roles/{id}} after it already has a row, and prompt assembly reads that row —
+     * so without this sweep the flag would have no effect on any role that once had a persona.
+     *
+     * <p>Rows for roles that have disappeared upstream entirely are still left alone: this service
+     * cannot tell a deleted role from one the projection failed to return, and deleting on that
+     * ambiguity would also discard a persona an administrator edited through
+     * {@code SystemPromptController}.
      */
     private void persistPersonas(@NonNull RolePersonaSnapshot snapshot) {
         for (String authority : snapshot.rankedAuthorities()) {
             snapshot.personaText(authority).ifPresent(text -> systemPromptWriter.upsert(authority, text));
+        }
+        for (String authority : snapshot.ineligibleAuthorities()) {
+            systemPromptWriter.remove(authority);
         }
     }
 }

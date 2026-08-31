@@ -68,19 +68,31 @@ public class RolePersonaEventEmitter {
                 role.getMcpPersonaRank(),
                 role.isMcpPersonaEligible());
 
-        writer.publish(
-                securityEventsTopic,
-                DomainEventEnvelope.of(
-                        RolePersonaChangedV1.EVENT_TYPE,
-                        RolePersonaChangedV1.SCHEMA_VERSION,
-                        role.getId(),
-                        aggregateVersion(role),
-                        SOURCE_SERVICE,
-                        null,
-                        currentActor(),
-                        payload,
-                        clock));
-        log.debug("Queued persona change fact for role={}", role.getName());
+        try {
+            writer.publish(
+                    securityEventsTopic,
+                    DomainEventEnvelope.of(
+                            RolePersonaChangedV1.EVENT_TYPE,
+                            RolePersonaChangedV1.SCHEMA_VERSION,
+                            role.getId(),
+                            aggregateVersion(role),
+                            SOURCE_SERVICE,
+                            null,
+                            currentActor(),
+                            payload,
+                            clock));
+            log.debug("Queued persona change fact for role={}", role.getName());
+        } catch (RuntimeException exception) {
+            // Serialization or envelope construction failing must not take the role write with it —
+            // OutboxEventWriter.serialize throws IllegalStateException, and without this an
+            // unserializable persona would turn a valid createRole into a 500. The consumer's
+            // scheduled re-pull is the backstop, so a dropped fact costs freshness, not correctness.
+            //
+            // A failure of the outbox INSERT itself may still doom the surrounding transaction at
+            // commit; that is a database fault, not an eventing one, and is not something this
+            // catch can or should paper over.
+            log.warn("Failed to queue persona change fact for role={}: {}", role.getName(), exception.getMessage());
+        }
     }
 
     /**

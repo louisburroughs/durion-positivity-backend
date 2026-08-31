@@ -121,6 +121,11 @@ public final class RolePersonaSnapshot {
         return rankedAuthorities;
     }
 
+    /** Roles excluded from persona resolution by design; used to sweep away rows they no longer own. */
+    public @NonNull Set<String> ineligibleAuthorities() {
+        return ineligibleAuthorities;
+    }
+
     /**
      * The personas this snapshot was built from, ineligible ones included. Exposed so a single-role
      * on-miss fetch can be merged in by rebuilding — a new role can land anywhere in the rank order,
