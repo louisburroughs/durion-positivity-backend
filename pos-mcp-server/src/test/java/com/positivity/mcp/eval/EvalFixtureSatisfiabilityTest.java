@@ -53,6 +53,15 @@ class EvalFixtureSatisfiabilityTest {
     /** The generic fallback identity, not a seeded role — its grants cannot be looked up. */
     private static final String FALLBACK_ROLE = "USER";
 
+    /**
+     * Exact expectation counts, not lower bounds. {@code > 0} would pass with one expectation
+     * parsed out of a hundred, so a JSON reshape that silently dropped almost every fixture would
+     * still look green — the failure mode these guards exist to prevent.
+     */
+    private static final int POSITIVE_EXPECTATIONS = 74;
+
+    private static final int NEGATIVE_FIXTURES = 31;
+
     private static final Pattern GROUP_BLOCK = Pattern.compile(
             "FROM mcp_tool, \\(VALUES(.*?)\\) AS perms\\(grp, code\\)\\s*WHERE mcp_tool\\.name = '([A-Za-z]+)'",
             Pattern.DOTALL);
@@ -84,33 +93,70 @@ class EvalFixtureSatisfiabilityTest {
         // Vacuity guard: every assertion here is trivially true over an empty fixture set, and the
         // set comes out of a JSON shape that can change.
         assertThat(checked)
-                .as("no positive expectations parsed out of the fixture file")
-                .isPositive();
+                .as("positive expectations parsed out of the fixture file")
+                .isEqualTo(POSITIVE_EXPECTATIONS);
         assertThat(unsatisfiable)
                 .as("positives asserting a tool the permission gate cannot offer their actor")
                 .isEmpty();
     }
 
+    /**
+     * A negative names its tool in {@code expected.forbidden_tool_ids}, never in
+     * {@code expected.tool_ids} — that list is empty for all 31 of them, which is what
+     * {@code BaselineCaptureIT}'s triage requires. Reading {@code tool_ids} here made this whole
+     * test vacuous: the inner loop never ran, so it passed no matter what the actors held.
+     */
     @Test
     @DisplayName("every negative fixture's actor really is blocked from the tools it names")
     void negativesAreActuallyBlocked() throws IOException {
         Map<String, Map<String, Set<String>>> groups = facadeGroups();
         List<String> reachable = new ArrayList<>();
+        int checked = 0;
 
         for (JsonNode fixture : fixtures()) {
             if (!isNegative(fixture)) {
                 continue;
             }
             Set<String> held = declaredCodes(fixture);
-            for (String tool : expectedTools(fixture)) {
+            for (String tool : forbiddenTools(fixture)) {
+                checked++;
                 if (reaches(groups, tool, held)) {
                     reachable.add(fixture.get("fixture_id").asString() + " -> " + tool);
                 }
             }
         }
 
+        assertThat(checked)
+                .as("no forbidden expectations parsed — a negative that names no tool proves nothing, "
+                        + "and is also what BaselineCaptureIT's triage rejects")
+                .isEqualTo(NEGATIVE_FIXTURES);
         assertThat(reachable)
                 .as("negatives whose actor can in fact reach the tool — the fixture proves nothing")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("every negative declares the shape BaselineCaptureIT's triage requires")
+    void negativesDeclareTheNegativeContract() throws IOException {
+        // BaselineCaptureIT (Failsafe, so it runs in `verify` and never on a pull request) hard-fails
+        // on a fixture with an empty expected.tool_ids that does not also declare expected.none=true
+        // with a non-empty forbidden_tool_ids. Asserting the same shape here, in `test`, is what puts
+        // it in front of a PR build — two fixtures reached main-bound review malformed precisely
+        // because nothing checked it before `verify`.
+        List<String> malformed = new ArrayList<>();
+        for (JsonNode fixture : fixtures()) {
+            if (!isNegative(fixture)) {
+                continue;
+            }
+            JsonNode expected = fixture.get("expected");
+            boolean declaresNone = expected.path("none").asBoolean(false);
+            if (!declaresNone || forbiddenTools(fixture).isEmpty()) {
+                malformed.add(fixture.get("fixture_id").asString());
+            }
+        }
+
+        assertThat(malformed)
+                .as("negatives missing expected.none=true or a non-empty forbidden_tool_ids")
                 .isEmpty();
     }
 
@@ -191,8 +237,17 @@ class EvalFixtureSatisfiabilityTest {
     }
 
     private static List<String> expectedTools(JsonNode fixture) {
+        return toolList(fixture, "tool_ids");
+    }
+
+    /** What a negative asserts must NOT be offered. */
+    private static List<String> forbiddenTools(JsonNode fixture) {
+        return toolList(fixture, "forbidden_tool_ids");
+    }
+
+    private static List<String> toolList(JsonNode fixture, String field) {
         List<String> tools = new ArrayList<>();
-        JsonNode expected = fixture.get("expected").get("tool_ids");
+        JsonNode expected = fixture.get("expected").get(field);
         if (expected != null) {
             expected.forEach(tool -> tools.add(tool.asString()));
         }

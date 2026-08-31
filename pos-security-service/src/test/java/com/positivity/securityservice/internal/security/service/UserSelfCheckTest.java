@@ -65,12 +65,21 @@ class UserSelfCheckTest {
         verify(userRepository, never()).findByUsername(anyString());
     }
 
+    /**
+     * The repository is stubbed to MATCH here, deliberately. {@code
+     * AnonymousAuthenticationToken.isAuthenticated()} returns {@code true}, so the
+     * {@code isAuthenticated} check does not reject it; with an unstubbed repository this test
+     * passed on Mockito's empty default and proved nothing. Stubbing a real hit means only the
+     * explicit type rejection can make it pass — if that check is removed, a user row named
+     * {@code anonymousUser} hands an unauthenticated caller that user's identity.
+     */
     @Test
-    @DisplayName("an anonymous token is refused")
+    @DisplayName("an anonymous token is refused even when its name matches a real user")
     void anonymousIsRefused() {
         SecurityContextHolder.getContext()
                 .setAuthentication(new AnonymousAuthenticationToken(
                         "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+        when(userRepository.findByUsername("anonymousUser")).thenReturn(Optional.of(userWithId(CALLER_ID)));
 
         assertThat(selfCheck.isSelf(CALLER_ID)).isFalse();
     }

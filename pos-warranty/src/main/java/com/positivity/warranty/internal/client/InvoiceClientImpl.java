@@ -23,9 +23,15 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * RestClient implementation of {@link InvoiceClient}.
  *
- * <p>Reads and adjustment writes demand authority {@code invoice:manage}. The refund endpoint
- * additionally enforces {@code REFUND_PAYMENT} in the pos-invoice service layer plus
- * {@code SUPERVISOR_OVERRIDE} for payments outside pos-invoice's 180-day refund window —
+ * <p>Reads demand {@code invoice:invoice:view} and adjustment writes demand {@code invoice:manage}
+ * — one authority each, since #1612 split the invoice read surface out of the write permission.
+ * Sending only {@code invoice:manage} on the three GETs would 403, and would do it quietly: the
+ * non-404 branch of {@link #handle} returns {@link java.util.Optional#empty()}, which
+ * {@code SettlementReconciliationServiceImpl} maps to {@code ReconciliationCheckStatus.UNKNOWN}.
+ * Every settlement row would read UNKNOWN and look exactly like pos-invoice being unreachable.
+ *
+ * <p>The refund endpoint additionally enforces {@code REFUND_PAYMENT} in the pos-invoice service
+ * layer plus {@code SUPERVISOR_OVERRIDE} for payments outside pos-invoice's 180-day refund window —
  * warranty refunds routinely reverse payments captured years earlier, and the warranty flow's
  * own approval gate (claim must be APPROVED before settlement) is the compensating control.
  */
@@ -34,7 +40,12 @@ import org.springframework.web.client.RestClientResponseException;
 public class InvoiceClientImpl implements InvoiceClient {
 
     private static final String SERVICE_USER = "pos-warranty-service";
+    /** Reads: getInvoice, getInvoiceAdjustments, getInvoiceRefunds (#1612). */
+    private static final String READ_AUTHORITIES = "invoice:invoice:view";
+
+    /** Writes: the adjustment POST. */
     private static final String AUTHORITIES = "invoice:manage";
+
     private static final String REFUND_AUTHORITIES = "invoice:manage,REFUND_PAYMENT,SUPERVISOR_OVERRIDE";
     private static final String REFUND_STATUS_COMPLETED = "COMPLETED";
     private static final String ADJUSTMENT_TYPE_WARRANTY = "WARRANTY";
@@ -58,7 +69,7 @@ public class InvoiceClientImpl implements InvoiceClient {
                     .get()
                     .uri(basePath + "/{invoiceId}", invoiceId)
                     .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
-                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, READ_AUTHORITIES)
                     .retrieve()
                     .body(InvoiceDetailsWire.class);
             if (response == null) {
@@ -106,7 +117,7 @@ public class InvoiceClientImpl implements InvoiceClient {
                     .get()
                     .uri(basePath + "/{invoiceId}", invoiceId)
                     .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
-                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, READ_AUTHORITIES)
                     .retrieve()
                     .body(InvoiceDetailsWire.class);
         } catch (RestClientResponseException ex) {
@@ -143,7 +154,7 @@ public class InvoiceClientImpl implements InvoiceClient {
                     .get()
                     .uri(basePath + "/{invoiceId}/refunds", invoiceId)
                     .header(GatewaySecurityConstants.HEADER_USER, SERVICE_USER)
-                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, AUTHORITIES)
+                    .header(GatewaySecurityConstants.HEADER_AUTHORITIES, READ_AUTHORITIES)
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<RefundEntry>>() {});
             return Optional.of(refunds != null ? refunds : List.of());

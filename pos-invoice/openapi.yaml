@@ -283,7 +283,6 @@ paths:
       tags:
       - Deposit Credits
       x-required-permissions:
-      - invoice:manage
       - invoice:invoice:view
     post:
       description: 'Creates an AVAILABLE deposit credit for a down-payment taken at pos-order checkout, holding the amount against its source document until a settlement invoice draws it down.
@@ -367,7 +366,6 @@ paths:
       tags:
       - Deposit Credits
       x-required-permissions:
-      - invoice:manage
       - invoice:invoice:view
   /v1/invoices/deposits/{depositCreditId}/refund:
     post:
@@ -526,7 +524,7 @@ paths:
           description: Caller lacks the invoice:invoice:view authority.
       security:
       - bearerAuth:
-        - invoice:manage
+        - invoice:invoice:view
       summary: Search Invoice Lines by Party
       tags:
       - Invoice Search
@@ -602,7 +600,7 @@ paths:
           description: Caller lacks the invoice:invoice:view authority.
       security:
       - bearerAuth:
-        - invoice:manage
+        - invoice:invoice:view
       summary: Search Invoices by Free Text
       tags:
       - Invoice Search
@@ -645,7 +643,6 @@ paths:
       tags:
       - Invoice
       x-required-permissions:
-      - invoice:manage
       - invoice:invoice:view
   /v1/invoices/{invoiceId}/adjustments:
     post:
@@ -948,7 +945,6 @@ paths:
       tags:
       - Invoice
       x-required-permissions:
-      - invoice:manage
       - invoice:finalize
   /v1/invoices/{invoiceId}/payments:
     post:
@@ -1620,7 +1616,6 @@ paths:
       tags:
       - Invoice
       x-required-permissions:
-      - invoice:manage
       - invoice:finalize
   /v1/refunds:
     post:

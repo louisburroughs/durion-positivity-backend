@@ -26,7 +26,7 @@ Tax-related questions often occur during estimate creation, invoice generation, 
 | "What tax should apply?" | Ask for jurisdiction, customer/account, line items, date, and exemption document status. |
 
 ## Estimate, workorder, and invoice timing
-Tax shown on an estimate should be treated as pre-invoice calculation until the invoice is generated or finalized. If a workorder adds parts or labor through an approved change request, the taxable base may change. The assistant should avoid saying tax is final until invoice finalization source confirms it. The verified invoice permissions are coarse (`invoice:manage`, `invoice:finalize`) and the bundle explicitly notes no `invoice:read` sample.
+Tax shown on an estimate should be treated as pre-invoice calculation until the invoice is generated or finalized. If a workorder adds parts or labor through an approved change request, the taxable base may change. The assistant should avoid saying tax is final until invoice finalization source confirms it. The verified invoice permissions separate reads from writes: `invoice:invoice:view` for reads, `invoice:manage` and `invoice:finalize` for changes (#1612).
 
 ## Accounting hand-off
 Tax collected or accrued may need a liability account, but the bundle does not provide tax-account mapping rules. Use the accounting RAG principles: journal entries must balance, posted entries should be immutable, and corrections require reversing or compensating entries. Do not invent tax liability accounts or jurisdiction remittance rules.

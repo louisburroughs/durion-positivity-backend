@@ -1432,6 +1432,10 @@
       },
       "expected": {
         "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "WorkorderFacadeTool"
+        ],
         "k": 5
       },
       "tags": [
@@ -2097,6 +2101,10 @@
       },
       "expected": {
         "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
         "k": 5
       },
       "tags": [

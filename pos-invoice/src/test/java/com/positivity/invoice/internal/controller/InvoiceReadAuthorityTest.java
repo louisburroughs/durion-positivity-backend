@@ -10,7 +10,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
@@ -42,6 +46,15 @@ class InvoiceReadAuthorityTest {
             InvoiceSearchController.class,
             DepositCreditController.class,
             PaymentReversalController.class);
+
+    /**
+     * The two that lost their class-level {@code @PreAuthorize} in #1612, and only those.
+     * {@code PaymentReversalController} keeps a deliberate class-level {@code isAuthenticated()} and
+     * {@code InvoiceSearchController} never had one, so requiring a method-level guard everywhere
+     * would be asserting a convention this module does not follow.
+     */
+    private static final List<Class<?>> CONTROLLERS_WITHOUT_A_CLASS_LEVEL_GUARD =
+            List.of(InvoiceController.class, DepositCreditController.class);
 
     @Test
     @DisplayName("no GET handler is guarded on invoice:manage")
@@ -87,6 +100,49 @@ class InvoiceReadAuthorityTest {
         assertThat(checked)
                 .as("no GET handlers found — the reflection, not the code, is what broke")
                 .hasSize(6);
+    }
+
+    /**
+     * #1612 removed the class-level {@code @PreAuthorize} from {@code InvoiceController} and
+     * {@code DepositCreditController}, because the OpenAPI generator unions class-level and
+     * method-level guards and so advertised {@code invoice:manage} on routes that no longer accept
+     * it. Removing a class-level default is only safe while every handler names its own — otherwise
+     * a method added later is simply unguarded, which is a worse failure than the one being fixed.
+     * This is the assertion that makes it safe.
+     */
+    @Test
+    @DisplayName("every handler names its own permission — no method relies on a class-level default")
+    void everyHandlerCarriesAnExplicitGuard() {
+        List<String> unguarded = new ArrayList<>();
+        int handlers = 0;
+        for (Class<?> controller : CONTROLLERS_WITHOUT_A_CLASS_LEVEL_GUARD) {
+            for (Method method : controller.getDeclaredMethods()) {
+                if (!isHandler(method)) {
+                    continue;
+                }
+                handlers++;
+                if (method.getAnnotation(PreAuthorize.class) == null) {
+                    unguarded.add(controller.getSimpleName() + "#" + method.getName());
+                }
+            }
+        }
+
+        assertThat(handlers)
+                .as("no request handlers found — the reflection is what broke")
+                .isPositive();
+        assertThat(unguarded)
+                .as("handlers with no method-level @PreAuthorize, relying on a class-level default "
+                        + "that no longer exists")
+                .isEmpty();
+    }
+
+    private static boolean isHandler(Method method) {
+        return method.isAnnotationPresent(GetMapping.class)
+                || method.isAnnotationPresent(PostMapping.class)
+                || method.isAnnotationPresent(PutMapping.class)
+                || method.isAnnotationPresent(DeleteMapping.class)
+                || method.isAnnotationPresent(PatchMapping.class)
+                || method.isAnnotationPresent(RequestMapping.class);
     }
 
     private static boolean isGet(Method method) {

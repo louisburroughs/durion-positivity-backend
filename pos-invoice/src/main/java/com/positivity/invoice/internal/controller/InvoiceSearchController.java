@@ -35,9 +35,13 @@ import org.springframework.web.bind.annotation.RestController;
  * invoice number, the customer name, or the workorder number.
  */
 @RestController
+// Both operations on this controller are reads and both moved to invoice:invoice:view in #1612.
+// The declared scope has to move with them: it feeds the generated spec and the Angular SDK, and
+// left at invoice:manage it contradicted the same operation's own x-required-permissions and 403
+// description.
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(
         name = "bearerAuth",
-        scopes = {"invoice:manage"})
+        scopes = {"invoice:invoice:view"})
 @RequestMapping("/v1/invoices")
 @Tag(name = "Invoice Search", description = "Invoice finder search and retrieval")
 @RequiredArgsConstructor

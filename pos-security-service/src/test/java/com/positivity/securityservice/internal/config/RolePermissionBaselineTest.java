@@ -478,6 +478,42 @@ class RolePermissionBaselineTest {
     }
 
     @Test
+    @DisplayName("invoice:invoice:view is held by exactly the roles decided in #1612")
+    void invoiceViewIsHeldByExactlyTheDecidedRoles() {
+        Set<String> holders = seededGrants.entrySet().stream()
+                .filter(entry -> entry.getValue().contains("invoice:invoice:view"))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        // #1612 moved six GET routes off invoice:manage, so this code is now the only way to read
+        // an invoice, its line items, its deposit credits or its refunds. Equality rather than
+        // containment, and pinned here rather than left to DISPATCHER's scope test: it is the
+        // widest grant that issue made, it exposes customer financial detail, and the two roles
+        // deliberately excluded are the customer-facing ones. Adding a role here is a decision,
+        // not a detail.
+        assertThat(holders)
+                .as("roles holding invoice:invoice:view")
+                .containsExactly(
+                        "ACCOUNTING_ASSOCIATE",
+                        "ACCOUNT_MANAGER",
+                        "ADMIN",
+                        "CONTROLLER",
+                        "DISPATCHER",
+                        "GENERAL_MANAGER",
+                        "INVENTORY_CONTROLLER",
+                        "INVENTORY_LEAD",
+                        "INVENTORY_MANAGER",
+                        "LOCATION_MANAGER",
+                        "MANAGER",
+                        "SERVICE_ADVISOR",
+                        "SHOP_MANAGER",
+                        "TECHNICIAN");
+        assertThat(holders)
+                .as("the persona-ineligible customer roles must not read invoices")
+                .doesNotContain("CUSTOMER", "SELF_SERVICE_CUSTOMER");
+    }
+
+    @Test
     @DisplayName("ADMIN holds both tool permissions")
     void adminHoldsToolViewAndManage() {
         assertThat(seededGrants.get("ADMIN")).contains("mcp:tool:view", "mcp:tool:manage");

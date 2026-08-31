@@ -5,6 +5,7 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -54,6 +55,12 @@ public class UserSelfCheck {
         }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        // AnonymousAuthenticationToken.isAuthenticated() returns TRUE, so the check above does not
+        // reject it — an anonymous caller falls through to the lookup, and a user row named
+        // "anonymousUser" would then match. Rejecting the type is what actually closes that path.
+        if (authentication instanceof AnonymousAuthenticationToken) {
             return false;
         }
         String username = authentication.getName();
