@@ -332,7 +332,7 @@ class NltiRequestServiceImplTest {
                         event -> {
                             throw new IllegalStateException("emitter down");
                         },
-                        new McpRoleResolverImpl(),
+                        new McpRoleResolverImpl(TestSnapshots.emptyHolder()),
                         Clock.fixed(Instant.parse("2026-08-19T10:15:30Z"), ZoneOffset.UTC)),
                 clock,
                 meterRegistry);

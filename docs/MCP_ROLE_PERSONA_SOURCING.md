@@ -1,6 +1,6 @@
 # MCP Role Persona Sourcing Strategy
 
-**Status:** proposed
+**Status:** accepted — implemented in #1613
 **Owning modules:** `pos-security-service` (role definition), `pos-mcp-server` (prompt assembly)
 **Supersedes:** the hardcoded `SystemPromptSeedRunner.seedRolePersonas` / `SystemPromptDefaults` role list
 
@@ -310,7 +310,78 @@ once, as load data, rather than written as SQL and migrated again later.
   resolves to a persona, so the drift documented above cannot silently return. This is the piece
   that has been missing: nothing today fails when a role is added to SQL and not to Java.
 
-## Open questions
+## Decisions taken
+
+The open questions this document raised were settled on the issue. Recorded here so the reasoning
+is not only in a comment thread.
+
+1. **D1 boundary — structured fields, reviewed free text deferred.** Slots are structured and
+   rendered in `pos-mcp-server`. The reviewed escape hatch for free-form persona text is specified
+   (D9) but not built; nothing needs it yet, and building an unused write path is how it rots.
+
+2. **D7 — (b), flag and exclude.** `CUSTOMER` and `SELF_SERVICE_CUSTOMER` have no MCP access in the
+   near term, so `mcp_persona_eligible` is false for both and they are excluded from resolution by
+   design. This is what lets the fallback metric separate a deliberate exclusion from a sync gap;
+   under (a) the metric noise would have gone away but the roles would have carried personas nobody
+   uses.
+
+3. **Sync trigger — event-driven, on top of the pull tiers.** `security.events.v1` carries a
+   `security.role.persona.changed` fact, consumed by `pos-mcp-server`. The pull tiers stay and are
+   what the service is correct without: the broker closes the staleness window on a persona edit to
+   a role already in the snapshot, which never triggers the on-miss fetch. `pos.mcp.kafka.enabled`
+   defaults to false, so the broker is optional for this service.
+
+4. **Cross-module contract — per ADR-0044.** `GET /v1/roles/personas` is a REST-edge read following
+   the `default-permissions` precedent (#782).
+
+5. **Rank ownership — settable through the API.** `mcp_persona_rank` is a field on the role
+   create/update DTO; any caller holding the role permissions can set or change it. `PUT
+   /v1/roles/{id}` is new — persona metadata previously could not be corrected without a database
+   edit.
+
+6. **D8 scope — moved now.** Role provisioning went to bulk load in the same change, so the persona
+   backfill was authored once rather than written as SQL and migrated again later.
+
+7. **D8 grant shape — two loads.** Roles in one, grants in another. Permissions are registered
+   code-first at startup, so the set a role can hold is not knowable when the role is created.
+
+8. **D9 control 3 — specified, not built.** Controls 1 (structural containment), 2 (explicit
+   precedence) and 4 (review queue) ship. Model evaluation waits for a free-text path to justify it,
+   consistent with decision 1.
+
+## Delivery status
+
+P1, P1b, P2, P3 and P4 are implemented, including the D8 move itself.
+
+`R__seed_reference_security.sql` is reduced to the bootstrap floor: `ADMIN` and
+`SYSTEM_ADMINISTRATOR` plus the seed admin account. `R__seed_role_permissions.sql` is reduced with
+it — not optional, because that file ends in a guard that raises on a role it cannot resolve, so a
+grant left behind for a moved role fails the migration rather than quietly doing nothing.
+
+A fresh database still gets `DISPATCHER` and `SHOP_MANAGER` (`V3`), `SELF_SERVICE_CUSTOMER` (`V8`)
+and `CONTROLLER` (`V24`) from Flyway. Those are versioned migrations, already applied everywhere;
+editing them would change their checksum and fail validation. The baseline file lists them too,
+which is harmless because provisioning treats an existing role as success.
+
+Everything else is provisioned from the versioned baseline files, applied by the loaders in
+dependency order (roles, then grants, then users):
+
+- `scripts/fixtures/seed/alpha/security/roles.csv` — 15 roles with persona metadata
+- `scripts/fixtures/seed/alpha/security/role-permissions.csv` — 17 roles, 1078 grants
+
+`RoleBaselineDriftTest` is what replaces Flyway's environment guarantee: the floor and the baseline
+together must still cover every expected role, the baseline must carry every grant Flyway still
+applies, and Flyway must grant only to roles it creates. `RolePermissionBaselineTest` reads both
+sources, so its policy invariants — least privilege, the customer-facing roles holding only the
+assistant entrypoints, no capability lost against the legacy expansion — still police the complete
+baseline rather than only the half that stayed in SQL.
+
+One consequence worth knowing: `R__seed_security_operational_data.sql` assigns its 25 demo users to
+roles by name, and on a fresh database those joins resolve only for the floor. That is covered
+rather than broken — `security/users.csv` provisions the same 25 accounts with the same roles
+through the `SECURITY_USER` loader, which runs after the role load.
+
+## Open questions (resolved — see "Decisions taken")
 
 1. **D1 boundary** — confirm the revised position: structured fields are the default and rendering
    stays in `pos-mcp-server`, with free-form persona text permitted only through a reviewed path

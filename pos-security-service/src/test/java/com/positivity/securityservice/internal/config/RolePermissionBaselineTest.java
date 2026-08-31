@@ -103,6 +103,15 @@ class RolePermissionBaselineTest {
     private static final Path MIGRATIONS = Path.of("src/main/resources/db/migration");
 
     /**
+     * The bulk-load grants baseline (#1613 D8). Grants for every role that moved out of Flyway live
+     * here now, so the policy invariants below have to read both files: the SQL seed alone is no
+     * longer the whole role-to-permission baseline, and checking only it would quietly stop
+     * policing most roles while still passing.
+     */
+    private static final Path BASELINE_GRANTS =
+            Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "role-permissions.csv");
+
+    /**
      * The #1512 revoke of SYSTEM_ADMINISTRATOR's out-of-band grants. Its keep list is a copy of
      * this seed's SYSTEM_ADMINISTRATOR block, which is what
      * {@link #v31KeepListMatchesTheSeededSystemAdministratorGrants} exists to police.
@@ -211,6 +220,14 @@ class RolePermissionBaselineTest {
     private static Set<String> definedPermissions;
     private static List<String> rawGrantRows;
 
+    /**
+     * Grants written by the SQL seed alone, before the bulk-load baseline is folded in (#1613 D8).
+     * The two checks about this migration's own internal consistency — that it grants only to roles
+     * a migration creates, and that its section-4 guard lists exactly what it grants — are about
+     * this file, not about the platform's complete role set.
+     */
+    private static Map<String, Set<String>> sqlSeededGrants;
+
     @BeforeAll
     static void parseSeed() throws IOException {
         seededGrants = new TreeMap<>();
@@ -232,7 +249,41 @@ class RolePermissionBaselineTest {
             }
         }
 
+        sqlSeededGrants = new TreeMap<>();
+        seededGrants.forEach((role, permissions) -> sqlSeededGrants.put(role, new TreeSet<>(permissions)));
+
+        mergeBaselineGrants();
+
         assertThat(seededGrants).as("no grant rows parsed out of %s", SEED).isNotEmpty();
+    }
+
+    /**
+     * Folds the bulk-load baseline into {@link #seededGrants}, so every assertion here sees the
+     * complete role-to-permission picture however it is split across Flyway and the load file.
+     *
+     * <p>Deliberately not folded into {@link #rawGrantRows}: that list backs the duplicate-row
+     * check, which is about one file listing the same grant twice. The two sources overlap by
+     * design for the roles Flyway still creates, and counting that as duplication would fail a test
+     * for the thing the split is supposed to do.
+     */
+    private static void mergeBaselineGrants() throws IOException {
+        List<String> lines = Files.readAllLines(BASELINE_GRANTS, StandardCharsets.UTF_8);
+        for (String line : lines.subList(1, lines.size())) {
+            if (line.isBlank()) {
+                continue;
+            }
+            int comma = line.indexOf(',');
+            String role = line.substring(0, comma).trim();
+            String permissions = line.substring(comma + 1).trim();
+            if (permissions.startsWith("\"") && permissions.endsWith("\"")) {
+                permissions = permissions.substring(1, permissions.length() - 1);
+            }
+            for (String permission : permissions.split(";")) {
+                if (!permission.isBlank()) {
+                    seededGrants.computeIfAbsent(role, key -> new TreeSet<>()).add(permission.trim());
+                }
+            }
+        }
     }
 
     @Test
@@ -459,7 +510,10 @@ class RolePermissionBaselineTest {
         }
 
         assertThat(creatable).as("no role-creating migration found").isNotEmpty();
-        assertThat(seededGrants.keySet())
+        // #1613 D8: scoped to this file's own grants. Roles provisioned by bulk load exist after
+        // Flyway by design, so they are not grant targets here — which is exactly why their grants
+        // moved to the load file rather than staying and failing the seed's own guard.
+        assertThat(sqlSeededGrants.keySet())
                 .as("granting to a role no migration creates aborts startup: the JOIN resolves "
                         + "nothing and the seed's own assertion raises. Since #1440 every role "
                         + "this baseline grants to must be created by a SQL migration — roles "
@@ -577,12 +631,13 @@ class RolePermissionBaselineTest {
                 .as("no role assertion list parsed out of %s", SEED)
                 .isNotEmpty();
 
+        // Section 4 guards this migration, so it is compared against this migration's grants.
         Set<String> grantedPermissions =
-                seededGrants.values().stream().flatMap(Set::stream).collect(Collectors.toCollection(TreeSet::new));
+                sqlSeededGrants.values().stream().flatMap(Set::stream).collect(Collectors.toCollection(TreeSet::new));
 
         assertThat(assertedRoles)
                 .as("roles asserted in section 4 vs roles actually granted to")
-                .isEqualTo(new TreeSet<>(seededGrants.keySet()));
+                .isEqualTo(new TreeSet<>(sqlSeededGrants.keySet()));
         assertThat(assertedPermissions)
                 .as("permissions asserted in section 4 vs permissions actually granted")
                 .isEqualTo(grantedPermissions);

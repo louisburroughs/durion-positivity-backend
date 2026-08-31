@@ -64,6 +64,8 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("people/staffing-assignments.csv", DomainType.STAFFING_ASSIGNMENT, Set.<String>of()),
                 Arguments.of("inventory/putaway-rules.csv", DomainType.PUTAWAY_RULE, Set.<String>of()),
                 Arguments.of("inventory/cycle-count-plans.csv", DomainType.CYCLE_COUNT_PLAN, Set.<String>of()),
+                Arguments.of("security/roles.csv", DomainType.SECURITY_ROLE, Set.<String>of()),
+                Arguments.of("security/role-permissions.csv", DomainType.SECURITY_ROLE_PERMISSION, Set.<String>of()),
                 Arguments.of("security/users.csv", DomainType.SECURITY_USER, Set.<String>of()),
                 Arguments.of("security/user-person-links.csv", DomainType.USER_PERSON_LINK, Set.<String>of()),
                 Arguments.of("shop-manager/mechanic-skills.csv", DomainType.MECHANIC_SKILL, Set.<String>of()),

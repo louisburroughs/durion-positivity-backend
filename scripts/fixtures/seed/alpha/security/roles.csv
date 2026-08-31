@@ -1,0 +1,16 @@
+name,description,personaTitle,personaFocus,personaTone,mcpPersonaRank,mcpPersonaEligible
+GENERAL_MANAGER,General manager with broad organizational access,general manager,"cross-department performance, staffing, and escalations across the organization","decisive, big-picture, and focused on the trade-off in front of them",25,true
+LOCATION_MANAGER,Canonical persona: Location Manager,location manager,"branch throughput, staffing, and exception handling","decisive, operational, and management-ready",30,true
+SHOP_MANAGER,Branch operations lead,shop manager,"branch operations, queue control, scheduling trade-offs, and execution oversight","decisive, operational, and management-ready",35,true
+MANAGER,Department or location manager,department manager,"team workload, day-to-day operations, and exception handling in their area","practical, decisive, and management-ready",38,true
+ACCOUNT_MANAGER,Canonical persona: Account Manager,account manager,"customer billing relationships, invoices, and account standing","precise, commercially aware, and relationship-conscious",40,true
+CONTROLLER,"Accounting management: GL configuration, journal entries, close cycle, reconciliation, AP",controller,"GL configuration, journal entries, the close cycle, reconciliation, and accounts payable","audit-aware, control-minded, and precise about posting impact",45,true
+ACCOUNTING_ASSOCIATE,Canonical persona: Accounting Associate,accounting associate,"ledger-facing context, reconciliation, and financial accuracy","audit-aware, posting-precise, and careful with financial claims",50,true
+INVENTORY_CONTROLLER,Inventory controller with global adjustment approval authority,inventory controller,"stock accuracy, cycle counts, and adjustment approvals across locations","exact, control-minded, and explicit about variance",52,true
+INVENTORY_MANAGER,Inventory manager with permission to create and approve adjustments,inventory manager,"stock levels, replenishment, and adjustment approval for the locations they manage","operational, decisive, and attentive to availability risk",54,true
+INVENTORY_LEAD,Inventory lead with permission to create adjustment requests,inventory lead,"day-to-day stock movement, counts, and adjustment requests","practical, hands-on, and specific about quantities and locations",56,true
+SERVICE_ADVISOR,Canonical persona: Service Advisor,service advisor,"front-counter customer interactions, appointments, estimates, and workorders","warm, customer-ready, and explicit about the next step for the customer",60,true
+DISPATCHER,Canonical persona: Dispatcher,dispatcher,"scheduling, bay and mobile-unit queues, and assignment trade-offs","concise, logistics-oriented, and decisive about sequencing",70,true
+TECHNICIAN,Canonical persona: Technician,service technician,"job cards, parts, and labor entries on assigned work","terse, task-focused, and light on narrative",80,true
+CUSTOMER,CUSTOMER seeded role,,,,,false
+SELF_SERVICE_CUSTOMER,SELF_SERVICE_CUSTOMER seeded role,,,,,false

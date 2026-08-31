@@ -1,6 +1,8 @@
 package com.positivity.mcp.internal.orchestration.agent;
 
 import com.positivity.mcp.internal.domain.RagScope;
+import com.positivity.mcp.internal.domain.RolePersonaSnapshot;
+import com.positivity.mcp.internal.service.RolePersonaSnapshotHolder;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import java.beans.Introspector;
 import java.util.ArrayList;
@@ -11,10 +13,12 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
 
@@ -23,21 +27,47 @@ public final class MasterAgentRegistry {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MasterAgentRegistry.class);
 
+    /** Roles to warm up when no snapshot has been synced yet, or for a registry built without one. */
+    private static final int DEFAULT_MAX_PRELOADED_ROLES = 16;
+
     private final List<Object> sharedTools;
     private final List<DomainAgentDefinition> domainAgents;
+    private final Supplier<RolePersonaSnapshot> snapshots;
+    private final int maxPreloadedRoles;
 
     @Autowired
-    public MasterAgentRegistry(@NonNull MasterAgentRegistryFactory registryFactory) {
-        this(registryFactory.loadRegistryDefinition());
+    public MasterAgentRegistry(
+            @NonNull MasterAgentRegistryFactory registryFactory,
+            @NonNull RolePersonaSnapshotHolder snapshotHolder,
+            @Value("${mcp.role-persona.preload-max:16}") int maxPreloadedRoles) {
+        this(registryFactory.loadRegistryDefinition(), snapshotHolder::get, maxPreloadedRoles);
     }
 
-    private MasterAgentRegistry(MasterAgentRegistryFactory.LoadedMasterAgentRegistry loadedRegistry) {
-        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents());
+    private MasterAgentRegistry(
+            MasterAgentRegistryFactory.LoadedMasterAgentRegistry loadedRegistry,
+            Supplier<RolePersonaSnapshot> snapshots,
+            int maxPreloadedRoles) {
+        this(loadedRegistry.sharedTools(), loadedRegistry.domainAgents(), snapshots, maxPreloadedRoles);
     }
 
+    /**
+     * Builds a registry with no role persona snapshot, so agent warm-up covers only the
+     * {@code ROLE_USER} fallback. For callers that exercise tool resolution rather than warm-up; the
+     * autowired constructor is the production path and always carries the snapshot.
+     */
     public MasterAgentRegistry(@NonNull List<Object> sharedTools, @NonNull List<DomainAgentDefinition> domainAgents) {
+        this(sharedTools, domainAgents, RolePersonaSnapshot::empty, DEFAULT_MAX_PRELOADED_ROLES);
+    }
+
+    public MasterAgentRegistry(
+            @NonNull List<Object> sharedTools,
+            @NonNull List<DomainAgentDefinition> domainAgents,
+            @NonNull Supplier<RolePersonaSnapshot> snapshots,
+            int maxPreloadedRoles) {
         this.sharedTools = List.copyOf(sharedTools);
         this.domainAgents = List.copyOf(domainAgents);
+        this.snapshots = snapshots;
+        this.maxPreloadedRoles = maxPreloadedRoles;
     }
 
     public @NonNull List<Object> sharedTools() {
@@ -154,14 +184,16 @@ public final class MasterAgentRegistry {
     }
 
     public @NonNull Set<String> preloadableRoleIdentifiers() {
-        // Gate 2A / #639: always cover the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER) so
-        // ROLE_TECHNICIAN and ROLE_USER are never omitted. Gate 2B / #780: role->tool preassignment is
-        // retired, so there are no configured assignments to union in.
-        Set<String> roleIdentifiers = new TreeSet<>(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS);
-        if (!roleIdentifiers.isEmpty()) {
-            return roleIdentifiers;
-        }
-        return preloadableDomainAgents();
+        // Gate 2A / #639: cover the roles a caller can actually resolve to, so none of them pays a
+        // cold-start. Gate 2B / #780: role->tool preassignment is retired, so there are no configured
+        // assignments to union in.
+        //
+        // #1613: the set follows the synced snapshot rather than a compile-time list, capped so an
+        // operator creating hundreds of roles cannot blow up agent prebuild. ROLE_USER is always
+        // included — it is the fallback every unresolved caller lands on, and it has no upstream row.
+        Set<String> roleIdentifiers = new TreeSet<>(snapshots.get().preloadableRoleIdentifiers(maxPreloadedRoles));
+        roleIdentifiers.add(SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
+        return roleIdentifiers;
     }
 
     private static boolean matchesSelectedTool(@NonNull Object tool, @NonNull Set<String> selectedNames) {

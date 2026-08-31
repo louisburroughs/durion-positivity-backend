@@ -101,6 +101,8 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
                     case STAFFING_ASSIGNMENT -> "staffingAssignmentBulkLoadJob";
                     case PUTAWAY_RULE -> "putawayRuleBulkLoadJob";
                     case CYCLE_COUNT_PLAN -> "cycleCountPlanBulkLoadJob";
+                    case SECURITY_ROLE -> "securityRoleBulkLoadJob";
+                    case SECURITY_ROLE_PERMISSION -> "securityRolePermissionBulkLoadJob";
                     case SECURITY_USER -> "securityUserBulkLoadJob";
                     case USER_PERSON_LINK -> "userPersonLinkBulkLoadJob";
                     case MECHANIC_SKILL -> "mechanicSkillBulkLoadJob";

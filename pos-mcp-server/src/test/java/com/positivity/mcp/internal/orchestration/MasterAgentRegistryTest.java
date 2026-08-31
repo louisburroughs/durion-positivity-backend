@@ -4,11 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.domain.RolePersona;
+import com.positivity.mcp.internal.domain.RolePersonaSnapshot;
 import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistryFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.service.RolePersonaSnapshotHolder;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +29,11 @@ class MasterAgentRegistryTest {
     @Mock
     private MasterAgentRegistryFactory registryFactory;
 
+    /** A holder that has never been synced, for tests that do not exercise warm-up. */
+    private static RolePersonaSnapshotHolder emptyHolder() {
+        return new RolePersonaSnapshotHolder(new SimpleMeterRegistry(), Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
+    }
+
     @Test
     void constructorFromLoaderPreservesSharedAndDomainRuntimeSplit() {
         Object sharedTool = new SharedToolStub();
@@ -31,7 +43,7 @@ class MasterAgentRegistryTest {
                         List.of(sharedTool),
                         List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)))));
 
-        MasterAgentRegistry registry = new MasterAgentRegistry(registryFactory);
+        MasterAgentRegistry registry = new MasterAgentRegistry(registryFactory, emptyHolder(), 16);
 
         assertThat(registry.sharedTools()).containsExactly(sharedTool);
         assertThat(registry.domainAgents())
@@ -112,16 +124,42 @@ class MasterAgentRegistryTest {
     }
 
     @Test
-    void preloadableRoleIdentifiersReturnsCanonicalRoleSet() {
+    void preloadableRoleIdentifiersFollowsTheSyncedSnapshot() {
         Object inventoryTool = new InventoryFacadeToolStub();
+        RolePersonaSnapshot snapshot = RolePersonaSnapshot.of(
+                Instant.EPOCH,
+                List.of(
+                        new RolePersona("TECHNICIAN", null, null, null, null, (short) 80, true),
+                        new RolePersona("ADMIN", null, null, null, null, (short) 20, true),
+                        // Ineligible roles never get an agent prebuilt: their callers land on the
+                        // fallback by design, so a warm agent for them would be wasted.
+                        new RolePersona("CUSTOMER", null, null, null, null, null, false)));
         MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(), List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))));
+                List.of(),
+                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
+                () -> snapshot,
+                16);
 
-        // Gate 2A (#639): preload covers the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER) so
-        // ROLE_TECHNICIAN/ROLE_USER are never omitted. Gate 2B (#780): role->tool preassignment retired,
-        // so there are no configured assignments to union — the canonical set is returned as-is.
+        // Gate 2A (#639): every role a caller can resolve to gets a warm agent. #1613: that set is
+        // the synced snapshot rather than a compile-time list, plus the ROLE_USER fallback, which has
+        // no upstream row.
         assertThat(registry.preloadableRoleIdentifiers())
-                .containsExactlyInAnyOrderElementsOf(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS);
+                .containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_TECHNICIAN", SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
+    }
+
+    @Test
+    void preloadableRoleIdentifiersHonoursTheCapSoManyRolesCannotBlowUpPrebuild() {
+        RolePersonaSnapshot snapshot = RolePersonaSnapshot.of(
+                Instant.EPOCH,
+                List.of(
+                        new RolePersona("ADMIN", null, null, null, null, (short) 10, true),
+                        new RolePersona("MANAGER", null, null, null, null, (short) 20, true),
+                        new RolePersona("TECHNICIAN", null, null, null, null, (short) 30, true)));
+        MasterAgentRegistry registry = new MasterAgentRegistry(List.of(), List.of(), () -> snapshot, 2);
+
+        // The cap keeps the highest-ranked roles — the ones a caller is most likely to resolve to.
+        assertThat(registry.preloadableRoleIdentifiers())
+                .containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_MANAGER", SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
     }
 
     @Test

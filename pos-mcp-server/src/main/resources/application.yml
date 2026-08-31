@@ -1,6 +1,9 @@
 spring:
   application:
     name: mcp-server
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   jackson:
     default-property-inclusion: non_null
   flyway:
@@ -22,6 +25,13 @@ spring:
           model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 mcp:
+  # Role persona sync from pos-security-service (#1613). Startup pull, on-miss fetch, and this
+  # scheduled re-pull are the pull tiers; the Kafka listener below removes the staleness window on a
+  # persona edit but is not required for correctness.
+  role-persona:
+    refresh-interval: ${MCP_ROLE_PERSONA_REFRESH_INTERVAL:PT15M}
+    # Cap on prebuilt per-role agents, so creating many roles cannot blow up agent warm-up.
+    preload-max: ${MCP_ROLE_PERSONA_PRELOAD_MAX:16}
   server:
     base-url: http://localhost:${server.port}
     message-endpoint: /mcp/message
@@ -340,6 +350,14 @@ springdoc:
 
   default-produces-media-type: application/json
 pos:
+  mcp:
+    kafka:
+      # Off by default: this service has no other broker dependency, and the pull tiers keep role
+      # personas correct without one (#1613). Enabling it only removes the staleness window on a
+      # persona edit to a role already in the snapshot, which never triggers the on-miss fetch.
+      enabled: ${POS_MCP_KAFKA_ENABLED:false}
+      security-events-topic: ${POS_MCP_SECURITY_EVENTS_TOPIC:security.events.v1}
+      security-events-consumer-group: ${POS_MCP_SECURITY_EVENTS_CONSUMER_GROUP:pos-mcp-security-events}
   accounting:
     base-url: ${POS_ACCOUNTING_BASE_URL:http://pos-api-gateway}
     account-balance-uri-template: ${POS_ACCOUNTING_ACCOUNT_BALANCE_URI_TEMPLATE:/accounting/v1/accounting/gl-accounts/{glAccountId}/balance}

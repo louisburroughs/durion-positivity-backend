@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
@@ -107,6 +108,9 @@ class RoleManagementServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private RolePersonaEventEmitter rolePersonaEventEmitter;
+
     @InjectMocks
     private RoleManagementServiceImpl sut;
 
@@ -144,7 +148,8 @@ class RoleManagementServiceTest {
             when(roleRepository.existsByNameIgnoreCase("ShopManager")).thenReturn(false);
             when(roleRepository.save(any(Role.class))).thenReturn(saved);
 
-            RoleDto result = sut.createRole("ShopManager", "Manages the shop floor");
+            RoleDto result = sut.createRole(
+                    new RoleCreateRequest("ShopManager", "Manages the shop floor", null, null, null, null, null));
 
             assertThat(result.getId()).isEqualTo(ROLE_ID);
             assertThat(result.getName()).isEqualTo("ShopManager");
@@ -165,7 +170,8 @@ class RoleManagementServiceTest {
             // "ShopManager"
             when(roleRepository.existsByNameIgnoreCase("shopmanager")).thenReturn(true);
 
-            assertThatThrownBy(() -> sut.createRole("shopmanager", null))
+            assertThatThrownBy(() ->
+                            sut.createRole(new RoleCreateRequest("shopmanager", null, null, null, null, null, null)))
                     .isInstanceOf(DuplicateRoleNameException.class)
                     .hasMessageContaining("shopmanager");
         }

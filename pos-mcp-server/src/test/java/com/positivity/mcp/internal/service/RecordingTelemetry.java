@@ -22,7 +22,9 @@ final class RecordingTelemetry {
 
     private final List<NltiRequestTelemetry> events = new ArrayList<>();
     private final NltiRequestTelemetryPublisher publisher = new NltiRequestTelemetryPublisher(
-            events::add, new McpRoleResolverImpl(), Clock.fixed(TELEMETRY_NOW, ZoneOffset.UTC));
+            events::add,
+            new McpRoleResolverImpl(TestSnapshots.emptyHolder()),
+            Clock.fixed(TELEMETRY_NOW, ZoneOffset.UTC));
 
     NltiRequestTelemetryPublisher publisher() {
         return publisher;

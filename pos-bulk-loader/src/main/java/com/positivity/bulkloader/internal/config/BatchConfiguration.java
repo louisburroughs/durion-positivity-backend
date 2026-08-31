@@ -27,6 +27,10 @@ import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.RoleLoaderRecord;
+import com.positivity.bulkloader.internal.domain.RoleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.RolePermissionLoaderRecord;
+import com.positivity.bulkloader.internal.domain.RolePermissionLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.SecurityUserLoaderRecord;
 import com.positivity.bulkloader.internal.domain.SecurityUserLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderRecord;
@@ -91,6 +95,8 @@ public class BatchConfiguration {
     private final StaffingAssignmentLoaderStrategy staffingAssignmentLoaderStrategy;
     private final PutawayRuleLoaderStrategy putawayRuleLoaderStrategy;
     private final CycleCountPlanLoaderStrategy cycleCountPlanLoaderStrategy;
+    private final RoleLoaderStrategy roleLoaderStrategy;
+    private final RolePermissionLoaderStrategy rolePermissionLoaderStrategy;
     private final SecurityUserLoaderStrategy securityUserLoaderStrategy;
     private final UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
     private final MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
@@ -938,6 +944,123 @@ public class BatchConfiguration {
                 this::mapCycleCountPlanPayloads);
     }
 
+    // #1613 D8: roles move out of Flyway into bulk load. Roles and their grants load separately —
+    // permissions are registered code-first by each module at startup, so the set a role can be
+    // granted is not knowable at the moment the role itself is created.
+    @Bean
+    public Job securityRoleBulkLoadJob(Step securityRoleBulkLoadStep) {
+        return jobFactory.job("securityRoleBulkLoadJob", securityRoleBulkLoadStep);
+    }
+
+    @Bean
+    public Step securityRoleBulkLoadStep(
+            ItemStreamReader<RoleLoaderRecord> securityRoleReader,
+            ItemProcessor<RoleLoaderRecord, NumberedRecord<RoleLoaderRecord>> securityRoleItemProcessor,
+            ItemWriter<NumberedRecord<RoleLoaderRecord>> securityRoleBulkIngestWriter) {
+        return jobFactory.step(
+                "securityRoleBulkLoadStep",
+                securityRoleReader,
+                securityRoleItemProcessor,
+                securityRoleBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<RoleLoaderRecord> securityRoleReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(roleLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<RoleLoaderRecord, NumberedRecord<RoleLoaderRecord>> securityRoleItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                roleLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<RoleLoaderRecord>> securityRoleBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "securityRoleBulkIngestWriter",
+                        DomainType.SECURITY_ROLE,
+                        securityServiceId,
+                        "/v1/roles/bulk-ingest",
+                        "security:role:create"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapSecurityRolePayloads);
+    }
+
+    @Bean
+    public Job securityRolePermissionBulkLoadJob(Step securityRolePermissionBulkLoadStep) {
+        return jobFactory.job("securityRolePermissionBulkLoadJob", securityRolePermissionBulkLoadStep);
+    }
+
+    @Bean
+    public Step securityRolePermissionBulkLoadStep(
+            ItemStreamReader<RolePermissionLoaderRecord> securityRolePermissionReader,
+            ItemProcessor<RolePermissionLoaderRecord, NumberedRecord<RolePermissionLoaderRecord>>
+                    securityRolePermissionItemProcessor,
+            ItemWriter<NumberedRecord<RolePermissionLoaderRecord>> securityRolePermissionBulkIngestWriter) {
+        return jobFactory.step(
+                "securityRolePermissionBulkLoadStep",
+                securityRolePermissionReader,
+                securityRolePermissionItemProcessor,
+                securityRolePermissionBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<RolePermissionLoaderRecord> securityRolePermissionReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(rolePermissionLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<RolePermissionLoaderRecord, NumberedRecord<RolePermissionLoaderRecord>>
+            securityRolePermissionItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                rolePermissionLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<RolePermissionLoaderRecord>> securityRolePermissionBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "securityRolePermissionBulkIngestWriter",
+                        DomainType.SECURITY_ROLE_PERMISSION,
+                        securityServiceId,
+                        "/v1/roles/permissions/bulk-ingest",
+                        "security:role:edit"),
+                new JobParams(jobIdParam, locationIdParam, operatorId),
+                this::mapSecurityRolePermissionPayloads);
+    }
+
     @Bean
     public Job securityUserBulkLoadJob(Step securityUserBulkLoadStep) {
         return jobFactory.job("securityUserBulkLoadJob", securityUserBulkLoadStep);
@@ -1250,6 +1373,51 @@ public class BatchConfiguration {
 
     private record OpeningStockWriterPayload(
             String sku, UUID locationId, java.math.BigDecimal quantity, String unitOfMeasure, String reasonCode) {}
+
+    private List<SecurityRoleWriterPayload> mapSecurityRolePayloads(List<RoleLoaderRecord> items) {
+        List<SecurityRoleWriterPayload> payloads = new ArrayList<>(items.size());
+        for (RoleLoaderRecord item : items) {
+            payloads.add(new SecurityRoleWriterPayload(
+                    item.getName(),
+                    blankToNull(item.getDescription()),
+                    blankToNull(item.getPersonaTitle()),
+                    blankToNull(item.getPersonaFocus()),
+                    blankToNull(item.getPersonaTone()),
+                    parseShortOrNull(item.getMcpPersonaRank()),
+                    parseBooleanOrNull(item.getMcpPersonaEligible())));
+        }
+        return payloads;
+    }
+
+    private List<SecurityRolePermissionWriterPayload> mapSecurityRolePermissionPayloads(
+            List<RolePermissionLoaderRecord> items) {
+        List<SecurityRolePermissionWriterPayload> payloads = new ArrayList<>(items.size());
+        for (RolePermissionLoaderRecord item : items) {
+            payloads.add(
+                    new SecurityRolePermissionWriterPayload(item.getRoleName(), splitRoles(item.getPermissions())));
+        }
+        return payloads;
+    }
+
+    /**
+     * Validated as an integer by {@code RoleLoaderStrategy}, so a bad value never reaches here.
+     * A blank cell means "unranked", not zero.
+     */
+    private Short parseShortOrNull(String value) {
+        String trimmed = blankToNull(value);
+        return trimmed == null ? null : Short.valueOf(trimmed);
+    }
+
+    private record SecurityRoleWriterPayload(
+            String name,
+            String description,
+            String personaTitle,
+            String personaFocus,
+            String personaTone,
+            Short mcpPersonaRank,
+            Boolean mcpPersonaEligible) {}
+
+    private record SecurityRolePermissionWriterPayload(String roleName, Set<String> permissions) {}
 
     private List<SecurityUserWriterPayload> mapSecurityUserPayloads(List<SecurityUserLoaderRecord> items) {
         List<SecurityUserWriterPayload> payloads = new ArrayList<>(items.size());

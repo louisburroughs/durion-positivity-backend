@@ -3,15 +3,17 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
+import com.positivity.securityservice.internal.dto.RolePersonasResponse;
+import com.positivity.securityservice.internal.dto.RoleUpdateRequest;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Service for managing roles, role assignments, and role-permission mappings.
@@ -20,9 +22,29 @@ import org.jspecify.annotations.Nullable;
 public interface RoleManagementService {
 
     /**
-     * Create a new role
+     * Create a new role, including its optional MCP persona metadata (#1613).
      */
-    RoleDto createRole(@NonNull String name, @Nullable String description);
+    RoleDto createRole(@NonNull RoleCreateRequest request);
+
+    /**
+     * Replace an existing role's description and MCP persona metadata (#1613).
+     *
+     * <p>PUT semantics: an omitted field clears the stored value, returning that persona slot to its
+     * derived default. The role name is not updatable — it keys authority resolution and permission
+     * grants.
+     *
+     * @throws com.positivity.securityservice.internal.exception.RoleNotFoundException if no role has
+     *                                                                                 that id
+     */
+    RoleDto updateRole(@NonNull UUID id, @NonNull RoleUpdateRequest request);
+
+    /**
+     * MCP persona metadata for every role, ordered by rank then name (#1613).
+     *
+     * <p>Consumed by {@code pos-mcp-server} to derive its role personas, priority order, and agent
+     * warm-up set from data instead of a compile-time list.
+     */
+    RolePersonasResponse getRolePersonas();
 
     /**
      * Update permissions for a role

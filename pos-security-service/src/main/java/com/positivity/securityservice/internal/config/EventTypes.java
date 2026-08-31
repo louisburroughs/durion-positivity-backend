@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 33 event types.
+     * Total: 38 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -48,8 +48,12 @@ public final class EventTypes {
                 EventTypeRegistration.write("SECURITY_PRINCIPAL_ROLE_ASSIGN", "Assign a principal to a role")
                         .build(),
 
-                // RoleController - 8 events
+                // RoleController - 9 events
                 EventTypeRegistration.write("SECURITY_ROLE_CREATE", "Create a new role")
+                        .build(),
+                // #1613: pos-mcp-server refreshes its role persona snapshot on create and update, so a
+                // persona edit reaches the assistant without waiting for the next scheduled pull.
+                EventTypeRegistration.write("SECURITY_ROLE_UPDATE", "Update a role's description and persona metadata")
                         .build(),
                 EventTypeRegistration.write("SECURITY_ROLE_PERMISSION_GRANT", "Grant a permission to a role")
                         .build(),
@@ -65,6 +69,15 @@ public final class EventTypes {
                                 "SECURITY_ROLE_ASSIGNMENT_REVOKE", "Revoke a role assignment by setting its end date")
                         .build(),
                 EventTypeRegistration.write("SECURITY_ROLE_DELETE", "Delete a role")
+                        .build(),
+
+                // Role bulk ingest - 2 events (#1613 D8: role provisioning moves to bulk load)
+                EventTypeRegistration.write("SECURITY_ROLE_BULK_INGEST", "Bulk provision roles with persona metadata")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_ROLE_PERMISSION_BULK_INGEST", "Bulk grant permissions to existing roles")
+                        .apiVersion("1")
                         .build(),
 
                 // UserRoleController - 2 events

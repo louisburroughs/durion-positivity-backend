@@ -1,8 +1,10 @@
 package com.positivity.securityservice.internal.repository;
 
+import com.positivity.securityservice.internal.dto.RolePersonaDto;
 import com.positivity.securityservice.internal.entity.Role;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -41,6 +43,29 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
      */
     @Query("SELECT DISTINCT p.name FROM Role r JOIN r.permissions p WHERE UPPER(r.name) IN :names")
     Set<String> findPermissionNamesByRoleNames(@Param("names") Collection<String> names);
+
+    /**
+     * Every role's MCP persona metadata, ordered by rank then name (#1613).
+     *
+     * <p>A constructor projection rather than a {@link Role} fetch on purpose: {@code permissions}
+     * is an {@code EAGER} {@code @ManyToMany}, so loading the entity graph for a sync that reads six
+     * scalar columns would pull every grant of every role on every refresh.
+     *
+     * <p>{@code NULLS LAST} implements D2 — an unranked role sorts after every ranked one, but is
+     * still returned, so it resolves to its own persona rather than the consumer's fallback.
+     *
+     * <p>Ineligible roles are included and flagged rather than filtered out. The consumer needs to
+     * tell a role that is excluded by design from one it has never heard of; only the second is a
+     * sync failure.
+     */
+    @Query("""
+            SELECT new com.positivity.securityservice.internal.dto.RolePersonaDto(
+                r.name, r.description, r.personaTitle, r.personaFocus, r.personaTone,
+                r.mcpPersonaRank, r.mcpPersonaEligible)
+            FROM Role r
+            ORDER BY r.mcpPersonaRank ASC NULLS LAST, r.name ASC
+            """)
+    List<RolePersonaDto> findAllPersonas();
 
     /**
      * Records who granted a role-permission row and when (#1512).

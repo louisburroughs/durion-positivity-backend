@@ -300,7 +300,7 @@ services:
         set -e
         BOOTSTRAP=kafka:29092
         # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
-        # 74 topics (37 DLQ). Regenerate with
+        # 76 topics (38 DLQ). Regenerate with
         # scripts/generate-kafka-topics.py --apply after adding a listener or a
         # *-topic property; CI fails on a stale block.
         #
@@ -363,6 +363,8 @@ services:
         people.events.v1.dlq             2592000000
         people.manifest.v1               259200000
         people.manifest.v1.dlq           2592000000
+        security.events.v1               604800000
+        security.events.v1.dlq           2592000000
         sender.outcomes.v1               604800000
         sender.outcomes.v1.dlq           2592000000
         supplier.commands.v1             604800000
@@ -959,6 +961,11 @@ services:
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      # Role persona sync (#1613). The listener removes the staleness window on a persona edit;
+      # the startup pull, on-miss fetch, and scheduled re-pull keep personas correct without it,
+      # which is why the broker stays optional for this service.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_MCP_KAFKA_ENABLED: ${POS_MCP_KAFKA_ENABLED:-true}
       # Chat runs against Ollama's hosted API. Embeddings stay local.
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
@@ -1210,7 +1217,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
       # ADR-0043/#876: users.person_id projection consumer + people-contact command outbox
-      POS_SECURITY_SERVICE_KAFKA_ENABLED: ${POS_SECURITY_SERVICE_KAFKA_ENABLED:-false}
+      # #1613: on so role persona facts reach security.events.v1 through the outbox, and
+      # pos-mcp-server picks up a persona edit without waiting for its scheduled re-pull.
+      POS_SECURITY_SERVICE_KAFKA_ENABLED: ${POS_SECURITY_SERVICE_KAFKA_ENABLED:-true}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_security_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}

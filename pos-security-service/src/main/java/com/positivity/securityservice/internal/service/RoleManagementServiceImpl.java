@@ -5,8 +5,11 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
+import com.positivity.securityservice.internal.dto.RolePersonasResponse;
+import com.positivity.securityservice.internal.dto.RoleUpdateRequest;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
@@ -33,7 +36,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -57,24 +59,68 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final UserRepository userRepository;
     private final AuditEventService auditEventService;
+    private final RolePersonaEventEmitter rolePersonaEventEmitter;
 
     /**
-     * Create a new role.
+     * Create a new role, including its optional MCP persona metadata (#1613).
      */
     @Override
     @Transactional
-    public RoleDto createRole(@NonNull String name, @Nullable String description) {
-        if (roleRepository.existsByNameIgnoreCase(name)) {
-            throw new DuplicateRoleNameException("Role with name " + name + " already exists");
+    public RoleDto createRole(@NonNull RoleCreateRequest request) {
+        if (roleRepository.existsByNameIgnoreCase(request.name())) {
+            throw new DuplicateRoleNameException("Role with name " + request.name() + " already exists");
         }
 
         Role role = new Role();
-        role.setName(name);
-        role.setDescription(description);
+        role.setName(request.name());
+        role.setDescription(request.description());
+        role.setPersonaTitle(request.personaTitle());
+        role.setPersonaFocus(request.personaFocus());
+        role.setPersonaTone(request.personaTone());
+        role.setMcpPersonaRank(request.mcpPersonaRank());
+        role.setMcpPersonaEligible(request.personaEligibleOrDefault());
         role.setCreatedBy(getCurrentUsername());
         role.setCreatedAt(Instant.now(clock));
 
-        return toRoleDto(roleRepository.save(role));
+        Role saved = roleRepository.save(role);
+        rolePersonaEventEmitter.rolePersonaChanged(saved);
+        return toRoleDto(saved);
+    }
+
+    /**
+     * Replace an existing role's description and MCP persona metadata (#1613).
+     *
+     * <p>Every field is assigned unconditionally: an omitted field clears the stored value, which is
+     * what returns a persona slot to its derived default. Treating null as "leave alone" would make
+     * that default unreachable through the API.
+     */
+    @Override
+    @Transactional
+    public RoleDto updateRole(@NonNull UUID id, @NonNull RoleUpdateRequest request) {
+        Role role =
+                roleRepository.findById(id).orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + id));
+
+        role.setDescription(request.description());
+        role.setPersonaTitle(request.personaTitle());
+        role.setPersonaFocus(request.personaFocus());
+        role.setPersonaTone(request.personaTone());
+        role.setMcpPersonaRank(request.mcpPersonaRank());
+        role.setMcpPersonaEligible(request.personaEligibleOrDefault());
+        role.setLastModifiedBy(getCurrentUsername());
+        role.setLastModifiedAt(Instant.now(clock));
+
+        Role saved = roleRepository.save(role);
+        rolePersonaEventEmitter.rolePersonaChanged(saved);
+        return toRoleDto(saved);
+    }
+
+    /**
+     * MCP persona metadata for every role (#1613).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public RolePersonasResponse getRolePersonas() {
+        return new RolePersonasResponse(Instant.now(clock), roleRepository.findAllPersonas());
     }
 
     /**
@@ -457,6 +503,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .permissions(role.getPermissions().stream()
                         .map(this::toPermissionDto)
                         .collect(Collectors.toSet()))
+                .personaTitle(role.getPersonaTitle())
+                .personaFocus(role.getPersonaFocus())
+                .personaTone(role.getPersonaTone())
+                .mcpPersonaRank(role.getMcpPersonaRank())
+                .mcpPersonaEligible(role.isMcpPersonaEligible())
                 .createdAt(role.getCreatedAt())
                 .createdBy(role.getCreatedBy())
                 .lastModifiedAt(role.getLastModifiedAt())

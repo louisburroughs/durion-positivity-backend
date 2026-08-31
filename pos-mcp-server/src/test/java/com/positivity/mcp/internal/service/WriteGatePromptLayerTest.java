@@ -26,7 +26,7 @@ class WriteGatePromptLayerTest {
     void setUp() {
         repository = mock(SystemPromptRepository.class);
         when(repository.findByName(anyString())).thenReturn(Optional.empty());
-        resolver = new RolePromptResolverImpl(repository, new SimpleMeterRegistry());
+        resolver = TestSnapshots.resolver(repository, new SimpleMeterRegistry());
     }
 
     @Test
