@@ -3,8 +3,11 @@
 
 Cross-references four sources of truth about the authorization model:
 
-  A. Granted   -- role -> permission rows in
-                  pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql
+  A. Granted   -- role -> permission grants from BOTH provisioning paths, which
+                  #1613 (D8) split: the bootstrap floor still in
+                  pos-security-service/.../db/migration/R__seed_role_permissions.sql,
+                  and every other role's grants in
+                  scripts/fixtures/seed/alpha/security/role-permissions.csv
   B. Contract  -- x-required-permissions entries across all pos-*/openapi.yaml
   C. Code      -- permissions reachable from @PreAuthorize/@PostAuthorize
                   (constant references resolved), plus non-annotation
@@ -249,6 +252,15 @@ for oapi in sorted(root.glob("pos-*/openapi.yaml")):
             contract[entry].add(mod)
 
 # ---- A. granted -------------------------------------------------------------
+# Two sources since #1613 D8 split role provisioning. The repeatable seed now grants only to the
+# roles Flyway still creates -- the ADMIN / SYSTEM_ADMINISTRATOR bootstrap floor plus the
+# checksum-frozen DISPATCHER, SHOP_MANAGER, SELF_SERVICE_CUSTOMER and CONTROLLER. Every other
+# role's grants live in the bulk-load baseline and are applied after the platform is up.
+#
+# Reading only the SQL would still have looked healthy, because ADMIN carries almost the whole
+# catalog there and the gated checks ask "is this code granted to ANY role". It would have been
+# wrong for every per-role question, and would have gone quietly wrong the first time a code was
+# granted only to an operational role. Both are read here (#1612).
 seed_path = root / "pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql"
 seed = seed_path.read_text()
 grants = collections.defaultdict(set)      # perm -> roles
@@ -256,6 +268,22 @@ role_perms = collections.defaultdict(set)  # role -> perms
 for role, perm in re.findall(r"\(\s*'([A-Z][A-Z_]+)'\s*,\s*'(" + PERM_RE + r")'\s*\)", seed):
     grants[perm].add(role)
     role_perms[role].add(perm)
+
+# Named distinctly: `baseline_path` is already this script's --baseline gate file.
+bulk_grants_path = root / "scripts/fixtures/seed/alpha/security/role-permissions.csv"
+if bulk_grants_path.exists():
+    baseline_lines = bulk_grants_path.read_text().splitlines()[1:]
+    if not any(line.strip() for line in baseline_lines):
+        sys.exit(f"ERROR: {bulk_grants_path} has no grant rows -- the parse, not the file, is wrong")
+    for line in baseline_lines:
+        if not line.strip():
+            continue
+        role, _, perms = line.partition(",")
+        for perm in perms.strip().strip('"').split(";"):
+            perm = perm.strip()
+            if perm:
+                grants[perm].add(role)
+                role_perms[role].add(perm)
 
 # ---- D. registry (per-module permissions.yaml manifests) --------------------
 registry = collections.defaultdict(set)  # perm -> modules
