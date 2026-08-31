@@ -22,10 +22,14 @@ tags:
   name: User Bulk Ingest API
 - description: Asynchronous audit export job management
   name: Audit Exports
+- description: Bulk provision roles with persona metadata
+  name: Role Bulk Ingest API
 - description: Manage roles, permissions, and user assignments
   name: Role Management
 - description: Authorization decision endpoints for principal permissions
   name: Authorization
+- description: Bulk grant permissions to existing roles
+  name: Role Permission Bulk Ingest API
 - description: Endpoints for user management and authentication
   name: User API
 - description: Central permission registry for all services
@@ -2371,13 +2375,13 @@ paths:
               New role:
                 description: New role
                 value:
-                  description: Shop manager
-                  name: SHOP_MGR
+                  description: Warranty claim intake
+                  mcpPersonaRank: 45
+                  name: WARRANTY_CLERK
+                  personaTitle: warranty clerk
             schema:
-              additionalProperties:
-                type: string
-              type: object
-        description: Name and optional description of the role to create.
+              $ref: '#/components/schemas/RoleCreateRequest'
+        description: Name, optional description, and optional MCP persona metadata.
         required: true
       responses:
         '201':
@@ -2681,6 +2685,98 @@ paths:
       - Role Management
       x-required-permissions:
       - security:role:assign
+  /v1/roles/bulk-ingest:
+    post:
+      description: 'Creates roles from a bulk-load batch, each with an optional description and optional MCP persona metadata; every role starts with no permissions and no user assignments.
+
+        Use this tool to provision a set of roles from a load file; do not use it to grant permissions, which is bulkIngestRolePermissions, and do not use createRole, which creates one role at a time.
+
+        Preconditions: the caller must hold security:role:create.
+
+        Required inputs: jobId, locationId, and records; each record needs a non-blank name.
+
+        A role that already exists counts as a success — provisioning is expected to be re-runnable against an environment that is already partly seeded.
+
+        Persona slots must describe the role rather than instruct the assistant: single line, within the length cap, and free of imperative control verbs.
+
+        Emits a SECURITY_ROLE_BULK_INGEST event.
+
+        Returns 200 in all cases; inspect per-record success and failure in the response.
+
+        '
+      operationId: bulkIngestRoles
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Roles:
+                description: Roles
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - description: Branch operations lead
+                    mcpPersonaRank: 35
+                    name: SHOP_MANAGER
+                    personaTitle: shop manager
+                  - description: Warranty claim intake and settlement
+                    name: WARRANTY_CLERK
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestRoleBulkIngestRecord'
+        description: Roles to provision, with optional persona metadata.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request payload
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:role:create
+      summary: Provision Roles in Bulk
+      tags:
+      - Role Bulk Ingest API
+      x-required-permissions:
+      - security:role:create
   /v1/roles/by-name/{name}:
     get:
       description: 'Returns a single role looked up by its exact name, including its permission set.
@@ -2920,6 +3016,97 @@ paths:
       - Role Management
       x-required-permissions:
       - security:role:edit
+  /v1/roles/permissions/bulk-ingest:
+    post:
+      description: 'Grants named permissions to existing roles from a bulk-load batch.
+
+        Use this tool to apply a role-to-permission grant file; do not use it to create roles, which is bulkIngestRoles, and note that both the role and each permission must already exist — permissions are registered by their owning module at startup.
+
+        Preconditions: the caller must hold security:role:edit.
+
+        Required inputs: jobId, locationId, and records; each record needs a roleName and at least one permission name.
+
+        Re-granting a permission a role already holds is a success and does not rewrite who granted it originally, so a grant file is safe to re-apply.
+
+        Emits a SECURITY_ROLE_PERMISSION_BULK_INGEST event.
+
+        Returns 200 in all cases; a row naming an unknown role fails with ROLE_PERMISSION_ROLE_UNKNOWN while the rest of the batch continues.
+
+        '
+      operationId: bulkIngestRolePermissions
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Grants:
+                description: Grants
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - permissions:
+                    - crm:party:view
+                    - order:shipment:cancel
+                    roleName: SHOP_MANAGER
+                  - permissions:
+                    - workorder:job:update
+                    roleName: TECHNICIAN
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestRolePermissionBulkIngestRecord'
+        description: Role-to-permission grants to apply.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request payload
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:role:edit
+      summary: Grant Permissions to Roles in Bulk
+      tags:
+      - Role Permission Bulk Ingest API
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/permissions/user/{userId}:
     get:
       description: 'Returns the union of permissions granted through a user''s currently effective role assignments, served at the legacy /permissions/user/{userId} path.
@@ -2997,6 +3184,73 @@ paths:
       - Role Management
       x-required-permissions:
       - security:permission:view
+  /v1/roles/personas:
+    get:
+      description: 'Returns one row per role with its MCP persona slots, resolution rank, and eligibility flag, ordered by rank then name, plus the timestamp the snapshot was assembled.
+
+        Use this tool to derive assistant personas and their priority order from role data, as pos-mcp-server does; do not use getAllRoles, which returns the full role graph including every permission grant and is far more expensive for this purpose.
+
+        Preconditions: the caller must hold security:role:view.
+
+        Required inputs: none.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Roles that are excluded from persona resolution are included and flagged rather than omitted, so a consumer can distinguish a role excluded by design from one it has never seen.
+
+        '
+      operationId: getRolePersonas
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePersonasResponse'
+          description: Role persona snapshot returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Bad Request
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:role:view
+      summary: Get MCP Persona Metadata for Every Role
+      tags:
+      - Role Management
+      x-required-permissions:
+      - security:role:view
   /v1/roles/{id}:
     delete:
       description: 'Deletes a role by UUID, clearing its permission grants and deleting all of its role assignments in the same transaction.
@@ -3140,6 +3394,97 @@ paths:
       - Role Management
       x-required-permissions:
       - security:role:view
+    put:
+      description: 'Replaces a role''s description and its MCP persona metadata: the persona title, focus, and tone slots, the persona rank, and whether the role participates in persona resolution at all.
+
+        Use this tool to correct or rank a role''s assistant persona; do not use updateRolePermissions, which changes the role''s permission grants, and do not use it to rename a role — the name keys authority resolution and permission grants and is not updatable here.
+
+        Preconditions: the caller must hold security:role:edit and the role id must exist.
+
+        Required inputs: role id as a path parameter. Every body field is optional, but an omitted field clears the stored value rather than leaving it unchanged, which is how a persona slot is returned to its derived default.
+
+        Persona slots must describe the role rather than instruct the assistant: single line, within the length cap, and free of imperative control verbs.
+
+        Emits a SECURITY_ROLE_UPDATE event and records the modifying actor and timestamp.
+
+        Returns 400 when a persona slot fails validation and 404 when no role has that id.
+
+        '
+      operationId: updateRole
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Persona edit:
+                description: Persona edit
+                value:
+                  description: Branch operations lead
+                  mcpPersonaRank: 35
+                  personaFocus: branch operations and queue control
+                  personaTitle: shop manager
+                  personaTone: decisive and operational
+            schema:
+              $ref: '#/components/schemas/RoleUpdateRequest'
+        description: Replacement description and MCP persona metadata.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDto'
+          description: Role updated
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid persona payload
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Role not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Conflict
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Internal Server Error
+      security:
+      - bearerAuth:
+        - security:role:edit
+      summary: Update a Role's Description and Persona Metadata
+      tags:
+      - Role Management
+      x-required-permissions:
+      - security:role:edit
   /v1/roles/{roleId}/permissions/grant:
     put:
       description: 'Grants a single permission key to a role, auto-registering the key in the permission registry when it is not yet known.
@@ -5671,6 +6016,62 @@ components:
       required:
       - decision
       type: object
+    BulkIngestRequestRoleBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/RoleBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestRolePermissionBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/RolePermissionBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
     BulkIngestRequestUserBulkIngestRecord:
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
@@ -6421,6 +6822,84 @@ components:
       - roleId
       - userId
       type: object
+    RoleBulkIngestRecord:
+      description: One role to provision, with optional MCP persona metadata
+      properties:
+        description:
+          description: Human-readable description
+          example: Branch operations lead
+          maxLength: 500
+          minLength: 0
+          type: string
+        mcpPersonaEligible:
+          description: Whether the role participates in persona resolution; defaults to true
+          example: true
+          type: boolean
+        mcpPersonaRank:
+          description: Resolution priority, lowest first; null leaves the role unranked
+          example: 35
+          format: int32
+          type: integer
+        name:
+          description: Role name, unprefixed and upper-case
+          example: SHOP_MANAGER
+          maxLength: 255
+          minLength: 0
+          type: string
+        personaFocus:
+          description: 'Persona slot: what they work on'
+          example: branch operations, queue control, and scheduling trade-offs
+          type: string
+        personaTitle:
+          description: 'Persona slot: who the caller is'
+          example: shop manager
+          type: string
+        personaTone:
+          description: 'Persona slot: how to speak to them'
+          example: decisive and operational
+          type: string
+      required:
+      - name
+      type: object
+    RoleCreateRequest:
+      description: Name, description, and optional MCP persona metadata for a new role
+      properties:
+        description:
+          description: Human-readable description of the role. Doubles as the derived persona focus when personaFocus is omitted.
+          example: Warranty claim intake and settlement
+          maxLength: 500
+          minLength: 0
+          type: string
+        mcpPersonaEligible:
+          description: Whether the role participates in MCP persona resolution. Defaults to true; set false for roles with no MCP access so their callers land on the fallback by design.
+          example: true
+          type: boolean
+        mcpPersonaRank:
+          description: MCP persona resolution priority, lowest first. Null leaves the role unranked, which sorts after every ranked role but still ahead of the ROLE_USER fallback.
+          example: 45
+          format: int32
+          type: integer
+        name:
+          description: Role name. Stored unprefixed and upper-case; the ROLE_ authority prefix is applied by the API gateway, not here.
+          example: WARRANTY_CLERK
+          maxLength: 255
+          minLength: 0
+          type: string
+        personaFocus:
+          description: What the caller works on. Derived from the description when omitted.
+          example: warranty claim intake, eligibility, and settlement
+          type: string
+        personaTitle:
+          description: Who the caller is, in the second person. Derived from the role name when omitted.
+          example: warranty clerk
+          type: string
+        personaTone:
+          description: How to speak to the caller. Defaults to a neutral tone when omitted.
+          example: precise, policy-aware, and explicit about claim status
+          type: string
+      required:
+      - name
+      type: object
     RoleDefaultPermissionsResponse:
       description: Default authority codes granted by a role
       properties:
@@ -6470,6 +6949,15 @@ components:
           description: Actor that last modified the role
           example: jane.doe
           type: string
+        mcpPersonaEligible:
+          description: Whether the role participates in MCP persona resolution
+          example: true
+          type: boolean
+        mcpPersonaRank:
+          description: MCP persona resolution priority, lowest first; null leaves the role unranked
+          example: 35
+          format: int32
+          type: integer
         name:
           description: Role name
           example: SHOP_MGR
@@ -6480,9 +6968,43 @@ components:
             $ref: '#/components/schemas/PermissionDto'
           type: array
           uniqueItems: true
+        personaFocus:
+          description: 'MCP persona slot: what the caller works on'
+          example: branch operations, queue control, scheduling trade-offs, and execution oversight
+          type: string
+        personaTitle:
+          description: 'MCP persona slot: who the caller is, in the second person (#1613)'
+          example: shop manager
+          type: string
+        personaTone:
+          description: 'MCP persona slot: how to speak to the caller'
+          example: decisive, operational, and management-ready
+          type: string
       required:
       - id
       - name
+      type: object
+    RolePermissionBulkIngestRecord:
+      description: Permission grants for one existing role
+      properties:
+        permissions:
+          description: Permission names to grant
+          example:
+          - crm:party:view
+          items:
+            minLength: 1
+            type: string
+          minItems: 1
+          type: array
+          uniqueItems: true
+        roleName:
+          description: Role to grant to; must already exist
+          example: SHOP_MANAGER
+          minLength: 1
+          type: string
+      required:
+      - permissions
+      - roleName
       type: object
     RolePermissionGrantRequest:
       description: Request to grant or revoke a single permission on a role
@@ -6515,6 +7037,90 @@ components:
       required:
       - permissionNames
       - roleId
+      type: object
+    RolePersonaDto:
+      description: MCP persona metadata for a single role
+      properties:
+        description:
+          description: Human-readable description, used to derive the persona focus when personaFocus is absent
+          example: Branch operations lead
+          type: string
+        mcpPersonaEligible:
+          description: Whether this role participates in persona resolution at all
+          example: true
+          type: boolean
+        mcpPersonaRank:
+          description: Resolution priority, lowest first. Null sorts after every ranked role but ahead of the consumer's own fallback identity.
+          example: 35
+          format: int32
+          type: integer
+        name:
+          description: Role name, unprefixed
+          example: SHOP_MANAGER
+          type: string
+        personaFocus:
+          description: What the caller works on
+          example: branch operations, queue control, scheduling trade-offs, and execution oversight
+          type: string
+        personaTitle:
+          description: Who the caller is, in the second person
+          example: shop manager
+          type: string
+        personaTone:
+          description: How to speak to the caller
+          example: decisive, operational, and management-ready
+          type: string
+      required:
+      - mcpPersonaEligible
+      - name
+      type: object
+    RolePersonasResponse:
+      description: Snapshot of MCP persona metadata for every role
+      properties:
+        generatedAt:
+          description: When this snapshot was assembled, for staleness reporting by the consumer
+          example: 2026-08-31 15:24:09+00:00
+          format: date-time
+          type: string
+        roles:
+          description: Persona metadata for every role, ordered by rank then name. Ineligible roles are included and flagged, so the consumer can tell an excluded role from an unknown one.
+          items:
+            $ref: '#/components/schemas/RolePersonaDto'
+          type: array
+      required:
+      - generatedAt
+      - roles
+      type: object
+    RoleUpdateRequest:
+      description: Replacement description and MCP persona metadata for an existing role
+      properties:
+        description:
+          description: Human-readable description of the role. Doubles as the derived persona focus when personaFocus is omitted.
+          example: Warranty claim intake and settlement
+          maxLength: 500
+          minLength: 0
+          type: string
+        mcpPersonaEligible:
+          description: Whether the role participates in MCP persona resolution. Defaults to true when omitted.
+          example: true
+          type: boolean
+        mcpPersonaRank:
+          description: MCP persona resolution priority, lowest first. Null leaves the role unranked.
+          example: 45
+          format: int32
+          type: integer
+        personaFocus:
+          description: What the caller works on. Cleared, and therefore derived from the description, when omitted.
+          example: warranty claim intake, eligibility, and settlement
+          type: string
+        personaTitle:
+          description: Who the caller is, in the second person. Cleared, and therefore derived from the role name, when omitted.
+          example: warranty clerk
+          type: string
+        personaTone:
+          description: How to speak to the caller. Cleared, and therefore defaulted to a neutral tone, when omitted.
+          example: precise, policy-aware, and explicit about claim status
+          type: string
       type: object
     SelfRegistrationRequest:
       description: Anonymous self-registration request
