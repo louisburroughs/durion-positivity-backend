@@ -331,8 +331,8 @@ class StreamingSessionAgentManagerTest {
     }
 
     @Test
-    @DisplayName("streamChat falls back to shared full role selection when selector returns empty")
-    void streamChat_semanticSelection_fallsBackToFullRoleToolsOnEmptyResult() {
+    @DisplayName("streamChat yields NO role tools when the gated set is empty — fail closed (#1606)")
+    void streamChat_semanticSelection_failsClosedOnEmptyResult() {
         String message = "show sales orders";
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
@@ -348,12 +348,14 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
+        // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
+        assertThat(roleAgentCacheKeys(selectorManager))
+                .doesNotContain("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test
-    @DisplayName("streamChat falls back to shared full role selection when selector throws")
-    void streamChat_semanticSelection_fallsBackToFullRoleToolsOnException() {
+    @DisplayName("streamChat yields NO role tools when the gating query throws — fail closed (#1608)")
+    void streamChat_semanticSelection_failsClosedOnException() {
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
@@ -369,7 +371,9 @@ class StreamingSessionAgentManagerTest {
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
+        // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
+        assertThat(roleAgentCacheKeys(selectorManager))
+                .doesNotContain("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test

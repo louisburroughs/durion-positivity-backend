@@ -194,9 +194,38 @@ UPDATE mcp_tool_permission SET permission_group = permission_code WHERE permissi
 ALTER TABLE mcp_tool_permission ALTER COLUMN permission_group SET NOT NULL;
 
 -- The V17 PK (tool_id, permission_code) forbids the same code in two groups. Widen it.
-ALTER TABLE mcp_tool_permission DROP CONSTRAINT IF EXISTS mcp_tool_permission_pkey;
-ALTER TABLE mcp_tool_permission
-    ADD CONSTRAINT mcp_tool_permission_pkey PRIMARY KEY (tool_id, permission_group, permission_code);
+--
+-- Drop by LOOKUP, not by assumed name. `DROP CONSTRAINT IF EXISTS mcp_tool_permission_pkey`
+-- silently no-ops in any environment whose primary key carries a different name (a restore,
+-- a rename, a hand-built schema), and the ADD below would then fail hard with "multiple
+-- primary keys for table are not allowed" — blocking service startup, since Flyway runs at
+-- boot. Resolving the real constraint name from the catalogue makes this idempotent
+-- everywhere. Guarded on the PK not already being the widened one, so re-runs are no-ops.
+DO $$
+DECLARE
+    pk_name text;
+    pk_cols text;
+BEGIN
+    SELECT conname,
+           pg_get_constraintdef(oid)
+      INTO pk_name, pk_cols
+      FROM pg_constraint
+     WHERE conrelid = 'mcp_tool_permission'::regclass
+       AND contype = 'p';
+
+    IF pk_name IS NULL THEN
+        -- No primary key at all (unexpected, but do not fail): just add the widened one.
+        ALTER TABLE mcp_tool_permission
+            ADD CONSTRAINT mcp_tool_permission_pkey
+            PRIMARY KEY (tool_id, permission_group, permission_code);
+    ELSIF pk_cols NOT LIKE '%permission_group%' THEN
+        EXECUTE format('ALTER TABLE mcp_tool_permission DROP CONSTRAINT %I', pk_name);
+        ALTER TABLE mcp_tool_permission
+            ADD CONSTRAINT mcp_tool_permission_pkey
+            PRIMARY KEY (tool_id, permission_group, permission_code);
+    END IF;
+    -- else: already widened, nothing to do.
+END $$;
 
 -- 2) Facade group seeds ───────────────────────────────────────────────────────
 

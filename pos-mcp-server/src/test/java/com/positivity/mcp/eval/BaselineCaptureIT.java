@@ -199,6 +199,23 @@ class BaselineCaptureIT {
         // set these floors from that observation and cite the run here.
         double minHit5 = Double.parseDouble(System.getProperty("mcp.eval.min-hit5", "0.68"));
         double minMrr = Double.parseDouble(System.getProperty("mcp.eval.min-mrr", "0.64"));
+
+        // While the floors are provisional (above), they fail identically whether the run is the
+        // known 0.60 / 0.5677 or a fresh regression below it — so a further slide would be
+        // invisible until the determination closes. These track the only values ever measured with
+        // THIS harness (2026-08-31, commit 6a1abecac) and are asserted with a small tolerance, so a
+        // drop below the known-bad point still fails loudly and distinguishably. Retire them, and
+        // this block, when the floors are re-baselined post-V40.
+        double lastObservedHit5 = Double.parseDouble(System.getProperty("mcp.eval.last-hit5", "0.60"));
+        double lastObservedMrr = Double.parseDouble(System.getProperty("mcp.eval.last-mrr", "0.5677"));
+        double tolerance = 0.02;
+        assertThat(hitAt5)
+                .as("tool-selection hit@5 must not fall below the last observed value (%s)", lastObservedHit5)
+                .isGreaterThanOrEqualTo(lastObservedHit5 - tolerance);
+        assertThat(mrr)
+                .as("tool-selection MRR must not fall below the last observed value (%s)", lastObservedMrr)
+                .isGreaterThanOrEqualTo(lastObservedMrr - tolerance);
+
         assertThat(hitAt5).as("tool-selection hit@5 floor").isGreaterThanOrEqualTo(minHit5);
         assertThat(mrr).as("tool-selection MRR floor").isGreaterThanOrEqualTo(minMrr);
     }

@@ -340,8 +340,8 @@ class SessionAgentManagerTest {
     }
 
     @Test
-    @DisplayName("chat with empty shared selection falls back to full role tool set")
-    void chat_withEmptySemanticSelection_usesFullRoleToolSet() {
+    @DisplayName("chat with empty shared selection gets NO role tools — fail closed (#1606)")
+    void chat_withEmptySemanticSelection_failsClosed() {
         String message = "show stock for sku ABC";
         ToolSelectionEngine realToolSelectionEngine = realToolSelectionEngine();
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
@@ -358,9 +358,16 @@ class SessionAgentManagerTest {
         assertThat(response).isEqualTo("Stock found");
         // Prompt resolution now happens deferred in systemMessageProvider lambda at runtime
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
-        verify(scopedContentRetrieverFactory).create("master", 20, 0.55);
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
+        // Second-order effect of failing closed, asserted rather than glossed: RAG scope is derived
+        // from the resolved tool set, so emptying roleTools leaves only the keyword fallback
+        // (inventory) and the scope narrows from "master" to "inventory" — less context, which is
+        // consistent with a caller the gate authorised for nothing.
+        verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
+        verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
+        // #1606: an empty gated set no longer substitutes the ungated domain tool set, so the
+        // agent is built with no role tools and the cache key reflects that.
+        assertThat(roleAgentCacheKeys(selectorManager))
+                .doesNotContain("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test

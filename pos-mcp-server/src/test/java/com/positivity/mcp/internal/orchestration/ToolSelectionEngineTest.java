@@ -118,8 +118,8 @@ class ToolSelectionEngineTest {
     }
 
     @Test
-    @DisplayName("selectRoleTools falls back to full role tools and keyword fallback tools")
-    void selectRoleTools_fallsBackToFullRoleToolsAndKeywordFallbacks() {
+    @DisplayName("empty gated set keeps keyword fallbacks but no role tools (#1606)")
+    void selectRoleTools_emptyGatedSet_keepsKeywordFallbacksOnly() {
         when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
@@ -128,7 +128,71 @@ class ToolSelectionEngineTest {
         ToolSelectionEngine.ToolSelectionResult result =
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "latest internet sales report");
 
-        assertThat(result.roleTools()).containsExactly(orderFacadeTool, inventoryFacadeTool);
+        // #1606: roleTools now fail closed on an empty gated set — the ungated domain set is no
+        // longer substituted. Keyword fallbacks are a separate list and still populate, so the
+        // assistant keeps web search rather than going mute.
+        assertThat(result.roleTools()).isEmpty();
         assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, orderFacadeTool);
+    }
+
+    @Test
+    @DisplayName("empty gated set yields NO tools — never the ungated domain set (#1606)")
+    void selectRoleTools_emptyGatedSet_failsClosed() {
+        // resolveDomainTools is bucketed by domain with no permission gating, so returning it when
+        // the gate legitimately matches nothing would hand a caller MORE tools than a successful
+        // gate would. V40 makes this reachable: a caller holding only a code V40 strips from the
+        // gate now matches no permission group.
+        when(toolRegistry.resolveDomainTools("ROLE_TECHNICIAN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of());
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_TECHNICIAN", PERMISSION_CODES, "show me customer history");
+
+        assertThat(result.roleTools()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("gating-query failure yields NO tools — fail closed, not back to role scope (#1608)")
+    void selectRoleTools_gatingQueryThrows_failsClosed() {
+        // Reachable in ordinary operation: a pod serving before Flyway applies V40 raises
+        // BadSqlGrammarException on the permission_group column. Degrading to the role-scoped set
+        // would silently revert authorisation from perm_bits to roles.
+        when(toolRegistry.resolveDomainTools("ROLE_TECHNICIAN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenThrow(new IllegalStateException("bad SQL grammar [permission_group]"));
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_TECHNICIAN", PERMISSION_CODES, "show me customer history");
+
+        assertThat(result.roleTools()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("names resolving to zero beans yields NO tools — a wiring fault must not widen the gate")
+    void selectRoleTools_namesResolveToNoBeans_failsClosed() {
+        ToolMetadata ghost = new ToolMetadata(
+                UUID.randomUUID(),
+                "ghostFacadeTool",
+                "Ghost",
+                "No such bean",
+                "inventory",
+                1.0,
+                "low",
+                200,
+                true,
+                "ghostFacadeTool");
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of(ghost));
+        when(toolRegistry.resolveToolsByName(List.of("ghostFacadeTool"))).thenReturn(List.of());
+
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
+
+        assertThat(result.roleTools()).isEmpty();
     }
 }

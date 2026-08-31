@@ -90,6 +90,17 @@ public interface ToolMetadataRepository {
     /**
      * Gate 3 (#785): revokes a permission code from a tool. Idempotent (no-op if absent).
      * Returns {@code true} when a row was deleted, {@code false} when the grant was already absent.
+     *
+     * <p><strong>Singleton groups only (V40 / #1606).</strong> This deletes by
+     * {@code (tool_id, permission_code)} and is therefore group-blind: on a tool whose codes are
+     * spread across per-method groups it removes the code from <em>every</em> group. That can
+     * <em>widen</em> the gate rather than narrow it — revoking {@code location:read} from
+     * {@code TaxFacadeTool} would leave {@code calculateTax} needing only {@code tax:calculate}
+     * instead of both, admitting callers the two-code group excluded.
+     *
+     * <p>Safe today because the only caller ({@code ToolPermissionAdminService}) resolves tools via
+     * {@code findDiscoveredToolIdByName}, i.e. {@code source='openapi'} operations, whose rows are
+     * all singleton groups. Do not call it for a facade tool without first making it group-aware.
      */
     boolean removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
 

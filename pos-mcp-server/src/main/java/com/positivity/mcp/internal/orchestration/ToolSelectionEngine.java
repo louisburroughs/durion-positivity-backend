@@ -107,26 +107,46 @@ public class ToolSelectionEngine {
             List<String> selectedNames =
                     candidates.stream().map(ToolMetadata::name).toList();
             if (selectedNames.isEmpty()) {
-                return logNoCandidates(role, permissionCodes, message, fullRoleTools);
+                // #1606 / #1608: an empty gated set is a CORRECT answer — the caller holds no
+                // permission group for any tool — so it must yield no tools. Returning
+                // fullRoleTools here would hand back MasterAgentRegistry.resolveDomainTools(role),
+                // which is bucketed by domain with no permission gating at all (its own javadoc
+                // defers visibility to "upstream permission gating" — this path). That inverted
+                // V40's purpose: a caller holding only a code V40 strips from the gate matched
+                // nothing, fell through here, and received the entire domain tool set.
+                logNoCandidates(role, permissionCodes, message, fullRoleTools);
+                return List.of();
             }
             // Resolve names across the full registered tool set (not role-scoped): permission gating
             // + scoring already ran in ToolRegistryService, and tools are bucketed by domain. The
             // legacy role-scoped name lookup was removed with the role preassignment. See Gate 2B / #780.
             List<Object> resolvedTools = toolRegistry.resolveToolsByName(selectedNames);
             if (resolvedTools.isEmpty() && !fullRoleTools.isEmpty()) {
-                return logResolvedToZeroTools(role, permissionCodes, message, selectedNames, fullRoleTools);
+                // Gating succeeded but the selected names resolved to no beans — a registry wiring
+                // fault, not a permission decision. Still fail closed: the caller's permissions did
+                // not authorise the domain set, so returning it would be a wider answer than
+                // success would have produced.
+                logResolvedToZeroTools(role, permissionCodes, message, selectedNames, fullRoleTools);
+                return List.of();
             }
             logResolvedCandidates(role, permissionCodes, message, selectedNames, resolvedTools);
             return resolvedTools;
         } catch (RuntimeException exception) {
-            LOGGER.warn(
-                    "MCP shared tool selection failed role={} permissionCodes={} queryPreview=\"{}\" error={}; using full role tool set",
+            // #1608: fail CLOSED. The previous behaviour returned fullRoleTools — an ungated,
+            // domain-bucketed set — so any error on the gating path silently degraded
+            // authorisation from perm_bits back to role scope, the very model the
+            // permission-based gating work retired. It is reachable in ordinary operation: a pod
+            // that serves before Flyway applies V40 raises BadSqlGrammarException on the
+            // permission_group column (observed on alpha, 2026-08-31). ERROR, not WARN — a gate
+            // that cannot be evaluated is an incident, not noise.
+            LOGGER.error(
+                    "MCP shared tool selection failed role={} permissionCodes={} queryPreview=\"{}\" error={}; returning NO tools (fail-closed)",
                     role,
                     permissionCodes,
                     sharedOrchestrationSupport.preview(message),
                     exception.getClass().getSimpleName(),
                     exception);
-            return fullRoleTools;
+            return List.of();
         }
     }
 
