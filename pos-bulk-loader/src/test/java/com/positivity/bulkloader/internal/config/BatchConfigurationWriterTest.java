@@ -35,6 +35,8 @@ import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.RoleLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.RolePermissionLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.SecurityUserLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StorageLocationLoaderStrategy;
@@ -118,6 +120,12 @@ class BatchConfigurationWriterTest {
     CycleCountPlanLoaderStrategy cycleCountPlanLoaderStrategy;
 
     @Mock
+    RoleLoaderStrategy roleLoaderStrategy;
+
+    @Mock
+    RolePermissionLoaderStrategy rolePermissionLoaderStrategy;
+
+    @Mock
     SecurityUserLoaderStrategy securityUserLoaderStrategy;
 
     @Mock
@@ -184,6 +192,8 @@ class BatchConfigurationWriterTest {
                 staffingAssignmentLoaderStrategy,
                 putawayRuleLoaderStrategy,
                 cycleCountPlanLoaderStrategy,
+                roleLoaderStrategy,
+                rolePermissionLoaderStrategy,
                 securityUserLoaderStrategy,
                 userPersonLinkLoaderStrategy,
                 mechanicSkillLoaderStrategy);

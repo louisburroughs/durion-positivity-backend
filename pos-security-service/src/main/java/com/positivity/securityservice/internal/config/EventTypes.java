@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 36 event types.
+     * Total: 38 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -69,6 +69,15 @@ public final class EventTypes {
                                 "SECURITY_ROLE_ASSIGNMENT_REVOKE", "Revoke a role assignment by setting its end date")
                         .build(),
                 EventTypeRegistration.write("SECURITY_ROLE_DELETE", "Delete a role")
+                        .build(),
+
+                // Role bulk ingest - 2 events (#1613 D8: role provisioning moves to bulk load)
+                EventTypeRegistration.write("SECURITY_ROLE_BULK_INGEST", "Bulk provision roles with persona metadata")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_ROLE_PERMISSION_BULK_INGEST", "Bulk grant permissions to existing roles")
+                        .apiVersion("1")
                         .build(),
 
                 // UserRoleController - 2 events

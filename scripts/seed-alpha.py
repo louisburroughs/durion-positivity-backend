@@ -56,6 +56,11 @@ FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixture
 # that references them; customers before vehicles, whose owner names the loader
 # resolves against the live party directory as it loads.
 PACK_FILES = [
+    # Roles first: users name the roles they are assigned (#1613 D8). Grants follow the roles,
+    # and both come before users so an account is never provisioned against a role that does not
+    # exist yet.
+    ("security/roles.csv", "SECURITY_ROLE"),
+    ("security/role-permissions.csv", "SECURITY_ROLE_PERMISSION"),
     ("security/users.csv", "SECURITY_USER"),
     ("location/locations.csv", "LOCATION"),
     ("location/storage-locations.csv", "STORAGE_LOCATION"),

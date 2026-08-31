@@ -84,6 +84,8 @@ class SpringBatchBulkLoadLauncherTest {
                 "staffingAssignmentBulkLoadJob",
                 "putawayRuleBulkLoadJob",
                 "cycleCountPlanBulkLoadJob",
+                "securityRoleBulkLoadJob",
+                "securityRolePermissionBulkLoadJob",
                 "securityUserBulkLoadJob",
                 "userPersonLinkBulkLoadJob",
                 "mechanicSkillBulkLoadJob")) {
