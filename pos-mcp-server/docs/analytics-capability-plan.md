@@ -108,9 +108,19 @@ the agent. No backend changes.
   claimed a past as-of date reconstructs the point-in-time balance. It does not —
   `FinancialReportingServiceImpl.generateAgedReceivables` documents this as a KNOWN LIMITATION:
   each invoice contributes its **current** open balance, and only the bucket boundaries move with
-  `asOfDate`. Two further corrections from the same read: `customerName` is hardcoded `null` on
-  receivables rows (payables rows do carry `vendorName`), and age is measured from invoice
-  creation, not due date. Tool descriptions corrected; Q10/Q14 partials withdrawn below.
+  `asOfDate`, and invoices raised after it are excluded entirely — so a past-dated total is
+  neither today's figure nor that date's. Two further corrections from the same read:
+  `customerName` is hardcoded `null` on receivables rows (payables rows do carry `vendorName`),
+  and A/R ages from invoice creation while A/P ages from due date. Tool descriptions corrected;
+  Q10/Q14 partials withdrawn below.
+
+  **Open defect — A/R aging basis.** The A/R side ignoring due date is a bug, not a design choice:
+  `ext_invoice.due_date` exists and is populated (`V22__ext_invoice_due_date.sql`, "collections-aging
+  due date frozen at finalization") and pos-accounting already ages collections by it elsewhere, so
+  a not-yet-due invoice raised 45 days ago is reported as "31-60 days past due". Descriptions now
+  name it as a known defect rather than presenting it as intent. Fixing it shifts every A/R bucket
+  and invalidates the Q13 ground-truth SQL, so it is scheduled as its own change alongside Wave 2's
+  accounting work — not folded into a documentation PR.
 - Seed `mcp_tool` rows + `mcp_tool_permission` mappings (migration; follow the V37 rederivation
   pattern, permission from the endpoint's `x-required-permissions`).
 

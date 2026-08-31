@@ -1249,11 +1249,18 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     }
 
     /**
-     * AR aging date. The {@code ext_invoice} replica carries no due date, so per
-     * the contract ("fall back to the invoice date when no due date is set") the
-     * invoice date is always used: {@code invoiceCreatedAt}, falling back to
-     * {@code finalizedAt}, then {@code updatedAt}. Instants are read at UTC for
-     * timezone-independent, deterministic day math.
+     * AR aging date: {@code invoiceCreatedAt}, falling back to {@code finalizedAt}, then
+     * {@code updatedAt}. Instants are read at UTC for timezone-independent, deterministic day math.
+     *
+     * <p><strong>KNOWN DEFECT.</strong> This javadoc previously justified the choice by saying the
+     * {@code ext_invoice} replica carries no due date. That is stale: {@code due_date} was added by
+     * {@code V22__ext_invoice_due_date.sql} ("collections-aging due date frozen at finalization by
+     * pos-invoice") and is used for collections aging elsewhere in this module (see
+     * {@code PaymentApplicationServiceImpl} OLDEST_FIRST). The contract's rule — due date, falling
+     * back to the invoice date — is therefore not being honoured here, and
+     * {@link #payableAgingDate} on the A/P side does honour it. Consequence: a not-yet-due invoice
+     * is bucketed as past due by its age. Correcting this shifts every A/R bucket, so it is
+     * deliberately left for its own change rather than folded into a documentation fix.
      */
     private LocalDate receivableAgingDate(ExtInvoice invoice) {
         Instant source = invoice.getInvoiceCreatedAt();

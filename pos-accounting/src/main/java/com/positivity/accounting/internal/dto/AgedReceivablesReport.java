@@ -49,11 +49,11 @@ public class AgedReceivablesReport {
     private Instant generatedAt;
 
     /**
-     * Per-customer aging rows ordered by customer name. Empty when no open
+     * Per-customer aging rows ordered by customer id. Empty when no open
      * receivables exist as of the requested date.
      */
     @Schema(
-            description = "Per-customer aging rows ordered by customer name; empty when no open receivables exist",
+            description = "Per-customer aging rows ordered by customer id; empty when no open receivables exist",
             requiredMode = REQUIRED)
     @NonNull
     private List<AgedReceivablesRow> rows;
