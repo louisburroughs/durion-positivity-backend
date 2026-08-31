@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.client;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.positivity.mcp.internal.domain.RolePersona;
 import com.positivity.mcp.internal.service.RolePersonaSource;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -32,11 +33,14 @@ public class RolePersonaClient implements RolePersonaSource {
     private static final String REQUIRED_AUTHORITY = "security:role:view";
 
     private final RestClient restClient;
+    private final Clock clock;
 
     public RolePersonaClient(
             @LoadBalanced RestClient.Builder loadBalancedRestClientBuilder,
-            @Value("${mcp.security-service.base-url:http://security-service}") String baseUrl) {
+            @Value("${mcp.security-service.base-url:http://security-service}") String baseUrl,
+            @NonNull Clock clock) {
         this.restClient = loadBalancedRestClientBuilder.baseUrl(baseUrl).build();
+        this.clock = clock;
     }
 
     @Override
@@ -58,7 +62,7 @@ public class RolePersonaClient implements RolePersonaSource {
             // A missing timestamp would make snapshot age unreadable, so fall back to receipt time:
             // slightly optimistic, but bounded by how often the sync runs.
             return Optional.of(new RolePersonaSnapshotData(
-                    response.generatedAt() == null ? Instant.now() : response.generatedAt(), personas));
+                    response.generatedAt() == null ? Instant.now(clock) : response.generatedAt(), personas));
         } catch (RuntimeException exception) {
             log.warn("Failed to fetch role personas: {}", exception.getMessage());
             return Optional.empty();

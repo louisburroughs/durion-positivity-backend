@@ -36,7 +36,7 @@ class RolePersonaRefresherTest {
         repository = Mockito.mock(SystemPromptRepository.class);
         Mockito.when(repository.findByName(Mockito.anyString())).thenReturn(Optional.empty());
         Mockito.when(repository.save(Mockito.any(SystemPrompt.class))).thenAnswer(i -> i.getArgument(0));
-        refresher = new RolePersonaRefresher(source, holder, repository);
+        refresher = new RolePersonaRefresher(source, holder, new SystemPromptWriter(repository));
     }
 
     @Test

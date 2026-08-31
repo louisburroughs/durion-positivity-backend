@@ -40,7 +40,7 @@ final class TestSnapshots {
      */
     static RolePersonaRefresher unreachableRefresher(
             SystemPromptRepository repository, RolePersonaSnapshotHolder holder) {
-        return new RolePersonaRefresher(new UnreachableSource(), holder, repository);
+        return new RolePersonaRefresher(new UnreachableSource(), holder, new SystemPromptWriter(repository));
     }
 
     /** A resolver with no synced personas and no reachable upstream. */

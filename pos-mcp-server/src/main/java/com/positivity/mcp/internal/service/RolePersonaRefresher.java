@@ -4,8 +4,6 @@ import com.positivity.mcp.internal.domain.RoleAuthorities;
 import com.positivity.mcp.internal.domain.RolePersona;
 import com.positivity.mcp.internal.domain.RolePersonaRenderer;
 import com.positivity.mcp.internal.domain.RolePersonaSnapshot;
-import com.positivity.mcp.internal.entity.SystemPrompt;
-import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -41,15 +39,15 @@ public class RolePersonaRefresher {
 
     private final RolePersonaSource personaSource;
     private final RolePersonaSnapshotHolder snapshotHolder;
-    private final SystemPromptRepository systemPromptRepository;
+    private final SystemPromptWriter systemPromptWriter;
 
     public RolePersonaRefresher(
             @NonNull RolePersonaSource personaSource,
             @NonNull RolePersonaSnapshotHolder snapshotHolder,
-            @NonNull SystemPromptRepository systemPromptRepository) {
+            @NonNull SystemPromptWriter systemPromptWriter) {
         this.personaSource = personaSource;
         this.snapshotHolder = snapshotHolder;
-        this.systemPromptRepository = systemPromptRepository;
+        this.systemPromptWriter = systemPromptWriter;
     }
 
     /**
@@ -111,7 +109,7 @@ public class RolePersonaRefresher {
     public void applyPersona(@NonNull RolePersona persona) {
         snapshotHolder.merge(persona);
         if (persona.mcpPersonaEligible()) {
-            upsert(RoleAuthorities.toAuthority(persona.name()), RolePersonaRenderer.render(persona));
+            systemPromptWriter.upsert(RoleAuthorities.toAuthority(persona.name()), RolePersonaRenderer.render(persona));
         }
     }
 
@@ -128,31 +126,7 @@ public class RolePersonaRefresher {
      */
     private void persistPersonas(@NonNull RolePersonaSnapshot snapshot) {
         for (String authority : snapshot.rankedAuthorities()) {
-            snapshot.personaText(authority).ifPresent(text -> upsert(authority, text));
-        }
-    }
-
-    private void upsert(@NonNull String name, @NonNull String content) {
-        try {
-            Optional<SystemPrompt> existing = systemPromptRepository.findByName(name);
-            if (existing.isPresent()) {
-                SystemPrompt prompt = existing.get();
-                if (!content.equals(prompt.getContent())) {
-                    prompt.setContent(content);
-                    systemPromptRepository.save(prompt);
-                    LOGGER.info("Updated role persona prompt name={}", name);
-                }
-                return;
-            }
-
-            SystemPrompt prompt = new SystemPrompt();
-            prompt.setName(name);
-            prompt.setContent(content);
-            systemPromptRepository.save(prompt);
-            LOGGER.info("Seeded role persona prompt name={}", name);
-        } catch (Exception exception) {
-            // One bad row must not abandon the rest of the sync.
-            LOGGER.warn("Failed to persist role persona prompt name={}", name, exception);
+            snapshot.personaText(authority).ifPresent(text -> systemPromptWriter.upsert(authority, text));
         }
     }
 }

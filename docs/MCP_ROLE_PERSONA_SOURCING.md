@@ -1,6 +1,6 @@
 # MCP Role Persona Sourcing Strategy
 
-**Status:** proposed
+**Status:** accepted — implemented in #1613, except the one item noted under "Delivery status"
 **Owning modules:** `pos-security-service` (role definition), `pos-mcp-server` (prompt assembly)
 **Supersedes:** the hardcoded `SystemPromptSeedRunner.seedRolePersonas` / `SystemPromptDefaults` role list
 
@@ -310,7 +310,57 @@ once, as load data, rather than written as SQL and migrated again later.
   resolves to a persona, so the drift documented above cannot silently return. This is the piece
   that has been missing: nothing today fails when a role is added to SQL and not to Java.
 
-## Open questions
+## Decisions taken
+
+The open questions this document raised were settled on the issue. Recorded here so the reasoning
+is not only in a comment thread.
+
+1. **D1 boundary — structured fields, reviewed free text deferred.** Slots are structured and
+   rendered in `pos-mcp-server`. The reviewed escape hatch for free-form persona text is specified
+   (D9) but not built; nothing needs it yet, and building an unused write path is how it rots.
+
+2. **D7 — (b), flag and exclude.** `CUSTOMER` and `SELF_SERVICE_CUSTOMER` have no MCP access in the
+   near term, so `mcp_persona_eligible` is false for both and they are excluded from resolution by
+   design. This is what lets the fallback metric separate a deliberate exclusion from a sync gap;
+   under (a) the metric noise would have gone away but the roles would have carried personas nobody
+   uses.
+
+3. **Sync trigger — event-driven, on top of the pull tiers.** `security.events.v1` carries a
+   `security.role.persona.changed` fact, consumed by `pos-mcp-server`. The pull tiers stay and are
+   what the service is correct without: the broker closes the staleness window on a persona edit to
+   a role already in the snapshot, which never triggers the on-miss fetch. `pos.mcp.kafka.enabled`
+   defaults to false, so the broker is optional for this service.
+
+4. **Cross-module contract — per ADR-0044.** `GET /v1/roles/personas` is a REST-edge read following
+   the `default-permissions` precedent (#782).
+
+5. **Rank ownership — settable through the API.** `mcp_persona_rank` is a field on the role
+   create/update DTO; any caller holding the role permissions can set or change it. `PUT
+   /v1/roles/{id}` is new — persona metadata previously could not be corrected without a database
+   edit.
+
+6. **D8 scope — moved now.** Role provisioning went to bulk load in the same change, so the persona
+   backfill was authored once rather than written as SQL and migrated again later.
+
+7. **D8 grant shape — two loads.** Roles in one, grants in another. Permissions are registered
+   code-first at startup, so the set a role can hold is not knowable when the role is created.
+
+8. **D9 control 3 — specified, not built.** Controls 1 (structural containment), 2 (explicit
+   precedence) and 4 (review queue) ship. Model evaluation waits for a free-text path to justify it,
+   consistent with decision 1.
+
+## Delivery status
+
+P1, P1b, P2, P3 and P4 are implemented. One item from D8 is deliberately outstanding:
+
+**Reducing `R__seed_reference_security.sql` to the bootstrap floor has not been done.** The loaders,
+the versioned baseline files (`scripts/fixtures/seed/alpha/security/roles.csv` and
+`role-permissions.csv`) and the drift check (`RoleBaselineDriftTest`) are all in place, so the move
+is now safe to make — but the move itself changes what a fresh database contains at boot, and that
+wants verifying against a real environment rather than reasoning. Until it happens, roles come from
+Flyway as before and the baseline files are held in step with the seed by the drift check.
+
+## Open questions (resolved — see "Decisions taken")
 
 1. **D1 boundary** — confirm the revised position: structured fields are the default and rendering
    stays in `pos-mcp-server`, with free-form persona text permitted only through a reviewed path
