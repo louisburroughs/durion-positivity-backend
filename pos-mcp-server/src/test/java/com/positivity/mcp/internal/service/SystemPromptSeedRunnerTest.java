@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.domain.RoleAuthorities;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import java.util.HashMap;
@@ -35,15 +36,12 @@ class SystemPromptSeedRunnerTest {
         Map<String, String> seedPrompts = SystemPromptSeedRunner.seedPrompts();
 
         assertThat(seedPrompts).containsKeys("master", "inventory", "order", "customer", "workorder", "admin");
-        // Gate 1: internal role personas ARE seeded; customer-facing personas are not (internal-only interface).
-        assertThat(seedPrompts)
-                .containsKeys(
-                        SystemPromptDefaults.ROLE_ADMIN_PROMPT_NAME,
-                        SystemPromptDefaults.ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
-                        SystemPromptDefaults.ROLE_SERVICE_ADVISOR_PROMPT_NAME)
-                .doesNotContainKeys(
-                        SystemPromptDefaults.ROLE_CUSTOMER_PROMPT_NAME,
-                        SystemPromptDefaults.ROLE_SELF_SERVICE_CUSTOMER_PROMPT_NAME);
+        // #1613: role personas are synced from pos-security-service, so the only one seeded here is
+        // the ROLE_USER fallback, which has no upstream row. Domain prompts are unaffected.
+        assertThat(seedPrompts).containsKey(SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
+        assertThat(seedPrompts.keySet())
+                .filteredOn(name -> name.startsWith(RoleAuthorities.ROLE_PREFIX))
+                .containsExactly(SystemPromptDefaults.ROLE_USER_PROMPT_NAME);
         assertThat(seedPrompts.get("shop-manager")).contains("Stay inside shop-manager scope");
     }
 

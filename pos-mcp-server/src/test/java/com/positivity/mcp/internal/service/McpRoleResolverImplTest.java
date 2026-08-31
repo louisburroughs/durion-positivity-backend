@@ -3,6 +3,12 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.domain.RolePersona;
+import com.positivity.mcp.internal.domain.RolePersonaSnapshot;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Stream;
@@ -27,9 +33,30 @@ class McpRoleResolverImplTest {
 
     private McpRoleResolverImpl resolver;
 
+    /**
+     * The ranks V35 backfills for these roles. Priority used to be a compile-time list; it comes from
+     * the synced snapshot now (#1613), and these cases assert the data-driven path produces the same
+     * answers the hardcoded order did.
+     */
     @BeforeEach
     void setUp() {
-        resolver = new McpRoleResolverImpl();
+        RolePersonaSnapshotHolder holder =
+                new RolePersonaSnapshotHolder(new SimpleMeterRegistry(), Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
+        holder.set(RolePersonaSnapshot.of(
+                Instant.EPOCH,
+                List.of(
+                        persona("SYSTEM_ADMINISTRATOR", 10),
+                        persona("ADMIN", 20),
+                        persona("LOCATION_MANAGER", 30),
+                        persona("ACCOUNT_MANAGER", 40),
+                        persona("SERVICE_ADVISOR", 60),
+                        persona("DISPATCHER", 70),
+                        persona("TECHNICIAN", 80))));
+        resolver = new McpRoleResolverImpl(holder);
+    }
+
+    private static RolePersona persona(String name, int rank) {
+        return new RolePersona(name, null, null, null, null, (short) rank, true);
     }
 
     private void givenAuthorities(String... roles) {

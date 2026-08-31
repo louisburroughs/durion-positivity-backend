@@ -1,7 +1,6 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.domain.RagScope;
-import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -21,49 +20,17 @@ public final class SystemPromptDefaults {
     public static final String MASTER_PROMPT_NAME = "master";
     static final String DEFAULT_PROMPT_NAME = MASTER_PROMPT_NAME;
 
-    // SQL-seeded security roles from pos-security-service
-    // (R__seed_reference_security.sql)
-    static final String ROLE_ADMIN_PROMPT_NAME = "ROLE_ADMIN";
-    static final String ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME = "ROLE_SYSTEM_ADMINISTRATOR";
-    static final String ROLE_ACCOUNT_MANAGER_PROMPT_NAME = "ROLE_ACCOUNT_MANAGER";
-    static final String ROLE_ACCOUNTING_ASSOCIATE_PROMPT_NAME = "ROLE_ACCOUNTING_ASSOCIATE";
-    static final String ROLE_LOCATION_MANAGER_PROMPT_NAME = "ROLE_LOCATION_MANAGER";
-    static final String ROLE_SERVICE_ADVISOR_PROMPT_NAME = "ROLE_SERVICE_ADVISOR";
-    static final String ROLE_DISPATCHER_PROMPT_NAME = "ROLE_DISPATCHER";
-    static final String ROLE_TECHNICIAN_PROMPT_NAME = "ROLE_TECHNICIAN";
-    static final String ROLE_CUSTOMER_PROMPT_NAME = "ROLE_CUSTOMER";
-    static final String ROLE_SELF_SERVICE_CUSTOMER_PROMPT_NAME = "ROLE_SELF_SERVICE_CUSTOMER";
-    // Fallback persona for authenticated callers with no higher-priority role (McpRoleResolver
-    // FALLBACK_ROLE). Internal-only interface: ROLE_CUSTOMER / ROLE_SELF_SERVICE_CUSTOMER are
-    // intentionally NOT seeded as personas (Gate 1).
-    static final String ROLE_USER_PROMPT_NAME = "ROLE_USER";
-
-    static final List<String> MCP_ROLE_PRIORITY = List.of(
-            ROLE_SYSTEM_ADMINISTRATOR_PROMPT_NAME,
-            ROLE_ADMIN_PROMPT_NAME,
-            ROLE_LOCATION_MANAGER_PROMPT_NAME,
-            ROLE_ACCOUNT_MANAGER_PROMPT_NAME,
-            ROLE_ACCOUNTING_ASSOCIATE_PROMPT_NAME,
-            ROLE_SERVICE_ADVISOR_PROMPT_NAME,
-            ROLE_DISPATCHER_PROMPT_NAME,
-            ROLE_TECHNICIAN_PROMPT_NAME,
-            ROLE_CUSTOMER_PROMPT_NAME,
-            ROLE_SELF_SERVICE_CUSTOMER_PROMPT_NAME);
-
     /**
-     * Canonical set of role identifiers that must be pre-built by both session managers (Gate 2A,
-     * issue #639). Equal to {@link #MCP_ROLE_PRIORITY} plus the {@code ROLE_USER} fallback, so a
-     * caller resolving to any priority role — or the fallback — hits a warm agent. Previously
-     * preload was driven only by configured tool assignments, which omitted ROLE_TECHNICIAN and
-     * ROLE_USER.
+     * Fallback persona for an authenticated caller who holds no role this service can resolve
+     * ({@code McpRoleResolver} FALLBACK_ROLE).
+     *
+     * <p>The only role identifier left in Java (#1613). Every other role — its persona, its
+     * resolution rank, and its place in the agent warm-up set — is synced from
+     * {@code pos-security-service} into {@code RolePersonaSnapshot}, so a role created after a
+     * release is visible to the assistant without a code change. {@code ROLE_USER} stays here
+     * because it is an MCP-internal identity with no security-service row to sync from.
      */
-    public static final List<String> PRELOADABLE_ROLE_IDENTIFIERS = buildPreloadableRoleIdentifiers();
-
-    private static List<String> buildPreloadableRoleIdentifiers() {
-        var roles = new java.util.LinkedHashSet<>(MCP_ROLE_PRIORITY);
-        roles.add(ROLE_USER_PROMPT_NAME);
-        return List.copyOf(roles);
-    }
+    public static final String ROLE_USER_PROMPT_NAME = "ROLE_USER";
 
     static final String DEFAULT_PROMPT_TEXT = """
             You are the concise POS assistant for Positivity and the master orchestration agent for Durion operations.
