@@ -300,7 +300,7 @@ services:
         set -e
         BOOTSTRAP=kafka:29092
         # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
-        # 74 topics (37 DLQ). Regenerate with
+        # 76 topics (38 DLQ). Regenerate with
         # scripts/generate-kafka-topics.py --apply after adding a listener or a
         # *-topic property; CI fails on a stale block.
         #
@@ -363,6 +363,8 @@ services:
         people.events.v1.dlq             2592000000
         people.manifest.v1               259200000
         people.manifest.v1.dlq           2592000000
+        security.events.v1               604800000
+        security.events.v1.dlq           2592000000
         sender.outcomes.v1               604800000
         sender.outcomes.v1.dlq           2592000000
         supplier.commands.v1             604800000
