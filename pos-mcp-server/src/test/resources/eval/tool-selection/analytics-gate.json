@@ -10,17 +10,13 @@
           "accounting:coa:view",
           "reporting:view:financial-statements",
           "invoice:manage",
-          "workorder:workorder:view",
-          "security:user:view"
+          "workorder:workorder:view"
         ],
         "workflow_state": "IDLE"
       },
       "expected": {
         "tool_ids": [
           "AccountingFacadeTool"
-        ],
-        "forbidden_tool_ids": [
-          "AdminFacadeTool"
         ],
         "k": 5
       },
@@ -29,9 +25,9 @@
         "wave1",
         "facade",
         "regression",
-        "admin-fast-path"
+        "admin-fast-path-positive-lock"
       ],
-      "notes": "Plan §6 Q13 — the Wave 1 full-pass gate. Answered today by AccountingFacadeTool.getAgedReceivables(asOfDate) (V39; the model does the Pareto in-context). REGRESSION LOCK: a live alpha smoke of this exact phrasing selected AdminFacadeTool ALONE because the ToolRegistryService admin fast path matches the bare keyword 'accounts' (ADMIN_QUERY_KEYWORDS) and returns AdminFacadeTool as the sole candidate, suppressing every other tool. Fix is PR #1588 (branch claude/mcp-admin-fastpath-hijack, unmerged at the time of writing) — this fixture fails on the pre-fix selector both on hit@5 (expected tool absent) and on the forbidden assertion (AdminFacadeTool selected). The actor deliberately holds security:user:view so AdminFacadeTool is permission-gated IN; without it the fast path cannot fire and the fixture would not reproduce the incident."
+      "notes": "Plan §6 Q13 — the Wave 1 full-pass gate. Answered today by AccountingFacadeTool.getAgedReceivables(asOfDate) (V39; the model does the Pareto in-context). REGRESSION LOCK for PR #1588: a live alpha smoke of this exact phrasing selected AdminFacadeTool ALONE, because the admin fast path matched the bare keyword 'accounts' and returns AdminFacadeTool as the sole candidate, suppressing every other tool. The lock is the POSITIVE assertion — AccountingFacadeTool must appear in the top-5. Under the pre-#1588 selector it cannot, because the fast path returns exactly one tool and it is not this one. Deliberately NOT a forbidden_tool_ids assertion: the first live run (2026-08-31) showed AdminFacadeTool still reaching the top-5 by ordinary semantic rank once the actor is permitted to see it, which is correct behaviour and not the defect. This fixture previously granted security:user:view to gate AdminFacadeTool in; that made the exclusion assertion incoherent — it forbade a tool the actor was entitled to. The grant is removed. q14-ar-balance-and-dso-by-month carries the exclusion assertion instead, where it holds by construction because that actor holds no admin permission at all."
     },
     {
       "fixture_id": "q13-admin-user-account-active",

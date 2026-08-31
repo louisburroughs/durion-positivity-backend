@@ -100,12 +100,15 @@ database and no model-quality judgement.
   ./mvnw -pl pos-mcp-server -Dmcp.eval.live=true -Dit.test=BaselineCaptureIT verify
   ```
 
-  `q13-ar-pareto` also depends on a scoring margin rather than a hard gate: its actor holds
-  `security:user:view` (required to reproduce the hijack conditions at all), so `AdminFacadeTool`
-  is gated in and the `forbidden_tool_ids` assertion holds only while it ranks outside the top-5.
-  Re-embedding the tool corpus after a description change can flip that without the fixture being
-  touched. `q14-ar-balance-and-dso-by-month` is the durable counterpart: its actor holds no admin
-  permission at all, so `AdminFacadeTool` cannot be returned by construction.
+  The lock is a POSITIVE assertion, and deliberately so. `q13-ar-pareto` requires
+  `AccountingFacadeTool` in the top-5, which the pre-#1588 selector cannot satisfy: the fast path
+  returns exactly one tool and it is not that one. It carries no `forbidden_tool_ids`. The first
+  live run (2026-08-31) established why — with the actor permitted to see `AdminFacadeTool`, that
+  tool reaches the top-5 by ordinary semantic rank, which is correct behaviour, not the defect.
+  An earlier version of this fixture granted `security:user:view` *and* forbade the tool that grant
+  admits, which was incoherent; the grant has been removed.
+  `q14-ar-balance-and-dso-by-month` carries the exclusion assertion instead, where it holds by
+  construction: that actor holds no admin permission, so `AdminFacadeTool` cannot be returned at all.
 - `tool-selection-pending/analytics-gate-pending.json` — the other sixteen questions (Wave 2/3).
   Same schema (`schema/tool-selection.schema.json`), structurally validated by
   `EvalFixtureValidationTest.toolSelectionPendingFixturesValid`, but **not scored**: both scorers
