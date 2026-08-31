@@ -352,6 +352,17 @@ class RolePermissionBaselineTest {
                         "workorder:workorder:view",
                         "workorder:workorder:assign-technician",
                         "people:availability:view",
+                        // #1612 reference-data reads. A dispatcher assigning a technician to a job
+                        // has to resolve the customer, the vehicle and the order behind it first,
+                        // and could not: these six reads were the single permission standing
+                        // between DISPATCHER and six MCP facades. Reads only — nothing here lets a
+                        // dispatcher change a customer, a product or an order.
+                        "catalog:product:view",
+                        "crm:party:view",
+                        "inventory:availability:read",
+                        "invoice:invoice:view",
+                        "order:order:view",
+                        "vehicle-inventory:registry:view",
                         // the assistant entrypoints every role carries
                         "mcp:chat:execute",
                         "mcp:chat:stream",
