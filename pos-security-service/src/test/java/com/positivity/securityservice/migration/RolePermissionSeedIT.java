@@ -6,12 +6,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.positivity.securityservice.internal.service.AuthorizationService;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +40,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * of a seeded operational user's effective permissions through
  * {@code user_roles -> roles -> role_permissions -> permissions}.
  *
+ * <p>Since #1613 (D8) the migration chain is no longer the whole picture: it provisions a
+ * bootstrap floor of six roles and the other eleven arrive through the bulk load. {@link
+ * #loadBaseline()} applies that second half here, so the grant assertions below describe a real
+ * environment instead of half of one. The capability assertions are deliberately kept rather than
+ * narrowed to the floor — resolving a technician's effective permissions through four joins is
+ * behaviour no parse-level test can reach, which is the whole reason this IT exists.
+ *
  * <p>Requires Docker.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -49,7 +61,22 @@ class RolePermissionSeedIT {
 
     private static final String SEED = "db/migration/R__seed_role_permissions.sql";
 
+    /**
+     * Re-applied after the baseline role load, because it links seeded users to roles by name and
+     * Flyway ran it while eleven of those roles did not yet exist. See {@link #loadBaseline()}.
+     */
+    private static final String OPERATIONAL = "db/migration/R__seed_security_operational_data.sql";
+
+    /** The bulk-load baseline: canonical for every role outside the bootstrap floor (#1613 D8). */
+    private static final Path BASELINE_ROLES =
+            Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "roles.csv");
+
+    private static final Path BASELINE_GRANTS =
+            Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "role-permissions.csv");
+
     private static String seedSql;
+
+    private static String operationalSql;
 
     @Autowired
     private DataSource dataSource;
@@ -69,16 +96,114 @@ class RolePermissionSeedIT {
 
     @BeforeAll
     static void loadSeed() throws IOException {
-        try (InputStream in = RolePermissionSeedIT.class.getClassLoader().getResourceAsStream(SEED)) {
-            assertThat(in).as("%s not on the classpath", SEED).isNotNull();
-            seedSql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        seedSql = classpathSql(SEED);
+        operationalSql = classpathSql(OPERATIONAL);
+    }
+
+    private static String classpathSql(String resource) throws IOException {
+        try (InputStream in = RolePermissionSeedIT.class.getClassLoader().getResourceAsStream(resource)) {
+            assertThat(in).as("%s not on the classpath", resource).isNotNull();
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+
+    @BeforeEach
+    void provision() {
+        loadBaseline();
     }
 
     @AfterEach
     void restoreBaseline() {
-        // Every test below must leave the seeded baseline intact for the next one.
+        // Restores the migration half only; @BeforeEach re-applies the bulk-load half before the
+        // next test, so doing it here as well would just pay for 1078 grant inserts twice per test.
         jdbc().execute(seedSql);
+    }
+
+    /**
+     * Provisions the roles and grants that #1613 (D8) moved out of Flyway and into the bulk load,
+     * so this container matches a real environment rather than only its bootstrap floor.
+     *
+     * <p>Without this the IT sees six roles. {@code R__seed_reference_security.sql} creates
+     * {@code ADMIN} and {@code SYSTEM_ADMINISTRATOR}; {@code V3}, {@code V8} and {@code V24} add
+     * {@code DISPATCHER}, {@code SHOP_MANAGER}, {@code SELF_SERVICE_CUSTOMER} and
+     * {@code CONTROLLER}. The other eleven -- {@code TECHNICIAN}, {@code ACCOUNT_MANAGER}, the
+     * three inventory roles and the rest -- are provisioned by the {@code SECURITY_ROLE} and
+     * {@code SECURITY_ROLE_PERMISSION} loaders from the baseline files this method reads. Asserting
+     * their grants is still the right thing for this IT to do; going through Flyway alone is not.
+     *
+     * <p>Ids are generated rather than fixed: nothing here asserts on a role id, and the real
+     * loaders mint UUIDv7 through the service layer (ADR-0013), which is not reproducible from SQL.
+     */
+    private void loadBaseline() {
+        for (String[] row : csvRows(BASELINE_ROLES)) {
+            jdbc().update(
+                            "INSERT INTO roles (id, name, description, created_at, created_by) "
+                                    + "VALUES (gen_random_uuid(), ?, ?, NOW(), 'baseline-load-it') "
+                                    + "ON CONFLICT (name) DO NOTHING",
+                            row[0],
+                            row.length > 1 ? row[1] : row[0]);
+        }
+
+        for (String[] row : csvRows(BASELINE_GRANTS)) {
+            if (row.length < 2) {
+                continue;
+            }
+            for (String code : row[1].split(";")) {
+                if (code.isBlank()) {
+                    continue;
+                }
+                // Skips silently when either side is unresolvable, unlike the seed migration's
+                // loud guard: an unknown code here means the baseline outran the permission
+                // catalog, which is RolePermissionBaselineTest's job to catch, not this one's.
+                jdbc().update(
+                                "INSERT INTO role_permissions (role_id, permission_id) "
+                                        + "SELECT r.id, p.id FROM roles r, permissions p "
+                                        + "WHERE r.name = ? AND p.name = ? "
+                                        + "ON CONFLICT DO NOTHING",
+                                row[0],
+                                code.trim());
+            }
+        }
+
+        // Flyway ran this while eleven of the roles above did not exist, so its user_roles insert
+        // resolved only for the floor. Re-running it now links the rest -- the same ordering the
+        // real pipeline gets by loading users after roles.
+        jdbc().execute(operationalSql);
+    }
+
+    /** Minimal CSV split: these fixtures quote only embedded commas. */
+    private static List<String[]> csvRows(Path file) {
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new UncheckedIOException("baseline fixture not readable: " + file, exception);
+        }
+        assertThat(lines).as("%s is empty", file).isNotEmpty();
+
+        List<String[]> rows = new ArrayList<>();
+        for (String line : lines.subList(1, lines.size())) {
+            if (line.isBlank()) {
+                continue;
+            }
+            List<String> values = new ArrayList<>();
+            StringBuilder current = new StringBuilder();
+            boolean quoted = false;
+            for (int i = 0; i < line.length(); i++) {
+                char c = line.charAt(i);
+                if (c == '"') {
+                    quoted = !quoted;
+                } else if (c == ',' && !quoted) {
+                    values.add(current.toString());
+                    current.setLength(0);
+                } else {
+                    current.append(c);
+                }
+            }
+            values.add(current.toString());
+            rows.add(values.toArray(String[]::new));
+        }
+        return rows;
     }
 
     @Test
@@ -122,14 +247,17 @@ class RolePermissionSeedIT {
     @Test
     @DisplayName("an unresolvable role name aborts the seed and names the role")
     void seed_unknownRoleName_failsLoudly() {
-        jdbc().update("UPDATE roles SET name = 'TECHNICIAN_RENAMED' WHERE name = 'TECHNICIAN'");
+        // DISPATCHER, not TECHNICIAN: the guard can only fire on a role the seed still grants to,
+        // and #1613 (D8) moved TECHNICIAN to the bulk-load baseline. Renaming a role the reduced
+        // seed no longer mentions proves nothing -- the seed would simply succeed.
+        jdbc().update("UPDATE roles SET name = 'DISPATCHER_RENAMED' WHERE name = 'DISPATCHER'");
         try {
             assertThatThrownBy(() -> jdbc().execute(seedSql))
                     .hasMessageContaining("unknown roles")
-                    .hasMessageContaining("TECHNICIAN");
+                    .hasMessageContaining("DISPATCHER");
         } finally {
             // Restore before @AfterEach re-applies the baseline, or every later test aborts too.
-            jdbc().update("UPDATE roles SET name = 'TECHNICIAN' WHERE name = 'TECHNICIAN_RENAMED'");
+            jdbc().update("UPDATE roles SET name = 'DISPATCHER' WHERE name = 'DISPATCHER_RENAMED'");
         }
     }
 
