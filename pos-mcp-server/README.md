@@ -74,9 +74,9 @@ Tool visibility is **permission-gated**, not role-gated. On each chat request `T
 narrows the active tool set:
 
 1. `ToolMetadataRepository.findTopKByEmbeddingForPermissions()` runs a pgvector ANN query (`<=>` cosine distance)
-   that joins `mcp_tool`, `mcp_tool_permission`, and `mcp_workflow_state`. Only tools whose required permission codes
-   intersect the caller's `permissionCodes`, and that are valid for the current workflow state, enter the scoring
-   window. Gating happens **inside** the query, before the top-K cut.
+   against `mcp_tool`, `mcp_tool_permission`, and `mcp_workflow_state`. Only tools the caller's `permissionCodes`
+   satisfy, and that are valid for the current workflow state, enter the scoring window. Gating happens **inside**
+   the query, before the top-K cut.
 2. `ToolScorer` ranks candidates by a weighted blend of semantic similarity and normalized priority
    (`Math.clamp(priority, 0.0, 1.0)`).
 3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
@@ -84,7 +84,24 @@ narrows the active tool set:
 5. The resolved agent is cached keyed by `role::toolCacheKey` (sorted tool names joined with `+`) and expires after
    `mcp.agent.cache-ttl-minutes` (default 30) so DB priority/prompt edits take effect without restart.
 
-**Fail-closed:** a tool with zero `mcp_tool_permission` rows is never selected for any caller. The `AUTHENTICATED`
+**AND-group gating (V40, #1606).** Every `mcp_tool_permission` row belongs to a `permission_group`, and a facade
+tool is offered **iff the caller holds every code of at least one group**. A group is one `@Tool` method's required
+permission codes, named after that method (`getCustomer`, `calculateTax`, …). Consequences:
+
+- A composition's group contains only its `.require()`d legs. Optional legs contribute nothing, because
+  `ToolComposition` degrades them individually — the section reports its own `not_authorized` status while the rest
+  still answer.
+- A method that requires no codes (e.g. `CustomerFacadeTool.getCustomerHistory`, which `.require()`s no leg)
+  contributes **no group at all**. An empty group would make `bool_and` vacuously true and admit every caller.
+- This replaced a flat OR over the union of a tool's codes, under which a composition's *least*-privileged leg
+  admitted the whole tool: a technician holding only `workorder:workorder:view` was offered `CustomerFacadeTool`,
+  whose `getCustomer` needs `crm:party:view` and 403s downstream (#1606 finding 1).
+- Discovered (`source='openapi'`) operations deliberately keep **OR** semantics. That is enforced by the data, not a
+  second query: each of their rows is its own singleton group (`permission_group = permission_code`), for which
+  AND-within-a-group and OR coincide. `ToolMetadataRepositoryImpl.addToolPermission` writes the same shape.
+
+**Fail-closed:** a tool with zero `mcp_tool_permission` rows is never selected for any caller — the qualifying
+predicate is an `EXISTS` over that tool's groups, and `EXISTS` over no rows is false. The `AUTHENTICATED`
 sentinel marks operations available to any authenticated caller.
 
 **Permission-code extraction:** `CurrentUserContextResolver` derives bare `domain:resource:action` codes from the
@@ -143,13 +160,16 @@ now serves per-entity event history (`GET /v1/events?entityId=`), pos-tax now se
 (`GET /v1/tax/rates`), and pos-people now serves employee search (`GET /v1/people/employees?q=`).
 
 Permission mappings for these tools are seeded by migration `V18` (retargeted by `V35`/`V36`); the #1519
-re-derivation migration (`V37`) re-derives the seeds against the restored targets above, unioning across every
-composition leg, and `V38` adds `tax:rates:view` to TaxFacadeTool for the restored `getTaxRate`.
+re-derivation migration (`V37`) re-derives the seeds against the restored targets above, `V38` adds
+`tax:rates:view` to TaxFacadeTool for the restored `getTaxRate`, `V39` re-derives AccountingFacadeTool for the W1.2
+aging methods, and `V40` (#1606) repartitions all 16 facades into per-method AND-groups. `V40`'s header carries the
+full tool → group → codes derivation table; `FacadeToolPermissionSeedTest` replays the whole chain and asserts it.
 
 The seed mirrors each downstream controller's *declared* authorization, not the product intent of the facade: for
 every backend endpoint a `@Tool` method calls, the merged class + method `@PreAuthorize` is read and
-`hasAuthority('X')` / `hasAnyAuthority('X','Y')` contribute codes `X`, `Y`, unioned across every `@Tool` method in
-the tool class. Some facade reads therefore fall back to the `AUTHENTICATED` sentinel instead of a "normal" business
+`hasAuthority('X')` / `hasAnyAuthority('X','Y')` contribute codes `X`, `Y`. Since `V40` those codes are grouped per
+`@Tool` method rather than unioned across the tool class, and only a composition's `.require()`d legs contribute.
+Some facade reads therefore fall back to the `AUTHENTICATED` sentinel instead of a "normal" business
 permission code:
 
 - **`isAuthenticated()` or no `@PreAuthorize` at all** (e.g. Order and Pricing reads, EventSummaryController) — there

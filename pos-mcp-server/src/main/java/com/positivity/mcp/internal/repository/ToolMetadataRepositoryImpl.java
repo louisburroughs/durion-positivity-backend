@@ -39,25 +39,31 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         if (permissionCodes.isEmpty()) {
             return List.of();
         }
+        // V40 / #1606: AND-group gating. A facade qualifies iff the caller holds EVERY code of at
+        // least one permission_group (a group is one @Tool method's required codes). bool_and over
+        // a group is only reached when the group has rows, and EXISTS over no rows is false — so a
+        // tool with zero mcp_tool_permission rows is still never returned (fail-closed).
         String sql = """
-                SELECT DISTINCT t.id, t.name, t.display_name, t.description,
+                SELECT t.id, t.name, t.display_name, t.description,
                        t.domain, t.priority, t.cost_level,
                        t.avg_latency_ms, t.enabled, t.handler_bean
                 FROM mcp_tool t
-                JOIN mcp_tool_permission tp ON tp.tool_id = t.id
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
                   AND t.source <> 'openapi'
-                  AND tp.permission_code = ANY(?)
                   AND ws.name = ?
+                  AND EXISTS (SELECT 1 FROM mcp_tool_permission g
+                              WHERE g.tool_id = t.id
+                              GROUP BY g.permission_group
+                              HAVING bool_and(g.permission_code = ANY(?)))
                 """;
 
         return jdbcTemplate.query(
                 sql,
                 ps -> {
-                    ps.setArray(1, ps.getConnection().createArrayOf(VARCHAR, permissionCodes.toArray()));
-                    ps.setString(2, workflowState);
+                    ps.setString(1, workflowState);
+                    ps.setArray(2, ps.getConnection().createArrayOf(VARCHAR, permissionCodes.toArray()));
                 },
                 this::mapRow);
     }
@@ -96,9 +102,11 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         if (permissionCodes.isEmpty()) {
             return List.of();
         }
-        // t.id IN (SELECT ...) rather than a JOIN avoids row duplication when a tool
-        // matches multiple permission codes, without DISTINCT (which would force
-        // ORDER BY's <=> expression into the SELECT list).
+        // EXISTS (...) rather than a JOIN avoids row duplication when a tool matches multiple
+        // permission codes, without DISTINCT (which would force ORDER BY's <=> expression into
+        // the SELECT list). V40 / #1606: AND-group gating — the caller must hold EVERY code of at
+        // least one permission_group. EXISTS over no rows is false, so a tool with zero
+        // mcp_tool_permission rows is still never returned (fail-closed).
         String sql = """
                 SELECT t.id, t.name, t.display_name, t.description,
                        t.domain, t.priority, t.cost_level,
@@ -110,7 +118,10 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                   AND t.source <> 'openapi'
                   AND t.embedding IS NOT NULL
                   AND ws.name = ?
-                  AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
+                  AND EXISTS (SELECT 1 FROM mcp_tool_permission g
+                              WHERE g.tool_id = t.id
+                              GROUP BY g.permission_group
+                              HAVING bool_and(g.permission_code = ANY(?)))
                 ORDER BY t.embedding <=> ?::vector, t.id
                 LIMIT ?
                 """;
@@ -135,6 +146,11 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         if (permissionCodes.isEmpty()) {
             return List.of();
         }
+        // Discovered (source='openapi') operations deliberately keep OR semantics: the meaning of
+        // their x-required-permissions has not been analysed, and the V40 / #1606 AND-group
+        // tightening is scoped to facade tools. That is enforced by the DATA, not a second query
+        // shape — every discovered-op row carries permission_group = permission_code (V40 backfill
+        // + addToolPermission below), so "all codes of some group" collapses to "any one code".
         String sql = """
                 SELECT t.name, t.description, t.http_method, t.http_path, t.service_id, t.input_schema
                 FROM mcp_tool t
@@ -245,11 +261,15 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     @Override
     public boolean addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
+        // V40 / #1606: the grant forms its OWN permission_group (group = code), which is the
+        // OR-equivalent shape — a singleton group is satisfied by holding that one code. Multi-code
+        // AND-groups are seed-derived (one per @Tool method) and are not expressible through this
+        // single-code admin/discovery API.
         return jdbcTemplate.update("""
-                INSERT INTO mcp_tool_permission (tool_id, permission_code)
-                VALUES (?, ?)
+                INSERT INTO mcp_tool_permission (tool_id, permission_group, permission_code)
+                VALUES (?, ?, ?)
                 ON CONFLICT DO NOTHING
-                """, toolId, permissionCode) > 0;
+                """, toolId, permissionCode, permissionCode) > 0;
     }
 
     @Override
@@ -281,7 +301,10 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     @Override
     public @NonNull List<String> listToolPermissions(@NonNull UUID toolId) {
         return jdbcTemplate.queryForList(
-                "SELECT permission_code FROM mcp_tool_permission WHERE tool_id = ? ORDER BY permission_code",
+                // DISTINCT: since V40 a code may appear in several permission_groups (e.g.
+                // location:read in both TaxFacadeTool.calculateTax and .getTaxRate); the admin
+                // view lists the codes a tool references, once each.
+                "SELECT DISTINCT permission_code FROM mcp_tool_permission WHERE tool_id = ? ORDER BY permission_code",
                 String.class,
                 toolId);
     }

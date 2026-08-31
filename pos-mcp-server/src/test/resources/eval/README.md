@@ -26,13 +26,78 @@ eval/
 ## Gate 0 exit status
 - Structural harness: **active**.
 - Minimum counts (≥100 tool-selection / ≥50 rag-retrieval / ≥30 write-safety): **met** —
-  110 / 56 / 34 (seed + `generated.json` + `analytics-gate.json`). The `minimumFixtureCountsMet` test is
+  110 / 60 / 38 (seed + `generated.json` + `analytics-gate.json`). The `minimumFixtureCountsMet` test is
   **enabled** and green. `tool-selection-pending/` is deliberately excluded from the count.
   Generated fixtures are grounded in the 16 facade tool names + their V18 gating permissions, the RAG
   doc ids/scopes, and the `KNOWN_ROLES` allowlist; regenerate with `scripts`-style tooling if the tool
   set or permission seeds change.
-- Baseline metrics (hit@5 / MRR / recall@k): **pending** live backend — captured by `BaselineCaptureIT`
-  against a running model + pgvector, not part of the structural CI test.
+- Baseline metrics (hit@5 / MRR / recall@k): captured by `BaselineCaptureIT` against a running model +
+  pgvector, not part of the structural CI test. **Currently RED** — see "Live baseline status" below.
+
+## Corpus size vs. scored size — why 110 and 80 are both correct (#1606 finding 3)
+
+The two gates count different things, and both numbers are right:
+
+| Gate | Suite | Counts | tool-selection | rag-retrieval |
+|---|---|---|---|---|
+| `EvalFixtureValidationTest.minimumFixtureCountsMet` | structural | **corpus size** — every fixture file entry | 110 | 60 |
+| `BaselineCaptureIT` hit@5 / MRR / recall@k | metric | **fixtures with a positive expectation** | 80 | 51 |
+
+The difference is the deliberate **negative set**: 30 tool-selection fixtures and 9 rag-retrieval
+fixtures that carry no positive expectation by design.
+
+- tool-selection: 30 permission-negative fixtures declare `expected.none: true` with
+  `expected.tool_ids: []` and a non-empty `expected.forbidden_tool_ids` (tagged `permission-negative`).
+  They assert that a tool the actor lacks the permission for is *never* selected.
+- rag-retrieval: 9 visibility-negative fixtures pair `expected.doc_ids: []` with a non-empty
+  `expected.forbidden_doc_ids` (tagged `visibility-negative`). Same idea for document visibility.
+
+**Nothing in the negative set is unchecked.** `BaselineCaptureIT` runs the live selector/retriever for
+every fixture and evaluates the forbidden assertions for negatives exactly as it does for positives;
+only the ranking metrics (which need a primary expected id to rank) skip them. Hit@5, MRR and recall@k
+are genuinely computed over 80 and 51 fixtures respectively — not over 110 and 60.
+
+To stop that difference from hiding a real defect, `BaselineCaptureIT` now reports an explicit
+three-way split and hard-fails on the third bucket:
+
+```
+MCP baseline tool-selection hit@5=... mrr=... scored=80 negativeOnly=30 skipped=0 total=110 -> ...
+MCP baseline rag recall@k=...          scored=51 negativeOnly=9  skipped=0 total=60  -> ...
+```
+
+- **scored** — positive expectation, contributed to the metric.
+- **negativeOnly** — *self-declared* negative (the explicit flags above). Forbidden assertions ran.
+- **skipped** — anything else: a missing `expected` block, a non-array `tool_ids`/`doc_ids`, a blank
+  `fixture_id`/`utterance`/`query`, a missing `actor`, or an empty expectation that forbids nothing and
+  therefore asserts nothing. **Asserted to be zero**, with each offender named as
+  `file[fixture_id]: reason`.
+
+The classification is driven by an explicit property of the fixture, never by a fallback `else`: a
+fixture that is malformed in a way that merely *happens* to leave `tool_ids` empty lands in **skipped**,
+not in **negativeOnly**. The three counts are also asserted to sum to the total loaded, so the split
+cannot drift away from the corpus. The same breakdown is written to
+`target/eval/baseline-tool-selection.json` and `target/eval/baseline-rag-recall.json`
+(`fixtures_total`, `fixtures_scored`, `fixtures_negative_only`, `fixtures_skipped`,
+`skipped_fixtures`), so a recorded run is self-describing.
+
+## Live baseline status — RED (#1606)
+
+The first live execution of `BaselineCaptureIT` (alpha, 2026-08-31) failed on two counts:
+
+- **Permission-negative violations.** `ts-customerfacadetool-neg-role-technician` and
+  `ts-customerfacadetool-neg-role-dispatcher` selected `CustomerFacadeTool` despite the actor holding
+  only `workorder:workorder:view`. Root cause is the `V37__facade_permission_rederivation.sql` union
+  combined with OR-semantics gating (#1606 finding 1). (`q13-ar-pareto` also appeared in that run and is
+  being fixed separately as an incoherent fixture assertion.)
+- **Both quality floors missed:** hit@5 **0.60** against a 0.68 floor, MRR **0.569** against a 0.64
+  floor (#1606 finding 2). The floors were derived from an `eval_live.py` observation (hit@5 0.76 /
+  MRR 0.7222), never from `BaselineCaptureIT` itself, so whether the selector degraded or the two
+  harnesses were never measuring the same thing is still undetermined.
+
+A permission-gate fix is in flight on this branch. Because it changes which tools a given actor can be
+offered, it is expected to clear the two violations **and to move hit@5 / MRR** — in which direction and
+by how much is not predicted here. Both metrics must be **re-measured live** and this section updated
+with the observed numbers before the gate can be called green.
 
 ## Lexical regression suite (#784 / #1178)
 

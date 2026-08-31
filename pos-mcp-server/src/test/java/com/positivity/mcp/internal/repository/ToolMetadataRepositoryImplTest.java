@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -213,5 +215,65 @@ class ToolMetadataRepositoryImplTest {
         // A tool disabled after plan creation (e.g. emergency kill switch) must not resolve for execution.
         verify(jdbcTemplate)
                 .query(contains("source = 'openapi' AND enabled = true"), any(RowMapper.class), eq("customer_getall"));
+    }
+
+    // ── V40 / #1606: AND-group gating shape ───────────────────────────────────
+    // Semantics are exercised against a real database in ToolPermissionGroupGatingTest; these
+    // assertions lock the two facade statements to the group predicate and, crucially, keep the
+    // discovered-operation statement on the untouched OR predicate.
+
+    @Test
+    @DisplayName("both facade gates use the AND-group predicate (all codes of at least one group)")
+    @SuppressWarnings("unchecked")
+    void facadeGatesUseAndGroupPredicate() {
+        when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
+                .thenReturn(List.of());
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+
+        repository.findEnabledByPermissionsAndWorkflow(Set.of("crm:party:view"), "IDLE");
+        repository.findTopKByEmbeddingForPermissions(new float[8], 5, Set.of("crm:party:view"), "IDLE");
+
+        verify(jdbcTemplate, times(2)).query(sql.capture(), any(PreparedStatementSetter.class), any(RowMapper.class));
+        assertThat(sql.getAllValues())
+                .allSatisfy(statement -> assertThat(statement)
+                        .contains("EXISTS (SELECT 1 FROM mcp_tool_permission g")
+                        .contains("GROUP BY g.permission_group")
+                        .contains("HAVING bool_and(g.permission_code = ANY(?))")
+                        .contains("t.source <> 'openapi'"));
+    }
+
+    @Test
+    @DisplayName("discovered (openapi) candidates keep OR semantics — no group predicate")
+    @SuppressWarnings("unchecked")
+    void discoveredCandidatesKeepOrSemantics() {
+        when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
+                .thenReturn(List.of());
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+
+        repository.findDiscoveredCandidatesForPermissions(new float[8], 5, Set.of("crm:party:view"), "IDLE");
+
+        verify(jdbcTemplate).query(sql.capture(), any(PreparedStatementSetter.class), any(RowMapper.class));
+        assertThat(sql.getValue())
+                .contains("t.source = 'openapi'")
+                .contains("t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))")
+                .doesNotContain("bool_and")
+                .doesNotContain("permission_group");
+    }
+
+    @Test
+    @DisplayName("addToolPermission writes the grant into its own singleton permission_group")
+    void addToolPermission_writesSingletonGroup() {
+        UUID toolId = UUID.fromString("00000000-0000-0000-0000-0000000000c0");
+        when(jdbcTemplate.update(anyString(), eq(toolId), eq("crm:party:view"), eq("crm:party:view")))
+                .thenReturn(1);
+
+        assertThat(repository.addToolPermission(toolId, "crm:party:view")).isTrue();
+
+        verify(jdbcTemplate)
+                .update(
+                        contains("INSERT INTO mcp_tool_permission (tool_id, permission_group, permission_code)"),
+                        eq(toolId),
+                        eq("crm:party:view"),
+                        eq("crm:party:view"));
     }
 }
