@@ -1,6 +1,6 @@
 # MCP Role Persona Sourcing Strategy
 
-**Status:** accepted — implemented in #1613, except the one item noted under "Delivery status"
+**Status:** accepted — implemented in #1613
 **Owning modules:** `pos-security-service` (role definition), `pos-mcp-server` (prompt assembly)
 **Supersedes:** the hardcoded `SystemPromptSeedRunner.seedRolePersonas` / `SystemPromptDefaults` role list
 
@@ -351,14 +351,35 @@ is not only in a comment thread.
 
 ## Delivery status
 
-P1, P1b, P2, P3 and P4 are implemented. One item from D8 is deliberately outstanding:
+P1, P1b, P2, P3 and P4 are implemented, including the D8 move itself.
 
-**Reducing `R__seed_reference_security.sql` to the bootstrap floor has not been done.** The loaders,
-the versioned baseline files (`scripts/fixtures/seed/alpha/security/roles.csv` and
-`role-permissions.csv`) and the drift check (`RoleBaselineDriftTest`) are all in place, so the move
-is now safe to make — but the move itself changes what a fresh database contains at boot, and that
-wants verifying against a real environment rather than reasoning. Until it happens, roles come from
-Flyway as before and the baseline files are held in step with the seed by the drift check.
+`R__seed_reference_security.sql` is reduced to the bootstrap floor: `ADMIN` and
+`SYSTEM_ADMINISTRATOR` plus the seed admin account. `R__seed_role_permissions.sql` is reduced with
+it — not optional, because that file ends in a guard that raises on a role it cannot resolve, so a
+grant left behind for a moved role fails the migration rather than quietly doing nothing.
+
+A fresh database still gets `DISPATCHER` and `SHOP_MANAGER` (`V3`), `SELF_SERVICE_CUSTOMER` (`V8`)
+and `CONTROLLER` (`V24`) from Flyway. Those are versioned migrations, already applied everywhere;
+editing them would change their checksum and fail validation. The baseline file lists them too,
+which is harmless because provisioning treats an existing role as success.
+
+Everything else is provisioned from the versioned baseline files, applied by the loaders in
+dependency order (roles, then grants, then users):
+
+- `scripts/fixtures/seed/alpha/security/roles.csv` — 15 roles with persona metadata
+- `scripts/fixtures/seed/alpha/security/role-permissions.csv` — 17 roles, 1078 grants
+
+`RoleBaselineDriftTest` is what replaces Flyway's environment guarantee: the floor and the baseline
+together must still cover every expected role, the baseline must carry every grant Flyway still
+applies, and Flyway must grant only to roles it creates. `RolePermissionBaselineTest` reads both
+sources, so its policy invariants — least privilege, the customer-facing roles holding only the
+assistant entrypoints, no capability lost against the legacy expansion — still police the complete
+baseline rather than only the half that stayed in SQL.
+
+One consequence worth knowing: `R__seed_security_operational_data.sql` assigns its 25 demo users to
+roles by name, and on a fresh database those joins resolve only for the floor. That is covered
+rather than broken — `security/users.csv` provisions the same 25 accounts with the same roles
+through the `SECURITY_USER` loader, which runs after the role load.
 
 ## Open questions (resolved — see "Decisions taken")
 

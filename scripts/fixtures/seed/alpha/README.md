@@ -175,7 +175,7 @@ The seed file stays until the alpha reseed is verified (§5.4).
 | File | Rows | Target |
 |---|---|---|
 | `roles.csv` | 15 roles with persona metadata | `SECURITY_ROLE` loader (`POST /v1/roles/bulk-ingest`) |
-| `role-permissions.csv` | 17 roles, 1043 grants | `SECURITY_ROLE_PERMISSION` loader (`POST /v1/roles/permissions/bulk-ingest`) |
+| `role-permissions.csv` | 17 roles, 1078 grants | `SECURITY_ROLE_PERMISSION` loader (`POST /v1/roles/permissions/bulk-ingest`) |
 | `users.csv` | 25 users, 16 roles | gateway API pack (`POST /security-service/users` per row) |
 
 **Roles load before users, and grants between them** (#1613 D8). A user record names
@@ -186,9 +186,12 @@ through the API requires `security:role:create`, which requires a role that hold
 it, which requires an admin user.
 
 These two files are the versioned baseline that replaces Flyway's guarantee that
-every environment received the same roles. `RoleBaselineDriftTest` in
-`pos-security-service` asserts they match the SQL seed exactly — role for role and
-grant for grant — so the two cannot silently diverge, and every persona slot in
+every environment received the same roles: `R__seed_reference_security.sql` is now
+reduced to the `ADMIN` / `SYSTEM_ADMINISTRATOR` bootstrap floor, so **these files are
+the only source for every other role**, and an environment that skips them has no
+working roles beyond the floor. `RoleBaselineDriftTest` in `pos-security-service`
+asserts the floor and these files together still cover every expected role, that the
+baseline carries every grant Flyway still applies, and that every persona slot in
 `roles.csv` passes the same validation the API applies.
 
 **No password material is committed.** The driver generates a random password per

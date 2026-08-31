@@ -1215,7 +1215,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-false}
       # ADR-0043/#876: users.person_id projection consumer + people-contact command outbox
-      POS_SECURITY_SERVICE_KAFKA_ENABLED: ${POS_SECURITY_SERVICE_KAFKA_ENABLED:-false}
+      # #1613: on so role persona facts reach security.events.v1 through the outbox, and
+      # pos-mcp-server picks up a persona edit without waiting for its scheduled re-pull.
+      POS_SECURITY_SERVICE_KAFKA_ENABLED: ${POS_SECURITY_SERVICE_KAFKA_ENABLED:-true}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_security_db
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}

@@ -42,6 +42,12 @@ VALUES
 ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
 
 -- Role assignments (resolved by role name to tolerate variable UUIDs from versioned migrations)
+--
+-- #1613 D8: these joins now resolve only for roles Flyway still creates. On a fresh database the
+-- rest of the roles do not exist yet when this runs, so those rows match nothing and no assignment
+-- is made. That is covered rather than broken: scripts/fixtures/seed/alpha/security/users.csv
+-- provisions the same 25 accounts with the same roles through the SECURITY_USER loader, which runs
+-- after the role load. On an environment that already has the roles this seed applies as before.
 INSERT INTO user_roles (user_id, role_id)
 SELECT a.user_id, r.id
 FROM (VALUES

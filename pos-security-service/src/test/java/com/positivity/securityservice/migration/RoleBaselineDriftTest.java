@@ -45,8 +45,46 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Role baseline drift (#1613 D8)")
 class RoleBaselineDriftTest {
 
-    /** Roles that stay in Flyway because a bulk load could not create them (D8 constraint 1). */
+    /**
+     * The intended bootstrap floor (D8 constraint 1): creating a role through the API needs
+     * {@code security:role:create}, which needs a role that holds it, which needs an admin user.
+     * These two, and the seed admin account, can never come from a load that requires them.
+     */
     private static final Set<String> BOOTSTRAP_FLOOR = Set.of("ADMIN", "SYSTEM_ADMINISTRATOR");
+
+    /**
+     * Roles a fresh database still gets from Flyway despite the move, because they are created by
+     * <em>versioned</em> migrations that are already applied everywhere. Editing those would change
+     * their checksum and fail validation, so they stay — and the baseline file lists them too, which
+     * is harmless because provisioning is idempotent.
+     */
+    private static final Set<String> VERSIONED_RESIDUE =
+            Set.of("DISPATCHER", "SHOP_MANAGER", "SELF_SERVICE_CUSTOMER", "CONTROLLER");
+
+    /**
+     * Every role the platform is expected to have. Pinned here because after the move no single
+     * source holds the whole set: Flyway owns the floor, the baseline file owns the rest. Adding a
+     * role means editing this list, which is the forcing function — it is exactly the silent
+     * addition this issue exists to prevent.
+     */
+    private static final Set<String> EXPECTED_ROLES = Set.of(
+            "ACCOUNTING_ASSOCIATE",
+            "ACCOUNT_MANAGER",
+            "ADMIN",
+            "CONTROLLER",
+            "CUSTOMER",
+            "DISPATCHER",
+            "GENERAL_MANAGER",
+            "INVENTORY_CONTROLLER",
+            "INVENTORY_LEAD",
+            "INVENTORY_MANAGER",
+            "LOCATION_MANAGER",
+            "MANAGER",
+            "SELF_SERVICE_CUSTOMER",
+            "SERVICE_ADVISOR",
+            "SHOP_MANAGER",
+            "SYSTEM_ADMINISTRATOR",
+            "TECHNICIAN");
 
     private static final Path FIXTURES = Path.of("..", "scripts", "fixtures", "seed", "alpha", "security");
     private static final Path MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
@@ -60,7 +98,11 @@ class RoleBaselineDriftTest {
     private static final Pattern ROLE_INSERT =
             Pattern.compile("INSERT\\s+INTO\\s+roles\\b(.*?);", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
-    private static final Pattern GRANT_PAIR = Pattern.compile("\\(\\s*'([A-Z_]+)'\\s*,\\s*'([a-z0-9:_\\-]+)'\\s*\\)");
+    // Permission names may be camelCase (people:timeException:view), so the character class must
+    // not be lower-case only — a narrower one silently drops those grants from the comparison and
+    // the check passes while the baseline is incomplete.
+    private static final Pattern GRANT_PAIR =
+            Pattern.compile("\\(\\s*'([A-Z_]+)'\\s*,\\s*'([A-Za-z0-9:_\\-]+)'\\s*\\)");
     private static final Pattern ROLE_DELETE = Pattern.compile(
             "DELETE\\s+FROM\\s+roles\\s+WHERE\\s+name\\s+IN\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern QUOTED_NAME = Pattern.compile("'([A-Z_]+)'");
@@ -95,34 +137,75 @@ class RoleBaselineDriftTest {
     }
 
     @Test
-    @DisplayName("the baseline file invents no role the SQL seed does not have")
-    void baselineInventsNoRole() throws IOException {
-        Set<String> seeded = seededRoleNames();
+    @DisplayName("Flyway and the baseline file together cover the whole role set, with nothing invented")
+    void floorAndBaselineCoverEveryExpectedRole() throws IOException {
+        Set<String> covered = new TreeSet<>(seededRoleNames());
+        covered.addAll(readCsv(FIXTURES.resolve("roles.csv")).stream()
+                .map(row -> row.get("name"))
+                .toList());
 
+        // The union check is what proves nothing was lost when roles moved out of SQL: after the
+        // move neither source holds the whole set on its own.
+        assertThat(covered).containsExactlyInAnyOrderElementsOf(EXPECTED_ROLES);
+    }
+
+    @Test
+    @DisplayName("the baseline file does not re-provision the bootstrap floor")
+    void baselineExcludesTheBootstrapFloor() throws IOException {
         Set<String> baseline = readCsv(FIXTURES.resolve("roles.csv")).stream()
                 .map(row -> row.get("name"))
                 .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
 
-        assertThat(seeded).containsAll(baseline);
+        // ADMIN and SYSTEM_ADMINISTRATOR are Flyway's, including their persona metadata. Listing
+        // them here too would mean two sources for one role, and the loader — which treats an
+        // existing role as success — would silently ignore whichever lost the race.
+        assertThat(baseline).doesNotContainAnyElementsOf(BOOTSTRAP_FLOOR);
     }
 
     @Test
-    @DisplayName("baseline grants match the SQL grant seed exactly, role for role")
-    void baselineGrantsMatchSeed() throws IOException {
+    @DisplayName("the baseline carries every grant Flyway still applies, so re-running it changes nothing")
+    void baselineGrantsSupersetOfSeed() throws IOException {
         Map<String, Set<String>> seeded = seededGrants();
+        Map<String, Set<String>> baseline = baselineGrants();
+
+        // Flyway now grants only to the roles it still creates; the baseline holds all of them. A
+        // superset rather than an equality: the baseline additionally carries the grants for every
+        // role that moved out of SQL, which is the whole point of the move.
+        // Compared per role, because "SHOP_MANAGER lost 12 grants" is actionable and a total is not.
+        assertThat(baseline.keySet()).containsAll(seeded.keySet());
+        for (Map.Entry<String, Set<String>> entry : seeded.entrySet()) {
+            assertThat(baseline.get(entry.getKey()))
+                    .as("grants for %s", entry.getKey())
+                    .containsAll(entry.getValue());
+        }
+    }
+
+    @Test
+    @DisplayName("the baseline carries grants for every expected role")
+    void baselineGrantsCoverEveryExpectedRole() throws IOException {
+        // A role provisioned with no grants can sign in and do nothing, which reads as a broken
+        // environment rather than a deliberately empty one.
+        assertThat(baselineGrants().keySet()).containsExactlyInAnyOrderElementsOf(EXPECTED_ROLES);
+    }
+
+    @Test
+    @DisplayName("Flyway grants only to the roles Flyway still creates")
+    void seedGrantsOnlyToRolesItCreates() throws IOException {
+        // The grant seed ends in a guard that raises if it names a role that does not exist, so a
+        // grant left behind for a moved role is not a silent no-op — it fails the migration.
+        Set<String> allowed = new TreeSet<>(BOOTSTRAP_FLOOR);
+        allowed.addAll(VERSIONED_RESIDUE);
+
+        assertThat(seededGrants().keySet()).isSubsetOf(allowed);
+        assertThat(seededRoleNames()).isSubsetOf(allowed);
+    }
+
+    private static Map<String, Set<String>> baselineGrants() throws IOException {
         Map<String, Set<String>> baseline = new LinkedHashMap<>();
         for (Map<String, String> row : readCsv(FIXTURES.resolve("role-permissions.csv"))) {
             baseline.put(row.get("roleName"), splitPermissions(row.get("permissions")));
         }
-
-        // Compared per role rather than as one flattened set: "SHOP_MANAGER lost 12 grants" is
-        // actionable, "1043 pairs became 1031" is not.
-        assertThat(baseline.keySet()).containsExactlyInAnyOrderElementsOf(seeded.keySet());
-        for (Map.Entry<String, Set<String>> entry : seeded.entrySet()) {
-            assertThat(baseline.get(entry.getKey()))
-                    .as("grants for %s", entry.getKey())
-                    .containsExactlyInAnyOrderElementsOf(entry.getValue());
-        }
+        return baseline;
     }
 
     @Test
