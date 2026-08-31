@@ -73,6 +73,50 @@ class EvalFixtureValidationTest {
     }
 
     @Test
+    @DisplayName("pending tool-selection fixtures are structurally valid and stay out of scoring")
+    void toolSelectionPendingFixturesValid() throws IOException {
+        // Analytics gate (docs/analytics-capability-plan.md §6): questions whose backing endpoints do
+        // not exist yet still get a fixture, but they must not count as regressions today. They live in
+        // this sibling directory rather than in tool-selection/ because both scorers — BaselineCaptureIT
+        // and scripts/eval_live.py — discover suites by directory glob (eval/tool-selection/*.json), so a
+        // second file there would be scored against the hit@5 / MRR floors and turn unimplemented Wave 2
+        // and Wave 3 work into a red build. Same schema, same structural rules, no scoring, and no
+        // contribution to the Gate 0 minimum count.
+        Set<String> scoredIds = new HashSet<>();
+        for (Path file : suiteFiles("tool-selection")) {
+            for (JsonNode fx : parseSuite(file).get("fixtures")) {
+                scoredIds.add(fx.path("fixture_id").asText());
+            }
+        }
+        // Hoisted out of the per-file loop so ids stay unique ACROSS pending suites, not just within
+        // one: a second pending file reusing an existing id would otherwise validate cleanly and leave
+        // CI reports naming an ambiguous fixture.
+        Set<String> ids = new HashSet<>();
+        for (Path file : suiteFiles("tool-selection-pending")) {
+            JsonNode root = parseSuite(file);
+            for (JsonNode fx : root.get("fixtures")) {
+                String id = requireId(fx, file, ids);
+                assertThat(scoredIds)
+                        .as("%s[%s]: pending fixture_id must not collide with a scored fixture", file, id)
+                        .doesNotContain(id);
+                requireText(fx, "utterance", file, id);
+                validateActor(fx.get("actor"), file, id, true);
+                JsonNode expected = required(fx, "expected", file, id);
+                assertThat(expected.has("tool_ids"))
+                        .as("%s[%s]: expected.tool_ids required", file, id)
+                        .isTrue();
+                // The tag is the promotion marker: a fixture only leaves this suite when its backing
+                // endpoint ships, and the tag is what a reviewer greps for when closing a wave gate.
+                Set<String> tags = new HashSet<>();
+                fx.path("tags").forEach(tag -> tags.add(tag.asText()));
+                assertThat(tags)
+                        .as("%s[%s]: pending fixtures must carry the 'pending' tag", file, id)
+                        .contains("pending");
+            }
+        }
+    }
+
+    @Test
     @DisplayName("rag-retrieval fixtures are structurally valid")
     void ragRetrievalFixturesValid() throws IOException {
         for (Path file : suiteFiles("rag-retrieval")) {

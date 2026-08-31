@@ -6,7 +6,8 @@ Source of truth for formats: `../../../../docs/phase0-fixtures-and-telemetry.md`
 ```
 eval/
   schema/        JSON Schema for each suite (authoring reference)
-  tool-selection/*.json   hit@5 / MRR fixtures
+  tool-selection/*.json   hit@5 / MRR fixtures (scored)
+  tool-selection-pending/*.json  same schema, NOT scored — questions whose backing endpoint is unbuilt
   rag-retrieval/*.json    recall@k fixtures
   rag-lexical/*.json      dense-vs-hybrid lexical fixtures (#784/#1178) — separate from the dense gate
   write-safety/*.json     write-gate invariant fixtures
@@ -25,7 +26,8 @@ eval/
 ## Gate 0 exit status
 - Structural harness: **active**.
 - Minimum counts (≥100 tool-selection / ≥50 rag-retrieval / ≥30 write-safety): **met** —
-  105 / 56 / 34 (seed + `generated.json`). The `minimumFixtureCountsMet` test is **enabled** and green.
+  110 / 56 / 34 (seed + `generated.json` + `analytics-gate.json`). The `minimumFixtureCountsMet` test is
+  **enabled** and green. `tool-selection-pending/` is deliberately excluded from the count.
   Generated fixtures are grounded in the 16 facade tool names + their V18 gating permissions, the RAG
   doc ids/scopes, and the `KNOWN_ROLES` allowlist; regenerate with `scripts`-style tooling if the tool
   set or permission seeds change.
@@ -75,3 +77,52 @@ It emits `realistic_rate`, `no_tool_rate`, `outcome_confusion`, and `gap_candida
 `gap_hypothesis` — the triage worklist: `new-tool` entries feed the tool roadmap; `description-gap`
 entries feed a `*FacadeTool` `@Tool` description-tightening pass, then a re-run should move the
 fixture to `realistic-response`. First live alpha run + gap triage write-up: pending (#1164 AC3-5).
+
+## Analytics gate suite (`docs/analytics-capability-plan.md` §6)
+
+The twenty business questions in plan §6 are the acceptance gates for the three analytics waves.
+Each question has a tool-selection fixture so a selection regression is caught in CI, with no
+database and no model-quality judgement.
+
+- `tool-selection/analytics-gate.json` — the questions answerable on today's tool surface: Q13
+  (Wave 1 full pass, `AccountingFacadeTool.getAgedReceivables`) plus the aging halves of Q5, Q10
+  and Q14, and the `q13-admin-user-account-active` counterpart. **Scored** by `BaselineCaptureIT`
+  and `scripts/eval_live.py`.
+
+  Note what each scorer actually exercises. Only `BaselineCaptureIT` calls
+  `ToolRegistryService.resolveCandidateTools`, so only it exercises the admin fast path —
+  `eval_live.py` reimplements selection as raw pgvector SQL and never enters that code, meaning the
+  `q13-ar-pareto` / `q13-admin-user-account-active` pair pins the #1588 fast-path fix **through
+  `BaselineCaptureIT` only**. That IT is gated on `-Dmcp.eval.live=true` and needs a running model
+  and pgvector, so this lock does not run in ordinary CI; it must be exercised deliberately:
+
+  ```
+  ./mvnw -pl pos-mcp-server -Dmcp.eval.live=true -Dit.test=BaselineCaptureIT verify
+  ```
+
+  `q13-ar-pareto` also depends on a scoring margin rather than a hard gate: its actor holds
+  `security:user:view` (required to reproduce the hijack conditions at all), so `AdminFacadeTool`
+  is gated in and the `forbidden_tool_ids` assertion holds only while it ranks outside the top-5.
+  Re-embedding the tool corpus after a description change can flip that without the fixture being
+  touched. `q14-ar-balance-and-dso-by-month` is the durable counterpart: its actor holds no admin
+  permission at all, so `AdminFacadeTool` cannot be returned by construction.
+- `tool-selection-pending/analytics-gate-pending.json` — the other sixteen questions (Wave 2/3).
+  Same schema (`schema/tool-selection.schema.json`), structurally validated by
+  `EvalFixtureValidationTest.toolSelectionPendingFixturesValid`, but **not scored**: both scorers
+  discover suites by directory glob, so an unbuilt endpoint would otherwise show up as a hit@5
+  regression. Every fixture carries the `pending` tag plus a `waveN` tag and names its blocking
+  plan item (E1–E13 / W3.2 composition) in `notes`. Promotion = move the fixture into
+  `analytics-gate.json` in the PR that ships its endpoint, and drop the `pending` tag.
+
+**Admin fast-path regression (#1588).** A live alpha smoke of Q13 selected `AdminFacadeTool`
+alone: `ToolRegistryService`'s admin fast path matches the bare keyword `accounts`
+(`ADMIN_QUERY_KEYWORDS`) and returns `AdminFacadeTool` as the sole candidate, suppressing every
+other tool. `q13-ar-pareto` (expects `AccountingFacadeTool`, forbids `AdminFacadeTool`) and
+`q13-admin-user-account-active` (expects `AdminFacadeTool`) pin both sides of that fix. The Q13
+actor deliberately holds `security:user:view` — without it `AdminFacadeTool` is gated out and the
+fast path cannot fire, so the fixture would not reproduce the incident. These fixtures fail against
+a selector that still carries the un-narrowed keyword list; that is the point.
+
+Ground-truth SQL and the fixture dataset for the *answer* half of the gate live under
+`analytics-gate/` (see its README) — plan §7 treats a fixture change without a matching
+ground-truth change as a review blocker.
