@@ -66,8 +66,12 @@ class BillingRulesServiceImplTest {
     @Test
     void saveBillingRules_shouldRejectOutOfVocabularyPaymentTermsCode() {
         when(billingRulesRepository.findByPartyId(partyId)).thenReturn(Optional.of(existingRules));
-        BillingRulesDTO dto = new BillingRulesDTO(
-                partyId, false, "2/10 Net 30", InvoiceDeliveryMethod.EMAIL, InvoiceGroupingStrategy.PER_WORKORDER);
+        BillingRulesDTO dto = new BillingRulesDTO();
+        dto.setPartyId(partyId);
+        dto.setPurchaseOrderRequired(false);
+        dto.setPaymentTermsCode("2/10 Net 30");
+        dto.setInvoiceDeliveryMethod(InvoiceDeliveryMethod.EMAIL);
+        dto.setInvoiceGroupingStrategy(InvoiceGroupingStrategy.PER_WORKORDER);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> billingRulesService.saveBillingRules(dto, "tester"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -80,8 +84,12 @@ class BillingRulesServiceImplTest {
         when(billingRulesRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         for (String code : new String[] {"DUE_ON_RECEIPT", "NET_10", "NET_15", "NET_30", "NET_45", "NET_60"}) {
-            BillingRulesDTO dto = new BillingRulesDTO(
-                    partyId, false, code, InvoiceDeliveryMethod.EMAIL, InvoiceGroupingStrategy.PER_WORKORDER);
+            BillingRulesDTO dto = new BillingRulesDTO();
+            dto.setPartyId(partyId);
+            dto.setPurchaseOrderRequired(false);
+            dto.setPaymentTermsCode(code);
+            dto.setInvoiceDeliveryMethod(InvoiceDeliveryMethod.EMAIL);
+            dto.setInvoiceGroupingStrategy(InvoiceGroupingStrategy.PER_WORKORDER);
             assertThat(billingRulesService.saveBillingRules(dto, "tester").getPaymentTermsCode())
                     .isEqualTo(code);
         }

@@ -55,6 +55,14 @@ public class UpdateStaffingAssignmentRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate effectiveTo;
 
+    // Suppressed java:S2637 — this no-arg constructor is required for Jackson deserialization of
+    // the @RequestBody in StaffingAssignmentController#updateStaffingAssignment. It cannot be
+    // removed, because this class also keeps an explicit all-args constructor (used across
+    // StaffingAssignmentLifecycleTest) — with two explicit constructors present, Java will not
+    // synthesize an implicit default constructor, so an explicit no-arg constructor must stay.
+    // personId's non-null contract is enforced by jakarta @NotNull plus @Valid on the controller
+    // parameter before the request ever reaches business logic, not by this constructor.
+    @SuppressWarnings("java:S2637")
     public UpdateStaffingAssignmentRequest() {}
 
     public UpdateStaffingAssignmentRequest(

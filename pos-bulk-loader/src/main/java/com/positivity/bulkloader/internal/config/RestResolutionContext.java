@@ -77,9 +77,12 @@ public class RestResolutionContext implements ResolutionContext {
     @NonNull
     @SuppressWarnings("unchecked")
     public <R> Optional<R> memoize(@NonNull String cacheKey, @NonNull Supplier<Optional<R>> loader) {
-        Optional<?> cached = cache.get(cacheKey);
-        if (cached != null) {
-            return (Optional<R>) cached;
+        // containsKey, not a null-check on the retrieved Optional: cache values are Optional<?>
+        // and are never themselves null, so testing presence this way keeps Sonar's dataflow
+        // analysis from treating the Optional-typed value as comparable to null (java:S2789)
+        // while still distinguishing "not cached yet" from "cached as Optional.empty()".
+        if (cache.containsKey(cacheKey)) {
+            return (Optional<R>) cache.get(cacheKey);
         }
         Optional<R> loaded = loader.get();
         cache.put(cacheKey, loaded);

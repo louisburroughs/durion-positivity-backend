@@ -1019,9 +1019,14 @@ public class EstimateServiceImpl implements EstimateService {
             return;
         }
         // The quantity column is non-null, so a persisted item always carries one; requireNonNull
-        // states that invariant where the dataflow cannot see it.
-        BigDecimal effectiveQuantity = request.getQuantity() != null
-                ? request.getQuantity()
+        // states that invariant where the dataflow cannot see it. requestQuantity is read once and
+        // reused rather than calling request.getQuantity() a second time in the ternary's true
+        // branch — Sonar's dataflow analysis cannot prove a second call returns the same value it
+        // already null-checked, which is what flagged the requirePermittedScale call below as a
+        // possible null argument (java:S2637).
+        BigDecimal requestQuantity = request.getQuantity();
+        BigDecimal effectiveQuantity = requestQuantity != null
+                ? requestQuantity
                 : Objects.requireNonNull(item.getQuantity(), "persisted estimate item has no quantity");
         String effectiveUomCode = uomCodeProvided ? normalizedRequestUomCode : item.getUomCode();
         partQuantityDivisibilityService.requirePermittedScale(
