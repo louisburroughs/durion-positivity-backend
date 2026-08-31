@@ -178,6 +178,8 @@ public class RoleController {
                     No events are emitted and no state changes; this is a read-only projection.
                     Roles that are excluded from persona resolution are included and flagged rather than omitted, so \
                     a consumer can distinguish a role excluded by design from one it has never seen.
+                    Returns 200 with every role and never 404: an environment holding no roles yields an empty list \
+                    rather than an error, so a consumer cannot mistake "not provisioned yet" for "endpoint missing".
                     """)
     @ApiResponse(responseCode = "200", description = "Role persona snapshot returned")
     public ResponseEntity<RolePersonasResponse> getRolePersonas() {
