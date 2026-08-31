@@ -1207,14 +1207,20 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1assignments~1user~1{userId}
   /v1/roles/assignments/{assignmentId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1assignments~1{assignmentId}
+  /v1/roles/bulk-ingest:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1bulk-ingest
   /v1/roles/by-name/{name}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1by-name~1{name}
   /v1/roles/check-permission:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1check-permission
   /v1/roles/permissions:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1permissions
+  /v1/roles/permissions/bulk-ingest:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1permissions~1bulk-ingest
   /v1/roles/permissions/user/{userId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1permissions~1user~1{userId}
+  /v1/roles/personas:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1personas
   /v1/roles/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1{id}
   /v1/roles/{roleId}/permissions/grant:
