@@ -7,93 +7,91 @@ info:
   title: POS Human Resources Service API
   version: v1
 servers:
-- description: Generated server url
-  url: http://localhost:8086
+  - description: Generated server url
+    url: http://localhost:8086
 tags:
-- description: Person-to-location staffing assignment operations (CAP-119)
-  name: People - Staffing Assignments
-- description: Reporting endpoints for people and attendance data
-  name: People Reports API
-- description: Approve/reject time entries (batch)
-  name: Time Entry Approval API
-- description: Operations for querying people availability
-  name: People Availability API
-- description: Operations for managing work sessions and breaks
-  name: Work Sessions API
-- description: Time entry adjustments and related APIs
-  name: People - TimeEntries
-- description: List, approve and reject attendance time entries (clock-in, clock-out, breaks)
-  name: Time Entry Approval API
-- description: Pay-period lifecycle management for timekeeping approval
-  name: Time Period Management API
-- description: Identity-compliance reports (ADR-0015 §4)
-  name: People Compliance API
-- description: Bulk import person-to-location assignments
-  name: Staffing Assignment Bulk Ingest API
-- description: Employee profile and offboarding operations
-  name: Employee API
-- description: Pay-period-based timekeeping approval operations
-  name: Timekeeping Approval API
-- description: Operations related to people records
-  name: People API
-- description: Time entry adjustments and related APIs
-  name: People TimeEntries
-- description: Time entry exception APIs
-  name: People - Exceptions
-- description: Bulk import employee records
-  name: People Bulk Ingest API
+  - description: Person-to-location staffing assignment operations (CAP-119)
+    name: People - Staffing Assignments
+  - description: Reporting endpoints for people and attendance data
+    name: People Reports API
+  - description: Operations for querying people availability
+    name: People Availability API
+  - description: Operations for managing work sessions and breaks
+    name: Work Sessions API
+  - description: List, approve and reject attendance time entries (clock-in, clock-out, breaks)
+    name: Time Entry Approval API
+  - description: Pay-period lifecycle management for timekeeping approval
+    name: Time Period Management API
+  - description: Identity-compliance reports (ADR-0015 §4)
+    name: People Compliance API
+  - description: Bulk import person-to-location assignments
+    name: Staffing Assignment Bulk Ingest API
+  - description: Employee profile and offboarding operations
+    name: Employee API
+  - description: Pay-period-based timekeeping approval operations
+    name: Timekeeping Approval API
+  - description: Operations related to people records
+    name: People API
+  - description: Time entry adjustments and related APIs
+    name: People TimeEntries
+  - description: Time entry exception APIs
+    name: People - Exceptions
+  - description: Bulk import employee records
+    name: People Bulk Ingest API
 paths:
   /v1/people/availability:
     get:
-      description: 'Lists people with staffing assignments active on a given date, joined with identity fields from the person replica, one row per assignment.
+      description:
+        "Lists people with staffing assignments active on a given date, joined with identity fields from the person replica, one row per assignment.
 
-        Use this tool to see who is available to work at a location on a date; use getPersonPrimaryLocation instead to resolve a single person''s home location.
+        Use this tool to see who is available to work at a location on a date; use getPersonPrimaryLocation instead to resolve a single person's home location.
 
-        Preconditions: when locationId is omitted the caller must be linked to a person with an active assignment, because the requester''s own location becomes the filter.
+        Preconditions: when locationId is omitted the caller must be linked to a person with an active assignment, because the requester's own location becomes the filter.
 
-        Required inputs: none are mandatory; locationId (UUID) defaults to the requester''s location and date (yyyy-MM-dd) defaults to today.
+        Required inputs: none are mandatory; locationId (UUID) defaults to the requester's location and date (yyyy-MM-dd) defaults to today.
 
         Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only projection.
 
         Returns 404 when locationId is omitted and the requester has no active location assignment or no person link.
 
-        '
+        "
       operationId: listPeopleAvailability
       parameters:
-      - description: Filter by location ID. Defaults to requester location when omitted.
-        in: query
-        name: locationId
-        required: false
-        schema:
-          format: uuid
-          type: string
-      - description: 'Filter by date (ISO format: yyyy-MM-dd)'
-        in: query
-        name: date
-        required: false
-        schema:
-          format: date
-          type: string
+        - description: Filter by location ID. Defaults to requester location when omitted.
+          in: query
+          name: locationId
+          required: false
+          schema:
+            format: uuid
+            type: string
+        - description: "Filter by date (ISO format: yyyy-MM-dd)"
+          in: query
+          name: date
+          required: false
+          schema:
+            format: date
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/PeopleAvailabilityResponse'
+                  $ref: "#/components/schemas/PeopleAvailabilityResponse"
                 type: array
           description: Availability data returned successfully.
       security:
-      - bearerAuth:
-        - people:availability:view
+        - bearerAuth:
+            - people:availability:view
       summary: List People Availability For A Location
       tags:
-      - People Availability API
+        - People Availability API
       x-required-permissions:
-      - people:availability:view
+        - people:availability:view
   /v1/people/bulk-ingest:
     post:
-      description: 'Imports a batch of employee records, creating each one through the same path as createEmployee with status forced to ACTIVE.
+      description:
+        "Imports a batch of employee records, creating each one through the same path as createEmployee with status forced to ACTIVE.
 
         Use this tool for initial loads or migrations of many employees; use createEmployee instead for a single hire, since per-record failures here are reported in the response body rather than as an HTTP error.
 
@@ -105,7 +103,7 @@ paths:
 
         Returns 200 even when individual records fail (inspect per-record success flags and errorCode PEOPLE_INGEST_FAILED), and 400 when the envelope itself is invalid or the records list is empty.
 
-        '
+        "
       operationId: createEmployeesBulk
       requestBody:
         content:
@@ -118,44 +116,45 @@ paths:
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
                   operatorId: user-jdoe
                   records:
-                  - employeeNumber: EMP-0001
-                    firstName: Jane
-                    hireDate: 2026-01-15
-                    lastName: Smith
-                    primaryEmail: jane.smith@example.com
-                  - employeeNumber: EMP-0002
-                    firstName: John
-                    hireDate: 2026-02-01
-                    lastName: Doe
-                    primaryPhone: +1-555-123-4567
+                    - employeeNumber: EMP-0001
+                      firstName: Jane
+                      hireDate: 2026-01-15
+                      lastName: Smith
+                      primaryEmail: jane.smith@example.com
+                    - employeeNumber: EMP-0002
+                      firstName: John
+                      hireDate: 2026-02-01
+                      lastName: Doe
+                      primaryPhone: +1-555-123-4567
             schema:
-              $ref: '#/components/schemas/BulkIngestRequestPersonBulkIngestRecord'
-        description: 'Bulk ingest envelope: a job-scoped batch of person records to import as ACTIVE employees.'
+              $ref: "#/components/schemas/BulkIngestRequestPersonBulkIngestRecord"
+        description: "Bulk ingest envelope: a job-scoped batch of person records to import as ACTIVE employees."
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
           description: Batch processed (check per-record success/failure in response)
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
           description: Invalid request payload
       security:
-      - bearerAuth:
-        - people:employee:create
+        - bearerAuth:
+            - people:employee:create
       summary: Bulk Import Employee Records From Batch
       tags:
-      - People Bulk Ingest API
+        - People Bulk Ingest API
       x-required-permissions:
-      - people:employee:create
+        - people:employee:create
   /v1/people/compliance/inactive-person-active-user:
     get:
-      description: 'Reports every ACTIVE user-person link whose linked person is in an inactive employment status (SUSPENDED, TERMINATED, or DISABLED), per ADR-0015 section 4; each row is a user that should have been disabled during offboarding.
+      description:
+        "Reports every ACTIVE user-person link whose linked person is in an inactive employment status (SUSPENDED, TERMINATED, or DISABLED), per ADR-0015 section 4; each row is a user that should have been disabled during offboarding.
 
         Use this tool for periodic identity-compliance audits; do not use disableEmployee here, which performs the offboarding itself rather than reporting on it.
 
@@ -167,44 +166,45 @@ paths:
 
         Returns 200 with an empty list when no offending links exist.
 
-        '
+        "
       operationId: listInactivePersonActiveUsers
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+                  $ref: "#/components/schemas/InactivePersonActiveUserResponse"
                 type: array
           description: Offending links returned (possibly empty)
-        '403':
+        "403":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+                  $ref: "#/components/schemas/InactivePersonActiveUserResponse"
                 type: array
           description: Forbidden
-        '500':
+        "500":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/InactivePersonActiveUserResponse'
+                  $ref: "#/components/schemas/InactivePersonActiveUserResponse"
                 type: array
           description: Unexpected server error
       security:
-      - bearerAuth:
-        - people:compliance:view
+        - bearerAuth:
+            - people:compliance:view
       summary: List Active Users Linked To Inactive Persons
       tags:
-      - People Compliance API
+        - People Compliance API
       x-required-permissions:
-      - people:compliance:view
+        - people:compliance:view
   /v1/people/employees:
     get:
-      description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number.
+      description:
+        "Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number.
 
         Use this tool when listing or typeahead-filtering employees; do not use getEmployee, which requires the person id already be known, and do not use getEmployeeByNumber, which resolves one exact employee number rather than searching.
 
@@ -216,51 +216,52 @@ paths:
 
         Returns 200 with an empty items list and correct totals when the page or query matches nothing.
 
-        '
+        "
       operationId: searchEmployees
       parameters:
-      - description: Case-insensitive substring match on name or employee number; blank lists all
-        in: query
-        name: q
-        required: false
-        schema:
-          type: string
-      - description: Zero-based page index
-        in: query
-        name: page
-        required: false
-        schema:
-          default: 0
-          format: int32
-          minimum: 0
-          type: integer
-      - description: Page size, up to 100
-        in: query
-        name: size
-        required: false
-        schema:
-          default: 20
-          exclusiveMinimum: 0
-          format: int32
-          maximum: 100
-          type: integer
+        - description: Case-insensitive substring match on name or employee number; blank lists all
+          in: query
+          name: q
+          required: false
+          schema:
+            type: string
+        - description: Zero-based page index
+          in: query
+          name: page
+          required: false
+          schema:
+            default: 0
+            format: int32
+            minimum: 0
+            type: integer
+        - description: Page size, up to 100
+          in: query
+          name: size
+          required: false
+          schema:
+            default: 20
+            exclusiveMinimum: 0
+            format: int32
+            maximum: 100
+            type: integer
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedResponseEmployeeSummaryDto'
+                $ref: "#/components/schemas/PagedResponseEmployeeSummaryDto"
           description: Employees returned (possibly empty)
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: Search Employees By Name Or Number
       tags:
-      - Employee API
+        - Employee API
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
     post:
-      description: 'Creates an employee profile: employment attributes (employee number, status, hire date) are stored in the people domain, while identity attributes (names, contact info) are forwarded to pos-people-contact as an upsert command with a server-generated UUIDv7 person id.
+      description:
+        "Creates an employee profile: employment attributes (employee number, status, hire date) are stored in the people domain, while identity attributes (names, contact info) are forwarded to pos-people-contact as an upsert command with a server-generated UUIDv7 person id.
 
         Use this tool when hiring or registering a brand-new employee; do not use updateEmployee, which modifies an existing profile, and do not use createEmployeesBulk, which imports many records in one call.
 
@@ -272,7 +273,7 @@ paths:
 
         Returns 409 when a duplicate employee number, email, or phone is detected under STRICT policy, and 422 when terminationDate is before hireDate.
 
-        '
+        "
       operationId: createEmployee
       requestBody:
         content:
@@ -292,45 +293,46 @@ paths:
                   preferredName: Jane
                   status: ACTIVE
             schema:
-              $ref: '#/components/schemas/CreateEmployeeRequest'
-        description: 'Employee profile to create: identity fields forwarded to pos-people-contact plus local employment attributes.'
+              $ref: "#/components/schemas/CreateEmployeeRequest"
+        description: "Employee profile to create: identity fields forwarded to pos-people-contact plus local employment attributes."
         required: true
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee created
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Invalid request
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Duplicate employee
-        '422':
+        "422":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Semantic validation failure
       security:
-      - bearerAuth:
-        - people:employee:create
+        - bearerAuth:
+            - people:employee:create
       summary: Create A New Employee Profile
       tags:
-      - Employee API
+        - Employee API
       x-required-permissions:
-      - people:employee:create
+        - people:employee:create
   /v1/people/employees/by-number/{employeeNumber}:
     get:
-      description: 'Resolves an employee number to a slim identity projection containing the person id, employee number, employment status, and an active flag.
+      description:
+        "Resolves an employee number to a slim identity projection containing the person id, employee number, employment status, and an active flag.
 
         Use this tool for service-to-service approver resolution such as manager-approval-by-employee-number; use getEmployee instead when the full profile with names and contact info is needed.
 
@@ -342,38 +344,39 @@ paths:
 
         Returns 404 when no employee carries the supplied employee number.
 
-        '
+        "
       operationId: getEmployeeByNumber
       parameters:
-      - in: path
-        name: employeeNumber
-        required: true
-        schema:
-          type: string
+        - in: path
+          name: employeeNumber
+          required: true
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeIdentityDto'
+                $ref: "#/components/schemas/EmployeeIdentityDto"
           description: Employee resolved
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeIdentityDto'
+                $ref: "#/components/schemas/EmployeeIdentityDto"
           description: No employee with that number
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: Resolve Employee By Employee Number
       tags:
-      - Employee API
+        - Employee API
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
   /v1/people/employees/{employeeId}:
     get:
-      description: 'Returns the full employee profile for a person id, merging identity fields from the pos-people-contact replica with local employment fields.
+      description:
+        "Returns the full employee profile for a person id, merging identity fields from the pos-people-contact replica with local employment fields.
 
         Use this tool when the person id is already known; use getEmployeeByNumber instead to resolve a human-entered employee number.
 
@@ -385,40 +388,41 @@ paths:
 
         Returns 404 when neither an employee record nor a person replica row exists for the id.
 
-        '
+        "
       operationId: getEmployee
       parameters:
-      - in: path
-        name: employeeId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: employeeId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee found
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee not found
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: Get Employee Profile By Person Id
       tags:
-      - Employee API
+        - Employee API
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
     put:
-      description: 'Updates an existing employee profile by person id, replacing employment attributes locally and forwarding identity attributes to pos-people-contact as an upsert command.
+      description:
+        "Updates an existing employee profile by person id, replacing employment attributes locally and forwarding identity attributes to pos-people-contact as an upsert command.
 
-        Use this tool when correcting or changing an existing employee''s details; do not use createEmployee, which registers a new person, and do not use disableEmployee, which is the offboarding transition.
+        Use this tool when correcting or changing an existing employee's details; do not use createEmployee, which registers a new person, and do not use disableEmployee, which is the offboarding transition.
 
         Preconditions: an employee row or identity-replica row must exist for the supplied employeeId, which is the person id at this API surface.
 
@@ -428,15 +432,15 @@ paths:
 
         Returns 404 when no employee or person exists for the id, 409 when another employee already uses the employee number, email, or phone under STRICT policy, and 422 when terminationDate is before hireDate.
 
-        '
+        "
       operationId: updateEmployee
       parameters:
-      - in: path
-        name: employeeId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: employeeId
+          required: true
+          schema:
+            format: uuid
+            type: string
       requestBody:
         content:
           application/json:
@@ -451,51 +455,52 @@ paths:
                   lastName: Smith
                   status: ON_LEAVE
             schema:
-              $ref: '#/components/schemas/UpdateEmployeeRequest'
+              $ref: "#/components/schemas/UpdateEmployeeRequest"
         description: Full replacement employee profile; identity fields are re-sent to pos-people-contact as an upsert command.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee updated
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Invalid request
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee not found
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Duplicate employee
-        '422':
+        "422":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Semantic validation failure
       security:
-      - bearerAuth:
-        - people:employee:edit
+        - bearerAuth:
+            - people:employee:edit
       summary: Update An Existing Employee Profile
       tags:
-      - Employee API
+        - Employee API
       x-required-permissions:
-      - people:employee:edit
+        - people:employee:edit
   /v1/people/employees/{employeeId}/disable:
     post:
-      description: 'Disables an ACTIVE employee, setting status DISABLED with a fresh statusEffectiveAt, and applies the requested staffing-assignment offboarding policy.
+      description:
+        "Disables an ACTIVE employee, setting status DISABLED with a fresh statusEffectiveAt, and applies the requested staffing-assignment offboarding policy.
 
         Use this tool for offboarding; do not use updateEmployee to force the status field, which skips offboarding, and do not use endStaffingAssignment, which ends a single assignment only.
 
@@ -507,15 +512,15 @@ paths:
 
         Returns 404 when the employee does not exist, and 400 when the employee is not currently ACTIVE.
 
-        '
+        "
       operationId: disableEmployee
       parameters:
-      - in: path
-        name: employeeId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: employeeId
+          required: true
+          schema:
+            format: uuid
+            type: string
       requestBody:
         content:
           application/json:
@@ -527,38 +532,39 @@ paths:
                   assignmentPolicy: GRACE_PERIOD
                   disableReason: Voluntary resignation
             schema:
-              $ref: '#/components/schemas/DisableEmployeeRequestDto'
+              $ref: "#/components/schemas/DisableEmployeeRequestDto"
         description: Optional offboarding metadata controlling how the employee's staffing assignments are terminated; omitting it applies the IMMEDIATE policy.
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee disabled
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee cannot be disabled
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
+                $ref: "#/components/schemas/EmployeeProfileDto"
           description: Employee not found
       security:
-      - bearerAuth:
-        - people:employee:deactivate
+        - bearerAuth:
+            - people:employee:deactivate
       summary: Disable Employee And Offboard Assignments
       tags:
-      - Employee API
+        - Employee API
       x-required-permissions:
-      - people:employee:deactivate
+        - people:employee:deactivate
   /v1/people/exceptions:
     get:
-      description: 'Lists time entry exceptions, either all of them or those recorded for one employee.
+      description:
+        "Lists time entry exceptions, either all of them or those recorded for one employee.
 
         Use this tool to review open and historical exceptions; use createTimeEntryException instead to record a new one.
 
@@ -570,33 +576,34 @@ paths:
 
         Returns 200 with an empty list when nothing matches.
 
-        '
+        "
       operationId: listTimeEntryExceptions
       parameters:
-      - in: query
-        name: employeeId
-        required: false
-        schema:
-          type: string
+        - in: query
+          name: employeeId
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/TimeEntryException'
+                  $ref: "#/components/schemas/TimeEntryException"
                 type: array
           description: List returned
       security:
-      - bearerAuth:
-        - people:timeException:view
+        - bearerAuth:
+            - people:timeException:view
       summary: List Time Entry Exceptions By Employee
       tags:
-      - People - Exceptions
+        - People - Exceptions
       x-required-permissions:
-      - people:timeException:view
+        - people:timeException:view
     post:
-      description: 'Records a timekeeping exception in OPEN status for an employee, such as a missed clock-out.
+      description:
+        "Records a timekeeping exception in OPEN status for an employee, such as a missed clock-out.
 
         Use this tool when a timekeeping anomaly is detected; do not use resolveTimeEntryException or waiveTimeEntryException, which close an existing exception.
 
@@ -608,7 +615,7 @@ paths:
 
         Returns 200 with the new exceptionId, and 400 when the JSON payload is malformed.
 
-        '
+        "
       operationId: createTimeEntryException
       requestBody:
         content:
@@ -624,33 +631,34 @@ paths:
                   severity: BLOCKING
                   timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
             schema:
-              $ref: '#/components/schemas/TimeEntryExceptionRequest'
+              $ref: "#/components/schemas/TimeEntryExceptionRequest"
         description: Timekeeping anomaly to record against an employee, optionally tied to a specific time entry.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntryExceptionResponse'
+                $ref: "#/components/schemas/TimeEntryExceptionResponse"
           description: Exception created
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntryExceptionResponse'
+                $ref: "#/components/schemas/TimeEntryExceptionResponse"
           description: Invalid request
       security:
-      - bearerAuth:
-        - people:timeException:create
+        - bearerAuth:
+            - people:timeException:create
       summary: Create A Time Entry Exception
       tags:
-      - People - Exceptions
+        - People - Exceptions
       x-required-permissions:
-      - people:timeException:create
+        - people:timeException:create
   /v1/people/exceptions/{exceptionId}/acknowledge:
     post:
-      description: 'Marks an OPEN time entry exception as ACKNOWLEDGED, stamping the acting user and timestamp.
+      description:
+        "Marks an OPEN time entry exception as ACKNOWLEDGED, stamping the acting user and timestamp.
 
         Use this tool to signal an exception has been seen but not yet fixed; use resolveTimeEntryException or waiveTimeEntryException instead to close it.
 
@@ -662,44 +670,45 @@ paths:
 
         Returns 404 when the exception does not exist, and 400 when it is already RESOLVED or WAIVED.
 
-        '
+        "
       operationId: acknowledgeTimeEntryException
       parameters:
-      - in: path
-        name: exceptionId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - in: path
+          name: exceptionId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
           description: Exception acknowledged successfully
-        '404':
+        "404":
           content:
             application/json:
               schema:
                 type: object
           description: Exception not found
       security:
-      - bearerAuth:
-        - people:timeException:acknowledge
+        - bearerAuth:
+            - people:timeException:acknowledge
       summary: Acknowledge An Open Time Entry Exception
       tags:
-      - People - Exceptions
+        - People - Exceptions
       x-required-permissions:
-      - people:timeException:acknowledge
+        - people:timeException:acknowledge
   /v1/people/exceptions/{exceptionId}/resolve:
     post:
-      description: 'Marks a time entry exception as RESOLVED with optional resolution notes, stamping the acting user and timestamp.
+      description:
+        "Marks a time entry exception as RESOLVED with optional resolution notes, stamping the acting user and timestamp.
 
         Use this tool when the underlying issue has been fixed; use waiveTimeEntryException instead to close it without a fix, or acknowledgeTimeEntryException to flag it as merely seen.
 
@@ -711,20 +720,20 @@ paths:
 
         Returns 404 when the exception does not exist, and 400 when it is already RESOLVED or WAIVED.
 
-        '
+        "
       operationId: resolveTimeEntryException
       parameters:
-      - in: path
-        name: exceptionId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - in: path
+          name: exceptionId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -734,57 +743,58 @@ paths:
                 value:
                   resolutionNotes: Corrected the clock-out time manually
             schema:
-              $ref: '#/components/schemas/TimeEntryExceptionResolveRequest'
+              $ref: "#/components/schemas/TimeEntryExceptionResolveRequest"
         description: Optional resolution details; when present, resolutionNotes replaces the notes stored on the exception.
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
           description: Exception resolved successfully
-        '404':
+        "404":
           content:
             application/json:
               schema:
                 type: object
           description: Exception not found
       security:
-      - bearerAuth:
-        - people:timeException:resolve
+        - bearerAuth:
+            - people:timeException:resolve
       summary: Resolve A Time Entry Exception
       tags:
-      - People - Exceptions
+        - People - Exceptions
       x-required-permissions:
-      - people:timeException:resolve
+        - people:timeException:resolve
   /v1/people/exceptions/{exceptionId}/waive:
     post:
-      description: 'Marks a time entry exception as WAIVED with a mandatory reason, closing it without a correction.
+      description:
+        "Marks a time entry exception as WAIVED with a mandatory reason, closing it without a correction.
 
         Use this tool to deliberately dismiss an exception; use resolveTimeEntryException instead when the underlying issue was actually fixed.
 
         Preconditions: the exception must exist and must not already be RESOLVED or WAIVED, which are terminal states.
 
-        Required inputs: exceptionId (UUID) path parameter and a body with a non-blank waiveReason, which is stored as the exception''s resolution notes.
+        Required inputs: exceptionId (UUID) path parameter and a body with a non-blank waiveReason, which is stored as the exception's resolution notes.
 
         Emits a PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE event and writes an EXCEPTION_WAIVED audit row.
 
         Returns 404 when the exception does not exist, and 400 when waiveReason is blank or the exception is already RESOLVED or WAIVED.
 
-        '
+        "
       operationId: waiveTimeEntryException
       parameters:
-      - in: path
-        name: exceptionId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - in: path
+          name: exceptionId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -794,39 +804,40 @@ paths:
                 value:
                   waiveReason: Known device outage; entry validated manually
             schema:
-              $ref: '#/components/schemas/TimeEntryExceptionWaiveRequest'
+              $ref: "#/components/schemas/TimeEntryExceptionWaiveRequest"
         description: Waiver justification; the reason is mandatory and becomes the exception's resolution notes.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
           description: Exception waived successfully
-        '400':
+        "400":
           content:
             application/json:
               schema:
                 type: object
           description: Invalid request - waiveReason is required
-        '404':
+        "404":
           content:
             application/json:
               schema:
                 type: object
           description: Exception not found
       security:
-      - bearerAuth:
-        - people:timeException:resolve
+        - bearerAuth:
+            - people:timeException:resolve
       summary: Waive A Time Entry Exception
       tags:
-      - People - Exceptions
+        - People - Exceptions
       x-required-permissions:
-      - people:timeException:resolve
+        - people:timeException:resolve
   /v1/people/me/locations:
     get:
-      description: 'Lists the authenticated caller''s staffing assignments that are active today, primary first.
+      description:
+        "Lists the authenticated caller's staffing assignments that are active today, primary first.
 
         Use this tool to populate a location switcher for the current user; use getMyPrimaryLocation instead when only the single primary location is needed.
 
@@ -838,36 +849,37 @@ paths:
 
         Returns 200 with an empty list when the person has no assignment active today, 404 when no person is linked to the current user, and 401 when the security context carries no username.
 
-        '
+        "
       operationId: listMyLocations
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+                  $ref: "#/components/schemas/StaffingAssignmentResponse"
                 type: array
           description: Active location assignments returned successfully.
-        '404':
+        "404":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: No person linked to the current user.
       security:
-      - bearerAuth:
-        - people:availability:view
+        - bearerAuth:
+            - people:availability:view
       summary: List Current User Active Location Assignments
       tags:
-      - People Availability API
+        - People Availability API
       x-required-permissions:
-      - people:availability:view
+        - people:availability:view
   /v1/people/me/primary-location:
     get:
-      description: 'Resolves the authenticated caller''s primary active location from their staffing assignments as of today.
+      description:
+        "Resolves the authenticated caller's primary active location from their staffing assignments as of today.
 
-        Use this tool when a UI or service needs the current user''s home location; use listMyLocations instead to see every active assignment, and getPersonPrimaryLocation for a different person.
+        Use this tool when a UI or service needs the current user's home location; use listMyLocations instead to see every active assignment, and getPersonPrimaryLocation for a different person.
 
         Preconditions: the caller must be linked to a person, and that person must have an ACTIVE assignment flagged primary whose effective dates cover today.
 
@@ -877,32 +889,33 @@ paths:
 
         Returns 404 when the caller has no person link or no active assignment flagged as primary today.
 
-        '
+        "
       operationId: getMyPrimaryLocation
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PrimaryLocationResponse'
+                $ref: "#/components/schemas/PrimaryLocationResponse"
           description: Primary location resolved successfully.
-        '404':
+        "404":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: No primary location assignment found for current user.
       security:
-      - bearerAuth:
-        - people:availability:view
+        - bearerAuth:
+            - people:availability:view
       summary: Get Current User Primary Location
       tags:
-      - People Availability API
+        - People Availability API
       x-required-permissions:
-      - people:availability:view
+        - people:availability:view
   /v1/people/reports/approvedTime:
     get:
-      description: 'Returns APPROVED time-entry rows with worked hours, approval metadata, and resolved employee and location names for a date range and one or more locations.
+      description:
+        "Returns APPROVED time-entry rows with worked hours, approval metadata, and resolved employee and location names for a date range and one or more locations.
 
         Use this tool as the stable source-data read for accounting time-export workflows; use getAttendanceDiscrepancyReport instead for variance analysis between attendance and job time.
 
@@ -914,91 +927,92 @@ paths:
 
         Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId is unknown or inactive.
 
-        '
+        "
       operationId: listApprovedTimeForExport
       parameters:
-      - description: Start date (inclusive)
-        example: 2026-02-01
-        in: query
-        name: startDate
-        required: true
-        schema:
-          format: date
-          type: string
-      - description: End date (inclusive)
-        example: 2026-02-07
-        in: query
-        name: endDate
-        required: true
-        schema:
-          format: date
-          type: string
-      - description: One or more location IDs
-        in: query
-        name: locationId
-        required: true
-        schema:
-          items:
-            format: uuid
+        - description: Start date (inclusive)
+          example: 2026-02-01
+          in: query
+          name: startDate
+          required: true
+          schema:
+            format: date
             type: string
-          type: array
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - description: End date (inclusive)
+          example: 2026-02-07
+          in: query
+          name: endDate
+          required: true
+          schema:
+            format: date
+            type: string
+        - description: One or more location IDs
+          in: query
+          name: locationId
+          required: true
+          schema:
+            items:
+              format: uuid
+              type: string
+            type: array
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
                 type: array
           description: Approved time rows retrieved successfully
-        '400':
+        "400":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
                 type: array
           description: Invalid parameters
-        '403':
+        "403":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
                 type: array
           description: Forbidden
-        '500':
+        "500":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
                 type: array
           description: Unexpected server error
-        '503':
+        "503":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ApprovedTimeExportResponse'
+                  $ref: "#/components/schemas/ApprovedTimeExportResponse"
                 type: array
           description: Dependent service unavailable
       security:
-      - bearerAuth:
-        - accounting:time:export
+        - bearerAuth:
+            - accounting:time:export
       summary: List Approved Time For Accounting Export
       tags:
-      - People Reports API
+        - People Reports API
       x-required-permissions:
-      - accounting:time:export
+        - accounting:time:export
   /v1/people/reports/attendanceJobtimeDiscrepancy:
     get:
-      description: 'Generates a per-technician, per-location, per-day report comparing attendance minutes from time entries with job minutes from the workorder job-time replica.
+      description:
+        "Generates a per-technician, per-location, per-day report comparing attendance minutes from time entries with job minutes from the workorder job-time replica.
 
         Use this tool to spot technicians whose clocked attendance diverges from booked job time; use listApprovedTimeForExport instead for the raw approved rows consumed by accounting export.
 
@@ -1006,116 +1020,117 @@ paths:
 
         Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly defaults to false.
 
-        Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are flagged when the absolute discrepancy exceeds the location''s configured threshold minutes.
+        Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are flagged when the absolute discrepancy exceeds the location's configured threshold minutes.
 
         Returns 400 when endDate is before startDate or timezone is not a valid IANA zone.
 
-        '
+        "
       operationId: getAttendanceDiscrepancyReport
       parameters:
-      - description: Start date (inclusive)
-        example: 2026-02-01
-        in: query
-        name: startDate
-        required: true
-        schema:
-          format: date
-          type: string
-      - description: End date (inclusive)
-        example: 2026-02-07
-        in: query
-        name: endDate
-        required: true
-        schema:
-          format: date
-          type: string
-      - description: IANA timezone
-        example: America/Chicago
-        in: query
-        name: timezone
-        required: true
-        schema:
-          type: string
-      - description: Optional location filter
-        in: query
-        name: locationId
-        required: false
-        schema:
-          format: uuid
-          type: string
-      - description: Optional technician IDs filter
-        in: query
-        name: technicianIds
-        required: false
-        schema:
-          items:
+        - description: Start date (inclusive)
+          example: 2026-02-01
+          in: query
+          name: startDate
+          required: true
+          schema:
+            format: date
+            type: string
+        - description: End date (inclusive)
+          example: 2026-02-07
+          in: query
+          name: endDate
+          required: true
+          schema:
+            format: date
+            type: string
+        - description: IANA timezone
+          example: America/Chicago
+          in: query
+          name: timezone
+          required: true
+          schema:
+            type: string
+        - description: Optional location filter
+          in: query
+          name: locationId
+          required: false
+          schema:
             format: uuid
             type: string
-          type: array
-      - description: Return flagged rows only
-        in: query
-        name: flaggedOnly
-        required: false
-        schema:
-          default: false
-          type: boolean
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - description: Optional technician IDs filter
+          in: query
+          name: technicianIds
+          required: false
+          schema:
+            items:
+              format: uuid
+              type: string
+            type: array
+        - description: Return flagged rows only
+          in: query
+          name: flaggedOnly
+          required: false
+          schema:
+            default: false
+            type: boolean
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
                 type: array
           description: Report generated successfully.
-        '400':
+        "400":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
                 type: array
           description: Invalid parameters
-        '403':
+        "403":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
                 type: array
           description: Forbidden
-        '500':
+        "500":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
                 type: array
           description: Unexpected server error
-        '503':
+        "503":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/AttendanceDiscrepancyReportResponse'
+                  $ref: "#/components/schemas/AttendanceDiscrepancyReportResponse"
                 type: array
           description: Dependent service unavailable
       security:
-      - bearerAuth:
-        - accounting:time:export
+        - bearerAuth:
+            - accounting:time:export
       summary: Get Attendance Versus Job Time Discrepancy Report
       tags:
-      - People Reports API
+        - People Reports API
       x-required-permissions:
-      - accounting:time:export
+        - accounting:time:export
   /v1/people/staffing/assignments:
     get:
-      description: 'Lists every staffing assignment for a person, including ENDED ones, across all locations and roles.
+      description:
+        "Lists every staffing assignment for a person, including ENDED ones, across all locations and roles.
 
         Use this tool for assignment history and administration; use listPersonLocations instead when only the assignments active today are wanted.
 
@@ -1127,34 +1142,35 @@ paths:
 
         Returns 200 with an empty list when the person has no assignments.
 
-        '
+        "
       operationId: listStaffingAssignments
       parameters:
-      - in: query
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: query
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+                  $ref: "#/components/schemas/StaffingAssignmentResponse"
                 type: array
           description: List of assignments.
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: List Staffing Assignments For A Person
       tags:
-      - People - Staffing Assignments
+        - People - Staffing Assignments
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
     post:
-      description: 'Creates a staffing assignment linking a person to a location with a role, effective dates, and a primary flag.
+      description:
+        "Creates a staffing assignment linking a person to a location with a role, effective dates, and a primary flag.
 
         Use this tool when a person starts working at a location; do not use updateStaffingAssignment, which modifies an existing assignment by id.
 
@@ -1162,11 +1178,11 @@ paths:
 
         Required inputs: personId (UUID), locationId (UUID), role, isPrimary, and effectiveFrom (yyyy-MM-dd); effectiveTo is optional and open-ended when null.
 
-        Emits a PEOPLE_STAFFING_ASSIGNMENT_CREATE event and publishes a staffing-assignment fact; a new primary demotes and ends any overlapping existing primary, and a person''s first active assignment is forced primary regardless of the flag.
+        Emits a PEOPLE_STAFFING_ASSIGNMENT_CREATE event and publishes a staffing-assignment fact; a new primary demotes and ends any overlapping existing primary, and a person's first active assignment is forced primary regardless of the flag.
 
-        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or active location cannot be resolved, and 400 when the person''s employee status is not ACTIVE.
+        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or active location cannot be resolved, and 400 when the person's employee status is not ACTIVE.
 
-        '
+        "
       operationId: createStaffingAssignment
       requestBody:
         content:
@@ -1181,45 +1197,46 @@ paths:
                   personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   role: TECHNICIAN
             schema:
-              $ref: '#/components/schemas/CreateStaffingAssignmentRequest'
+              $ref: "#/components/schemas/CreateStaffingAssignmentRequest"
         description: Staffing assignment to create, binding one person to one location for a role over an effective date range.
         required: true
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Assignment created.
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Validation error.
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Location or person not found.
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Overlapping assignment exists.
       security:
-      - bearerAuth:
-        - people:employee:edit
+        - bearerAuth:
+            - people:employee:edit
       summary: Create Person To Location Staffing Assignment
       tags:
-      - People - Staffing Assignments
+        - People - Staffing Assignments
       x-required-permissions:
-      - people:employee:edit
+        - people:employee:edit
   /v1/people/staffing/assignments/{assignmentId}:
     delete:
-      description: 'Ends a staffing assignment by setting its status to ENDED without physically deleting the row.
+      description:
+        "Ends a staffing assignment by setting its status to ENDED without physically deleting the row.
 
         Use this tool when a person stops working at a location; do not use disableEmployee, which offboards the whole employee, and do not use updateStaffingAssignment to shorten dates manually.
 
@@ -1227,36 +1244,37 @@ paths:
 
         Required inputs: assignmentId (UUID) path parameter; there is no request body.
 
-        Emits a PEOPLE_STAFFING_ASSIGNMENT_END event and publishes a staffing-assignment fact; a null effectiveTo is stamped with today''s date.
+        Emits a PEOPLE_STAFFING_ASSIGNMENT_END event and publishes a staffing-assignment fact; a null effectiveTo is stamped with today's date.
 
         Returns 204 on success, and 404 when no assignment exists for the supplied id.
 
-        '
+        "
       operationId: endStaffingAssignment
       parameters:
-      - in: path
-        name: assignmentId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: assignmentId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '204':
+        "204":
           description: Assignment ended.
-        '404':
+        "404":
           description: Assignment not found.
       security:
-      - bearerAuth:
-        - people:employee:edit
+        - bearerAuth:
+            - people:employee:edit
       summary: End An Active Staffing Assignment
       tags:
-      - People - Staffing Assignments
+        - People - Staffing Assignments
       x-required-permissions:
-      - people:employee:edit
+        - people:employee:edit
     get:
-      description: 'Returns a single staffing assignment by its unique assignment id.
+      description:
+        "Returns a single staffing assignment by its unique assignment id.
 
-        Use this tool when the assignment id is already known; use listStaffingAssignments instead to discover a person''s assignments.
+        Use this tool when the assignment id is already known; use listStaffingAssignments instead to discover a person's assignments.
 
         Preconditions: the assignment must exist; both ACTIVE and ENDED assignments are returned.
 
@@ -1266,38 +1284,39 @@ paths:
 
         Returns 404 when no assignment exists for the supplied id.
 
-        '
+        "
       operationId: getStaffingAssignment
       parameters:
-      - in: path
-        name: assignmentId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: assignmentId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Assignment found.
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Assignment not found.
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: Get Staffing Assignment By Id
       tags:
-      - People - Staffing Assignments
+        - People - Staffing Assignments
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
     put:
-      description: 'Replaces a staffing assignment''s person, location, role, primary flag, and effective dates.
+      description:
+        "Replaces a staffing assignment's person, location, role, primary flag, and effective dates.
 
         Use this tool to correct or reshape an existing assignment; do not use endStaffingAssignment, which only closes an assignment, and do not use createStaffingAssignment for a new one.
 
@@ -1307,17 +1326,17 @@ paths:
 
         Emits a PEOPLE_STAFFING_ASSIGNMENT_UPDATE event and publishes a staffing-assignment fact; setting isPrimary true demotes and ends any other overlapping primary assignment.
 
-        Returns 404 when the assignment, person, employee record, or active location cannot be resolved, 409 when another assignment overlaps for the person, location, and role, and 400 when the person''s employee status is not ACTIVE.
+        Returns 404 when the assignment, person, employee record, or active location cannot be resolved, 409 when another assignment overlaps for the person, location, and role, and 400 when the person's employee status is not ACTIVE.
 
-        '
+        "
       operationId: updateStaffingAssignment
       parameters:
-      - in: path
-        name: assignmentId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: assignmentId
+          required: true
+          schema:
+            format: uuid
+            type: string
       requestBody:
         content:
           application/json:
@@ -1332,59 +1351,60 @@ paths:
                   personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   role: TECHNICIAN
             schema:
-              $ref: '#/components/schemas/UpdateStaffingAssignmentRequest'
+              $ref: "#/components/schemas/UpdateStaffingAssignmentRequest"
         description: Full replacement values for the assignment's person, location, role, primary flag, and effective dates.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Assignment updated.
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Validation error.
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Assignment not found.
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffingAssignmentResponse'
+                $ref: "#/components/schemas/StaffingAssignmentResponse"
           description: Overlapping assignment exists.
       security:
-      - bearerAuth:
-        - people:employee:edit
+        - bearerAuth:
+            - people:employee:edit
       summary: Update An Existing Staffing Assignment
       tags:
-      - People - Staffing Assignments
+        - People - Staffing Assignments
       x-required-permissions:
-      - people:employee:edit
+        - people:employee:edit
   /v1/people/staffing/bulk-ingest:
     post:
-      description: 'Creates many staffing assignments at once, resolving each row''s employee number to a person.
+      description:
+        "Creates many staffing assignments at once, resolving each row's employee number to a person.
 
-        Use this tool when standing up a location''s roster or seeding an environment; use createStaffingAssignment instead for a single assignment.
+        Use this tool when standing up a location's roster or seeding an environment; use createStaffingAssignment instead for a single assignment.
 
         Preconditions: each employee number must resolve to a person with an ACTIVE employee record, each location must be active, and no assignment may overlap an existing one for the same person, location and role.
 
-        Required inputs: jobId (UUID), locationId (UUID) and records, each with an employeeNumber and a role; a record''s own locationId overrides the batch one, and effectiveFrom defaults to today.
+        Required inputs: jobId (UUID), locationId (UUID) and records, each with an employeeNumber and a role; a record's own locationId overrides the batch one, and effectiveFrom defaults to today.
 
         Emits a PEOPLE_STAFFING_ASSIGNMENT_BULK_INGEST event and a staffing-assignment fact per row.
 
-        Note two side effects that make this not simply additive: a new primary demotes and end-dates an overlapping existing primary, and a person''s first active assignment is forced primary whatever the flag says.
+        Note two side effects that make this not simply additive: a new primary demotes and end-dates an overlapping existing primary, and a person's first active assignment is forced primary whatever the flag says.
 
         Returns 200 with a per-record result; check each result rather than the status alone.
 
-        '
+        "
       operationId: bulkIngestStaffingAssignments
       requestBody:
         content:
@@ -1397,46 +1417,47 @@ paths:
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
                   operatorId: seed-operator
                   records:
-                  - employeeNumber: EMP-0001
-                    primary: true
-                    role: LOCATION_MANAGER
-                  - employeeNumber: EMP-0002
-                    primary: true
-                    role: TECHNICIAN
+                    - employeeNumber: EMP-0001
+                      primary: true
+                      role: LOCATION_MANAGER
+                    - employeeNumber: EMP-0002
+                      primary: true
+                      role: TECHNICIAN
             schema:
-              $ref: '#/components/schemas/BulkIngestRequestStaffingAssignmentBulkIngestRecord'
+              $ref: "#/components/schemas/BulkIngestRequestStaffingAssignmentBulkIngestRecord"
         description: Staffing assignments to create.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
           description: Batch processed; inspect per-record results
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
           description: Invalid request payload
-        '403':
+        "403":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: "#/components/schemas/BulkIngestResponse"
           description: Forbidden
       security:
-      - bearerAuth:
-        - people:employee:edit
+        - bearerAuth:
+            - people:employee:edit
       summary: Assign People to Locations in Bulk
       tags:
-      - Staffing Assignment Bulk Ingest API
+        - Staffing Assignment Bulk Ingest API
       x-required-permissions:
-      - people:employee:edit
+        - people:employee:edit
   /v1/people/time-periods:
     post:
-      description: 'Creates a pay period for a tenant with an inclusive start and end date and an initial lifecycle status.
+      description:
+        "Creates a pay period for a tenant with an inclusive start and end date and an initial lifecycle status.
 
         Use this tool for corrections and off-grid periods; do not create routine periods manually, the scheduled rollover opens those on the configured cadence instead.
 
@@ -1448,7 +1469,7 @@ paths:
 
         Returns 400 when the range is invalid, and 409 when the range overlaps an existing period.
 
-        '
+        "
       operationId: createTimePeriod
       requestBody:
         content:
@@ -1461,39 +1482,40 @@ paths:
                   startDate: 2026-06-01
                   tenantId: 01960000-0000-7000-8000-000000000001
             schema:
-              $ref: '#/components/schemas/CreateTimePeriodRequest'
+              $ref: "#/components/schemas/CreateTimePeriodRequest"
         description: Tenant, inclusive date range, and optional initial status of the new period.
         required: true
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDto'
+                $ref: "#/components/schemas/TimePeriodDto"
           description: Time period created
-        '400':
+        "400":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: Invalid date range
-        '409':
+        "409":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: Overlapping period exists
       security:
-      - bearerAuth:
-        - people:timePeriod:create
+        - bearerAuth:
+            - people:timePeriod:create
       summary: Create Pay Period
       tags:
-      - Time Period Management API
+        - Time Period Management API
       x-required-permissions:
-      - people:timePeriod:create
+        - people:timePeriod:create
   /v1/people/time-periods/{timePeriodId}/status:
     post:
-      description: 'Moves a pay period to a new lifecycle status along the allowed transitions, including reopening a SUBMISSION_CLOSED period for corrections.
+      description:
+        "Moves a pay period to a new lifecycle status along the allowed transitions, including reopening a SUBMISSION_CLOSED period for corrections.
 
         Use this tool for manual corrections; do not drive routine closure with it, the scheduled rollover advances statuses on the configured cadence instead.
 
@@ -1505,15 +1527,15 @@ paths:
 
         Returns 404 when the period does not exist, and 409 when the transition is not allowed.
 
-        '
+        "
       operationId: transitionTimePeriod
       parameters:
-      - in: path
-        name: timePeriodId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: timePeriodId
+          required: true
+          schema:
+            format: uuid
+            type: string
       requestBody:
         content:
           application/json:
@@ -1523,39 +1545,40 @@ paths:
                 value:
                   status: SUBMISSION_CLOSED
             schema:
-              $ref: '#/components/schemas/TransitionTimePeriodRequest'
+              $ref: "#/components/schemas/TransitionTimePeriodRequest"
         description: Target lifecycle status for the period.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDto'
+                $ref: "#/components/schemas/TimePeriodDto"
           description: Time period transitioned
-        '404':
+        "404":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: Time period not found
-        '409':
+        "409":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: Transition not allowed
       security:
-      - bearerAuth:
-        - people:timePeriod:transition
+        - bearerAuth:
+            - people:timePeriod:transition
       summary: Transition Pay Period Status
       tags:
-      - Time Period Management API
+        - Time Period Management API
       x-required-permissions:
-      - people:timePeriod:transition
+        - people:timePeriod:transition
   /v1/people/timeEntries:
     get:
-      description: 'Returns a page of attendance time entries — clock-in, clock-out and the break minutes inside that window — with each entry''s status and approval decision, oldest submission first.
+      description:
+        "Returns a page of attendance time entries — clock-in, clock-out and the break minutes inside that window — with each entry's status and approval decision, oldest submission first.
 
         Use this tool to build the approvals queue or to find the timeEntryId an approve or reject call needs; do not use listWorkexecWorkSessions, which returns time a technician spent on a workorder task. A time entry is attendance only and carries no workorder reference, so this endpoint cannot answer how long a job took.
 
@@ -1567,93 +1590,94 @@ paths:
 
         Returns 200 with the page envelope, and 400 when timeZone is not a known zone id or the paging parameters are out of range.
 
-        '
+        "
       operationId: listTimeEntries
       parameters:
-      - description: Keep only entries in this status; omit for every status
-        in: query
-        name: status
-        required: false
-        schema:
-          enum:
-          - DRAFT
-          - SUBMITTED
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          type: string
-      - description: Calendar day of the clock-in, resolved in timeZone
-        example: 2026-01-15
-        in: query
-        name: workDate
-        required: false
-        schema:
-          format: date
-          type: string
-      - description: Zone whose calendar day workDate names; defaults to UTC
-        example: America/Chicago
-        in: query
-        name: timeZone
-        required: false
-        schema:
-          type: string
-      - description: Keep only this person's entries
-        in: query
-        name: employeeId
-        required: false
-        schema:
-          format: uuid
-          type: string
-      - description: Keep only entries clocked at this location
-        in: query
-        name: locationId
-        required: false
-        schema:
-          format: uuid
-          type: string
-      - description: Zero-based page index
-        in: query
-        name: page
-        required: false
-        schema:
-          default: 0
-          format: int32
-          minimum: 0
-          type: integer
-      - description: Page size, up to 100
-        in: query
-        name: size
-        required: false
-        schema:
-          default: 20
-          exclusiveMinimum: 0
-          format: int32
-          maximum: 100
-          type: integer
+        - description: Keep only entries in this status; omit for every status
+          in: query
+          name: status
+          required: false
+          schema:
+            enum:
+              - DRAFT
+              - SUBMITTED
+              - PENDING_APPROVAL
+              - APPROVED
+              - REJECTED
+            type: string
+        - description: Calendar day of the clock-in, resolved in timeZone
+          example: 2026-01-15
+          in: query
+          name: workDate
+          required: false
+          schema:
+            format: date
+            type: string
+        - description: Zone whose calendar day workDate names; defaults to UTC
+          example: America/Chicago
+          in: query
+          name: timeZone
+          required: false
+          schema:
+            type: string
+        - description: Keep only this person's entries
+          in: query
+          name: employeeId
+          required: false
+          schema:
+            format: uuid
+            type: string
+        - description: Keep only entries clocked at this location
+          in: query
+          name: locationId
+          required: false
+          schema:
+            format: uuid
+            type: string
+        - description: Zero-based page index
+          in: query
+          name: page
+          required: false
+          schema:
+            default: 0
+            format: int32
+            minimum: 0
+            type: integer
+        - description: Page size, up to 100
+          in: query
+          name: size
+          required: false
+          schema:
+            default: 20
+            exclusiveMinimum: 0
+            format: int32
+            maximum: 100
+            type: integer
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedResponseTimeEntrySummary'
+                $ref: "#/components/schemas/PagedResponseTimeEntrySummary"
           description: Time entries returned (possibly empty)
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedResponseTimeEntrySummary'
+                $ref: "#/components/schemas/PagedResponseTimeEntrySummary"
           description: Invalid filter or paging parameter
       security:
-      - bearerAuth:
-        - people:timeEntry:view
+        - bearerAuth:
+            - people:timeEntry:view
       summary: List Attendance Time Entries For Approval
       tags:
-      - Time Entry Approval API
+        - Time Entry Approval API
       x-required-permissions:
-      - people:timeEntry:view
+        - people:timeEntry:view
   /v1/people/timeEntries/adjustments:
     post:
-      description: 'Creates a PENDING adjustment against a time entry, proposing either replacement start and end timestamps or a signed minutes delta.
+      description:
+        "Creates a PENDING adjustment against a time entry, proposing either replacement start and end timestamps or a signed minutes delta.
 
         Use this tool when a recorded time entry needs correction before approval; do not use approveTimeEntryAdjustment, which decides an already proposed adjustment.
 
@@ -1665,7 +1689,7 @@ paths:
 
         Returns 404 when the time entry does not exist, 409 when the entry is not in PENDING_APPROVAL status, and 400 when reasonCode is missing or the proposed-times versus minutesDelta rule is violated.
 
-        '
+        "
       operationId: createTimeEntryAdjustment
       requestBody:
         content:
@@ -1679,45 +1703,46 @@ paths:
                   reasonCode: MISSED_BREAK
                   timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
             schema:
-              $ref: '#/components/schemas/TimeEntryAdjustmentRequest'
-        description: 'Proposed correction for one time entry: replacement start/end timestamps or a signed minutes delta, with a reason code.'
+              $ref: "#/components/schemas/TimeEntryAdjustmentRequest"
+        description: "Proposed correction for one time entry: replacement start/end timestamps or a signed minutes delta, with a reason code."
         required: true
       responses:
-        '201':
+        "201":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
           description: Adjustment created
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
           description: Invalid request
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
           description: Time entry not found
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntryAdjustmentResponse'
+                $ref: "#/components/schemas/TimeEntryAdjustmentResponse"
           description: Invalid time entry state for adjustment
       security:
-      - bearerAuth:
-        - people:timeAdjustment:create
+        - bearerAuth:
+            - people:timeAdjustment:create
       summary: Create A Pending Time Entry Adjustment
       tags:
-      - People TimeEntries
+        - People TimeEntries
       x-required-permissions:
-      - people:timeAdjustment:create
+        - people:timeAdjustment:create
   /v1/people/timeEntries/adjustments/{adjustmentId}/approve:
     post:
-      description: 'Approves a time entry adjustment, stamping the deciding user and decision time and writing an ADJUSTMENT_APPROVED audit row.
+      description:
+        "Approves a time entry adjustment, stamping the deciding user and decision time and writing an ADJUSTMENT_APPROVED audit row.
 
         Use this tool to accept a proposed correction; do not use approveTimeEntriesBatch, which approves the time entries themselves rather than adjustments.
 
@@ -1725,54 +1750,55 @@ paths:
 
         Required inputs: adjustmentId (UUID) path parameter; an optional X-Correlation-Id header is carried into the audit trail.
 
-        Emits a PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE event; the underlying time entry''s own timestamps are not recalculated by this call.
+        Emits a PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE event; the underlying time entry's own timestamps are not recalculated by this call.
 
         Returns 404 when no adjustment exists for the supplied id.
 
-        '
+        "
       operationId: approveTimeEntryAdjustment
       parameters:
-      - in: path
-        name: adjustmentId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - in: path
+          name: adjustmentId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
           description: Adjustment approved successfully
-        '403':
+        "403":
           content:
             application/json:
               schema:
                 type: object
           description: Forbidden - insufficient permissions
-        '404':
+        "404":
           content:
             application/json:
               schema:
                 type: object
           description: Adjustment not found
       security:
-      - bearerAuth:
-        - people:timeAdjustment:approve
+        - bearerAuth:
+            - people:timeAdjustment:approve
       summary: Approve A Pending Time Entry Adjustment
       tags:
-      - People TimeEntries
+        - People TimeEntries
       x-required-permissions:
-      - people:timeAdjustment:approve
+        - people:timeAdjustment:approve
   /v1/people/timeEntries/approve:
     post:
-      description: 'Approves a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry APPROVED and stamping the approver and approval time; pos-people is authoritative for approval execution.
+      description:
+        "Approves a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry APPROVED and stamping the approver and approval time; pos-people is authoritative for approval execution.
 
         Use this tool for supervisor approval of individually selected time entries; do not use rejectTimeEntriesBatch, which rejects them, and do not use approveTimePeriod, which approves a whole pay period per person.
 
@@ -1784,14 +1810,14 @@ paths:
 
         Returns 200 with a per-entry result list (failure codes NOT_FOUND, ENTRY_NOT_PENDING, FORBIDDEN) rather than failing the whole batch, and 400 when the decisions list is missing or empty.
 
-        '
+        "
       operationId: approveTimeEntriesBatch
       parameters:
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -1800,36 +1826,37 @@ paths:
                 description: Approve two entries
                 value:
                   decisions:
-                  - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
             schema:
-              $ref: '#/components/schemas/TimeEntryDecisionBatchRequest'
+              $ref: "#/components/schemas/TimeEntryDecisionBatchRequest"
         description: Batch of approval decisions, one element per time entry to approve; rejectionReason is ignored here.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
           description: Time entries approved successfully
-        '400':
+        "400":
           content:
             application/json:
               schema:
                 type: object
           description: Invalid request - decisions required
       security:
-      - bearerAuth:
-        - people:timeEntry:approve
+        - bearerAuth:
+            - people:timeEntry:approve
       summary: Batch Approve Submitted Time Entries
       tags:
-      - Time Entry Approval API
+        - Time Entry Approval API
       x-required-permissions:
-      - people:timeEntry:approve
+        - people:timeEntry:approve
   /v1/people/timeEntries/reject:
     post:
-      description: 'Rejects a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry REJECTED with the supplied reason stored on the entry.
+      description:
+        "Rejects a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry REJECTED with the supplied reason stored on the entry.
 
         Use this tool to send individually selected entries back with a reason; do not use approveTimeEntriesBatch, which approves them, and do not use rejectTimePeriod, which rejects a whole pay period per person.
 
@@ -1841,14 +1868,14 @@ paths:
 
         Returns 200 with a per-entry result list (failure codes NOT_FOUND, ENTRY_NOT_PENDING, FORBIDDEN), and 400 when any decision lacks a rejectionReason.
 
-        '
+        "
       operationId: rejectTimeEntriesBatch
       parameters:
-      - in: header
-        name: X-Correlation-Id
-        required: false
-        schema:
-          type: string
+        - in: header
+          name: X-Correlation-Id
+          required: false
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -1857,36 +1884,37 @@ paths:
                 description: Reject one entry
                 value:
                   decisions:
-                  - rejectionReason: Incomplete work details
-                    timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    - rejectionReason: Incomplete work details
+                      timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
             schema:
-              $ref: '#/components/schemas/TimeEntryDecisionBatchRequest'
+              $ref: "#/components/schemas/TimeEntryDecisionBatchRequest"
         description: Batch of rejection decisions; every element must carry a non-blank rejectionReason.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 type: object
           description: Time entries rejected successfully
-        '400':
+        "400":
           content:
             application/json:
               schema:
                 type: object
           description: Invalid request - rejectionReason required for all decisions
       security:
-      - bearerAuth:
-        - people:timeEntry:reject
+        - bearerAuth:
+            - people:timeEntry:reject
       summary: Batch Reject Submitted Time Entries
       tags:
-      - Time Entry Approval API
+        - Time Entry Approval API
       x-required-permissions:
-      - people:timeEntry:reject
+        - people:timeEntry:reject
   /v1/people/timeEntries/{timeEntryId}:
     get:
-      description: 'Returns a single attendance time entry by id, with its clock-in, clock-out, break minutes, status and approval decision.
+      description:
+        "Returns a single attendance time entry by id, with its clock-in, clock-out, break minutes, status and approval decision.
 
         Use this tool for the detail view opened from an approvals-queue row; do not use listTimeEntries, which pages over many entries, and do not use getTimeEntryAdjustments, which returns the proposed corrections attached to an entry rather than the entry itself.
 
@@ -1898,53 +1926,54 @@ paths:
 
         Returns 404 when no entry has that id, and 400 when timeZone is not a known zone id.
 
-        '
+        "
       operationId: getTimeEntry
       parameters:
-      - in: path
-        name: timeEntryId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - description: Zone the derived workDate is resolved in; defaults to UTC
-        in: query
-        name: timeZone
-        required: false
-        schema:
-          type: string
+        - in: path
+          name: timeEntryId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - description: Zone the derived workDate is resolved in; defaults to UTC
+          in: query
+          name: timeZone
+          required: false
+          schema:
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntrySummary'
+                $ref: "#/components/schemas/TimeEntrySummary"
           description: Time entry returned
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntrySummary'
+                $ref: "#/components/schemas/TimeEntrySummary"
           description: Invalid timeZone
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimeEntrySummary'
+                $ref: "#/components/schemas/TimeEntrySummary"
           description: Time entry not found
       security:
-      - bearerAuth:
-        - people:timeEntry:view
+        - bearerAuth:
+            - people:timeEntry:view
       summary: Get One Attendance Time Entry
       tags:
-      - Time Entry Approval API
+        - Time Entry Approval API
       x-required-permissions:
-      - people:timeEntry:view
+        - people:timeEntry:view
   /v1/people/timeEntries/{timeEntryId}/adjustments:
     get:
-      description: 'Lists all adjustments recorded against one time entry, in any status.
+      description:
+        "Lists all adjustments recorded against one time entry, in any status.
 
-        Use this tool to review an entry''s correction history; use createTimeEntryAdjustment instead to propose a new correction.
+        Use this tool to review an entry's correction history; use createTimeEntryAdjustment instead to propose a new correction.
 
         Preconditions: none; an unknown timeEntryId simply yields no rows.
 
@@ -1954,37 +1983,38 @@ paths:
 
         Returns 200 with an empty list when the time entry has no adjustments.
 
-        '
+        "
       operationId: listTimeEntryAdjustments
       parameters:
-      - in: path
-        name: timeEntryId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: timeEntryId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/TimeEntryAdjustment'
+                  $ref: "#/components/schemas/TimeEntryAdjustment"
                 type: array
           description: List returned
       security:
-      - bearerAuth:
-        - people:timeAdjustment:view
+        - bearerAuth:
+            - people:timeAdjustment:view
       summary: List Adjustments For A Time Entry
       tags:
-      - People TimeEntries
+        - People TimeEntries
       x-required-permissions:
-      - people:timeAdjustment:view
+        - people:timeAdjustment:view
   /v1/people/timekeeping/approvals/people:
     get:
-      description: 'Lists the distinct employees that have at least one timekeeping entry, with display name and employee number.
+      description:
+        "Lists the distinct employees that have at least one timekeeping entry, with display name and employee number.
 
-        Use this tool to build the person picker for pay-period approval; use listTimekeepingEntries instead for one person''s entries in a period.
+        Use this tool to build the person picker for pay-period approval; use listTimekeepingEntries instead for one person's entries in a period.
 
         Preconditions: none; display names come from the person identity replica, which is eventually consistent.
 
@@ -1994,28 +2024,29 @@ paths:
 
         Returns 200 with an empty list when no timekeeping entries exist.
 
-        '
+        "
       operationId: listTimekeepingApprovalPeople
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ApprovalPersonDto'
+                  $ref: "#/components/schemas/ApprovalPersonDto"
                 type: array
           description: List of employees
       security:
-      - bearerAuth:
-        - people:timekeeping:view
+        - bearerAuth:
+            - people:timekeeping:view
       summary: List Employees With Timekeeping Entries
       tags:
-      - Timekeeping Approval API
+        - Timekeeping Approval API
       x-required-permissions:
-      - people:timekeeping:view
+        - people:timekeeping:view
   /v1/people/timekeeping/time-period-approvals:
     get:
-      description: 'Summarises a person''s timekeeping approval state for a pay period: total, pending, approved, and rejected counts plus an overall status.
+      description:
+        "Summarises a person's timekeeping approval state for a pay period: total, pending, approved, and rejected counts plus an overall status.
 
         Use this tool for a status badge or gate; use listTimekeepingEntries instead when the individual entries are needed.
 
@@ -2027,45 +2058,46 @@ paths:
 
         Returns 404 when the time period does not exist.
 
-        '
+        "
       operationId: getTimePeriodApproval
       parameters:
-      - in: query
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: query
-        name: timePeriodId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: query
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: query
+          name: timePeriodId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodApprovalDto'
+                $ref: "#/components/schemas/TimePeriodApprovalDto"
           description: Approval summary
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodApprovalDto'
+                $ref: "#/components/schemas/TimePeriodApprovalDto"
           description: Time period not found
       security:
-      - bearerAuth:
-        - people:timekeeping:view
+        - bearerAuth:
+            - people:timekeeping:view
       summary: Get Time Period Approval Summary
       tags:
-      - Timekeeping Approval API
+        - Timekeeping Approval API
       x-required-permissions:
-      - people:timekeeping:view
+        - people:timekeeping:view
   /v1/people/timekeeping/time-periods:
     get:
-      description: 'Lists pay periods with their start and end dates and status, newest first when scoped to a tenant.
+      description:
+        "Lists pay periods with their start and end dates and status, newest first when scoped to a tenant.
 
         Use this tool to choose the period for approval screens; use listTimekeepingEntries instead for the entries inside a chosen period.
 
@@ -2077,35 +2109,36 @@ paths:
 
         Returns 200 with an empty list when no pay periods exist.
 
-        '
+        "
       operationId: listTimePeriods
       parameters:
-      - in: query
-        name: tenantId
-        required: false
-        schema:
-          format: uuid
-          type: string
+        - in: query
+          name: tenantId
+          required: false
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/TimePeriodDto'
+                  $ref: "#/components/schemas/TimePeriodDto"
                 type: array
           description: List of time periods
       security:
-      - bearerAuth:
-        - people:timekeeping:view
+        - bearerAuth:
+            - people:timekeeping:view
       summary: List Pay Periods For Timekeeping Approval
       tags:
-      - Timekeeping Approval API
+        - Timekeeping Approval API
       x-required-permissions:
-      - people:timekeeping:view
+        - people:timekeeping:view
   /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/approve:
     post:
-      description: 'Bulk-approves every PENDING_APPROVAL timekeeping entry for a person within a pay period''s date range.
+      description:
+        "Bulk-approves every PENDING_APPROVAL timekeeping entry for a person within a pay period's date range.
 
         Use this tool for pay-period sign-off; do not use approveTimeEntriesBatch, which decides individually selected time entries instead of a whole period.
 
@@ -2117,45 +2150,46 @@ paths:
 
         Returns 200 with processedCount 0 when nothing was pending, and 404 when the time period does not exist.
 
-        '
+        "
       operationId: approveTimePeriod
       parameters:
-      - in: path
-        name: timePeriodId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: timePeriodId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: path
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+                $ref: "#/components/schemas/TimePeriodDecisionResponse"
           description: Entries approved
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+                $ref: "#/components/schemas/TimePeriodDecisionResponse"
           description: Time period not found
       security:
-      - bearerAuth:
-        - people:timekeeping:approve
+        - bearerAuth:
+            - people:timekeeping:approve
       summary: Approve All Pending Entries In Period
       tags:
-      - Timekeeping Approval API
+        - Timekeeping Approval API
       x-required-permissions:
-      - people:timekeeping:approve
+        - people:timekeeping:approve
   /v1/people/timekeeping/time-periods/{timePeriodId}/people/{personId}/reject:
     post:
-      description: 'Bulk-rejects every PENDING_APPROVAL timekeeping entry for a person within a pay period, storing the reason on each entry as its correctionReason.
+      description:
+        "Bulk-rejects every PENDING_APPROVAL timekeeping entry for a person within a pay period, storing the reason on each entry as its correctionReason.
 
         Use this tool to send a whole period back for correction; do not use rejectTimeEntriesBatch, which rejects individually selected time entries.
 
@@ -2167,21 +2201,21 @@ paths:
 
         Returns 400 when reason is blank, and 404 when the time period does not exist.
 
-        '
+        "
       operationId: rejectTimePeriod
       parameters:
-      - in: path
-        name: timePeriodId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: timePeriodId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: path
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
       requestBody:
         content:
           application/json:
@@ -2191,39 +2225,40 @@ paths:
                 value:
                   reason: Missing break entries for two shifts
             schema:
-              $ref: '#/components/schemas/RejectTimePeriodRequest'
+              $ref: "#/components/schemas/RejectTimePeriodRequest"
         description: Rejection justification applied as the correctionReason on every pending entry in the period.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+                $ref: "#/components/schemas/TimePeriodDecisionResponse"
           description: Entries rejected
-        '400':
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+                $ref: "#/components/schemas/TimePeriodDecisionResponse"
           description: Reason is required
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TimePeriodDecisionResponse'
+                $ref: "#/components/schemas/TimePeriodDecisionResponse"
           description: Time period not found
       security:
-      - bearerAuth:
-        - people:timekeeping:reject
+        - bearerAuth:
+            - people:timekeeping:reject
       summary: Reject All Pending Entries In Period
       tags:
-      - Timekeeping Approval API
+        - Timekeeping Approval API
       x-required-permissions:
-      - people:timekeeping:reject
+        - people:timekeeping:reject
   /v1/people/timekeeping/timekeeping-entries:
     get:
-      description: 'Lists a person''s timekeeping entries whose sessions fall entirely within the given pay period''s date range, evaluated in UTC.
+      description:
+        "Lists a person's timekeeping entries whose sessions fall entirely within the given pay period's date range, evaluated in UTC.
 
         Use this tool to review entries before deciding a period; use getTimePeriodApproval instead for just the status counts.
 
@@ -2235,61 +2270,62 @@ paths:
 
         Returns 404 when the time period does not exist.
 
-        '
+        "
       operationId: listTimekeepingEntries
       parameters:
-      - in: query
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: query
-        name: timePeriodId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: query
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
+        - in: query
+          name: timePeriodId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/TimekeepingEntryDto'
+                  $ref: "#/components/schemas/TimekeepingEntryDto"
                 type: array
           description: List of timekeeping entries
-        '404':
+        "404":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/TimekeepingEntryDto'
+                  $ref: "#/components/schemas/TimekeepingEntryDto"
                 type: array
           description: Time period not found
       security:
-      - bearerAuth:
-        - people:timekeeping:view
+        - bearerAuth:
+            - people:timekeeping:view
       summary: List Timekeeping Entries For Person And Period
       tags:
-      - Timekeeping Approval API
+        - Timekeeping Approval API
       x-required-permissions:
-      - people:timekeeping:view
+        - people:timekeeping:view
   /v1/people/workSessions/start:
     post:
-      description: 'Starts a new ACTIVE work session for a person, stamping the start time from the server clock and the actor from the security context.
+      description:
+        "Starts a new ACTIVE work session for a person, stamping the start time from the server clock and the actor from the security context.
 
         Use this tool when a person clocks in for the day; do not use startWorkSessionBreak, which pauses an already running session.
 
         Preconditions: the person must exist in the identity replica, and the person must have no session that is still open.
 
-        Required inputs: personId (UUID) in the body; the body''s actor field is ignored, because the recorded actor is always the authenticated username.
+        Required inputs: personId (UUID) in the body; the body's actor field is ignored, because the recorded actor is always the authenticated username.
 
         Emits a PEOPLE_WORK_SESSION_START event.
 
         Returns 404 when the person is unknown, and 409 when an active session already exists for the person, including under concurrent start races.
 
-        '
+        "
       operationId: startWorkSession
       requestBody:
         content:
@@ -2300,38 +2336,39 @@ paths:
                 value:
                   personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
             schema:
-              $ref: '#/components/schemas/WorkSessionRequest'
+              $ref: "#/components/schemas/WorkSessionRequest"
         description: Identifies the person clocking in; the actor field is ignored in favour of the authenticated username.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionDto'
+                $ref: "#/components/schemas/WorkSessionDto"
           description: Work session started successfully.
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       summary: Start A Work Session For Person
       tags:
-      - Work Sessions API
+        - Work Sessions API
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/people/workSessions/stop:
     post:
-      description: 'Stops a person''s open work session, setting status ENDED and closing any break still open at the same timestamp.
+      description:
+        "Stops a person's open work session, setting status ENDED and closing any break still open at the same timestamp.
 
         Use this tool when a person clocks out; do not use submitWorkSession, which sends an already ENDED session for approval.
 
         Preconditions: the person must have an open session; sessions are keyed by person here, not by session id.
 
-        Required inputs: personId (UUID) in the body; the body''s actor field is ignored in favour of the authenticated username.
+        Required inputs: personId (UUID) in the body; the body's actor field is ignored in favour of the authenticated username.
 
         Emits a PEOPLE_WORK_SESSION_STOP event.
 
         Returns 404 when no active session exists for the person.
 
-        '
+        "
       operationId: stopWorkSession
       requestBody:
         content:
@@ -2342,26 +2379,27 @@ paths:
                 value:
                   personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
             schema:
-              $ref: '#/components/schemas/WorkSessionRequest'
+              $ref: "#/components/schemas/WorkSessionRequest"
         description: Identifies the person clocking out; the open session is found by person id, not session id.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionDto'
+                $ref: "#/components/schemas/WorkSessionDto"
           description: Work session stopped successfully.
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       summary: Stop An Active Work Session
       tags:
-      - Work Sessions API
+        - Work Sessions API
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/people/workSessions/{id}/breaks/start:
     post:
-      description: 'Starts a break inside an active work session, stamping the start time from the server clock.
+      description:
+        "Starts a break inside an active work session, stamping the start time from the server clock.
 
         Use this tool when a person pauses work; do not use stopWorkSession, which ends the whole session rather than pausing it.
 
@@ -2373,40 +2411,41 @@ paths:
 
         Returns 404 when no open session exists for the id, and 409 when a break is already open, including under concurrent break-start races.
 
-        '
+        "
       operationId: startWorkSessionBreak
       parameters:
-      - description: Work session ID
-        example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
-        in: path
-        name: id
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - description: Work session ID
+          example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
+          in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakDto'
+                $ref: "#/components/schemas/BreakDto"
           description: Break started successfully.
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakDto'
+                $ref: "#/components/schemas/BreakDto"
           description: Work session not found.
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       summary: Start A Break In Work Session
       tags:
-      - Work Sessions API
+        - Work Sessions API
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/people/workSessions/{id}/breaks/stop:
     post:
-      description: 'Ends the open break on a work session, stamping the end time from the server clock.
+      description:
+        "Ends the open break on a work session, stamping the end time from the server clock.
 
         Use this tool when a person returns from a break; do not use stopWorkSession, which ends the session and auto-closes any open break itself.
 
@@ -2418,40 +2457,41 @@ paths:
 
         Returns 409 when no open break exists for the session, including when the session id itself is unknown.
 
-        '
+        "
       operationId: stopWorkSessionBreak
       parameters:
-      - description: Work session ID
-        example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
-        in: path
-        name: id
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - description: Work session ID
+          example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
+          in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakDto'
+                $ref: "#/components/schemas/BreakDto"
           description: Break stopped successfully.
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BreakDto'
+                $ref: "#/components/schemas/BreakDto"
           description: No open break exists for the session, including when the session id itself is unknown.
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       summary: Stop The Open Work Session Break
       tags:
-      - Work Sessions API
+        - Work Sessions API
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/people/workSessions/{id}/submit:
     post:
-      description: 'Submits an ENDED work session for approval, recording billable and break minute totals and marking the session SUBMITTED.
+      description:
+        "Submits an ENDED work session for approval, recording billable and break minute totals and marking the session SUBMITTED.
 
         Use this tool after stopWorkSession has ended the session; do not use approveTimeEntriesBatch, which decides time entries, not work sessions.
 
@@ -2463,17 +2503,17 @@ paths:
 
         Returns 404 when the session does not exist, and 409 when the session is not in ENDED status.
 
-        '
+        "
       operationId: submitWorkSession
       parameters:
-      - description: Work session ID
-        example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
-        in: path
-        name: id
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - description: Work session ID
+          example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
+          in: path
+          name: id
+          required: true
+          schema:
+            format: uuid
+            type: string
       requestBody:
         content:
           application/json:
@@ -2485,38 +2525,39 @@ paths:
                   breakMinutes: 30
                   submittedAt: 2026-02-16 17:00:00+00:00
             schema:
-              $ref: '#/components/schemas/WorkSessionSubmitRequest'
+              $ref: "#/components/schemas/WorkSessionSubmitRequest"
         description: Billable and break minute totals plus the submission timestamp for the ended session.
         required: true
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionDto'
+                $ref: "#/components/schemas/WorkSessionDto"
           description: Work session submitted successfully.
-        '404':
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionDto'
+                $ref: "#/components/schemas/WorkSessionDto"
           description: Work session not found.
-        '409':
+        "409":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkSessionDto'
+                $ref: "#/components/schemas/WorkSessionDto"
           description: Work session is not in a submittable state.
       security:
-      - bearerAuth: []
+        - bearerAuth: []
       summary: Submit An Ended Work Session
       tags:
-      - Work Sessions API
+        - Work Sessions API
       x-required-permissions:
-      - AUTHENTICATED
+        - AUTHENTICATED
   /v1/people/{personId}/locations:
     get:
-      description: 'Lists a given person''s staffing assignments that are active today, primary first.
+      description:
+        "Lists a given person's staffing assignments that are active today, primary first.
 
         Use this tool when acting on another person by id; use listMyLocations instead for the authenticated caller, and listStaffingAssignments for full history including ended assignments.
 
@@ -2528,36 +2569,37 @@ paths:
 
         Returns 200 with an empty list when the person has no assignment active today, including when the personId is unknown.
 
-        '
+        "
       operationId: listPersonLocations
       parameters:
-      - description: Person id
-        in: path
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - description: Person id
+          in: path
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+                  $ref: "#/components/schemas/StaffingAssignmentResponse"
                 type: array
           description: Active location assignments returned successfully.
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: List Person Active Location Assignments
       tags:
-      - People Availability API
+        - People Availability API
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
   /v1/people/{personId}/primary-location:
     get:
-      description: 'Resolves a person''s primary active location from their staffing assignments as of today.
+      description:
+        "Resolves a person's primary active location from their staffing assignments as of today.
 
         Use this tool for service-to-service location resolution by person id; use getMyPrimaryLocation instead for the authenticated caller.
 
@@ -2569,40 +2611,41 @@ paths:
 
         Returns 404 when the person has no active assignment flagged as primary today.
 
-        '
+        "
       operationId: getPersonPrimaryLocation
       parameters:
-      - description: Person id
-        in: path
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - description: Person id
+          in: path
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PrimaryLocationResponse'
+                $ref: "#/components/schemas/PrimaryLocationResponse"
           description: Primary location resolved successfully.
-        '404':
+        "404":
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: "#/components/schemas/ProblemDetail"
           description: No primary location assignment found for the person.
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: Get Person Primary Location Assignment
       tags:
-      - People Availability API
+        - People Availability API
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
   /v1/people/{personId}/staffing/assignments:
     get:
-      description: 'Lists every staffing assignment for the person given in the path, including ENDED ones; the data is identical to listStaffingAssignments.
+      description:
+        "Lists every staffing assignment for the person given in the path, including ENDED ones; the data is identical to listStaffingAssignments.
 
         Use this tool when a path-style URL is preferred; use listStaffingAssignments instead for the query-parameter form, which returns the same rows.
 
@@ -2614,32 +2657,32 @@ paths:
 
         Returns 200 with an empty list when the person has no assignments.
 
-        '
+        "
       operationId: listStaffingAssignmentsByPath
       parameters:
-      - in: path
-        name: personId
-        required: true
-        schema:
-          format: uuid
-          type: string
+        - in: path
+          name: personId
+          required: true
+          schema:
+            format: uuid
+            type: string
       responses:
-        '200':
+        "200":
           content:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/StaffingAssignmentResponse'
+                  $ref: "#/components/schemas/StaffingAssignmentResponse"
                 type: array
           description: List of assignments.
       security:
-      - bearerAuth:
-        - people:employee:view
+        - bearerAuth:
+            - people:employee:view
       summary: List Staffing Assignments By Person Path
       tags:
-      - People - Staffing Assignments
+        - People - Staffing Assignments
       x-required-permissions:
-      - people:employee:view
+        - people:employee:view
 components:
   schemas:
     ApprovalPersonDto:
@@ -2659,8 +2702,8 @@ components:
           format: uuid
           type: string
       required:
-      - displayName
-      - personId
+        - displayName
+        - personId
       type: object
     ApprovedTimeExportResponse:
       description: Approved time row for accounting/payroll export orchestration
@@ -2705,15 +2748,15 @@ components:
           example: 01960011-0000-7000-8000-000000000001
           type: string
       required:
-      - approvedAt
-      - approvedBy
-      - employeeId
-      - employeeName
-      - entryDate
-      - hoursWorked
-      - locationId
-      - locationName
-      - timeEntryId
+        - approvedAt
+        - approvedBy
+        - employeeId
+        - employeeName
+        - entryDate
+        - hoursWorked
+        - locationId
+        - locationName
+        - timeEntryId
       type: object
     AttendanceDiscrepancyReportResponse:
       description: Attendance vs job time discrepancy row
@@ -2760,15 +2803,15 @@ components:
           format: double
           type: number
       required:
-      - discrepancyHours
-      - isFlagged
-      - locationId
-      - reportDate
-      - technicianId
-      - technicianName
-      - thresholdApplied
-      - totalAttendanceHours
-      - totalJobHours
+        - discrepancyHours
+        - isFlagged
+        - locationId
+        - reportDate
+        - technicianId
+        - technicianName
+        - thresholdApplied
+        - totalAttendanceHours
+        - totalJobHours
       type: object
     BreakDto:
       description: Break taken within a work session
@@ -2789,11 +2832,11 @@ components:
           format: date-time
           type: string
       required:
-      - sessionId
-      - startedAt
+        - sessionId
+        - startedAt
       type: object
     BulkIngestRequestPersonBulkIngestRecord:
-      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      description: "Generic bulk ingest request: a batch of records for a job scoped to a location"
       properties:
         jobId:
           description: Identifier of the bulk ingest job
@@ -2812,16 +2855,16 @@ components:
         records:
           description: The records to ingest (at least one); shape depends on the target domain
           items:
-            $ref: '#/components/schemas/PersonBulkIngestRecord'
+            $ref: "#/components/schemas/PersonBulkIngestRecord"
           minItems: 1
           type: array
       required:
-      - jobId
-      - locationId
-      - records
+        - jobId
+        - locationId
+        - records
       type: object
     BulkIngestRequestStaffingAssignmentBulkIngestRecord:
-      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      description: "Generic bulk ingest request: a batch of records for a job scoped to a location"
       properties:
         jobId:
           description: Identifier of the bulk ingest job
@@ -2840,16 +2883,16 @@ components:
         records:
           description: The records to ingest (at least one); shape depends on the target domain
           items:
-            $ref: '#/components/schemas/StaffingAssignmentBulkIngestRecord'
+            $ref: "#/components/schemas/StaffingAssignmentBulkIngestRecord"
           minItems: 1
           type: array
       required:
-      - jobId
-      - locationId
-      - records
+        - jobId
+        - locationId
+        - records
       type: object
     BulkIngestResponse:
-      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
+      description: "Summary outcome of a bulk ingest job: per-record results plus aggregate counts"
       properties:
         failureCount:
           description: Number of records that failed ingest
@@ -2859,7 +2902,7 @@ components:
         results:
           description: Per-record outcomes in submission order
           items:
-            $ref: '#/components/schemas/BulkIngestResult'
+            $ref: "#/components/schemas/BulkIngestResult"
           type: array
         successCount:
           description: Number of records ingested successfully
@@ -2872,10 +2915,10 @@ components:
           format: int32
           type: integer
       required:
-      - failureCount
-      - results
-      - successCount
-      - totalSubmitted
+        - failureCount
+        - results
+        - successCount
+        - totalSubmitted
       type: object
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
@@ -2903,19 +2946,19 @@ components:
           example: true
           type: boolean
       required:
-      - rowIndex
-      - success
+        - rowIndex
+        - success
       type: object
     CreateEmployeeRequest:
       description: Request to create an employee record
       properties:
         contactInfo:
-          $ref: '#/components/schemas/EmployeeContactInfoDto'
+          $ref: "#/components/schemas/EmployeeContactInfoDto"
         duplicatePolicy:
           description: Policy controlling how potential duplicate employee records are handled during creation
           enum:
-          - STRICT
-          - BALANCED
+            - STRICT
+            - BALANCED
           example: STRICT
           type: string
         employeeNumber:
@@ -2945,11 +2988,11 @@ components:
         status:
           description: Employment status of the employee
           enum:
-          - ACTIVE
-          - ON_LEAVE
-          - SUSPENDED
-          - TERMINATED
-          - DISABLED
+            - ACTIVE
+            - ON_LEAVE
+            - SUSPENDED
+            - TERMINATED
+            - DISABLED
           example: ACTIVE
           type: string
         terminationDate:
@@ -2958,11 +3001,11 @@ components:
           format: date
           type: string
       required:
-      - employeeNumber
-      - firstName
-      - hireDate
-      - lastName
-      - status
+        - employeeNumber
+        - firstName
+        - hireDate
+        - lastName
+        - status
       type: object
     CreateStaffingAssignmentRequest:
       description: Request to create a staffing assignment
@@ -2999,11 +3042,11 @@ components:
           minLength: 1
           type: string
       required:
-      - effectiveFrom
-      - isPrimary
-      - locationId
-      - personId
-      - role
+        - effectiveFrom
+        - isPrimary
+        - locationId
+        - personId
+        - role
       type: object
     CreateTimePeriodRequest:
       description: Request to create a pay period for timekeeping approval
@@ -3021,9 +3064,9 @@ components:
         status:
           description: Initial lifecycle status; defaults to OPEN when omitted
           enum:
-          - OPEN
-          - SUBMISSION_CLOSED
-          - PAYROLL_CLOSED
+            - OPEN
+            - SUBMISSION_CLOSED
+            - PAYROLL_CLOSED
           example: OPEN
           type: string
         tenantId:
@@ -3032,9 +3075,9 @@ components:
           format: uuid
           type: string
       required:
-      - endDate
-      - startDate
-      - tenantId
+        - endDate
+        - startDate
+        - tenantId
       type: object
     Decision:
       description: An individual decision for a specific time entry
@@ -3049,7 +3092,7 @@ components:
           minLength: 1
           type: string
       required:
-      - timeEntryId
+        - timeEntryId
       type: object
     DisableEmployeeRequestDto:
       description: Request to disable an employee and govern handling of their staffing assignments
@@ -3062,8 +3105,8 @@ components:
         assignmentPolicy:
           description: Policy controlling how active staffing assignments are terminated
           enum:
-          - IMMEDIATE
-          - GRACE_PERIOD
+            - IMMEDIATE
+            - GRACE_PERIOD
           example: IMMEDIATE
           type: string
         disableReason:
@@ -3092,7 +3135,7 @@ components:
           type: string
         postalCode:
           description: Postal or ZIP code
-          example: '62704'
+          example: "62704"
           type: string
         region:
           description: State, province, or region
@@ -3103,9 +3146,9 @@ components:
       description: Contact information for an employee
       properties:
         address:
-          $ref: '#/components/schemas/EmployeeAddressDto'
+          $ref: "#/components/schemas/EmployeeAddressDto"
         emergencyContact:
-          $ref: '#/components/schemas/EmployeeEmergencyContactDto'
+          $ref: "#/components/schemas/EmployeeEmergencyContactDto"
         primaryEmail:
           description: Primary email address
           example: jane.smith@example.com
@@ -3169,17 +3212,17 @@ components:
           example: ACTIVE
           type: string
       required:
-      - active
-      - employeeId
-      - employeeNumber
-      - personId
-      - status
+        - active
+        - employeeId
+        - employeeNumber
+        - personId
+        - status
       type: object
     EmployeeProfileDto:
       description: Employee profile returned by employee read and write operations
       properties:
         contactInfo:
-          $ref: '#/components/schemas/EmployeeContactInfoDto'
+          $ref: "#/components/schemas/EmployeeContactInfoDto"
         createdAt:
           description: Timestamp the employee record was created
           example: 2026-01-15 09:30:00+00:00
@@ -3214,11 +3257,11 @@ components:
         status:
           description: Employment status of the employee
           enum:
-          - ACTIVE
-          - ON_LEAVE
-          - SUSPENDED
-          - TERMINATED
-          - DISABLED
+            - ACTIVE
+            - ON_LEAVE
+            - SUSPENDED
+            - TERMINATED
+            - DISABLED
           example: ACTIVE
           type: string
         statusEffectiveAt:
@@ -3239,17 +3282,17 @@ components:
         warnings:
           description: Non-fatal warnings raised while resolving the profile
           example:
-          - Potential duplicate employee number
+            - Potential duplicate employee number
           items:
             type: string
           type: array
       required:
-      - employeeNumber
-      - firstName
-      - hireDate
-      - id
-      - lastName
-      - status
+        - employeeNumber
+        - firstName
+        - hireDate
+        - id
+        - lastName
+        - status
       type: object
     EmployeeSummaryDto:
       description: Slim employee row for search results
@@ -3289,9 +3332,9 @@ components:
           example: ACTIVE
           type: string
       required:
-      - active
-      - employeeId
-      - personId
+        - active
+        - employeeId
+        - personId
       type: object
     InactivePersonActiveUserResponse:
       description: An active user-person link whose linked person is in an inactive status (ADR-0015 §4 violation)
@@ -3309,11 +3352,11 @@ components:
         personStatus:
           description: Inactive status of the linked person; absent when the employee row disappeared between the link query and the mapping step
           enum:
-          - ACTIVE
-          - ON_LEAVE
-          - SUSPENDED
-          - TERMINATED
-          - DISABLED
+            - ACTIVE
+            - ON_LEAVE
+            - SUSPENDED
+            - TERMINATED
+            - DISABLED
           example: TERMINATED
           type: string
         personStatusEffectiveAt:
@@ -3326,9 +3369,9 @@ components:
           example: marcus.webb
           type: string
       required:
-      - linkId
-      - personId
-      - username
+        - linkId
+        - personId
+        - username
       type: object
     PagedResponseEmployeeSummaryDto:
       description: A page of results
@@ -3336,7 +3379,7 @@ components:
         items:
           description: Items on this page
           items:
-            $ref: '#/components/schemas/EmployeeSummaryDto'
+            $ref: "#/components/schemas/EmployeeSummaryDto"
           type: array
         page:
           description: Zero-based page index
@@ -3359,11 +3402,11 @@ components:
           format: int32
           type: integer
       required:
-      - items
-      - page
-      - size
-      - totalElements
-      - totalPages
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
       type: object
     PagedResponseTimeEntrySummary:
       description: A page of results
@@ -3371,7 +3414,7 @@ components:
         items:
           description: Items on this page
           items:
-            $ref: '#/components/schemas/TimeEntrySummary'
+            $ref: "#/components/schemas/TimeEntrySummary"
           type: array
         page:
           description: Zero-based page index
@@ -3394,11 +3437,11 @@ components:
           format: int32
           type: integer
       required:
-      - items
-      - page
-      - size
-      - totalElements
-      - totalPages
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
       type: object
     PeopleAvailabilityResponse:
       description: Availability of a person at a location for a given date based on staffing assignments
@@ -3406,8 +3449,8 @@ components:
         assignmentStatus:
           description: Lifecycle status of the assignment
           enum:
-          - ACTIVE
-          - ENDED
+            - ACTIVE
+            - ENDED
           example: ACTIVE
           type: string
         availableOn:
@@ -3452,10 +3495,10 @@ components:
           example: TECHNICIAN
           type: string
       required:
-      - assignmentStatus
-      - locationId
-      - personId
-      - primary
+        - assignmentStatus
+        - locationId
+        - personId
+        - primary
       type: object
     PersonBulkIngestRecord:
       description: Single person record within a bulk ingest payload
@@ -3493,10 +3536,10 @@ components:
           example: +1-555-123-4567
           type: string
       required:
-      - employeeNumber
-      - firstName
-      - hireDate
-      - lastName
+        - employeeNumber
+        - firstName
+        - hireDate
+        - lastName
       type: object
     PrimaryLocationResponse:
       description: Primary location resolved from the authenticated user's active staffing assignments
@@ -3507,7 +3550,7 @@ components:
           format: uuid
           type: string
       required:
-      - locationId
+        - locationId
       type: object
     ProblemDetail:
       properties:
@@ -3536,7 +3579,7 @@ components:
           minLength: 1
           type: string
       required:
-      - reason
+        - reason
       type: object
     StaffingAssignmentBulkIngestRecord:
       description: One person's assignment to a location for a role
@@ -3571,8 +3614,8 @@ components:
           minLength: 1
           type: string
       required:
-      - employeeNumber
-      - role
+        - employeeNumber
+        - role
       type: object
     StaffingAssignmentResponse:
       description: Staffing assignment response
@@ -3622,8 +3665,8 @@ components:
         status:
           description: Assignment lifecycle status
           enum:
-          - ACTIVE
-          - ENDED
+            - ACTIVE
+            - ENDED
           example: ACTIVE
           type: string
         updatedAt:
@@ -3632,13 +3675,13 @@ components:
           format: date-time
           type: string
       required:
-      - assignmentId
-      - effectiveFrom
-      - isPrimary
-      - locationId
-      - personId
-      - role
-      - status
+        - assignmentId
+        - effectiveFrom
+        - isPrimary
+        - locationId
+        - personId
+        - role
+        - status
       type: object
     TimeEntryAdjustment:
       description: Time entry adjustment representing a proposed or approved change to a time entry
@@ -3693,10 +3736,10 @@ components:
         status:
           description: Current status of the adjustment
           enum:
-          - PROPOSED
-          - PENDING
-          - APPROVED
-          - REJECTED
+            - PROPOSED
+            - PENDING
+            - APPROVED
+            - REJECTED
           example: PENDING
           type: string
         timeEntryId:
@@ -3705,9 +3748,9 @@ components:
           format: uuid
           type: string
       required:
-      - reasonCode
-      - status
-      - timeEntryId
+        - reasonCode
+        - status
+        - timeEntryId
       type: object
     TimeEntryAdjustmentRequest:
       description: Request to create a time entry adjustment
@@ -3746,8 +3789,8 @@ components:
           format: uuid
           type: string
       required:
-      - reasonCode
-      - timeEntryId
+        - reasonCode
+        - timeEntryId
       type: object
     TimeEntryAdjustmentResponse:
       description: Response from creating or updating a time entry adjustment
@@ -3766,7 +3809,7 @@ components:
           example: true
           type: boolean
       required:
-      - success
+        - success
       type: object
     TimeEntryDecisionBatchRequest:
       description: Batch request payload for making decisions (approve/reject) on multiple time entries
@@ -3774,11 +3817,11 @@ components:
         decisions:
           description: List of decisions for the time entries
           items:
-            $ref: '#/components/schemas/Decision'
+            $ref: "#/components/schemas/Decision"
           minItems: 1
           type: array
       required:
-      - decisions
+        - decisions
       type: object
     TimeEntryException:
       description: Time entry exception representing a discrepancy or issue with time tracking
@@ -3818,17 +3861,17 @@ components:
         severity:
           description: Severity level of the exception
           enum:
-          - WARNING
-          - BLOCKING
+            - WARNING
+            - BLOCKING
           example: BLOCKING
           type: string
         status:
           description: Current status of the exception
           enum:
-          - OPEN
-          - ACKNOWLEDGED
-          - RESOLVED
-          - WAIVED
+            - OPEN
+            - ACKNOWLEDGED
+            - RESOLVED
+            - WAIVED
           example: OPEN
           type: string
         timeEntryId:
@@ -3841,11 +3884,11 @@ components:
           format: date
           type: string
       required:
-      - employeeId
-      - exceptionCode
-      - severity
-      - status
-      - workDate
+        - employeeId
+        - exceptionCode
+        - severity
+        - status
+        - workDate
       type: object
     TimeEntryExceptionRequest:
       description: Request to create a time entry exception
@@ -3870,8 +3913,8 @@ components:
         severity:
           description: Severity level of the exception
           enum:
-          - WARNING
-          - BLOCKING
+            - WARNING
+            - BLOCKING
           example: BLOCKING
           type: string
         timeEntryId:
@@ -3879,8 +3922,8 @@ components:
           example: te-12345
           type: string
       required:
-      - employeeId
-      - exceptionCode
+        - employeeId
+        - exceptionCode
       type: object
     TimeEntryExceptionResolveRequest:
       description: Request to resolve a time entry exception
@@ -3906,7 +3949,7 @@ components:
           example: true
           type: boolean
       required:
-      - success
+        - success
       type: object
     TimeEntryExceptionWaiveRequest:
       description: Request to waive a time entry exception
@@ -3916,7 +3959,7 @@ components:
           minLength: 1
           type: string
       required:
-      - waiveReason
+        - waiveReason
       type: object
     TimeEntrySummary:
       description: An attendance time entry (clock-in, clock-out, breaks) with its approval decision
@@ -3955,11 +3998,11 @@ components:
         status:
           description: Approval status
           enum:
-          - DRAFT
-          - SUBMITTED
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
+            - DRAFT
+            - SUBMITTED
+            - PENDING_APPROVAL
+            - APPROVED
+            - REJECTED
           type: string
         submittedAtUtc:
           description: When the employee submitted the entry for approval
@@ -3979,8 +4022,8 @@ components:
           format: uuid
           type: string
       required:
-      - status
-      - timeEntryId
+        - status
+        - timeEntryId
       type: object
     TimePeriodApprovalDto:
       description: Aggregated approval state for a person within a time period
@@ -3993,9 +4036,9 @@ components:
         overallStatus:
           description: Overall approval status for the person in the period
           enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
+            - PENDING_APPROVAL
+            - APPROVED
+            - REJECTED
           example: PENDING_APPROVAL
           type: string
         pendingCount:
@@ -4024,13 +4067,13 @@ components:
           format: int32
           type: integer
       required:
-      - approvedCount
-      - overallStatus
-      - pendingCount
-      - personId
-      - rejectedCount
-      - timePeriodId
-      - totalCount
+        - approvedCount
+        - overallStatus
+        - pendingCount
+        - personId
+        - rejectedCount
+        - timePeriodId
+        - totalCount
       type: object
     TimePeriodDecisionResponse:
       description: Result of an approve/reject decision applied across a person's time period entries
@@ -4055,10 +4098,10 @@ components:
           format: uuid
           type: string
       required:
-      - personId
-      - processedCount
-      - status
-      - timePeriodId
+        - personId
+        - processedCount
+        - status
+        - timePeriodId
       type: object
     TimePeriodDto:
       description: Timekeeping time period bounding a payroll or submission cycle
@@ -4076,9 +4119,9 @@ components:
         status:
           description: Lifecycle status of the period
           enum:
-          - OPEN
-          - SUBMISSION_CLOSED
-          - PAYROLL_CLOSED
+            - OPEN
+            - SUBMISSION_CLOSED
+            - PAYROLL_CLOSED
           example: OPEN
           type: string
         tenantId:
@@ -4092,11 +4135,11 @@ components:
           format: uuid
           type: string
       required:
-      - endDate
-      - startDate
-      - status
-      - tenantId
-      - timePeriodId
+        - endDate
+        - startDate
+        - status
+        - tenantId
+        - timePeriodId
       type: object
     TimekeepingEntryDto:
       description: Timekeeping entry summarizing a worked session pending or resolved for approval
@@ -4104,9 +4147,9 @@ components:
         approvalStatus:
           description: Approval status of the entry
           enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
+            - PENDING_APPROVAL
+            - APPROVED
+            - REJECTED
           example: PENDING_APPROVAL
           type: string
         associatedWorkOrderId:
@@ -4135,10 +4178,10 @@ components:
           format: uuid
           type: string
       required:
-      - approvalStatus
-      - employeeId
-      - sessionStartTime
-      - timekeepingEntryId
+        - approvalStatus
+        - employeeId
+        - sessionStartTime
+        - timekeepingEntryId
       type: object
     TransitionTimePeriodRequest:
       description: Request to move a pay period to a new lifecycle status
@@ -4146,24 +4189,24 @@ components:
         status:
           description: Target lifecycle status
           enum:
-          - OPEN
-          - SUBMISSION_CLOSED
-          - PAYROLL_CLOSED
+            - OPEN
+            - SUBMISSION_CLOSED
+            - PAYROLL_CLOSED
           example: SUBMISSION_CLOSED
           type: string
       required:
-      - status
+        - status
       type: object
     UpdateEmployeeRequest:
       description: Request to update an existing employee record
       properties:
         contactInfo:
-          $ref: '#/components/schemas/EmployeeContactInfoDto'
+          $ref: "#/components/schemas/EmployeeContactInfoDto"
         duplicatePolicy:
           description: Policy controlling how potential duplicate employee records are handled
           enum:
-          - STRICT
-          - BALANCED
+            - STRICT
+            - BALANCED
           example: STRICT
           type: string
         employeeNumber:
@@ -4193,11 +4236,11 @@ components:
         status:
           description: Employment status of the employee
           enum:
-          - ACTIVE
-          - ON_LEAVE
-          - SUSPENDED
-          - TERMINATED
-          - DISABLED
+            - ACTIVE
+            - ON_LEAVE
+            - SUSPENDED
+            - TERMINATED
+            - DISABLED
           example: ACTIVE
           type: string
         terminationDate:
@@ -4206,11 +4249,11 @@ components:
           format: date
           type: string
       required:
-      - employeeNumber
-      - firstName
-      - hireDate
-      - lastName
-      - status
+        - employeeNumber
+        - firstName
+        - hireDate
+        - lastName
+        - status
       type: object
     UpdateStaffingAssignmentRequest:
       description: Request to update a staffing assignment
@@ -4247,11 +4290,11 @@ components:
           minLength: 1
           type: string
       required:
-      - effectiveFrom
-      - isPrimary
-      - locationId
-      - personId
-      - role
+        - effectiveFrom
+        - isPrimary
+        - locationId
+        - personId
+        - role
       type: object
     WorkSessionDto:
       description: Work session representing a tracked period of work for a person
@@ -4296,9 +4339,9 @@ components:
           format: date-time
           type: string
       required:
-      - personId
-      - sessionId
-      - status
+        - personId
+        - sessionId
+        - status
       type: object
     WorkSessionRequest:
       description: Request to start or act on a work session for a person
@@ -4313,7 +4356,7 @@ components:
           format: uuid
           type: string
       required:
-      - personId
+        - personId
       type: object
     WorkSessionSubmitRequest:
       description: Request to submit a completed work session for review
@@ -4336,9 +4379,9 @@ components:
           format: date-time
           type: string
       required:
-      - billableMinutes
-      - breakMinutes
-      - submittedAt
+        - billableMinutes
+        - breakMinutes
+        - submittedAt
       type: object
   securitySchemes:
     bearerAuth:
