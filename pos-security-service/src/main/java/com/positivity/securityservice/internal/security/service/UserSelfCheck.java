@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.security;
+package com.positivity.securityservice.internal.security.service;
 
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -26,6 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>This widens a read, so it fails closed on every uncertainty — no authentication, an
  * unauthenticated token, a blank principal, or a username matching no user all return {@code
  * false}, leaving the permission check as the only way through.
+ *
+ * <p>It lives beside {@code JwtService} rather than in {@code internal.security} because it reads a
+ * repository, and the cross-module rule
+ * {@code ArchitectureTests#repositoriesShouldOnlyBeAccessedFromServiceLayer} admits only the
+ * service and dao layers as repository consumers. Answering "who is the caller" from stored user
+ * data is service work, so the rule is right and the first placement was wrong.
  */
 @Component("userSelfCheck")
 public class UserSelfCheck {

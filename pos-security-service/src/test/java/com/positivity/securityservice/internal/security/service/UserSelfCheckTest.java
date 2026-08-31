@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.security;
+package com.positivity.securityservice.internal.security.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
