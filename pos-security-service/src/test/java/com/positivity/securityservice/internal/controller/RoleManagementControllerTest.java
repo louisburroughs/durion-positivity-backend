@@ -1,7 +1,6 @@
 package com.positivity.securityservice.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -12,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
@@ -199,7 +199,8 @@ class RoleManagementControllerTest {
                 .createdBy("admin")
                 .createdAt(Instant.now(TEST_CLOCK))
                 .build();
-        when(roleManagementService.createRole("ShopManager", null)).thenReturn(dto);
+        when(roleManagementService.createRole(new RoleCreateRequest("ShopManager", null, null, null, null, null, null)))
+                .thenReturn(dto);
 
         mockMvc.perform(post("/v1/roles")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -227,7 +228,7 @@ class RoleManagementControllerTest {
     @WithMockUser(authorities = "security:role:create")
     @DisplayName("SC2 (GREEN-after-scaffold): POST /v1/roles duplicate name → 409 Conflict")
     void createRole_duplicateName_returns409() throws Exception {
-        when(roleManagementService.createRole(anyString(), any()))
+        when(roleManagementService.createRole(any(RoleCreateRequest.class)))
                 .thenThrow(new DuplicateRoleNameException("Role already exists: ShopManager"));
 
         mockMvc.perform(post("/v1/roles")

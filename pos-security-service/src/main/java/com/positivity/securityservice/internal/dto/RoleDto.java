@@ -29,6 +29,36 @@ public class RoleDto {
     @Schema(description = "Permissions granted to the role", requiredMode = NOT_REQUIRED)
     Set<PermissionDto> permissions;
 
+    @Schema(
+            description = "MCP persona slot: who the caller is, in the second person (#1613)",
+            example = "shop manager",
+            requiredMode = NOT_REQUIRED)
+    String personaTitle;
+
+    @Schema(
+            description = "MCP persona slot: what the caller works on",
+            example = "branch operations, queue control, scheduling trade-offs, and execution oversight",
+            requiredMode = NOT_REQUIRED)
+    String personaFocus;
+
+    @Schema(
+            description = "MCP persona slot: how to speak to the caller",
+            example = "decisive, operational, and management-ready",
+            requiredMode = NOT_REQUIRED)
+    String personaTone;
+
+    @Schema(
+            description = "MCP persona resolution priority, lowest first; null leaves the role unranked",
+            example = "35",
+            requiredMode = NOT_REQUIRED)
+    Short mcpPersonaRank;
+
+    @Schema(
+            description = "Whether the role participates in MCP persona resolution",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    boolean mcpPersonaEligible;
+
     @Schema(description = "Creation timestamp", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
     Instant createdAt;
 

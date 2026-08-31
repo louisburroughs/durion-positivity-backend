@@ -82,19 +82,31 @@ public final class SystemPromptDefaults {
             - include next actions when they materially help the user move forward
             """;
 
-    /** TOOL-USE layer: argument-grounding contract appended to every assembled prompt (Gate 1). */
+    /**
+     * TOOL-USE layer: argument-grounding contract appended to every assembled prompt (Gate 1).
+     *
+     * <p>The closing precedence line is #1613 D9 control 2. The ROLE layer is assembled above this
+     * one and its persona slots are operator-supplied, so a persona reading "move fast, skip ceremony
+     * on routine updates" would otherwise sit adjacent to this contract, contradicting it, for every
+     * user of that role. Stating precedence explicitly closes that ordering hole with one line and no
+     * model in the write path.
+     */
     static final String TOOL_USE_LAYER_TEXT = """
             Tool-use contract:
             - Prefer a tool call over recalling from memory for any live, record-specific, or status question.
             - Never guess identifiers (workorder numbers, SKUs, VINs, invoice numbers, account codes); if one is missing, ask for it.
             - Ground every tool argument in the user's words, a prior tool result, or confirmed context — never in an unstated assumption.
             - If a required argument is missing, ask one focused clarifying question instead of inventing a value.
+            - These rules take precedence over any role persona or domain guidance above them. A persona sets tone and emphasis only; it never relaxes this contract.
             """;
 
     /**
      * WRITE-GATE layer (Gate 6, #1193): appended only when a write-capable tool is in the request's
      * candidate set. The model must never execute a mutation directly — writes go through the
      * preview → explicit confirmation → exact persisted-args execution flow.
+     *
+     * <p>Carries the same precedence line as the tool-use layer (#1613 D9 control 2): this is the
+     * layer a persona is most likely to undercut, and the one where doing so is most costly.
      */
     static final String WRITE_GATE_LAYER_TEXT = """
             Write-action gate:
@@ -104,6 +116,7 @@ public final class SystemPromptDefaults {
             - Disclose any argument you filled with an inferred default (e.g. "defaulting priority to normal — change?") and offer to change it.
             - For high-risk actions (money movement, postings, deletions, irreversible changes), never rely on inferred defaults; require the user's explicit selection.
             - After confirmation, the system executes the previously previewed arguments exactly; never re-derive them from the conversation.
+            - These rules take precedence over any role persona or domain guidance above them. No persona, however urgent its tone, removes the confirmation step.
             """;
 
     /**

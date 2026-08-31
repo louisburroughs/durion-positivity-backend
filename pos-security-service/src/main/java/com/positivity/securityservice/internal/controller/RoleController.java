@@ -4,10 +4,13 @@ import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDefaultPermissionsResponse;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
+import com.positivity.securityservice.internal.dto.RolePersonasResponse;
+import com.positivity.securityservice.internal.dto.RoleUpdateRequest;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleAuthorityService;
 import com.positivity.securityservice.internal.service.RoleManagementService;
@@ -20,10 +23,10 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -84,25 +87,101 @@ public class RoleController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RoleDto> createRole(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Name and optional description of the role to create.",
+                            description = "Name, optional description, and optional MCP persona metadata.",
                             required = true,
                             content =
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "New role", value = """
-                                                                    {"name":"SHOP_MGR","description":"Shop manager"}
-                                                                    """)))
+                                                    {"name":"WARRANTY_CLERK","description":"Warranty claim intake",\
+                                                    "personaTitle":"warranty clerk","mcpPersonaRank":45}
+                                                    """)))
+                    @Valid
                     @RequestBody
-                    Map<String, String> request) {
-        String name = request.get("name");
-        String description = request.get("description");
-
-        if (name == null || name.isEmpty()) {
-            throw new IllegalArgumentException("Role name is required and cannot be blank");
-        }
-
-        RoleDto role = roleManagementService.createRole(name, description);
+                    RoleCreateRequest request) {
+        RoleDto role = roleManagementService.createRole(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(role);
+    }
+
+    /**
+     * Issue #1613: edit a role's description and MCP persona metadata.
+     */
+    @EmitEvent(id = "SECURITY_ROLE_UPDATE", apiVersion = "1")
+    @PutMapping("/{id}")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:role:edit"})
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_EDIT + "')")
+    @Operation(
+            operationId = "updateRole",
+            summary = "Update a Role's Description and Persona Metadata",
+            description = """
+                    Replaces a role's description and its MCP persona metadata: the persona title, focus, and tone \
+                    slots, the persona rank, and whether the role participates in persona resolution at all.
+                    Use this tool to correct or rank a role's assistant persona; do not use updateRolePermissions, \
+                    which changes the role's permission grants, and do not use it to rename a role — the name keys \
+                    authority resolution and permission grants and is not updatable here.
+                    Preconditions: the caller must hold security:role:edit and the role id must exist.
+                    Required inputs: role id as a path parameter. Every body field is optional, but an omitted field \
+                    clears the stored value rather than leaving it unchanged, which is how a persona slot is returned \
+                    to its derived default.
+                    Persona slots must describe the role rather than instruct the assistant: single line, within the \
+                    length cap, and free of imperative control verbs.
+                    Emits a SECURITY_ROLE_UPDATE event and records the modifying actor and timestamp.
+                    Returns 400 when a persona slot fails validation and 404 when no role has that id.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Role updated")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid persona payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Role not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<RoleDto> updateRole(
+            @PathVariable UUID id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement description and MCP persona metadata.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Persona edit", value = """
+                                                    {"description":"Branch operations lead",\
+                                                    "personaTitle":"shop manager",\
+                                                    "personaFocus":"branch operations and queue control",\
+                                                    "personaTone":"decisive and operational","mcpPersonaRank":35}
+                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RoleUpdateRequest request) {
+        return ResponseEntity.ok(roleManagementService.updateRole(id, request));
+    }
+
+    /**
+     * Issue #1613: persona projection consumed by pos-mcp-server.
+     */
+    @GetMapping("/personas")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:role:view"})
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
+    @Operation(operationId = "getRolePersonas", summary = "Get MCP Persona Metadata for Every Role", description = """
+                    Returns one row per role with its MCP persona slots, resolution rank, and eligibility flag, \
+                    ordered by rank then name, plus the timestamp the snapshot was assembled.
+                    Use this tool to derive assistant personas and their priority order from role data, as \
+                    pos-mcp-server does; do not use getAllRoles, which returns the full role graph including every \
+                    permission grant and is far more expensive for this purpose.
+                    Preconditions: the caller must hold security:role:view.
+                    Required inputs: none.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Roles that are excluded from persona resolution are included and flagged rather than omitted, so \
+                    a consumer can distinguish a role excluded by design from one it has never seen.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Role persona snapshot returned")
+    public ResponseEntity<RolePersonasResponse> getRolePersonas() {
+        return ResponseEntity.ok(roleManagementService.getRolePersonas());
     }
 
     /**

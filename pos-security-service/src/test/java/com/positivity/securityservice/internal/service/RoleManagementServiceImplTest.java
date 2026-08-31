@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.entity.Permission;
@@ -82,7 +83,8 @@ class RoleManagementServiceImplTest {
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
         when(permissionRepository.findByName("security:role:grant")).thenReturn(Optional.of(permission));
 
-        RoleDto created = roleManagementService.createRole("MANAGER", "Manager role");
+        RoleDto created = roleManagementService.createRole(
+                new RoleCreateRequest("MANAGER", "Manager role", null, null, null, null, null));
         RoleDto updated = roleManagementService.updateRolePermissions(
                 new RolePermissionsRequest(roleId, Set.of("security:role:grant")));
 
