@@ -88,9 +88,12 @@ class EvalFixtureValidationTest {
                 scoredIds.add(fx.path("fixture_id").asText());
             }
         }
+        // Hoisted out of the per-file loop so ids stay unique ACROSS pending suites, not just within
+        // one: a second pending file reusing an existing id would otherwise validate cleanly and leave
+        // CI reports naming an ambiguous fixture.
+        Set<String> ids = new HashSet<>();
         for (Path file : suiteFiles("tool-selection-pending")) {
             JsonNode root = parseSuite(file);
-            Set<String> ids = new HashSet<>();
             for (JsonNode fx : root.get("fixtures")) {
                 String id = requireId(fx, file, ids);
                 assertThat(scoredIds)
