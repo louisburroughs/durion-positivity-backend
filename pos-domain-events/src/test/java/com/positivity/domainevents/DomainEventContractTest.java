@@ -363,6 +363,9 @@ class DomainEventContractTest {
         if (type == long.class || type == Long.class) {
             return 1L;
         }
+        if (type == short.class || type == Short.class) {
+            return (short) 1;
+        }
         if (type == double.class || type == Double.class) {
             return 1.0d;
         }

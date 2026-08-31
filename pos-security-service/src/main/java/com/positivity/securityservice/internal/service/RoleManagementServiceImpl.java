@@ -59,6 +59,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final UserRepository userRepository;
     private final AuditEventService auditEventService;
+    private final RolePersonaEventEmitter rolePersonaEventEmitter;
 
     /**
      * Create a new role, including its optional MCP persona metadata (#1613).
@@ -81,7 +82,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         role.setCreatedBy(getCurrentUsername());
         role.setCreatedAt(Instant.now(clock));
 
-        return toRoleDto(roleRepository.save(role));
+        Role saved = roleRepository.save(role);
+        rolePersonaEventEmitter.rolePersonaChanged(saved);
+        return toRoleDto(saved);
     }
 
     /**
@@ -106,7 +109,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         role.setLastModifiedBy(getCurrentUsername());
         role.setLastModifiedAt(Instant.now(clock));
 
-        return toRoleDto(roleRepository.save(role));
+        Role saved = roleRepository.save(role);
+        rolePersonaEventEmitter.rolePersonaChanged(saved);
+        return toRoleDto(saved);
     }
 
     /**

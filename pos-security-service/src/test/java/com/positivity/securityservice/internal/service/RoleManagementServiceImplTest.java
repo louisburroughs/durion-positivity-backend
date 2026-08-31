@@ -56,6 +56,9 @@ class RoleManagementServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private RolePersonaEventEmitter rolePersonaEventEmitter;
+
     @InjectMocks
     private RoleManagementServiceImpl roleManagementService;
 

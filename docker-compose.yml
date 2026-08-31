@@ -959,6 +959,11 @@ services:
       POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      # Role persona sync (#1613). The listener removes the staleness window on a persona edit;
+      # the startup pull, on-miss fetch, and scheduled re-pull keep personas correct without it,
+      # which is why the broker stays optional for this service.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_MCP_KAFKA_ENABLED: ${POS_MCP_KAFKA_ENABLED:-true}
       # Chat runs against Ollama's hosted API. Embeddings stay local.
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}

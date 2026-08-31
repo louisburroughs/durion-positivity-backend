@@ -94,13 +94,25 @@ public class RolePersonaRefresher {
         }
 
         RolePersona persona = fetched.get();
+        applyPersona(persona);
+        LOGGER.info(
+                "MCP role persona fetched on miss role={} eligible={}", persona.name(), persona.mcpPersonaEligible());
+        return true;
+    }
+
+    /**
+     * Merges one role's persona into the held snapshot and persists its row.
+     *
+     * <p>Shared by the on-miss fetch and the event listener. An event carries the role's current
+     * state rather than a delta, so it can be applied without re-reading upstream — and applying the
+     * same event twice is the same as applying it once, which is what makes retries and redeliveries
+     * safe without a processed-event table.
+     */
+    public void applyPersona(@NonNull RolePersona persona) {
         snapshotHolder.merge(persona);
         if (persona.mcpPersonaEligible()) {
             upsert(RoleAuthorities.toAuthority(persona.name()), RolePersonaRenderer.render(persona));
         }
-        LOGGER.info(
-                "MCP role persona fetched on miss role={} eligible={}", persona.name(), persona.mcpPersonaEligible());
-        return true;
     }
 
     /**
