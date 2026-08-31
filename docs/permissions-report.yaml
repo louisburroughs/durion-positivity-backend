@@ -1,9 +1,9 @@
-generatedAt: "2026-08-31T19:22:40.063410+00:00"
+generatedAt: "2026-08-31T20:26:39.572442+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 458
-  uniquePermissionCount: 458
+  permissionCount: 459
+  uniquePermissionCount: 459
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -467,16 +467,18 @@ manifests:
     domain: "invoice"
     serviceName: "pos-invoice"
     version: "1.0"
-    permissionCount: 4
+    permissionCount: 5
     permissions:
-      - name: "invoice:manage"
-        description: "Manage invoice lifecycle operations"
       - name: "invoice:billing-rules"
         description: "Manage invoice billing rules and defaults"
       - name: "invoice:finalize"
         description: "Finalize a draft invoice; Service Advisor limited to ≤$500 without manager approval, Shop Manager unlimited (Story #13, AC3)"
       - name: "invoice:finalize:override"
         description: "Approve finalization of an invoice that requires manager elevation; held by manager/admin roles and verified for manager-approval-by-employee-number"
+      - name: "invoice:invoice:view"
+        description: "Read invoices, invoice items, deposit credits and invoice-anchored refunds; the read half of invoice:manage, split out so a role can look at an invoice without holding write authority (#1612)"
+      - name: "invoice:manage"
+        description: "Manage invoice lifecycle operations"
   - module: "pos-location"
     path: "pos-location/src/main/resources/permissions.yaml"
     domain: "location"
@@ -2323,6 +2325,12 @@ permissions:
     source: "pos-invoice/src/main/resources/permissions.yaml"
   - name: "invoice:finalize:override"
     description: "Approve finalization of an invoice that requires manager elevation; held by manager/admin roles and verified for manager-approval-by-employee-number"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
+  - name: "invoice:invoice:view"
+    description: "Read invoices, invoice items, deposit credits and invoice-anchored refunds; the read half of invoice:manage, split out so a role can look at an invoice without holding write authority (#1612)"
     domain: "invoice"
     serviceName: "pos-invoice"
     module: "pos-invoice"

@@ -186,9 +186,10 @@ public class InvoiceController {
                     Returns 404 when no invoice exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice found")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"invoice:manage"})
+            scopes = {"invoice:invoice:view"})
     public ResponseEntity<InvoiceDetailsResponse> getInvoice(@PathVariable @NonNull UUID invoiceId) {
         return ResponseEntity.ok(invoiceService.getInvoice(invoiceId));
     }

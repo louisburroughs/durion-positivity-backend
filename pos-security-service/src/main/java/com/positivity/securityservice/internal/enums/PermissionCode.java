@@ -915,13 +915,15 @@ public enum PermissionCode {
     INVENTORY__PUTAWAY_RULE__MANAGE(491, "inventory:putaway_rule:manage"),
     INVENTORY__PUTAWAY_RULE__VIEW(492, "inventory:putaway_rule:view"),
     // ── People (new) ───────────────────────────────────────────────────────────
-    PEOPLE__TIMEENTRY__VIEW(493, "people:timeEntry:view");
+    PEOPLE__TIMEENTRY__VIEW(493, "people:timeEntry:view"),
+    // ── Invoice (new) ──────────────────────────────────────────────────────────
+    INVOICE__INVOICE__VIEW(494, "invoice:invoice:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 65;
+    public static final int CATALOG_VERSION = 66;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

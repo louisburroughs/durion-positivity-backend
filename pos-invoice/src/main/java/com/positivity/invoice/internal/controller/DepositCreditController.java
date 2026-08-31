@@ -110,6 +110,7 @@ public class DepositCreditController {
                     """,
             tags = {"Deposit Credits"})
     @GetMapping("/{depositCreditId}")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<DepositCreditResponse> getDeposit(@PathVariable UUID depositCreditId) {
         return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
@@ -131,6 +132,7 @@ public class DepositCreditController {
                     """,
             tags = {"Deposit Credits"})
     @GetMapping
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<List<DepositCreditResponse>> listBySource(
             @RequestParam String sourceType, @RequestParam UUID sourceId) {

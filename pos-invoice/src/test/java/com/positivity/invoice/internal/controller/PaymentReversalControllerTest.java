@@ -162,8 +162,9 @@ class PaymentReversalControllerTest {
 
     // -------------------------------------------------------------------------
     // GET /v1/invoices/{invoiceId}/refunds — refund list for warranty
-    // reconciliation (#922). Authority (invoice:manage) is enforced by
-    // @PreAuthorize, outside standalone-MockMvc scope.
+    // reconciliation (#922). Authority (invoice:invoice:view since #1612) is
+    // enforced by @PreAuthorize, outside standalone-MockMvc scope; the guard
+    // itself is pinned by InvoiceReadAuthorityTest.
     // -------------------------------------------------------------------------
 
     /**

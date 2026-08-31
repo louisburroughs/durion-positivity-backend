@@ -2,11 +2,13 @@ domain: invoice
 serviceName: pos-invoice
 version: "1.0"
 permissions:
-  - name: "invoice:manage"
-    description: "Manage invoice lifecycle operations"
   - name: "invoice:billing-rules"
     description: "Manage invoice billing rules and defaults"
   - name: "invoice:finalize"
-    description: "Finalize a draft invoice; Service Advisor limited to ≤$500 without manager approval, Shop Manager unlimited (Story #13, AC3)"
+    description: "Finalize a draft invoice; Service Advisor limited to \u2264$500 without manager approval, Shop Manager unlimited (Story #13, AC3)"
   - name: "invoice:finalize:override"
     description: "Approve finalization of an invoice that requires manager elevation; held by manager/admin roles and verified for manager-approval-by-employee-number"
+  - name: "invoice:invoice:view"
+    description: "Read invoices, invoice items, deposit credits and invoice-anchored refunds; the read half of invoice:manage, split out so a role can look at an invoice without holding write authority (#1612)"
+  - name: "invoice:manage"
+    description: "Manage invoice lifecycle operations"

@@ -284,6 +284,7 @@ paths:
       - Deposit Credits
       x-required-permissions:
       - invoice:manage
+      - invoice:invoice:view
     post:
       description: 'Creates an AVAILABLE deposit credit for a down-payment taken at pos-order checkout, holding the amount against its source document until a settlement invoice draws it down.
 
@@ -367,6 +368,7 @@ paths:
       - Deposit Credits
       x-required-permissions:
       - invoice:manage
+      - invoice:invoice:view
   /v1/invoices/deposits/{depositCreditId}/refund:
     post:
       description: 'Zeroes the remaining balance of a deposit credit and marks it REFUNDED, recording that the deposit is returned because its source document was cancelled after the deposit was taken.
@@ -521,7 +523,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the invoice:manage authority.
+          description: Caller lacks the invoice:invoice:view authority.
       security:
       - bearerAuth:
         - invoice:manage
@@ -529,7 +531,7 @@ paths:
       tags:
       - Invoice Search
       x-required-permissions:
-      - invoice:manage
+      - invoice:invoice:view
   /v1/invoices/search:
     get:
       description: 'Searches invoices by a free-text term matched against the invoice number, the customer name (resolved via the customer service), or the workorder number, returning a page of finder rows.
@@ -597,7 +599,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the invoice:manage authority.
+          description: Caller lacks the invoice:invoice:view authority.
       security:
       - bearerAuth:
         - invoice:manage
@@ -605,7 +607,7 @@ paths:
       tags:
       - Invoice Search
       x-required-permissions:
-      - invoice:manage
+      - invoice:invoice:view
   /v1/invoices/{invoiceId}:
     get:
       description: 'Returns the full invoice detail — status, line items, adjustments, totals, tax breakdown, due date and the resolved workorder number.
@@ -638,12 +640,13 @@ paths:
           description: Invoice found
       security:
       - bearerAuth:
-        - invoice:manage
+        - invoice:invoice:view
       summary: Get Invoice Details
       tags:
       - Invoice
       x-required-permissions:
       - invoice:manage
+      - invoice:invoice:view
   /v1/invoices/{invoiceId}/adjustments:
     post:
       description: 'Applies a monetary adjustment (DISCOUNT, FEE, CORRECTION, or WARRANTY credit) to a DRAFT invoice and recalculates its tax and total.
@@ -1463,7 +1466,7 @@ paths:
 
         Use this tool to reconcile what has already been returned before issuing another refund; do not use refundPayment or createStandaloneInvoiceRefund, which create refunds rather than list them.
 
-        Preconditions: the invoice must exist; the caller needs the invoice:manage authority.
+        Preconditions: the invoice must exist; the caller needs the invoice:invoice:view authority.
 
         Required inputs: invoiceId (UUID) as a path parameter; there is no request body or filtering.
 
@@ -1503,7 +1506,7 @@ paths:
       tags:
       - PaymentReversal
       x-required-permissions:
-      - invoice:manage
+      - invoice:invoice:view
     post:
       description: 'Records a refund against an invoice whose original payment is not in this system — predecessor-system sales, pre-deploy invoices, vendor-paid warranty work — while the cash disbursement itself happens out of band (till, check, or vendor payment).
 

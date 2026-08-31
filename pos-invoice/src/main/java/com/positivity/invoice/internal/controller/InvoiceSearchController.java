@@ -68,11 +68,11 @@ public class InvoiceSearchController {
                 content = @Content(schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "403",
-                description = "Caller lacks the invoice:manage authority.",
+                description = "Caller lacks the invoice:invoice:view authority.",
                 content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @EmitEvent(id = "INVOICE_SEARCH", apiVersion = "1")
     public Page<InvoiceSearchResult> searchInvoices(
             @Parameter(
@@ -106,11 +106,11 @@ public class InvoiceSearchController {
                 content = @Content(schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "403",
-                description = "Caller lacks the invoice:manage authority.",
+                description = "Caller lacks the invoice:invoice:view authority.",
                 content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/items/search")
-    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @EmitEvent(id = "INVOICE_ITEM_SEARCH", apiVersion = "1")
     public List<InvoiceLineSearchResult> searchInvoiceLines(
             @Parameter(description = "Customer party identifier owning the invoices (required)") @RequestParam @NonNull
