@@ -15,19 +15,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 /**
- * Issue #1613, D4: the three-tier sync, and specifically that every tier is fail-soft.
+ * Issue #1613, D4: the persona refresh mechanism, and specifically that every tier is fail-soft.
  *
  * <p>The failure this issue exists to fix was silent — a role added upstream and not to Java broke
  * nothing and alerted nobody — so the cases that matter most here are the ones where the fetch fails
  * and the service has to keep serving what it already had.
  */
-@DisplayName("RolePersonaSyncRunner (#1613)")
-class RolePersonaSyncRunnerTest {
+@DisplayName("RolePersonaRefresher (#1613)")
+class RolePersonaRefresherTest {
 
     private StubSource source;
     private RolePersonaSnapshotHolder holder;
     private SystemPromptRepository repository;
-    private RolePersonaSyncRunner runner;
+    private RolePersonaRefresher refresher;
 
     @BeforeEach
     void setUp() {
@@ -36,7 +36,7 @@ class RolePersonaSyncRunnerTest {
         repository = Mockito.mock(SystemPromptRepository.class);
         Mockito.when(repository.findByName(Mockito.anyString())).thenReturn(Optional.empty());
         Mockito.when(repository.save(Mockito.any(SystemPrompt.class))).thenAnswer(i -> i.getArgument(0));
-        runner = new RolePersonaSyncRunner(source, holder, repository);
+        refresher = new RolePersonaRefresher(source, holder, repository);
     }
 
     @Test
@@ -49,7 +49,7 @@ class RolePersonaSyncRunnerTest {
                         TestSnapshots.eligible("TECHNICIAN", 80),
                         new RolePersona("CUSTOMER", null, null, null, null, null, false))));
 
-        assertThat(runner.refresh()).isTrue();
+        assertThat(refresher.refreshAll()).isTrue();
 
         assertThat(holder.get().rankedAuthorities()).containsExactly("ROLE_ADMIN", "ROLE_TECHNICIAN");
         // The ineligible role gets no row: it can never assemble a ROLE layer, so a persona for it
@@ -62,11 +62,11 @@ class RolePersonaSyncRunnerTest {
     void failedFetchKeepsPreviousSnapshot() {
         source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
                 Instant.EPOCH, List.of(TestSnapshots.eligible("ADMIN", 20))));
-        runner.refresh();
+        refresher.refreshAll();
 
         source.all = Optional.empty();
 
-        assertThat(runner.refresh()).isFalse();
+        assertThat(refresher.refreshAll()).isFalse();
         // Blanking here would silently demote every admin to the generic fallback persona for as
         // long as security-service was unreachable.
         assertThat(holder.get().rankedAuthorities()).containsExactly("ROLE_ADMIN");
@@ -77,7 +77,7 @@ class RolePersonaSyncRunnerTest {
     void failedFetchAtBootIsSurvivable() {
         source.all = Optional.empty();
 
-        assertThat(runner.refresh()).isFalse();
+        assertThat(refresher.refreshAll()).isFalse();
         assertThat(holder.get().isEmpty()).isTrue();
     }
 
@@ -87,10 +87,10 @@ class RolePersonaSyncRunnerTest {
         // Tier 2 is what makes a role created after boot work without a restart.
         source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
                 Instant.EPOCH, List.of(TestSnapshots.eligible("TECHNICIAN", 80))));
-        runner.refresh();
+        refresher.refreshAll();
         source.one = Optional.of(TestSnapshots.eligible("ADMIN", 20));
 
-        assertThat(runner.refreshRole("ROLE_ADMIN")).isTrue();
+        assertThat(refresher.refreshRole("ROLE_ADMIN")).isTrue();
 
         assertThat(holder.get().rankedAuthorities()).containsExactly("ROLE_ADMIN", "ROLE_TECHNICIAN");
         assertThat(savedNames()).contains("ROLE_ADMIN");
@@ -102,7 +102,7 @@ class RolePersonaSyncRunnerTest {
     void onMissFetchFailureChangesNothing() {
         source.one = Optional.empty();
 
-        assertThat(runner.refreshRole("ROLE_NEVER_HEARD_OF_IT")).isFalse();
+        assertThat(refresher.refreshRole("ROLE_NEVER_HEARD_OF_IT")).isFalse();
         assertThat(holder.get().isEmpty()).isTrue();
     }
 
@@ -111,7 +111,7 @@ class RolePersonaSyncRunnerTest {
     void onMissFetchOfIneligibleRoleWritesNoRow() {
         source.one = Optional.of(new RolePersona("CUSTOMER", null, null, null, null, null, false));
 
-        assertThat(runner.refreshRole("ROLE_CUSTOMER")).isTrue();
+        assertThat(refresher.refreshRole("ROLE_CUSTOMER")).isTrue();
 
         // Knowing about it is the point: it stops the next request counting this as a sync gap.
         assertThat(holder.get().isIneligible("ROLE_CUSTOMER")).isTrue();
@@ -123,7 +123,7 @@ class RolePersonaSyncRunnerTest {
     void unchangedPersonaIsNotRewritten() {
         source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
                 Instant.EPOCH, List.of(TestSnapshots.eligible("ADMIN", 20))));
-        runner.refresh();
+        refresher.refreshAll();
 
         SystemPrompt existing = new SystemPrompt();
         existing.setName("ROLE_ADMIN");
@@ -131,7 +131,7 @@ class RolePersonaSyncRunnerTest {
         Mockito.reset(repository);
         Mockito.when(repository.findByName("ROLE_ADMIN")).thenReturn(Optional.of(existing));
 
-        runner.refresh();
+        refresher.refreshAll();
 
         Mockito.verify(repository, Mockito.never()).save(Mockito.any(SystemPrompt.class));
     }
@@ -146,7 +146,7 @@ class RolePersonaSyncRunnerTest {
         source.all = Optional.of(new RolePersonaSource.RolePersonaSnapshotData(
                 Instant.EPOCH, List.of(TestSnapshots.eligible("ADMIN", 20), TestSnapshots.eligible("TECHNICIAN", 80))));
 
-        assertThat(runner.refresh()).isTrue();
+        assertThat(refresher.refreshAll()).isTrue();
 
         assertThat(savedNames()).containsExactly("ROLE_TECHNICIAN");
     }

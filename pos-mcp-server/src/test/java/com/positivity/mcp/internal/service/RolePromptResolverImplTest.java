@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.domain.RolePersona;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -32,7 +33,7 @@ class RolePromptResolverImplTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        resolver = new RolePromptResolverImpl(systemPromptRepository, meterRegistry);
+        resolver = TestSnapshots.resolver(systemPromptRepository, meterRegistry);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────
@@ -145,23 +146,51 @@ class RolePromptResolverImplTest {
                 .isEqualTo(1.0);
     }
 
+    /**
+     * #1613 split the old {@code missing-role-layer} reason. A role the sync has never delivered,
+     * whose on-miss fetch also fails, is a genuine sync gap and should alert.
+     */
     @Test
-    @DisplayName("assemble counts a missing-role-layer fallback when the role persona is unseeded")
-    void assemble_rolePersonaMissing_recordsMissingRoleLayerMetric() {
+    @DisplayName("assemble counts an unknown-role fallback when the role is neither seeded nor fetchable")
+    void assemble_rolePersonaMissing_recordsUnknownRoleMetric() {
         when(systemPromptRepository.findByName(MASTER_NAME))
                 .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
         when(systemPromptRepository.findByName("ROLE_TECHNICIAN")).thenReturn(Optional.empty());
 
         resolver.assemble("ROLE_TECHNICIAN", "master");
 
-        assertThat(meterRegistry
-                        .counter(
-                                RolePromptResolverImpl.METRIC_PROMPT_FALLBACK,
-                                "reason",
-                                RolePromptResolverImpl.REASON_MISSING_ROLE_LAYER,
-                                "requested",
-                                "ROLE_TECHNICIAN")
-                        .count())
+        assertThat(fallbackCount(RolePromptResolverImpl.REASON_UNKNOWN_ROLE, "ROLE_TECHNICIAN"))
                 .isEqualTo(1.0);
+    }
+
+    /**
+     * The other half of the split, and the reason it was needed: CUSTOMER and SELF_SERVICE_CUSTOMER
+     * produced a fallback on every external-facing request, so the counter could not distinguish a
+     * designed exclusion from a defect. An ineligible role must not be counted as unknown, and must
+     * not trigger a pointless fetch for a persona that will never exist.
+     */
+    @Test
+    @DisplayName("assemble counts a persona-ineligible fallback for a role excluded by design")
+    void assemble_ineligibleRole_recordsPersonaIneligibleMetric() {
+        when(systemPromptRepository.findByName(MASTER_NAME))
+                .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
+        when(systemPromptRepository.findByName("ROLE_CUSTOMER")).thenReturn(Optional.empty());
+        RolePromptResolverImpl ineligibleAware = TestSnapshots.resolver(
+                systemPromptRepository,
+                meterRegistry,
+                TestSnapshots.holderWith(new RolePersona("CUSTOMER", null, null, null, null, null, false)));
+
+        ineligibleAware.assemble("ROLE_CUSTOMER", "master");
+
+        assertThat(fallbackCount(RolePromptResolverImpl.REASON_PERSONA_INELIGIBLE, "ROLE_CUSTOMER"))
+                .isEqualTo(1.0);
+        assertThat(fallbackCount(RolePromptResolverImpl.REASON_UNKNOWN_ROLE, "ROLE_CUSTOMER"))
+                .isZero();
+    }
+
+    private double fallbackCount(String reason, String requested) {
+        return meterRegistry
+                .counter(RolePromptResolverImpl.METRIC_PROMPT_FALLBACK, "reason", reason, "requested", requested)
+                .count();
     }
 }

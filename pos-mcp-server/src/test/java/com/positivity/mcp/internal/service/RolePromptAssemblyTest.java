@@ -58,7 +58,7 @@ class RolePromptAssemblyTest {
                 .thenReturn(Optional.of(prompt("master", "BASE_TEXT")));
         when(repo.findByName("ROLE_TECHNICIAN")).thenReturn(Optional.of(prompt("ROLE_TECHNICIAN", "ROLE_TEXT")));
         when(repo.findByName("accounting")).thenReturn(Optional.of(prompt("accounting", "DOMAIN_TEXT")));
-        var resolver = new RolePromptResolverImpl(repo, new SimpleMeterRegistry());
+        var resolver = TestSnapshots.resolver(repo, new SimpleMeterRegistry());
 
         AssembledPrompt out = resolver.assemble("ROLE_TECHNICIAN", "accounting");
 
@@ -76,7 +76,7 @@ class RolePromptAssemblyTest {
         when(repo.findByName(SystemPromptDefaults.MASTER_PROMPT_NAME))
                 .thenReturn(Optional.of(prompt("master", "BASE_TEXT")));
         lenient().when(repo.findByName("ROLE_UNSEEDED")).thenReturn(Optional.empty());
-        var resolver = new RolePromptResolverImpl(repo, new SimpleMeterRegistry());
+        var resolver = TestSnapshots.resolver(repo, new SimpleMeterRegistry());
 
         AssembledPrompt out = resolver.assemble("ROLE_UNSEEDED", "master");
 
@@ -90,7 +90,7 @@ class RolePromptAssemblyTest {
         SystemPromptRepository repo = mock(SystemPromptRepository.class);
         when(repo.findByName(SystemPromptDefaults.MASTER_PROMPT_NAME)).thenReturn(Optional.empty());
         lenient().when(repo.findByName("ROLE_USER")).thenReturn(Optional.empty());
-        var resolver = new RolePromptResolverImpl(repo, new SimpleMeterRegistry());
+        var resolver = TestSnapshots.resolver(repo, new SimpleMeterRegistry());
 
         AssembledPrompt out = resolver.assemble("ROLE_USER", "master");
 
