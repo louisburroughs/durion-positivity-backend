@@ -59,9 +59,14 @@ public class ReportingFacadeTool {
                     + "YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. 2026). Returns a "
                     + "JSON envelope with two sections: incomeStatement (the period's income statement — its "
                     + "revenue lines are the earned revenue) and agedReceivables (per-customer open invoice "
-                    + "balances bucketed by days past due, as of the period's end date — the revenue not yet "
-                    + "collected). A failed or unauthorized aged-receivables section degrades only itself; "
-                    + "the top-level status is degraded when the income statement is unavailable.")
+                    + "balances bucketed against the period's end date). A failed or unauthorized "
+                    + "aged-receivables section degrades only itself; the top-level status is degraded when "
+                    + "the income statement is unavailable. IMPORTANT — for any PAST period the "
+                    + "agedReceivables section is not that period's uncollected revenue: the balances are "
+                    + "each invoice's CURRENT open balance, and only the aging buckets are keyed to the "
+                    + "period end. Report it as today's outstanding balance on invoices raised up to that "
+                    + "date, never as historical exposure. The incomeStatement section is genuinely "
+                    + "period-scoped and carries no such caveat.")
     public String getRevenueReport(
             @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
         ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);

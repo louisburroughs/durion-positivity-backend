@@ -34,9 +34,14 @@ public class AgedReceivablesRow {
     private UUID customerId;
 
     /**
-     * Customer display name (may be null when the directory lookup is unavailable).
+     * Customer display name. Always {@code null} on this report today — the generator performs no
+     * directory lookup (see {@code FinancialReportingServiceImpl.generateAgedReceivables}).
+     * Consumers must resolve names from the customer directory by {@code customerId}.
      */
-    @Schema(description = "Customer display name", example = "Acme Fleet Services", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Customer display name. Always null on this report — no directory lookup is "
+                    + "performed; resolve the name from the customer directory using customerId.",
+            requiredMode = NOT_REQUIRED)
     private String customerName;
 
     /**

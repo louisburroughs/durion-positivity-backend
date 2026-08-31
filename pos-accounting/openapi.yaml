@@ -8101,7 +8101,7 @@ components:
           format: date-time
           type: string
         rows:
-          description: Per-customer aging rows ordered by customer name; empty when no open receivables exist
+          description: Per-customer aging rows ordered by customer id; empty when no open receivables exist
           items:
             $ref: '#/components/schemas/AgedReceivablesRow'
           type: array
@@ -8126,8 +8126,7 @@ components:
           format: uuid
           type: string
         customerName:
-          description: Customer display name
-          example: Acme Fleet Services
+          description: Customer display name. Always null on this report — no directory lookup is performed; resolve the name from the customer directory using customerId.
           type: string
         days31To60:
           description: Outstanding 31-60 days past due

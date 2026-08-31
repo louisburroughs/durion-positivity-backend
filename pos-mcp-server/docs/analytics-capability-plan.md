@@ -1,8 +1,9 @@
 # Analytics Capability Plan — Waves 1–3
 
-Status: proposed
+Status: Wave 1 delivered; Waves 2-3 proposed
 Date: 2026-08-30
 Baseline: `main` @ 10b20358 — **0 of 20** audit questions answerable end-to-end
+Last updated: 2026-08-30 (Wave 1 outcome; D1-D4 resolved)
 Companion audit: https://claude.ai/code/artifact/0b35718c-496d-400a-959b-e494a75ae2e1
 Related: `docs/tool-selection-architecture.md`, `docs/permission-based-tool-selection-spec.md`
 
@@ -103,7 +104,23 @@ the agent. No backend changes.
   calling `GET /v1/accounting/reports/financial/aged-receivables|aged-payables?asOfDate=`.
 - Descriptions must spell out the row shape (`customerId/vendorId, name, current, days31To60,
   days61To90, days90Plus, totalOutstanding`) and the key trick: calling with *historical*
-  as-of dates reconstructs point-in-time balances (this is what makes Q10/Q14 trends possible).
+  as-of dates re-ages the buckets. **Correction (2026-08-30):** the shipped description originally
+  claimed a past as-of date reconstructs the point-in-time balance. It does not —
+  `FinancialReportingServiceImpl.generateAgedReceivables` documents this as a KNOWN LIMITATION:
+  each invoice contributes its **current** open balance, and only the bucket boundaries move with
+  `asOfDate`, and invoices raised after it are excluded entirely — so a past-dated total is
+  neither today's figure nor that date's. Two further corrections from the same read:
+  `customerName` is hardcoded `null` on receivables rows (payables rows do carry `vendorName`),
+  and A/R ages from invoice creation while A/P ages from due date. Tool descriptions corrected;
+  Q10/Q14 partials withdrawn below.
+
+  **Open defect — A/R aging basis.** The A/R side ignoring due date is a bug, not a design choice:
+  `ext_invoice.due_date` exists and is populated (`V22__ext_invoice_due_date.sql`, "collections-aging
+  due date frozen at finalization") and pos-accounting already ages collections by it elsewhere, so
+  a not-yet-due invoice raised 45 days ago is reported as "31-60 days past due". Descriptions now
+  name it as a known defect rather than presenting it as intent. Fixing it shifts every A/R bucket
+  and invalidates the Q13 ground-truth SQL, so it is scheduled as its own change alongside Wave 2's
+  accounting work — not folded into a documentation PR.
 - Seed `mcp_tool` rows + `mcp_tool_permission` mappings (migration; follow the V37 rederivation
   pattern, permission from the endpoint's `x-required-permissions`).
 
@@ -126,14 +143,37 @@ the agent. No backend changes.
   fail-closed) demonstrably holds per round. If deferred, record why; Wave 3 compositions
   reduce the pressure on this.
 
+### Wave 1 outcome (2026-08-30)
+
+Shipped in PR #1587 and deployed to alpha. W1.1–W1.4 all landed; `listUsers` was additionally
+found to be GETting the gateway root and given a real path.
+
+The exit-gate smoke test then paid for the whole wave: asking Q13 on alpha returned
+`selected:["AdminFacadeTool"], candidateCount:1` while the router had correctly classified
+`domain:accounting`. Cause: `account`/`accounts` were bare admin fast-path keywords, and that
+path returns `AdminFacadeTool` **alone** — so every accounting question containing the word had
+all other candidates suppressed, making the aging facades unreachable. Fixed in PR #1588.
+
+Two lessons folded into the waves below:
+1. **Run the Q-gates as soon as a wave deploys, not at the end.** One question exposed a defect
+   that had silently made an entire domain unreachable through chat.
+2. **A tool-selection fixture would have caught it in CI with no database.** Answer-correctness
+   fixtures (§2.3) are expensive; selection fixtures are nearly free and catch a whole class of
+   routing regressions. Both tracks are now in scope, selection first.
+
+Three alpha deploy-config defects were also found and fixed live (port-less gateway URLs, and
+`POS_SECURITY_BASE_URL` routed through the gateway so permission registration had never
+succeeded). They predate this work but are recorded because they are not in any repo file and
+will return if that `.env` is regenerated.
+
 ### Wave 1 exit gate
 
 | Question | Requirement |
 |---|---|
 | Q13 (A/R Pareto + past-due share) | **Full pass.** 1 aging call; model sorts, accumulates to 80 %, computes past-due share per row. |
 | Q5 (open WOs for 60+-day customers) | **Partial.** Aging identifies the customers; per-customer `searchWorkorders(customerId)` with in-context status filtering; ≤ 12 tool calls; answer flags that "open" was filtered client-side. |
-| Q10 (rising sales + rising past-due) | **Partial.** Past-due trend via 3 historical aging calls passes; answer states the sales-trend half is not yet answerable. |
-| Q14 (A/R balance + DSO monthly) | **Partial.** Balance trend via 12 historical aging calls; DSO deferred; context stays within budget. |
+| Q10 (rising sales + rising past-due) | **Withdrawn.** Rested on a past-due *trend* from historical aging calls, which the report cannot produce — balances are current, not point-in-time. Moves to Wave 3 behind real historical reconstruction. |
+| Q14 (A/R balance + DSO monthly) | **Withdrawn**, same cause. A twelve-month A/R balance trend needs point-in-time balances no endpoint produces today. |
 | Regression | All previously working facade behaviors unchanged (existing facade tests + ArchitectureTest). |
 
 ## 4. Wave 2 — dimensioned single-window aggregates (backend)
@@ -149,18 +189,18 @@ Wave 3's `groupBy`.
 | # | Module | Route (v1) | Params | Row shape | Unblocks |
 |---|---|---|---|---|---|
 | E1 | pos-invoice | `GET /invoices/analytics/revenue-by-customer` | startDate, endDate, limit | customerId, name, revenue, invoiceCount, avgInvoiceValue, lastInvoiceDate | Q7, Q8, Q9, Q10 |
-| E2 | pos-invoice | `GET /invoices/analytics/collections` | startDate, endDate | invoiced, collected, collectionRatePct (single window) | Q11, Q18 (A/R side) |
+| E2 | **pos-accounting** | `GET /accounting/analytics/collections` | startDate, endDate | invoiced, collected, collectionRatePct (single window) | Q11, Q18 (A/R side) — module set by D3 |
 | E3 | pos-invoice | `GET /invoices/analytics/payment-lag-cohorts` | issuedFrom, issuedTo | cohort (≤30 / 31–60 / 61–90 / unpaid), invoiceCount, amount | Q12 |
 | E4 | pos-invoice | `GET /invoices/analytics/invoicing-lag` | startDate, endDate | avgDaysWoCreationToInvoice, count (single window; model loops months) | Q4 |
 | E5 | pos-workorder | `GET /workorders/analytics/technician-labor` | startDate, endDate | technicianId, name, completedWoCount, billedHours, laborRevenue | Q1, Q2, Q19 |
 | E6 | pos-workorder | `GET /workorders/analytics/reopened` | startDate, endDate, withinDays | technicianId, woId, completedAt, reopenedAt | Q3 |
-| E7 | pos-workorder | `GET /workorders/status-transitions` | woId or (from,to,startDate,endDate) | woId, fromStatus, toStatus, at, actorId | Q3 backing projection |
-| E8 | pos-accounting | `GET /accounting/analytics/vendor-spend` | startDate, endDate | vendorId, name, paidAmount, billCount, avgBillAmount | Q15, Q17, Q18 (A/P side) |
+| E7 | pos-workorder | `GET /workorders/status-transitions` | woId or (from,to,startDate,endDate) | woId, fromStatus, toStatus, at, actorId | Q3 backing projection — **table already exists**, see D4 |
+| E8 | **pos-accounting** | `GET /accounting/analytics/vendor-spend` | startDate, endDate | vendorId, name, paidAmount, billCount, avgBillAmount | Q15, Q17, Q18 (A/P side) |
 | E9 | pos-accounting | `GET /accounting/vendor-bills` | dueFrom, dueTo, status, pageable | billId, vendorId, dueDate, amount, status | Q16, Q17 (today: only `/{billId}` exists — no list route at all) |
-| E10 | pos-accounting | `GET /accounting/payment-applications` | appliedFrom, appliedTo, pageable | applicationId, paymentId, invoiceId, appliedAt, amount | Q9 (days-to-pay), Q11 audit |
+| E10 | **pos-accounting** | `GET /accounting/payment-applications` | appliedFrom, appliedTo, pageable | applicationId, paymentId, invoiceId, appliedAt, amount | Q9 (days-to-pay), Q11 audit — module set by D3 |
 | E11 | pos-invoice | invoice search: add `status`, `issuedFrom`, `issuedTo`, `customerId` params | — | existing `Page<InvoiceSearchResult>` | retires most of G3 |
 | E12 | pos-workorder | WO search: add `status`, `createdFrom`, `createdTo`, `technicianId` params | — | existing `Page<WorkorderSearchResult>` | Q5 full, retires G3 remainder |
-| E13 | pos-workorder | `GET /workorders/analytics/customer-margin` | startDate, endDate | customerId, revenue, partsCost, laborCost, grossMargin | Q6 (see D2) |
+| E13 | *deferred to Wave 3* | `…/analytics/customer-margin` | startDate, endDate | customerId, revenue, partsCost, laborCost, grossMargin | Q6 — **moved out of Wave 2 by D2** (5-domain problem: true parts cost lives in pos-inventory) |
 
 ### W2.2 Cross-cutting requirements (every endpoint)
 
@@ -185,32 +225,50 @@ Wave 3's `groupBy`.
   and confirm via gate runs that they win selection slots for their questions. If selection
   telemetry shows misses, promote more.
 
-### W2.4 Design decisions
+### W2.4 Design decisions — **RESOLVED 2026-08-30**
 
-- **D1 — technician labor revenue source (E5).** Option A: compute inside pos-workorder from
-  its own billed labor entries (rate × hours) — single-module, ships now, may diverge from
-  invoiced amounts under discounts. Option B: event-fed replica of invoice labor lines
-  (precedent: the job-time-totals replica, ADR-0044 §6 / #875, see
-  `PeopleReportsServiceImpl.java:382`). **Recommendation: A for Wave 2 with the variance
-  documented in the tool description; B as a follow-up ADR if variance matters.**
-- **D2 — customer margin (E13) parts cost.** Parts cost lives on WO parts-usage lines;
-  revenue on invoices. If invoice lines carry `workorderId` (verify first), pos-workorder can
-  own the margin projection via its own data + a bounded lookup; otherwise this becomes an
-  event-fed replica and may slip to Wave 3. Do the verification before committing the route.
-- **D3 — cash-application ownership (E2/E10).** pos-invoice `PaymentController` vs
-  pos-accounting `InvoicePaymentController`/`PaymentApplicationController` both touch
-  payments. Establish which module is authoritative for *customer cash received* before
-  building E2; the answer decides whether Q18's two sides come from one module or two.
-- **D4 — status-transition storage (E7).** If a WO status history table already exists, expose
-  it; if only current-state exists, add an append-only transition table written on every
-  lifecycle change (backfill not required for the gate — fixtures are seeded fresh).
+All four were settled by reading the code. Three differ from what this plan originally assumed;
+the E-table above has been updated accordingly.
+
+- **D1 — technician labor revenue source (E5). Option A is impossible; use a narrow Option B.**
+  `WorkorderLaborEntry` (pos-workorder) carries `technicianId` and `hoursWorked` but **no rate
+  and no amount**, so rate × hours cannot be computed in-module. Labor revenue exists only
+  invoice-side: `InvoiceItem.type` discriminates labor from parts, `InvoiceItem.lineTotal`
+  carries the money, and `Invoice.workorderId` joins back to the work order. pos-workorder's
+  existing `ExtInvoiceReplica` carries only subtotal/tax/total — no labor/parts split.
+  **Decision:** extend that existing replica with `laborTotal`/`partsTotal` (event-fed, ADR-0044
+  §6 precedent) rather than building a new replica. E5 then serves hours and revenue from one
+  module. Smaller than the Option B originally sketched.
+- **D2 — customer margin (E13) parts cost. Q6 moves to Wave 3.** The join is fine
+  (`Invoice.workorderId` + `InvoiceItem.type`), but **true parts cost is in neither module**:
+  `WorkorderPart.unitPrice` is the *sell* price, and cost lives in pos-inventory (`avgCost`,
+  `unitCostSnapshot`, `costAtTimeOfAdjustment`). Margin is therefore a five-domain problem, not
+  the three-domain one assumed. Per the escape hatch in the original W2 exit gate, E13/Q6 is
+  formally a **Wave 3** deliverable; sourcing cost from pos-inventory needs its own decision
+  (event-fed cost replica vs. a costing endpoint) before it is specified.
+- **D3 — cash-application ownership (E2/E10): pos-accounting.** It owns `ReceivablePayment`,
+  `PaymentApplication`, `PaymentApplicationReversal`, `PaymentAppliedEvent` on the A/R side and
+  `APPayment`/`APPaymentAllocation` on the A/P side. pos-invoice holds only `PaymentIntent` and
+  `Receipt` — pre-settlement artifacts. **E2 and E10 move from pos-invoice to pos-accounting**,
+  which also means Q18's two sides come from one module. Simpler than assumed.
+- **D4 — status-transition storage (E7): already exists.** `WorkorderStateTransition`
+  (table `work_order_state_transitions`) persists `fromStatus`, `toStatus`, `transitionedAt`,
+  `transitionedBy`, `reason`, `metadata`. `WorkorderStateTransitionRepository` currently exposes
+  only per-workorder finders (`findByWorkorder_Id`, `…OrderByTransitionedAtDesc`).
+  **E7 collapses to a date-range query method plus the endpoint** — no new table, no backfill.
+  Cheapest item in the wave, and it unblocks Q3 outright.
 
 ### Wave 2 exit gate
 
-Full pass required: **Q1, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q11, Q12, Q15, Q16, Q17, Q18.**
-(Q4/Q11 pass via ≤ 6-call loops over single-window endpoints; Q5 upgrades from partial via E12;
-Q6 contingent on D2 — if D2 forces the replica path, Q6 formally moves to the Wave 3 gate and
-that move is recorded in the gate-run notes, not silently absorbed.)
+Full pass required: **Q1, Q3, Q4, Q5, Q7, Q8, Q9, Q12, Q15, Q16, Q17.**
+(Q4 passes via a ≤ 6-call loop over single-window E4; Q5 upgrades from partial via E12.)
+
+Moved out of this gate by the D-decisions, recorded here rather than silently absorbed:
+- **Q6 → Wave 3** (D2: parts cost is in pos-inventory; five-domain problem).
+- **Q11, Q18 → Wave 3.** Both need weekly buckets. Looping a single-window E2 twelve times
+  (Q11) or twenty-six times (Q18) exceeds the call budgets in §6, so they are only honestly
+  passable once `groupBy=week` lands in W3.1. E2 still ships in Wave 2 — it is the endpoint
+  W3.1 periodizes.
 
 Under-permission run: caller lacking `invoice:analytics:view` must get zero analytics tools and
 an honest "not authorized" degradation on Q7.
@@ -224,8 +282,12 @@ tool. This is what retires G5 — bucketing moves to SQL where it belongs.
 
 - Add `groupBy=month|week` to E1, E2, E4, E5, E8 (and E13 if shipped). Response becomes one
   row per (period × dimension). Twelve months of collections = 1 call, 12 rows.
-- Aging endpoints: add a batch form `asOfDates=[...]` (or `monthEnds=start,end`) so Q14's
-  twelve point-in-time snapshots are one call.
+- Aging endpoints: **first make historical as-of dates mean what they say.** Today the report ages
+  *current* balances against a past date; a real trend needs point-in-time reconstruction (replaying
+  payment applications, reversals and credit memos up to `asOfDate`). That is a pos-accounting
+  change and a hard prerequisite for Q10 and Q14 — not a batching problem. Once balances are
+  genuinely historical, add a batch form (`asOfDates=[...]` or `monthEnds=start,end`) so twelve
+  snapshots are one call.
 - Facade/tool descriptions updated with an explicit steering line: "for more than 3 periods,
   use groupBy — do not loop this tool." Gate criterion 3 (bounded cost) enforces it.
 
@@ -251,7 +313,10 @@ tool. This is what retires G5 — bucketing moves to SQL where it belongs.
 
 ### Wave 3 exit gate
 
-Full pass required: **Q2, Q10, Q14, Q19, Q20** (+ Q6 if deferred from Wave 2).
+Full pass required: **Q2, Q6, Q10, Q11, Q14, Q18, Q19, Q20** (Q6/Q11/Q18 moved here by the
+resolved D-decisions and the call-budget analysis; see the Wave 2 exit gate). Q10 and Q14
+additionally depend on the point-in-time balance reconstruction in W3.1 — without it neither
+question is answerable at any wave.
 Cumulative regression: **all 20 questions pass in one recorded gate run**, both transports,
 plus the under-permissioned degradation run. That run's results table is the closing artifact
 of this plan.

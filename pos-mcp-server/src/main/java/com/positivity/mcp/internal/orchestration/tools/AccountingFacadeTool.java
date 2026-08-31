@@ -120,15 +120,26 @@ public class AccountingFacadeTool {
     @Tool(
             description = "Get the Aged Receivables report: the platform's per-customer accounts-receivable "
                     + "(A/R) aging aggregate as of a date. Returns one row per customer with an open "
-                    + "balance — customerId, customerName, current (0-30 days), days31To60, days61To90, "
-                    + "days90Plus, totalOutstanding — plus grand totals across all rows. Use this for "
-                    + "past-due, outstanding-balance, and customer-concentration questions instead of "
-                    + "aggregating individual invoices. Calling with a PAST asOfDate reconstructs the "
-                    + "point-in-time A/R balance, so a month-end trend is one call per month-end date "
-                    + "(e.g. 2026-04-30, then 2026-05-31, then 2026-06-30). Rows are empty when no open "
-                    + "receivables exist as of the date.")
+                    + "balance — customerId, current (0-30 days), days31To60, days61To90, days90Plus, "
+                    + "totalOutstanding — plus grand totals across all rows. Use this for past-due, "
+                    + "outstanding-balance, and customer-concentration questions instead of aggregating "
+                    + "individual invoices. The customerName field is always null on this report; resolve "
+                    + "names separately with the customer directory if the answer needs them. Age here is "
+                    + "measured from invoice creation, NOT from the due date (a known defect — the aged "
+                    + "PAYABLES report does use due date), so a not-yet-due invoice raised 45 days ago is "
+                    + "still bucketed as \"31-60 days past due\". Treat these buckets as invoice age, and "
+                    + "say so when the question is about genuinely overdue money. IMPORTANT — a past "
+                    + "asOfDate does NOT reconstruct the historical balance: each invoice contributes its "
+                    + "CURRENT open balance and only the buckets are keyed to asOfDate, while invoices "
+                    + "raised after that date are excluded entirely — so a past-dated total is neither "
+                    + "today's A/R nor that date's. Do not build an A/R balance trend from a series of "
+                    + "past dates. Rows are empty when no open receivables exist as of the date.")
     public String getAgedReceivables(
-            @ToolParam(description = "As-of date, YYYY-MM-DD (past dates = historical)") @NonNull String asOfDate) {
+            @ToolParam(
+                            description = "As-of date, YYYY-MM-DD. Buckets age against this date; balances "
+                                    + "are always current, never historical.")
+                    @NonNull
+                    String asOfDate) {
         return restClient
                 .get()
                 .uri(agedReceivablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
@@ -142,12 +153,21 @@ public class AccountingFacadeTool {
                     + "vendorId, vendorName, current (0-30 days), days31To60, days61To90, days90Plus, "
                     + "totalOutstanding — plus grand totals across all rows. Use this for past-due, "
                     + "outstanding-balance, and vendor-concentration questions about what the business "
-                    + "owes, instead of aggregating individual vendor bills. Calling with a PAST asOfDate "
-                    + "reconstructs the point-in-time A/P balance, so a month-end trend is one call per "
-                    + "month-end date (e.g. 2026-04-30, then 2026-05-31, then 2026-06-30). Rows are empty "
-                    + "when no open payables exist as of the date.")
+                    + "owes, instead of aggregating individual vendor bills. Age here is measured from the "
+                    + "bill's DUE date (falling back to the bill date when no due date is set) — note this "
+                    + "differs from the aged RECEIVABLES report, which ages from invoice creation, so the "
+                    + "two reports' \"past due\" axes are not the same measure; say so if you compare them. "
+                    + "IMPORTANT — a past asOfDate does NOT reconstruct the historical balance: each bill "
+                    + "contributes its CURRENT open balance and only the buckets are keyed to asOfDate, "
+                    + "while bills dated after it are excluded entirely — so a past-dated total is neither "
+                    + "today's A/P nor that date's. Do not build an A/P balance trend from a series of past "
+                    + "dates. Rows are empty when no open payables exist as of the date.")
     public String getAgedPayables(
-            @ToolParam(description = "As-of date, YYYY-MM-DD (past dates = historical)") @NonNull String asOfDate) {
+            @ToolParam(
+                            description = "As-of date, YYYY-MM-DD. Buckets age against this date; balances "
+                                    + "are always current, never historical.")
+                    @NonNull
+                    String asOfDate) {
         return restClient
                 .get()
                 .uri(agedPayablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
