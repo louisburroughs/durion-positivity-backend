@@ -112,7 +112,9 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         TimeEntry entry = repository
                 .findById(timeEntryId)
                 .orElseThrow(() -> new NotFoundException("No time entry found for timeEntryId=" + timeEntryId));
-        return toSummary(entry, zoneId == null ? ZoneOffset.UTC : zoneId);
+        // zoneId is @NonNull on this method, and its only caller (the controller's resolveZone
+        // helper) never passes null, so the null-fallback here was unreachable (java:S2583).
+        return toSummary(entry, zoneId);
     }
 
     /**

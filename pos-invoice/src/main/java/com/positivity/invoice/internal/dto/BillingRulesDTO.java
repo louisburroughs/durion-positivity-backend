@@ -88,20 +88,15 @@ public class BillingRulesDTO {
 
     // Constructors
 
-    public BillingRulesDTO() {}
-
-    public BillingRulesDTO(
-            @NonNull String partyId,
-            boolean purchaseOrderRequired,
-            @NonNull String paymentTermsCode,
-            @NonNull InvoiceDeliveryMethod invoiceDeliveryMethod,
-            @NonNull InvoiceGroupingStrategy invoiceGroupingStrategy) {
-        this.partyId = partyId;
-        this.purchaseOrderRequired = purchaseOrderRequired;
-        this.paymentTermsCode = paymentTermsCode;
-        this.invoiceDeliveryMethod = invoiceDeliveryMethod;
-        this.invoiceGroupingStrategy = invoiceGroupingStrategy;
-    }
+    // No explicit constructor: the implicit default constructor satisfies Jackson
+    // deserialization for this request/response DTO. An explicit no-arg constructor left the
+    // @NonNull partyId field unset at construction time (java:S2637), and an explicit
+    // all-args constructor left version/createdAt/updatedAt/updatedBy unset (java:S2637) since
+    // those are server-managed fields never supplied by a caller. Required-ness for the
+    // caller-supplied fields is enforced by the jakarta @NotNull validation on each field
+    // (triggered by @Valid on the controller's @RequestBody), not by any constructor; the
+    // server-managed fields are populated via setters in BillingRulesServiceImpl#toDTO before
+    // the DTO is returned.
 
     // Getters and Setters
 
