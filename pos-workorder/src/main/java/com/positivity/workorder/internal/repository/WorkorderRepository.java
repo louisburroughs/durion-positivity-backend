@@ -129,9 +129,9 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     Page<Workorder> searchByQuery(
             @Param("q") String q,
             @Param("customerIds") Collection<UUID> customerIds,
-            @Param("idQuery") UUID idQuery,
-            @Param("customerId") UUID customerId,
-            @Param("vehicleId") UUID vehicleId,
+            @Param("idQuery") @Nullable UUID idQuery,
+            @Param("customerId") @Nullable UUID customerId,
+            @Param("vehicleId") @Nullable UUID vehicleId,
             @Param("status") @Nullable WorkorderStatus status,
             @Param("createdFrom") Instant createdFrom,
             @Param("createdTo") Instant createdTo,
