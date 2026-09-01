@@ -9,6 +9,7 @@ import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ServiceLaborStandardRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -26,11 +27,15 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
 
     private final ServiceRepository serviceRepository;
     private final ServiceLaborStandardRepository laborStandardRepository;
+    private final Clock clock;
 
     public ServiceLaborStandardServiceImpl(
-            ServiceRepository serviceRepository, ServiceLaborStandardRepository laborStandardRepository) {
+            ServiceRepository serviceRepository,
+            ServiceLaborStandardRepository laborStandardRepository,
+            Clock clock) {
         this.serviceRepository = serviceRepository;
         this.laborStandardRepository = laborStandardRepository;
+        this.clock = clock;
     }
 
     @Override
@@ -77,7 +82,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         }
         ServiceLaborStandardEntity replacement = validatedEntity(serviceId, request);
         rejectDuplicateActiveRow(serviceId, replacement, standardId);
-        existing.setSupersededAt(Instant.now());
+        existing.setSupersededAt(Instant.now(clock));
         laborStandardRepository.save(existing);
         return toResponse(laborStandardRepository.save(replacement));
     }
@@ -103,7 +108,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         entity.setSourceCode(DURION_SOURCE);
         // For a hand-authored row the vintage is the moment of authoring; imported rows will carry
         // their feed's revision instead.
-        entity.setSourceRevision(Instant.now().toString());
+        entity.setSourceRevision(Instant.now(clock).toString());
         entity.setPublishedAt(request.getPublishedAt());
         return entity;
     }

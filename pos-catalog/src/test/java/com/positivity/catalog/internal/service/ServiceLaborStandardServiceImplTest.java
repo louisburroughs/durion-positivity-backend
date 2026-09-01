@@ -17,7 +17,9 @@ import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ServiceLaborStandardRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,7 +57,10 @@ class ServiceLaborStandardServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ServiceLaborStandardServiceImpl(serviceRepository, laborStandardRepository);
+        service = new ServiceLaborStandardServiceImpl(
+                serviceRepository,
+                laborStandardRepository,
+                Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC));
         when(serviceRepository.existsById(SERVICE_ID)).thenReturn(true);
         when(laborStandardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
