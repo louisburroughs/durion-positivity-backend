@@ -2,6 +2,8 @@ domain: accounting
 serviceName: pos-accounting
 version: "1.0"
 permissions:
+  - name: "accounting:analytics:view"
+    description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
   - name: "accounting:ap:pay"
     description: "Process payments"
   - name: "accounting:ap:view"

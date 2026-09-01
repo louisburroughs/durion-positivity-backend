@@ -64,6 +64,7 @@ public abstract class BaseIntegrationTest {
     protected static final String TEST_USER = "testuser";
     protected static final String TEST_AUTHORITIES = String.join(
             ",",
+            "accounting:analytics:view",
             "accounting:je:view",
             "accounting:je:create",
             "accounting:je:post",
