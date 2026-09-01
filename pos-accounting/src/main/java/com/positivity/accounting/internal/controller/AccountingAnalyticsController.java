@@ -77,7 +77,7 @@ public class AccountingAnalyticsController {
                     Deposit-credit and customer-credit settlement is excluded from collected, because that \
                     cash was received when the deposit was taken rather than when the credit was drawn \
                     down, so collectionRatePct is understated for a window in which deposit-funded \
-                    invoices finalize; the three-way basis guide, so the right figure gets picked for a question: received is \
+                    invoices finalize; as a basis guide, so the right figure gets picked for a question: received is \
                     cash actually taken in (cash basis, independent of application); collected is A/R \
                     relief on a movement basis (not cash received); nonCashSettled is invoice settlement \
                     reached without any new cash (deposit/customer-credit draw-downs); refunded is gross \
