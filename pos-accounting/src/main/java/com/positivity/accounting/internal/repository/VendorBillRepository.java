@@ -144,6 +144,43 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     List<VendorBill> findByBillDateRange(LocalDateTime startDate, LocalDateTime endDate);
 
     /**
+     * Find bills whose billDate falls in the inclusive range, regardless of status. Used by the
+     * vendor-spend analytics endpoint (Wave 2 E8, issue #1596) for the bill-side (billCount /
+     * avgBillAmount) population, which is deliberately independent of the payment-side
+     * (paidAmount) population — see {@code VendorSpendRow} Javadoc.
+     *
+     * @param startDate inclusive lower bound
+     * @param endDate   inclusive upper bound
+     * @return bills billed within the range (unordered)
+     */
+    List<VendorBill> findByBillDateBetween(LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * Find bills whose dueDate falls in the inclusive range and whose status matches, with
+     * pagination. Used by the vendor-bill due-date-window listing (Wave 2 E9, issue #1597).
+     *
+     * @param dueFrom  inclusive lower bound
+     * @param dueTo    inclusive upper bound
+     * @param status   required status
+     * @param pageable pagination and sort (this endpoint enforces its own sort server-side)
+     * @return page of matching bills
+     */
+    Page<VendorBill> findByDueDateBetweenAndStatus(
+            LocalDateTime dueFrom, LocalDateTime dueTo, VendorBillStatus status, Pageable pageable);
+
+    /**
+     * Find bills whose dueDate falls in the inclusive range, any status, with pagination. Used
+     * by the vendor-bill due-date-window listing (Wave 2 E9, issue #1597) when no status filter
+     * is supplied.
+     *
+     * @param dueFrom  inclusive lower bound
+     * @param dueTo    inclusive upper bound
+     * @param pageable pagination and sort (this endpoint enforces its own sort server-side)
+     * @return page of matching bills
+     */
+    Page<VendorBill> findByDueDateBetween(LocalDateTime dueFrom, LocalDateTime dueTo, Pageable pageable);
+
+    /**
      * Find a bill by vendor and bill number.
      */
     Optional<VendorBill> findByVendorIdAndBillNumber(UUID vendorId, String billNumber);

@@ -1,9 +1,11 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
@@ -18,11 +20,17 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +40,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -409,6 +418,65 @@ public class VendorBillController {
 
         List<VendorBillMatchCandidateResponse> candidates = vendorBillService.listMatchCandidates(invoiceEventId);
         return ResponseEntity.ok(candidates);
+    }
+
+    /**
+     * List vendor bills due in a date window, optionally filtered by status (Wave 2 E9, issue
+     * #1597).
+     *
+     * GET /v1/accounting/vendor-bills
+     *
+     * @param dueFrom  window start (inclusive)
+     * @param dueTo    window end (inclusive)
+     * @param status   optional status filter
+     * @param pageable page number/size (size capped server-side; sort is server-controlled)
+     * @return page of matching bills, dueDate ascending
+     */
+    @GetMapping
+    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_LIST_VIEW", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
+    @Operation(
+            operationId = "listVendorBills",
+            summary = "List Vendor Bills By Due Date",
+            description = """
+                    Lists vendor bills whose due date falls in [dueFrom, dueTo], optionally filtered by \
+                    status, ordered by due date ascending.
+                    Use this tool to browse or triage upcoming/overdue payables across vendors; do not use \
+                    listApBills for this, which is scoped to APPROVED-only bills sorted for payment \
+                    selection, and use getVendorBillById when the bill id is already known.
+                    Preconditions: none beyond the caller holding accounting:ap:view.
+                    Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window \
+                    cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, \
+                    MATCH_EXCEPTION, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though \
+                    the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
+                    Emits an ACCOUNTING_VENDOR_BILL_LIST_VIEW audit event; no state changes.
+                    Returns 400 when dueTo is before dueFrom, the window exceeds 366 days, or status is not \
+                    a recognized VendorBillStatus value.
+                    """,
+            tags = {"Vendor Bill API"})
+    @ApiResponse(responseCode = "200", description = "Vendor bills retrieved successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid date range, window too wide, or unrecognized status")
+    public ResponseEntity<Page<VendorBillListRow>> listVendorBills(
+            @Parameter(description = "Due-date window start (YYYY-MM-DD)", required = true, example = "2026-06-01")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate dueFrom,
+            @Parameter(description = "Due-date window end (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate dueTo,
+            @Parameter(description = "Optional bill status filter", example = "APPROVED")
+                    @RequestParam(required = false)
+                    VendorBillStatus status,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+
+        Page<VendorBillListRow> bills = vendorBillService.listByDueDateWindow(dueFrom, dueTo, status, pageable);
+        return ResponseEntity.ok(bills);
     }
 
     /**

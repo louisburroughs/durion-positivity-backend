@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.CollectionsAnalyticsReport;
 import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
+import com.positivity.accounting.internal.dto.VendorSpendReport;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.AccountingAnalyticsService;
 import com.positivity.events.EmitEvent;
@@ -26,13 +27,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * REST API for Wave 2 read-only accounting analytics (Issue #1590 E2, Issue #1591 E3).
+ * REST API for Wave 2 read-only accounting analytics (Issue #1590 E2, Issue #1591 E3, Issue #1596
+ * E8).
  *
- * <p>Both endpoints are single-window aggregates over data pos-accounting already persists (the
- * {@code ExtInvoice} replica and this module's own {@code PaymentApplication} settlement records);
- * neither requires a schema change. Follows the {@link FinancialReportingController} annotation
- * style but is kept as its own controller, mirroring how {@link LaborOverheadReportController}
- * already sits alongside it as a separate single-purpose report family.
+ * <p>All three endpoints are single-window aggregates over data pos-accounting already persists
+ * (the {@code ExtInvoice} replica and this module's own {@code PaymentApplication}/{@code
+ * APPayment}/{@code VendorBill} records); none requires a schema change. Follows the {@link
+ * FinancialReportingController} annotation style but is kept as its own controller, mirroring how
+ * {@link LaborOverheadReportController} already sits alongside it as a separate single-purpose
+ * report family.
  */
 @RestController
 @RequestMapping("/v1/accounting/analytics")
@@ -193,6 +196,82 @@ public class AccountingAnalyticsController {
         }
 
         PaymentLagCohortsReport report = accountingAnalyticsService.getPaymentLagCohorts(issuedFrom, issuedTo, limit);
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * Per-vendor spend analytics for one date window (Issue #1596, E8).
+     */
+    @GetMapping(value = "/vendor-spend", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.ANALYTICS_VIEW + "')")
+    @EmitEvent(id = "ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW", apiVersion = "1")
+    @Operation(
+            operationId = "getVendorSpend",
+            summary = "Get Vendor Spend Analytics",
+            description = """
+                    Returns per-vendor spend rows for a single date window, ordered by paidAmount descending \
+                    and capped at limit, so the top N vendors by spend is simply the first rows with no \
+                    paging needed.
+                    Use this tool to find which vendors received the most A/P cash, or billed the most, in a \
+                    period; do not use listApBills for this, which lists individual eligible bills rather \
+                    than a per-vendor aggregate.
+                    Preconditions: none; a window with no settled payments and no bills yields an empty rows \
+                    list.
+                    Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; \
+                    limit is optional, defaults to 20, and is hard-capped at 100.
+                    IMPORTANT: paidAmount (settled A/P cash — APPayment.grossAmount for payments whose \
+                    paymentDate falls in the window and whose gateway status shows the cash already moved) \
+                    and billCount/avgBillAmount (VendorBill records whose billDate falls in the window) are \
+                    DIFFERENT POPULATIONS of the same vendor — a payment can settle bills billed in an \
+                    earlier or later window, so avgBillAmount * billCount does not reconcile to paidAmount. \
+                    avgBillAmount is 0, never null, when billCount is 0.
+                    Emits an ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW audit event; no state changes.
+                    Returns 400 when endDate is before startDate, or limit is not a positive integer.
+                    """,
+            tags = {"Accounting Analytics"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Vendor spend analytics generated successfully",
+            content = @Content(schema = @Schema(implementation = VendorSpendReport.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid date range or limit",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - missing accounting:analytics:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<VendorSpendReport> getVendorSpend(
+            @Parameter(description = "Window start date (YYYY-MM-DD)", required = true, example = "2026-06-01")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate startDate,
+            @Parameter(description = "Window end date (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate endDate,
+            @Parameter(
+                            description = "Maximum vendor rows to return, top-by-paidAmount (default 20,"
+                                    + " hard-capped at 100)",
+                            example = "20")
+                    @RequestParam(required = false, defaultValue = "20")
+                    int limit) {
+
+        // Use IllegalArgumentException for validation errors to leverage the module's
+        // @RestControllerAdvice (AccountingExceptionHandler) which maps it to 400 Bad Request
+        // with a consistent ApiError format, matching every other reporting endpoint in this
+        // module (ADR-0017).
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+
+        VendorSpendReport report = accountingAnalyticsService.getVendorSpend(startDate, endDate, limit);
         return ResponseEntity.ok(report);
     }
 }

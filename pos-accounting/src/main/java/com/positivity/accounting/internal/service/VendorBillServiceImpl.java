@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.BillMatchResult;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
+import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
@@ -19,6 +20,10 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +33,12 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,6 +87,12 @@ public class VendorBillServiceImpl implements VendorBillService {
     // Tolerance thresholds for three-way matching
     private static final BigDecimal QUANTITY_TOLERANCE_PERCENT = new BigDecimal("0.001"); // 0.1%
     private static final BigDecimal PRICE_TOLERANCE_PERCENT = new BigDecimal("0.05"); // 5%
+
+    /**
+     * Hard cap on page size for {@link #listByDueDateWindow}; also the default when the caller's
+     * requested page size is non-positive or over this cap.
+     */
+    private static final int MAX_LIST_PAGE_SIZE = 100;
 
     @Override
     @Transactional
@@ -719,6 +735,53 @@ public class VendorBillServiceImpl implements VendorBillService {
                 allCandidates.size());
 
         return toResponse(savedBill);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull Page<VendorBillListRow> listByDueDateWindow(
+            @NonNull LocalDate dueFrom,
+            @NonNull LocalDate dueTo,
+            @Nullable VendorBillStatus status,
+            @NonNull Pageable pageable) {
+
+        if (dueTo.isBefore(dueFrom)) {
+            throw new IllegalArgumentException("dueTo cannot be before dueFrom");
+        }
+        long windowDays = ChronoUnit.DAYS.between(dueFrom, dueTo);
+        if (windowDays > MAX_DUE_DATE_WINDOW_DAYS) {
+            throw new IllegalArgumentException("Due-date window cannot exceed " + MAX_DUE_DATE_WINDOW_DAYS + " days");
+        }
+
+        int pageSize = pageable.getPageSize() > 0 && pageable.getPageSize() <= MAX_LIST_PAGE_SIZE
+                ? pageable.getPageSize()
+                : MAX_LIST_PAGE_SIZE;
+        // Sort order is server-controlled (dueDate ascending), mirroring
+        // APPaymentService#listEligibleBills — any sort supplied by the caller is ignored.
+        Pageable effectivePageable =
+                PageRequest.of(pageable.getPageNumber(), pageSize, Sort.by(Sort.Direction.ASC, "dueDate"));
+
+        LocalDateTime dueFromStart = dueFrom.atStartOfDay();
+        LocalDateTime dueToEnd = dueTo.atTime(LocalTime.MAX);
+
+        Page<VendorBill> bills = status != null
+                ? billRepository.findByDueDateBetweenAndStatus(dueFromStart, dueToEnd, status, effectivePageable)
+                : billRepository.findByDueDateBetween(dueFromStart, dueToEnd, effectivePageable);
+
+        return bills.map(this::toListRow);
+    }
+
+    /**
+     * Map VendorBill entity to the due-date-window list row (Wave 2 E9, issue #1597).
+     */
+    private @NonNull VendorBillListRow toListRow(@NonNull VendorBill bill) {
+        return VendorBillListRow.builder()
+                .billId(bill.getVendorBillId())
+                .vendorId(bill.getVendorId())
+                .dueDate(bill.getDueDate())
+                .amount(bill.getTotalAmount())
+                .status(bill.getStatus())
+                .build();
     }
 
     /**

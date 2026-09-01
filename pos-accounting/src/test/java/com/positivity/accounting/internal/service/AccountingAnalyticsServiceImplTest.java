@@ -9,14 +9,24 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.CollectionsAnalyticsReport;
 import com.positivity.accounting.internal.dto.PaymentLagCohortRow;
 import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
+import com.positivity.accounting.internal.dto.VendorSpendReport;
+import com.positivity.accounting.internal.dto.VendorSpendRow;
+import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.Vendor;
+import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +41,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link AccountingAnalyticsServiceImpl}: invoiced-vs-collected cohort separation,
- * the zero-invoiced ratio edge case (E2), and the payment-lag boundary / unpaid / partial-payment
- * cohort rules (E3).
+ * the zero-invoiced ratio edge case (E2), the payment-lag boundary / unpaid / partial-payment
+ * cohort rules (E3), and the vendor-spend paidAmount/billCount population split (E8).
  */
 @ExtendWith(MockitoExtension.class)
 class AccountingAnalyticsServiceImplTest {
@@ -45,11 +55,26 @@ class AccountingAnalyticsServiceImplTest {
     @Mock
     private PaymentApplicationRepository paymentApplicationRepository;
 
+    @Mock
+    private APPaymentRepository apPaymentRepository;
+
+    @Mock
+    private VendorBillRepository vendorBillRepository;
+
+    @Mock
+    private VendorRepository vendorRepository;
+
     private AccountingAnalyticsServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new AccountingAnalyticsServiceImpl(TEST_CLOCK, extInvoiceRepository, paymentApplicationRepository);
+        service = new AccountingAnalyticsServiceImpl(
+                TEST_CLOCK,
+                extInvoiceRepository,
+                paymentApplicationRepository,
+                apPaymentRepository,
+                vendorBillRepository,
+                vendorRepository);
     }
 
     private static ExtInvoice invoice(UUID id, Instant finalizedAt, String total) {
@@ -77,6 +102,31 @@ class AccountingAnalyticsServiceImplTest {
         app.setApplicationRequestId(UUID.randomUUID().toString());
         app.setCreatedBy("test");
         return app;
+    }
+
+    private static APPayment settledPayment(UUID vendorId, String vendorName, LocalDateTime paymentDate, String gross) {
+        APPayment payment = new APPayment();
+        payment.setPaymentId(UUID.randomUUID());
+        payment.setPaymentRef(UUID.randomUUID().toString());
+        payment.setVendorId(vendorId);
+        payment.setVendorName(vendorName);
+        payment.setGrossAmount(new BigDecimal(gross));
+        payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+        payment.setPaymentDate(paymentDate);
+        payment.setCreatedBy("test");
+        return payment;
+    }
+
+    private static VendorBill bill(UUID vendorId, String vendorName, LocalDateTime billDate, String total) {
+        VendorBill bill = new VendorBill();
+        bill.setVendorBillId(UUID.randomUUID());
+        bill.setVendorId(vendorId);
+        bill.setVendorName(vendorName);
+        bill.setBillNumber("BILL-" + UUID.randomUUID());
+        bill.setBillDate(billDate);
+        bill.setTotalAmount(new BigDecimal(total));
+        bill.setCreatedBy("test");
+        return bill;
     }
 
     @Nested
@@ -331,6 +381,125 @@ class AccountingAnalyticsServiceImplTest {
         private Map<String, PaymentLagCohortRow> byCohort(PaymentLagCohortsReport report) {
             return report.getCohorts().stream()
                     .collect(java.util.stream.Collectors.toMap(PaymentLagCohortRow::getCohort, row -> row));
+        }
+    }
+
+    @Nested
+    @DisplayName("getVendorSpend (E8)")
+    class VendorSpendTests {
+
+        private final LocalDate start = LocalDate.of(2026, 6, 1);
+        private final LocalDate end = LocalDate.of(2026, 6, 30);
+
+        @Test
+        @DisplayName("Rejects endDate before startDate")
+        void rejectsInvalidRange() {
+            assertThatThrownBy(() -> service.getVendorSpend(end, start, 20))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("Rejects a non-positive limit")
+        void rejectsNonPositiveLimit() {
+            assertThatThrownBy(() -> service.getVendorSpend(start, end, 0))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("paidAmount (settled A/P cash) and billCount/avgBillAmount are independent populations")
+        void paidAmountAndBillsAreIndependentPopulations() {
+            UUID vendorId = UUID.randomUUID();
+
+            // Settled payment in the window, but no bill billed in this same window — proving the
+            // payment-side and bill-side populations are independent (the payment can settle a
+            // bill billed in an earlier window).
+            when(apPaymentRepository.findByStatusInAndPaymentDateBetween(any(), any(), any()))
+                    .thenReturn(List.of(
+                            settledPayment(vendorId, "Acme Parts Co", LocalDateTime.of(2026, 6, 10, 0, 0), "1000.00")));
+            when(vendorBillRepository.findByBillDateBetween(any(), any())).thenReturn(List.of());
+            when(vendorRepository.findAllById(any())).thenReturn(List.of());
+
+            VendorSpendReport report = service.getVendorSpend(start, end, 20);
+
+            assertThat(report.getRows()).hasSize(1);
+            VendorSpendRow row = report.getRows().get(0);
+            assertThat(row.getVendorId()).isEqualTo(vendorId);
+            assertThat(row.getPaidAmount()).isEqualByComparingTo("1000.00");
+            assertThat(row.getBillCount()).isZero();
+            // 0, never null, when billCount is 0.
+            assertThat(row.getAvgBillAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            // No directory entry: falls back to the vendor-name snapshot on the payment.
+            assertThat(row.getName()).isEqualTo("Acme Parts Co");
+        }
+
+        @Test
+        @DisplayName("Excludes payments that never moved cash (INITIATED/GATEWAY_PENDING/GATEWAY_FAILED)")
+        void excludesUnsettledPaymentStatuses() {
+            UUID vendorId = UUID.randomUUID();
+            when(apPaymentRepository.findByStatusInAndPaymentDateBetween(any(), any(), any()))
+                    .thenReturn(List.of());
+            when(vendorBillRepository.findByBillDateBetween(any(), any()))
+                    .thenReturn(
+                            List.of(bill(vendorId, "Acme Parts Co", LocalDateTime.of(2026, 6, 15, 0, 0), "500.00")));
+            when(vendorRepository.findAllById(any())).thenReturn(List.of());
+
+            VendorSpendReport report = service.getVendorSpend(start, end, 20);
+
+            assertThat(report.getRows()).hasSize(1);
+            assertThat(report.getRows().get(0).getPaidAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getRows().get(0).getBillCount()).isEqualTo(1);
+            assertThat(report.getRows().get(0).getAvgBillAmount()).isEqualByComparingTo("500.00");
+        }
+
+        @Test
+        @DisplayName("Vendor directory name takes precedence over the payment/bill snapshot name")
+        void directoryNameTakesPrecedence() {
+            UUID vendorId = UUID.randomUUID();
+            Vendor vendor = new Vendor(vendorId, "Acme Parts Company (canonical)");
+            when(apPaymentRepository.findByStatusInAndPaymentDateBetween(any(), any(), any()))
+                    .thenReturn(List.of(settledPayment(
+                            vendorId, "Acme Parts Co (stale)", LocalDateTime.of(2026, 6, 10, 0, 0), "1000.00")));
+            when(vendorBillRepository.findByBillDateBetween(any(), any())).thenReturn(List.of());
+            when(vendorRepository.findAllById(any())).thenReturn(List.of(vendor));
+
+            VendorSpendReport report = service.getVendorSpend(start, end, 20);
+
+            assertThat(report.getRows().get(0).getName()).isEqualTo("Acme Parts Company (canonical)");
+        }
+
+        @Test
+        @DisplayName("Orders rows by paidAmount descending and signals truncation via the limit")
+        void ordersByPaidAmountDescendingAndTruncates() {
+            UUID highVendor = UUID.randomUUID();
+            UUID lowVendor = UUID.randomUUID();
+            when(apPaymentRepository.findByStatusInAndPaymentDateBetween(any(), any(), any()))
+                    .thenReturn(List.of(
+                            settledPayment(lowVendor, "Low Vendor", LocalDateTime.of(2026, 6, 10, 0, 0), "100.00"),
+                            settledPayment(highVendor, "High Vendor", LocalDateTime.of(2026, 6, 11, 0, 0), "9000.00")));
+            when(vendorBillRepository.findByBillDateBetween(any(), any())).thenReturn(List.of());
+            when(vendorRepository.findAllById(any())).thenReturn(List.of());
+
+            VendorSpendReport full = service.getVendorSpend(start, end, 20);
+            assertThat(full.getRows()).extracting(VendorSpendRow::getVendorId).containsExactly(highVendor, lowVendor);
+            assertThat(full.isTruncated()).isFalse();
+
+            VendorSpendReport capped = service.getVendorSpend(start, end, 1);
+            assertThat(capped.getRows()).extracting(VendorSpendRow::getVendorId).containsExactly(highVendor);
+            assertThat(capped.isTruncated()).isTrue();
+            assertThat(capped.getLimit()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("Returns an empty row list for a window with no settled payments and no bills")
+        void returnsEmptyRowsWhenNoActivity() {
+            when(apPaymentRepository.findByStatusInAndPaymentDateBetween(any(), any(), any()))
+                    .thenReturn(List.of());
+            when(vendorBillRepository.findByBillDateBetween(any(), any())).thenReturn(List.of());
+
+            VendorSpendReport report = service.getVendorSpend(start, end, 20);
+
+            assertThat(report.getRows()).isEmpty();
+            assertThat(report.isTruncated()).isFalse();
         }
     }
 }

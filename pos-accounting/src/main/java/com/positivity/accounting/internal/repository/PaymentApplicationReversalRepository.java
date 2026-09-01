@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,4 +59,20 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
     @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(r.amount), 0) FROM PaymentApplicationReversal r"
             + " WHERE r.originalPaymentApplication.invoiceId = :invoiceId")
     java.math.BigDecimal sumReversedAmountByInvoiceId(UUID invoiceId);
+
+    /**
+     * Bulk-resolve which of the given payment application ids have a reversal. Used by the
+     * payment-application list endpoint (Wave 2 E10, issue #1598) with {@code
+     * includeReversed=true} to flag each row's {@code reversed} field in one round trip instead
+     * of one existence check per row.
+     *
+     * @param originalPaymentApplicationIds candidate application ids
+     * @return the subset of those ids that have a reversal
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT r.originalPaymentApplication.paymentApplicationId FROM PaymentApplicationReversal r"
+                    + " WHERE r.originalPaymentApplication.paymentApplicationId IN :originalPaymentApplicationIds")
+    List<UUID> findReversedApplicationIds(
+            @org.springframework.data.repository.query.Param("originalPaymentApplicationIds")
+                    Collection<UUID> originalPaymentApplicationIds);
 }
