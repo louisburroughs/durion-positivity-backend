@@ -330,4 +330,70 @@ class SalesOrderCheckoutTest {
         assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-key-2"))
                 .isInstanceOf(com.positivity.order.internal.exception.InvalidOrderStateTransitionException.class);
     }
+
+    private SalesOrder depositTakeOrderWithTax() {
+        SalesOrder order = SalesOrder.builder()
+                .orderId(ORDER_ID)
+                .clerkId("clerk-1")
+                .terminalId("terminal-1")
+                .status(SalesOrderStatus.DRAFT)
+                .subtotal(money("92.00"))
+                .taxTotal(money("8.00"))
+                .grandTotal(money("100.00"))
+                .depositSourceType("WORKORDER")
+                .depositSourceId(UUID.randomUUID())
+                .lines(new ArrayList<>())
+                .createdBy("clerk-1")
+                .updatedBy("clerk-1")
+                .build();
+        SalesOrderLine line = SalesOrderLine.builder()
+                .orderLineId(UUID.randomUUID())
+                .order(order)
+                .itemSku("SKU-1")
+                .itemDescription("Widget")
+                .quantity(2)
+                .unitPrice(money("50.00"))
+                .lineSubtotal(money("92.00"))
+                .taxAmount(money("8.00"))
+                .lineTotal(money("100.00"))
+                .priceSource(PriceSource.PRICING_SERVICE)
+                .fulfillmentStatus(FulfillmentStatus.AVAILABLE)
+                .build();
+        order.getLines().add(line);
+        return order;
+    }
+
+    @Test
+    @DisplayName("CHK-011 (#1629): deposit-take order zeroes tax on the invoice request")
+    void checkout_depositTake_zeroesTaxOnInvoiceRequest() {
+        SalesOrder order = depositTakeOrderWithTax();
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+
+        salesOrderService.checkout(ORDER_ID, "chk-key-1");
+
+        ArgumentCaptor<OrderInvoiceCreationRequest> captor = ArgumentCaptor.forClass(OrderInvoiceCreationRequest.class);
+        verify(invoicingPort).createInvoiceForOrder(captor.capture());
+        OrderInvoiceCreationRequest request = captor.getValue();
+        assertThat(request.getTaxAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(request.getSubtotal()).isEqualByComparingTo(order.getGrandTotal());
+        assertThat(request.getTotalAmount()).isEqualByComparingTo(order.getGrandTotal());
+        assertThat(request.getDepositAmount()).isEqualByComparingTo(order.getGrandTotal());
+        assertThat(request.getLines())
+                .allSatisfy(line -> assertThat(line.getTaxAmount()).isEqualByComparingTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("CHK-012 (#1629 control): ordinary order still carries the order's taxTotal on the invoice request")
+    void checkout_ordinaryOrder_carriesOrderTax() {
+        SalesOrder order = draftOrderWithLine();
+        order.setTaxTotal(money("8.00"));
+        order.getLines().getFirst().setTaxAmount(money("8.00"));
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+
+        salesOrderService.checkout(ORDER_ID, "chk-key-1");
+
+        ArgumentCaptor<OrderInvoiceCreationRequest> captor = ArgumentCaptor.forClass(OrderInvoiceCreationRequest.class);
+        verify(invoicingPort).createInvoiceForOrder(captor.capture());
+        assertThat(captor.getValue().getTaxAmount()).isEqualByComparingTo(order.getTaxTotal());
+    }
 }

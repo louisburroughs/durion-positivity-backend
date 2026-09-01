@@ -224,6 +224,40 @@ class OrderInvoiceServiceImplTest {
     }
 
     @Test
+    @DisplayName("OIS-1629a: a deposit-take request carrying nonzero tax still yields a zero-tax invoice")
+    void depositTake_nonzeroTaxRequest_zeroedOnInvoice() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositSourceType("WORKORDER");
+        depositTake.setDepositSourceId(workorderId);
+        depositTake.setDepositAmount(new BigDecimal("108.00"));
+        // Request still carries a nonzero tax (upstream caller not yet fixed) — pos-invoice must
+        // zero it anyway (#1629 defensive guard at the document build).
+        assertThat(depositTake.getTaxAmount()).isEqualByComparingTo("8.00");
+
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(depositTake);
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice saved = captor.getAllValues().get(0);
+        assertThat(saved.getTax()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(saved.getSubtotal()).isEqualByComparingTo(saved.getTotal());
+        assertThat(saved.getTotal()).isEqualByComparingTo("108.00");
+    }
+
+    @Test
+    @DisplayName("OIS-1629b: an ordinary from-order invoice keeps the request's tax")
+    void ordinaryInvoice_keepsTax() {
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(request(null));
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice saved = captor.getAllValues().get(0);
+        assertThat(saved.getTax()).isEqualByComparingTo("8.00");
+        assertThat(saved.getSubtotal()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
     @DisplayName("OIS-1623c: an unknown deposit source type is rejected before any document is created")
     void depositTake_unknownSourceType_rejected() {
         OrderInvoiceCreationRequest depositTake = request(null);

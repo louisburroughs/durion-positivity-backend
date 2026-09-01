@@ -143,8 +143,16 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
             invoice.addItem(buildLineItem(line));
         }
 
-        invoice.setSubtotal(money(request.getSubtotal(), BigDecimal.ZERO));
-        invoice.setTax(money(request.getTaxAmount(), BigDecimal.ZERO));
+        // #1629: a deposit-take invoice is a contract-liability/cash-receipt artifact, not a
+        // taxable sale — force zero tax here regardless of what the request carried, guarding
+        // against callers that still compute tax on a deposit-take order.
+        if (isDepositTake(request)) {
+            invoice.setSubtotal(money(request.getTotalAmount(), BigDecimal.ZERO));
+            invoice.setTax(BigDecimal.ZERO);
+        } else {
+            invoice.setSubtotal(money(request.getSubtotal(), BigDecimal.ZERO));
+            invoice.setTax(money(request.getTaxAmount(), BigDecimal.ZERO));
+        }
         invoice.setTotal(money(request.getTotalAmount(), BigDecimal.ZERO));
         return invoice;
     }

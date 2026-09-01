@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -8,10 +9,12 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.EntryNumberGapCheck;
+import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.internal.dto.TrialBalanceRow;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
@@ -255,5 +258,71 @@ class FinancialReportingServiceImplTest {
         ArgumentCaptor<LocalDateTime> asOfCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(journalEntryRepository).sumPostedDebitsCreditsByAccountAsOf(asOfCaptor.capture());
         assertThat(asOfCaptor.getValue()).isEqualTo(AS_OF.atTime(LocalTime.MAX));
+    }
+
+    @Test
+    @DisplayName("#1629: tax-liability report excludes a deposit-take invoice's tax rows, "
+            + "keeping only the settlement invoice's")
+    void taxLiability_excludesDepositTakeInvoiceTax() {
+        LocalDate start = LocalDate.of(2026, 6, 1);
+        LocalDate end = LocalDate.of(2026, 6, 30);
+        Instant finalizedAt = start.atStartOfDay().toInstant(ZoneOffset.UTC);
+
+        UUID depositInvoiceId = UUID.fromString("a2000000-0000-7000-8000-000000000001");
+        UUID settlementInvoiceId = UUID.fromString("a2000000-0000-7000-8000-000000000002");
+
+        ExtInvoice depositInvoice = ExtInvoice.builder()
+                .invoiceId(depositInvoiceId)
+                .status("FINALIZED")
+                .finalizedAt(finalizedAt)
+                .depositSourceType("WORKORDER")
+                .total(new BigDecimal("100.00"))
+                .build();
+        // Historical row: recorded before the #1629 source fix, must never reach the report.
+        ExtInvoice settlementInvoice = ExtInvoice.builder()
+                .invoiceId(settlementInvoiceId)
+                .status("FINALIZED")
+                .finalizedAt(finalizedAt)
+                .depositSourceType(null)
+                .total(new BigDecimal("216.00"))
+                .build();
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                .thenReturn(List.of(depositInvoice, settlementInvoice));
+
+        com.positivity.accounting.internal.entity.ExtInvoiceTax depositTaxRow =
+                com.positivity.accounting.internal.entity.ExtInvoiceTax.builder()
+                        .invoiceId(depositInvoiceId)
+                        .jurisdictionType("STATE")
+                        .jurisdictionCode("WA")
+                        .rate(new BigDecimal("0.08"))
+                        .taxableBase(new BigDecimal("100.00"))
+                        .taxAmount(new BigDecimal("8.00"))
+                        .exempt(false)
+                        .build();
+        com.positivity.accounting.internal.entity.ExtInvoiceTax settlementTaxRow =
+                com.positivity.accounting.internal.entity.ExtInvoiceTax.builder()
+                        .invoiceId(settlementInvoiceId)
+                        .jurisdictionType("STATE")
+                        .jurisdictionCode("WA")
+                        .rate(new BigDecimal("0.08"))
+                        .taxableBase(new BigDecimal("200.00"))
+                        .taxAmount(new BigDecimal("16.00"))
+                        .exempt(false)
+                        .build();
+        // Only the settlement invoice's id is ever looked up — asserted below via the captor —
+        // but stub broadly so a filter regression doesn't just fail on a Mockito argument mismatch.
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(any())).thenReturn(List.of(settlementTaxRow));
+
+        TaxLiabilityReport report = service.generateTaxLiability(start, end);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UUID>> idsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(extInvoiceTaxRepository).findByInvoiceIdIn(idsCaptor.capture());
+        assertThat(idsCaptor.getValue()).containsExactly(settlementInvoiceId);
+
+        assertThat(report.getTotalTaxCollectedGross()).isEqualByComparingTo("16.00");
+        assertThat(report.getTotalTaxableBase()).isEqualByComparingTo("200.00");
+        assertThat(report.getRows()).hasSize(1);
+        assertThat(report.getRows().getFirst().getTaxCollectedGross()).isEqualByComparingTo("16.00");
     }
 }
