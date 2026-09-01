@@ -64,9 +64,8 @@ public class InvoiceAnalyticsController {
                     Preconditions: none; an empty window yields an empty `rows` list.
                     Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; \
                     limit is optional, defaults to 20, and is hard-capped at 100.
-                    Emits an INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW audit event; no state changes — this is \
-                    a read-only projection.
-                    Returns 400 when the end date is before the start date.
+                    Emits an INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW audit event with no state changes — this \
+                    is a read-only projection — and returns 400 when the end date is before the start date.
                     """)
     @ApiResponses({
         @ApiResponse(
