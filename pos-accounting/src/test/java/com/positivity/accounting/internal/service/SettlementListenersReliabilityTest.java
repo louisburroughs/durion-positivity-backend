@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.ProcessedEvent;
+import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
+import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.payment.SettlementProviderConfigV1;
 import com.positivity.domainevents.payment.SettlementReportedV1;
@@ -57,6 +59,12 @@ class SettlementListenersReliabilityTest {
     @Mock
     private PaymentApplicationService paymentApplicationService;
 
+    @Mock
+    private ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
+
+    @Mock
+    private ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
+
     private SettlementConfigEventsListener configListener() {
         return new SettlementConfigEventsListener(
                 CLOCK,
@@ -73,6 +81,8 @@ class SettlementListenersReliabilityTest {
                 processedEventRepository,
                 reconciliationService,
                 paymentApplicationService,
+                extInvoicePaymentReversalRepository,
+                extInvoiceDepositCreditApplicationRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class));
     }
 

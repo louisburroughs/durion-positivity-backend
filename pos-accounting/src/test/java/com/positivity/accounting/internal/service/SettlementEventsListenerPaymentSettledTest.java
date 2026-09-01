@@ -14,6 +14,8 @@ import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
 import com.positivity.accounting.internal.repository.CustomerCreditRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
+import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
@@ -64,6 +66,12 @@ class SettlementEventsListenerPaymentSettledTest {
     @Mock
     private SettlementReconciliationService reconciliationService;
 
+    @Mock
+    private ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
+
+    @Mock
+    private ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
+
     private String envelope(String eventId, PaymentSettledV1 payload) {
         return mapper.writeValueAsString(
                 Map.of("eventType", PaymentSettledV1.EVENT_TYPE, "eventId", eventId, "payload", payload));
@@ -100,6 +108,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     processedEventRepository,
                     reconciliationService,
                     paymentApplicationService,
+                    extInvoicePaymentReversalRepository,
+                    extInvoiceDepositCreditApplicationRepository,
                     mock(ObjectProvider.class));
         }
 
@@ -258,6 +268,8 @@ class SettlementEventsListenerPaymentSettledTest {
                     processedEventRepository,
                     reconciliationService,
                     realService,
+                    extInvoicePaymentReversalRepository,
+                    extInvoiceDepositCreditApplicationRepository,
                     mock(ObjectProvider.class));
         }
 
