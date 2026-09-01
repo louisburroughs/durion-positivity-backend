@@ -168,7 +168,8 @@ public class CollectionsAnalyticsReport {
                     + " movement basis while refunded is cash out, and the commonest refund shape (a refunded"
                     + " invoice payment) produces BOTH a RefundRecord and a PaymentApplicationReversal, so"
                     + " that reversal already reduced collected before this subtraction reduces it again —"
-                    + " netCashCollected under-counts for that shape. received minus refunded is the clean"
+                    + " netCashCollected under-counts for that shape (the credit-balance refund leg has no"
+                    + " application reversal, so it is subtracted exactly once). received minus refunded is the clean"
                     + " cash-basis pair for \"how much cash came in vs went out\"; prefer that over this field"
                     + " when answering a cash-in-vs-cash-out question. May be NEGATIVE; not clamped.",
             example = "97800.00",

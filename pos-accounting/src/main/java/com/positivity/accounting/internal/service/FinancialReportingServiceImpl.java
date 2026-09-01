@@ -788,6 +788,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     // Story T8 (Issue #966) — Sales-Tax Liability report (reconciliation-grade).
     // ========================================================================
 
+    /**
+     * The #1629 deposit-take exclusion applies to every window, including periods whose tax was
+     * already computed and filed before the fix deployed: a marked deposit-take invoice's tax rows
+     * leave the report retroactively, per the accounting ruling on #1629 (its tax was never a real
+     * liability). A re-run of a previously filed window can therefore return a smaller figure than
+     * was filed — that delta is the correction, not a defect, and it is bounded to invoices both
+     * marked (post-V29 enrichment) and taxed (pre-#1629 source fix).
+     */
     @Override
     public @NonNull TaxLiabilityReport generateTaxLiability(@NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 

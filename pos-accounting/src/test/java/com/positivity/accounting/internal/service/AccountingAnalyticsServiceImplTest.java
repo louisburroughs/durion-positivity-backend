@@ -566,17 +566,16 @@ class AccountingAnalyticsServiceImplTest {
             // window A must show the cash coming IN (received) with no settlement yet; window B
             // must show the settlement (nonCashSettled) with no new cash (collected/received both 0).
             UUID depositInvoiceId = UUID.randomUUID();
+            // The down payment becomes a pos-invoice DepositCredit, so the window-B draw-down
+            // arrives through the deposit-credit replica leg, not the customer-credit subledger.
             stubWindowedFixture(
                     List.of(depositTakeInvoice(depositInvoiceId, Instant.parse("2026-01-05T00:00:00Z"), "500.00")),
                     List.of(),
                     List.of(),
                     List.of(),
-                    List.of(),
+                    List.of(Map.entry(Instant.parse("2026-02-05T00:00:00Z"), "500.00")),
                     List.of(Map.entry(Instant.parse("2026-01-05T00:00:00Z"), "500.00")),
-                    List.of(new CreditTxnFixture(
-                            CustomerCreditTransactionType.APPLICATION,
-                            Instant.parse("2026-02-05T00:00:00Z"),
-                            new BigDecimal("500.00"))));
+                    List.of());
 
             CollectionsAnalyticsReport january =
                     service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
@@ -585,6 +584,9 @@ class AccountingAnalyticsServiceImplTest {
 
             assertThat(january.getReceived()).isEqualByComparingTo("500.00");
             assertThat(january.getNonCashSettled()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(january.getInvoiced())
+                    .as("the deposit-take document is a contract liability, never invoiced revenue (D6/D8)")
+                    .isEqualByComparingTo(BigDecimal.ZERO);
 
             assertThat(february.getNonCashSettled()).isEqualByComparingTo("500.00");
             assertThat(february.getCollected()).isEqualByComparingTo(BigDecimal.ZERO);
