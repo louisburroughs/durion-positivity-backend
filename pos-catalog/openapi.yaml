@@ -6324,6 +6324,10 @@ components:
     ServiceDto:
       description: Catalog service item
       properties:
+        defaultLaborHours:
+          description: Vehicle-agnostic fallback labor hours in tenths
+          example: 1.5
+          type: number
         id:
           description: Service identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
@@ -6335,6 +6339,19 @@ components:
         name:
           description: Service name
           example: Standard installation
+          type: string
+        operationCategory:
+          description: Operation category
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: REPAIR
+          type: string
+        operationCode:
+          description: Durion operation code
+          example: BRAKE-PAD-FRONT
           type: string
         shortDescription:
           description: Short service description
@@ -6372,6 +6389,8 @@ components:
         engineCode:
           description: Engine code
           example: K20C2
+          maxLength: 64
+          minLength: 0
           type: string
         includedOpCodes:
           description: Operation codes whose time is already included in this one's hours
@@ -6387,14 +6406,20 @@ components:
         make:
           description: Vehicle make
           example: Honda
+          maxLength: 64
+          minLength: 0
           type: string
         model:
           description: Vehicle model
           example: Civic
+          maxLength: 64
+          minLength: 0
           type: string
         overlapGroup:
           description: Operations sharing this group share setup time and must not be summed naively
           example: WHEEL-OFF
+          maxLength: 64
+          minLength: 0
           type: string
         publishedAt:
           description: Date the time was published or decided; omitted means undated
@@ -6404,6 +6429,8 @@ components:
         submodel:
           description: Vehicle submodel or trim
           example: EX
+          maxLength: 64
+          minLength: 0
           type: string
         timeType:
           description: Kind of published time; defaults to DURION_STANDARD
@@ -6417,6 +6444,8 @@ components:
         vehicleYear:
           description: Model year or year range the time applies to
           example: 2019-2023
+          maxLength: 16
+          minLength: 0
           type: string
       required:
       - laborHours
