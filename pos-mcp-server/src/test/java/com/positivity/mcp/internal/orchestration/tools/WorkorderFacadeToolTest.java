@@ -23,6 +23,7 @@ class WorkorderFacadeToolTest {
     private static final String WORKORDER_ID = "01960003-0000-7000-8000-0000000000e0";
     private static final String CUSTOMER_ID = "01960003-0000-7000-8000-000000000050";
     private static final String VEHICLE_ID = "01960003-0000-7000-8000-000000000077";
+    private static final String TECHNICIAN_ID = "01960003-0000-7000-8000-000000000099";
 
     private MockRestServiceServer mockServer;
     private WorkorderFacadeTool tool;
@@ -59,7 +60,7 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
-    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} when no id filters are given")
+    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} when no filters are given")
     void searchWorkorders_sendsGetToSearchEndpoint() {
         FacadeContractManifest.Entry entry = contract("searchWorkorders");
         mockServer
@@ -67,7 +68,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("brakes", null, null);
+        String result = tool.searchWorkorders("brakes", null, null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -85,7 +86,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID);
+        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -100,7 +101,30 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID);
+        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID, null, null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders appends status, createdFrom, createdTo and technicianId when supplied "
+            + "(Q5 gate combo: status + customerId in one server-side call)")
+    void searchWorkorders_appendsStructuredFilters() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", ""))
+                        + "&customerId=" + CUSTOMER_ID
+                        + "&status=APPROVED"
+                        + "&createdFrom=2026-06-01"
+                        + "&createdTo=2026-06-30"
+                        + "&technicianId=" + TECHNICIAN_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result =
+                tool.searchWorkorders("", CUSTOMER_ID, null, "APPROVED", "2026-06-01", "2026-06-30", TECHNICIAN_ID);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -120,7 +144,7 @@ class WorkorderFacadeToolTest {
         server.expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?customerId=" + CUSTOMER_ID))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null);
+        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null, null, null, null, null);
 
         server.verify();
         assertThat(result).isNotEmpty();

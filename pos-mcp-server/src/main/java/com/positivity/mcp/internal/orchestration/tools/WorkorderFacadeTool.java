@@ -42,8 +42,22 @@ public class WorkorderFacadeTool {
     @Tool(
             description = "Search workorders by a free-text query matched against customer name or a literal "
                     + "workorder id (a query that parses as a UUID is treated as a workorder id), optionally "
-                    + "narrowed by an exact customerId and/or vehicleId. These are the only filters — there is "
-                    + "no status or date filtering. Returns only the first page of matches (default size 25).")
+                    + "narrowed by an exact customerId, an exact vehicleId, an exact status, a createdAt date "
+                    + "window (createdFrom/createdTo), and/or a technicianId — each combinable with the query "
+                    + "and with each other. status must be an exact WorkorderStatus value (DRAFT, APPROVED, "
+                    + "ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, "
+                    + "COMPLETED, CANCELLED); an unrecognized value is rejected by the backend with 400. There "
+                    + "is no \"open\" alias for status — an open-work-orders query loops this call once per "
+                    + "open status (APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, "
+                    + "READY_FOR_PICKUP), each call still fully server-side filtered. createdFrom/createdTo "
+                    + "(YYYY-MM-DD, inclusive on both ends) bound the workorder's createdAt timestamp in UTC. "
+                    + "technicianId matches any technician who has logged a labor entry on the workorder, not "
+                    + "the workorder's currently assigned technician — a workorder assigned to one technician "
+                    + "but worked by another surfaces under the working technician's id. Row shape: workorderId, "
+                    + "workorderNumber, estimateNumber, status, customerId, customerName, vehicleId, "
+                    + "vehicleLabel, vin, createdAt. Returns only the first page of matches (default size 25, "
+                    + "hard-capped at 100 — a larger request is silently clamped, visible in the response's own "
+                    + "size/totalElements).")
     public String searchWorkorders(
             @ToolParam(description = "Free-text query matching customer name or a literal workorder id") @NonNull
                     String query,
@@ -54,12 +68,31 @@ public class WorkorderFacadeTool {
             @ToolParam(
                             description = "Optional exact vehicle id (UUID) filter, combinable with the query",
                             required = false)
-                    String vehicleId) {
+                    String vehicleId,
+            @ToolParam(
+                            description = "Optional exact status filter (DRAFT, APPROVED, ASSIGNED, "
+                                    + "WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, "
+                                    + "COMPLETED, CANCELLED); no \"open\" alias — loop once per open status",
+                            required = false)
+                    String status,
+            @ToolParam(description = "Optional createdAt window start, inclusive (YYYY-MM-DD, UTC)", required = false)
+                    String createdFrom,
+            @ToolParam(description = "Optional createdAt window end, inclusive (YYYY-MM-DD, UTC)", required = false)
+                    String createdTo,
+            @ToolParam(
+                            description = "Optional technician id (UUID) who logged a labor entry on the "
+                                    + "workorder — not the assigned technician",
+                            required = false)
+                    String technicianId) {
         StringBuilder template = new StringBuilder(workorderSearchUriTemplate);
         Map<String, String> uriParams = new HashMap<>();
         uriParams.put("query", query);
         appendQueryParam(template, uriParams, "customerId", customerId);
         appendQueryParam(template, uriParams, "vehicleId", vehicleId);
+        appendQueryParam(template, uriParams, "status", status);
+        appendQueryParam(template, uriParams, "createdFrom", createdFrom);
+        appendQueryParam(template, uriParams, "createdTo", createdTo);
+        appendQueryParam(template, uriParams, "technicianId", technicianId);
         return restClient.get().uri(template.toString(), uriParams).retrieve().body(String.class);
     }
 
