@@ -67,44 +67,29 @@ public class AccountingAnalyticsController {
                     Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice \
                     totals for invoices finalized in the window), collected, applicationReversals, and a \
                     server-derived collectionRatePct.
-                    invoiced EXCLUDES deposit-take invoices — the document a deposit-take order renders \
-                    for the down-payment itself (#1623): a deposit is a contract liability, not a sale, \
-                    and the settlement invoice is later raised gross for the full workorder total, so \
-                    counting both would overstate billing by every deposit taken.
-                    collected is payment amounts APPLIED to accounts receivable within the window, NET of \
-                    application reversals recorded within the window — it is NOT cash received. Reversals \
-                    net on a movement basis: a January payment reversed in March reduces March and never \
-                    restates January, so a closed period is never rewritten and sub-windows stay additive \
-                    (Jan + Feb + Mar equals Jan-Mar). collected may therefore be negative in a \
-                    heavy-reversal window and is deliberately not clamped. applicationReversals reports the \
-                    gross reversal amount for that window as a positive number, so a dip in collected can \
-                    be attributed without a second call.
-                    Settlement by deposit credit or customer credit is EXCLUDED, because that cash was \
-                    received when the deposit was taken rather than when the credit was drawn down; a \
-                    window in which deposit-funded invoices finalize therefore shows collectionRatePct \
-                    understated.
-                    Refunds have no dedicated figure in this endpoint (see issue #1620), but they are not \
-                    absent from it. The commonest shape — a refunded invoice payment — produces both a \
-                    RefundRecord in pos-invoice and a PaymentApplicationReversal in pos-accounting, and \
-                    that reversal reduces collected in the window the reversal was recorded, on the \
-                    movement basis above. So a refund of an applied invoice payment does depress \
-                    collected, via the reversal, in the reversal's window — do not explain such a dip as \
-                    anything else. Standalone refunds and credit-balance refunds relieve no receivable and \
-                    are not reflected at all.
-                    Use this tool for a single window's cash-application efficiency; do not loop it across \
-                    more than 3 periods for a multi-period trend such as 12 weekly windows, since that \
-                    exceeds this endpoint's call budget — narrow the request instead, or wait for a future \
+                    collected is payment amounts applied to accounts receivable within the window, net of \
+                    application reversals recorded within the window rather than cash received, on a \
+                    movement basis where a January payment reversed in March reduces March and never \
+                    restates January, so collected may be negative in a heavy-reversal window and is \
+                    deliberately not clamped; applicationReversals reports that gross reversal amount as a \
+                    positive number so a dip in collected can be attributed without a second call.
+                    Deposit-credit and customer-credit settlement is excluded, because that cash was \
+                    received when the deposit was taken rather than when the credit was drawn down, so \
+                    collectionRatePct is understated for a window in which deposit-funded invoices \
+                    finalize; refunds have no dedicated figure here, but a refunded invoice payment does \
+                    depress collected, via the resulting PaymentApplicationReversal, in the reversal's \
+                    window instead of being invisible, while standalone and credit-balance refunds relieve \
+                    no receivable and are not reflected at all.
+                    Use this tool for a single window's cash-application efficiency rather than looping it \
+                    across more than 3 periods for a multi-period trend, since that exceeds this \
+                    endpoint's call budget — narrow the request instead, or wait for a future \
                     groupBy=month|week parameter.
                     Preconditions: none; a window with no finalized invoices, no applications and no \
                     reversals returns invoiced=0, collected=0, applicationReversals=0 and a null \
-                    collectionRatePct, which is also returned whenever invoiced is zero rather than a \
-                    misleading 0 or a divide-by-zero error.
-                    Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; \
-                    invoiced and collected are deliberately different invoice cohorts, since a payment can \
-                    settle in a later window than the invoice it pays, so collectionRatePct is a period \
-                    cash-conversion ratio rather than a cohort collection rate.
-                    There is no limit parameter and no truncated flag, since the response is always exactly \
-                    one aggregate row, not a list to cap.
+                    collectionRatePct, which is also returned whenever invoiced is zero.
+                    Required inputs: startDate and endDate (ISO dates), with endDate on or after \
+                    startDate; invoiced and collected are deliberately different invoice cohorts since a \
+                    payment can settle in a later window than the invoice it pays.
                     Emits an ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW audit event; no other state changes.
                     Returns 400 when endDate is before startDate.
                     """,
