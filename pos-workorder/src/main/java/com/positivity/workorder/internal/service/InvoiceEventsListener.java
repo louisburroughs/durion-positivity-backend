@@ -12,10 +12,14 @@ import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
@@ -172,6 +176,8 @@ public class InvoiceEventsListener {
                 .tax(payload.tax())
                 .total(payload.total())
                 .invoiceCreatedAt(payload.createdAt())
+                .laborTotal(sumLineAmounts(payload.lines(), "LABOR"))
+                .partsTotal(sumLineAmounts(payload.lines(), "PART"))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -186,5 +192,26 @@ public class InvoiceEventsListener {
             log.info("Linked invoice {} to workorder {}", payload.invoiceId(), payload.workorderId());
         }
         log.info("Updated ext_invoice invoiceId={} version={}", payload.invoiceId(), aggregateVersion);
+    }
+
+    /**
+     * Sums line {@code amount} for lines whose {@code itemType} matches {@code itemType}
+     * (case-insensitive), the labor/parts split derivation for E5 (#1593).
+     *
+     * <p>{@code null} lines (payload carries no line detail, e.g. an event from a producer that
+     * predates #924) returns {@code null} — the split is unknown, and callers must not coerce that
+     * to zero. An empty (authoritative) or non-empty {@code lines} list always returns a sum:
+     * {@code ZERO} when no line matches, since the list itself is a known, complete fact.
+     */
+    private static @Nullable BigDecimal sumLineAmounts(
+            @Nullable List<InvoiceUpdatedV1.InvoiceLine> lines, String itemType) {
+        if (lines == null) {
+            return null;
+        }
+        return lines.stream()
+                .filter(line -> itemType.equalsIgnoreCase(line.itemType()))
+                .map(InvoiceUpdatedV1.InvoiceLine::amount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

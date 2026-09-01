@@ -389,6 +389,22 @@ public class WorkorderStateMachine {
         Workorder saved = workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorderId);
 
+        // Reopening never changes `status` (it stays COMPLETED — see Workorder.isLocked()), so this
+        // does not go through transitionWorkorder()/canTransitionTo(). Record it as a same-status
+        // marker transition anyway (#1594 E6): without a ledger row here, work_order_state_transitions
+        // never reflects a reopen at all, and the reopened-workorder analytics endpoint — which is
+        // specified to read this table, not the current-status snapshot — would be permanently
+        // vacuous. A COMPLETED->COMPLETED row is unambiguous today because completeWorkorder() never
+        // records a transition into COMPLETED from COMPLETED (it refuses to run at all when the
+        // workorder is already COMPLETED); the "Reopened: " reason prefix additionally distinguishes
+        // this marker from a genuine completion if that guard is ever relaxed.
+        recordTransition(
+                workorderId,
+                WorkorderStatus.COMPLETED,
+                WorkorderStatus.COMPLETED,
+                actorId,
+                "Reopened: " + reopenReason);
+
         Map<String, Object> auditDetails = new LinkedHashMap<>();
         auditDetails.put("state", "COMPLETED");
         auditDetails.put("isReopened", true);

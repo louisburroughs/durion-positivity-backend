@@ -2,6 +2,8 @@ domain: workorder
 serviceName: pos-workorder
 version: "1.0"
 permissions:
+  - name: "workorder:analytics:view"
+    description: "View cross-workorder analytics (status-transition history, reopened-workorder and technician-labor summaries)"
   - name: "workorder:approval_config:create"
     description: "Create approval configurations"
   - name: "workorder:approval_config:delete"

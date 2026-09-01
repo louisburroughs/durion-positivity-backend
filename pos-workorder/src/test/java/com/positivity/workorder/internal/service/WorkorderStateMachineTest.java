@@ -73,6 +73,9 @@ class WorkorderStateMachineTest {
     @Mock
     private com.positivity.workorder.internal.service.FleetAuthorizationService fleetAuthorizationService;
 
+    @Mock
+    private com.positivity.workorder.internal.repository.AuditEventRepository auditEventRepository;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
@@ -114,6 +117,56 @@ class WorkorderStateMachineTest {
     @AfterEach
     void clearAuth() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName(
+            "reopenCompletedWorkorder records a COMPLETED->COMPLETED marker transition (#1594 E6)")
+    void reopenCompletedWorkorder_recordsMarkerTransition() throws Exception {
+        Workorder completedWorkorder = Workorder.builder()
+                .id(testWorkorderId)
+                .shopId(testShopId)
+                .vehicleId(testVehicleId)
+                .customerId(testCustomerId)
+                .status(WorkorderStatus.COMPLETED)
+                .build();
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(completedWorkorder));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        stateMachine.reopenCompletedWorkorder(testWorkorderId, userId, "Customer reported a rattle after pickup");
+
+        // Status itself never leaves COMPLETED (isLocked() semantics) — only the isReopened flag
+        // moves — so this cannot go through transitionWorkorder()/canTransitionTo(); it is recorded
+        // directly, which is exactly what makes it distinguishable from nothing at all.
+        assertEquals(WorkorderStatus.COMPLETED, completedWorkorder.getStatus());
+
+        ArgumentCaptor<WorkorderStateTransition> captor = ArgumentCaptor.forClass(WorkorderStateTransition.class);
+        verify(transitionRepository).save(captor.capture());
+        WorkorderStateTransition recorded = captor.getValue();
+        assertEquals(WorkorderStatus.COMPLETED, recorded.getFromStatus());
+        assertEquals(WorkorderStatus.COMPLETED, recorded.getToStatus());
+        assertEquals(userId, recorded.getTransitionedBy());
+        assertTrue(recorded.getReason().startsWith("Reopened: "));
+        assertTrue(recorded.getReason().contains("Customer reported a rattle after pickup"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("A second reopen call records a second, independent marker transition")
+    void reopenCompletedWorkorder_calledTwice_recordsTwoMarkerTransitions() throws Exception {
+        Workorder completedWorkorder = Workorder.builder()
+                .id(testWorkorderId)
+                .shopId(testShopId)
+                .vehicleId(testVehicleId)
+                .customerId(testCustomerId)
+                .status(WorkorderStatus.COMPLETED)
+                .build();
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(completedWorkorder));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        stateMachine.reopenCompletedWorkorder(testWorkorderId, userId, "first reopen");
+        stateMachine.reopenCompletedWorkorder(testWorkorderId, userId, "second reopen");
+
+        verify(transitionRepository, org.mockito.Mockito.times(2)).save(any(WorkorderStateTransition.class));
     }
 
     @Test
