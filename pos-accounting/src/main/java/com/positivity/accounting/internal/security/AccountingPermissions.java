@@ -17,6 +17,9 @@ package com.positivity.accounting.internal.security;
  * without a manual bit assignment.
  */
 public final class AccountingPermissions {
+    /** View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts). */
+    public static final String ANALYTICS_VIEW = "accounting:analytics:view";
+
     /** Process payments. */
     public static final String AP_PAY = "accounting:ap:pay";
 

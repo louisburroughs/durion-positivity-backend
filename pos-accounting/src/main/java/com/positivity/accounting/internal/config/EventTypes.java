@@ -16,7 +16,9 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 92 event types (includes +1 from the credit-memo void (issue #997
+     * Total: 94 event types (includes +2 from the Wave 2 read-only analytics endpoints
+     * (Issues #1590 E2 / #1591 E3): ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW,
+     * ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW, +1 from the credit-memo void (issue #997
      * symmetry): ACCOUNTING_CREDIT_MEMO_VOID, +4 from the customer-credit lifecycle
      * (PR #1004): ACCOUNTING_CUSTOMER_CREDIT_LIST, ACCOUNTING_CUSTOMER_CREDIT_GET,
      * ACCOUNTING_CUSTOMER_CREDIT_APPLY, ACCOUNTING_CUSTOMER_CREDIT_REFUND,
@@ -390,6 +392,17 @@ public final class EventTypes {
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_CUSTOMER_CREDIT_REFUND",
                                 "Refund an open customer credit to the customer (Dr credit liability / Cr cash)")
+                        .build(),
+
+                // AccountingAnalyticsController — 2 events (Wave 2, Issues #1590 E2 / #1591 E3)
+                EventTypeRegistration.search(
+                                "ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW",
+                                "View invoiced-vs-collected analytics for a date window")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW",
+                                "View payment-lag cohorts (<=30/31-60/61-90/unpaid) for invoices issued in a"
+                                        + " date window")
                         .build());
     }
 }

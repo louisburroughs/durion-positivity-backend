@@ -1,6 +1,8 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.PaymentApplication;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +32,16 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
      * @return list of applications
      */
     List<PaymentApplication> findByInvoiceId(UUID invoiceId);
+
+    /**
+     * Find all applications for a set of invoices in one round trip. Used by the payment-lag
+     * cohorts analytics endpoint (Wave 2 E3, issue #1591) to bulk-load applications for every
+     * invoice issued in the requested window, avoiding one query per invoice.
+     *
+     * @param invoiceIds invoice identifiers
+     * @return applications for any of the given invoices (unordered; callers sort per invoice)
+     */
+    List<PaymentApplication> findByInvoiceIdIn(Collection<UUID> invoiceIds);
 
     /**
      * Find all applications for a customer with pagination.
@@ -63,6 +75,17 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
      * @return true if already processed
      */
     boolean existsByApplicationRequestId(String applicationRequestId);
+
+    /**
+     * Find applications whose application timestamp falls in the inclusive instant range. Used
+     * by the invoiced-vs-collected analytics endpoint (Wave 2 E2, issue #1590) to sum settled cash
+     * by application date, independent of which invoice or finalization period it settles.
+     *
+     * @param start inclusive lower bound
+     * @param end   inclusive upper bound
+     * @return applications posted within the range (unordered)
+     */
+    List<PaymentApplication> findByApplicationTimestampBetween(Instant start, Instant end);
 
     /**
      * Sum of all applied amounts for a payment.
