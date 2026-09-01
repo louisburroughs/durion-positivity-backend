@@ -2,8 +2,10 @@ package com.positivity.invoice.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
+import com.positivity.domainevents.payment.DepositCreditAppliedV1;
 import com.positivity.domainevents.payment.PaymentReversedV1;
 import com.positivity.domainevents.payment.PaymentSettledV1;
+import com.positivity.invoice.internal.entity.DepositCredit;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
@@ -77,6 +79,33 @@ public class PaymentEventPublisher {
                 "Queued payment.payment.settled paymentIntentId={} invoiceId={}",
                 paymentIntent.getId(),
                 invoice.getId());
+    }
+
+    /** Emits {@code payment.deposit-credit.applied} for a deposit-credit draw-down against an invoice. */
+    public void publishDepositCreditApplied(
+            @NonNull DepositCredit credit, @NonNull UUID invoiceId, @NonNull BigDecimal amountApplied) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        DepositCreditAppliedV1 payload =
+                new DepositCreditAppliedV1(credit.getDepositCreditId(), invoiceId, amountApplied, Instant.now(clock));
+        writer.publish(
+                DomainTopics.events("payment"),
+                DomainEventEnvelope.of(
+                        DepositCreditAppliedV1.EVENT_TYPE,
+                        DepositCreditAppliedV1.SCHEMA_VERSION,
+                        credit.getDepositCreditId(),
+                        0L,
+                        SOURCE_SERVICE,
+                        null,
+                        null,
+                        payload,
+                        clock));
+        log.debug(
+                "Queued payment.deposit-credit.applied depositCreditId={} invoiceId={}",
+                credit.getDepositCreditId(),
+                invoiceId);
     }
 
     /** Emits {@code payment.payment.reversed} for a void of an authorized intent. */
