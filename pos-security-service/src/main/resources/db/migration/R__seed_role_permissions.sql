@@ -998,7 +998,6 @@ FROM (VALUES
     ('ADMIN', 'inventory:valuation:view'),
     ('ADMIN', 'invoice:analytics:view'),
     ('ADMIN', 'invoice:billing-rules'),
-    ('ADMIN', 'invoice:analytics:view'),
     ('ADMIN', 'invoice:finalize'),
     ('ADMIN', 'invoice:finalize:override'),
     ('ADMIN', 'invoice:invoice:view'),
