@@ -369,7 +369,8 @@ class ReplicaListenerContractTest {
     }
 
     @Test
-    @DisplayName("workorder: replicates the workorder an invoice is raised from")
+    @DisplayName(
+            "workorder: replicates the workorder an invoice is raised from, including its creation timestamp (#1592)")
     void workorderMapping() {
         UUID customerId = UUID.randomUUID();
         new WorkorderEventsListener(
@@ -382,7 +383,8 @@ class ReplicaListenerContractTest {
                         {"eventId":"evt-1","eventType":"%s","aggregateVersion":6,
                          "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",
                            "customerId":"%s","vehicleId":null,"shopId":null,"invoiceId":null,
-                           "parts":[],"services":[]}}""".formatted(WorkorderUpdatedV1.EVENT_TYPE, ID, customerId));
+                           "parts":[],"services":[],"createdAt":"2026-08-01T12:00:00Z",
+                           "updatedAt":"2026-08-10T09:00:00Z"}}""".formatted(WorkorderUpdatedV1.EVENT_TYPE, ID, customerId));
 
         ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
         verify(workorderRepository).save(captor.capture());
@@ -391,6 +393,30 @@ class ReplicaListenerContractTest {
         assertThat(captor.getValue().getStatus()).isEqualTo("CLOSED");
         assertThat(captor.getValue().getCustomerId()).isEqualTo(customerId);
         assertThat(captor.getValue().getAggregateVersion()).isEqualTo(6);
+        assertThat(captor.getValue().getWorkorderCreatedAt()).isEqualTo(Instant.parse("2026-08-01T12:00:00Z"));
+    }
+
+    @Test
+    @DisplayName(
+            "workorder: a fact with no createdAt (older event) leaves workorderCreatedAt null rather than backfilling from updatedAt or now (#1592)")
+    void workorderMapping_missingCreatedAt_staysNull() {
+        new WorkorderEventsListener(
+                        clock,
+                        objectMapper,
+                        processedEventRepository,
+                        workorderRepository,
+                        org.mockito.Mockito.mock(ObjectProvider.class))
+                .onWorkorderEvent("""
+                        {"eventId":"evt-1","eventType":"%s","aggregateVersion":6,
+                         "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",
+                           "customerId":null,"vehicleId":null,"shopId":null,"invoiceId":null,
+                           "parts":[],"services":[]}}""".formatted(WorkorderUpdatedV1.EVENT_TYPE, ID));
+
+        ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
+        verify(workorderRepository).save(captor.capture());
+        assertThat(captor.getValue().getWorkorderCreatedAt()).isNull();
+        // Not backfilled from the replica's own updatedAt (NOW, the fixed clock value) either.
+        assertThat(captor.getValue().getWorkorderCreatedAt()).isNotEqualTo(NOW);
     }
 
     @Test

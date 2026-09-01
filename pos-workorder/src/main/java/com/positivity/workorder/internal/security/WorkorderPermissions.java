@@ -17,6 +17,16 @@ package com.positivity.workorder.internal.security;
  * without a manual bit assignment.
  */
 public final class WorkorderPermissions {
+    /**
+     * View Wave 2 cross-workorder analytics (status-transition history, reopened-workorder and
+     * technician-labor summaries). Shared by all three analytics endpoints (#1593/#1594/#1595)
+     * rather than one permission per endpoint: they are all read-only reporting surfaces over the
+     * same underlying data (state transitions, labor entries, invoice replicas) with the same
+     * intended audience (shop management), so splitting them would not gate anything meaningfully
+     * differently.
+     */
+    public static final String ANALYTICS_VIEW = "workorder:analytics:view";
+
     /** Create approval configurations. */
     public static final String APPROVAL_CONFIG_CREATE = "workorder:approval_config:create";
 

@@ -125,6 +125,10 @@ public class WorkorderEventsListener {
                 .workorderNumber(payload.workorderNumber())
                 .status(payload.status())
                 .customerId(payload.customerId())
+                // #1592: passed through verbatim, including null (older events / not yet
+                // assigned) — never defaulted to updatedAt or "now", which would fabricate a
+                // lag anchor the invoicing-lag report would then silently misreport.
+                .workorderCreatedAt(payload.createdAt())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

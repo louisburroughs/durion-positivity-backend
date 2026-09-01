@@ -14,6 +14,8 @@ tags:
   name: Billing Authorization
 - description: Card payment initiation and capture endpoints
   name: Payment
+- description: Revenue and lag reporting over invoices
+  name: Invoice Analytics
 - description: Deposit / down-payment credits and their application to settlements
   name: Deposit Credits
 - description: Invoice generation and lifecycle management
@@ -240,6 +242,136 @@ paths:
       - Invoice
       x-required-permissions:
       - invoice:manage
+  /v1/invoices/analytics/invoicing-lag:
+    get:
+      description: 'Returns the average number of days from workorder creation to invoice creation for invoices created in [startDate, endDate], anchored on Invoice.createdAt — the invoice''s own draft creation timestamp in this module, not finalizedAt — against the linked workorder''s own creation timestamp replicated from pos-workorder.
+
+        Use this tool to track how quickly workorders turn into invoices; do not use getRevenueByCustomer for this, which reports per-customer revenue amounts, not throughput timing.
+
+        An invoice with no linked workorder, or whose workorder replica has no known creation timestamp yet, is excluded from both the average and the count returned alongside it — never treated as zero lag — and count rides with the average so a thin window reads as thin, not as a trend swing.
+
+        Preconditions: none; a window with no qualifying invoice yields one row with a null average and count 0.
+
+        Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; there is no limit parameter, since the response is a single aggregate row today, not a list to cap.
+
+        Emits an INVOICE_ANALYTICS_INVOICING_LAG_VIEW audit event; no state changes — this is a read-only projection.
+
+        Returns 400 when the end date is before the start date.
+
+        '
+      operationId: getInvoicingLag
+      parameters:
+      - description: Window start date (YYYY-MM-DD, inclusive)
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Window end date (YYYY-MM-DD, inclusive)
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: true
+        schema:
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicingLagReport'
+          description: Invoicing-lag report returned (average is null and count is 0 when no invoice qualifies).
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: endDate is before startDate.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the invoice:analytics:view authority.
+      security:
+      - bearerAuth:
+        - invoice:analytics:view
+      summary: Get Workorder-Creation-To-Invoice Lag
+      tags:
+      - Invoice Analytics
+      x-required-permissions:
+      - invoice:analytics:view
+  /v1/invoices/analytics/revenue-by-customer:
+    get:
+      description: 'Returns per-customer revenue for invoices in [startDate, endDate], anchored on Invoice.createdAt — this invoice''s own draft-creation timestamp, not finalizedAt, which can be null for a non-finalized invoice — ordered by revenue descending and bounded to `limit` rows — the top N by revenue, with no pagination to walk. Only revenue-recognized invoices count (status FINALIZED or POSTED); DRAFT invoices have not been billed and CANCELLED/ERROR invoices never will be. Each row''s avgInvoiceValue is revenue / invoiceCount, computed here rather than left to the caller, and lastInvoiceDate is that customer''s most recent contributing invoice in the window.
+
+        Use this tool to find the highest-revenue customers in a period; the response''s `truncated` flag tells you when more customers had revenue than `limit` allowed through, without a second call.
+
+        Preconditions: none; an empty window yields an empty `rows` list.
+
+        Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; limit is optional, defaults to 20, and is hard-capped at 100.
+
+        Emits an INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW audit event; no state changes — this is a read-only projection.
+
+        Returns 400 when the end date is before the start date.
+
+        '
+      operationId: getRevenueByCustomer
+      parameters:
+      - description: Window start date (YYYY-MM-DD, inclusive)
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Window end date (YYYY-MM-DD, inclusive)
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Maximum rows to return, top-by-revenue (default 20, hard-capped at 100)
+        example: 20
+        in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevenueByCustomerReport'
+          description: Revenue-by-customer report returned (rows empty when no revenue-recognized invoice exists in the window).
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: endDate is before startDate.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the invoice:analytics:view authority.
+      security:
+      - bearerAuth:
+        - invoice:analytics:view
+      summary: Get Revenue By Customer
+      tags:
+      - Invoice Analytics
+      x-required-permissions:
+      - invoice:analytics:view
   /v1/invoices/deposits:
     get:
       description: 'Lists every deposit credit held against one source document, identified by its type and id.
@@ -2579,6 +2711,45 @@ components:
       - invoiceId
       - status
       type: object
+    InvoicingLagReport:
+      description: Workorder-creation-to-invoice-creation lag report for one date window
+      properties:
+        endDate:
+          description: Window end date (inclusive)
+          example: 2026-06-30
+          format: date
+          type: string
+        rows:
+          description: Aggregate rows — exactly one today, the whole-window aggregate
+          items:
+            $ref: '#/components/schemas/InvoicingLagRow'
+          type: array
+        startDate:
+          description: Window start date (inclusive)
+          example: 2026-06-01
+          format: date
+          type: string
+      required:
+      - endDate
+      - rows
+      - startDate
+      type: object
+    InvoicingLagRow:
+      description: One aggregate row of workorder-creation-to-invoice-creation lag
+      properties:
+        avgDaysWoCreationToInvoice:
+          description: Average days from workorder creation to invoice creation across `count` invoices; null when count is 0 (undefined, not zero)
+          example: 3.42
+          format: double
+          type: number
+        count:
+          description: Number of invoices this average is computed over. Excludes invoices with no linked workorder and workorders whose creation timestamp has not replicated yet (#1592) — never counted as zero lag.
+          example: 47
+          format: int64
+          type: integer
+      required:
+      - count
+      type: object
     OrderInvoiceCreationRequest:
       description: Payload for creating an invoice from a sales order at checkout.
       properties:
@@ -2962,6 +3133,75 @@ components:
           type: string
       required:
       - reason
+      type: object
+    RevenueByCustomerReport:
+      description: Per-customer revenue report for one date window, ordered by revenue descending
+      properties:
+        endDate:
+          description: Window end date (inclusive)
+          example: 2026-06-30
+          format: date
+          type: string
+        limit:
+          description: The effective row cap applied to this response
+          example: 20
+          format: int32
+          type: integer
+        rows:
+          description: Per-customer rows, revenue descending, bounded to `limit` entries
+          items:
+            $ref: '#/components/schemas/RevenueByCustomerRow'
+          type: array
+        startDate:
+          description: Window start date (inclusive)
+          example: 2026-06-01
+          format: date
+          type: string
+        truncated:
+          description: True when more customers had revenue in the window than `limit` allowed through — rows beyond the cap are not included
+          type: boolean
+      required:
+      - endDate
+      - limit
+      - rows
+      - startDate
+      - truncated
+      type: object
+    RevenueByCustomerRow:
+      description: One customer's aggregated revenue over the report window
+      properties:
+        avgInvoiceValue:
+          description: revenue / invoiceCount, computed server-side (4 decimal places, HALF_UP)
+          example: 408.2917
+          type: number
+        customerId:
+          description: Customer party identifier (canonical lowercase UUID string, matching the invoice's own party id column)
+          example: 018f0000-0000-7000-8000-0000000000aa
+          type: string
+        invoiceCount:
+          description: Number of revenue-recognized invoices contributing to revenue
+          example: 12
+          format: int64
+          type: integer
+        lastInvoiceDate:
+          description: Creation timestamp of this customer's most recent contributing invoice in the window
+          example: 2026-06-30 18:12:00+00:00
+          format: date-time
+          type: string
+        name:
+          description: Resolved customer display name, from the local customer-party replica; null if the replica has not caught up to this party yet
+          example: Acme Towing LLC
+          type: string
+        revenue:
+          description: Total revenue-recognized invoice value for this customer in the window
+          example: 4899.5
+          type: number
+      required:
+      - avgInvoiceValue
+      - customerId
+      - invoiceCount
+      - lastInvoiceDate
+      - revenue
       type: object
     RevertRequest:
       description: Request payload for reverting a finalized invoice back to DRAFT

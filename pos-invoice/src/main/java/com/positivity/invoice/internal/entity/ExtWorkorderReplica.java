@@ -53,6 +53,16 @@ public class ExtWorkorderReplica {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    /**
+     * The workorder's own creation timestamp ({@code WorkorderUpdatedV1.createdAt}, #1592):
+     * the anchor the invoicing-lag analytics report (#1592 E4) measures from. Null until a fact
+     * carrying it arrives for this workorder — replicas written before this field existed, or
+     * from an older event schema, stay null rather than being backfilled from {@link
+     * #updatedAt}, which would silently understate or overstate the lag.
+     */
+    @Column(name = "workorder_created_at")
+    private Instant workorderCreatedAt;
+
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;

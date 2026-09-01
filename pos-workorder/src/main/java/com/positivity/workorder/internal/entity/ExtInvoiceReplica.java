@@ -55,6 +55,20 @@ public class ExtInvoiceReplica {
     @Column(name = "invoice_created_at")
     private Instant invoiceCreatedAt;
 
+    /**
+     * Sum of line {@code amount} where {@code itemType} equals {@code LABOR} (case-insensitive),
+     * derived in {@code InvoiceEventsListener} from {@code InvoiceUpdatedV1.lines} (Wave 2 E5,
+     * #1593). {@code null} means the source event carried no line detail ({@code lines() == null});
+     * {@code ZERO} means the lines were authoritatively empty or none were LABOR. Never coerce
+     * {@code null} to zero — it means "unknown," not "no labor."
+     */
+    @Column(name = "labor_total")
+    private BigDecimal laborTotal;
+
+    /** Sum of line {@code amount} where {@code itemType} equals {@code PART} (case-insensitive). Same null/zero contract as {@link #laborTotal}. */
+    @Column(name = "parts_total")
+    private BigDecimal partsTotal;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

@@ -84,4 +84,14 @@ public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLa
             @NonNull @Param("startInclusive") LocalDateTime startInclusive,
             @NonNull @Param("endExclusive") LocalDateTime endExclusive,
             @NonNull @Param("finalizedStatus") WorkorderStatus finalizedStatus);
+
+    /**
+     * Stopped labor entries whose {@code startTime} (log time, not the parent workorder's status)
+     * falls in a date range (E5, #1593) — backs {@code billedHours} on
+     * {@code GET /v1/workorders/analytics/technician-labor}. Only entries with a recorded
+     * {@code endTime} are counted, matching {@link #findFinalizedByEndTimeBetween} above.
+     */
+    @NonNull
+    List<WorkorderLaborEntry> findByEndTimeIsNotNullAndStartTimeBetween(
+            @NonNull LocalDateTime startInclusive, @NonNull LocalDateTime endExclusive);
 }

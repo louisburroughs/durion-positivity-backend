@@ -32,6 +32,8 @@ tags:
   name: Daily Dispatch Board Dashboard
 - description: Endpoints for work order management
   name: Work Order API
+- description: 'Cross-workorder reporting: status transitions, reopens, technician labor'
+  name: Workorder Analytics
 - description: Endpoints for managing approval configurations by location and customer
   name: Approval Configuration API
 - description: Endpoints for timer operations, labor entry creation, and job time totals
@@ -981,6 +983,174 @@ paths:
       - Work Order API
       x-required-permissions:
       - workorder:workorder:create
+  /v1/workorders/analytics/reopened:
+    get:
+      description: 'Returns one row per reopen event for work orders completed in the window and reopened within withinDays of that completion, per event rather than pre-counted, so a workorder reopened twice inside the window produces two separate rows for the caller to group and count by technician.
+
+        Use this tool for reopen and rework-quality questions; use getWorkorderStatusTransitions instead for the raw per-workorder transition history.
+
+        The technicianId is the actor recorded on the completing state transition, not the actor who reopened the work order, resolved to a stable person id via the active user-link replica; a row is excluded, never guessed, when that actor is null, blank, or cannot be resolved to a technician.
+
+        Rows are computed from the persisted work_order_state_transitions ledger rather than the workorder''s current status or isReopened snapshot, so a work order completed, reopened, and completed again surfaces as distinct rows even though its current status never leaves COMPLETED.
+
+        Preconditions: none beyond a valid date range.
+
+        Required inputs: startDate and endDate, ISO dates with endDate on or after startDate, both anchored on the completion date rather than the reopen date; withinDays is optional, defaulting to 7 with a maximum of 90.
+
+        Emits a WORKORDER_ANALYTICS_REOPENED_VIEW audit event; no state changes.
+
+        Returns 400 when endDate precedes startDate or withinDays is out of range, and reports truncated=true in the response when more rows matched than the limit allowed.
+
+        '
+      operationId: getReopenedWorkorderAnalytics
+      parameters:
+      - description: Completion-date range start (YYYY-MM-DD), inclusive
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Completion-date range end (YYYY-MM-DD), inclusive
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Reopen must occur within this many days of completion (default 7, max 90)
+        in: query
+        name: withinDays
+        required: false
+        schema:
+          default: 7
+          format: int32
+          maximum: 90
+          minimum: 1
+          type: integer
+      - description: Maximum rows to return (default 100, max 500)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          format: int32
+          maximum: 500
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReopenedWorkorderAnalyticsResponse'
+          description: Reopened-workorder analytics returned successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid date range or withinDays out of bounds
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReopenedWorkorderAnalyticsResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReopenedWorkorderAnalyticsResponse'
+          description: Forbidden - missing workorder:analytics:view
+      security:
+      - bearerAuth:
+        - workorder:analytics:view
+      summary: Get Reopened Workorder Analytics
+      tags:
+      - Workorder Analytics
+      x-required-permissions:
+      - workorder:analytics:view
+  /v1/workorders/analytics/technician-labor:
+    get:
+      description: 'Returns one row per technician summarizing completedWoCount, billedHours and laborRevenue for the window, with each column independently windowed so they can disagree at month boundaries: completedWoCount and laborRevenue anchor on the workorder''s completion date, attributed to the technician on the completing state transition, while billedHours anchors on the labor entry''s own log time and can fall in a different period than the workorder''s eventual completion.
+
+        A technician can appear with billedHours logged but completedWoCount=0 on a workorder not yet completed, or the reverse, and laborRevenue sums ext_invoice.laborTotal across invoices for that technician''s completed work orders, excluding rather than zeroing an invoice whose laborTotal is null because its source event carried no line detail.
+
+        Use this tool for labor productivity and revenue-per-technician questions; use getReopenedWorkorderAnalytics instead for rework and quality.
+
+        Preconditions: none beyond a valid date range.
+
+        Required inputs: startDate and endDate, ISO dates with endDate on or after startDate.
+
+        Emits a WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW audit event; no state changes.
+
+        Returns 400 when endDate precedes startDate, and reports truncated=true in the response, with rows ordered by billedHours descending, when more technicians matched than the limit allowed.
+
+        '
+      operationId: getTechnicianLaborAnalytics
+      parameters:
+      - description: Window start date (YYYY-MM-DD), inclusive
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Window end date (YYYY-MM-DD), inclusive
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Maximum rows to return (default 100, max 500)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          format: int32
+          maximum: 500
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianLaborAnalyticsResponse'
+          description: Technician labor analytics returned successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid date range
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianLaborAnalyticsResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianLaborAnalyticsResponse'
+          description: Forbidden - missing workorder:analytics:view
+      security:
+      - bearerAuth:
+        - workorder:analytics:view
+      summary: Get Technician Labor Analytics
+      tags:
+      - Workorder Analytics
+      x-required-permissions:
+      - workorder:analytics:view
   /v1/workorders/changeRequests/{changeId}:
     get:
       description: 'Returns one change request with its status, description, emergency flags, approval details, and item associations.
@@ -2627,6 +2797,121 @@ paths:
       - Workorder Search
       x-required-permissions:
       - workorder:workorder:view
+  /v1/workorders/status-transitions:
+    get:
+      description: 'Returns work_order_state_transitions rows either for one workorder (woId) or for a date range (startDate/endDate, optionally narrowed by from/to status), ordered oldest first. Field mapping: at <- transitionedAt, actorId <- transitionedBy.
+
+        Use this tool for status-change history and as the backing projection for getReopenedWorkorderAnalytics; use getTechnicianLaborAnalytics instead for labor/revenue rollups, not raw transition rows.
+
+        Preconditions: exactly one calling mode — woId alone, or startDate+endDate (from/to optional) — never both, never neither; an unbounded scan is never performed.
+
+        Required inputs: either woId, or startDate and endDate (ISO dates, endDate on or after startDate).
+
+        Emits a WORKORDER_STATUS_TRANSITIONS_VIEW audit event; no state changes.
+
+        Returns 400 when the calling mode is ambiguous or incomplete, or endDate precedes startDate. Response truncated=true when more rows matched than limit allowed.
+
+        '
+      operationId: getWorkorderStatusTransitions
+      parameters:
+      - description: Single workorder id — mutually exclusive with the range params below
+        in: query
+        name: woId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Filter to transitions FROM this status (range mode only)
+        in: query
+        name: from
+        required: false
+        schema:
+          enum:
+          - DRAFT
+          - APPROVED
+          - ASSIGNED
+          - WORK_IN_PROGRESS
+          - AWAITING_PARTS
+          - AWAITING_APPROVAL
+          - READY_FOR_PICKUP
+          - COMPLETED
+          - CANCELLED
+          type: string
+      - description: Filter to transitions TO this status (range mode only)
+        in: query
+        name: to
+        required: false
+        schema:
+          enum:
+          - DRAFT
+          - APPROVED
+          - ASSIGNED
+          - WORK_IN_PROGRESS
+          - AWAITING_PARTS
+          - AWAITING_APPROVAL
+          - READY_FOR_PICKUP
+          - COMPLETED
+          - CANCELLED
+          type: string
+      - description: Range start date (YYYY-MM-DD), inclusive
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Range end date (YYYY-MM-DD), inclusive
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Maximum rows to return (default 100, max 500)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          format: int32
+          maximum: 500
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderStatusTransitionsResponse'
+          description: Status transitions returned successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Ambiguous/incomplete parameter combination, or endDate before startDate
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderStatusTransitionsResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderStatusTransitionsResponse'
+          description: Forbidden - missing workorder:analytics:view
+      security:
+      - bearerAuth:
+        - workorder:analytics:view
+      summary: Get Workorder Status Transitions
+      tags:
+      - Workorder Analytics
+      x-required-permissions:
+      - workorder:analytics:view
   /v1/workorders/travelSegments/start:
     post:
       description: 'Starts an IN_PROGRESS travel segment for a mobile technician, stamping the start time from the server clock and recording who created it.
@@ -7698,6 +7983,42 @@ components:
       - reopenedAt
       - workorderId
       type: object
+    ReopenedWorkorderAnalyticsResponse:
+      description: Per-event reopened-workorder rows within the window, with truncation signalling
+      properties:
+        limit:
+          description: The limit applied to this response
+          format: int32
+          type: integer
+        rows:
+          description: Reopen events, ordered oldest first, capped at `limit`
+          items:
+            $ref: '#/components/schemas/ReopenedWorkorderRow'
+          type: array
+        truncated:
+          description: True when more matching reopen events existed than `limit` allowed and the result was capped
+          type: boolean
+      type: object
+    ReopenedWorkorderRow:
+      description: A single work-order reopen event within withinDays of its completion
+      properties:
+        completedAt:
+          description: When the work order was completed (the event this reopen is anchored to)
+          format: date-time
+          type: string
+        reopenedAt:
+          description: When this reopen occurred
+          format: date-time
+          type: string
+        technicianId:
+          description: 'The technician who completed the work order (attribution rule: the actor recorded on the completing state transition, resolved to a stable person id). Rows where that actor cannot be resolved to a technician are excluded rather than guessed — see the endpoint description.'
+          format: uuid
+          type: string
+        woId:
+          description: The work order that was reopened
+          format: uuid
+          type: string
+      type: object
     ResolveScanRequest:
       description: Request to resolve a scanned SKU and location against a pick task
       properties:
@@ -8158,6 +8479,43 @@ components:
         workorderId:
           description: Work order ID
           example: 550e8400-e29b-41d4-a716-446655440001
+          type: string
+      type: object
+    TechnicianLaborAnalyticsResponse:
+      description: Per-technician labor summary rows for the window, with truncation signalling
+      properties:
+        limit:
+          description: The limit applied to this response
+          format: int32
+          type: integer
+        rows:
+          description: One row per technician, ordered by billedHours descending, capped at `limit`
+          items:
+            $ref: '#/components/schemas/TechnicianLaborRow'
+          type: array
+        truncated:
+          description: True when more technicians had matching activity than `limit` allowed and the result was capped
+          type: boolean
+      type: object
+    TechnicianLaborRow:
+      description: One technician's labor summary for the window
+      properties:
+        billedHours:
+          description: Sum of WorkorderLaborEntry.hoursWorked for this technician's stopped labor entries whose startTime falls in the window (window = labor log time, not workorder completion date)
+          type: number
+        completedWoCount:
+          description: Work orders this technician completed in the window (attributed to the actor on the completing state transition; window = completion date, not labor log time)
+          format: int32
+          type: integer
+        laborRevenue:
+          description: Sum of ext_invoice.laborTotal across invoices attributable to this technician's completedWoCount work orders (window = the same completion date as completedWoCount). An invoice whose laborTotal is null (source event carried no line detail) is excluded from this sum rather than treated as zero.
+          type: number
+        name:
+          description: Technician display name, resolved server-side; null when the person replica has no record
+          type: string
+        technicianId:
+          description: Stable technician (person) id
+          format: uuid
           type: string
       type: object
     TravelSegmentAdjustmentResponse:
@@ -9646,6 +10004,22 @@ components:
           - COMPLETED
           - CANCELLED
           type: string
+      type: object
+    WorkorderStatusTransitionsResponse:
+      description: Date-range (or single-workorder) status transition history, with truncation signalling
+      properties:
+        limit:
+          description: The limit applied to this response
+          format: int32
+          type: integer
+        transitions:
+          description: Matching transitions, oldest first, capped at `limit`
+          items:
+            $ref: '#/components/schemas/WorkorderStateTransitionResponse'
+          type: array
+        truncated:
+          description: True when more matching transitions existed than `limit` allowed and the result was capped
+          type: boolean
       type: object
     WorkorderStatusView:
       description: Summary view of a workorder's work-in-progress status

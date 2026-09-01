@@ -207,15 +207,25 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.m2/build-cache
+          # v3: the v2 cache pool was poisoned again, same mechanism as the v1
+          # incident below — PR #1617 saw pos-invoice's brand-new
+          # InvoiceAnalyticsRepositoryTest fail deterministically in CI (empty
+          # result sets from queries whose logic is correct and passes in every
+          # local/non-cached run) while every other signal on the PR was green.
+          # restore-keys reuse caches across branches, so one branch's
+          # stale/experimental target/classes can leak into every later PR
+          # build and produce phantom failures that never reproduce locally.
+          # Bumping the namespace abandons the poisoned entries.
+          #
           # v2: the v1 cache pool was poisoned with a compiled test class
           # (RagContextBuilderTest) that exists in no commit — restore-keys
           # reuse caches across branches, so one branch's stale/experimental
           # target/test-classes can leak into every later PR build and fail
           # surefire on phantom tests (PR #1201). Bumping the namespace
           # abandons the poisoned entries.
-          key: ${{ runner.os }}-mvn-build-cache-v2-${{ github.run_id }}
+          key: ${{ runner.os }}-mvn-build-cache-v3-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-mvn-build-cache-v2-
+            ${{ runner.os }}-mvn-build-cache-v3-
 
       - name: Install reactor (skip tests)
         # alwaysRunPlugins: on a build-cache hit the extension skips the install

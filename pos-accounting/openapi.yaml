@@ -22,6 +22,8 @@ tags:
   name: Invoice Payments
 - description: Manage mapping keys for GL mapping taxonomy
   name: Mapping Keys
+- description: Read-only cross-invoice collections and payment-lag analytics (Wave 2)
+  name: Accounting Analytics
 - description: Manage posting categories for GL mapping taxonomy
   name: Posting Categories
 - description: Manage credit memos for AR corrections
@@ -57,6 +59,153 @@ tags:
 - description: Ingest and manage accounting events for journal processing.
   name: Accounting Events
 paths:
+  /v1/accounting/analytics/collections:
+    get:
+      description: 'Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice totals for invoices finalized in the window) and collected (the sum of settled PaymentApplication amounts applied in the window, never pos-invoice''s pre-settlement PaymentIntent/Receipt artifacts), plus a server-derived collectionRatePct.
+
+        Use this tool for a single window''s cash-collection efficiency; do not loop it across more than 3 periods for a multi-period trend such as 12 weekly windows, since that exceeds this endpoint''s call budget — narrow the request instead, or wait for a future groupBy=month|week parameter.
+
+        Preconditions: none; a window with no finalized invoices and no applications returns invoiced=0, collected=0 and a null collectionRatePct, which is also returned whenever invoiced is zero rather than a misleading 0 or a divide-by-zero error.
+
+        Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; invoiced and collected are deliberately different invoice cohorts, since a payment can settle in a later window than the invoice it pays, so collectionRatePct is a period cash-efficiency signal rather than a cohort collection rate.
+
+        There is no limit parameter and no truncated flag, since the response is always exactly one aggregate row, not a list to cap.
+
+        Emits an ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW audit event; no other state changes.
+
+        Returns 400 when endDate is before startDate.
+
+        '
+      operationId: getCollectionsAnalytics
+      parameters:
+      - description: Window start date (YYYY-MM-DD)
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Window end date (YYYY-MM-DD)
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: true
+        schema:
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionsAnalyticsReport'
+          description: Collections analytics generated successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid date range
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - missing accounting:analytics:view
+      security:
+      - bearerAuth:
+        - accounting:analytics:view
+      summary: Get Invoiced Vs Collected Analytics
+      tags:
+      - Accounting Analytics
+      x-required-permissions:
+      - accounting:analytics:view
+  /v1/accounting/analytics/payment-lag-cohorts:
+    get:
+      description: 'Generates payment-lag cohorts for invoices issued (finalized) in a date window: exactly four cohorts (<=30, 31-60, 61-90, unpaid) each with an invoice count and total invoice amount, where issuedFrom/issuedTo anchor on invoice issue date (ExtInvoice.finalizedAt) rather than payment date.
+
+        Use this tool for AR collection-speed distribution across invoices; do not use getCollectionsAnalytics instead, which reports a period cash total rather than a per-invoice speed distribution.
+
+        Preconditions: none; a window with no finalized invoices returns all four cohorts at count 0 and amount 0.
+
+        Required inputs: issuedFrom and issuedTo (ISO dates), with issuedTo on or after issuedFrom; limit is optional, defaults to 4, and is capped at 4 since the result is always at most four rows.
+
+        Lag is measured in whole days from the issue-date anchor to the PaymentApplication at which invoiceBalanceAfter first reaches zero, with boundaries inclusive at the upper edge; unpaid absorbs invoices with no application, invoices only partially applied, and invoices whose full-payment lag exceeded 90 days, each counted at its full invoice total rather than a remaining balance.
+
+        The response''s truncated flag is true when limit dropped one or more of the four fixed cohorts, false when all four are present.
+
+        Emits an ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW audit event; no state changes.
+
+        Returns 400 when issuedTo is before issuedFrom.
+
+        '
+      operationId: getPaymentLagCohorts
+      parameters:
+      - description: Issue-date window start (YYYY-MM-DD)
+        example: 2026-01-01
+        in: query
+        name: issuedFrom
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Issue-date window end (YYYY-MM-DD)
+        example: 2026-06-30
+        in: query
+        name: issuedTo
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Maximum cohort rows to return, from the fixed order (server caps at 4)
+        example: 4
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 4
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentLagCohortsReport'
+          description: Payment-lag cohorts generated successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid date range
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - missing accounting:analytics:view
+      security:
+      - bearerAuth:
+        - accounting:analytics:view
+      summary: Get Payment Lag Cohorts
+      tags:
+      - Accounting Analytics
+      x-required-permissions:
+      - accounting:analytics:view
   /v1/accounting/ap/bills:
     get:
       description: 'Lists vendor bills eligible for payment, meaning those in APPROVED status, ordered by due date oldest first with nulls last, then bill date, then bill id.
@@ -8883,6 +9032,45 @@ components:
       required:
       - operatorId
       type: object
+    CollectionsAnalyticsReport:
+      description: Invoiced-vs-collected analytics for one date window. invoiced and collected are different invoice cohorts (see field descriptions) — do not present collectionRatePct as a cohort collection rate.
+      properties:
+        collected:
+          description: Sum of settled PaymentApplication.appliedAmount whose applicationTimestamp falls in the window (never PaymentIntent/Receipt pre-settlement amounts); 0 when none applied in the window
+          example: 98250.0
+          type: number
+        collectionRatePct:
+          description: collected divided by invoiced, times 100, rounded HALF_UP to 2 decimals; null when invoiced is zero (the ratio is undefined — never a divide-by-zero error and never a misleading 0)
+          example: 78.6
+          type:
+          - number
+          - 'null'
+        endDate:
+          description: Window end date (inclusive)
+          example: 2026-06-30
+          format: date
+          type: string
+        generatedAt:
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+          format: date-time
+          type: string
+        invoiced:
+          description: Sum of ExtInvoice.total for invoices whose finalizedAt (accrual/posting date) falls in the window; 0 when none finalized in the window
+          example: 125000.0
+          type: number
+        startDate:
+          description: Window start date (inclusive)
+          example: 2026-06-01
+          format: date
+          type: string
+      required:
+      - collected
+      - endDate
+      - generatedAt
+      - invoiced
+      - startDate
+      type: object
     ContractField:
       description: A single field definition in an event envelope contract
       properties:
@@ -11469,6 +11657,60 @@ components:
           type: string
       required:
       - reason
+      type: object
+    PaymentLagCohortRow:
+      description: 'One payment-lag cohort: invoice count and total invoice amount for invoices whose full-payment lag (or non-payment) falls in this band'
+      properties:
+        amount:
+          description: Sum of invoice totals in this cohort — the invoice's full amount, not its remaining open balance
+          example: 84250.0
+          type: number
+        cohort:
+          description: 'Cohort label. <=30 / 31-60 / 61-90: whole days from the invoice''s issue-date anchor to the PaymentApplication at which invoiceBalanceAfter first reached zero (boundaries inclusive at the upper edge, e.g. 31-60 includes exactly 60). unpaid: no application ever brought the balance to zero in the observed data, the lag exceeded 90 days, or the invoice is only partially applied.'
+          example: <=30
+          type: string
+        invoiceCount:
+          description: Count of invoices in this cohort
+          example: 42
+          format: int32
+          type: integer
+      required:
+      - amount
+      - cohort
+      - invoiceCount
+      type: object
+    PaymentLagCohortsReport:
+      description: Payment-lag cohorts for invoices issued (finalized) in a date window
+      properties:
+        cohorts:
+          description: Cohort rows in fixed order (<=30, 31-60, 61-90, unpaid), truncated to the requested limit
+          items:
+            $ref: '#/components/schemas/PaymentLagCohortRow'
+          type: array
+        generatedAt:
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+          format: date-time
+          type: string
+        issuedFrom:
+          description: Window start date (inclusive), anchored on invoice finalizedAt
+          example: 2026-01-01
+          format: date
+          type: string
+        issuedTo:
+          description: Window end date (inclusive)
+          example: 2026-06-30
+          format: date
+          type: string
+        truncated:
+          description: True when `limit` is below the fixed cohort count (4) and dropped cohorts that would otherwise appear, false otherwise
+          type: boolean
+      required:
+      - cohorts
+      - generatedAt
+      - issuedFrom
+      - issuedTo
+      - truncated
       type: object
     PostingCategoryCreateRequest:
       description: Request payload for creating a new posting category

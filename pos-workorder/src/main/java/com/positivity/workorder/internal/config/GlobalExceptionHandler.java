@@ -287,6 +287,40 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", ex.getMessage(), request);
     }
 
+    /**
+     * {@code @RequestParam}-level {@code @Min}/{@code @Max} (e.g. the analytics endpoints' {@code
+     * limit}/{@code withinDays}, #1593-#1595) validated via class-level {@code @Validated} raises
+     * the raw JSR-380 exception through an AOP method interceptor, not Spring's web-native {@code
+     * HandlerMethodValidationException} — so unlike {@code MethodArgumentNotValidException} it does
+     * not implement {@link org.springframework.web.ErrorResponse} and pos-web-common's platform
+     * fallback collapses it to a 500. Without this handler, an out-of-range query parameter on any
+     * {@code @Validated} controller in this module is a server error instead of the caller's 400.
+     */
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(
+            jakarta.validation.ConstraintViolationException ex, HttpServletRequest request) {
+        List<ApiError.FieldError> fieldErrors = ex.getConstraintViolations().stream()
+                .map(v -> new ApiError.FieldError(
+                        lastPathSegment(v.getPropertyPath().toString()), v.getMessage()))
+                .toList();
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.withFieldErrors(
+                "VALIDATION_FAILED",
+                "Request validation failed",
+                HttpStatus.BAD_REQUEST.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                fieldErrors);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.BAD_REQUEST);
+    }
+
+    private static String lastPathSegment(String propertyPath) {
+        int dot = propertyPath.lastIndexOf('.');
+        return dot < 0 ? propertyPath : propertyPath.substring(dot + 1);
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request);

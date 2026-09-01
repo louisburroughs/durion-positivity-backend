@@ -519,6 +519,28 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    // ==================== ANALYTICS EVENTS (Wave 2 E5/E6/E7, #1593-#1595) ====================
+
+    /** E7 (#1595): date-range (or single-workorder) status-transition query. */
+    public static final EventTypeRegistration WORKORDER_STATUS_TRANSITIONS_VIEW = EventTypeRegistration.fastRead(
+                    "WORKORDER_STATUS_TRANSITIONS_VIEW",
+                    "Query workorder status transitions by date range or workorder id")
+            .apiVersion("1")
+            .build();
+
+    /** E6 (#1594): reopened-workorder analytics within N days of completion. */
+    public static final EventTypeRegistration WORKORDER_ANALYTICS_REOPENED_VIEW = EventTypeRegistration.search(
+                    "WORKORDER_ANALYTICS_REOPENED_VIEW", "Retrieve reopened-workorder analytics for a date range")
+            .apiVersion("1")
+            .build();
+
+    /** E5 (#1593): per-technician labor summary (completed WOs, billed hours, labor revenue). */
+    public static final EventTypeRegistration WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW = EventTypeRegistration.search(
+                    "WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW",
+                    "Retrieve per-technician labor analytics for a date range")
+            .apiVersion("1")
+            .build();
+
     // ==================== ALL EVENT TYPES ====================
 
     /** All event types for registration at startup */
@@ -618,5 +640,9 @@ public final class EventTypes {
             // Fleet payment authorization events (#1346)
             WORKORDER_FLEET_AUTHORIZATION_READ,
             WORKORDER_FLEET_AUTHORIZATION_REQUEST,
-            WORKORDER_FLEET_AUTHORIZATION_RESOLVE);
+            WORKORDER_FLEET_AUTHORIZATION_RESOLVE,
+            // Analytics events (Wave 2 E5/E6/E7, #1593-#1595)
+            WORKORDER_STATUS_TRANSITIONS_VIEW,
+            WORKORDER_ANALYTICS_REOPENED_VIEW,
+            WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW);
 }
