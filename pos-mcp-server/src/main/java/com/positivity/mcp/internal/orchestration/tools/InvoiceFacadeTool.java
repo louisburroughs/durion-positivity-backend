@@ -26,6 +26,7 @@ public class InvoiceFacadeTool {
     private final String invoiceUriTemplate;
     private final String invoiceSearchUriTemplate;
     private final String customerInvoicesUriTemplate;
+    private final String revenueByCustomerUriTemplate;
     private final int customerInvoiceLineCap;
 
     public InvoiceFacadeTool(
@@ -34,12 +35,14 @@ public class InvoiceFacadeTool {
             @Value("${pos.invoice.invoice-uri-template}") @NonNull String invoiceUriTemplate,
             @Value("${pos.invoice.search-uri-template}") @NonNull String invoiceSearchUriTemplate,
             @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate,
+            @Value("${pos.invoice.revenue-by-customer-uri-template}") @NonNull String revenueByCustomerUriTemplate,
             @Value("${pos.invoice.customer-invoice-line-cap:" + CUSTOMER_INVOICE_LINE_CAP + "}")
                     int customerInvoiceLineCap) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.invoiceUriTemplate = invoiceUriTemplate;
         this.invoiceSearchUriTemplate = invoiceSearchUriTemplate;
         this.customerInvoicesUriTemplate = customerInvoicesUriTemplate;
+        this.revenueByCustomerUriTemplate = revenueByCustomerUriTemplate;
         this.customerInvoiceLineCap = customerInvoiceLineCap;
     }
 
@@ -126,5 +129,32 @@ public class InvoiceFacadeTool {
         return lineRows == null
                 ? null
                 : FacadeJsonSupport.distinctInvoicesFromLineRows(lineRows, customerInvoiceLineCap);
+    }
+
+    @Tool(
+            description = "Get per-customer revenue for a reporting period (Wave 2 E1). period must be a "
+                    + "calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. "
+                    + "2026) — resolve a relative phrase like \"last month\" or \"last quarter\" to the "
+                    + "concrete YYYY-MM/YYYY yourself before calling; a quarter or a run of months is not a "
+                    + "single period here, so loop this call once per month (or once for the enclosing year) "
+                    + "rather than guess at a wider window. Returns rows — customerId, name (null until the "
+                    + "customer-party replica has caught up), revenue, invoiceCount, avgInvoiceValue "
+                    + "(revenue / invoiceCount, server-computed), lastInvoiceDate — ordered by revenue "
+                    + "descending and capped at the top 20 customers; the response's truncated flag is true "
+                    + "when more customers had revenue in the window than that cap allowed. Only "
+                    + "revenue-recognized invoices (status FINALIZED or POSTED) count — a DRAFT invoice has "
+                    + "not been billed yet and a CANCELLED/ERROR one never will be, so neither contributes. "
+                    + "This tool does NOT accept a customerId filter, a limit override, or a groupBy — it "
+                    + "always ranks every customer in the business for one window; for a single customer's "
+                    + "invoices use getInvoicesByCustomer instead, and do not loop this tool across more than "
+                    + "a handful of periods for a multi-period trend.")
+    public String getRevenueByCustomer(
+            @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
+        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+        return restClient
+                .get()
+                .uri(revenueByCustomerUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
+                .retrieve()
+                .body(String.class);
     }
 }

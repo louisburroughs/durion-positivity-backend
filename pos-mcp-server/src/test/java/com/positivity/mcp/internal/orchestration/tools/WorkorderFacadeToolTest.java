@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -41,7 +42,8 @@ class WorkorderFacadeToolTest {
                 BASE_URL,
                 contract("getWorkorder").template(),
                 contract("searchWorkorders").template(),
-                contract("getWorkorderStatus").template());
+                contract("getWorkorderStatus").template(),
+                contract("getTechnicianLaborAnalytics").template());
     }
 
     @Test
@@ -140,7 +142,8 @@ class WorkorderFacadeToolTest {
                 BASE_URL,
                 contract("getWorkorder").template(),
                 "/workorder/v1/workorders/search",
-                contract("getWorkorderStatus").template());
+                contract("getWorkorderStatus").template(),
+                contract("getTechnicianLaborAnalytics").template());
         server.expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?customerId=" + CUSTOMER_ID))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
@@ -184,5 +187,46 @@ class WorkorderFacadeToolTest {
 
         mockServer.verify();
         assertThat(result).isEqualTo("{\"error\":\"boom\"}");
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics maps a YYYY-MM period to GET technician-labor?startDate&endDate")
+    void getTechnicianLaborAnalytics_mapsCalendarMonthToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[],\"truncated\":false,\"limit\":100}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getTechnicianLaborAnalytics("2026-06");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("\"truncated\":false");
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics maps a YYYY period to the full calendar year")
+    void getTechnicianLaborAnalytics_mapsCalendarYearToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getTechnicianLaborAnalytics("2026");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics rejects an unsupported period form without issuing a request")
+    void getTechnicianLaborAnalytics_rejectsUnsupportedPeriod() {
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("Q2-2026"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY-MM")
+                .hasMessageContaining("YYYY");
+
+        mockServer.verify();
     }
 }

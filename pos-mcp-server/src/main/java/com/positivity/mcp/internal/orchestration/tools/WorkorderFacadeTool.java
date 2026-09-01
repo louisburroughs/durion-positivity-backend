@@ -17,17 +17,20 @@ public class WorkorderFacadeTool {
     private final String workorderUriTemplate;
     private final String workorderSearchUriTemplate;
     private final String workorderStatusUriTemplate;
+    private final String technicianLaborUriTemplate;
 
     public WorkorderFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.workorder.base-url}") @NonNull String baseUrl,
             @Value("${pos.workorder.workorder-uri-template}") @NonNull String workorderUriTemplate,
             @Value("${pos.workorder.search-uri-template}") @NonNull String workorderSearchUriTemplate,
-            @Value("${pos.workorder.status-uri-template}") @NonNull String workorderStatusUriTemplate) {
+            @Value("${pos.workorder.status-uri-template}") @NonNull String workorderStatusUriTemplate,
+            @Value("${pos.workorder.technician-labor-uri-template}") @NonNull String technicianLaborUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.workorderUriTemplate = workorderUriTemplate;
         this.workorderSearchUriTemplate = workorderSearchUriTemplate;
         this.workorderStatusUriTemplate = workorderStatusUriTemplate;
+        this.technicianLaborUriTemplate = technicianLaborUriTemplate;
     }
 
     @Tool(description = "Get full workorder details by workorder ID")
@@ -121,5 +124,32 @@ public class WorkorderFacadeTool {
                 .retrieve()
                 .body(String.class);
         return body == null ? null : FacadeJsonSupport.workorderStatusProjection(body);
+    }
+
+    @Tool(
+            description = "Get per-technician labor and revenue summary for a reporting period (Wave 2 E5). "
+                    + "period must be a calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in "
+                    + "YYYY form (e.g. 2026) — resolve a relative phrase like \"last month\" yourself before "
+                    + "calling; do not loop this tool across more than a handful of periods for a "
+                    + "multi-period trend. Returns rows — technicianId, name (null when the person replica "
+                    + "has no record), completedWoCount, billedHours, laborRevenue — ordered by billedHours "
+                    + "descending and capped at 100 technicians; the response's truncated flag is true when "
+                    + "more technicians had activity in the window than that cap allowed. The three columns "
+                    + "are independently windowed and can disagree at month boundaries: completedWoCount and "
+                    + "laborRevenue are attributed to the technician on the completing state transition and "
+                    + "anchor on the workorder's completion date, while billedHours anchors on the labor "
+                    + "entry's own log time — a technician can show billedHours with completedWoCount=0 on "
+                    + "work not yet completed, or the reverse. laborRevenue sums invoice labor totals for "
+                    + "that technician's completed work orders, excluding (never zeroing) an invoice whose "
+                    + "labor total is unknown. This tool does NOT accept a technicianId filter, a limit "
+                    + "override, or a groupBy — it always ranks every technician for one window.")
+    public String getTechnicianLaborAnalytics(
+            @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
+        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+        return restClient
+                .get()
+                .uri(technicianLaborUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
+                .retrieve()
+                .body(String.class);
     }
 }

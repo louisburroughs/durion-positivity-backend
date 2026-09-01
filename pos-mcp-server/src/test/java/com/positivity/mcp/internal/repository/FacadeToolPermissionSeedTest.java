@@ -29,7 +29,9 @@ import org.junit.jupiter.api.Test;
  * {@code V38} (adds {@code tax:rates:view} to TaxFacadeTool for the restored getTaxRate, #1522) →
  * {@code V39} (re-derives AccountingFacadeTool for the W1.2 aging facades; permission-net-neutral)
  * → {@code V40} (per-method AND-groups, #1606 finding 1) → {@code V41} (re-derives InvoiceFacadeTool
- * and AdminFacadeTool after #1612 moved two endpoint guards).
+ * and AdminFacadeTool after #1612 moved two endpoint guards) → {@code V42} (Wave 2 W2.3 facade
+ * promotion, #1601: adds one analytics method each to InvoiceFacadeTool, WorkorderFacadeTool, and
+ * AccountingFacadeTool).
  *
  * <p><b>V40 changed the unit of the assertion.</b> Rows now carry a {@code permission_group} and a
  * tool is offered iff the caller holds ALL codes of AT LEAST ONE group, so a flat union no longer
@@ -64,6 +66,11 @@ class FacadeToolPermissionSeedTest {
     private static final String PEOPLE_EMPLOYEE_VIEW = "people:employee:view";
     private static final String AVAILABILITY_READ = "inventory:availability:read";
     private static final String SECURITY_PERMISSION_VIEW = "security:permission:view";
+    // W2.3 facade promotion (#1601, V42): one new analytics method each on InvoiceFacadeTool,
+    // WorkorderFacadeTool, and AccountingFacadeTool.
+    private static final String INVOICE_ANALYTICS_VIEW = "invoice:analytics:view";
+    private static final String WORKORDER_ANALYTICS_VIEW = "workorder:analytics:view";
+    private static final String ACCOUNTING_ANALYTICS_VIEW = "accounting:analytics:view";
     private static final Set<String> ASSISTANT_ENTRYPOINTS =
             Set.of("mcp:chat:execute", "mcp:chat:stream", "nlti:request:submit", "nlti:request:read", AUTHENTICATED);
 
@@ -94,7 +101,8 @@ class FacadeToolPermissionSeedTest {
                             "getGeneralLedger", Set.of(REPORTING),
                             "getFinancialSummary", Set.of(REPORTING),
                             "getAgedReceivables", Set.of(REPORTING),
-                            "getAgedPayables", Set.of(REPORTING))),
+                            "getAgedPayables", Set.of(REPORTING),
+                            "getVendorSpend", Set.of(ACCOUNTING_ANALYTICS_VIEW))),
             Map.entry(
                     "ReportingFacadeTool",
                     Map.of(
@@ -132,7 +140,8 @@ class FacadeToolPermissionSeedTest {
                     Map.of(
                             "getInvoice", Set.of(INVOICE_VIEW),
                             "searchInvoices", Set.of(INVOICE_VIEW),
-                            "getInvoicesByCustomer", Set.of(INVOICE_VIEW))),
+                            "getInvoicesByCustomer", Set.of(INVOICE_VIEW),
+                            "getRevenueByCustomer", Set.of(INVOICE_ANALYTICS_VIEW))),
             Map.entry(
                     "LocationFacadeTool",
                     Map.of(
@@ -177,7 +186,8 @@ class FacadeToolPermissionSeedTest {
                     Map.of(
                             "getWorkorder", Set.of(WORKORDER_VIEW),
                             "searchWorkorders", Set.of(WORKORDER_VIEW),
-                            "getWorkorderStatus", Set.of(WORKORDER_VIEW))),
+                            "getWorkorderStatus", Set.of(WORKORDER_VIEW),
+                            "getTechnicianLaborAnalytics", Set.of(WORKORDER_ANALYTICS_VIEW))),
             // getSystemStatus makes no HTTP call and carries no guard, so it contributes no group.
             Map.entry(
                     "AdminFacadeTool",
@@ -427,8 +437,10 @@ class FacadeToolPermissionSeedTest {
         // they replay identically. Each later migration of that shape belongs in this list; a
         // re-derivation left out of it would leave the test asserting a chain the database does
         // not have, which is the failure mode this whole class exists to prevent.
-        for (String migration :
-                List.of("V40__mcp_tool_permission_groups.sql", "V41__facade_permission_rederivation_1612.sql")) {
+        for (String migration : List.of(
+                "V40__mcp_tool_permission_groups.sql",
+                "V41__facade_permission_rederivation_1612.sql",
+                "V42__wave2_facade_promotion.sql")) {
             String sql = read(migration);
             parseFullDeletes(sql).forEach(groups::remove);
             parseGroupSeed(sql).forEach((tool, seeded) -> {

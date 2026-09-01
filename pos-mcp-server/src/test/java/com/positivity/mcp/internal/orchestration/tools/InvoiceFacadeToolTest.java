@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -41,6 +42,7 @@ class InvoiceFacadeToolTest {
                 contract("getInvoice").template(),
                 contract("searchInvoices").template(),
                 contract("getInvoicesByCustomer").template(),
+                contract("getRevenueByCustomer").template(),
                 InvoiceFacadeTool.CUSTOMER_INVOICE_LINE_CAP);
     }
 
@@ -232,5 +234,48 @@ class InvoiceFacadeToolTest {
 
         mockServer.verify();
         assertThat(result).isEqualTo(errorEnvelope);
+    }
+
+    @Test
+    @DisplayName("getRevenueByCustomer maps a YYYY-MM period to GET revenue-by-customer?startDate&endDate")
+    void getRevenueByCustomer_mapsCalendarMonthToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getRevenueByCustomer");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"startDate\":\"2026-06-01\",\"endDate\":\"2026-06-30\",\"rows\":[]}",
+                        MediaType.APPLICATION_JSON));
+
+        String result = tool.getRevenueByCustomer("2026-06");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("2026-06-01").contains("2026-06-30");
+    }
+
+    @Test
+    @DisplayName("getRevenueByCustomer maps a YYYY period to the full calendar year")
+    void getRevenueByCustomer_mapsCalendarYearToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getRevenueByCustomer");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getRevenueByCustomer("2026");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getRevenueByCustomer rejects an unsupported period form without issuing a request")
+    void getRevenueByCustomer_rejectsUnsupportedPeriod() {
+        assertThatThrownBy(() -> tool.getRevenueByCustomer("2025-Q1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY-MM")
+                .hasMessageContaining("YYYY");
+
+        mockServer.verify();
     }
 }

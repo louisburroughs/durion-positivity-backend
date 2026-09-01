@@ -58,7 +58,8 @@ class AccountingFacadeToolTest {
                 summary.leg("balanceSheet").template(),
                 summary.leg("trialBalance").template(),
                 contract("getAgedReceivables").template(),
-                contract("getAgedPayables").template());
+                contract("getAgedPayables").template(),
+                contract("getVendorSpend").template());
     }
 
     @Test
@@ -286,6 +287,49 @@ class AccountingFacadeToolTest {
         assertThatThrownBy(() -> tool.getAgedPayables("2026-02-30"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM-DD");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend maps a YYYY-MM period to GET vendor-spend?startDate&endDate")
+    void getVendorSpend_mapsCalendarMonthToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getVendorSpend");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"rows\":[{\"vendorId\":\"v1\",\"paidAmount\":1000.00,\"billCount\":0}]}",
+                        MediaType.APPLICATION_JSON));
+
+        String result = tool.getVendorSpend("2026-06");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("paidAmount");
+    }
+
+    @Test
+    @DisplayName("getVendorSpend maps a YYYY period to the full calendar year")
+    void getVendorSpend_mapsCalendarYearToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getVendorSpend");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getVendorSpend("2026");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend rejects an unsupported period form without issuing a request")
+    void getVendorSpend_rejectsUnsupportedPeriod() {
+        assertThatThrownBy(() -> tool.getVendorSpend("2025-Q1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY-MM")
+                .hasMessageContaining("YYYY");
 
         mockServer.verify();
     }

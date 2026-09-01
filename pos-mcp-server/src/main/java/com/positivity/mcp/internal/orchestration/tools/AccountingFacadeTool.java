@@ -23,6 +23,7 @@ public class AccountingFacadeTool {
     private final String trialBalanceUriTemplate;
     private final String agedReceivablesUriTemplate;
     private final String agedPayablesUriTemplate;
+    private final String vendorSpendUriTemplate;
 
     public AccountingFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -33,7 +34,8 @@ public class AccountingFacadeTool {
             @Value("${pos.accounting.balance-sheet-uri-template}") @NonNull String balanceSheetUriTemplate,
             @Value("${pos.accounting.trial-balance-uri-template}") @NonNull String trialBalanceUriTemplate,
             @Value("${pos.accounting.aged-receivables-uri-template}") @NonNull String agedReceivablesUriTemplate,
-            @Value("${pos.accounting.aged-payables-uri-template}") @NonNull String agedPayablesUriTemplate) {
+            @Value("${pos.accounting.aged-payables-uri-template}") @NonNull String agedPayablesUriTemplate,
+            @Value("${pos.accounting.vendor-spend-uri-template}") @NonNull String vendorSpendUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.accountBalanceUriTemplate = accountBalanceUriTemplate;
         this.generalLedgerUriTemplate = generalLedgerUriTemplate;
@@ -42,6 +44,7 @@ public class AccountingFacadeTool {
         this.trialBalanceUriTemplate = trialBalanceUriTemplate;
         this.agedReceivablesUriTemplate = agedReceivablesUriTemplate;
         this.agedPayablesUriTemplate = agedPayablesUriTemplate;
+        this.vendorSpendUriTemplate = vendorSpendUriTemplate;
     }
 
     @Tool(
@@ -171,6 +174,34 @@ public class AccountingFacadeTool {
         return restClient
                 .get()
                 .uri(agedPayablesUriTemplate, Map.of("asOfDate", validatedAsOfDate(asOfDate)))
+                .retrieve()
+                .body(String.class);
+    }
+
+    @Tool(
+            description = "Get per-vendor spend for a reporting period (Wave 2 E8). period must be a "
+                    + "calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. "
+                    + "2026) — resolve a relative phrase like \"last month\" or \"the same six months last "
+                    + "year\" to the concrete YYYY-MM/YYYY yourself and call once per period; do not loop "
+                    + "this tool across more than a handful of periods for a multi-period trend. Returns "
+                    + "rows — vendorId, name (falls back to a bill/payment name snapshot, null only if "
+                    + "neither source has one), paidAmount, billCount, avgBillAmount — ordered by paidAmount "
+                    + "descending and capped at the top 20 vendors; the response's truncated flag is true "
+                    + "when more vendors had activity in the window than that cap allowed. IMPORTANT: "
+                    + "paidAmount (settled A/P cash — payments whose paymentDate falls in the window and "
+                    + "whose gateway status shows the cash already moved) and billCount/avgBillAmount "
+                    + "(VendorBill records whose billDate falls in the window) are DIFFERENT POPULATIONS of "
+                    + "the same vendor — a payment can settle bills billed in an earlier or later window, so "
+                    + "avgBillAmount * billCount does not reconcile to paidAmount, and a vendor with a high "
+                    + "paidAmount but billCount=0 in this window is not an anomaly. avgBillAmount is 0, "
+                    + "never null, when billCount is 0. This tool does NOT accept a vendorId filter or a "
+                    + "limit override — it always ranks every vendor for one window; use listApBills instead "
+                    + "for individual eligible bills rather than a per-vendor aggregate.")
+    public String getVendorSpend(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
+        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+        return restClient
+                .get()
+                .uri(vendorSpendUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
                 .retrieve()
                 .body(String.class);
     }
