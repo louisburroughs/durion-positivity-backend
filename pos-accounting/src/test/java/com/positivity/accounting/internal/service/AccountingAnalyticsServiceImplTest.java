@@ -20,6 +20,7 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
@@ -56,6 +57,9 @@ class AccountingAnalyticsServiceImplTest {
     private PaymentApplicationRepository paymentApplicationRepository;
 
     @Mock
+    private PaymentApplicationReversalRepository paymentApplicationReversalRepository;
+
+    @Mock
     private APPaymentRepository apPaymentRepository;
 
     @Mock
@@ -72,6 +76,7 @@ class AccountingAnalyticsServiceImplTest {
                 TEST_CLOCK,
                 extInvoiceRepository,
                 paymentApplicationRepository,
+                paymentApplicationReversalRepository,
                 apPaymentRepository,
                 vendorBillRepository,
                 vendorRepository);
@@ -156,11 +161,14 @@ class AccountingAnalyticsServiceImplTest {
                             // Settles an invoice finalized in an entirely different (earlier) period —
                             // proving invoiced and collected are independent cohorts.
                             application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "1200.00", "0.00")));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
 
             CollectionsAnalyticsReport report = service.getCollectionsAnalytics(start, end);
 
             assertThat(report.getInvoiced()).isEqualByComparingTo("1500.00");
             assertThat(report.getCollected()).isEqualByComparingTo("1200.00");
+            assertThat(report.getApplicationReversals()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(report.getCollectionRatePct()).isEqualByComparingTo("80.00");
             assertThat(report.getGeneratedAt()).isEqualTo(TEST_CLOCK.instant());
         }
@@ -187,12 +195,171 @@ class AccountingAnalyticsServiceImplTest {
             when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of());
             when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
                     .thenReturn(List.of());
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
 
             CollectionsAnalyticsReport report =
                     service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
 
             assertThat(report.getInvoiced()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(report.getCollected()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getApplicationReversals()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getCollectionRatePct()).isNull();
+        }
+
+        /**
+         * Stubs the three window-scoped reads from one fixture so a single dataset can be queried
+         * through several different windows in one test — which is what the movement-basis
+         * (non-restatement) and additivity cases below actually assert.
+         */
+        private void stubWindowedFixture(
+                List<ExtInvoice> invoices,
+                List<PaymentApplication> applications,
+                List<Map.Entry<Instant, String>> reversals) {
+
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenAnswer(call -> invoices.stream()
+                            .filter(i -> within(i.getFinalizedAt(), call.getArgument(0), call.getArgument(1)))
+                            .toList());
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenAnswer(call -> applications.stream()
+                            .filter(a -> within(a.getApplicationTimestamp(), call.getArgument(0), call.getArgument(1)))
+                            .toList());
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenAnswer(call -> reversals.stream()
+                            .filter(r -> within(r.getKey(), call.getArgument(0), call.getArgument(1)))
+                            .map(r -> new BigDecimal(r.getValue()))
+                            .reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
+
+        private boolean within(Instant value, Instant start, Instant end) {
+            return !value.isBefore(start) && !value.isAfter(end);
+        }
+
+        @Test
+        @DisplayName("A reversal recorded in the same window as its application nets that application to zero")
+        void reversalInSameWindowNetsToZero() {
+            stubWindowedFixture(
+                    List.of(invoice(UUID.randomUUID(), Instant.parse("2026-06-02T00:00:00Z"), "1000.00")),
+                    List.of(application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "500.00", "500.00")),
+                    List.of(Map.entry(Instant.parse("2026-06-12T00:00:00Z"), "500.00")));
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo("1000.00");
+            assertThat(report.getCollected()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getApplicationReversals()).isEqualByComparingTo("500.00");
+            assertThat(report.getCollectionRatePct()).isEqualByComparingTo("0.00");
+        }
+
+        @Test
+        @DisplayName("A reversal in a LATER window reduces that later window and never restates the earlier one")
+        void reversalInLaterWindowDoesNotRestateEarlierWindow() {
+            stubWindowedFixture(
+                    List.of(
+                            invoice(UUID.randomUUID(), Instant.parse("2026-01-05T00:00:00Z"), "1000.00"),
+                            invoice(UUID.randomUUID(), Instant.parse("2026-03-05T00:00:00Z"), "400.00")),
+                    List.of(application(UUID.randomUUID(), Instant.parse("2026-01-15T00:00:00Z"), "1000.00", "0.00")),
+                    List.of(Map.entry(Instant.parse("2026-03-20T00:00:00Z"), "1000.00")));
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport march =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+
+            // January is closed and must read exactly as it did before the March reversal existed.
+            assertThat(january.getCollected()).isEqualByComparingTo("1000.00");
+            assertThat(january.getApplicationReversals()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(january.getCollectionRatePct()).isEqualByComparingTo("100.00");
+
+            // March absorbs the whole reversal.
+            assertThat(march.getCollected()).isEqualByComparingTo("-1000.00");
+            assertThat(march.getApplicationReversals()).isEqualByComparingTo("1000.00");
+        }
+
+        @Test
+        @DisplayName("Movement basis is additive: Jan + Feb + Mar equals the single Jan-Mar window")
+        void subWindowsAreAdditive() {
+            stubWindowedFixture(
+                    List.of(
+                            invoice(UUID.randomUUID(), Instant.parse("2026-01-05T00:00:00Z"), "1200.00"),
+                            invoice(UUID.randomUUID(), Instant.parse("2026-02-05T00:00:00Z"), "300.00"),
+                            invoice(UUID.randomUUID(), Instant.parse("2026-03-05T00:00:00Z"), "500.00")),
+                    List.of(
+                            application(UUID.randomUUID(), Instant.parse("2026-01-15T00:00:00Z"), "1000.00", "200.00"),
+                            application(UUID.randomUUID(), Instant.parse("2026-02-15T00:00:00Z"), "300.00", "0.00"),
+                            application(UUID.randomUUID(), Instant.parse("2026-03-15T00:00:00Z"), "200.00", "300.00")),
+                    List.of(
+                            Map.entry(Instant.parse("2026-02-20T00:00:00Z"), "100.00"),
+                            Map.entry(Instant.parse("2026-03-25T00:00:00Z"), "250.00")));
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport february =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+            CollectionsAnalyticsReport march =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+            CollectionsAnalyticsReport quarter =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 3, 31));
+
+            assertThat(january.getCollected()).isEqualByComparingTo("1000.00");
+            assertThat(february.getCollected()).isEqualByComparingTo("200.00");
+            assertThat(march.getCollected()).isEqualByComparingTo("-50.00");
+
+            BigDecimal summedCollected =
+                    january.getCollected().add(february.getCollected()).add(march.getCollected());
+            BigDecimal summedReversals = january.getApplicationReversals()
+                    .add(february.getApplicationReversals())
+                    .add(march.getApplicationReversals());
+            BigDecimal summedInvoiced =
+                    january.getInvoiced().add(february.getInvoiced()).add(march.getInvoiced());
+
+            assertThat(summedCollected).isEqualByComparingTo(quarter.getCollected());
+            assertThat(summedReversals).isEqualByComparingTo(quarter.getApplicationReversals());
+            assertThat(summedInvoiced).isEqualByComparingTo(quarter.getInvoiced());
+            assertThat(quarter.getCollected()).isEqualByComparingTo("1150.00");
+            assertThat(quarter.getApplicationReversals()).isEqualByComparingTo("350.00");
+        }
+
+        @Test
+        @DisplayName("A heavy-reversal window drives collected negative and it is NOT clamped to zero")
+        void heavyReversalWindowGoesNegativeAndIsNotClamped() {
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(invoice(UUID.randomUUID(), Instant.parse("2026-06-02T00:00:00Z"), "1000.00")));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of(
+                            application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "100.00", "900.00")));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(new BigDecimal("900.00"));
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getCollected()).isNegative();
+            assertThat(report.getCollected()).isEqualByComparingTo("-800.00");
+            // Gross, and positive, even while collected is negative.
+            assertThat(report.getApplicationReversals()).isPositive();
+            assertThat(report.getApplicationReversals()).isEqualByComparingTo("900.00");
+            assertThat(report.getCollectionRatePct()).isEqualByComparingTo("-80.00");
+        }
+
+        @Test
+        @DisplayName("collectionRatePct stays null when invoiced is zero even if reversals make collected negative")
+        void nullRateWhenInvoicedIsZeroWithReversals() {
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of());
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of(
+                            application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "300.00", "0.00")));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(new BigDecimal("500.00"));
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getCollected()).isEqualByComparingTo("-200.00");
+            assertThat(report.getApplicationReversals()).isEqualByComparingTo("500.00");
             assertThat(report.getCollectionRatePct()).isNull();
         }
     }

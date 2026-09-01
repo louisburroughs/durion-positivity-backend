@@ -25,6 +25,19 @@ import org.jspecify.annotations.Nullable;
  * settle. {@code collectionRatePct} is therefore a period-level cash-efficiency signal, not a
  * per-cohort collection rate; do not read it as "what fraction of this window's invoiced amount got
  * paid".
+ *
+ * <p>{@code collected} is <b>payment amounts applied to accounts receivable within the window, net
+ * of application reversals recorded within the window — it is not cash received</b>. Reversals are
+ * netted on a <b>movement basis</b>: a January payment reversed in March reduces March and never
+ * restates January, so a closed period is never rewritten and the measure stays additive (Jan + Feb
+ * + Mar equals Jan–Mar). {@code applicationReversals} reports the gross reversal amount so a dip in
+ * {@code collected} can be attributed without a second call.
+ *
+ * <p>Excluded by name: settlement by <b>deposit credit</b> or <b>customer credit</b> (pos-invoice
+ * {@code DepositCredit}/{@code DepositCreditApplication}), because that cash was received when the
+ * deposit was taken, not when the credit was drawn down — a window in which deposit-funded invoices
+ * finalize therefore shows {@code collectionRatePct} understated. <b>Refunds are not represented in
+ * this endpoint at all</b> (pos-invoice {@code RefundRecord}; tracked as a follow-up).
  */
 @Data
 @Builder
@@ -33,7 +46,9 @@ import org.jspecify.annotations.Nullable;
 @Schema(
         description = "Invoiced-vs-collected analytics for one date window. invoiced and collected are different"
                 + " invoice cohorts (see field descriptions) — do not present collectionRatePct as a"
-                + " cohort collection rate.")
+                + " cohort collection rate. collected is applied-to-A/R net of reversals recorded in the"
+                + " window, not cash received: it excludes deposit-credit and customer-credit settlement"
+                + " and does not represent refunds at all.")
 public class CollectionsAnalyticsReport {
 
     @Schema(description = "Window start date (inclusive)", example = "2026-06-01", requiredMode = REQUIRED)
@@ -63,13 +78,32 @@ public class CollectionsAnalyticsReport {
     private BigDecimal invoiced;
 
     @Schema(
-            description = "Sum of settled PaymentApplication.appliedAmount whose applicationTimestamp falls in the"
-                    + " window (never PaymentIntent/Receipt pre-settlement amounts); 0 when none applied"
-                    + " in the window",
+            description = "Payment amounts APPLIED to accounts receivable within the window, NET of application"
+                    + " reversals recorded within the window — this is NOT cash received. Computed as the"
+                    + " sum of PaymentApplication.appliedAmount whose applicationTimestamp falls in the"
+                    + " window, minus the sum of PaymentApplicationReversal.amount whose reversedAt falls"
+                    + " in the window (movement basis: a January payment reversed in March reduces March"
+                    + " and never restates January, so sub-windows remain additive). Settlement by deposit"
+                    + " credit or customer credit is EXCLUDED, because that cash was received when the"
+                    + " deposit was taken rather than when the credit was drawn down, so a window in which"
+                    + " deposit-funded invoices finalize shows collectionRatePct understated. Refunds are"
+                    + " not represented in this endpoint at all. May be NEGATIVE in a heavy-reversal"
+                    + " window; it is deliberately not clamped. 0 when nothing was applied or reversed in"
+                    + " the window",
             example = "98250.00",
             requiredMode = REQUIRED)
     @NonNull
     private BigDecimal collected;
+
+    @Schema(
+            description = "GROSS sum of PaymentApplicationReversal.amount whose reversedAt falls in the window, as a"
+                    + " positive number; this amount has already been subtracted from collected. Reported"
+                    + " so a consumer seeing a dip in collected can attribute it to reversals without a"
+                    + " second call. 0 when no reversals were recorded in the window",
+            example = "1750.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    private BigDecimal applicationReversals;
 
     @Schema(
             description = "collected divided by invoiced, times 100, rounded HALF_UP to 2 decimals; null when invoiced"
