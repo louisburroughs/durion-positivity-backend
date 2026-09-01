@@ -81,15 +81,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                items:
+                  $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                type: array
           description: The service's labor standards.
         '404':
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Service does not exist
       security:
       - bearerAuth:
@@ -164,19 +164,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Malformed hours, time type, or operation codes
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Service does not exist
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: An active standard already covers this vehicle key and type
       security:
       - bearerAuth:
@@ -255,19 +255,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Malformed hours, time type, or operation codes
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Standard not found for this service
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                $ref: '#/components/schemas/ApiError'
           description: Row already superseded, or not a DURION-source row
       security:
       - bearerAuth:

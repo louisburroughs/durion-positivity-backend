@@ -81,7 +81,10 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         ServiceLaborStandardEntity replacement = validatedEntity(serviceId, request);
         rejectDuplicateActiveRow(serviceId, replacement, standardId);
         existing.setSupersededAt(Instant.now(clock));
-        laborStandardRepository.save(existing);
+        // Flushed before the replacement is inserted: Hibernate orders inserts ahead of updates
+        // within a flush, and the V18 active-key unique index would otherwise see the old row
+        // still active when the replacement lands on the same vehicle key.
+        laborStandardRepository.saveAndFlush(existing);
         return toResponse(laborStandardRepository.save(replacement));
     }
 

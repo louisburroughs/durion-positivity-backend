@@ -63,6 +63,7 @@ class ServiceLaborStandardServiceImplTest {
                 Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC));
         when(serviceRepository.existsById(SERVICE_ID)).thenReturn(true);
         when(laborStandardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(laborStandardRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
                 .thenReturn(List.of());
     }
@@ -221,10 +222,14 @@ class ServiceLaborStandardServiceImplTest {
             assertThat(existing.getSupersededAt()).isNotNull();
             assertThat(response.getLaborHours()).isEqualByComparingTo("1.8");
             assertThat(response.getSupersededAt()).isNull();
+            // The old row must be flushed as superseded before the replacement is inserted, or
+            // the V18 active-key unique index rejects the replacement (inserts flush first).
+            org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(laborStandardRepository);
+            inOrder.verify(laborStandardRepository).saveAndFlush(existing);
             ArgumentCaptor<ServiceLaborStandardEntity> saved =
                     ArgumentCaptor.forClass(ServiceLaborStandardEntity.class);
-            verify(laborStandardRepository, org.mockito.Mockito.times(2)).save(saved.capture());
-            assertThat(saved.getAllValues().getFirst()).isSameAs(existing);
+            inOrder.verify(laborStandardRepository).save(saved.capture());
+            assertThat(saved.getValue()).isNotSameAs(existing);
         }
 
         @Test

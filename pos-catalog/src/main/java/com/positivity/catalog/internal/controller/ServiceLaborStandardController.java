@@ -5,8 +5,10 @@ import com.positivity.catalog.internal.dto.ServiceLaborStandardResponseDto;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.ServiceLaborStandardService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -78,9 +80,18 @@ public class ServiceLaborStandardController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ServiceLaborStandardResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Malformed hours, time type, or operation codes")
-    @ApiResponse(responseCode = "404", description = "Service does not exist")
-    @ApiResponse(responseCode = "409", description = "An active standard already covers this vehicle key and type")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Malformed hours, time type, or operation codes",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Service does not exist",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "An active standard already covers this vehicle key and type",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServiceLaborStandardResponseDto> createLaborStandard(
             @Parameter(description = "Service the standard belongs to.", required = true) @PathVariable UUID serviceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -133,8 +144,13 @@ public class ServiceLaborStandardController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = ServiceLaborStandardResponseDto.class)))
-    @ApiResponse(responseCode = "404", description = "Service does not exist")
+                            array =
+                                    @ArraySchema(
+                                            schema = @Schema(implementation = ServiceLaborStandardResponseDto.class))))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Service does not exist",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ServiceLaborStandardResponseDto>> listLaborStandards(
             @Parameter(description = "Service whose standards to list.", required = true) @PathVariable UUID serviceId,
             @Parameter(description = "Include superseded rows for audit history.") @RequestParam(defaultValue = "false")
@@ -170,9 +186,18 @@ public class ServiceLaborStandardController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ServiceLaborStandardResponseDto.class)))
-    @ApiResponse(responseCode = "400", description = "Malformed hours, time type, or operation codes")
-    @ApiResponse(responseCode = "404", description = "Standard not found for this service")
-    @ApiResponse(responseCode = "409", description = "Row already superseded, or not a DURION-source row")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Malformed hours, time type, or operation codes",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Standard not found for this service",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Row already superseded, or not a DURION-source row",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServiceLaborStandardResponseDto> supersedeLaborStandard(
             @Parameter(description = "Service the standard belongs to.", required = true) @PathVariable UUID serviceId,
             @Parameter(description = "Standard being replaced.", required = true) @PathVariable UUID standardId,

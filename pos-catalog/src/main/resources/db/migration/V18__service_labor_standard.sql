@@ -49,3 +49,19 @@ CREATE TABLE service_labor_standard (
 CREATE INDEX ix_sls_lookup ON service_labor_standard (service_id, make, model, vehicle_year)
     WHERE superseded_at IS NULL;
 CREATE INDEX ix_sls_source ON service_labor_standard (source_code, source_revision);
+
+-- Concurrency backstop for the supersede-only lifecycle: no two ACTIVE rows may answer the
+-- same (service, vehicle key, time type), or resolution becomes ambiguous. The service layer
+-- pre-checks this and answers 409; the index catches what two concurrent writers (or direct
+-- SQL) slip past that check. COALESCE folds the null-as-wildcard key fields into the key so
+-- wildcard rows are protected too — '' cannot collide with real data because the service
+-- layer stores empty strings as NULL.
+CREATE UNIQUE INDEX ux_sls_active_key ON service_labor_standard (
+    service_id,
+    time_type,
+    COALESCE(vehicle_year, ''),
+    COALESCE(make, ''),
+    COALESCE(model, ''),
+    COALESCE(submodel, ''),
+    COALESCE(engine_code, '')
+) WHERE superseded_at IS NULL;
