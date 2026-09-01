@@ -1,9 +1,9 @@
-generatedAt: "2026-09-01T21:12:50.535649+00:00"
+generatedAt: "2026-09-01T21:49:25.513753+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 464
-  uniquePermissionCount: 464
+  permissionCount: 466
+  uniquePermissionCount: 466
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -136,7 +136,7 @@ manifests:
     domain: "catalog"
     serviceName: "pos-catalog"
     version: "1.0"
-    permissionCount: 39
+    permissionCount: 41
     permissions:
       - name: "catalog:catalog_grouping:delete"
         description: "Delete a catalog grouping"
@@ -160,6 +160,10 @@ manifests:
         description: "View an item's standard cost and its audit history"
       - name: "catalog:item_cost:update"
         description: "Update item cost"
+      - name: "catalog:labor_standard:manage"
+        description: "Author or supersede DURION-source labor standards for a service"
+      - name: "catalog:labor_standard:view"
+        description: "View a service's vehicle-keyed labor standards and their provenance"
       - name: "catalog:location_price_override:read"
         description: "View a location's effective price for a product"
       - name: "catalog:location_price_override:write"
@@ -1507,6 +1511,18 @@ permissions:
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:item_cost:update"
     description: "Update item cost"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:labor_standard:manage"
+    description: "Author or supersede DURION-source labor standards for a service"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:labor_standard:view"
+    description: "View a service's vehicle-keyed labor standards and their provenance"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"

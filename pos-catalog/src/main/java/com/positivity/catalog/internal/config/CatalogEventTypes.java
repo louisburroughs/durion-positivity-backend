@@ -158,6 +158,17 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.fastRead("CATALOG_PRICE_BOOK_RESOLVE_PRICE", "Resolve effective price")
                         .build(),
                 EventTypeRegistration.write("CATALOG_BULK_INGEST", "Bulk ingest catalog products")
+                        .build(),
+                // Labor standards — vehicle-keyed estimated service times (#1569)
+                EventTypeRegistration.write(
+                                "CATALOG_LABOR_STANDARD_CREATE", "Author a DURION-source labor standard for a service")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_LABOR_STANDARD_SUPERSEDE",
+                                "Supersede a labor standard with a corrected replacement row")
+                        .build(),
+                EventTypeRegistration.search(
+                                "CATALOG_LABOR_STANDARD_LIST", "List a service's labor standards with provenance")
                         .build());
     }
 }

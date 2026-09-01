@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
 
@@ -19,4 +20,16 @@ public class ServiceDto {
 
     @Schema(description = "Short service description")
     private String shortDescription;
+
+    @Schema(description = "Durion operation code", example = "BRAKE-PAD-FRONT")
+    private String operationCode;
+
+    @Schema(
+            description = "Operation category",
+            example = "REPAIR",
+            allowableValues = {"REPAIR", "DIAGNOSTIC", "MAINTENANCE", "TIRE_SERVICE"})
+    private String operationCategory;
+
+    @Schema(description = "Vehicle-agnostic fallback labor hours in tenths", example = "1.5")
+    private BigDecimal defaultLaborHours;
 }

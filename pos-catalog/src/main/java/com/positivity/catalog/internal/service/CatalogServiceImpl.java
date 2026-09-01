@@ -17,13 +17,16 @@ import com.positivity.catalog.internal.entity.NonInventoryProductEntity;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.Subcategory;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.CatalogRepository;
 import com.positivity.catalog.internal.repository.NonInventoryProductRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -262,6 +265,44 @@ public class CatalogServiceImpl implements CatalogService {
         service.setName(dto.getName());
         service.setShortDescription(dto.getShortDescription());
         service.setLongDescription(dto.getLongDescription());
+        service.setOperationCode(validatedOperationCode(dto.getOperationCode(), service.getId()));
+        service.setOperationCategory(parsedOperationCategory(dto.getOperationCategory()));
+        service.setDefaultLaborHours(validatedLaborHours(dto.getDefaultLaborHours()));
+    }
+
+    /**
+     * Shape rules live in {@link LaborTimeValidation}; uniqueness is pre-checked here so a
+     * duplicate answers 400 with the colliding code named, instead of surfacing as a constraint
+     * violation from the V17 partial unique index.
+     */
+    private String validatedOperationCode(String operationCode, UUID serviceId) {
+        String normalized = LaborTimeValidation.validatedOperationCodeShape(operationCode, "operationCode");
+        if (normalized == null) {
+            return null;
+        }
+        serviceRepository.findByOperationCode(normalized).ifPresent(other -> {
+            if (!other.getId().equals(serviceId)) {
+                throw new CatalogValidationException(
+                        "operationCode " + normalized + " is already assigned to service " + other.getId());
+            }
+        });
+        return normalized;
+    }
+
+    private OperationCategory parsedOperationCategory(String operationCategory) {
+        if (operationCategory == null || operationCategory.isBlank()) {
+            return null;
+        }
+        try {
+            return OperationCategory.valueOf(operationCategory.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new CatalogValidationException("operationCategory must be one of "
+                    + java.util.Arrays.toString(OperationCategory.values()) + ": " + operationCategory);
+        }
+    }
+
+    private BigDecimal validatedLaborHours(BigDecimal hours) {
+        return LaborTimeValidation.validatedTenthsHours(hours, "defaultLaborHours");
     }
 
     private NonInventoryProductEntity toNonInventoryEntity(CatalogItemRequestDto dto) {
@@ -387,6 +428,12 @@ public class CatalogServiceImpl implements CatalogService {
         dto.setName(entity.getName());
         dto.setShortDescription(entity.getShortDescription());
         dto.setLongDescription(entity.getLongDescription());
+        dto.setOperationCode(entity.getOperationCode());
+        dto.setOperationCategory(
+                entity.getOperationCategory() == null
+                        ? null
+                        : entity.getOperationCategory().name());
+        dto.setDefaultLaborHours(entity.getDefaultLaborHours());
         return dto;
     }
 
@@ -454,6 +501,12 @@ public class CatalogServiceImpl implements CatalogService {
         dto.setName(entity.getName());
         dto.setShortDescription(entity.getShortDescription());
         dto.setLongDescription(entity.getLongDescription());
+        dto.setOperationCode(entity.getOperationCode());
+        dto.setOperationCategory(
+                entity.getOperationCategory() == null
+                        ? null
+                        : entity.getOperationCategory().name());
+        dto.setDefaultLaborHours(entity.getDefaultLaborHours());
         return dto;
     }
 

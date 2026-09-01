@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.List;
 import lombok.Data;
 
@@ -78,4 +79,26 @@ public class CatalogItemRequestDto {
             example = "{\"weightKg\":1.2}",
             requiredMode = NOT_REQUIRED)
     private String specifications;
+
+    @Schema(
+            description = "Durion operation code for service type; uppercase alphanumeric segments"
+                    + " joined by single dashes, unique across services when present",
+            example = "BRAKE-PAD-FRONT",
+            requiredMode = NOT_REQUIRED)
+    private String operationCode;
+
+    @Schema(
+            description = "Operation category for service type",
+            example = "REPAIR",
+            allowableValues = {"REPAIR", "DIAGNOSTIC", "MAINTENANCE", "TIRE_SERVICE"},
+            requiredMode = NOT_REQUIRED)
+    private String operationCategory;
+
+    @Schema(
+            description = "Vehicle-agnostic fallback labor hours for service type, decimal hours in"
+                    + " tenths (0.1 hr = 6 min); vehicle-specific times live on the service's labor"
+                    + " standards instead",
+            example = "1.5",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal defaultLaborHours;
 }

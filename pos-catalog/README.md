@@ -68,6 +68,11 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `PUT /v1/products/{productId}/tracking-level` — set stock tracking level (`NONE`/`LOT`/`SERIAL`)
 - `POST|GET /v1/products/{productId}/uoms`, `PUT|DELETE /v1/products/{productId}/uoms/{uomId}` — per-product UoM conversion set
 - `POST|GET /v1/products/substitution-groups`, `GET|DELETE /.../{groupId}`, `POST /.../{groupId}/members`, `DELETE /.../{groupId}/members/{productId}` — substitution groups (a product belongs to at most one group)
+- `POST|GET /v1/catalog-items/service/{serviceId}/labor-standards`, `POST /.../{standardId}/supersede` — vehicle-keyed estimated service times (book time) with provenance (auth: `catalog:labor_standard:manage` / `:view`)
+
+## Estimated service time (labor standards, #1569)
+
+`ServiceEntity` is the system of record for estimated service time (ADR-0058/0059). The `service` table carries the operation taxonomy — `operation_code` (Durion-owned identity, unique when present), `operation_category` (`REPAIR`/`DIAGNOSTIC`/`MAINTENANCE`/`TIRE_SERVICE`) and `default_labor_hours` (vehicle-agnostic fallback only) — authored through `/v1/catalog-items/service`. Vehicle-specific book times live in `service_labor_standard` (V18): year/make/model/submodel/engine key with null-as-wildcard, decimal hours in tenths, `time_type` (retail vs OEM-warranty vs manufacturer-install vs Durion standard), overlap/included-operation metadata, and non-negotiable source + revision provenance. Rows are append-and-supersede: corrections replace a row rather than update it, so a quoted number stays explainable. Only `DURION`-source rows are writable through the API; imported guide rows arrive via the labor-guide sourcing pipeline (`docs/service-time-sourcing-plan.md`) in a later phase, which also brings the resolution service (exact + widening vehicle match) and the transport to pos-workorder.
 
 ## Domain Events
 

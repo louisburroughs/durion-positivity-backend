@@ -1,6 +1,10 @@
 # Service Time Estimate Sourcing Plan (and Parts-Fitment Sourcing Mirror)
 
-**Status:** DRAFT for vetting — round 1
+**Status:** DRAFT for vetting — round 1. Load-bearing decisions (§4.1 keying, §3.1 pattern,
+naming, licensing gate, timekeeping boundary) are drafted as durion ADR-0058/ADR-0059
+(PROPOSED). Phase 0 plus the §4.4 DURION authoring surface (V17/V18, taxonomy fields,
+`/labor-standards` CRUD, permissions, event ids) landed under #1569; the §6 transport
+decision remains PENDING until the consumer side is built.
 **Owner module:** pos-catalog (system of record per decision recorded on
 [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569), 2026-08-29)
 **Inputs:** [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569)
@@ -357,13 +361,18 @@ corrections need a human write path, not just feeds:
 - New CRUD on `/v1/catalog-items/service/{id}/labor-standards` for `service_labor_standard`
   rows with `source_code = 'DURION'` (only DURION rows are hand-editable; imported rows are
   correctable only by supersession with an audit note).
-- Permissions (registered code-first in `CatalogPermissionRegistry`):
-  `catalog:labor_standard:view`, `catalog:labor_standard:manage`,
-  `catalog:labor_standard:import`.
-- `@EmitEvent` ids in `CatalogEventTypes` (threshold presets in parentheses):
-  `CATALOG_LABOR_STANDARD_CREATE/UPDATE/SUPERSEDE` (`write`),
-  `CATALOG_LABOR_STANDARD_SEARCH` (`search`), `CATALOG_LABOR_GUIDE_IMPORT` (`write`),
-  `CATALOG_LABOR_TIME_RESOLVE` (`fastRead`).
+- Permissions: `catalog:labor_standard:view` and `catalog:labor_standard:manage` (landed,
+  bits 500/501). `catalog:labor_standard:import` is deferred to Phase 1 to land with the
+  importer it gates — registering a permission with no enforcement site would defeat the
+  `generate-permissions.sh --sync` scan and burn a bit on an endpoint that may still reshape.
+- `@EmitEvent` ids in `CatalogEventTypes` (threshold presets in parentheses), as landed:
+  `CATALOG_LABOR_STANDARD_CREATE/SUPERSEDE` (`write`), `CATALOG_LABOR_STANDARD_LIST`
+  (`search`). There is deliberately no `..._UPDATE` — rows are corrected by supersession
+  only, so an update event would name an operation the API refuses. Phase 1 adds
+  `CATALOG_LABOR_GUIDE_IMPORT` (`write`) and `CATALOG_LABOR_TIME_RESOLVE` (`fastRead`) with
+  their endpoints.
+- Vehicle-key strings are stored and deduplicated case-sensitively for now; canonical casing
+  arrives with the §4.3 vocabulary alignment in Phase 1 rather than as an ad-hoc rule here.
 
 ---
 
