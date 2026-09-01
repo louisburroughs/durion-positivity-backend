@@ -17,6 +17,14 @@ package com.positivity.invoice.internal.security;
  * without a manual bit assignment.
  */
 public final class InvoicePermissions {
+    /**
+     * View invoice analytics reports (revenue-by-customer, invoicing lag; #1589, #1592). Shared
+     * by both Wave 2 analytics endpoints rather than split per-report: they are the same
+     * business capability (reporting visibility into invoicing performance) and a role that
+     * needs one legitimately needs the other.
+     */
+    public static final String ANALYTICS_VIEW = "invoice:analytics:view";
+
     /** Manage invoice billing rules and defaults. */
     public static final String BILLING_RULES = "invoice:billing-rules";
 

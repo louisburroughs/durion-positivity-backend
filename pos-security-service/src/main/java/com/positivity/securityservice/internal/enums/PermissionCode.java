@@ -917,13 +917,15 @@ public enum PermissionCode {
     // ── People (new) ───────────────────────────────────────────────────────────
     PEOPLE__TIMEENTRY__VIEW(493, "people:timeEntry:view"),
     // ── Invoice (new) ──────────────────────────────────────────────────────────
-    INVOICE__INVOICE__VIEW(494, "invoice:invoice:view");
+    INVOICE__INVOICE__VIEW(494, "invoice:invoice:view"),
+    // ── Invoice (new) ──────────────────────────────────────────────────────────
+    INVOICE__ANALYTICS__VIEW(495, "invoice:analytics:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 66;
+    public static final int CATALOG_VERSION = 67;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

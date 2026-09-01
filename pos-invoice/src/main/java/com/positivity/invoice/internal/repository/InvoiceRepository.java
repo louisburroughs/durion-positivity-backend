@@ -2,11 +2,14 @@ package com.positivity.invoice.internal.repository;
 
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -72,4 +75,81 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
                     + "WHERE w2.workorder_id = inv.workorder_id AND w2.customer_id IS NOT NULL)",
             nativeQuery = true)
     int backfillPartyIdFromWorkorderReplica();
+
+    /**
+     * Revenue-by-customer analytics rows (#1589, E1): per-customer aggregate over
+     * revenue-recognized invoices ({@code status IN :revenueStatuses} — DRAFT has not been
+     * billed and CANCELLED/ERROR never will be) created in {@code [start, end]}, ordered by
+     * revenue descending so the caller can take the top N by simply bounding {@code pageable}
+     * rather than paging. Callers request one row more than their public {@code limit} so the
+     * service layer can detect truncation without a second COUNT query.
+     *
+     * @param start           window start (inclusive), UTC instant
+     * @param end             window end (inclusive), UTC instant
+     * @param revenueStatuses invoice statuses counted as recognized revenue
+     * @param pageable        row bound (size = limit + 1); sort is ignored, the query orders itself
+     * @return one row per customer with revenue in the window, revenue descending
+     */
+    @Query("""
+            SELECT i.partyId AS customerId, SUM(i.total) AS revenue, COUNT(i) AS invoiceCount,
+                   MAX(i.createdAt) AS lastInvoiceDate
+            FROM Invoice i
+            WHERE i.partyId IS NOT NULL
+              AND i.status IN :revenueStatuses
+              AND i.createdAt >= :start AND i.createdAt <= :end
+            GROUP BY i.partyId
+            ORDER BY SUM(i.total) DESC
+            """)
+    @NonNull
+    List<RevenueByCustomerProjection> revenueByCustomer(
+            @Param("start") @NonNull Instant start,
+            @Param("end") @NonNull Instant end,
+            @Param("revenueStatuses") @NonNull Collection<InvoiceStatus> revenueStatuses,
+            @NonNull Pageable pageable);
+
+    /** Projection for {@link #revenueByCustomer}. */
+    interface RevenueByCustomerProjection {
+        String getCustomerId();
+
+        BigDecimal getRevenue();
+
+        long getInvoiceCount();
+
+        Instant getLastInvoiceDate();
+    }
+
+    /**
+     * Raw (invoice-creation, workorder-creation) instant pairs feeding the invoicing-lag report
+     * (#1592, E4), bounded to invoices created in {@code [start, end]} that carry a
+     * {@code workorderId} matching a known {@code ext_workorder} replica row. The LEFT JOIN is
+     * deliberate — mirrors {@code AsnLineRepository#sumUnreceivedRemainderForSku} — so an
+     * invoice whose replica has not caught up still comes back with a null
+     * {@code workorderCreatedAt}, forcing the caller to exclude it explicitly rather than the
+     * row silently vanishing from the result set. {@code workorderCreatedAt} may be null even
+     * with a matched replica row: the fact carrying it may not have arrived yet, or the row was
+     * written before #1592. Callers MUST exclude a null {@code workorderCreatedAt} from the
+     * average rather than treat it as zero lag.
+     *
+     * @param start window start (inclusive), UTC instant
+     * @param end   window end (inclusive), UTC instant
+     * @return one row per matching invoice; {@code workorderCreatedAt} may be null
+     */
+    @Query("""
+            SELECT i.createdAt AS invoiceCreatedAt, w.workorderCreatedAt AS workorderCreatedAt
+            FROM Invoice i
+            LEFT JOIN ExtWorkorderReplica w ON w.workorderId = i.workorderId
+            WHERE i.workorderId IS NOT NULL
+              AND i.createdAt >= :start AND i.createdAt <= :end
+            """)
+    @NonNull
+    List<InvoicingLagPairProjection> invoicingLagPairs(
+            @Param("start") @NonNull Instant start, @Param("end") @NonNull Instant end);
+
+    /** Projection for {@link #invoicingLagPairs}. */
+    interface InvoicingLagPairProjection {
+        Instant getInvoiceCreatedAt();
+
+        @Nullable
+        Instant getWorkorderCreatedAt();
+    }
 }
