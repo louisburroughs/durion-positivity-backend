@@ -91,7 +91,9 @@ public class TestSecurityConfig {
             new SimpleGrantedAuthority("inventory:pick_list:execute"),
             new SimpleGrantedAuthority("workorder:parts:consume"),
             // Wave 2 analytics endpoints (#1593/#1594/#1595)
-            new SimpleGrantedAuthority("workorder:analytics:view"));
+            new SimpleGrantedAuthority("workorder:analytics:view"),
+            new SimpleGrantedAuthority("workorder:note:add"),
+            new SimpleGrantedAuthority("workorder:note:view"));
 
     /**
      * Request attribute name: when set to {@code Boolean.TRUE} on a MockMvc request,

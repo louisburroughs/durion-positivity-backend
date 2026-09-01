@@ -114,6 +114,12 @@ public final class WorkorderPermissions {
     /** Override operationalContext. */
     public static final String OPERATIONALCONTEXT_OVERRIDE = "workorder:operationalContext:override";
 
+    /** Record a note about the customer on a workorder. */
+    public static final String NOTE_ADD = "workorder:note:add";
+
+    /** View the notes recorded about the customer on a workorder. */
+    public static final String NOTE_VIEW = "workorder:note:view";
+
     /** Add parts to workorder. */
     public static final String PARTS_ADD = "workorder:parts:add";
 

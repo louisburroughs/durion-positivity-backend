@@ -52,6 +52,18 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** Record a note about the customer on a workorder (#1584) */
+    public static final EventTypeRegistration WORKORDER_NOTE_ADD = EventTypeRegistration.write(
+                    "WORKORDER_NOTE_ADD", "Record a note about the customer on a workorder")
+            .apiVersion("1")
+            .build();
+
+    /** List the customer notes recorded on a workorder (#1584) */
+    public static final EventTypeRegistration WORKORDER_NOTE_LIST = EventTypeRegistration.fastRead(
+                    "WORKORDER_NOTE_LIST", "List the notes recorded about the customer on a workorder")
+            .apiVersion("1")
+            .build();
+
     /** Delete a workorder */
     public static final EventTypeRegistration WORKORDER_DELETE = EventTypeRegistration.write(
                     "WORKORDER_DELETE", "Delete a workorder by ID")
@@ -561,6 +573,9 @@ public final class EventTypes {
             WORKORDER_PART_ITEM_COMPLETE,
             WORKORDER_INVOICE_GENERATE,
             WORKORDER_REOPEN,
+            // Customer notes on a workorder (#1584)
+            WORKORDER_NOTE_ADD,
+            WORKORDER_NOTE_LIST,
             // Technician assignment events (CAP:005 Story #161)
             WORKORDER_TECHNICIAN_ASSIGN,
             WORKORDER_TECHNICIAN_REASSIGN,

@@ -924,13 +924,16 @@ public enum PermissionCode {
     ACCOUNTING__ANALYTICS__VIEW(496, "accounting:analytics:view"),
 
     // ── Workorder (new) ────────────────────────────────────────────────────────
-    WORKORDER__ANALYTICS__VIEW(497, "workorder:analytics:view");
+    WORKORDER__ANALYTICS__VIEW(497, "workorder:analytics:view"),
+    // ── Workorder (new) ────────────────────────────────────────────────────────
+    WORKORDER__NOTE__ADD(498, "workorder:note:add"),
+    WORKORDER__NOTE__VIEW(499, "workorder:note:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 68;
+    public static final int CATALOG_VERSION = 69;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

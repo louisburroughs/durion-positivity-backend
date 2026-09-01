@@ -66,15 +66,9 @@ RETENTION_DEFAULT = 604_800_000  # 7d — events and commands
 # It is provisioned here with the same delete retention the broker already gives
 # it, so this changes nothing about it; switching it to cleanup.policy=compact is
 # deliberately out of scope (#1579 non-goals).
-#
-# workorder-events is a pre-ADR-0044 topic name, still consumed by
-# pos-customer's WorkorderEventHandler with pos.customer.kafka.enabled=true on
-# alpha. Nothing publishes to it, so the listener looks dead, but the topic is
-# derived from a live listener and is provisioned rather than quietly dropped.
 NON_CONFORMING_NOTE = {
     "payment.settlement-config.v1": "compacted config feed, not {domain}.{kind}.v1",
     "sender.outcomes.v1": "externally owned feed, consumed only",
-    "workorder-events": "pre-ADR-0044 name; consumed by pos-customer, published by nothing",
 }
 
 # A @KafkaListener annotation spans several lines, so match across them.

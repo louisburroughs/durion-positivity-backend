@@ -1,15 +1,9 @@
 {
   "properties": [
     {
-      "name": "pos.customer.kafka.workorder-events-topic",
-      "type": "java.lang.String",
-      "description": "Kafka topic name for workorder events consumed by pos-customer.",
-      "defaultValue": "workorder-events"
-    },
-    {
       "name": "pos.customer.kafka.enabled",
       "type": "java.lang.Boolean",
-      "description": "Enable or disable Kafka workorder event consumption.",
+      "description": "Enable or disable Kafka event consumption in pos-customer.",
       "defaultValue": false
     },
     {

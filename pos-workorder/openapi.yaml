@@ -16,6 +16,8 @@ tags:
   name: Travel Segment API
 - description: Workorder search and retrieval
   name: Workorder Search
+- description: Notes about the customer recorded while a workorder is worked
+  name: Workorder Note API
 - description: Create estimates from shop appointments
   name: Estimates from Appointments
 - description: Endpoints for managing technician work sessions and break segments
@@ -4293,6 +4295,104 @@ paths:
       - Workorder Labor API
       x-required-permissions:
       - workorder:labor:add
+  /v1/workorders/{workorderId}/notes:
+    get:
+      description: 'Returns the notes recorded about the customer on one workorder, most recent first.
+
+        Use this tool to read one workorder''s own notes; read the customer''s CRM interaction timeline instead when the question spans every workorder for that customer.
+
+        Preconditions: the workorder must exist.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        Emits a WORKORDER_NOTE_LIST audit event; no domain events are published and no state changes, since this is a read-only query.
+
+        Returns 200 with the notes (an empty list when none were recorded), and 404 when the workorder does not exist.
+
+        '
+      operationId: listWorkorderNotes
+      parameters:
+      - description: Workorder ID
+        example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/WorkorderNoteResponse'
+                type: array
+          description: Notes retrieved
+        '404':
+          description: Workorder not found
+      security:
+      - bearerAuth:
+        - workorder:note:view
+      summary: List a Workorder's Customer Notes
+      tags:
+      - Workorder Note API
+      x-required-permissions:
+      - workorder:note:view
+    post:
+      description: 'Records a free-text note about the customer against a workorder, such as something the customer said while the job was open, and publishes it so it lands on the customer''s CRM timeline.
+
+        Use this tool for a note about the CUSTOMER; do not use it for notes about the work itself or about a decision on it — completion notes and approval notes are fields on the workorder and the change request respectively.
+
+        Preconditions: the workorder must exist; the author is taken from the authenticated caller rather than the request body.
+
+        Required inputs: workorderId (UUID) as a path parameter and noteText (max 2000 characters); noteType is an optional free-text classification such as CUSTOMER_REQUEST.
+
+        Emits a WORKORDER_NOTE_ADD event and publishes the workorder.note.added.v1 fact, which pos-customer projects onto the party''s timeline.
+
+        Returns 201 with the saved note, and 404 when the workorder does not exist.
+
+        '
+      operationId: addWorkorderNote
+      parameters:
+      - description: Workorder ID
+        example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Customer remark:
+                description: Customer remark
+                value:
+                  noteText: Customer says the noise only happens on a cold start.
+                  noteType: CUSTOMER_REQUEST
+            schema:
+              $ref: '#/components/schemas/AddWorkorderNoteRequest'
+        description: The note to record.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderNoteResponse'
+          description: Note recorded
+        '404':
+          description: Workorder not found
+      security:
+      - bearerAuth:
+        - workorder:note:add
+      summary: Record a Note About the Customer
+      tags:
+      - Workorder Note API
+      x-required-permissions:
+      - workorder:note:add
   /v1/workorders/{workorderId}/operationalContext:
     get:
       description: 'Returns the workorder''s current operational context — location, bay (derived from the assigned resource), assigned mechanics, assigned resources, and a locked flag that is true once work has started.
@@ -6176,6 +6276,24 @@ components:
       - itemType
       - quantity
       - unitPrice
+      type: object
+    AddWorkorderNoteRequest:
+      description: A note about the customer, recorded against a workorder
+      properties:
+        noteText:
+          description: The note as written.
+          example: Customer says the noise only happens on a cold start.
+          maxLength: 2000
+          minLength: 1
+          type: string
+        noteType:
+          description: Caller-supplied classification of the note. Free text; the shops' vocabularies differ and CRM only displays it.
+          example: CUSTOMER_REQUEST
+          maxLength: 100
+          minLength: 0
+          type: string
+      required:
+      - noteText
       type: object
     AdjustLaborRequest:
       description: Request to manually adjust labor hours
@@ -9305,6 +9423,25 @@ components:
       - active
       - id
       - workorderId
+      type: object
+    WorkorderNoteResponse:
+      description: A note about the customer, recorded against a workorder
+      properties:
+        authoredBy:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        noteId:
+          format: uuid
+          type: string
+        noteText:
+          type: string
+        noteType:
+          type: string
+        workorderId:
+          format: uuid
+          type: string
       type: object
     WorkorderNumberRef:
       description: Workorder id resolved to its human workorder number
