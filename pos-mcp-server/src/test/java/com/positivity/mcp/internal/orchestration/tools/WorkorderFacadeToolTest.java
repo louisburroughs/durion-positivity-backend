@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -23,6 +24,7 @@ class WorkorderFacadeToolTest {
     private static final String WORKORDER_ID = "01960003-0000-7000-8000-0000000000e0";
     private static final String CUSTOMER_ID = "01960003-0000-7000-8000-000000000050";
     private static final String VEHICLE_ID = "01960003-0000-7000-8000-000000000077";
+    private static final String TECHNICIAN_ID = "01960003-0000-7000-8000-000000000099";
 
     private MockRestServiceServer mockServer;
     private WorkorderFacadeTool tool;
@@ -40,7 +42,8 @@ class WorkorderFacadeToolTest {
                 BASE_URL,
                 contract("getWorkorder").template(),
                 contract("searchWorkorders").template(),
-                contract("getWorkorderStatus").template());
+                contract("getWorkorderStatus").template(),
+                contract("getTechnicianLaborAnalytics").template());
     }
 
     @Test
@@ -59,7 +62,7 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
-    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} when no id filters are given")
+    @DisplayName("searchWorkorders sends GET /workorders/search?q={query} when no filters are given")
     void searchWorkorders_sendsGetToSearchEndpoint() {
         FacadeContractManifest.Entry entry = contract("searchWorkorders");
         mockServer
@@ -67,7 +70,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("brakes", null, null);
+        String result = tool.searchWorkorders("brakes", null, null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -85,7 +88,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID);
+        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -100,7 +103,30 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID);
+        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID, null, null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders appends status, createdFrom, createdTo and technicianId when supplied "
+            + "(Q5 gate combo: status + customerId in one server-side call)")
+    void searchWorkorders_appendsStructuredFilters() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", ""))
+                        + "&customerId=" + CUSTOMER_ID
+                        + "&status=APPROVED"
+                        + "&createdFrom=2026-06-01"
+                        + "&createdTo=2026-06-30"
+                        + "&technicianId=" + TECHNICIAN_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result =
+                tool.searchWorkorders("", CUSTOMER_ID, null, "APPROVED", "2026-06-01", "2026-06-30", TECHNICIAN_ID);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -116,11 +142,12 @@ class WorkorderFacadeToolTest {
                 BASE_URL,
                 contract("getWorkorder").template(),
                 "/workorder/v1/workorders/search",
-                contract("getWorkorderStatus").template());
+                contract("getWorkorderStatus").template(),
+                contract("getTechnicianLaborAnalytics").template());
         server.expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?customerId=" + CUSTOMER_ID))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null);
+        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null, null, null, null, null);
 
         server.verify();
         assertThat(result).isNotEmpty();
@@ -160,5 +187,46 @@ class WorkorderFacadeToolTest {
 
         mockServer.verify();
         assertThat(result).isEqualTo("{\"error\":\"boom\"}");
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics maps a YYYY-MM period to GET technician-labor?startDate&endDate")
+    void getTechnicianLaborAnalytics_mapsCalendarMonthToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[],\"truncated\":false,\"limit\":100}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getTechnicianLaborAnalytics("2026-06");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("\"truncated\":false");
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics maps a YYYY period to the full calendar year")
+    void getTechnicianLaborAnalytics_mapsCalendarYearToDateRange() {
+        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getTechnicianLaborAnalytics("2026");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics rejects an unsupported period form without issuing a request")
+    void getTechnicianLaborAnalytics_rejectsUnsupportedPeriod() {
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("Q2-2026"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY-MM")
+                .hasMessageContaining("YYYY");
+
+        mockServer.verify();
     }
 }

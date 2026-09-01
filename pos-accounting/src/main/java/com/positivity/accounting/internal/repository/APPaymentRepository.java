@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,4 +49,17 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      * Find payment by payment reference (idempotency key).
      */
     Optional<APPayment> findByPaymentRef(String paymentRef);
+
+    /**
+     * Find payments in one of the given statuses whose payment date falls in the inclusive
+     * range. Used by the vendor-spend analytics endpoint (Wave 2 E8, issue #1596) to sum settled
+     * A/P cash by payment date, independent of vendor bill date.
+     *
+     * @param statuses  statuses to include (typically the "cash already moved" statuses)
+     * @param startDate inclusive lower bound
+     * @param endDate   inclusive upper bound
+     * @return payments in one of the given statuses within the range (unordered)
+     */
+    List<APPayment> findByStatusInAndPaymentDateBetween(
+            Collection<APPaymentStatus> statuses, LocalDateTime startDate, LocalDateTime endDate);
 }

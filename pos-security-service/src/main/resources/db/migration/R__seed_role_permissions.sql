@@ -111,6 +111,14 @@
 --   bays, schedules, technicians) plus invoice:finalize:override (#1374). It has
 --   no audit grant because the shop domain defines no audit permission; add one
 --   to pos-shop-manager's manifest first if that capability is wanted.
+-- * accounting:analytics:view / invoice:analytics:view / workorder:analytics:view
+--   (Wave 2 analytics, pos-mcp-server/docs/analytics-capability-plan.md #1596-#1601)
+--   are held by ADMIN and SHOP_MANAGER. Every Wave 2 gate question names its caller
+--   a "ROLE_SHOP_MANAGER-equivalent principal", and audit-rbac.py's fail-closed
+--   check means these three read-only endpoints are unreachable by anyone until a
+--   role holds them -- granting only ADMIN would leave the feature's actual
+--   intended caller locked out. Wider distribution (e.g. CONTROLLER for the
+--   accounting one) is a follow-up product decision, not made here.
 -- * SECURITY_ADMIN and READ_ONLY_SCHEDULER are NOT granted here and no longer
 --   exist: V3 created them as unratified "Candidate Roles v0", nothing in the
 --   codebase ever referenced them, and V23 deletes them (#1373).

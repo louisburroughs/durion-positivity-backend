@@ -2,15 +2,17 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.CollectionsAnalyticsReport;
 import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
+import com.positivity.accounting.internal.dto.VendorSpendReport;
 import java.time.LocalDate;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Wave 2 read-only accounting analytics (Issue #1590 E2, Issue #1591 E3).
+ * Wave 2 read-only accounting analytics (Issue #1590 E2, Issue #1591 E3, Issue #1596 E8).
  *
- * <p>Both endpoints are single-window aggregates over data pos-accounting already persists — the
- * {@code ExtInvoice} replica (fed from {@code invoice.events.v1}) and this module's own {@code
- * PaymentApplication} settlement records. No schema changes; no new replica field.
+ * <p>All three endpoints are single-window aggregates over data pos-accounting already
+ * persists — the {@code ExtInvoice} replica (fed from {@code invoice.events.v1}) and this
+ * module's own {@code PaymentApplication}/{@code APPayment}/{@code VendorBill} records. No
+ * schema changes; no new replica field.
  */
 public interface AccountingAnalyticsService {
 
@@ -80,4 +82,39 @@ public interface AccountingAnalyticsService {
      */
     @NonNull
     PaymentLagCohortsReport getPaymentLagCohorts(@NonNull LocalDate issuedFrom, @NonNull LocalDate issuedTo, int limit);
+
+    /**
+     * Per-vendor spend analytics for one date window (Issue #1596, E8).
+     *
+     * <p><b>paidAmount</b> sums {@code APPayment.grossAmount} — the amount allocated against
+     * vendor bills, before any processor fee — for payments to that vendor whose {@code
+     * paymentDate} falls in the inclusive window and whose {@code status} shows the gateway
+     * already moved the cash ({@code GATEWAY_SUCCEEDED} or later: {@code GL_POST_PENDING},
+     * {@code GL_POSTED}, {@code GL_POST_FAILED} all still count, since a GL-posting failure never
+     * un-does a gateway-confirmed payment). A payment stuck in {@code INITIATED}, {@code
+     * GATEWAY_PENDING} or {@code GATEWAY_FAILED} moved no cash and is excluded.
+     *
+     * <p><b>billCount</b> and <b>avgBillAmount</b> are a DIFFERENT population: every {@code
+     * VendorBill} for that vendor whose {@code billDate} falls in the same window, regardless of
+     * status. {@code avgBillAmount} is {@code sum(totalAmount) / billCount}, and is {@code 0}
+     * (never {@code null}) when {@code billCount} is {@code 0}.
+     *
+     * <p>Callers must not assume {@code avgBillAmount * billCount} reconciles to {@code
+     * paidAmount} — see {@link com.positivity.accounting.internal.dto.VendorSpendRow} Javadoc.
+     *
+     * <p>Vendor {@code name} is resolved server-side from the AP vendor directory, falling back
+     * to the vendor-name snapshot recorded on the vendor's own bills/payments when the vendor has
+     * no directory entry. Rows are ordered by {@code paidAmount} descending and capped at {@code
+     * limit}, so the top-N-by-spend read needs no paging.
+     *
+     * @param startDate window start date (inclusive)
+     * @param endDate   window end date (inclusive)
+     * @param limit     maximum vendor rows to return, top-by-paidAmount; {@code <= 0} is a client
+     *                  error, values above the module cap are clamped
+     * @return vendor spend rows, {@code paidAmount} descending, bounded to {@code limit}
+     * @throws IllegalArgumentException if {@code endDate} is before {@code startDate}, or {@code
+     *                                  limit} is not positive
+     */
+    @NonNull
+    VendorSpendReport getVendorSpend(@NonNull LocalDate startDate, @NonNull LocalDate endDate, int limit);
 }

@@ -1,9 +1,11 @@
 package com.positivity.accounting.internal.controller;
 
+import com.positivity.accounting.internal.dto.PaymentApplicationListRow;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
 import com.positivity.accounting.internal.security.AccountingPermissions;
+import com.positivity.accounting.internal.service.PaymentApplicationQueryService;
 import com.positivity.accounting.internal.service.PaymentApplicationService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,17 +16,26 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -33,6 +44,15 @@ import org.springframework.web.bind.annotation.RestController;
  * Endpoints:
  * - POST /payments/{paymentId}/applications - Apply payment to invoices
  * - POST /payment-applications/{applicationId}/reverse - Reverse application
+ * - GET  /payment-applications - List applications by applied-date window (Wave 2 E10, issue
+ *   #1598)
+ *
+ * <p><b>Scope note (issue #1605), applies to the GET listing only:</b> scoped strictly to
+ * pos-accounting's own {@code PaymentApplication} cash applications. Does NOT include
+ * pos-invoice's {@code DepositCreditApplication} deposit-credit draw-downs or {@code
+ * RefundRecord} — whether this endpoint should also surface those is an open cross-module
+ * architecture question tracked on issue #1605 and deliberately NOT decided here (this module
+ * never reads pos-invoice's entities/database, per ADR-0026/ADR-0044).
  *
  * @see <a href=
  *      "https://github.com/louisburroughs/durion-positivity-backend/issues/114">Issue
@@ -47,6 +67,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentApplicationController {
 
     private final PaymentApplicationService paymentApplicationService;
+    private final PaymentApplicationQueryService paymentApplicationQueryService;
 
     @PostMapping("/payments/{paymentId}/void")
     @SecurityRequirement(
@@ -300,6 +321,67 @@ public class PaymentApplicationController {
         log.info("Successfully reversed payment application(mask) {}", maskForLog(applicationId));
 
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * List payment applications applied in a date window (Wave 2 E10, issue #1598).
+     *
+     * GET /v1/accounting/payment-applications
+     */
+    @GetMapping("/payment-applications")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.ANALYTICS_VIEW + "')")
+    @EmitEvent(id = "ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:analytics:view"})
+    @Operation(
+            operationId = "listPaymentApplications",
+            summary = "List Payment Applications By Applied Date",
+            description = """
+                    Lists pos-accounting cash applications of customer payments to invoices whose applied \
+                    date falls in [appliedFrom, appliedTo], ordered by appliedAt ascending.
+                    Use this tool to review A/R cash application activity in a period; do not use \
+                    getPaymentLagCohorts or getCollectionsAnalytics for this, which are aggregate reports \
+                    rather than a row-level application list, and note this endpoint is SCOPED TO \
+                    pos-accounting cash applications only — it does not include pos-invoice deposit-credit \
+                    draw-downs (DepositCreditApplication) or refunds (RefundRecord); see issue #1605 for that \
+                    open cross-module question.
+                    Preconditions: none beyond the caller holding accounting:analytics:view.
+                    Required inputs: appliedFrom and appliedTo (ISO dates, appliedTo on or after \
+                    appliedFrom); the window cannot exceed 366 days, to bound the scan. includeReversed is \
+                    optional and defaults to false, in which case applications later reversed via \
+                    PaymentApplicationReversal are EXCLUDED from the list entirely (not merely flagged); \
+                    pass includeReversed=true to include them, with each row's reversed field then reporting \
+                    whether that application was reversed. page/size/sort are standard, though the \
+                    appliedAt-ascending sort is server-controlled and any caller-supplied sort is ignored.
+                    Emits an ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW audit event; no state changes.
+                    Returns 400 when appliedTo is before appliedFrom or the window exceeds 366 days.
+                    """,
+            tags = {"Payment Applications"})
+    @ApiResponse(responseCode = "200", description = "Payment applications retrieved successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid date range or window too wide")
+    public ResponseEntity<Page<PaymentApplicationListRow>> listPaymentApplications(
+            @Parameter(description = "Applied-date window start (YYYY-MM-DD)", required = true, example = "2026-06-01")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate appliedFrom,
+            @Parameter(description = "Applied-date window end (YYYY-MM-DD)", required = true, example = "2026-06-30")
+                    @RequestParam
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    @NonNull
+                    LocalDate appliedTo,
+            @Parameter(
+                            description = "Include applications later reversed, flagged via the row's reversed"
+                                    + " field (default false: reversed applications are excluded entirely)",
+                            example = "false")
+                    @RequestParam(required = false, defaultValue = "false")
+                    boolean includeReversed,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+
+        Page<PaymentApplicationListRow> applications = paymentApplicationQueryService.listByAppliedDateWindow(
+                appliedFrom, appliedTo, includeReversed, pageable);
+        return ResponseEntity.ok(applications);
     }
 
     private String maskForLog(Object value) {

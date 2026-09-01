@@ -3,10 +3,19 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.CollectionsAnalyticsReport;
 import com.positivity.accounting.internal.dto.PaymentLagCohortRow;
 import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
+import com.positivity.accounting.internal.dto.VendorSpendReport;
+import com.positivity.accounting.internal.dto.VendorSpendRow;
+import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.entity.Vendor;
+import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -18,9 +27,12 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
@@ -54,17 +66,46 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
     private static final int RATE_SCALE = 2;
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
+    /** Default row cap for {@link #getVendorSpend} when the caller omits {@code limit}. */
+    private static final int DEFAULT_VENDOR_SPEND_LIMIT = 20;
+
+    /** Hard cap so a caller cannot request an unbounded per-vendor fan-out. */
+    private static final int MAX_VENDOR_SPEND_LIMIT = 100;
+
+    /**
+     * A/P payment statuses at and after which the gateway has confirmed the cash moved
+     * ({@code GATEWAY_SUCCEEDED} — "allocations applied" per {@link APPaymentStatus}), so a
+     * subsequent GL-posting failure ({@code GL_POST_FAILED}) does not un-count it as settled
+     * cash.
+     */
+    private static final Set<APPaymentStatus> SETTLED_AP_PAYMENT_STATUSES = EnumSet.of(
+            APPaymentStatus.GATEWAY_SUCCEEDED,
+            APPaymentStatus.GL_POST_PENDING,
+            APPaymentStatus.GL_POSTED,
+            APPaymentStatus.GL_POST_FAILED);
+
+    private static final int AVG_BILL_AMOUNT_SCALE = 2;
+
     private final Clock clock;
     private final ExtInvoiceRepository extInvoiceRepository;
     private final PaymentApplicationRepository paymentApplicationRepository;
+    private final APPaymentRepository apPaymentRepository;
+    private final VendorBillRepository vendorBillRepository;
+    private final VendorRepository vendorRepository;
 
     public AccountingAnalyticsServiceImpl(
             Clock clock,
             ExtInvoiceRepository extInvoiceRepository,
-            PaymentApplicationRepository paymentApplicationRepository) {
+            PaymentApplicationRepository paymentApplicationRepository,
+            APPaymentRepository apPaymentRepository,
+            VendorBillRepository vendorBillRepository,
+            VendorRepository vendorRepository) {
         this.clock = clock;
         this.extInvoiceRepository = extInvoiceRepository;
         this.paymentApplicationRepository = paymentApplicationRepository;
+        this.apPaymentRepository = apPaymentRepository;
+        this.vendorBillRepository = vendorBillRepository;
+        this.vendorRepository = vendorRepository;
     }
 
     @Override
@@ -159,6 +200,85 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 .generatedAt(Instant.now(clock))
                 .truncated(capped < DEFAULT_COHORT_LIMIT)
                 .cohorts(rows)
+                .build();
+    }
+
+    @Override
+    public @NonNull VendorSpendReport getVendorSpend(
+            @NonNull LocalDate startDate, @NonNull LocalDate endDate, int limit) {
+
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be at least 1");
+        }
+        int effectiveLimit = Math.min(limit, MAX_VENDOR_SPEND_LIMIT);
+
+        log.info("Generating vendor spend analytics for window {} to {}", startDate, endDate);
+
+        LocalDateTime startOfDay = startDate.atStartOfDay();
+        LocalDateTime endOfDay = endDate.atTime(LocalTime.MAX);
+
+        List<APPayment> settledPayments = apPaymentRepository.findByStatusInAndPaymentDateBetween(
+                SETTLED_AP_PAYMENT_STATUSES, startOfDay, endOfDay);
+        List<VendorBill> billsInWindow = vendorBillRepository.findByBillDateBetween(startOfDay, endOfDay);
+
+        Map<UUID, BigDecimal> paidByVendor = new LinkedHashMap<>();
+        Map<UUID, String> fallbackNameByVendor = new LinkedHashMap<>();
+        for (APPayment payment : settledPayments) {
+            paidByVendor.merge(payment.getVendorId(), nullSafe(payment.getGrossAmount()), BigDecimal::add);
+            fallbackNameByVendor.putIfAbsent(payment.getVendorId(), payment.getVendorName());
+        }
+
+        Map<UUID, Integer> billCountByVendor = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> billTotalByVendor = new LinkedHashMap<>();
+        for (VendorBill bill : billsInWindow) {
+            billCountByVendor.merge(bill.getVendorId(), 1, Integer::sum);
+            billTotalByVendor.merge(bill.getVendorId(), nullSafe(bill.getTotalAmount()), BigDecimal::add);
+            fallbackNameByVendor.putIfAbsent(bill.getVendorId(), bill.getVendorName());
+        }
+
+        Set<UUID> vendorIds = new LinkedHashSet<>();
+        vendorIds.addAll(paidByVendor.keySet());
+        vendorIds.addAll(billCountByVendor.keySet());
+
+        Map<UUID, String> directoryNameByVendor = vendorIds.isEmpty()
+                ? Map.of()
+                : vendorRepository.findAllById(vendorIds).stream()
+                        .collect(Collectors.toMap(Vendor::getVendorId, Vendor::getName));
+
+        List<VendorSpendRow> allRows = new ArrayList<>();
+        for (UUID vendorId : vendorIds) {
+            BigDecimal paidAmount = paidByVendor.getOrDefault(vendorId, BigDecimal.ZERO);
+            int billCount = billCountByVendor.getOrDefault(vendorId, 0);
+            BigDecimal billTotal = billTotalByVendor.getOrDefault(vendorId, BigDecimal.ZERO);
+            BigDecimal avgBillAmount = billCount == 0
+                    ? BigDecimal.ZERO
+                    : billTotal.divide(BigDecimal.valueOf(billCount), AVG_BILL_AMOUNT_SCALE, RoundingMode.HALF_UP);
+            String name = directoryNameByVendor.getOrDefault(vendorId, fallbackNameByVendor.get(vendorId));
+
+            allRows.add(VendorSpendRow.builder()
+                    .vendorId(vendorId)
+                    .name(name)
+                    .paidAmount(paidAmount)
+                    .billCount(billCount)
+                    .avgBillAmount(avgBillAmount)
+                    .build());
+        }
+
+        allRows.sort(Comparator.comparing(VendorSpendRow::getPaidAmount).reversed());
+
+        boolean truncated = allRows.size() > effectiveLimit;
+        List<VendorSpendRow> rows = truncated ? new ArrayList<>(allRows.subList(0, effectiveLimit)) : allRows;
+
+        return VendorSpendReport.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .generatedAt(Instant.now(clock))
+                .limit(effectiveLimit)
+                .truncated(truncated)
+                .rows(rows)
                 .build();
     }
 

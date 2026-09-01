@@ -1,13 +1,19 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.enums.VendorBillStatus;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Service for Vendor Bill lifecycle management (Issue #130).
@@ -131,4 +137,34 @@ public interface VendorBillService {
      */
     @NonNull
     VendorBillResponse selectMatchCandidate(@NonNull UUID candidateId, @NonNull String operatorId);
+
+    /**
+     * List vendor bills due in a date window, optionally filtered by status (Wave 2 E9, issue
+     * #1597).
+     *
+     * <p>The window is effectively required and bounded: to keep this a bounded-scan query
+     * rather than an unbounded table scan, {@code dueTo - dueFrom} may not exceed {@link
+     * #MAX_DUE_DATE_WINDOW_DAYS} days.
+     *
+     * <p>Results are ordered by {@code dueDate} ascending — this ordering is server-controlled
+     * (any sort supplied on {@code pageable} is ignored), matching the precedent set by {@code
+     * APPaymentService#listEligibleBills}.
+     *
+     * @param dueFrom  window start (inclusive)
+     * @param dueTo    window end (inclusive)
+     * @param status   optional status filter; {@code null} matches bills of any status
+     * @param pageable page number and size (size is capped server-side; sort is ignored)
+     * @return page of matching bills mapped to the list row shape, dueDate ascending
+     * @throws IllegalArgumentException if {@code dueTo} is before {@code dueFrom}, or the window
+     *                                  exceeds {@link #MAX_DUE_DATE_WINDOW_DAYS} days
+     */
+    @NonNull
+    Page<VendorBillListRow> listByDueDateWindow(
+            @NonNull LocalDate dueFrom,
+            @NonNull LocalDate dueTo,
+            @Nullable VendorBillStatus status,
+            @NonNull Pageable pageable);
+
+    /** Maximum allowed {@code dueTo - dueFrom} span, in days, for {@link #listByDueDateWindow}. */
+    int MAX_DUE_DATE_WINDOW_DAYS = 366;
 }

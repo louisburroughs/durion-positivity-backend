@@ -34,25 +34,49 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     /**
      * Free-text invoice search matching the invoice number (substring, case-insensitive),
      * the customer (party) ids resolved from a name query, or the workorder ids resolved
-     * from a workorder-number query.
+     * from a workorder-number query, ANDed against the structured filters added by #1599
+     * (E11): exact {@code status}, a {@code finalizedAt} window ({@code issuedFrom}/
+     * {@code issuedTo}), and exact {@code customerId} (party id). Every structured filter is
+     * independently optional and combinable with the free-text leg and with each other.
      *
      * <p>JPQL {@code IN} requires non-empty collections; callers pass a non-matching
-     * sentinel when a leg yields no ids.
+     * sentinel when a leg yields no ids. The free-text leg itself is skipped (never forced
+     * to match) when {@code q} is the empty string — the {@code :q = ''} disjunct makes the
+     * whole free-text group vacuously true so a caller can filter by structured fields alone
+     * without supplying a query term.
      *
-     * @param q            free-text query matched against the invoice number
+     * @param q            free-text query matched against the invoice number; empty string
+     *                     disables the free-text leg entirely (structured filters only)
      * @param customerIds  party ids resolved from the customer-name leg
      * @param workorderIds workorder ids resolved from the workorder-number leg
+     * @param status       exact status match; null disables the filter
+     * @param issuedFrom   {@code finalizedAt} lower bound (inclusive); null disables the filter
+     * @param issuedTo     {@code finalizedAt} upper bound (inclusive); null disables the filter
+     * @param customerId   exact party id match; null disables the filter
      * @param pageable     pagination and sorting configuration
      * @return page of matching invoices
      */
-    @Query("SELECT i FROM Invoice i WHERE LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\' "
-            + "OR i.partyId IN :customerIds "
-            + "OR i.workorderId IN :workorderIds")
+    @Query("""
+            SELECT i FROM Invoice i
+            WHERE ((:q <> '' AND (
+                       LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\'
+                       OR i.partyId IN :customerIds
+                       OR i.workorderId IN :workorderIds))
+                   OR :q = '')
+              AND (:status IS NULL OR i.status = :status)
+              AND (:issuedFrom IS NULL OR i.finalizedAt >= :issuedFrom)
+              AND (:issuedTo IS NULL OR i.finalizedAt <= :issuedTo)
+              AND (:customerId IS NULL OR i.partyId = :customerId)
+            """)
     @NonNull
     Page<Invoice> searchByQuery(
             @Param("q") @NonNull String q,
             @Param("customerIds") @NonNull Collection<String> customerIds,
             @Param("workorderIds") @NonNull Collection<UUID> workorderIds,
+            @Param("status") @Nullable InvoiceStatus status,
+            @Param("issuedFrom") @Nullable Instant issuedFrom,
+            @Param("issuedTo") @Nullable Instant issuedTo,
+            @Param("customerId") @Nullable String customerId,
             @NonNull Pageable pageable);
 
     /**

@@ -416,6 +416,122 @@ class VendorBillServiceTest {
         assertThat(result).isEmpty();
     }
 
+    @Nested
+    @DisplayName("listByDueDateWindow (Wave 2 E9, issue #1597)")
+    class ListByDueDateWindowTests {
+
+        private final java.time.LocalDate dueFrom = java.time.LocalDate.of(2026, 6, 1);
+        private final java.time.LocalDate dueTo = java.time.LocalDate.of(2026, 6, 30);
+
+        @Test
+        @DisplayName("Rejects dueTo before dueFrom")
+        void rejectsInvalidRange() {
+            assertThatThrownBy(() -> vendorBillService.listByDueDateWindow(
+                            dueTo, dueFrom, null, org.springframework.data.domain.PageRequest.of(0, 20)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("Rejects a window wider than 366 days")
+        void rejectsWindowTooWide() {
+            java.time.LocalDate wideTo = dueFrom.plusDays(400);
+
+            assertThatThrownBy(() -> vendorBillService.listByDueDateWindow(
+                            dueFrom, wideTo, null, org.springframework.data.domain.PageRequest.of(0, 20)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("Accepts a window of exactly 366 days")
+        void acceptsMaxWindow() {
+            java.time.LocalDate maxTo = dueFrom.plusDays(366);
+            when(billRepository.findByDueDateBetween(any(), any(), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+
+            vendorBillService.listByDueDateWindow(
+                    dueFrom, maxTo, null, org.springframework.data.domain.PageRequest.of(0, 20));
+
+            verify(billRepository).findByDueDateBetween(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("With no status filter, delegates to findByDueDateBetween and maps rows")
+        void noStatusFilterMapsRows() {
+            VendorBill bill = buildBill(
+                    testBillId,
+                    VendorBillStatus.APPROVED,
+                    new BigDecimal("500.00"),
+                    LocalDateTime.of(2026, 6, 5, 0, 0));
+            bill.setDueDate(LocalDateTime.of(2026, 6, 10, 0, 0));
+            when(billRepository.findByDueDateBetween(any(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(bill)));
+
+            org.springframework.data.domain.Page<com.positivity.accounting.internal.dto.VendorBillListRow> result =
+                    vendorBillService.listByDueDateWindow(
+                            dueFrom, dueTo, null, org.springframework.data.domain.PageRequest.of(0, 20));
+
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).getBillId()).isEqualTo(testBillId);
+            assertThat(result.getContent().get(0).getAmount()).isEqualByComparingTo("500.00");
+            assertThat(result.getContent().get(0).getStatus()).isEqualTo(VendorBillStatus.APPROVED);
+        }
+
+        @Test
+        @DisplayName("With a status filter, delegates to findByDueDateBetweenAndStatus")
+        void statusFilterDelegatesToFilteredQuery() {
+            when(billRepository.findByDueDateBetweenAndStatus(any(), any(), any(), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+
+            vendorBillService.listByDueDateWindow(
+                    dueFrom, dueTo, VendorBillStatus.APPROVED, org.springframework.data.domain.PageRequest.of(0, 20));
+
+            verify(billRepository)
+                    .findByDueDateBetweenAndStatus(
+                            any(), any(), org.mockito.ArgumentMatchers.eq(VendorBillStatus.APPROVED), any());
+            verify(billRepository, org.mockito.Mockito.never()).findByDueDateBetween(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("Caps the effective page size at the module's hard cap regardless of the requested size")
+        void capsPageSize() {
+            when(billRepository.findByDueDateBetween(any(), any(), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+
+            vendorBillService.listByDueDateWindow(
+                    dueFrom, dueTo, null, org.springframework.data.domain.PageRequest.of(0, 10_000));
+
+            org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageableCaptor =
+                    org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+            verify(billRepository).findByDueDateBetween(any(), any(), pageableCaptor.capture());
+            assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
+        }
+
+        @Test
+        @DisplayName("Ignores any caller-supplied sort and enforces dueDate ascending server-side")
+        void ignoresCallerSuppliedSort() {
+            when(billRepository.findByDueDateBetween(any(), any(), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+
+            vendorBillService.listByDueDateWindow(
+                    dueFrom,
+                    dueTo,
+                    null,
+                    org.springframework.data.domain.PageRequest.of(
+                            0,
+                            20,
+                            org.springframework.data.domain.Sort.by(
+                                    org.springframework.data.domain.Sort.Direction.DESC, "billDate")));
+
+            org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageableCaptor =
+                    org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+            verify(billRepository).findByDueDateBetween(any(), any(), pageableCaptor.capture());
+            org.springframework.data.domain.Sort.Order order =
+                    pageableCaptor.getValue().getSort().getOrderFor("dueDate");
+            assertThat(order).isNotNull();
+            assertThat(order.getDirection()).isEqualTo(org.springframework.data.domain.Sort.Direction.ASC);
+        }
+    }
+
     // ========================================
     // Helper Methods
     // ========================================

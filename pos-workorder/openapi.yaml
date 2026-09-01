@@ -2723,17 +2723,23 @@ paths:
       - workorder:workorder:view
   /v1/workorders/search:
     get:
-      description: 'Searches workorders by free-text query against customer display names or a literal workorder id, optionally narrowed by exact customerId and vehicleId filters, returning a page of rows enriched with customer name, vehicle label, and VIN.
+      description: 'Searches workorders by free-text query against customer display names or a literal workorder id, optionally narrowed by exact customerId and vehicleId filters, an exact status, a createdAt date window (createdFrom/createdTo), and/or a technicianId, returning a page of rows enriched with customer name, vehicle label, and VIN. All filters are combinable with each other and with q.
 
-        Use this tool when finding workorders by customer or id fragments; use listWorkorders instead for an unfiltered listing, and resolveWorkorderNumbers to map known ids to human numbers.
+        status must be an exact WorkorderStatus value (DRAFT, APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, CANCELLED); an unrecognized value is rejected with 400 rather than silently matching nothing. There is no "open" alias — an "open work orders" query loops this call once per open status (APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP), each call still fully server-side and combinable with customerId etc., the same way a caller loops a date window over several periods for other endpoints in this API.
+
+        technicianId matches any technician who has logged a labor entry (WorkorderLaborEntry.technicianId) on the workorder — the same attribution basis as getTechnicianLaborAnalytics''s billedHours column — not the workorder''s currently assigned technician (TechnicianAssignment); a workorder assigned to one technician but worked by another surfaces under the working technician''s id.
+
+        createdFrom/createdTo are inclusive calendar-date bounds (YYYY-MM-DD) on the workorder''s createdAt timestamp, evaluated in UTC.
+
+        Use this tool when finding workorders by customer, id fragments, status, date, or technician; use listWorkorders instead for an unfiltered listing, and resolveWorkorderNumbers to map known ids to human numbers.
 
         Preconditions: customer-name matching depends on the local customer replica; at most 10 name-matched customers are considered per query.
 
-        Required inputs: none are mandatory — q defaults to an empty string and is treated as a workorder id when it parses as a UUID; page size defaults to 25.
+        Required inputs: none are mandatory — q defaults to an empty string and is treated as a workorder id when it parses as a UUID; page size defaults to 25 and is hard-capped at 100 (a larger request is silently clamped, visible in the response''s own size/totalElements).
 
         Emits a WORKORDER_SEARCH audit event; no workorder state changes — this is a read-only projection.
 
-        Returns 200 with an empty page when nothing matches; no 404 is produced for empty results.
+        Returns 200 with an empty page when nothing matches, 400 when status is not a valid WorkorderStatus value, and no 404 for empty results.
 
         '
       operationId: searchWorkorders
@@ -2754,6 +2760,43 @@ paths:
       - description: Exact vehicle id filter, combinable with q (optional)
         in: query
         name: vehicleId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Exact status filter (optional). Must be a real WorkorderStatus value; an unrecognized value returns 400. No "open" alias — loop this call once per open status to find open work orders.
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - DRAFT
+          - APPROVED
+          - ASSIGNED
+          - WORK_IN_PROGRESS
+          - AWAITING_PARTS
+          - AWAITING_APPROVAL
+          - READY_FOR_PICKUP
+          - COMPLETED
+          - CANCELLED
+          type: string
+      - description: Inclusive lower bound (YYYY-MM-DD, UTC) on the workorder's createdAt (optional)
+        in: query
+        name: createdFrom
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Inclusive upper bound (YYYY-MM-DD, UTC) on the workorder's createdAt (optional)
+        in: query
+        name: createdTo
+        required: false
+        schema:
+          format: date
+          type: string
+      - description: Technician who logged a labor entry on the workorder (WorkorderLaborEntry.technicianId) — not the assigned technician (optional)
+        in: query
+        name: technicianId
         required: false
         schema:
           format: uuid
@@ -2789,6 +2832,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PageWorkorderSearchResult'
           description: Page of workorder search results returned.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageWorkorderSearchResult'
+          description: status is not a valid WorkorderStatus value.
       security:
       - bearerAuth:
         - workorder:workorder:view

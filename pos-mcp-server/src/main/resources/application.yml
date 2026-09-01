@@ -371,6 +371,8 @@ pos:
     # aging aggregates; a historical asOfDate reconstructs the point-in-time balance.
     aged-receivables-uri-template: ${POS_ACCOUNTING_AGED_RECEIVABLES_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/aged-receivables?asOfDate={asOfDate}}
     aged-payables-uri-template: ${POS_ACCOUNTING_AGED_PAYABLES_URI_TEMPLATE:/accounting/v1/accounting/reports/financial/aged-payables?asOfDate={asOfDate}}
+    # W2.3 facade promotion (#1601, E8): per-vendor spend for one date window.
+    vendor-spend-uri-template: ${POS_ACCOUNTING_VENDOR_SPEND_URI_TEMPLATE:/accounting/v1/accounting/analytics/vendor-spend?startDate={startDate}&endDate={endDate}}
   catalog:
     base-url: ${POS_CATALOG_BASE_URL:http://pos-api-gateway}
     product-uri-template: ${POS_CATALOG_PRODUCT_URI_TEMPLATE:/catalog/v1/products/{productId}}
@@ -409,6 +411,8 @@ pos:
     # a drifted value inverts getInvoicesByCustomer's truncated signal in both directions.
     customer-invoice-line-cap: ${POS_INVOICE_CUSTOMER_INVOICE_LINE_CAP:200}
     customer-invoices-uri-template: ${POS_INVOICE_CUSTOMER_INVOICES_URI_TEMPLATE:/invoice/v1/invoices/items/search?partyId={customerId}}
+    # W2.3 facade promotion (#1601, E1): per-customer revenue for one date window.
+    revenue-by-customer-uri-template: ${POS_INVOICE_REVENUE_BY_CUSTOMER_URI_TEMPLATE:/invoice/v1/invoices/analytics/revenue-by-customer?startDate={startDate}&endDate={endDate}}
   nlti:
     session:
       ttl-hours: 24
@@ -508,6 +512,8 @@ pos:
     workorder-uri-template: ${POS_WORKORDER_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
     search-uri-template: ${POS_WORKORDER_SEARCH_URI_TEMPLATE:/workorder/v1/workorders/search?q={query}}
     status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
+    # W2.3 facade promotion (#1601, E5): per-technician labor/revenue for one date window.
+    technician-labor-uri-template: ${POS_WORKORDER_TECHNICIAN_LABOR_URI_TEMPLATE:/workorder/v1/workorders/analytics/technician-labor?startDate={startDate}&endDate={endDate}}
   show-actuator: true
 
 logging:

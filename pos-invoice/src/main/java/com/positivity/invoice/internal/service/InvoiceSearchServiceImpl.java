@@ -1,11 +1,16 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
+import com.positivity.invoice.internal.dto.InvoiceSearchFilters;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,23 +52,42 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
     private final WorkorderReferenceService workorderReferenceService;
 
     @Override
-    public @NonNull Page<InvoiceSearchResult> search(@NonNull String q, @NonNull Pageable pageable) {
-        // A blank query would degenerate to LIKE '%%' (full-table scan in undefined order); a
-        // finder requires an actual term, so short-circuit to an empty page.
-        if (!StringUtils.hasText(q)) {
+    public @NonNull Page<InvoiceSearchResult> search(
+            @NonNull String q, @NonNull InvoiceSearchFilters filters, @NonNull Pageable pageable) {
+        boolean hasQuery = StringUtils.hasText(q);
+        // A blank query with no structured filter either would degenerate to matching every
+        // invoice; a finder requires an actual term or a filter to narrow by, so short-circuit
+        // to an empty page. A blank query with at least one structured filter set is a
+        // legitimate filtered listing and falls through instead.
+        if (!hasQuery && filters.isEmpty()) {
             return Page.empty(pageable);
         }
 
-        // Resolve the query against customer names and workorder numbers in sibling services.
-        List<String> nameMatchPartyIds = customerReferenceService.searchIdsByName(q, 10);
-        List<UUID> numberMatchWorkorderIds = workorderReferenceService.searchIdsByNumber(q, 10);
+        // The free-text leg (and its two sibling-service resolution calls) only runs when a
+        // query term is actually present; a filters-only call skips both remote calls.
+        List<String> customerIds = List.of(NO_PARTY_SENTINEL);
+        List<UUID> workorderIds = List.of(NO_WORKORDER_SENTINEL);
+        String likeQuery = "";
+        if (hasQuery) {
+            // Resolve the query against customer names and workorder numbers in sibling services.
+            List<String> nameMatchPartyIds = customerReferenceService.searchIdsByName(q, 10);
+            List<UUID> numberMatchWorkorderIds = workorderReferenceService.searchIdsByNumber(q, 10);
 
-        List<String> customerIds = nameMatchPartyIds.isEmpty() ? List.of(NO_PARTY_SENTINEL) : nameMatchPartyIds;
-        List<UUID> workorderIds =
-                numberMatchWorkorderIds.isEmpty() ? List.of(NO_WORKORDER_SENTINEL) : numberMatchWorkorderIds;
+            customerIds = nameMatchPartyIds.isEmpty() ? List.of(NO_PARTY_SENTINEL) : nameMatchPartyIds;
+            workorderIds = numberMatchWorkorderIds.isEmpty() ? List.of(NO_WORKORDER_SENTINEL) : numberMatchWorkorderIds;
+            // Escape LIKE wildcards so a query containing % or _ matches literally.
+            likeQuery = escapeLike(q);
+        }
 
-        // Escape LIKE wildcards so a query containing % or _ matches literally.
-        Page<Invoice> page = invoiceRepository.searchByQuery(escapeLike(q), customerIds, workorderIds, pageable);
+        Page<Invoice> page = invoiceRepository.searchByQuery(
+                likeQuery,
+                customerIds,
+                workorderIds,
+                filters.status(),
+                startOfDayUtc(filters.issuedFrom()),
+                endOfDayUtc(filters.issuedTo()),
+                filters.customerId(),
+                pageable);
 
         // Enrich each row with the resolved customer display name and human workorder number.
         List<String> pagePartyIds = page.getContent().stream()
@@ -137,5 +161,15 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
      */
     private static @NonNull String escapeLike(@NonNull String q) {
         return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** Mirrors {@code InvoiceAnalyticsServiceImpl}'s window-bound conversion. */
+    private static @Nullable Instant startOfDayUtc(@Nullable LocalDate date) {
+        return date == null ? null : date.atStartOfDay().toInstant(ZoneOffset.UTC);
+    }
+
+    /** Mirrors {@code InvoiceAnalyticsServiceImpl}'s window-bound conversion. */
+    private static @Nullable Instant endOfDayUtc(@Nullable LocalDate date) {
+        return date == null ? null : date.atTime(LocalTime.MAX).toInstant(ZoneOffset.UTC);
     }
 }

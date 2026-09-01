@@ -91,6 +91,16 @@ AccountingFacadeTool.getAgedPayables:
   downstreamPath: "/v1/accounting/reports/financial/aged-payables?asOfDate={}"
   # W1.2: per-vendor A/P aging mirror of getAgedReceivables.
 
+AccountingFacadeTool.getVendorSpend:
+  verb: GET
+  baseUrlProperty: pos.accounting.base-url
+  templateProperty: pos.accounting.vendor-spend-uri-template
+  template: "/accounting/v1/accounting/analytics/vendor-spend?startDate={startDate}&endDate={endDate}"
+  route: accounting
+  downstreamPath: "/v1/accounting/analytics/vendor-spend?startDate={}&endDate={}"
+  # W2.3 facade promotion (#1601, E8). The tool maps its period argument (YYYY-MM or YYYY) onto
+  # the date range via ReportingPeriods.
+
 AdminFacadeTool.getSystemStatus:
   verb: NONE
   route: NONE
@@ -305,6 +315,16 @@ InvoiceFacadeTool.getInvoicesByCustomer:
   route: invoice
   downstreamPath: "/v1/invoices/items/search?partyId={}"
   # The facade de-duplicates the returned line rows by owning invoice.
+
+InvoiceFacadeTool.getRevenueByCustomer:
+  verb: GET
+  baseUrlProperty: pos.invoice.base-url
+  templateProperty: pos.invoice.revenue-by-customer-uri-template
+  template: "/invoice/v1/invoices/analytics/revenue-by-customer?startDate={startDate}&endDate={endDate}"
+  route: invoice
+  downstreamPath: "/v1/invoices/analytics/revenue-by-customer?startDate={}&endDate={}"
+  # W2.3 facade promotion (#1601, E1). The tool maps its period argument (YYYY-MM or YYYY) onto
+  # the date range via ReportingPeriods.
 
 LocationFacadeTool.getLocation:
   verb: GET
@@ -597,3 +617,13 @@ WorkorderFacadeTool.getWorkorderStatus:
   route: workorder
   downstreamPath: "/v1/workorders/{}"
   # Same endpoint as getWorkorder; the response's status field answers the status intent.
+
+WorkorderFacadeTool.getTechnicianLaborAnalytics:
+  verb: GET
+  baseUrlProperty: pos.workorder.base-url
+  templateProperty: pos.workorder.technician-labor-uri-template
+  template: "/workorder/v1/workorders/analytics/technician-labor?startDate={startDate}&endDate={endDate}"
+  route: workorder
+  downstreamPath: "/v1/workorders/analytics/technician-labor?startDate={}&endDate={}"
+  # W2.3 facade promotion (#1601, E5). The tool maps its period argument (YYYY-MM or YYYY) onto
+  # the date range via ReportingPeriods.

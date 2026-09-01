@@ -16,7 +16,10 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 94 event types (includes +2 from the Wave 2 read-only analytics endpoints
+     * Total: 97 event types (includes +3 from the Wave 2 vendor-spend / vendor-bill-list /
+     * payment-application-list endpoints (Issues #1596 E8 / #1597 E9 / #1598 E10):
+     * ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW, ACCOUNTING_VENDOR_BILL_LIST_VIEW,
+     * ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW, +2 from the Wave 2 read-only analytics endpoints
      * (Issues #1590 E2 / #1591 E3): ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW,
      * ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW, +1 from the credit-memo void (issue #997
      * symmetry): ACCOUNTING_CREDIT_MEMO_VOID, +4 from the customer-credit lifecycle
@@ -252,6 +255,11 @@ public final class EventTypes {
                                 "ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT",
                                 "Select match candidate to approve vendor bill from ambiguous match")
                         .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_VENDOR_BILL_LIST_VIEW",
+                                "List vendor bills due in a date window, optionally filtered by status (Wave 2 E9,"
+                                        + " issue #1597)")
+                        .build(),
 
                 // AP Payment GL Posting - 1 event (Issue #128)
                 EventTypeRegistration.write("AP_PAYMENT_GL_POSTING", "Post AP payment to GL (Dr AP, Cr Cash/Bank)")
@@ -403,6 +411,18 @@ public final class EventTypes {
                                 "ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW",
                                 "View payment-lag cohorts (<=30/31-60/61-90/unpaid) for invoices issued in a"
                                         + " date window")
+                        .build(),
+                EventTypeRegistration.search(
+                                "ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW",
+                                "View per-vendor spend analytics (settled A/P cash and bill count/average) for a"
+                                        + " date window (Wave 2 E8, issue #1596)")
+                        .build(),
+
+                // PaymentApplicationController list route — 1 event (Wave 2, Issue #1598 E10)
+                EventTypeRegistration.search(
+                                "ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW",
+                                "List pos-accounting cash applications of customer payments to invoices in an"
+                                        + " applied-date window")
                         .build());
     }
 }

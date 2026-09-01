@@ -2,12 +2,14 @@ package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -85,14 +87,27 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     /**
      * Free-text workorder search matching the workorder number (contains), a resolved
      * customer id (from a name search), or the workorder id directly, optionally
-     * restricted to an exact customer and/or vehicle.
+     * restricted to an exact customer, vehicle, status, creation-date window, and/or
+     * technician (E12, #1600).
      *
-     * @param q           free-text term matched against workorderNumber (case-insensitive contains)
-     * @param customerIds customer ids resolved from a name search (must be non-empty for JPQL IN)
-     * @param idQuery     the query parsed as a UUID, or {@code null} if not a UUID
-     * @param customerId  exact customer filter, or {@code null} for no restriction
-     * @param vehicleId   exact vehicle filter, or {@code null} for no restriction
-     * @param pageable    pagination configuration
+     * @param q            free-text term matched against workorderNumber (case-insensitive contains)
+     * @param customerIds  customer ids resolved from a name search (must be non-empty for JPQL IN)
+     * @param idQuery      the query parsed as a UUID, or {@code null} if not a UUID
+     * @param customerId   exact customer filter, or {@code null} for no restriction
+     * @param vehicleId    exact vehicle filter, or {@code null} for no restriction
+     * @param status       exact status filter, or {@code null} for no restriction (mirrors
+     *                     InvoiceRepository#searchByQuery's single-status filter, #1599/E11)
+     * @param createdFrom  inclusive lower bound on {@code createdAt}; a null caller-supplied bound is
+     *                     widened to a sentinel far in the past by the service layer rather than passed
+     *                     as {@code null} here — an untyped {@code null} bound against a temporal
+     *                     column is not something Postgres can infer a type for inside a comparison
+     * @param createdTo    exclusive upper bound on {@code createdAt}; a null caller-supplied bound is
+     *                     widened to a sentinel far in the future by the service layer, for the same
+     *                     reason as {@code createdFrom}
+     * @param technicianId technician id to match against {@code WorkorderLaborEntry.technicianId} (any
+     *                     technician who logged a labor entry on the workorder), or {@code null} for no
+     *                     restriction
+     * @param pageable     pagination configuration
      * @return page of matching workorders
      */
     @Query("SELECT w FROM Workorder w WHERE (:q = '' "
@@ -101,6 +116,12 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)) "
             + "AND (:customerId IS NULL OR w.customerId = :customerId) "
             + "AND (:vehicleId IS NULL OR w.vehicleId = :vehicleId) "
+            + "AND (:status IS NULL OR w.status = :status) "
+            + "AND w.createdAt >= :createdFrom "
+            + "AND w.createdAt < :createdTo "
+            + "AND (:technicianId IS NULL OR EXISTS ("
+            + "  SELECT 1 FROM WorkorderLaborEntry le "
+            + "  WHERE le.workorder = w AND le.technicianId = :technicianId)) "
             // Deterministic default order (newest first) so pagination is stable — without it
             // Postgres returns plan-dependent order and page-1-only consumers silently drop
             // rows. A caller-supplied Pageable sort is appended after this.
@@ -108,9 +129,13 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     Page<Workorder> searchByQuery(
             @Param("q") String q,
             @Param("customerIds") Collection<UUID> customerIds,
-            @Param("idQuery") UUID idQuery,
-            @Param("customerId") UUID customerId,
-            @Param("vehicleId") UUID vehicleId,
+            @Param("idQuery") @Nullable UUID idQuery,
+            @Param("customerId") @Nullable UUID customerId,
+            @Param("vehicleId") @Nullable UUID vehicleId,
+            @Param("status") @Nullable WorkorderStatus status,
+            @Param("createdFrom") Instant createdFrom,
+            @Param("createdTo") Instant createdTo,
+            @Param("technicianId") @Nullable UUID technicianId,
             Pageable pageable);
 
     /**
