@@ -89,3 +89,68 @@ being asserted into the log. A prior attempt silently evaluated `main` instead o
 branch — the host clone is single-branch, so `git fetch origin` does not retrieve other branches,
 and a script body placed on the left of `||` has `set -e` suppressed, so a failed checkout did not
 stop the run. It produced plausible, wrong numbers.
+
+---
+
+# Post-V40 measurement — 2026-08-31 (determination CLOSED)
+
+Run: alpha, `durion-eval` at `88db20c73` (delta from the deployed `ee2712874` is pos-people only —
+zero `pos-mcp-server` files). V40 applied cleanly to Postgres 16.6 at container boot, schema 39 → 40
+in 183 ms.
+
+| Metric | Before V40 | After V40 | Floor |
+|---|---|---|---|
+| hit@5 | 0.60 | **0.55** | 0.68 |
+| MRR | 0.5677 | **0.5271** | 0.64 |
+| forbidden violations | 2 | **0** | must be 0 |
+| RAG recall@k | — | 0.951 (51/9/0 of 60) | 0.76 |
+
+**The permission fix works.** Both `ts-customerfacadetool-neg-*` violations cleared — the #1606
+finding-1 defect is closed against real Postgres, not just H2.
+
+## Why the metrics fell, and why that is correct
+
+The drop is exactly four fixtures, all `ts-shopmanagerfacadetool-pos-1..4`. Their actors hold
+`shop:location:view` + `shop:schedule:view`. Post-V40 `ShopManagerFacadeTool`'s groups are
+`getShopStatus{location:read}`, `getShopQueue{workorder:wip:view}`, `searchShops{location:read}` —
+the facade calls **pos-location** endpoints, and neither actor code satisfies any group. Those
+callers cannot complete a single method of that tool. They were previously admitted only because
+V37's union carried `shop:schedule:view` in from the *optional* schedule leg — the exact
+over-exposure V40 removes. Both permission codes are real (`pos-shop-manager/permissions.yaml`), so
+the fixtures are not fictional; their actors are simply not authorised for the tool they assert.
+
+## The finding that closes this determination
+
+| | achievable | observed |
+|---|---|---|
+| Before V40 (OR gate) | 48 / 80 = 0.60 | 0.60 |
+| After V40 (AND groups) | 44 / 80 = 0.55 | 0.55 |
+
+**The selector achieves 100% of achievable hits in both runs.** A positive fixture can only hit if
+its actor's permissions admit the expected tool; **36 of 80 (45%) scored positives fail that test by
+construction** — they assert that a tool should be selected for a caller the gate does not permit it
+to. hit@5 is therefore measuring *fixture-corpus coherence*, not selector quality, and has been
+doing so all along.
+
+This supersedes the "did the selector degrade?" framing. It did not. Nor is the earlier
+pipeline-mismatch explanation the whole story: even a perfect selector cannot exceed 0.55 on this
+corpus, so **the 0.68 / 0.64 floors were never attainable** — not before V37, not after V40.
+
+## Recommended actions (decide before re-baselining)
+
+1. **Fix the corpus, not the floors, first.** Audit all 36 unsatisfiable positives. Each is either a
+   mis-specified actor (the ShopManager four look like this — a "shop manager" persona given
+   shop-domain codes for a facade that depends on the location domain) or a genuine gap where the
+   facade's grouping is wrong. Both are worth knowing; neither is visible in an aggregate.
+2. **Only then set the floors**, from a corpus where the ceiling is 1.0, citing the run.
+3. Meanwhile the `mcp.eval.last-hit5` / `last-mrr` tripwire should be moved to **0.55 / 0.5271**, so
+   a further regression is still caught while the corpus work proceeds.
+4. Consider asserting the ceiling itself: a positive fixture whose actor cannot satisfy any group of
+   its expected tool is self-contradictory and should fail fixture validation, not silently cap the
+   metric.
+
+## Note on method
+
+The 0.60 → 0.55 movement was only legible because the run tracked the previously observed values
+alongside the floors (added on review as #1609 finding 5). Against the floors alone both runs fail
+identically, and the four-fixture change — and everything above — would have been invisible.
