@@ -53,6 +53,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * pair netting to zero), all-account section ordering, aging bucket boundaries
  * (days 30/31/60/61/90/91, not-yet-due, no-due-date fallback), and empty-data
  * shapes.
+ *
+ * <p><strong>Aging rule under test (issue #1604).</strong> Both reports age from the item's DUE
+ * date, falling back to the item's document date (invoice date for A/R, bill date for A/P) when no
+ * due date is recorded. Two separate concerns are pinned separately here:
+ *
+ * <ul>
+ *   <li><em>Existence</em> — an item whose DOCUMENT date is after {@code asOfDate} did not exist
+ *       yet and is excluded from the report entirely.
+ *   <li><em>Aging</em> — an item that existed is bucketed by days past its DUE date. Not-yet-due
+ *       items have a negative age and land in {@code current}.
+ * </ul>
  */
 @ExtendWith(MockitoExtension.class)
 class FinancialReportingG2ServiceTest {
@@ -222,15 +233,35 @@ class FinancialReportingG2ServiceTest {
     // ================= Aged Receivables — bucket boundaries =================
 
     @Test
-    @DisplayName("Aged AR: bucket boundaries 30/31/60/61/90/91; future-dated is excluded (finding 10)")
+    @DisplayName("Aged AR: due date drives the bucket, not the invoice date (issue #1604)")
+    void agedReceivablesAgesByDueDateNotInvoiceDate() {
+        // Raised 45 days ago but not due for another 15 days: under the invoice-date basis this
+        // landed in days31To60; under the due-date basis it is not yet due, so it is `current`.
+        ExtInvoice invoice = arInvoice(new BigDecimal("100.00"), AS_OF.minusDays(45), AS_OF.plusDays(15));
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    @DisplayName("Aged AR: bucket boundaries 30/31/60/61/90/91 measured from the due date; not-yet-due is current")
     void agedReceivablesBucketBoundaries() {
-        ExtInvoice notYetDue = arInvoice(new BigDecimal("10.00"), AS_OF.plusDays(5)); // d = -5 -> excluded
-        ExtInvoice d30 = arInvoice(new BigDecimal("30.00"), AS_OF.minusDays(30)); // current
-        ExtInvoice d31 = arInvoice(new BigDecimal("31.00"), AS_OF.minusDays(31)); // 31-60
-        ExtInvoice d60 = arInvoice(new BigDecimal("60.00"), AS_OF.minusDays(60)); // 31-60
-        ExtInvoice d61 = arInvoice(new BigDecimal("61.00"), AS_OF.minusDays(61)); // 61-90
-        ExtInvoice d90 = arInvoice(new BigDecimal("90.00"), AS_OF.minusDays(90)); // 61-90
-        ExtInvoice d91 = arInvoice(new BigDecimal("91.00"), AS_OF.minusDays(91)); // 90+
+        // Every invoice is dated long before AS_OF (so all exist as of the report date); only the
+        // due date varies, which is what the buckets must key on.
+        LocalDate invoiceDate = AS_OF.minusDays(120);
+        ExtInvoice notYetDue = arInvoice(new BigDecimal("10.00"), invoiceDate, AS_OF.plusDays(5)); // d=-5 -> current
+        ExtInvoice d30 = arInvoice(new BigDecimal("30.00"), invoiceDate, AS_OF.minusDays(30)); // current
+        ExtInvoice d31 = arInvoice(new BigDecimal("31.00"), invoiceDate, AS_OF.minusDays(31)); // 31-60
+        ExtInvoice d60 = arInvoice(new BigDecimal("60.00"), invoiceDate, AS_OF.minusDays(60)); // 31-60
+        ExtInvoice d61 = arInvoice(new BigDecimal("61.00"), invoiceDate, AS_OF.minusDays(61)); // 61-90
+        ExtInvoice d90 = arInvoice(new BigDecimal("90.00"), invoiceDate, AS_OF.minusDays(90)); // 61-90
+        ExtInvoice d91 = arInvoice(new BigDecimal("91.00"), invoiceDate, AS_OF.minusDays(91)); // 90+
 
         List<ExtInvoice> all = List.of(notYetDue, d30, d31, d60, d61, d90, d91);
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(all);
@@ -241,15 +272,30 @@ class FinancialReportingG2ServiceTest {
 
         AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
 
-        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("30.00"); // 30 (future-dated 10 excluded)
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("40.00"); // 10 not-yet-due + 30
         assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("91.00"); // 31 + 60
         assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("151.00"); // 61 + 90
         assertThat(report.getTotals().getDays90Plus()).isEqualByComparingTo("91.00");
-        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("363.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("373.00");
     }
 
     @Test
-    @DisplayName("Aged AR: no invoiceCreatedAt falls back to finalizedAt for aging")
+    @DisplayName("Aged AR: null due date ages by the invoice date")
+    void agedReceivablesNullDueDateAgesByInvoiceDate() {
+        // Drafts and replica rows predating V22__ext_invoice_due_date.sql carry no due date.
+        ExtInvoice invoice = arInvoice(new BigDecimal("400.00"), AS_OF.minusDays(61), null);
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("400.00");
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("Aged AR: no due date and no invoiceCreatedAt falls back to finalizedAt for aging")
     void agedReceivablesNoInvoiceDateFallsBackToFinalized() {
         ExtInvoice invoice = ExtInvoice.builder()
                 .invoiceId(UUID.randomUUID())
@@ -257,6 +303,7 @@ class FinancialReportingG2ServiceTest {
                 .status("POSTED")
                 .total(new BigDecimal("500.00"))
                 .invoiceCreatedAt(null)
+                .dueDate(null)
                 .finalizedAt(AS_OF.minusDays(45).atStartOfDay().toInstant(ZoneOffset.UTC))
                 .build();
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(invoice));
@@ -295,9 +342,10 @@ class FinancialReportingG2ServiceTest {
     }
 
     @Test
-    @DisplayName("Aged AR: future-dated invoice (after asOfDate) is excluded, not bucketed as current (finding 10)")
+    @DisplayName("Aged AR: invoice whose DOCUMENT date is after asOfDate did not exist yet and is excluded")
     void agedReceivablesExcludesFutureDated() {
-        ExtInvoice future = arInvoice(new BigDecimal("100.00"), AS_OF.plusDays(10));
+        // Existence is tested against the invoice date, never the due date.
+        ExtInvoice future = arInvoice(new BigDecimal("100.00"), AS_OF.plusDays(10), AS_OF.plusDays(40));
         when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(future));
         when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
         when(invoiceBalanceCalculator.balanceDue(future)).thenReturn(new BigDecimal("100.00"));
@@ -309,15 +357,36 @@ class FinancialReportingG2ServiceTest {
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
     }
 
+    @Test
+    @DisplayName("Aged AR: not-yet-due invoice with a past document date is INCLUDED in current")
+    void agedReceivablesNotYetDueIsIncludedInCurrent() {
+        // The converse of agedReceivablesExcludesFutureDated: the invoice exists (document date is
+        // in the past) but is not yet due, so it must be reported rather than dropped.
+        ExtInvoice notYetDue = arInvoice(new BigDecimal("100.00"), AS_OF.minusDays(10), AS_OF.plusDays(20));
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(notYetDue));
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(notYetDue)).thenReturn(new BigDecimal("100.00"));
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        assertThat(report.getRows()).hasSize(1);
+        assertThat(report.getRows().get(0).getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("100.00");
+    }
+
     // ================= Aged Payables — bucket boundaries =================
 
     @Test
-    @DisplayName("Aged AP: open = total - allocations; bucket boundaries land correctly")
+    @DisplayName("Aged AP: open = total - allocations; bucket boundaries measured from the due date")
     void agedPayablesBucketBoundariesAndOpenBalance() {
         UUID vendorId = UUID.randomUUID();
-        VendorBill current = apBill(vendorId, "Acme", new BigDecimal("300.00"), AS_OF.minusDays(30));
-        VendorBill mid = apBill(vendorId, "Acme", new BigDecimal("400.00"), AS_OF.minusDays(61));
-        VendorBill partiallyPaid = apBill(vendorId, "Acme", new BigDecimal("500.00"), AS_OF.minusDays(91));
+        // Bill dates are all well before AS_OF (so every bill exists as of the report date); only
+        // the due date varies, which is what the buckets must key on.
+        LocalDate billDate = AS_OF.minusDays(120);
+        VendorBill current = apBill(vendorId, "Acme", new BigDecimal("300.00"), billDate, AS_OF.minusDays(30));
+        VendorBill mid = apBill(vendorId, "Acme", new BigDecimal("400.00"), billDate, AS_OF.minusDays(61));
+        VendorBill partiallyPaid = apBill(vendorId, "Acme", new BigDecimal("500.00"), billDate, AS_OF.minusDays(91));
 
         when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(current, mid, partiallyPaid));
         // Batched allocation totals (finding 9): bills with no allocation are simply absent (treated 0);
@@ -369,10 +438,11 @@ class FinancialReportingG2ServiceTest {
     }
 
     @Test
-    @DisplayName("Aged AP: future-dated bill (due after asOfDate) is excluded, not bucketed as current (finding 10)")
+    @DisplayName("Aged AP: bill whose DOCUMENT (bill) date is after asOfDate did not exist yet and is excluded")
     void agedPayablesExcludesFutureDated() {
+        // Existence is tested against the bill date, never the due date.
         UUID vendorId = UUID.randomUUID();
-        VendorBill future = apBill(vendorId, "Acme", new BigDecimal("300.00"), AS_OF.plusDays(10));
+        VendorBill future = apBill(vendorId, "Acme", new BigDecimal("300.00"), AS_OF.plusDays(10), AS_OF.plusDays(40));
         when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(future));
 
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
@@ -380,6 +450,69 @@ class FinancialReportingG2ServiceTest {
         assertThat(report.getRows()).isEmpty();
         assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("0");
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("Aged AP: not-yet-due bill with a past bill date is INCLUDED in current (issue #1604)")
+    void agedPayablesNotYetDueIsIncludedInCurrent() {
+        // Previously dropped by the `daysPastDue < 0` guard, which understated totalOutstanding.
+        UUID vendorId = UUID.randomUUID();
+        VendorBill notYetDue =
+                apBill(vendorId, "Acme", new BigDecimal("300.00"), AS_OF.minusDays(10), AS_OF.plusDays(20));
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(notYetDue));
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        assertThat(report.getRows()).hasSize(1);
+        assertThat(report.getRows().get(0).getCurrent()).isEqualByComparingTo("300.00");
+        assertThat(report.getTotals().getCurrent()).isEqualByComparingTo("300.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("300.00");
+    }
+
+    // ================= A/R and A/P share one documented aging rule (issue #1604) =================
+
+    @Test
+    @DisplayName("Aging parity: identically dated A/R and A/P items bucket identically (issue #1604)")
+    void agingRuleIsIdenticalForReceivablesAndPayables() {
+        // Same three shapes on both sides — not yet due, 45 days past due, and no due date at all
+        // (falling back to the document date) — must produce the same bucket totals.
+        LocalDate documentDate = AS_OF.minusDays(75);
+
+        ExtInvoice arNotYetDue = arInvoice(new BigDecimal("100.00"), documentDate, AS_OF.plusDays(20));
+        ExtInvoice arPastDue = arInvoice(new BigDecimal("200.00"), documentDate, AS_OF.minusDays(45));
+        ExtInvoice arNoDueDate = arInvoice(new BigDecimal("300.00"), documentDate, null);
+        List<ExtInvoice> invoices = List.of(arNotYetDue, arPastDue, arNoDueDate);
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(invoices);
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        for (ExtInvoice invoice : invoices) {
+            when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
+        }
+
+        UUID vendorId = UUID.randomUUID();
+        VendorBill apNotYetDue = apBill(vendorId, "Acme", new BigDecimal("100.00"), documentDate, AS_OF.plusDays(20));
+        VendorBill apPastDue = apBill(vendorId, "Acme", new BigDecimal("200.00"), documentDate, AS_OF.minusDays(45));
+        VendorBill apNoDueDate = apBill(vendorId, "Acme", new BigDecimal("300.00"), documentDate, null);
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(apNotYetDue, apPastDue, apNoDueDate));
+
+        AgedReceivablesReport ar = service.generateAgedReceivables(AS_OF);
+        AgedPayablesReport ap = service.generateAgedPayables(AS_OF);
+
+        // not-yet-due -> current; 45 days past due -> 31-60; no due date -> aged from the
+        // document date (75 days) -> 61-90.
+        assertThat(ar.getTotals().getCurrent()).isEqualByComparingTo("100.00");
+        assertThat(ar.getTotals().getDays31To60()).isEqualByComparingTo("200.00");
+        assertThat(ar.getTotals().getDays61To90()).isEqualByComparingTo("300.00");
+
+        assertThat(ap.getTotals().getCurrent())
+                .isEqualByComparingTo(ar.getTotals().getCurrent());
+        assertThat(ap.getTotals().getDays31To60())
+                .isEqualByComparingTo(ar.getTotals().getDays31To60());
+        assertThat(ap.getTotals().getDays61To90())
+                .isEqualByComparingTo(ar.getTotals().getDays61To90());
+        assertThat(ap.getTotals().getDays90Plus())
+                .isEqualByComparingTo(ar.getTotals().getDays90Plus());
+        assertThat(ap.getTotals().getTotalOutstanding())
+                .isEqualByComparingTo(ar.getTotals().getTotalOutstanding());
     }
 
     // ================= Fixtures =================
@@ -412,24 +545,38 @@ class FinancialReportingG2ServiceTest {
         entry.addLine(line);
     }
 
+    /** Invoice with no due date recorded — ages from the invoice (document) date. */
     private static ExtInvoice arInvoice(BigDecimal total, LocalDate invoiceDate) {
+        return arInvoice(total, invoiceDate, null);
+    }
+
+    /** Invoice carrying both dates: {@code invoiceDate} governs existence, {@code dueDate} aging. */
+    private static ExtInvoice arInvoice(BigDecimal total, LocalDate invoiceDate, LocalDate dueDate) {
         return ExtInvoice.builder()
                 .invoiceId(UUID.randomUUID())
                 .partyId(UUID.randomUUID().toString())
                 .status("POSTED")
                 .total(total)
                 .invoiceCreatedAt(invoiceDate.atStartOfDay().toInstant(ZoneOffset.UTC))
+                .dueDate(dueDate)
                 .build();
     }
 
+    /** Bill whose bill date and due date coincide. */
     private static VendorBill apBill(UUID vendorId, String vendorName, BigDecimal total, LocalDate dueDate) {
+        return apBill(vendorId, vendorName, total, dueDate, dueDate);
+    }
+
+    /** Bill carrying both dates: {@code billDate} governs existence, {@code dueDate} aging. */
+    private static VendorBill apBill(
+            UUID vendorId, String vendorName, BigDecimal total, LocalDate billDate, LocalDate dueDate) {
         VendorBill bill = new VendorBill(UUID.randomUUID());
         bill.setVendorId(vendorId);
         bill.setVendorName(vendorName);
         bill.setTotalAmount(total);
         bill.setStatus(VendorBillStatus.APPROVED);
-        bill.setDueDate(dueDate.atStartOfDay());
-        bill.setBillDate(dueDate.atStartOfDay());
+        bill.setDueDate(dueDate == null ? null : dueDate.atStartOfDay());
+        bill.setBillDate(billDate.atStartOfDay());
         return bill;
     }
 

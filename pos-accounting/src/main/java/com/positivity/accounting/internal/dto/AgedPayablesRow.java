@@ -13,15 +13,22 @@ import org.jspecify.annotations.NonNull;
  * One per-vendor row of the Aged Payables report.
  *
  * Buckets the vendor's open (unpaid) vendor-bill balances by days past due as of
- * the report date. Open balance per bill is the bill total minus applied
- * {@code APPaymentAllocation} amounts. All bucket amounts are non-negative;
+ * the report date. "Past due" is measured from the bill's DUE date, falling back
+ * to the bill date when no due date is recorded. Aged Receivables applies the same
+ * rule with the invoice date as its fallback. A bill not yet due has a negative age
+ * and is reported in {@code current}; a bill dated after the report date did not yet
+ * exist and is not reported at all. Open balance per bill is the bill total minus
+ * applied {@code APPaymentAllocation} amounts. All bucket amounts are non-negative;
  * {@code totalOutstanding} is their sum.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Per-vendor aged payables row with bucketed open vendor-bill balances")
+@Schema(
+        description = "Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured "
+                + "from the bill due date, falling back to the bill date when no due date is recorded; "
+                + "not-yet-due bills are reported in the current bucket.")
 public class AgedPayablesRow {
 
     /**
