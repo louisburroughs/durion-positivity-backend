@@ -287,6 +287,35 @@ class AccountingAnalyticsServiceImplTest {
                 List<ExtInvoice> invoices,
                 List<PaymentApplication> applications,
                 List<Map.Entry<Instant, String>> reversals) {
+            stubWindowedFixture(invoices, applications, reversals, List.of(), List.of(), List.of(), List.of());
+        }
+
+        /**
+         * Full sibling of the three-feed fixture above (ADR-0057 Implementation Notes / Testing):
+         * every window-scoped sum answers by the ACTUAL start/end instants passed for its own
+         * invocation, keyed off the fixture data, rather than an {@code any()} stub returning one
+         * fixed value regardless of window or timestamp column — so swapping the query's timestamp
+         * column, or widening its bounds, fails a test instead of passing unnoticed.
+         *
+         * @param refundReplicaEntries pos-invoice refund replica rows (reversedAt, amount) —
+         *     backs {@code extInvoicePaymentReversalRepository.sumAmountByReversedAtBetween}
+         * @param depositCreditApplications deposit-credit draw-down rows (appliedAt, amount) —
+         *     backs {@code extInvoiceDepositCreditApplicationRepository.sumAmountAppliedByAppliedAtBetween}
+         * @param receivedPayments cash-received rows (clearedAt, amount) — backs {@code
+         *     receivablePaymentRepository.sumTotalAmountByClearedAtBetween}
+         * @param customerCreditTransactions typed customer-credit subledger rows (type, createdAt,
+         *     amount) — backs {@code
+         *     customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween}, filtered by
+         *     BOTH the requested type and the actual window
+         */
+        private void stubWindowedFixture(
+                List<ExtInvoice> invoices,
+                List<PaymentApplication> applications,
+                List<Map.Entry<Instant, String>> reversals,
+                List<Map.Entry<Instant, String>> refundReplicaEntries,
+                List<Map.Entry<Instant, String>> depositCreditApplications,
+                List<Map.Entry<Instant, String>> receivedPayments,
+                List<CreditTxnFixture> customerCreditTransactions) {
 
             when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
                     .thenAnswer(call -> invoices.stream()
@@ -301,11 +330,33 @@ class AccountingAnalyticsServiceImplTest {
                             .filter(r -> within(r.getKey(), call.getArgument(0), call.getArgument(1)))
                             .map(r -> new BigDecimal(r.getValue()))
                             .reduce(BigDecimal.ZERO, BigDecimal::add));
+            when(extInvoicePaymentReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenAnswer(call -> sumWithin(refundReplicaEntries, call.getArgument(0), call.getArgument(1)));
+            when(extInvoiceDepositCreditApplicationRepository.sumAmountAppliedByAppliedAtBetween(any(), any()))
+                    .thenAnswer(call -> sumWithin(depositCreditApplications, call.getArgument(0), call.getArgument(1)));
+            when(receivablePaymentRepository.sumTotalAmountByClearedAtBetween(any(), any()))
+                    .thenAnswer(call -> sumWithin(receivedPayments, call.getArgument(0), call.getArgument(1)));
+            when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(any(), any(), any()))
+                    .thenAnswer(call -> customerCreditTransactions.stream()
+                            .filter(e -> e.type() == call.getArgument(0))
+                            .filter(e -> within(e.timestamp(), call.getArgument(1), call.getArgument(2)))
+                            .map(CreditTxnFixture::amount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
+
+        private BigDecimal sumWithin(List<Map.Entry<Instant, String>> entries, Instant start, Instant end) {
+            return entries.stream()
+                    .filter(e -> within(e.getKey(), start, end))
+                    .map(e -> new BigDecimal(e.getValue()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 
         private boolean within(Instant value, Instant start, Instant end) {
             return !value.isBefore(start) && !value.isAfter(end);
         }
+
+        /** One row of the typed customer-credit subledger fixture for {@link #stubWindowedFixture}. */
+        private record CreditTxnFixture(CustomerCreditTransactionType type, Instant timestamp, BigDecimal amount) {}
 
         @Test
         @DisplayName("A reversal recorded in the same window as its application nets that application to zero")
@@ -394,6 +445,153 @@ class AccountingAnalyticsServiceImplTest {
         }
 
         @Test
+        @DisplayName("refunded (replica leg) is attributed to the ACTUAL reversedAt window, not any() (ADR-0057"
+                + " Implementation Notes / Testing)")
+        void refundedReplicaLegPinnedToActualWindow() {
+            stubWindowedFixture(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(
+                            Map.entry(Instant.parse("2026-01-10T00:00:00Z"), "200.00"),
+                            Map.entry(Instant.parse("2026-02-10T00:00:00Z"), "300.00")),
+                    List.of(),
+                    List.of(),
+                    List.of());
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport february =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+            assertThat(january.getRefunded()).isEqualByComparingTo("200.00");
+            assertThat(february.getRefunded()).isEqualByComparingTo("300.00");
+        }
+
+        @Test
+        @DisplayName("nonCashSettled (deposit-credit leg) is attributed to the ACTUAL appliedAt window, not"
+                + " any() (ADR-0057 Implementation Notes / Testing)")
+        void nonCashSettledDepositCreditLegPinnedToActualWindow() {
+            stubWindowedFixture(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(
+                            Map.entry(Instant.parse("2026-01-10T00:00:00Z"), "400.00"),
+                            Map.entry(Instant.parse("2026-02-10T00:00:00Z"), "600.00")),
+                    List.of(),
+                    List.of());
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport february =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+            assertThat(january.getNonCashSettled()).isEqualByComparingTo("400.00");
+            assertThat(february.getNonCashSettled()).isEqualByComparingTo("600.00");
+        }
+
+        @Test
+        @DisplayName("received is attributed to the ACTUAL clearedAt window, not any() (ADR-0057 Implementation"
+                + " Notes / Testing)")
+        void receivedPinnedToActualWindow() {
+            stubWindowedFixture(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(
+                            Map.entry(Instant.parse("2026-01-10T00:00:00Z"), "500.00"),
+                            Map.entry(Instant.parse("2026-02-10T00:00:00Z"), "700.00")),
+                    List.of());
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport february =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+            assertThat(january.getReceived()).isEqualByComparingTo("500.00");
+            assertThat(february.getReceived()).isEqualByComparingTo("700.00");
+        }
+
+        @Test
+        @DisplayName("customer-credit typed sums (APPLICATION → nonCashSettled, REFUND → refunded) are"
+                + " attributed to the ACTUAL createdAt window AND filtered by type, not any() (ADR-0057"
+                + " Implementation Notes / Testing)")
+        void customerCreditTypedSumsPinnedToActualWindowAndType() {
+            stubWindowedFixture(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(
+                            new CreditTxnFixture(
+                                    CustomerCreditTransactionType.APPLICATION,
+                                    Instant.parse("2026-01-10T00:00:00Z"),
+                                    new BigDecimal("150.00")),
+                            new CreditTxnFixture(
+                                    CustomerCreditTransactionType.REFUND,
+                                    Instant.parse("2026-01-12T00:00:00Z"),
+                                    new BigDecimal("90.00")),
+                            new CreditTxnFixture(
+                                    CustomerCreditTransactionType.APPLICATION,
+                                    Instant.parse("2026-02-10T00:00:00Z"),
+                                    new BigDecimal("250.00")),
+                            new CreditTxnFixture(
+                                    CustomerCreditTransactionType.REFUND,
+                                    Instant.parse("2026-02-12T00:00:00Z"),
+                                    new BigDecimal("40.00"))));
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport february =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+            assertThat(january.getNonCashSettled()).isEqualByComparingTo("150.00");
+            assertThat(january.getRefunded()).isEqualByComparingTo("90.00");
+            assertThat(february.getNonCashSettled()).isEqualByComparingTo("250.00");
+            assertThat(february.getRefunded()).isEqualByComparingTo("40.00");
+        }
+
+        @Test
+        @DisplayName("ADR-0057 Implementation Notes / Testing narrative: deposit taken and cleared in one"
+                + " window, drawn down against the settlement invoice in a LATER window")
+        void depositTakeCashInOneWindowDrawDownInALaterWindow() {
+            // The deposit-take invoice itself finalizes alongside the cash clearing in window A;
+            // the down payment is drawn down against the settlement invoice's balance in window B.
+            // window A must show the cash coming IN (received) with no settlement yet; window B
+            // must show the settlement (nonCashSettled) with no new cash (collected/received both 0).
+            UUID depositInvoiceId = UUID.randomUUID();
+            stubWindowedFixture(
+                    List.of(depositTakeInvoice(depositInvoiceId, Instant.parse("2026-01-05T00:00:00Z"), "500.00")),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(Map.entry(Instant.parse("2026-01-05T00:00:00Z"), "500.00")),
+                    List.of(new CreditTxnFixture(
+                            CustomerCreditTransactionType.APPLICATION,
+                            Instant.parse("2026-02-05T00:00:00Z"),
+                            new BigDecimal("500.00"))));
+
+            CollectionsAnalyticsReport january =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+            CollectionsAnalyticsReport february =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+            assertThat(january.getReceived()).isEqualByComparingTo("500.00");
+            assertThat(january.getNonCashSettled()).isEqualByComparingTo(BigDecimal.ZERO);
+
+            assertThat(february.getNonCashSettled()).isEqualByComparingTo("500.00");
+            assertThat(february.getCollected()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(february.getReceived()).isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
         @DisplayName("A heavy-reversal window drives collected negative and it is NOT clamped to zero")
         void heavyReversalWindowGoesNegativeAndIsNotClamped() {
             when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
@@ -454,6 +652,9 @@ class AccountingAnalyticsServiceImplTest {
             when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
                             eq(CustomerCreditTransactionType.APPLICATION), any(), any()))
                     .thenReturn(drawDown.getAmount());
+            when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
+                            eq(CustomerCreditTransactionType.REFUND), any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
 
             CollectionsAnalyticsReport report =
                     service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
@@ -507,6 +708,33 @@ class AccountingAnalyticsServiceImplTest {
 
             assertThat(report.getRefunded()).isEqualByComparingTo("450.00");
             assertThat(report.getCollected()).isEqualByComparingTo("300.00");
+        }
+
+        @Test
+        @DisplayName("refunded sums BOTH the pos-invoice replica and the accounting credit-balance"
+                + " REFUND feed (ADR-0057 §4)")
+        void refundedSumsBothSources() {
+            // Same both-feeds shape as nonCashSettledSumsBothSources: one source alone reads
+            // complete while systematically short of the other, disjoint subledger.
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of());
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of());
+            when(extInvoicePaymentReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(new BigDecimal("450.00"));
+            when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
+                            eq(CustomerCreditTransactionType.REFUND), any(), any()))
+                    .thenReturn(new BigDecimal("120.00"));
+            when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
+                            eq(CustomerCreditTransactionType.APPLICATION), any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getRefunded()).isEqualByComparingTo("570.00");
+            // Neither feed leaks into collected or received.
+            assertThat(report.getCollected()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getReceived()).isEqualByComparingTo(BigDecimal.ZERO);
         }
 
         @Test
@@ -606,6 +834,9 @@ class AccountingAnalyticsServiceImplTest {
             when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
                             eq(CustomerCreditTransactionType.APPLICATION), any(), any()))
                     .thenReturn(new BigDecimal("200.00"));
+            when(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
+                            eq(CustomerCreditTransactionType.REFUND), any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
 
             CollectionsAnalyticsReport report =
                     service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));

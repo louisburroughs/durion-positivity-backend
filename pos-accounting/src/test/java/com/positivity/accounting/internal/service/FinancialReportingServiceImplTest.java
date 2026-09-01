@@ -271,6 +271,8 @@ class FinancialReportingServiceImplTest {
         UUID depositInvoiceId = UUID.fromString("a2000000-0000-7000-8000-000000000001");
         UUID settlementInvoiceId = UUID.fromString("a2000000-0000-7000-8000-000000000002");
 
+        // Marked row (depositSourceType set): its tax was minted before the #1629 source fix and
+        // must never reach the report.
         ExtInvoice depositInvoice = ExtInvoice.builder()
                 .invoiceId(depositInvoiceId)
                 .status("FINALIZED")
@@ -278,7 +280,6 @@ class FinancialReportingServiceImplTest {
                 .depositSourceType("WORKORDER")
                 .total(new BigDecimal("100.00"))
                 .build();
-        // Historical row: recorded before the #1629 source fix, must never reach the report.
         ExtInvoice settlementInvoice = ExtInvoice.builder()
                 .invoiceId(settlementInvoiceId)
                 .status("FINALIZED")

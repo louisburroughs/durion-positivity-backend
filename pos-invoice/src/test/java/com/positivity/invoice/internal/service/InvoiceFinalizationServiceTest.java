@@ -658,7 +658,9 @@ class InvoiceFinalizationServiceTest {
      * #1629: a deposit-take invoice (contract-liability/cash-receipt document) must never accrue
      * tax at finalization — the committable tax calculation is skipped entirely, tax is frozen at
      * ZERO, the total is subtotal + adjustments (no tax term), and the breakdown writer is called
-     * with an empty (authoritative-empty) response, matching the #982 null-vs-empty contract.
+     * with null — its documented "nothing taxable, clear the breakdown" contract. The #982
+     * authoritative-empty signal is then produced downstream by InvoiceEventPublisher once the
+     * rows are gone, not by this null call itself.
      */
     @Test
     void finalize_depositTakeInvoice_skipsTaxCalculation_andZeroesTax() {

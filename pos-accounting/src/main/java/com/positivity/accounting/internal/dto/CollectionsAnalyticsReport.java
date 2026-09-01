@@ -94,7 +94,10 @@ public class CollectionsAnalyticsReport {
 
     @Schema(
             description = "Sum of ExtInvoice.total for invoices whose finalizedAt (accrual/posting date) falls in the"
-                    + " window; 0 when none finalized in the window",
+                    + " window; 0 when none finalized in the window. Deposit-take invoices — the document a"
+                    + " deposit-take order renders for the down payment itself, identified by a non-null"
+                    + " depositSourceType — are EXCLUDED: they are a contract-liability document, not a sale"
+                    + " (#1623, ADR-0057 decision 6)",
             example = "125000.00",
             requiredMode = REQUIRED)
     @NonNull
@@ -144,13 +147,17 @@ public class CollectionsAnalyticsReport {
     private BigDecimal collectionRatePct;
 
     @Schema(
-            description = "GROSS completed refunds whose reversedAt falls in the window, as a positive number: a"
-                    + " genuine cash-out measure (#1620). Sums ExtInvoicePaymentReversal.amount, which includes"
-                    + " standalone refunds with no invoice — refunded is a cash-out measure and cash out is"
-                    + " uniform regardless of whether the refund relieves a receivable. VOID reversals"
-                    + " (an authorization released before capture) are EXCLUDED: no cash was ever collected"
-                    + " for one, so releasing it is not a cash-out event, and the replica never stores them"
-                    + " in the first place. 0 when no refunds were recorded in the window",
+            description = "GROSS completed refunds in the window, as a positive number: a genuine cash-out measure"
+                    + " (#1620). Sums BOTH refund sources: invoice/standalone refunds replicated from"
+                    + " pos-invoice (ExtInvoicePaymentReversal.amount, by reversedAt — includes standalone"
+                    + " refunds with no invoice, since cash out is uniform regardless of whether the refund"
+                    + " relieves a receivable) AND credit-balance refunds, this module's own"
+                    + " CustomerCreditTransaction subledger (type REFUND, by the draw-down's createdAt) —"
+                    + " accounting's own cash-out refunds against a customer's credit balance, distinct from"
+                    + " and additive with the replica leg since the two are disjoint subledgers. VOID"
+                    + " reversals (an authorization released before capture) are EXCLUDED: no cash was ever"
+                    + " collected for one, so releasing it is not a cash-out event, and the replica never"
+                    + " stores them in the first place. 0 when no refunds were recorded in the window",
             example = "450.00",
             requiredMode = REQUIRED)
     @NonNull
@@ -175,7 +182,10 @@ public class CollectionsAnalyticsReport {
                     + " when the settlement event says cash was actually taken in, not when this replica row"
                     + " was written. Cash received but sitting unapplied appears here and NOT in collected —"
                     + " received and collected are independent populations, like invoiced and collected"
-                    + " already are. 0 when nothing cleared in the window",
+                    + " already are. A voided receivable payment currently retains its clearedAt and"
+                    + " totalAmount (there is no VOIDED status on ReceivablePayment), so a void is not"
+                    + " deducted from received; voids are rare and refuse once any application exists. 0 when"
+                    + " nothing cleared in the window",
             example = "101000.00",
             requiredMode = REQUIRED)
     @NonNull

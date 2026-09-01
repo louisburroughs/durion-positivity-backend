@@ -856,9 +856,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant);
         // Deposit-take invoices excluded (#1629, Accounting ruling — mirrors the #1623 filter in
         // AccountingAnalyticsServiceImpl.getCollectionsAnalytics): a deposit-take document is a
-        // contract liability, not a taxable sale, and may carry historical (pre-fix) invalid tax
-        // rows. A marked row's tax must never enter the liability report; the settlement invoice
-        // alone establishes taxable base and tax liability.
+        // contract liability, not a taxable sale. Marked rows can carry tax minted before the
+        // #1629 source fix and must not reach the report; rows replicated before the V29
+        // enrichment are UNMARKED and still contribute (forward-only until a replay lands, per
+        // ADR-0057's consequences). The settlement invoice alone establishes taxable base and tax
+        // liability.
         List<UUID> invoiceIds = invoices.stream()
                 .filter(invoice -> invoice.getDepositSourceType() == null)
                 .map(ExtInvoice::getInvoiceId)

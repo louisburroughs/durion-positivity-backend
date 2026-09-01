@@ -182,8 +182,14 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         // VOID reversals (an authorization released before capture) never produced collected cash,
         // so they are correctly absent: the replica behind this query never stores them at all
         // (see ExtInvoicePaymentReversalRepository#sumAmountByReversedAtBetween).
-        BigDecimal refunded =
-                nullSafe(extInvoicePaymentReversalRepository.sumAmountByReversedAtBetween(startInstant, endInstant));
+        // Both refund shapes together (ADR-0057 §4, the same both-feeds rule as nonCashSettled):
+        // pos-invoice RefundRecord facts (replica, by reversedAt) plus accounting's own credit-balance
+        // refunds (CustomerCreditTransaction REFUND rows, by createdAt) — one source alone reads
+        // complete while systematically short. The two are disjoint subledgers, so no double-count.
+        BigDecimal refunded = nullSafe(
+                        extInvoicePaymentReversalRepository.sumAmountByReversedAtBetween(startInstant, endInstant))
+                .add(nullSafe(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
+                        CustomerCreditTransactionType.REFUND, startInstant, endInstant)));
 
         // Mixed-basis subtraction (collected is movement-basis A/R relief, refunded is cash out) —
         // deliberately not the clean cash pair; see the field's own @Schema doc. Not clamped.
