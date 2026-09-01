@@ -6,8 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.invoice.internal.config.PaymentEventPublisher;
 import com.positivity.invoice.internal.dto.DepositCreditSummary;
 import com.positivity.invoice.internal.entity.DepositCredit;
 import com.positivity.invoice.internal.enums.DepositCreditStatus;
@@ -50,11 +52,14 @@ class DepositCreditServiceImplTest {
     @Mock
     private com.positivity.invoice.internal.repository.DepositCreditApplicationRepository applicationRepository;
 
+    @Mock
+    private PaymentEventPublisher paymentEventPublisher;
+
     private DepositCreditServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new DepositCreditServiceImpl(repository, applicationRepository, CLOCK);
+        service = new DepositCreditServiceImpl(repository, applicationRepository, paymentEventPublisher, CLOCK);
     }
 
     private static DepositCredit credit(UUID id, String remaining, DepositCreditStatus status) {
@@ -198,5 +203,83 @@ class DepositCreditServiceImplTest {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getDeposit(id)).isInstanceOf(DepositCreditNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("DCS-009: a single draw-down publishes exactly one payment.deposit-credit.applied event")
+    void apply_publishesEventForSingleDrawDown() {
+        UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+        DepositCredit c = credit(creditId, "200.0000", DepositCreditStatus.AVAILABLE);
+        when(repository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
+                        eq(DepositSourceType.WORKORDER), eq(WORKORDER_ID), any()))
+                .thenReturn(List.of(c));
+        when(applicationRepository.findDepositCreditIdsByInvoiceId(INVOICE_ID)).thenReturn(java.util.Set.of());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.applyAvailableCredits(DepositSourceType.WORKORDER, WORKORDER_ID, INVOICE_ID, new BigDecimal("120.00"));
+
+        verify(paymentEventPublisher, org.mockito.Mockito.times(1))
+                .publishDepositCreditApplied(eq(c), eq(INVOICE_ID), eq(new BigDecimal("120.0000")));
+    }
+
+    @Test
+    @DisplayName("DCS-010: a FIFO draw-down spanning two credits publishes one event per credit")
+    void apply_publishesOneEventPerCreditInFifoDrawDown() {
+        DepositCredit older = credit(
+                UUID.fromString("00000000-0000-0000-0000-0000000000f2"), "100.0000", DepositCreditStatus.AVAILABLE);
+        DepositCredit newer = credit(
+                UUID.fromString("00000000-0000-0000-0000-0000000000f3"), "100.0000", DepositCreditStatus.AVAILABLE);
+        when(repository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
+                        eq(DepositSourceType.WORKORDER), eq(WORKORDER_ID), any()))
+                .thenReturn(List.of(older, newer));
+        when(applicationRepository.findDepositCreditIdsByInvoiceId(INVOICE_ID)).thenReturn(java.util.Set.of());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.applyAvailableCredits(DepositSourceType.WORKORDER, WORKORDER_ID, INVOICE_ID, new BigDecimal("150.00"));
+
+        verify(paymentEventPublisher)
+                .publishDepositCreditApplied(eq(older), eq(INVOICE_ID), eq(new BigDecimal("100.0000")));
+        verify(paymentEventPublisher)
+                .publishDepositCreditApplied(eq(newer), eq(INVOICE_ID), eq(new BigDecimal("50.0000")));
+    }
+
+    @Test
+    @DisplayName("DCS-011: the idempotent re-apply path publishes no event")
+    void apply_idempotentPathPublishesNothing() {
+        UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000000f4");
+        DepositCredit c = credit(creditId, "80.0000", DepositCreditStatus.PARTIALLY_APPLIED);
+        when(repository.findBySourceTypeAndSourceIdAndStatusInOrderByCreatedAtAsc(
+                        eq(DepositSourceType.WORKORDER), eq(WORKORDER_ID), any()))
+                .thenReturn(List.of(c));
+        when(applicationRepository.findDepositCreditIdsByInvoiceId(INVOICE_ID)).thenReturn(java.util.Set.of(creditId));
+
+        service.applyAvailableCredits(DepositSourceType.WORKORDER, WORKORDER_ID, INVOICE_ID, new BigDecimal("50.00"));
+
+        verifyNoInteractions(paymentEventPublisher);
+    }
+
+    @Test
+    @DisplayName("DCS-012: createDeposit publishes no deposit-credit-applied event")
+    void create_publishesNothing() {
+        when(repository.findByOrderId(ORDER_ID)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createDeposit(new CreateDepositCommand(
+                ORDER_ID, "workorder", WORKORDER_ID, "party-1", new BigDecimal("200.00"), null));
+
+        verifyNoInteractions(paymentEventPublisher);
+    }
+
+    @Test
+    @DisplayName("DCS-013: refundDeposit publishes no deposit-credit-applied event")
+    void refund_publishesNothing() {
+        UUID id = UUID.randomUUID();
+        DepositCredit c = credit(id, "200.0000", DepositCreditStatus.AVAILABLE);
+        when(repository.findById(id)).thenReturn(Optional.of(c));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.refundDeposit(id, "workorder cancelled");
+
+        verifyNoInteractions(paymentEventPublisher);
     }
 }

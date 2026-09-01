@@ -641,6 +641,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     private static OrderInvoiceCreationRequest toInvoiceRequest(SalesOrder order) {
+        // Issue #1629: a deposit-take invoice is a contract-liability/cash-receipt artifact, not
+        // a taxable sale — it must carry zero tax (order- and line-level). The settlement invoice
+        // alone establishes taxable base and tax liability.
+        boolean depositTake = order.getDepositSourceType() != null && order.getDepositSourceId() != null;
         // Line amounts are net of ALL discounts (lineTotal − tax includes the pro-rata order
         // discount allocation) so the invoice's subtotal + tax = total exactly.
         List<OrderInvoiceLineItem> lines = order.getLines().stream()
@@ -650,8 +654,11 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         .description(line.getItemDescription())
                         .quantity(BigDecimal.valueOf(line.getQuantity()))
                         .unitPrice(line.getUnitPrice())
-                        .amount(line.getLineTotal().subtract(line.getTaxAmount()))
-                        .taxAmount(line.getTaxAmount())
+                        .amount(
+                                depositTake
+                                        ? line.getLineTotal()
+                                        : line.getLineTotal().subtract(line.getTaxAmount()))
+                        .taxAmount(depositTake ? BigDecimal.ZERO : line.getTaxAmount())
                         .type("PART")
                         .build())
                 .toList();
@@ -660,13 +667,16 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .workorderId(order.getWorkOrderId())
                 .customerId(order.getCustomerId())
                 .locationId(order.getLocationId())
-                .subtotal(order.getGrandTotal().subtract(order.getTaxTotal()))
-                .taxAmount(order.getTaxTotal())
+                .subtotal(
+                        depositTake
+                                ? order.getGrandTotal()
+                                : order.getGrandTotal().subtract(order.getTaxTotal()))
+                .taxAmount(depositTake ? BigDecimal.ZERO : order.getTaxTotal())
                 .totalAmount(order.getGrandTotal())
                 .lines(lines);
         // Story E4: a deposit-take order registers a deposit credit against its source for the
         // order total — pos-invoice owns the credit artifact (gate V2).
-        if (order.getDepositSourceType() != null && order.getDepositSourceId() != null) {
+        if (depositTake) {
             builder.depositSourceType(order.getDepositSourceType())
                     .depositSourceId(order.getDepositSourceId())
                     .depositAmount(order.getGrandTotal());

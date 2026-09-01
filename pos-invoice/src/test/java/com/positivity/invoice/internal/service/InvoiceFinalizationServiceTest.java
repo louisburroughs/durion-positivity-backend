@@ -655,6 +655,59 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
+     * #1629: a deposit-take invoice (contract-liability/cash-receipt document) must never accrue
+     * tax at finalization — the committable tax calculation is skipped entirely, tax is frozen at
+     * ZERO, the total is subtotal + adjustments (no tax term), and the breakdown writer is called
+     * with null — its documented "nothing taxable, clear the breakdown" contract. The #982
+     * authoritative-empty signal is then produced downstream by InvoiceEventPublisher once the
+     * rows are gone, not by this null call itself.
+     */
+    @Test
+    void finalize_depositTakeInvoice_skipsTaxCalculation_andZeroesTax() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000d3");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000d4"), BigDecimal.ZERO);
+        draft.setId(invoiceId);
+        draft.setSubtotal(new BigDecimal("100.00"));
+        draft.setAdjustmentsAmount(new BigDecimal("5.00"));
+        draft.setTax(BigDecimal.ZERO);
+        draft.setDepositSourceType(com.positivity.invoice.internal.enums.DepositSourceType.WORKORDER);
+        draft.setDepositSourceId(UUID.randomUUID());
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+        assertThat(draft.getTax()).isEqualByComparingTo("0");
+        assertThat(draft.getTotal()).isEqualByComparingTo("105.00");
+        verify(taxBreakdownWriter).replace(invoiceId, null);
+        org.mockito.Mockito.verifyNoInteractions(invoiceTaxCalculator, taxLifecycleClient);
+    }
+
+    /**
+     * #1629 control: an ordinary (non-deposit-take) invoice keeps the current tax-applying
+     * finalization behavior — the committable calculation runs and its result is frozen.
+     */
+    @Test
+    void finalize_nonDepositTakeInvoice_stillRunsCommittableTaxCalculation() {
+        UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-0000000000d5");
+        Invoice draft = draftInvoice(UUID.fromString("00000000-0000-0000-0000-0000000000d6"), BigDecimal.ZERO);
+        draft.setId(invoiceId);
+        draft.setSubtotal(new BigDecimal("100.00"));
+        when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        var response = taxResponse(new BigDecimal("8.25"));
+        when(invoiceTaxCalculator.calculateCommittable(draft)).thenReturn(response);
+
+        service.completeInvoice(invoiceId, shopManagerRequest());
+
+        assertThat(draft.getTax()).isEqualByComparingTo("8.25");
+        assertThat(draft.getTotal()).isEqualByComparingTo("108.25");
+        verify(taxBreakdownWriter).replace(invoiceId, response);
+        verify(taxLifecycleClient).commit(invoiceId);
+    }
+
+    /**
      * #985: a failed committable calculation blocks finalization (D-T5) — without the persisted
      * provider document the later commit could never resolve. The invoice stays DRAFT.
      */

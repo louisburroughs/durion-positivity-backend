@@ -107,11 +107,37 @@ class OrderInvoiceServiceImplTest {
                 .build();
     }
 
+    /**
+     * A well-formed deposit-take base request (#1629): zero tax, subtotal == totalAmount ==
+     * {@code amount}, and a single gross line summing to it. Deposit-take tests that don't care
+     * about the tax figures themselves build on this rather than {@link #request} (which carries
+     * a nonzero tax appropriate for an ordinary sale) so they don't trip the #1629 zero-tax guard.
+     */
+    private OrderInvoiceCreationRequest depositTakeRequest(UUID workorderId, BigDecimal amount) {
+        return OrderInvoiceCreationRequest.builder()
+                .orderId(ORDER_ID)
+                .workorderId(workorderId)
+                .customerId(CUSTOMER_ID)
+                .subtotal(amount)
+                .taxAmount(BigDecimal.ZERO)
+                .totalAmount(amount)
+                .lines(List.of(OrderInvoiceLineItem.builder()
+                        .orderLineId(UUID.randomUUID())
+                        .description("Widget")
+                        .quantity(new BigDecimal("2"))
+                        .unitPrice(amount.divide(new BigDecimal("2")))
+                        .amount(amount)
+                        .taxAmount(BigDecimal.ZERO)
+                        .type("PART")
+                        .build()))
+                .build();
+    }
+
     @Test
     @DisplayName("OIS-E4a: a deposit-take order registers a deposit credit against its source")
     void depositTake_registersCredit() {
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
-        OrderInvoiceCreationRequest depositTake = request(null);
+        OrderInvoiceCreationRequest depositTake = depositTakeRequest(null, new BigDecimal("108.00"));
         depositTake.setDepositSourceType("WORKORDER");
         depositTake.setDepositSourceId(workorderId);
         depositTake.setDepositAmount(new BigDecimal("108.00"));
@@ -155,7 +181,7 @@ class OrderInvoiceServiceImplTest {
     @Test
     @DisplayName("OIS-E4d: a deposit amount without a source type is rejected before any deposit is recorded")
     void depositAmountWithoutSourceType_rejected() {
-        OrderInvoiceCreationRequest depositTake = request(null);
+        OrderInvoiceCreationRequest depositTake = depositTakeRequest(null, new BigDecimal("50.00"));
         depositTake.setDepositAmount(new BigDecimal("50.00"));
         depositTake.setDepositSourceId(UUID.randomUUID());
 
@@ -167,7 +193,7 @@ class OrderInvoiceServiceImplTest {
     @Test
     @DisplayName("OIS-E4e: a deposit amount without a source id is rejected before any deposit is recorded")
     void depositAmountWithoutSourceId_rejected() {
-        OrderInvoiceCreationRequest depositTake = request(null);
+        OrderInvoiceCreationRequest depositTake = depositTakeRequest(null, new BigDecimal("50.00"));
         depositTake.setDepositAmount(new BigDecimal("50.00"));
         depositTake.setDepositSourceType("WORKORDER");
 
@@ -179,7 +205,7 @@ class OrderInvoiceServiceImplTest {
     @Test
     @DisplayName("OIS-E4f: a deposit taken on an anonymous counter sale carries no party id on the credit")
     void depositTake_anonymousCustomer_omitsCustomerId() {
-        OrderInvoiceCreationRequest anonymousDeposit = request(null);
+        OrderInvoiceCreationRequest anonymousDeposit = depositTakeRequest(null, new BigDecimal("50.00"));
         anonymousDeposit.setCustomerId(null);
         anonymousDeposit.setDepositAmount(new BigDecimal("50.00"));
         anonymousDeposit.setDepositSourceType("ORDER");
@@ -196,7 +222,7 @@ class OrderInvoiceServiceImplTest {
     @DisplayName("OIS-1623a: a deposit-take order stamps deposit provenance on the invoice document")
     void depositTake_stampsProvenanceOnInvoice() {
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e3");
-        OrderInvoiceCreationRequest depositTake = request(null);
+        OrderInvoiceCreationRequest depositTake = depositTakeRequest(null, new BigDecimal("108.00"));
         depositTake.setDepositSourceType("WORKORDER");
         depositTake.setDepositSourceId(workorderId);
         depositTake.setDepositAmount(new BigDecimal("108.00"));
@@ -221,6 +247,76 @@ class OrderInvoiceServiceImplTest {
         Invoice saved = captor.getAllValues().get(0);
         assertThat(saved.getDepositSourceType()).isNull();
         assertThat(saved.getDepositSourceId()).isNull();
+    }
+
+    @Test
+    @DisplayName("OIS-1629a: a deposit-take request carrying nonzero tax is rejected before any document is created")
+    void depositTake_nonzeroTaxRequest_rejected() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositSourceType("WORKORDER");
+        depositTake.setDepositSourceId(workorderId);
+        depositTake.setDepositAmount(new BigDecimal("108.00"));
+        // Request carries a nonzero tax (upstream caller malformed) — pos-invoice must reject it
+        // outright (#1629) rather than silently zeroing tax while desyncing the header from the
+        // (still nonzero-net) line items.
+        assertThat(depositTake.getTaxAmount()).isEqualByComparingTo("8.00");
+
+        assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("deposit-take invoice requests must carry zero tax");
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName(
+            "OIS-1629b: a well-formed (zero-tax, gross-line) deposit-take request yields a header-line-consistent invoice")
+    void depositTake_wellFormedRequest_yieldsGrossZeroTaxInvoice() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e5");
+        OrderInvoiceCreationRequest depositTake = OrderInvoiceCreationRequest.builder()
+                .orderId(ORDER_ID)
+                .workorderId(workorderId)
+                .customerId(CUSTOMER_ID)
+                .subtotal(new BigDecimal("108.00"))
+                .taxAmount(BigDecimal.ZERO)
+                .totalAmount(new BigDecimal("108.00"))
+                .depositSourceType("WORKORDER")
+                .depositSourceId(workorderId)
+                .depositAmount(new BigDecimal("108.00"))
+                .lines(List.of(OrderInvoiceLineItem.builder()
+                        .orderLineId(UUID.randomUUID())
+                        .description("Widget")
+                        .quantity(new BigDecimal("2"))
+                        .unitPrice(new BigDecimal("54.00"))
+                        .amount(new BigDecimal("108.00"))
+                        .taxAmount(BigDecimal.ZERO)
+                        .type("PART")
+                        .build()))
+                .build();
+
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(depositTake);
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice saved = captor.getAllValues().get(0);
+        assertThat(saved.getTax()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(saved.getSubtotal()).isEqualByComparingTo(saved.getTotal());
+        BigDecimal itemLineTotalSum = saved.getItems().stream()
+                .map(com.positivity.invoice.internal.entity.InvoiceItem::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(itemLineTotalSum).isEqualByComparingTo(saved.getSubtotal());
+    }
+
+    @Test
+    @DisplayName("OIS-1629c: an ordinary from-order invoice keeps the request's tax")
+    void ordinaryInvoice_keepsTax() {
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(request(null));
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice saved = captor.getAllValues().get(0);
+        assertThat(saved.getTax()).isEqualByComparingTo("8.00");
+        assertThat(saved.getSubtotal()).isEqualByComparingTo("100.00");
     }
 
     @Test

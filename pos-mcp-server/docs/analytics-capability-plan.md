@@ -208,7 +208,7 @@ Wave 3's `groupBy`.
 | # | Module | Route (v1) | Params | Row shape | Unblocks |
 |---|---|---|---|---|---|
 | E1 | pos-invoice | `GET /invoices/analytics/revenue-by-customer` | startDate, endDate, limit | customerId, name, revenue, invoiceCount, avgInvoiceValue, lastInvoiceDate | Q7, Q8, Q9, Q10 |
-| E2 | **pos-accounting** | `GET /accounting/analytics/collections` | startDate, endDate | invoiced, collected, collectionRatePct (single window) | Q11, Q18 (A/R side) — module set by D3 |
+| E2 | **pos-accounting** | `GET /accounting/analytics/collections` | startDate, endDate | invoiced, collected, applicationReversals, collectionRatePct, refunded, netCashCollected, received, nonCashSettled, settled, settlementRatePct (single window; W2.5 delivery note) | Q11, Q18 (A/R side) — module set by D3 |
 | E3 | pos-invoice | `GET /invoices/analytics/payment-lag-cohorts` | issuedFrom, issuedTo | cohort (≤30 / 31–60 / 61–90 / unpaid), invoiceCount, amount | Q12 |
 | E4 | pos-invoice | `GET /invoices/analytics/invoicing-lag` | startDate, endDate | avgDaysWoCreationToInvoice, count (single window; model loops months) | Q4 |
 | E5 | pos-workorder | `GET /workorders/analytics/technician-labor` | startDate, endDate | technicianId, name, completedWoCount, billedHours, laborRevenue | Q1, Q2, Q19 |
@@ -359,6 +359,23 @@ Follow-ups filed from this decision: **#1620** refunds (`refunded`/`netCashColle
 non-cash settlement (`nonCashSettled`/`settled`/`settlementRatePct`, both sources together),
 **#1622** `received` (true cash receipts, which resolves the A/R-relief-vs-cash base mismatch), and
 **#1623** — whether `invoiced` double-counts deposit-take orders — **resolved as D8 above**.
+
+**Delivered 2026-09-01:** #1620, #1621 and #1622 shipped together. E2 now returns
+`invoiced` / `collected` / `applicationReversals` / `collectionRatePct` plus `refunded`,
+`netCashCollected`, `received`, `nonCashSettled`, `settled` and `settlementRatePct`, fed by two new
+ADR-0044 R3 replicas (`ext_invoice_payment_reversal` from `payment.payment.reversed`
+REFUND facts, `ext_invoice_deposit_credit_application` from the new
+`payment.deposit-credit.applied` fact) and accounting's own `receivable_payment` /
+`customer_credit_transaction` subledgers. Q11's ground truth is
+`eval/analytics-gate/ground-truth/q11-weekly-invoiced-vs-collected.sql`
+(invoiced / settled / settlementRatePct), Q18's is
+`ground-truth/q18-weekly-cash-in-vs-out.sql` (received vs refunded + A/P paid) — both written from
+these definitions, not the pre-#1605 premise. Deposits remain GL-invisible: per the accounting
+ruling on #1621, a deposit draw-down would post to a distinct liability account (2310-style, never
+2300), and whether accounting posts deposit GL at all is deliberately out of #1621's scope —
+`nonCashSettled` is an analytics figure over the replicas, not a GL-derived one. Also delivered
+alongside: **#1629** — deposit-take invoices carry zero tax at the source and
+`generateTaxLiability` excludes marked historical rows.
 
 ### Wave 2 exit gate
 

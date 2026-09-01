@@ -178,18 +178,29 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         TaxCalculationResponse committableTax = null;
         if (existingOpt.isPresent()) {
             Invoice existing = existingOpt.get();
-            // #985 (story T6, Option A): while the invoice is still DRAFT, run the COMMITTABLE
-            // tax calculation (committable=true, referenceId == invoiceId). The provider then
-            // persists an uncommitted SalesInvoice document under code == invoiceId, so the
-            // lifecycle commit below — and the PENDING_COMMIT re-commit job on provider outage —
-            // resolve by that code. A calculation failure propagates and blocks finalization
-            // (per D-T5; the estimate-and-true-up leniency of D-T3 applies to the COMMIT step,
-            // not to document creation — a PENDING_COMMIT row without a provider document could
-            // never converge). The invoice stays DRAFT and finalization can be retried. A null
-            // result means nothing is taxable: no provider document exists, the lifecycle
-            // commit is skipped, and any previously frozen tax is zeroed (stale-tax guard).
-            committableTax = invoiceTaxCalculator.calculateCommittable(existing);
-            applyCommittableTax(invoiceId, existing, committableTax);
+            if (existing.getDepositSourceType() != null) {
+                // #1629: a deposit-take invoice is a contract-liability/cash-receipt document,
+                // not a taxable sale — tax is recognized on the settlement invoice only. Skip
+                // the committable tax calculation entirely (no provider document is created for
+                // it, so there is nothing to commit or re-commit either); freeze tax at ZERO and
+                // clear any stale breakdown via the same null-response path applyCommittableTax
+                // already uses for "nothing taxable".
+                applyCommittableTax(invoiceId, existing, null);
+            } else {
+                // #985 (story T6, Option A): while the invoice is still DRAFT, run the
+                // COMMITTABLE tax calculation (committable=true, referenceId == invoiceId). The
+                // provider then persists an uncommitted SalesInvoice document under code ==
+                // invoiceId, so the lifecycle commit below — and the PENDING_COMMIT re-commit
+                // job on provider outage — resolve by that code. A calculation failure
+                // propagates and blocks finalization (per D-T5; the estimate-and-true-up
+                // leniency of D-T3 applies to the COMMIT step, not to document creation — a
+                // PENDING_COMMIT row without a provider document could never converge). The
+                // invoice stays DRAFT and finalization can be retried. A null result means
+                // nothing is taxable: no provider document exists, the lifecycle commit is
+                // skipped, and any previously frozen tax is zeroed (stale-tax guard).
+                committableTax = invoiceTaxCalculator.calculateCommittable(existing);
+                applyCommittableTax(invoiceId, existing, committableTax);
+            }
         }
 
         // AC4: Transition DRAFT → FINALIZED
@@ -320,7 +331,9 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      *
      * <p>A {@code null} response means nothing is taxable at finalization time: the frozen tax
      * is ZERO and the persisted breakdown is cleared — a previously computed (now stale) draft
-     * tax must not survive into the FINALIZED invoice when no provider document exists.
+     * tax must not survive into the FINALIZED invoice when no provider document exists. Also
+     * invoked directly with {@code null} for deposit-take invoices (#1629), which never run the
+     * committable calculation at all — same zero-and-clear result.
      */
     private void applyCommittableTax(
             @NonNull UUID invoiceId, @NonNull Invoice invoice, @Nullable TaxCalculationResponse taxResponse) {

@@ -1,7 +1,13 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication;
+import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
+import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
+import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.payment.DepositCreditAppliedV1;
+import com.positivity.domainevents.payment.PaymentReversedV1;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import com.positivity.domainevents.payment.SettlementReportedV1;
 import io.micrometer.core.instrument.Counter;
@@ -49,6 +55,22 @@ import tools.jackson.databind.ObjectMapper;
  * than given an invented customer id; see {@link #resolveCustomerId(String)}. This is not a
  * regression: {@code payment.cleared.v1} never had a producer, so no path created a receivable for
  * these payments before this change either.
+ *
+ * <p><strong>Since issues #1620/#1621:</strong> this listener also replicates two more {@code
+ * payment.events.v1} facts, each into its own read-only table (ADR-0044 R3/R6) rather than through
+ * an existing service, since neither has a pre-existing write path to reuse the way {@code
+ * payment.payment.settled} reuses {@code handlePaymentCleared}:
+ *
+ * <ul>
+ *   <li>{@code payment.payment.reversed} ({@link PaymentReversedV1}) — only completed refunds
+ *       ({@code reversalType == "REFUND"}) are stored, into {@link
+ *       com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal}; see {@link
+ *       #onPaymentReversed}.
+ *   <li>{@code payment.deposit-credit.applied} ({@link DepositCreditAppliedV1}) — every draw-down
+ *       is stored into {@link
+ *       com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplication}; see {@link
+ *       #onDepositCreditApplied}.
+ * </ul>
  */
 @Slf4j
 @Component
@@ -60,6 +82,8 @@ public class SettlementEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final SettlementReconciliationService reconciliationService;
     private final PaymentApplicationService paymentApplicationService;
+    private final ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
+    private final ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
     private final Counter payloadRejectedCounter;
     private final Counter paymentSettledUnmappableCounter;
 
@@ -69,12 +93,16 @@ public class SettlementEventsListener {
             ProcessedEventRepository processedEventRepository,
             SettlementReconciliationService reconciliationService,
             PaymentApplicationService paymentApplicationService,
+            ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository,
+            ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.reconciliationService = reconciliationService;
         this.paymentApplicationService = paymentApplicationService;
+        this.extInvoicePaymentReversalRepository = extInvoicePaymentReversalRepository;
+        this.extInvoiceDepositCreditApplicationRepository = extInvoiceDepositCreditApplicationRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -109,7 +137,9 @@ public class SettlementEventsListener {
         String eventType = envelope.path("eventType").stringValue(null);
         boolean isSettlementReported = SettlementReportedV1.EVENT_TYPE.equals(eventType);
         boolean isPaymentSettled = PaymentSettledV1.EVENT_TYPE.equals(eventType);
-        if (!isSettlementReported && !isPaymentSettled) {
+        boolean isPaymentReversed = PaymentReversedV1.EVENT_TYPE.equals(eventType);
+        boolean isDepositCreditApplied = DepositCreditAppliedV1.EVENT_TYPE.equals(eventType);
+        if (!isSettlementReported && !isPaymentSettled && !isPaymentReversed && !isDepositCreditApplied) {
             log.debug("Ignoring payment event type={}", eventType);
             return;
         }
@@ -125,6 +155,14 @@ public class SettlementEventsListener {
 
         if (isPaymentSettled) {
             onPaymentSettled(envelope, eventId);
+            return;
+        }
+        if (isPaymentReversed) {
+            onPaymentReversed(envelope, eventId);
+            return;
+        }
+        if (isDepositCreditApplied) {
+            onDepositCreditApplied(envelope, eventId);
             return;
         }
 
@@ -230,6 +268,225 @@ public class SettlementEventsListener {
                 payload.settledAt(),
                 eventUuid);
         markProcessed(eventId);
+    }
+
+    /**
+     * Handle {@code payment.payment.reversed}: replicate completed refunds (issue #1620) into
+     * {@link ExtInvoicePaymentReversal}. Same "malformed payload skipped-and-marked, business/DB
+     * error propagates unmarked" contract as {@link #onPaymentEvent} above — the repository save
+     * below is deliberately outside any catch block.
+     *
+     * <p>VOID reversals (and any future reversal type other than REFUND) are intentionally not
+     * stored: a VOID releases an authorization that never captured funds, so it never produced a
+     * {@code PaymentApplication} and removes no collected cash — recording it here would subtract
+     * money that was never added.
+     */
+    private void onPaymentReversed(@NonNull JsonNode envelope, @NonNull String eventId) {
+        PaymentReversedV1 payload;
+        try {
+            payload = objectMapper.treeToValue(envelope.path("payload"), PaymentReversedV1.class);
+        } catch (DatabindException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected malformed payment.payment.reversed payload eventId={}: {}", eventId, e.getMessage(), e);
+            markProcessed(eventId);
+            return;
+        } catch (Exception e) {
+            log.warn("Skipping malformed payment.payment.reversed event eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
+        }
+
+        if (payload == null) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected payment.payment.reversed event with missing payload eventId={}", eventId);
+            markProcessed(eventId);
+            return;
+        }
+
+        // A null reversalType is malformed, not a VOID: treating it as VOID would silently drop
+        // a reversal fact instead of rejecting it — fail loud rather than falling into the
+        // REFUND/VOID branch below.
+        if (payload.reversalType() == null) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error(
+                    "Rejected payment.payment.reversed payload with null reversalType eventId={} refundId={}",
+                    eventId,
+                    payload.refundId());
+            markProcessed(eventId);
+            return;
+        }
+
+        if (!"REFUND".equals(payload.reversalType())) {
+            log.debug(
+                    "Ignoring non-REFUND payment.payment.reversed eventId={} reversalType={} (issue #1620: a VOID"
+                            + " releases an authorization that never captured funds)",
+                    eventId,
+                    payload.reversalType());
+            markProcessed(eventId);
+            return;
+        }
+
+        if (!hasRequiredFieldsForReversal(payload)) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error(
+                    "Rejected payment.payment.reversed payload missing required fields eventId={} refundId={}",
+                    eventId,
+                    payload.refundId());
+            markProcessed(eventId);
+            return;
+        }
+
+        // refundId is the replica's primary key; a replay-repair event can carry a fresh eventId
+        // for the same underlying refund fact, so the natural key is the authoritative guard here,
+        // not just the outer processed_events check on eventId.
+        if (extInvoicePaymentReversalRepository.existsById(payload.refundId())) {
+            log.debug("Skipping already-replicated refund refundId={} eventId={}", payload.refundId(), eventId);
+            markProcessed(eventId);
+            return;
+        }
+
+        UUID eventUuid;
+        try {
+            eventUuid = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.warn("Skipping payment.payment.reversed event with non-UUID eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
+        }
+
+        extInvoicePaymentReversalRepository.save(ExtInvoicePaymentReversal.builder()
+                .refundId(payload.refundId())
+                .paymentIntentId(payload.paymentIntentId())
+                .invoiceId(payload.invoiceId())
+                .partyId(payload.partyId())
+                .amount(payload.amount())
+                .currencyCode(payload.currencyCode())
+                .reversalType(payload.reversalType())
+                .reversedAt(payload.reversedAt())
+                .sourceEventId(eventUuid)
+                .build());
+        markProcessed(eventId);
+    }
+
+    /**
+     * Required fields for a REFUND {@link ExtInvoicePaymentReversal} row: {@code refundId} is the
+     * replica's primary key, and {@code invoiceId}/{@code paymentIntentId}/{@code partyId} are
+     * legitimately {@code null} for a standalone refund with no gateway or invoice leg (#1620).
+     */
+    private static boolean hasRequiredFieldsForReversal(@NonNull PaymentReversedV1 payload) {
+        return payload.refundId() != null
+                && payload.amount() != null
+                && payload.amount().compareTo(BigDecimal.ZERO) > 0
+                && payload.currencyCode() != null
+                && !payload.currencyCode().isBlank()
+                && payload.reversedAt() != null;
+    }
+
+    /**
+     * Handle {@code payment.deposit-credit.applied}: replicate a deposit-credit draw-down (issue
+     * #1621) into {@link ExtInvoiceDepositCreditApplication}. Same "malformed payload
+     * skipped-and-marked, business/DB error propagates unmarked" contract as {@link
+     * #onPaymentEvent} above.
+     */
+    private void onDepositCreditApplied(@NonNull JsonNode envelope, @NonNull String eventId) {
+        DepositCreditAppliedV1 payload;
+        try {
+            payload = objectMapper.treeToValue(envelope.path("payload"), DepositCreditAppliedV1.class);
+        } catch (DatabindException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error(
+                    "Rejected malformed payment.deposit-credit.applied payload eventId={}: {}",
+                    eventId,
+                    e.getMessage(),
+                    e);
+            markProcessed(eventId);
+            return;
+        } catch (Exception e) {
+            log.warn("Skipping malformed payment.deposit-credit.applied event eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
+        }
+
+        if (payload == null) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected payment.deposit-credit.applied event with missing payload eventId={}", eventId);
+            markProcessed(eventId);
+            return;
+        }
+
+        if (!hasRequiredFieldsForDepositCreditApplication(payload)) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error(
+                    "Rejected payment.deposit-credit.applied payload missing required fields eventId={}"
+                            + " depositCreditId={} invoiceId={}",
+                    eventId,
+                    payload.depositCreditId(),
+                    payload.invoiceId());
+            markProcessed(eventId);
+            return;
+        }
+
+        // pos-invoice's applyAvailableCredits() applies a given credit to a given invoice at most
+        // once, so the (depositCreditId, invoiceId) pair is the authoritative duplicate guard — a
+        // replay-repair event can carry a fresh eventId for the same underlying application fact.
+        if (extInvoiceDepositCreditApplicationRepository.existsByDepositCreditIdAndInvoiceId(
+                payload.depositCreditId(), payload.invoiceId())) {
+            log.debug(
+                    "Skipping already-replicated deposit-credit application depositCreditId={} invoiceId={}"
+                            + " eventId={}",
+                    payload.depositCreditId(),
+                    payload.invoiceId(),
+                    eventId);
+            markProcessed(eventId);
+            return;
+        }
+
+        UUID eventUuid;
+        try {
+            eventUuid = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.warn("Skipping payment.deposit-credit.applied event with non-UUID eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
+        }
+
+        extInvoiceDepositCreditApplicationRepository.save(ExtInvoiceDepositCreditApplication.builder()
+                .depositCreditId(payload.depositCreditId())
+                .invoiceId(payload.invoiceId())
+                .amountApplied(payload.amountApplied())
+                .appliedAt(payload.appliedAt())
+                .sourceEventId(eventUuid)
+                .build());
+        markProcessed(eventId);
+    }
+
+    /** Required fields for an {@link ExtInvoiceDepositCreditApplication} row (issue #1621). */
+    private static boolean hasRequiredFieldsForDepositCreditApplication(@NonNull DepositCreditAppliedV1 payload) {
+        return payload.depositCreditId() != null
+                && payload.invoiceId() != null
+                && payload.amountApplied() != null
+                && payload.amountApplied().compareTo(BigDecimal.ZERO) > 0
+                && payload.appliedAt() != null;
     }
 
     /**

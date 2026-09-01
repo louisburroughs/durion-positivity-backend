@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -8,10 +9,12 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.EntryNumberGapCheck;
+import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
 import com.positivity.accounting.internal.dto.TrialBalanceRow;
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
@@ -255,5 +258,141 @@ class FinancialReportingServiceImplTest {
         ArgumentCaptor<LocalDateTime> asOfCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(journalEntryRepository).sumPostedDebitsCreditsByAccountAsOf(asOfCaptor.capture());
         assertThat(asOfCaptor.getValue()).isEqualTo(AS_OF.atTime(LocalTime.MAX));
+    }
+
+    @Test
+    @DisplayName("#1629: tax-liability report excludes a deposit-take invoice's tax rows, "
+            + "keeping only the settlement invoice's")
+    void taxLiability_excludesDepositTakeInvoiceTax() {
+        LocalDate start = LocalDate.of(2026, 6, 1);
+        LocalDate end = LocalDate.of(2026, 6, 30);
+        Instant finalizedAt = start.atStartOfDay().toInstant(ZoneOffset.UTC);
+
+        UUID depositInvoiceId = UUID.fromString("a2000000-0000-7000-8000-000000000001");
+        UUID settlementInvoiceId = UUID.fromString("a2000000-0000-7000-8000-000000000002");
+
+        // Marked row (depositSourceType set): its tax was minted before the #1629 source fix and
+        // must never reach the report.
+        ExtInvoice depositInvoice = ExtInvoice.builder()
+                .invoiceId(depositInvoiceId)
+                .status("FINALIZED")
+                .finalizedAt(finalizedAt)
+                .depositSourceType("WORKORDER")
+                .total(new BigDecimal("100.00"))
+                .build();
+        ExtInvoice settlementInvoice = ExtInvoice.builder()
+                .invoiceId(settlementInvoiceId)
+                .status("FINALIZED")
+                .finalizedAt(finalizedAt)
+                .depositSourceType(null)
+                .total(new BigDecimal("216.00"))
+                .build();
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                .thenReturn(List.of(depositInvoice, settlementInvoice));
+
+        com.positivity.accounting.internal.entity.ExtInvoiceTax depositTaxRow =
+                com.positivity.accounting.internal.entity.ExtInvoiceTax.builder()
+                        .invoiceId(depositInvoiceId)
+                        .jurisdictionType("STATE")
+                        .jurisdictionCode("WA")
+                        .rate(new BigDecimal("0.08"))
+                        .taxableBase(new BigDecimal("100.00"))
+                        .taxAmount(new BigDecimal("8.00"))
+                        .exempt(false)
+                        .build();
+        com.positivity.accounting.internal.entity.ExtInvoiceTax settlementTaxRow =
+                com.positivity.accounting.internal.entity.ExtInvoiceTax.builder()
+                        .invoiceId(settlementInvoiceId)
+                        .jurisdictionType("STATE")
+                        .jurisdictionCode("WA")
+                        .rate(new BigDecimal("0.08"))
+                        .taxableBase(new BigDecimal("200.00"))
+                        .taxAmount(new BigDecimal("16.00"))
+                        .exempt(false)
+                        .build();
+        // Fix #5 test-honesty: stub with an Answer that actually filters by the requested ids,
+        // rather than unconditionally returning only the settlement row — otherwise the money
+        // assertions below can't fail even if the source-side #1629 filter is deleted.
+        java.util.Map<UUID, com.positivity.accounting.internal.entity.ExtInvoiceTax> taxRowsByInvoiceId =
+                java.util.Map.of(depositInvoiceId, depositTaxRow, settlementInvoiceId, settlementTaxRow);
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(any())).thenAnswer(invocation -> {
+            List<UUID> requestedIds = invocation.getArgument(0);
+            return requestedIds.stream()
+                    .map(taxRowsByInvoiceId::get)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+        });
+
+        TaxLiabilityReport report = service.generateTaxLiability(start, end);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UUID>> idsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(extInvoiceTaxRepository).findByInvoiceIdIn(idsCaptor.capture());
+        assertThat(idsCaptor.getValue()).containsExactly(settlementInvoiceId);
+
+        assertThat(report.getTotalTaxCollectedGross()).isEqualByComparingTo("16.00");
+        assertThat(report.getTotalTaxableBase()).isEqualByComparingTo("200.00");
+        assertThat(report.getRows()).hasSize(1);
+        assertThat(report.getRows().getFirst().getTaxCollectedGross()).isEqualByComparingTo("16.00");
+    }
+
+    /**
+     * #1629 (Fix 4): a credit memo against a deposit-take original must contribute nothing to
+     * the tax-liability report — its original invoice's tax was never counted on the gross side,
+     * so netting the credit-side reversal would drive the jurisdiction's netTax negative against
+     * tax that was never counted.
+     */
+    @Test
+    @DisplayName("#1629: a credit memo against a deposit-take invoice contributes nothing to the tax-liability report")
+    void taxLiability_creditAgainstDepositTakeInvoice_contributesNothing() {
+        LocalDate start = LocalDate.of(2026, 6, 1);
+        LocalDate end = LocalDate.of(2026, 6, 30);
+        Instant finalizedAt = start.atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant postedAt = finalizedAt.plusSeconds(3600);
+
+        UUID depositInvoiceId = UUID.fromString("a3000000-0000-7000-8000-000000000001");
+
+        ExtInvoice depositInvoice = ExtInvoice.builder()
+                .invoiceId(depositInvoiceId)
+                .status("FINALIZED")
+                .finalizedAt(finalizedAt)
+                .depositSourceType("WORKORDER")
+                .total(new BigDecimal("100.00"))
+                .build();
+        // No invoices finalized in-window other than the (excluded) deposit-take one.
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of());
+
+        com.positivity.accounting.internal.entity.CreditMemo creditAgainstDeposit =
+                new com.positivity.accounting.internal.entity.CreditMemo();
+        creditAgainstDeposit.setOriginalInvoiceId(depositInvoiceId);
+        creditAgainstDeposit.setCustomerId(UUID.randomUUID());
+        creditAgainstDeposit.setCreditAmount(new BigDecimal("100.00"));
+        creditAgainstDeposit.setTaxAmountReversed(new BigDecimal("8.00"));
+        creditAgainstDeposit.setStatus(com.positivity.accounting.internal.enums.CreditMemoStatus.POSTED);
+        creditAgainstDeposit.setPostedTimestamp(postedAt);
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(any(), any(), any()))
+                .thenReturn(List.of(creditAgainstDeposit));
+        // The deposit flag is loaded fresh by originalInvoiceId (the original can sit outside the
+        // report window) — stub findAllById to actually filter by the requested ids.
+        when(extInvoiceRepository.findAllById(any())).thenAnswer(invocation -> {
+            Iterable<UUID> requestedIds = invocation.getArgument(0);
+            List<ExtInvoice> all = List.of(depositInvoice);
+            List<ExtInvoice> matched = new java.util.ArrayList<>();
+            for (UUID id : requestedIds) {
+                all.stream()
+                        .filter(inv -> inv.getInvoiceId().equals(id))
+                        .findFirst()
+                        .ifPresent(matched::add);
+            }
+            return matched;
+        });
+
+        TaxLiabilityReport report = service.generateTaxLiability(start, end);
+
+        // Excluded before ever reaching CreditMemoTax/ExtInvoiceTax attribution lookups.
+        verify(creditMemoTaxRepository, never()).findByCreditMemoIdIn(any());
+        assertThat(report.getTotalCreditsNetted()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(report.getTotalNetTax()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(report.getRows()).isEmpty();
     }
 }
