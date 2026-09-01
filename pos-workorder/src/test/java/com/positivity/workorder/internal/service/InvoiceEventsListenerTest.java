@@ -218,6 +218,68 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("E5 (#1593): payload.lines()==null leaves laborTotal/partsTotal null, not zero")
+    void nullLinesLeavesLaborPartsTotalsNull() {
+        when(processedEvents.existsById("e-nolines")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(workorders.findById(WORKORDER_ID)).thenReturn(Optional.empty());
+
+        // event(...) omits "lines" entirely -> InvoiceUpdatedV1.lines() is null.
+        listener.onInvoiceEvent(event("e-nolines", 1));
+
+        ArgumentCaptor<ExtInvoiceReplica> saved = ArgumentCaptor.forClass(ExtInvoiceReplica.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getLaborTotal()).isNull();
+        assertThat(saved.getValue().getPartsTotal()).isNull();
+    }
+
+    @Test
+    @DisplayName("E5 (#1593): an authoritatively empty lines list yields ZERO, not null")
+    void emptyLinesYieldsZeroTotals() {
+        when(processedEvents.existsById("e-emptylines")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(workorders.findById(WORKORDER_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent("""
+                {"eventId":"e-emptylines","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"DRAFT","lines":[]}}
+                """.formatted(INVOICE_ID, INVOICE_ID, WORKORDER_ID));
+
+        ArgumentCaptor<ExtInvoiceReplica> saved = ArgumentCaptor.forClass(ExtInvoiceReplica.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getLaborTotal()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(saved.getValue().getPartsTotal()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName(
+            "E5 (#1593): sums LABOR/PART line amounts case-insensitively, ignoring other itemTypes and null amounts")
+    void sumsLaborAndPartsLinesCaseInsensitively() {
+        when(processedEvents.existsById("e-lines")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(workorders.findById(WORKORDER_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent("""
+                {"eventId":"e-lines","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"DRAFT",
+                            "lines":[
+                              {"invoiceItemId":"00000000-0000-0000-0000-000000000101","itemType":"LABOR","amount":100.00},
+                              {"invoiceItemId":"00000000-0000-0000-0000-000000000102","itemType":"labor","amount":25.50},
+                              {"invoiceItemId":"00000000-0000-0000-0000-000000000103","itemType":"Part","amount":40.00},
+                              {"invoiceItemId":"00000000-0000-0000-0000-000000000104","itemType":"FEE","amount":9.99},
+                              {"invoiceItemId":"00000000-0000-0000-0000-000000000105","itemType":"PART"}
+                            ]}}
+                """.formatted(INVOICE_ID, INVOICE_ID, WORKORDER_ID));
+
+        ArgumentCaptor<ExtInvoiceReplica> saved = ArgumentCaptor.forClass(ExtInvoiceReplica.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getLaborTotal()).isEqualByComparingTo(new BigDecimal("125.50"));
+        assertThat(saved.getValue().getPartsTotal()).isEqualByComparingTo(new BigDecimal("40.00"));
+    }
+
+    @Test
     @DisplayName("Propagates transient DB errors so the container retries")
     void propagatesTransientErrors() {
         when(processedEvents.existsById("e-3")).thenReturn(false);

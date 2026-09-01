@@ -89,7 +89,9 @@ public class TestSecurityConfig {
             // Issue CAP-218: pick list view/execute and parts consume authorities
             new SimpleGrantedAuthority("inventory:pick_list:view"),
             new SimpleGrantedAuthority("inventory:pick_list:execute"),
-            new SimpleGrantedAuthority("workorder:parts:consume"));
+            new SimpleGrantedAuthority("workorder:parts:consume"),
+            // Wave 2 analytics endpoints (#1593/#1594/#1595)
+            new SimpleGrantedAuthority("workorder:analytics:view"));
 
     /**
      * Request attribute name: when set to {@code Boolean.TRUE} on a MockMvc request,
