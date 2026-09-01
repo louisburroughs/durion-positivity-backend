@@ -54,8 +54,16 @@ class OrderInvoiceContractBehaviorIT {
     @Autowired
     private InvoiceRepository invoiceRepository;
 
+    /**
+     * Both authorities, because this helper serves both halves of the contract: creating an invoice
+     * needs {@code invoice:manage} and reading one back needs {@code invoice:invoice:view} since
+     * #1612 split the read surface out of the write permission. A caller exercising both holds both
+     * — the four roles that write invoices are all granted the read code too.
+     */
     private MockHttpServletRequestBuilder withInvoiceAuth(MockHttpServletRequestBuilder requestBuilder) {
-        return requestBuilder.header("X-User", "contract-test-user").header("X-Authorities", "invoice:manage");
+        return requestBuilder
+                .header("X-User", "contract-test-user")
+                .header("X-Authorities", "invoice:manage,invoice:invoice:view");
     }
 
     private static String fromOrderBody(UUID orderId) {
