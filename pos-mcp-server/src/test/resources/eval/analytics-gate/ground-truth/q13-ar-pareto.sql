@@ -2,7 +2,9 @@
 --   "Which customers make up most of our accounts receivable balance, and how much of
 --    each is past due?"
 --
--- Wave 1 gate, full pass. The chat answer is produced from ONE tool call —
+-- Wave 1 gate recorded a full pass for Q13; that run predates issue #1604 and its figures are NOT
+-- comparable to what this script now specifies (see docs/gate-runs/2026-09-01-ar-aging-basis-
+-- change.md). The chat answer is produced from ONE tool call —
 -- AccountingFacadeTool.getAgedReceivables(asOfDate) → GET /v1/accounting/reports/financial/
 -- aged-receivables?asOfDate= — with the model doing the Pareto in-context. This script is the
 -- specification of the expected figures (plan §2.1 criterion 1: exact for currency, ±0.5 % for
@@ -14,10 +16,15 @@
 --
 -- The bucketing below mirrors FinancialReportingServiceImpl.generateAgedReceivables and
 -- InvoiceBalanceCalculator.balanceDue exactly. Three behaviours are easy to get wrong:
---   1. The aging date is COALESCE(invoice_created_at, finalized_at, updated_at) — NOT due_date.
---   2. Buckets are inclusive upper bounds on days past due: <=30 / <=60 / <=90 / >90, and
---      "current" therefore also holds everything not yet due (days_past_due < 0 is dropped
---      entirely, not bucketed).
+--   1. The aging date is the invoice's due date, falling back to the document date
+--      COALESCE(invoice_created_at, finalized_at, updated_at) when due_date is null (drafts, and
+--      replica rows built from events predating V22__ext_invoice_due_date.sql). This is the same
+--      rule the A/P side applies, so the two reports' "past due" axes are the same measure.
+--      Corrected by issue #1604; before that fix A/R aged from the document date alone.
+--   2. Buckets are inclusive upper bounds on days past due: <=30 / <=60 / <=90 / >90. A not-yet-due
+--      invoice has days_past_due < 0, which satisfies <=30 and so lands in "current" — it is
+--      INCLUDED, not dropped. What is excluded is an invoice that did not yet exist as of
+--      :as_of_date, tested on its DOCUMENT date (never on the aging date).
 --   3. The open balance is the invoice's CURRENT balance, so a back-dated :as_of_date does NOT
 --      reconstruct a point-in-time balance (known limitation, documented in the service). Run
 --      this script with the same :as_of_date the gate run used.
@@ -41,8 +48,18 @@ ar_invoices AS (
         i.invoice_id,
         CAST(i.party_id AS uuid) AS customer_id,
         COALESCE(i.total, 0) AS total,
+        -- Document date ("did this invoice exist yet?"). Instants are read at UTC for
+        -- timezone-independent day math, matching receivableDocumentDate.
         CAST(COALESCE(i.invoice_created_at, i.finalized_at, i.updated_at)
-             AT TIME ZONE 'UTC' AS date) AS aging_date
+             AT TIME ZONE 'UTC' AS date) AS document_date,
+        -- Aging basis ("how far past due is it?") = due_date, else the document date.
+        -- ext_invoice.due_date is already a `date`; only the timestamp branch is converted, so
+        -- both COALESCE arms are `date` and neither wraps a date in AT TIME ZONE.
+        COALESCE(
+            i.due_date,
+            CAST(COALESCE(i.invoice_created_at, i.finalized_at, i.updated_at)
+                 AT TIME ZONE 'UTC' AS date)
+        ) AS aging_date
     FROM ext_invoice i
     WHERE i.status IN ('FINALIZED', 'POSTED')
       AND i.party_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -54,6 +71,7 @@ open_balances AS (
     SELECT
         a.invoice_id,
         a.customer_id,
+        a.document_date,
         a.aging_date,
         a.total
             - COALESCE((SELECT SUM(pa.applied_amount)
@@ -80,11 +98,14 @@ aged AS (
     SELECT
         b.customer_id,
         b.open_balance,
+        -- Negative for a not-yet-due invoice; kept, and bucketed as "current" below.
         (p.as_of_date - b.aging_date) AS days_past_due
     FROM open_balances b
     CROSS JOIN params p
     WHERE b.open_balance > 0                    -- only positive-open items contribute
-      AND (p.as_of_date - b.aging_date) >= 0    -- future-dated as of as_of_date: excluded
+      -- Existence filter, on the DOCUMENT date: an invoice raised after as_of_date did not exist
+      -- yet. NOT on the aging date — a not-yet-due invoice already exists and is still reported.
+      AND b.document_date <= p.as_of_date
 ),
 
 -- One row per customer: the AgedReceivablesRow contract (customerName is deliberately absent —
@@ -92,6 +113,7 @@ aged AS (
 rows_by_customer AS (
     SELECT
         customer_id,
+        -- <= 30 also catches every negative days_past_due, i.e. everything not yet due.
         SUM(open_balance) FILTER (WHERE days_past_due <= 30) AS current_bucket,
         SUM(open_balance) FILTER (WHERE days_past_due > 30 AND days_past_due <= 60) AS days_31_60,
         SUM(open_balance) FILTER (WHERE days_past_due > 60 AND days_past_due <= 90) AS days_61_90,
@@ -109,8 +131,9 @@ normalized AS (
         COALESCE(days_61_90, 0) AS days_61_90,
         COALESCE(days_90_plus, 0) AS days_90_plus,
         total_outstanding,
-        -- "Past due" for Q13 = anything beyond the current bucket, i.e. more than 30 days
-        -- past the aging date. Same convention the aging report's own buckets imply.
+        -- "Past due" for Q13 = anything beyond the current bucket, i.e. more than 30 days past
+        -- the invoice's due date. Since #1604 that is literally what it says: the current bucket
+        -- holds the not-yet-due and up-to-30-days-late money, and these three hold overdue money.
         COALESCE(days_31_60, 0) + COALESCE(days_61_90, 0) + COALESCE(days_90_plus, 0) AS past_due
     FROM rows_by_customer
 ),

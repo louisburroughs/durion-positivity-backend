@@ -114,13 +114,27 @@ the agent. No backend changes.
   and A/R ages from invoice creation while A/P ages from due date. Tool descriptions corrected;
   Q10/Q14 partials withdrawn below.
 
-  **Open defect — A/R aging basis.** The A/R side ignoring due date is a bug, not a design choice:
-  `ext_invoice.due_date` exists and is populated (`V22__ext_invoice_due_date.sql`, "collections-aging
-  due date frozen at finalization") and pos-accounting already ages collections by it elsewhere, so
-  a not-yet-due invoice raised 45 days ago is reported as "31-60 days past due". Descriptions now
-  name it as a known defect rather than presenting it as intent. Fixing it shifts every A/R bucket
-  and invalidates the Q13 ground-truth SQL, so it is scheduled as its own change alongside Wave 2's
-  accounting work — not folded into a documentation PR.
+  **Resolved (2026-09-01, issue #1604) — A/R aging basis.** The defect recorded above (A/R ignoring
+  `due_date` while A/P used it, so a not-yet-due invoice raised 45 days ago was reported as "31-60
+  days past due") is fixed in `FinancialReportingServiceImpl`. Both halves of the aging report now
+  apply one rule:
+  - **Aging basis** = the document's due date, falling back to the document date when the due date
+    is null (A/R document date `invoice_created_at` → `finalized_at` → `updated_at`; A/P `bill_date`).
+    `ext_invoice.due_date` is nullable on drafts and on replica rows built from events predating
+    `V22__ext_invoice_due_date.sql`, so the fallback is permanent, not transitional.
+  - **Existence filter re-based.** "Raised after `asOfDate` → excluded" is now tested on the
+    *document* date, not the aging date, so it means "not raised yet" rather than "not due yet".
+  - **Not-yet-due amounts are included, in `current`.** `daysPastDue` may be negative and negatives
+    satisfy the `<= 30` test — which is what `AgedReceivablesRow.current`'s schema always promised
+    ("includes not-yet-due"). Previously those rows were dropped entirely.
+
+  Bucket boundaries are unchanged (`current` ≤ 30, 31–60, 61–90, > 90). The prediction above held:
+  the fix shifts every A/R bucket and invalidated the Q13 ground-truth SQL, which has been rewritten
+  to the new rule; the recorded Wave 1 Q13/Q5 outcomes below predate it and are not comparable.
+  A/P bucket totals moved too, because not-yet-due vendor bills are no longer dropped. Tool
+  descriptions on both `getAgedReceivables` and `getAgedPayables` were corrected in the same change
+  (the "the two reports are not the same measure" caveat is now false and removed). Full record:
+  `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
 - Seed `mcp_tool` rows + `mcp_tool_permission` mappings (migration; follow the V37 rederivation
   pattern, permission from the endpoint's `x-required-permissions`).
 
