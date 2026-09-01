@@ -62,7 +62,7 @@ The accounting RAG states CONTROLLER includes all ACCOUNTANT permissions plus `a
 ## ACCOUNT_MANAGER
 The accounting RAG aligns ACCOUNT_MANAGER more with commercial account and invoice operations than pure ledger administration. It states ACCOUNT_MANAGER has all ACCOUNTANT permissions plus `invoice:manage` and `invoice:billing-rules`.
 
-_Verified: `invoice:billing-rules` is the exact code in `pos-invoice/src/main/resources/permissions.yaml` (alongside `invoice:manage`, `invoice:finalize`, `invoice:finalize:override`). Some invoice codes are intentionally two-part, not three-part._
+_Verified: `invoice:billing-rules` is the exact code in `pos-invoice/src/main/resources/permissions.yaml` (alongside `invoice:invoice:view`, `invoice:manage`, `invoice:finalize`, `invoice:finalize:override`). Some invoice codes are intentionally two-part, not three-part._
 
 ## MCP/NLTI permissions
 The supplied permission samples include `mcp:chat:execute`, `nlti:request:submit`, and `nlti:audit:read`. The accounting RAG states every built-in accounting role also receives `mcp:chat:execute`. Use `nlti:audit:read` for audit/observability RAG visibility when verified.

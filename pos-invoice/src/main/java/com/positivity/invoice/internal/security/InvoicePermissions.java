@@ -26,6 +26,16 @@ public final class InvoicePermissions {
     /** Manage invoice lifecycle operations. */
     public static final String MANAGE = "invoice:manage";
 
+    /**
+     * Read invoices, invoice items, deposit credits and refunds (#1612).
+     *
+     * <p>Every read route used to demand {@link #MANAGE}, so seven roles that legitimately needed
+     * to look at an invoice were offered write authority or nothing. A role holding {@code MANAGE}
+     * does not implicitly hold this: the guards name one permission each, and the roles that write
+     * invoices are granted both.
+     */
+    public static final String VIEW = "invoice:invoice:view";
+
     private InvoicePermissions() {
         // Utility class - prevent instantiation
     }

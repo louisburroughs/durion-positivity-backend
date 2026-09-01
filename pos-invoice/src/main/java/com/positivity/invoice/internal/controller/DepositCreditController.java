@@ -39,7 +39,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/invoices/deposits")
 @RequiredArgsConstructor
 @Tag(name = "Deposit Credits", description = "Deposit / down-payment credits and their application to settlements")
-@PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
+// No class-level @PreAuthorize: every handler names its own permission (#1612). See the note on
+// InvoiceController — a class-level guard is unioned into x-required-permissions, so the two reads
+// here advertised invoice:manage alongside the view code they actually require.
 public class DepositCreditController {
 
     private final DepositCreditService depositCreditService;
@@ -63,6 +65,7 @@ public class DepositCreditController {
                     """,
             tags = {"Deposit Credits"})
     @PostMapping
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_DEPOSIT_CREATE", apiVersion = "1")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<DepositCreditResponse> createDeposit(
@@ -110,6 +113,7 @@ public class DepositCreditController {
                     """,
             tags = {"Deposit Credits"})
     @GetMapping("/{depositCreditId}")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<DepositCreditResponse> getDeposit(@PathVariable UUID depositCreditId) {
         return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
@@ -131,6 +135,7 @@ public class DepositCreditController {
                     """,
             tags = {"Deposit Credits"})
     @GetMapping
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<List<DepositCreditResponse>> listBySource(
             @RequestParam String sourceType, @RequestParam UUID sourceId) {
@@ -158,6 +163,7 @@ public class DepositCreditController {
                     """,
             tags = {"Deposit Credits"})
     @PostMapping("/{depositCreditId}/refund")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_DEPOSIT_REFUND", apiVersion = "1")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<DepositCreditResponse> refundDeposit(

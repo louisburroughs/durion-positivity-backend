@@ -35,7 +35,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/invoices")
 @Tag(name = "Invoice", description = "Invoice generation and lifecycle management")
-@PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
+// No class-level @PreAuthorize: every handler names its own permission (#1612).
+// RequiredPermissionsOpenApiAutoConfiguration emits the UNION of the class-level and method-level
+// guards, while Spring resolves the most specific one — so with a class-level invoice:manage here,
+// getInvoice advertised x-required-permissions [invoice:manage, invoice:invoice:view] while
+// actually accepting only the second. A discovered OpenAPI operation is gated with OR, so a caller
+// holding just invoice:manage would have been offered a read it then 403s on: the exact
+// selectable-but-not-callable defect #1606 fixed for facade tools.
+// InvoiceReadAuthorityTest asserts every handler here carries an explicit guard, so removing the
+// class-level default cannot leave a future method unguarded.
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
@@ -52,6 +60,7 @@ public class InvoiceController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_CREATE", apiVersion = "1")
     @Operation(operationId = "createInvoice", summary = "Create Invoice Draft from Workorder", description = """
                     Creates a DRAFT invoice from completed workorder data, pricing the supplied line items, \
@@ -97,6 +106,7 @@ public class InvoiceController {
     }
 
     @PostMapping("/from-order")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_CREATE_FROM_ORDER", apiVersion = "1")
     @Operation(operationId = "createInvoiceFromOrder", summary = "Create Invoice from Sales Order", description = """
                     Creates the DRAFT invoice fronting a sales order at counter-sale checkout, recording the order's \
@@ -150,6 +160,7 @@ public class InvoiceController {
     }
 
     @PostMapping("/{invoiceId}/cancel")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_CANCEL", apiVersion = "1")
     @Operation(operationId = "cancelInvoice", summary = "Cancel a Draft Invoice", description = """
                     Cancels a DRAFT invoice terminally before any money has moved, the invoice-side effect of an \
@@ -186,14 +197,16 @@ public class InvoiceController {
                     Returns 404 when no invoice exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice found")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"invoice:manage"})
+            scopes = {"invoice:invoice:view"})
     public ResponseEntity<InvoiceDetailsResponse> getInvoice(@PathVariable @NonNull UUID invoiceId) {
         return ResponseEntity.ok(invoiceService.getInvoice(invoiceId));
     }
 
     @PostMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_ADJUSTMENT_APPLY", apiVersion = "1")
     @Operation(operationId = "applyInvoiceAdjustment", summary = "Apply Adjustment to Draft Invoice", description = """
                     Applies a monetary adjustment (DISCOUNT, FEE, CORRECTION, or WARRANTY credit) to a DRAFT invoice \

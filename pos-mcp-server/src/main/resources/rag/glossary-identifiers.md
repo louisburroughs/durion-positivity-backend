@@ -42,9 +42,9 @@ _Verified: `pos-vehicle-inventory` `VinUtils` (pattern `^[A-HJ-NPR-Z0-9]{17}$`, 
 
 ## Invoice number
 
-An invoice number is the human-facing invoice identifier (distinct from the UUID `id`). Format: `INV-<epochMillis>-<first 8 chars of the invoice UUID>`, assigned once at draft creation. Reading an invoice is gated by `invoice:manage` — there is no `invoice:read` permission. (DTO `@Schema` examples like `INV-2026-1001` are illustrative and do NOT match the runtime format.)
+An invoice number is the human-facing invoice identifier (distinct from the UUID `id`). Format: `INV-<epochMillis>-<first 8 chars of the invoice UUID>`, assigned once at draft creation. Reading an invoice is gated by `invoice:invoice:view`; changing one is gated by `invoice:manage` (#1612 split the read surface out of the write permission). (DTO `@Schema` examples like `INV-2026-1001` are illustrative and do NOT match the runtime format.)
 
-_Verified: `pos-invoice` `InvoiceServiceImpl.generateInvoiceNumber()` (`"INV-"+epochMilli+"-"+idPart`); `InvoiceController` class-level `@PreAuthorize('invoice:manage')` covers GET._
+_Verified: `pos-invoice` `InvoiceServiceImpl.generateInvoiceNumber()` (`"INV-"+epochMilli+"-"+idPart`); `InvoiceController#getInvoice` carries a method-level `@PreAuthorize('invoice:invoice:view')` that overrides the class-level `invoice:manage`._
 
 ## PO number
 

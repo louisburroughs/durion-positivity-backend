@@ -35,9 +35,13 @@ import org.springframework.web.bind.annotation.RestController;
  * invoice number, the customer name, or the workorder number.
  */
 @RestController
+// Both operations on this controller are reads and both moved to invoice:invoice:view in #1612.
+// The declared scope has to move with them: it feeds the generated spec and the Angular SDK, and
+// left at invoice:manage it contradicted the same operation's own x-required-permissions and 403
+// description.
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(
         name = "bearerAuth",
-        scopes = {"invoice:manage"})
+        scopes = {"invoice:invoice:view"})
 @RequestMapping("/v1/invoices")
 @Tag(name = "Invoice Search", description = "Invoice finder search and retrieval")
 @RequiredArgsConstructor
@@ -68,11 +72,11 @@ public class InvoiceSearchController {
                 content = @Content(schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "403",
-                description = "Caller lacks the invoice:manage authority.",
+                description = "Caller lacks the invoice:invoice:view authority.",
                 content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @EmitEvent(id = "INVOICE_SEARCH", apiVersion = "1")
     public Page<InvoiceSearchResult> searchInvoices(
             @Parameter(
@@ -106,11 +110,11 @@ public class InvoiceSearchController {
                 content = @Content(schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "403",
-                description = "Caller lacks the invoice:manage authority.",
+                description = "Caller lacks the invoice:invoice:view authority.",
                 content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/items/search")
-    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @EmitEvent(id = "INVOICE_ITEM_SEARCH", apiVersion = "1")
     public List<InvoiceLineSearchResult> searchInvoiceLines(
             @Parameter(description = "Customer party identifier owning the invoices (required)") @RequestParam @NonNull

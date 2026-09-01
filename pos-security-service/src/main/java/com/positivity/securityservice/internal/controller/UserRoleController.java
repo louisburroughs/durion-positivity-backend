@@ -89,15 +89,17 @@ public class UserRoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "') or @userSelfCheck.isSelf(#userId)")
     @Operation(operationId = "getUserPermissions", summary = "Get a User's Effective Permissions", description = """
                     Returns the union of permissions granted through a user's currently effective role assignments.
                     Use this tool for a user's flattened effective permission set; use listUserRoleAssignments \
                     instead to see the assignments and scopes behind it.
-                    Preconditions: the caller must hold security:permission:view and the user must exist.
+                    Preconditions: the user must exist, and the caller must either hold \
+                    security:permission:view or be asking about themselves.
                     Required inputs: userId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the user does not exist.
+                    Returns 403 when the caller is asking about another user without \
+                    security:permission:view, and 404 when the user does not exist.
                     """)
     public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
         return ResponseEntity.ok(roleManagementService.getUserPermissions(userId));

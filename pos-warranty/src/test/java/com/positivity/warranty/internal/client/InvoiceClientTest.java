@@ -48,6 +48,37 @@ class InvoiceClientTest {
         client = new InvoiceClientImpl(builder, "invoice", "/v1/invoices");
     }
 
+    /**
+     * #1612: the three reads send {@code invoice:invoice:view}, not {@code invoice:manage}.
+     *
+     * <p>Nothing pinned the read authority before, which is why moving the pos-invoice guards was
+     * invisible from here. {@link MockRestServiceServer} enforces no authority of its own, so a
+     * client sending the wrong one stays green locally and 403s in production — and does it
+     * silently: the non-404 branch returns {@link Optional#empty()}, which settlement
+     * reconciliation reads as UNKNOWN, indistinguishable from pos-invoice being down.
+     */
+    @Test
+    void readsSendTheReadAuthorityNotTheWriteAuthority() {
+        server.expect(requestTo(BASE + "/" + INVOICE_ID))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-warranty-service"))
+                .andExpect(header("X-Authorities", "invoice:invoice:view"))
+                .andRespond(withSuccess(
+                        "{\"invoiceId\":\"" + INVOICE_ID + "\",\"invoiceNumber\":\"INV-100\","
+                                + "\"partyId\":\"" + PARTY_ID + "\",\"status\":\"DRAFT\",\"total\":10.00,"
+                                + "\"items\":[]}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE + "/" + INVOICE_ID + "/refunds"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Authorities", "invoice:invoice:view"))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        client.getInvoice(INVOICE_ID);
+        client.getInvoiceRefunds(INVOICE_ID);
+
+        server.verify();
+    }
+
     @Test
     void getInvoiceMapsSummaryWithItems() {
         server.expect(requestTo(BASE + "/" + INVOICE_ID))

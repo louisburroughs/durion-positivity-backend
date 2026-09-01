@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -27,7 +28,8 @@ import org.junit.jupiter.api.Test;
  * downstream endpoints after the #1519 Wave 2/3 retargeting; per-tool delete-and-reinsert) →
  * {@code V38} (adds {@code tax:rates:view} to TaxFacadeTool for the restored getTaxRate, #1522) →
  * {@code V39} (re-derives AccountingFacadeTool for the W1.2 aging facades; permission-net-neutral)
- * → {@code V40} (per-method AND-groups, #1606 finding 1).
+ * → {@code V40} (per-method AND-groups, #1606 finding 1) → {@code V41} (re-derives InvoiceFacadeTool
+ * and AdminFacadeTool after #1612 moved two endpoint guards).
  *
  * <p><b>V40 changed the unit of the assertion.</b> Rows now carry a {@code permission_group} and a
  * tool is offered iff the caller holds ALL codes of AT LEAST ONE group, so a flat union no longer
@@ -38,8 +40,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The replay models the migration chain exactly: everything through V39 is flat, V40's backfill
  * turns each of those rows into its own singleton group ({@code permission_group = permission_code},
- * behaviour-identical to the old OR gate), and V40's per-tool delete-and-reinsert then replaces the
- * 16 facades with real method groups.
+ * behaviour-identical to the old OR gate), V40's per-tool delete-and-reinsert then replaces the
+ * 16 facades with real method groups, and V41 replaces two of those again.
  *
  * <p>It also keeps the #1115 regression guard: no facade may carry the {@code AUTHENTICATED}
  * pseudo-permission alongside a privileged code — every authenticated caller holds
@@ -53,7 +55,9 @@ class FacadeToolPermissionSeedTest {
     private static final String REPORTING = "reporting:view:financial-statements";
     private static final String CRM_PARTY_VIEW = "crm:party:view";
     private static final String LOCATION_READ = "location:read";
-    private static final String INVOICE_MANAGE = "invoice:manage";
+    // #1612 moved the invoice read routes off invoice:manage; all three InvoiceFacadeTool
+    // methods are reads, so the whole tool moved with them (V41).
+    private static final String INVOICE_VIEW = "invoice:invoice:view";
     private static final String ON_HAND_VIEW = "inventory:on_hand:view";
     private static final String CATALOG_PRODUCT_VIEW = "catalog:product:view";
     private static final String WORKORDER_VIEW = "workorder:workorder:view";
@@ -126,9 +130,9 @@ class FacadeToolPermissionSeedTest {
             Map.entry(
                     "InvoiceFacadeTool",
                     Map.of(
-                            "getInvoice", Set.of(INVOICE_MANAGE),
-                            "searchInvoices", Set.of(INVOICE_MANAGE),
-                            "getInvoicesByCustomer", Set.of(INVOICE_MANAGE))),
+                            "getInvoice", Set.of(INVOICE_VIEW),
+                            "searchInvoices", Set.of(INVOICE_VIEW),
+                            "getInvoicesByCustomer", Set.of(INVOICE_VIEW))),
             Map.entry(
                     "LocationFacadeTool",
                     Map.of(
@@ -180,11 +184,16 @@ class FacadeToolPermissionSeedTest {
                     Map.of(
                             "listUsers", Set.of("security:user:view"),
                             "getUserPermissions", Set.of(SECURITY_PERMISSION_VIEW),
-                            "getMyPermissions", Set.of(SECURITY_PERMISSION_VIEW),
+                            // getMyPermissions drops out entirely in V41: #1612 made the self-read
+                            // authorised by identity, so it requires no code and contributes no
+                            // group (R3). An AUTHENTICATED group would have been R4's shape, but R4
+                            // is for a tool guarded ONLY by the sentinel — adding one here would
+                            // satisfy the OR for every caller and offer an admin tool to everyone,
+                            // which noFacadeMixesAuthenticatedWithPrivilege below rejects (#1115).
                             "getAuditLog", Set.of("security:audit:view"))));
 
     @Test
-    @DisplayName("net facade seed (V18..V40) equals the #1606 per-method group table")
+    @DisplayName("net facade seed (V18..V41) equals the #1606 per-method group table")
     void netSeedMatchesGroupTable() throws IOException {
         Map<String, Map<String, Set<String>>> groups = netGroupGrants();
 
@@ -280,8 +289,10 @@ class FacadeToolPermissionSeedTest {
                 .isFalse();
         assertThat(qualifies(groups.get("CustomerFacadeTool"), Set.of(CRM_PARTY_VIEW)))
                 .isTrue();
-        // The other two codes V37's union pulled in through the same composition.
-        assertThat(qualifies(groups.get("CustomerFacadeTool"), Set.of("crm:interaction:view", INVOICE_MANAGE)))
+        // The other two codes V37's union pulled in through the same composition. invoice:manage is
+        // a literal here rather than a constant: this pins what the old union wrongly admitted, and
+        // is unrelated to which code guards invoice reads today.
+        assertThat(qualifies(groups.get("CustomerFacadeTool"), Set.of("crm:interaction:view", "invoice:manage")))
                 .isFalse();
         // PricingFacadeTool's optional effectivePrice leg, and ShopManagerFacadeTool's optional
         // schedule leg, likewise no longer admit their tools.
@@ -412,13 +423,20 @@ class FacadeToolPermissionSeedTest {
             codes.forEach(code ->
                     singletons.computeIfAbsent(code, g -> new LinkedHashSet<>()).add(code));
         });
-        String v40 = read("V40__mcp_tool_permission_groups.sql");
-        parseFullDeletes(v40).forEach(groups::remove);
-        parseGroupSeed(v40).forEach((tool, seeded) -> {
-            Map<String, Set<String>> existing = groups.computeIfAbsent(tool, t -> new LinkedHashMap<>());
-            seeded.forEach((group, codes) ->
-                    existing.computeIfAbsent(group, g -> new LinkedHashSet<>()).addAll(codes));
-        });
+        // V40 and V41 share a shape — a per-tool full delete followed by the derived groups — so
+        // they replay identically. Each later migration of that shape belongs in this list; a
+        // re-derivation left out of it would leave the test asserting a chain the database does
+        // not have, which is the failure mode this whole class exists to prevent.
+        for (String migration :
+                List.of("V40__mcp_tool_permission_groups.sql", "V41__facade_permission_rederivation_1612.sql")) {
+            String sql = read(migration);
+            parseFullDeletes(sql).forEach(groups::remove);
+            parseGroupSeed(sql).forEach((tool, seeded) -> {
+                Map<String, Set<String>> existing = groups.computeIfAbsent(tool, t -> new LinkedHashMap<>());
+                seeded.forEach((group, codes) -> existing.computeIfAbsent(group, g -> new LinkedHashSet<>())
+                        .addAll(codes));
+            });
+        }
         return groups;
     }
 

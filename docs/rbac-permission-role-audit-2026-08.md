@@ -855,3 +855,69 @@ Three properties the migration is built around:
   what made this set legible, so it worked out here. It is still a footgun: future revoke
   migrations should scope to the roles they mean, or state in the header that they are
   intentionally global.
+
+---
+
+## §9 — MCP facade reachability and the reference-data grants (#1612, 2026-08-31)
+
+Live grants on alpha showed every role blocked from most MCP facade tools by **exactly one**
+missing permission, never two or more. The gate was not structurally wrong: each role was short a
+single reference-data read. A facade has to resolve a location, customer or order id before it can
+do anything useful, so a role holding the *functional* permission still got nothing.
+
+The matrix behind this is now reproducible offline —
+`python3 scripts/mcp-facade-reachability.py` — rather than reconstructed by querying alpha. It
+reads the facade permission groups from `pos-mcp-server`'s migrations and the grants from the
+bulk-load baseline, and reproduced the live alpha figures exactly for all ten roles the issue
+scored. `docs/mcp-facade-reachability-1612.md` holds the before/after and the reasoning for what
+is still blocked.
+
+### Dispositions, per code group
+
+| Group | Codes | Disposition |
+|---|---|---|
+| Reference-data reads | `catalog:product:view`, `crm:party:view`, `vehicle-inventory:registry:view`, `people:employee:view`, `order:order:view`, `inventory:availability:read`, `inventory:on_hand:view`, `location:read`, `workorder:workorder:view` | **Granted** to every role blocked by exactly that code, in the bulk-load baseline. Read-only id/name lookups; granting them fixes both halves (the tool becomes selectable *and* the downstream call succeeds), where relaxing the endpoint guard would have made the data readable by every authenticated caller for the same benefit. |
+| Invoice reads | `invoice:manage` on six GET routes | **Endpoint fixed, not granted.** New `invoice:invoice:view` (bit 494, catalog v66); `invoice:manage` no longer required for a read. Granting `manage` to seven more roles would have handed out write authority to solve a read problem. |
+| Own permissions | `security:permission:view` on `GET /v1/users/{userId}/permissions` | **Endpoint fixed, not granted.** The guard is now "`security:permission:view` OR self". Reading someone else's set still needs the code. |
+| Admin facade | `security:user:view` | **No action.** See the correction below. |
+| Business policy | `accounting:coa:view`, `tax:calculate`, `reporting:view:financial-statements` beyond the finance roles | **Deferred.** Whether a `SHOP_MANAGER` or `TECHNICIAN` should see tax and accounting data is a business decision. `reporting:view:financial-statements` was granted to `ACCOUNTING_ASSOCIATE` only — an accounting role that cannot read financial statements was a mis-grant, and it was why that role reached 1 of 15 facades. |
+
+### Two corrections to the issue's analysis
+
+**`security:audit:view` does not gate `AdminFacadeTool`.** `V40:436-441` gives that tool four
+single-code groups — `listUsers`, `getUserPermissions`, `getMyPermissions`, `getAuditLog` — and
+reachability is OR across groups, so the cheapest unlock was `security:user:view`, not the audit
+code. Nothing was granted for it. Making `getMyPermissions` an `AUTHENTICATED` group would have
+reached the tool without exposing the audit log, but that is the #1115 defect: a facade mixing the
+sentinel with privileged codes passes the gate for every authenticated caller. So the endpoint fix
+lets any caller read their own permissions through the API, while the MCP tool keeps its admin
+gate. Reaching the tool and reaching the endpoint are separate questions, and only the second was
+a defect.
+
+**`SYSTEM_ADMINISTRATOR` at 1 of 15 facades is the policy working, not drift.** It looks like the
+sharpest mis-grant in the matrix and is not one.
+`RolePermissionBaselineTest#systemAdministrator_isSecurityScopedNotSuperuser` states a rule rather
+than a list: the role may hold `security:*`, `mcp:*`, `nlti:*` and a named carve-out set **only**,
+never a broader domain authority. It was excluded from the reference-data grants for that reason.
+
+### Follow-ups this opened
+
+- **`audit-rbac.py` read the wrong half of the grant model.** Source A was
+  `R__seed_role_permissions.sql` alone, which #1613 (D8) had reduced to the six-role bootstrap
+  floor. It still reported green because `ADMIN` carries almost the whole catalog there and the
+  gated checks ask "is this code granted to *any* role" — but it was wrong for every per-role
+  question, and would have gone quietly wrong the first time a code was granted only to an
+  operational role. It now reads both sources. **Fixed here.**
+- **Eval fixtures asserted an unreachable gate.** Thirty of the 101 tool-selection fixtures
+  expected a tool their own actor could not be offered, and several actors held permissions their
+  role was never granted, so #1606's `hit@5` was measuring the fixture set as much as the
+  retrieval. Rebuilt from real grants, with `EvalFixtureSatisfiabilityTest` as the guard.
+  **Fixed here.**
+- **`LOCATION_MANAGER` does not hold `inventory:on_hand:view`.** Surfaced while rebuilding the
+  fixtures, which had assumed it did. It was not granted here because no facade was blocked on it
+  for that role, so it fell outside this issue's decisions — but a location manager who cannot read
+  on-hand stock at their own location is worth a second look.
+- **No pre-merge gate covers Testcontainers ITs.** `ci.yml` runs pull requests as
+  `test -DskipITs` and only reaches `verify` on push to `main`, so a seed-affecting change cannot
+  be caught before it lands. Unrelated to this issue's subject, but it is how the
+  `RolePermissionSeedIT` break from #1613 reached `main`.

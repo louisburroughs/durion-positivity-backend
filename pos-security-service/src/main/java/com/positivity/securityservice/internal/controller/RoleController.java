@@ -440,7 +440,11 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
+    // Same guard as the canonical path (#1612). These two operations return the identical payload
+    // from the identical service call, so authorising them differently would mean a caller could
+    // read their own permissions at one URL and not the other — a divergence that is a trap rather
+    // than a policy.
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "') or @userSelfCheck.isSelf(#userId)")
     @Operation(
             operationId = "getUserPermissionsLegacy",
             summary = "Get User Permissions at Legacy Path",
@@ -449,10 +453,12 @@ public class RoleController {
                     served at the legacy /permissions/user/{userId} path.
                     Use this tool only for legacy callers; use getUserPermissions instead, which returns the same \
                     data at the canonical /v1/users/{userId}/permissions path.
-                    Preconditions: the caller must hold security:permission:view and the user must exist.
+                    Preconditions: the user must exist, and the caller must either hold \
+                    security:permission:view or be asking about themselves.
                     Required inputs: userId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the user does not exist.
+                    Returns 403 when the caller is asking about another user without \
+                    security:permission:view, and 404 when the user does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "User permissions returned successfully")
     @ApiResponse(

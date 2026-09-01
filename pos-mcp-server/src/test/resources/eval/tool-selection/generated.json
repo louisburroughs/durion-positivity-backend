@@ -95,8 +95,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view",
-          "inventory:on_hand:search"
+          "inventory:availability:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -118,8 +117,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view",
-          "inventory:on_hand:search"
+          "inventory:availability:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -141,8 +139,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view",
-          "inventory:on_hand:search"
+          "inventory:availability:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -164,8 +161,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view",
-          "inventory:on_hand:search"
+          "inventory:availability:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -275,8 +271,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "crm:vehicle:view",
-          "crm:vehicle:search"
+          "crm:vehicle:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -298,8 +293,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "crm:vehicle:view",
-          "crm:vehicle:search"
+          "crm:vehicle:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -321,8 +315,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "crm:vehicle:view",
-          "crm:vehicle:search"
+          "crm:vehicle:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -344,8 +337,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "crm:vehicle:view",
-          "crm:vehicle:search"
+          "crm:vehicle:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -547,7 +539,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "order:order:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -569,7 +561,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "order:order:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -591,7 +583,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "order:order:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -613,7 +605,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "order:order:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -635,7 +627,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -657,7 +649,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -679,7 +671,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -701,7 +693,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -723,7 +715,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -745,7 +737,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -767,7 +759,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -789,7 +781,7 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "AUTHENTICATED"
+          "catalog:product:view"
         ],
         "workflow_state": "IDLE"
       },
@@ -811,8 +803,6 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "people:employee:view",
-          "people:person:view",
           "people:availability:view"
         ],
         "workflow_state": "IDLE"
@@ -835,8 +825,6 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "people:employee:view",
-          "people:person:view",
           "people:availability:view"
         ],
         "workflow_state": "IDLE"
@@ -859,8 +847,6 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "people:employee:view",
-          "people:person:view",
           "people:availability:view"
         ],
         "workflow_state": "IDLE"
@@ -883,8 +869,6 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "people:employee:view",
-          "people:person:view",
           "people:availability:view"
         ],
         "workflow_state": "IDLE"
@@ -907,7 +891,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "workorder:dashboard:view"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -929,7 +913,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "workorder:dashboard:view"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -951,7 +935,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "workorder:dashboard:view"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -973,7 +957,7 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "workorder:dashboard:view"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -995,7 +979,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:location:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1017,7 +1001,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:location:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1039,7 +1023,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:location:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1061,7 +1045,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:location:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1083,8 +1067,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "shop:location:view",
-          "shop:schedule:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1106,8 +1089,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "shop:location:view",
-          "shop:schedule:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1129,8 +1111,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "shop:location:view",
-          "shop:schedule:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1152,8 +1133,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "shop:location:view",
-          "shop:schedule:view"
+          "location:read"
         ],
         "workflow_state": "IDLE"
       },
@@ -1175,7 +1155,7 @@
       "actor": {
         "role": "ROLE_ACCOUNTING_ASSOCIATE",
         "permission_codes": [
-          "AUTHENTICATED"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -1197,7 +1177,7 @@
       "actor": {
         "role": "ROLE_ACCOUNTING_ASSOCIATE",
         "permission_codes": [
-          "AUTHENTICATED"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -1219,7 +1199,7 @@
       "actor": {
         "role": "ROLE_ACCOUNTING_ASSOCIATE",
         "permission_codes": [
-          "AUTHENTICATED"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -1241,7 +1221,7 @@
       "actor": {
         "role": "ROLE_ACCOUNTING_ASSOCIATE",
         "permission_codes": [
-          "AUTHENTICATED"
+          "reporting:view:financial-statements"
         ],
         "workflow_state": "IDLE"
       },
@@ -1451,17 +1431,20 @@
         ]
       },
       "expected": {
-        "tool_ids": [
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
           "WorkorderFacadeTool"
         ],
         "k": 5
       },
       "tags": [
-        "positive",
         "authenticated-baseline",
-        "facade"
+        "facade",
+        "negative",
+        "permission-negative"
       ],
-      "notes": "WorkorderFacadeTool carries an AUTHENTICATED grant (V18 union: its getWorkorderStatus op is @PreAuthorize(isAuthenticated())), so any authenticated user is legitimately offered the facade at the selection layer; per-operation authorization (e.g. the list/search ops needing workorder:workorder:view) is enforced downstream at the gateway. Retargeted from a false permission-negative — see the facade-AUTHENTICATED-grant finding."
+      "notes": "WorkorderFacadeTool carried an AUTHENTICATED grant only through V18's union of every method's codes. V40 (#1606 finding 1) replaced that union with per-method AND-groups, and neither tool has an AUTHENTICATED group: WorkorderFacadeTool's getWorkorderStatus and AdminFacadeTool's getSystemStatus contribute no group at all (rule R3). An authenticated-only caller is therefore offered EventsFacadeTool and nothing else, which FacadeToolPermissionSeedTest#assistantOnlyCallerQualifiesOnlyEventsFacade also asserts. This fixture asserted the pre-V40 behaviour and was unsatisfiable by construction."
     },
     {
       "fixture_id": "ts-inventoryfacadetool-neg-role-technician",
@@ -2117,17 +2100,20 @@
         ]
       },
       "expected": {
-        "tool_ids": [
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
           "AdminFacadeTool"
         ],
         "k": 5
       },
       "tags": [
-        "positive",
         "authenticated-baseline",
-        "facade"
+        "facade",
+        "negative",
+        "permission-negative"
       ],
-      "notes": "AdminFacadeTool carries an AUTHENTICATED grant (V18 union: its getSystemStatus op has no downstream call and is isAuthenticated()-level), so any authenticated user is legitimately offered the facade; the privileged security:* operations remain gateway-enforced per operation. Retargeted from a false permission-negative — see the facade-AUTHENTICATED-grant finding, which flags whether offering AdminFacadeTool this broadly at the selection layer is desirable."
+      "notes": "AdminFacadeTool carried an AUTHENTICATED grant only through V18's union of every method's codes. V40 (#1606 finding 1) replaced that union with per-method AND-groups, and neither tool has an AUTHENTICATED group: WorkorderFacadeTool's getWorkorderStatus and AdminFacadeTool's getSystemStatus contribute no group at all (rule R3). An authenticated-only caller is therefore offered EventsFacadeTool and nothing else, which FacadeToolPermissionSeedTest#assistantOnlyCallerQualifiesOnlyEventsFacade also asserts. This fixture asserted the pre-V40 behaviour and was unsatisfiable by construction."
     },
     {
       "fixture_id": "ts-adminfacadetool-neg-role-dispatcher",
@@ -2160,7 +2146,7 @@
         "permission_codes": [
           "crm:party:view",
           "crm:vehicle:view",
-          "workorder:workorder:create"
+          "workorder:workorder:view"
         ]
       },
       "expected": {
@@ -2182,8 +2168,8 @@
       "actor": {
         "role": "ROLE_ACCOUNT_MANAGER",
         "permission_codes": [
-          "order:order:view",
-          "invoice:invoice:create"
+          "invoice:invoice:view",
+          "order:order:view"
         ]
       },
       "expected": {
@@ -2204,8 +2190,8 @@
       "actor": {
         "role": "ROLE_SERVICE_ADVISOR",
         "permission_codes": [
-          "crm:vehicle:view",
-          "AUTHENTICATED"
+          "catalog:product:view",
+          "crm:vehicle:view"
         ]
       },
       "expected": {
@@ -2226,8 +2212,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view",
-          "inventory:goods_receipt:create"
+          "inventory:availability:read"
         ],
         "workflow_state": "CREATING_PO"
       },
@@ -2248,8 +2233,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view",
-          "inventory:goods_receipt:create"
+          "inventory:availability:read"
         ],
         "workflow_state": "PROCESSING_RETURN"
       },
@@ -2270,7 +2254,7 @@
       "actor": {
         "role": "ROLE_LOCATION_MANAGER",
         "permission_codes": [
-          "inventory:on_hand:view"
+          "inventory:availability:read"
         ],
         "workflow_state": "INVENTORY_RECON"
       },
