@@ -108,7 +108,7 @@ class VendorBillControllerListTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET / returns 403 when the caller lacks accounting:ap:view")
+    @DisplayName("GET / returns 403 when the caller lacks accounting:analytics:view")
     void listReturns403WithoutPermission() throws Exception {
         mockMvc.perform(withAuth(
                         get(LIST_PATH).param("dueFrom", "2026-06-01").param("dueTo", "2026-06-30"),

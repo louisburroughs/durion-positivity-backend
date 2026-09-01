@@ -135,7 +135,7 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             @Param("status") @Nullable WorkorderStatus status,
             @Param("createdFrom") Instant createdFrom,
             @Param("createdTo") Instant createdTo,
-            @Param("technicianId") UUID technicianId,
+            @Param("technicianId") @Nullable UUID technicianId,
             Pageable pageable);
 
     /**

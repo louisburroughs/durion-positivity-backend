@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * Free-text workorder search resolving the query against customer names (via the
@@ -57,10 +58,16 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
             @Nullable LocalDate createdTo,
             @Nullable UUID technicianId,
             @NonNull Pageable pageable) {
-        // Resolve customer ids whose display name matches the query.
-        List<UUID> nameMatchIds = customerReferenceService.searchIdsByName(q, 10).stream()
-                .map(CustomerReferenceService.CustomerRef::customerId)
-                .toList();
+        // Resolve customer ids whose display name matches the query -- but only when a query term
+        // was actually supplied. An empty q sent to the name search is not a no-op: the customer
+        // directory may treat it as "match everything" and hand back up to 10 arbitrary ids, which
+        // would then inject spurious matches into what the caller intended as a filters-only listing
+        // (mirrors InvoiceSearchServiceImpl's hasQuery guard, #1599/E11).
+        List<UUID> nameMatchIds = StringUtils.hasText(q)
+                ? customerReferenceService.searchIdsByName(q, 10).stream()
+                        .map(CustomerReferenceService.CustomerRef::customerId)
+                        .toList()
+                : List.of();
 
         // JPQL IN requires a non-empty collection; use a sentinel that cannot match a real id.
         List<UUID> customerIds = nameMatchIds.isEmpty() ? List.of(new UUID(0, 0)) : nameMatchIds;

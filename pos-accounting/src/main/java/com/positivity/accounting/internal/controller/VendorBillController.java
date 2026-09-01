@@ -436,8 +436,8 @@ public class VendorBillController {
     @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_LIST_VIEW", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
+            scopes = {"accounting:analytics:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.ANALYTICS_VIEW + "')")
     @Operation(
             operationId = "listVendorBills",
             summary = "List Vendor Bills By Due Date",
@@ -447,7 +447,7 @@ public class VendorBillController {
                     Use this tool to browse or triage upcoming/overdue payables across vendors; do not use \
                     listApBills for this, which is scoped to APPROVED-only bills sorted for payment \
                     selection, and use getVendorBillById when the bill id is already known.
-                    Preconditions: none beyond the caller holding accounting:ap:view.
+                    Preconditions: none beyond the caller holding accounting:analytics:view.
                     Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window \
                     cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, \
                     MATCH_EXCEPTION, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though \

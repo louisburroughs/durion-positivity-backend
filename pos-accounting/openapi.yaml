@@ -7524,7 +7524,7 @@ paths:
 
         Use this tool to browse or triage upcoming/overdue payables across vendors; do not use listApBills for this, which is scoped to APPROVED-only bills sorted for payment selection, and use getVendorBillById when the bill id is already known.
 
-        Preconditions: none beyond the caller holding accounting:ap:view.
+        Preconditions: none beyond the caller holding accounting:analytics:view.
 
         Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
 
@@ -7604,12 +7604,12 @@ paths:
           description: Invalid date range, window too wide, or unrecognized status
       security:
       - bearerAuth:
-        - accounting:ap:view
+        - accounting:analytics:view
       summary: List Vendor Bills By Due Date
       tags:
       - Vendor Bill API
       x-required-permissions:
-      - accounting:ap:view
+      - accounting:analytics:view
     post:
       description: 'Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, totaling the received line items and syncing the vendor into the AP vendor directory.
 
