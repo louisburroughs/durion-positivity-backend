@@ -11,10 +11,15 @@ import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
+import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
+import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
@@ -91,6 +96,10 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
     private final ExtInvoiceRepository extInvoiceRepository;
     private final PaymentApplicationRepository paymentApplicationRepository;
     private final PaymentApplicationReversalRepository paymentApplicationReversalRepository;
+    private final ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository;
+    private final ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository;
+    private final ReceivablePaymentRepository receivablePaymentRepository;
+    private final CustomerCreditTransactionRepository customerCreditTransactionRepository;
     private final APPaymentRepository apPaymentRepository;
     private final VendorBillRepository vendorBillRepository;
     private final VendorRepository vendorRepository;
@@ -100,6 +109,10 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             ExtInvoiceRepository extInvoiceRepository,
             PaymentApplicationRepository paymentApplicationRepository,
             PaymentApplicationReversalRepository paymentApplicationReversalRepository,
+            ExtInvoicePaymentReversalRepository extInvoicePaymentReversalRepository,
+            ExtInvoiceDepositCreditApplicationRepository extInvoiceDepositCreditApplicationRepository,
+            ReceivablePaymentRepository receivablePaymentRepository,
+            CustomerCreditTransactionRepository customerCreditTransactionRepository,
             APPaymentRepository apPaymentRepository,
             VendorBillRepository vendorBillRepository,
             VendorRepository vendorRepository) {
@@ -107,6 +120,10 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         this.extInvoiceRepository = extInvoiceRepository;
         this.paymentApplicationRepository = paymentApplicationRepository;
         this.paymentApplicationReversalRepository = paymentApplicationReversalRepository;
+        this.extInvoicePaymentReversalRepository = extInvoicePaymentReversalRepository;
+        this.extInvoiceDepositCreditApplicationRepository = extInvoiceDepositCreditApplicationRepository;
+        this.receivablePaymentRepository = receivablePaymentRepository;
+        this.customerCreditTransactionRepository = customerCreditTransactionRepository;
         this.apPaymentRepository = apPaymentRepository;
         this.vendorBillRepository = vendorBillRepository;
         this.vendorRepository = vendorRepository;
@@ -161,6 +178,35 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 ? null
                 : collected.multiply(ONE_HUNDRED).divide(invoiced, RATE_SCALE, RoundingMode.HALF_UP);
 
+        // Gross completed refunds attributed to the window their reversal was recorded in (#1620).
+        // VOID reversals (an authorization released before capture) never produced collected cash,
+        // so they are correctly absent: the replica behind this query never stores them at all
+        // (see ExtInvoicePaymentReversalRepository#sumAmountByReversedAtBetween).
+        BigDecimal refunded =
+                nullSafe(extInvoicePaymentReversalRepository.sumAmountByReversedAtBetween(startInstant, endInstant));
+
+        // Mixed-basis subtraction (collected is movement-basis A/R relief, refunded is cash out) —
+        // deliberately not the clean cash pair; see the field's own @Schema doc. Not clamped.
+        BigDecimal netCashCollected = collected.subtract(refunded);
+
+        // Cash actually taken in, independent of application (#1622).
+        BigDecimal received =
+                nullSafe(receivablePaymentRepository.sumTotalAmountByClearedAtBetween(startInstant, endInstant));
+
+        // Settlement without new cash: pos-invoice deposit-credit draw-downs plus this module's own
+        // customer-credit APPLICATION draw-downs, both attributed to the draw-down moment (#1621).
+        BigDecimal nonCashSettled = nullSafe(
+                        extInvoiceDepositCreditApplicationRepository.sumAmountAppliedByAppliedAtBetween(
+                                startInstant, endInstant))
+                .add(nullSafe(customerCreditTransactionRepository.sumAmountByTypeAndCreatedAtBetween(
+                        CustomerCreditTransactionType.APPLICATION, startInstant, endInstant)));
+
+        BigDecimal settled = collected.add(nonCashSettled);
+
+        BigDecimal settlementRatePct = invoiced.compareTo(BigDecimal.ZERO) == 0
+                ? null
+                : settled.multiply(ONE_HUNDRED).divide(invoiced, RATE_SCALE, RoundingMode.HALF_UP);
+
         return CollectionsAnalyticsReport.builder()
                 .startDate(startDate)
                 .endDate(endDate)
@@ -169,6 +215,12 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 .collected(collected)
                 .applicationReversals(applicationReversals)
                 .collectionRatePct(collectionRatePct)
+                .refunded(refunded)
+                .netCashCollected(netCashCollected)
+                .received(received)
+                .nonCashSettled(nonCashSettled)
+                .settled(settled)
+                .settlementRatePct(settlementRatePct)
                 .build();
     }
 

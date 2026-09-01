@@ -65,28 +65,39 @@ public class AccountingAnalyticsController {
             summary = "Get Invoiced Vs Collected Analytics",
             description = """
                     Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice \
-                    totals for invoices finalized in the window), collected, applicationReversals, and a \
-                    server-derived collectionRatePct.
+                    totals for invoices finalized in the window), collected, applicationReversals, \
+                    refunded, netCashCollected, received, nonCashSettled, settled, and the server-derived \
+                    collectionRatePct and settlementRatePct.
                     collected is payment amounts applied to accounts receivable within the window, net of \
                     application reversals recorded within the window rather than cash received, on a \
                     movement basis where a January payment reversed in March reduces March and never \
                     restates January, so collected may be negative in a heavy-reversal window and is \
                     deliberately not clamped; applicationReversals reports that gross reversal amount as a \
-                    positive number so a dip in collected can be attributed without a second call.
-                    Deposit-credit and customer-credit settlement is excluded, because that cash was \
-                    received when the deposit was taken rather than when the credit was drawn down, so \
-                    collectionRatePct is understated for a window in which deposit-funded invoices \
-                    finalize; refunds have no dedicated figure here, but a refunded invoice payment does \
-                    depress collected, via the resulting PaymentApplicationReversal, in the reversal's \
-                    window instead of being invisible, while standalone and credit-balance refunds relieve \
-                    no receivable and are not reflected at all.
+                    positive number so a dip in collected can be attributed without a second call. \
+                    Deposit-credit and customer-credit settlement is excluded from collected, because that \
+                    cash was received when the deposit was taken rather than when the credit was drawn \
+                    down, so collectionRatePct is understated for a window in which deposit-funded \
+                    invoices finalize.
+                    Three-way basis guide, so the right figure gets picked for a question: received is \
+                    cash actually taken in (cash basis, independent of application); collected is A/R \
+                    relief on a movement basis (not cash received); nonCashSettled is invoice settlement \
+                    reached without any new cash (deposit/customer-credit draw-downs); refunded is gross \
+                    completed-refund cash out. "How much cash came in vs went out" is received vs \
+                    refunded — both genuine cash movements measured on the same basis. "How much of what \
+                    we billed got settled, by any means" is invoiced / settled / settlementRatePct, where \
+                    settled = collected + nonCashSettled.
+                    netCashCollected (= collected - refunded) has a mixed-basis caveat: the commonest \
+                    refund shape, a refunded invoice payment, already reduced collected via its \
+                    PaymentApplicationReversal, so subtracting refunded again under-counts for that shape \
+                    — prefer received - refunded for a clean cash-in-vs-cash-out answer.
                     Use this tool for a single window's cash-application efficiency rather than looping it \
                     across more than 3 periods for a multi-period trend, since that exceeds this \
                     endpoint's call budget — narrow the request instead, or wait for a future \
                     groupBy=month|week parameter.
-                    Preconditions: none; a window with no finalized invoices, no applications and no \
-                    reversals returns invoiced=0, collected=0, applicationReversals=0 and a null \
-                    collectionRatePct, which is also returned whenever invoiced is zero.
+                    Preconditions: none; a window with no finalized invoices, no applications, no \
+                    reversals, no refunds, no clearances and no non-cash draw-downs returns every amount \
+                    field as 0 and a null collectionRatePct/settlementRatePct, which are also returned \
+                    whenever invoiced is zero.
                     Required inputs: startDate and endDate (ISO dates), with endDate on or after \
                     startDate; invoiced and collected are deliberately different invoice cohorts since a \
                     payment can settle in a later window than the invoice it pays.
