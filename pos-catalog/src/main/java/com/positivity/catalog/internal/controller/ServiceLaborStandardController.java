@@ -8,6 +8,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -82,7 +83,27 @@ public class ServiceLaborStandardController {
     @ApiResponse(responseCode = "409", description = "An active standard already covers this vehicle key and type")
     public ResponseEntity<ServiceLaborStandardResponseDto> createLaborStandard(
             @Parameter(description = "Service the standard belongs to.", required = true) @PathVariable UUID serviceId,
-            @Valid @RequestBody ServiceLaborStandardRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The standard to author: laborHours (decimal hours in tenths) plus"
+                                    + " optional vehicle-key fields (null = any vehicle), timeType, overlap"
+                                    + " metadata and published date.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ServiceLaborStandardRequestDto.class),
+                                            examples =
+                                                    @ExampleObject(name = "Front brake pads on a Civic", value = """
+                                                            {"vehicleYear":"2019-2023",
+                                                             "make":"Honda","model":"Civic",
+                                                             "laborHours":1.5,
+                                                             "timeType":"DURION_STANDARD",
+                                                             "overlapGroup":"WHEEL-OFF",
+                                                             "publishedAt":"2026-09-01"}
+                                                            """)))
+                    @Valid
+                    @RequestBody
+                    ServiceLaborStandardRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(laborStandardService.create(serviceId, request));
     }
 
@@ -155,7 +176,25 @@ public class ServiceLaborStandardController {
     public ResponseEntity<ServiceLaborStandardResponseDto> supersedeLaborStandard(
             @Parameter(description = "Service the standard belongs to.", required = true) @PathVariable UUID serviceId,
             @Parameter(description = "Standard being replaced.", required = true) @PathVariable UUID standardId,
-            @Valid @RequestBody ServiceLaborStandardRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The full replacement row — not a patch: omitted vehicle-key fields"
+                                    + " become wildcards. Same shape as create.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ServiceLaborStandardRequestDto.class),
+                                            examples = @ExampleObject(name = "Corrected hours", value = """
+                                                            {"vehicleYear":"2019-2023",
+                                                             "make":"Honda","model":"Civic",
+                                                             "laborHours":1.8,
+                                                             "timeType":"DURION_STANDARD",
+                                                             "overlapGroup":"WHEEL-OFF",
+                                                             "publishedAt":"2026-09-01"}
+                                                            """)))
+                    @Valid
+                    @RequestBody
+                    ServiceLaborStandardRequestDto request) {
         return ResponseEntity.ok(laborStandardService.supersede(serviceId, standardId, request));
     }
 }

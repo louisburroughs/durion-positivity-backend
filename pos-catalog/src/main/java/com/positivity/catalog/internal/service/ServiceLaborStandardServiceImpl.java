@@ -30,9 +30,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
     private final Clock clock;
 
     public ServiceLaborStandardServiceImpl(
-            ServiceRepository serviceRepository,
-            ServiceLaborStandardRepository laborStandardRepository,
-            Clock clock) {
+            ServiceRepository serviceRepository, ServiceLaborStandardRepository laborStandardRepository, Clock clock) {
         this.serviceRepository = serviceRepository;
         this.laborStandardRepository = laborStandardRepository;
         this.clock = clock;
