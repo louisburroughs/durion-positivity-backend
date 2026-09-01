@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
 
@@ -31,4 +32,23 @@ public class CatalogItemResponseDto {
             example = "Forged steel adjustable wrench with cushioned grip",
             requiredMode = NOT_REQUIRED)
     private String longDescription;
+
+    @Schema(
+            description = "Durion operation code; service items only",
+            example = "BRAKE-PAD-FRONT",
+            requiredMode = NOT_REQUIRED)
+    private String operationCode;
+
+    @Schema(
+            description = "Operation category; service items only",
+            example = "REPAIR",
+            allowableValues = {"REPAIR", "DIAGNOSTIC", "MAINTENANCE", "TIRE_SERVICE"},
+            requiredMode = NOT_REQUIRED)
+    private String operationCategory;
+
+    @Schema(
+            description = "Vehicle-agnostic fallback labor hours in tenths; service items only",
+            example = "1.5",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal defaultLaborHours;
 }

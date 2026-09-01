@@ -1,7 +1,9 @@
 package com.positivity.catalog.internal.entity;
 
+import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Data;
@@ -23,6 +25,26 @@ public class ServiceEntity implements CatalogItem {
     private String name;
     private String longDescription;
     private String shortDescription;
+
+    /**
+     * Durion-owned operation identity (#1569, sourcing plan §4.2), e.g. {@code BRAKE-PAD-FRONT}.
+     * Vendor labor-guide codes map onto this, never the reverse. Nullable: a dealer-created
+     * one-off service may never join a guide taxonomy. Unique when present (V17 partial index).
+     */
+    @Column(name = "operation_code")
+    private String operationCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation_category")
+    private OperationCategory operationCategory;
+
+    /**
+     * Vehicle-agnostic fallback hours ONLY, decimal hours in tenths. Deliberately second-class:
+     * the vehicle-keyed {@link ServiceLaborStandardEntity} rows are the real answer; this is
+     * what a single-scalar shop authors by hand and what degraded-mode consumers may later see.
+     */
+    @Column(name = "default_labor_hours", precision = 5, scale = 1)
+    private BigDecimal defaultLaborHours;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

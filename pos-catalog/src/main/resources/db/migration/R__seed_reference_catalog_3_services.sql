@@ -61,3 +61,72 @@ ON CONFLICT (id) DO UPDATE SET
     short_description = EXCLUDED.short_description,
     long_description = EXCLUDED.long_description,
     updated_at = NOW();
+
+-- =============================================================
+-- Operation taxonomy backfill (#1569, sourcing plan Phase 0)
+-- Durion operation codes and categories for the seeded services.
+-- The three spark-plug rows keep the vehicle attribute the names
+-- baked in, but now as distinct operation codes — the Phase 1
+-- labor-guide dedup test case. default_labor_hours is NOT seeded:
+-- hours come from labor-guide sources or deliberate authoring,
+-- never from invented seed data.
+-- =============================================================
+UPDATE service AS s
+SET operation_code     = v.operation_code,
+    operation_category = v.operation_category,
+    updated_at         = NOW()
+FROM (VALUES
+    ('3541bc6d-da85-1de0-bd10-22b8eb344403'::uuid, 'OIL-CHANGE-FULL-SYNTHETIC',  'MAINTENANCE'),
+    ('0f987253-1a5e-4064-7f3c-551ba61f4074'::uuid, 'TIRE-ROTATION',              'TIRE_SERVICE'),
+    ('56b14899-cb6c-7628-0763-4c603ec0a325'::uuid, 'BRAKE-PAD-FRONT',            'REPAIR'),
+    ('41ebfc0f-ec66-cafd-b475-c68e6577de31'::uuid, 'BRAKE-PAD-REAR',             'REPAIR'),
+    ('92b11cde-5fa4-f4dd-aee7-cef17ba6737e'::uuid, 'BRAKE-ROTOR-FRONT-PAIR',     'REPAIR'),
+    ('50acd5b8-cd98-f884-b5e3-50fdd1cc0985'::uuid, 'BRAKE-ROTOR-REAR-PAIR',      'REPAIR'),
+    ('d75d06b5-973e-3233-082a-7c1f018eaae0'::uuid, 'TIRE-INSTALL-SINGLE',        'TIRE_SERVICE'),
+    ('b16f7719-bd81-cdac-4ada-cb932e774d35'::uuid, 'TIRE-INSTALL-SET-4',         'TIRE_SERVICE'),
+    ('02a1326e-3abc-586c-8234-0962277c17ac'::uuid, 'ALIGNMENT-2-WHEEL',          'REPAIR'),
+    ('87dc8c9f-05b8-a51b-779e-898cd83a1247'::uuid, 'ALIGNMENT-4-WHEEL',          'REPAIR'),
+    ('f0309976-ed07-fb86-5e2c-77f14b751eb7'::uuid, 'BATTERY-REPLACE',            'REPAIR'),
+    ('ee77b2ce-ae54-7e80-7d4d-c88551bee026'::uuid, 'BATTERY-TERMINAL-SERVICE',   'MAINTENANCE'),
+    ('112197be-eae2-0eef-7c28-e51971393f2c'::uuid, 'SPARK-PLUG-L4',              'MAINTENANCE'),
+    ('63baa121-960f-e600-4da2-f9b554ebe771'::uuid, 'SPARK-PLUG-V6',              'MAINTENANCE'),
+    ('75c7d9c6-199a-f97a-5dd4-16180a8f7ca3'::uuid, 'SPARK-PLUG-V8',              'MAINTENANCE'),
+    ('577c1f6d-894c-b177-3543-fb9c422f1c9e'::uuid, 'AIR-FILTER-ENGINE',          'MAINTENANCE'),
+    ('1a5d4ac2-5fcf-3f5e-b386-366d18a6087c'::uuid, 'AIR-FILTER-CABIN',           'MAINTENANCE'),
+    ('e1f4a53b-87f5-4858-c6ad-b895c7ec49f2'::uuid, 'FUEL-FILTER',                'MAINTENANCE'),
+    ('a90fb00a-0a48-0ebc-5998-a2fdc6afb625'::uuid, 'COOLANT-FLUSH',              'MAINTENANCE'),
+    ('abf87535-3215-7f70-5497-c4860ef64b9a'::uuid, 'TRANS-FLUID-SERVICE',        'MAINTENANCE'),
+    ('d041afd0-24aa-8eb8-c0db-c10e04b75271'::uuid, 'POWER-STEERING-FLUSH',       'MAINTENANCE'),
+    ('28c9e995-3c3b-e4f3-f69b-d8387db0edbc'::uuid, 'BRAKE-FLUID-EXCHANGE',       'MAINTENANCE'),
+    ('23b004e3-52a3-9218-47fd-2a8bfe0ddb3f'::uuid, 'SHOCK-FRONT-PAIR',           'REPAIR'),
+    ('e71c3b85-c8b3-d4bf-e33a-2daedc795f37'::uuid, 'SHOCK-REAR-PAIR',            'REPAIR'),
+    ('e31377d3-586b-8b8d-f20c-cdfcfd6c5b75'::uuid, 'TIMING-BELT',                'REPAIR'),
+    ('018e9020-ca04-c807-b81e-224ab7d1ca40'::uuid, 'SERPENTINE-BELT',            'REPAIR'),
+    ('05cacced-7cc8-5a97-f3c4-7f6cfa8d6e4e'::uuid, 'CV-AXLE-SINGLE',             'REPAIR'),
+    ('7fb02b98-7e4a-1df9-c8c8-8774df10dabe'::uuid, 'ALTERNATOR-REPLACE',         'REPAIR'),
+    ('31eb81cd-d38d-e87a-c164-5a05178e9afc'::uuid, 'STARTER-REPLACE',            'REPAIR'),
+    ('9d8a6af2-08b8-4ebf-e9c5-b6a33bcbf990'::uuid, 'THERMOSTAT-REPLACE',         'REPAIR'),
+    ('26c0bc39-aa24-0d04-10cc-267d0dd3b09b'::uuid, 'FUEL-INJECTOR-CLEAN',        'MAINTENANCE'),
+    ('ff5e5f48-46b6-8a4c-db90-d6b9870af3f5'::uuid, 'MAF-SENSOR-CLEAN',           'MAINTENANCE'),
+    ('2455d28a-8093-75da-5d6c-ff583680c95c'::uuid, 'THROTTLE-BODY-SERVICE',      'MAINTENANCE'),
+    ('1f830469-c5b1-26fc-7b56-9df2e64727ff'::uuid, 'AC-RECHARGE',                'MAINTENANCE'),
+    ('60ffa2fd-65cd-b792-251c-32882fcea555'::uuid, 'AC-COMPRESSOR-REPLACE',      'REPAIR'),
+    ('08dd120f-54ed-048c-c45f-286e829c95fa'::uuid, 'WIPER-BLADE-PAIR',           'MAINTENANCE'),
+    ('3dc62325-9109-6b90-ad7a-718ab776d305'::uuid, 'HEADLIGHT-RESTORATION',      'MAINTENANCE'),
+    ('99407ab3-901d-a7b6-816e-00bfb282ad4c'::uuid, 'WHEEL-BALANCE-SET-4',        'TIRE_SERVICE'),
+    ('292091f9-2eb8-2e35-6b36-dedbca795463'::uuid, 'PRE-PURCHASE-INSPECTION',    'DIAGNOSTIC'),
+    ('e978449c-296c-02a1-f69a-3a13834383f4'::uuid, 'DIAG-SCAN',                  'DIAGNOSTIC'),
+    ('09161747-551a-f6e9-66aa-05b16e59924d'::uuid, 'OIL-CHANGE-SYNTHETIC-BLEND', 'MAINTENANCE'),
+    ('0eed2076-505a-337c-4460-a6a7a063c01a'::uuid, 'MULTI-POINT-INSPECTION',     'DIAGNOSTIC'),
+    ('7ba469c5-81cc-9213-532c-4324b1e1825a'::uuid, 'CATALYTIC-CONVERTER',        'REPAIR'),
+    ('734ea397-3b06-84fd-b68f-67fcac4d0c36'::uuid, 'MUFFLER-REPLACE',            'REPAIR'),
+    ('41a8c4ec-6bbd-ad7c-bfd9-d18e0e55345f'::uuid, 'EXHAUST-PIPE-REPAIR',        'REPAIR'),
+    ('c0dccec2-bb81-17f1-7a48-e8e7b89ce1b3'::uuid, 'BALL-JOINT-SINGLE',          'REPAIR'),
+    ('0fbd2e40-a25b-8fca-6800-4b8e3bd3d682'::uuid, 'CONTROL-ARM-SINGLE',         'REPAIR'),
+    ('c54b6d26-b6f1-26b0-0cc9-ead4a98210ee'::uuid, 'TIE-ROD-END',                'REPAIR'),
+    ('c9b2df00-247f-6224-a0f4-1636a894ee8d'::uuid, 'WHEEL-BEARING-HUB',          'REPAIR'),
+    ('c31b4b23-0678-4322-9da2-58e14e8a63f2'::uuid, 'STEERING-RACK-REPLACE',      'REPAIR')
+) AS v (id, operation_code, operation_category)
+WHERE s.id = v.id
+  AND (s.operation_code IS DISTINCT FROM v.operation_code
+       OR s.operation_category IS DISTINCT FROM v.operation_category);

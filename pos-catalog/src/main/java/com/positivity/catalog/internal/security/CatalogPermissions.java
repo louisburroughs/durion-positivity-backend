@@ -201,6 +201,18 @@ public final class CatalogPermissions {
     public static final String TREAD_DESIGN_VIEW = "catalog:tread_design:view";
 
     /**
+     * Read a service's labor standards — vehicle-keyed book times with provenance (#1569).
+     */
+    public static final String LABOR_STANDARD_VIEW = "catalog:labor_standard:view";
+
+    /**
+     * Author or supersede a DURION-source labor standard (#1569). Imported rows are not covered:
+     * they are corrected by their source's next import, and this permission never lets a hand
+     * edit masquerade as vendor data.
+     */
+    public static final String LABOR_STANDARD_MANAGE = "catalog:labor_standard:manage";
+
+    /**
      * Re-publish catalog facts to seed or repair a downstream replica.
      *
      * <p>One code shared by all three fact-replay endpoints — product facts, service facts, and

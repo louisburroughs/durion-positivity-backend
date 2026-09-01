@@ -53,9 +53,10 @@ public class CatalogItemController {
             Use this tool for quick item entry across the three item types; do not use createProduct, which is \
             the richer product-master path that enforces SKU and manufacturer-part uniqueness — this endpoint \
             performs no duplicate checks.
-            Preconditions: none; for type service and noninventory only name, shortDescription and \
-            longDescription are persisted, while type product also stores manufacturer, SKU, productCode, \
-            material, color, warranty and specifications fields.
+            Preconditions: none; for type noninventory only name, shortDescription and longDescription are \
+            persisted; type service also stores operationCode (unique when present), operationCategory and \
+            defaultLaborHours (decimal hours in tenths); type product also stores manufacturer, SKU, \
+            productCode, material, color, warranty and specifications fields.
             Required inputs: type path parameter, one of product, service or noninventory (case-insensitive), \
             plus a body with at least name.
             Emits a CATALOG_ITEM_CREATE event; no catalog groupings are touched.
@@ -73,8 +74,9 @@ public class CatalogItemController {
     public ResponseEntity<CatalogItemResponseDto> addCatalogItem(
             @Parameter(description = "Type of catalog item (product, service, noninventory)") @PathVariable String type,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Item to create; only name, shortDescription and longDescription are stored"
-                                    + " for services and non-inventory products, products store the full field set.",
+                            description = "Item to create; non-inventory products store name, shortDescription and"
+                                    + " longDescription, services add operationCode, operationCategory and"
+                                    + " defaultLaborHours, and products store the full field set.",
                             required = true,
                             content =
                                     @Content(

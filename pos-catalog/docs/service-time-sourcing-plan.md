@@ -1,6 +1,10 @@
 # Service Time Estimate Sourcing Plan (and Parts-Fitment Sourcing Mirror)
 
-**Status:** DRAFT for vetting — round 1
+**Status:** DRAFT for vetting — round 1. Load-bearing decisions (§4.1 keying, §3.1 pattern,
+naming, licensing gate, timekeeping boundary) are drafted as durion ADR-0058/ADR-0059
+(PROPOSED). Phase 0 plus the §4.4 DURION authoring surface (V17/V18, taxonomy fields,
+`/labor-standards` CRUD, permissions, event ids) landed under #1569; the §6 transport
+decision remains PENDING until the consumer side is built.
 **Owner module:** pos-catalog (system of record per decision recorded on
 [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569), 2026-08-29)
 **Inputs:** [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569)
