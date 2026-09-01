@@ -14,6 +14,8 @@ tags:
   name: Substitution Group API
 - description: Unit of measure conversion API
   name: UOM Conversion API
+- description: Vehicle-keyed estimated service times (book time) with provenance, per service operation. Hand-authored DURION rows only; imported guide rows are read-only here.
+  name: Service Labor Standards
 - description: Manage standard, last, and average item costs
   name: Item Cost API
 - description: 'Vendor price entries applied from supplier PRICAT imports: latest applicable cost, full cost history, and import application state. Read-only.'
@@ -37,6 +39,245 @@ tags:
 - description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read-only.
   name: Tread Design Enrichment
 paths:
+  /v1/catalog-items/service/{serviceId}/labor-standards:
+    get:
+      description: 'Returns the service''s labor standards — vehicle-keyed book times with source and revision — active
+
+        rows only by default, oldest first.
+
+        Use this tool to see what estimated times exist for an operation and where each came from; do not
+
+        use it to resolve the one applicable time for a specific vehicle, which is the resolution endpoint''s
+
+        job once it exists (sourcing plan §3.4).
+
+        Preconditions: the service must exist.
+
+        Required inputs: serviceId path parameter; includeSuperseded=true adds replaced rows for audit.
+
+        Emits a CATALOG_LABOR_STANDARD_LIST event; no state changes.
+
+        Returns 404 when the service does not exist.
+
+        '
+      operationId: listServiceLaborStandards
+      parameters:
+      - description: Service whose standards to list.
+        in: path
+        name: serviceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Include superseded rows for audit history.
+        in: query
+        name: includeSuperseded
+        required: false
+        schema:
+          default: false
+          type: boolean
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: The service's labor standards.
+        '404':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+                type: array
+          description: Service does not exist
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:view
+      summary: List a Service's Labor Standards
+      tags:
+      - Service Labor Standards
+      x-required-permissions:
+      - catalog:labor_standard:view
+    post:
+      description: 'Creates an active DURION-source labor standard: the estimated (book) time for this service
+
+        operation on the vehicles the key fields describe, in decimal hours in tenths (0.1 hr = 6 min).
+
+        Use this tool for hand-authored times — dealer-created operations or shop-decided standards; do not
+
+        use it to transcribe a licensed labor guide, which enters through the guide import path with its own
+
+        provenance.
+
+        Preconditions: the service must exist, and no active standard may already cover the same vehicle key
+
+        and time type — correct a wrong number by superseding it, not by adding a duplicate.
+
+        Required inputs: serviceId path parameter and a body with laborHours; vehicle-key fields left null
+
+        are wildcards, and timeType defaults to DURION_STANDARD.
+
+        Emits a CATALOG_LABOR_STANDARD_CREATE event.
+
+        Returns 400 for malformed hours (not in tenths, non-positive) or codes, 404 for an unknown service,
+
+        and 409 when an active row already covers the same vehicle key and time type.
+
+        '
+      operationId: createServiceLaborStandard
+      parameters:
+      - description: Service the standard belongs to.
+        in: path
+        name: serviceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Front brake pads on a Civic:
+                description: Front brake pads on a Civic
+                value:
+                  laborHours: 1.5
+                  make: Honda
+                  model: Civic
+                  overlapGroup: WHEEL-OFF
+                  publishedAt: 2026-09-01
+                  timeType: DURION_STANDARD
+                  vehicleYear: 2019-2023
+            schema:
+              $ref: '#/components/schemas/ServiceLaborStandardRequestDto'
+        description: 'The standard to author: laborHours (decimal hours in tenths) plus optional vehicle-key fields (null = any vehicle), timeType, overlap metadata and published date.'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: Labor standard created.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: Malformed hours, time type, or operation codes
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: Service does not exist
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: An active standard already covers this vehicle key and type
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:manage
+      summary: Author a Labor Standard for a Service
+      tags:
+      - Service Labor Standards
+      x-required-permissions:
+      - catalog:labor_standard:manage
+  /v1/catalog-items/service/{serviceId}/labor-standards/{standardId}/supersede:
+    post:
+      description: 'Replaces an active DURION-source standard: the old row is marked superseded and kept for audit, and
+
+        the body becomes the new active row, returned with fresh provenance.
+
+        Use this tool to correct a hand-authored time; do not use it on imported guide rows, which are
+
+        corrected by their source''s next import — the API refuses them.
+
+        Preconditions: the standard must belong to the service, still be active, and carry source DURION.
+
+        Required inputs: serviceId and standardId path parameters, plus a full replacement body — this is a
+
+        replacement, not a patch, so omitted vehicle-key fields become wildcards.
+
+        Emits a CATALOG_LABOR_STANDARD_SUPERSEDE event.
+
+        Returns 400 for a malformed body, 404 when the standard is not this service''s, and 409 when the row
+
+        is already superseded or not DURION-source.
+
+        '
+      operationId: supersedeServiceLaborStandard
+      parameters:
+      - description: Service the standard belongs to.
+        in: path
+        name: serviceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Standard being replaced.
+        in: path
+        name: standardId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Corrected hours:
+                description: Corrected hours
+                value:
+                  laborHours: 1.8
+                  make: Honda
+                  model: Civic
+                  overlapGroup: WHEEL-OFF
+                  publishedAt: 2026-09-01
+                  timeType: DURION_STANDARD
+                  vehicleYear: 2019-2023
+            schema:
+              $ref: '#/components/schemas/ServiceLaborStandardRequestDto'
+        description: 'The full replacement row — not a patch: omitted vehicle-key fields become wildcards. Same shape as create.'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: The replacement row now active.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: Malformed hours, time type, or operation codes
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: Standard not found for this service
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceLaborStandardResponseDto'
+          description: Row already superseded, or not a DURION-source row
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:manage
+      summary: Supersede a Labor Standard with a Correction
+      tags:
+      - Service Labor Standards
+      x-required-permissions:
+      - catalog:labor_standard:manage
   /v1/catalog-items/services/facts/replay:
     post:
       description: 'Re-publishes catalog.service.updated facts for one bounded page of services so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
@@ -114,7 +355,7 @@ paths:
 
         Use this tool for quick item entry across the three item types; do not use createProduct, which is the richer product-master path that enforces SKU and manufacturer-part uniqueness — this endpoint performs no duplicate checks.
 
-        Preconditions: none; for type service and noninventory only name, shortDescription and longDescription are persisted, while type product also stores manufacturer, SKU, productCode, material, color, warranty and specifications fields.
+        Preconditions: none; for type noninventory only name, shortDescription and longDescription are persisted; type service also stores operationCode (unique when present), operationCategory and defaultLaborHours (decimal hours in tenths); type product also stores manufacturer, SKU, productCode, material, color, warranty and specifications fields.
 
         Required inputs: type path parameter, one of product, service or noninventory (case-insensitive), plus a body with at least name.
 
@@ -149,7 +390,7 @@ paths:
                   sku: WIP-22-PREM
             schema:
               $ref: '#/components/schemas/CatalogItemRequestDto'
-        description: Item to create; only name, shortDescription and longDescription are stored for services and non-inventory products, products store the full field set.
+        description: Item to create; non-inventory products store name, shortDescription and longDescription, services add operationCode, operationCategory and defaultLaborHours, and products store the full field set.
         required: true
       responses:
         '201':
@@ -4194,6 +4435,10 @@ components:
           description: Country of origin for product type
           example: US
           type: string
+        defaultLaborHours:
+          description: Vehicle-agnostic fallback labor hours for service type, decimal hours in tenths (0.1 hr = 6 min); vehicle-specific times live on the service's labor standards instead
+          example: 1.5
+          type: number
         images:
           description: Product image URLs for product type
           example:
@@ -4233,6 +4478,19 @@ components:
           description: Item name
           example: Heavy Duty Wrench
           type: string
+        operationCategory:
+          description: Operation category for service type
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: REPAIR
+          type: string
+        operationCode:
+          description: Durion operation code for service type; uppercase alphanumeric segments joined by single dashes, unique across services when present
+          example: BRAKE-PAD-FRONT
+          type: string
         productCode:
           description: Product code for product type
           example: 012345678905
@@ -4262,6 +4520,10 @@ components:
     CatalogItemResponseDto:
       description: Catalog item response
       properties:
+        defaultLaborHours:
+          description: Vehicle-agnostic fallback labor hours in tenths; service items only
+          example: 1.5
+          type: number
         id:
           description: Item identifier
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
@@ -4278,6 +4540,19 @@ components:
         name:
           description: Item name
           example: Heavy Duty Wrench
+          type: string
+        operationCategory:
+          description: Operation category; service items only
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: REPAIR
+          type: string
+        operationCode:
+          description: Durion operation code; service items only
+          example: BRAKE-PAD-FRONT
           type: string
         shortDescription:
           description: Short description
@@ -6090,6 +6365,130 @@ components:
           description: The updatedSince filter this page ran under, echoed back.
           format: date-time
           type: string
+      type: object
+    ServiceLaborStandardRequestDto:
+      description: 'A hand-authored (DURION-source) labor standard for a service operation. Vehicle-key fields left null are wildcards: the time applies to any vehicle the more specific fields do not narrow.'
+      properties:
+        engineCode:
+          description: Engine code
+          example: K20C2
+          type: string
+        includedOpCodes:
+          description: Operation codes whose time is already included in this one's hours
+          example:
+          - BRAKE-ROTOR-FRONT-PAIR
+          items:
+            type: string
+          type: array
+        laborHours:
+          description: Labor hours, decimal hours in tenths (0.1 hr = 6 min)
+          example: 1.5
+          type: number
+        make:
+          description: Vehicle make
+          example: Honda
+          type: string
+        model:
+          description: Vehicle model
+          example: Civic
+          type: string
+        overlapGroup:
+          description: Operations sharing this group share setup time and must not be summed naively
+          example: WHEEL-OFF
+          type: string
+        publishedAt:
+          description: Date the time was published or decided; omitted means undated
+          example: 2026-09-01
+          format: date
+          type: string
+        submodel:
+          description: Vehicle submodel or trim
+          example: EX
+          type: string
+        timeType:
+          description: Kind of published time; defaults to DURION_STANDARD
+          enum:
+          - RETAIL_FLAT_RATE
+          - OEM_WARRANTY
+          - MANUFACTURER_INSTALL
+          - DURION_STANDARD
+          example: DURION_STANDARD
+          type: string
+        vehicleYear:
+          description: Model year or year range the time applies to
+          example: 2019-2023
+          type: string
+      required:
+      - laborHours
+      type: object
+    ServiceLaborStandardResponseDto:
+      description: A labor standard row with its provenance. supersededAt null means the row is active.
+      properties:
+        createdAt:
+          description: Row creation instant
+          format: date-time
+          type: string
+        engineCode:
+          description: Engine code; null = any
+          type: string
+        id:
+          description: Labor standard identifier
+          format: uuid
+          type: string
+        includedOpCodes:
+          description: Operation codes whose time this one already includes
+          items:
+            type: string
+          type: array
+        laborHours:
+          description: Labor hours, decimal hours in tenths
+          example: 1.5
+          type: number
+        make:
+          description: Vehicle make; null = any
+          type: string
+        model:
+          description: Vehicle model; null = any
+          type: string
+        overlapGroup:
+          description: Overlap group shared with other operations
+          type: string
+        publishedAt:
+          description: Date the source published the time
+          format: date
+          type: string
+        serviceId:
+          description: Owning service identifier
+          format: uuid
+          type: string
+        sourceCode:
+          description: Source that published the time; DURION for hand-authored rows
+          type: string
+        sourceRevision:
+          description: Source revision the time came from
+          type: string
+        submodel:
+          description: Vehicle submodel or trim; null = any
+          type: string
+        supersededAt:
+          description: When a newer row replaced this one; null while active
+          format: date-time
+          type: string
+        timeType:
+          description: Kind of published time
+          example: DURION_STANDARD
+          type: string
+        vehicleYear:
+          description: Model year or year range; null = any
+          type: string
+      required:
+      - createdAt
+      - id
+      - laborHours
+      - serviceId
+      - sourceCode
+      - sourceRevision
+      - timeType
       type: object
     SortObject:
       properties:
