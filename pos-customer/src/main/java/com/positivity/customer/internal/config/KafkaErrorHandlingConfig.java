@@ -17,8 +17,9 @@ import org.springframework.util.backoff.ExponentialBackOff;
  *
  * <p>Failed records are retried with exponential backoff; when retries are exhausted the record is
  * published to {@code {topic}.dlq} so poison messages surface for alerting instead of silently
- * blocking or dropping. Idempotency (the {@code processing_log} unique {@code event_id} guard in
- * {@code WorkorderEventHandler}) makes the retries harmless.
+ * blocking or dropping. Idempotency (the {@code processed_events}
+ * guard in the fact listeners, and the {@code processing_log} unique {@code event_id} guard in
+ * {@code WorkorderManifestListener}) makes the retries harmless.
  *
  * <p>Spring Boot wires a single {@code CommonErrorHandler} bean into the auto-configured listener
  * container factory, so declaring the bean is sufficient.

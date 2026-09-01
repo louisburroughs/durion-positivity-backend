@@ -20,7 +20,7 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
-      group-id: pos-customer-workorder-events
+      group-id: pos-customer
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -102,7 +102,6 @@ pos:
         enabled: ${POS_CUSTOMER_PUBLIC_INQUIRY_ENABLED:false}
         max-submissions-per-hour: ${POS_CUSTOMER_PUBLIC_INQUIRY_MAX_PER_HOUR:5}
     kafka:
-      workorder-events-topic: workorder-events
       # Service-history fact feed (FI-3, #1133): service-completion + declined-service facts
       # projected into the CRM service-history read model and declined-service follow-ups.
       workorder-facts-topic: ${POS_CUSTOMER_WORKORDER_FACTS_TOPIC:workorder.events.v1}

@@ -1,13 +1,19 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.entity.CustomerInteraction;
 import com.positivity.customer.internal.entity.FollowUpTask;
+import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.ProcessedEvent;
 import com.positivity.customer.internal.entity.ServiceHistory;
 import com.positivity.customer.internal.enums.FollowUpStatus;
 import com.positivity.customer.internal.enums.FollowUpType;
+import com.positivity.customer.internal.enums.InteractionDirection;
+import com.positivity.customer.internal.enums.InteractionType;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
+import com.positivity.customer.internal.repository.PartyNoteRepository;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
 import com.positivity.customer.internal.repository.ServiceHistoryRepository;
+import com.positivity.domainevents.workorder.WorkorderNoteAddedV1;
 import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
 import com.positivity.domainevents.workorder.WorkorderServiceLineDeclinedV1;
 import io.micrometer.core.instrument.Counter;
@@ -39,7 +45,14 @@ import tools.jackson.databind.ObjectMapper;
  *       last-service-age and service-due segment predicates.
  *   <li>{@code workorder.service-line.declined.v1} → exactly one {@code DECLINED_SERVICE_FOLLOWUP}
  *       {@link FollowUpTask}, and the declined-service segment predicate.
+ *   <li>{@code workorder.note.added.v1} → a {@link PartyNote} row and a {@code WORKORDER_NOTE}
+ *       {@link CustomerInteraction} on the party timeline (#1584).
  * </ul>
+ *
+ * <p>The note projection used to live in a {@code WorkorderEventHandler} on a {@code
+ * workorder-events} topic that no producer ever wrote to (#1584). pos-workorder now publishes the
+ * note as a fact on this topic, so the projection moved here and the non-conforming topic is
+ * gone.
  *
  * <p>Same contract as {@link VehicleEventsListener}: idempotent via {@code processed_events} in the
  * write transaction (a per-write {@code source_event_id} unique guard backs it up), transient DB
@@ -59,6 +72,8 @@ public class WorkorderEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ServiceHistoryRepository serviceHistoryRepository;
     private final FollowUpTaskRepository followUpTaskRepository;
+    private final PartyNoteRepository partyNoteRepository;
+    private final CustomerInteractionServiceImpl customerInteractionService;
     private final Counter payloadRejectedCounter;
 
     public WorkorderEventsListener(
@@ -67,12 +82,16 @@ public class WorkorderEventsListener {
             ProcessedEventRepository processedEventRepository,
             ServiceHistoryRepository serviceHistoryRepository,
             FollowUpTaskRepository followUpTaskRepository,
+            PartyNoteRepository partyNoteRepository,
+            CustomerInteractionServiceImpl customerInteractionService,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.serviceHistoryRepository = serviceHistoryRepository;
         this.followUpTaskRepository = followUpTaskRepository;
+        this.partyNoteRepository = partyNoteRepository;
+        this.customerInteractionService = customerInteractionService;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -98,7 +117,8 @@ public class WorkorderEventsListener {
         }
         String eventType = envelope.path("eventType").stringValue(null);
         boolean handled = WorkorderServiceCompletedV1.EVENT_TYPE.equals(eventType)
-                || WorkorderServiceLineDeclinedV1.EVENT_TYPE.equals(eventType);
+                || WorkorderServiceLineDeclinedV1.EVENT_TYPE.equals(eventType)
+                || WorkorderNoteAddedV1.EVENT_TYPE.equals(eventType);
         if (!handled) {
             log.debug("Ignoring workorder event type={}", eventType);
             return;
@@ -116,8 +136,10 @@ public class WorkorderEventsListener {
         try {
             if (WorkorderServiceCompletedV1.EVENT_TYPE.equals(eventType)) {
                 applyServiceCompleted(envelope, eventId);
-            } else {
+            } else if (WorkorderServiceLineDeclinedV1.EVENT_TYPE.equals(eventType)) {
                 applyServiceLineDeclined(envelope, eventId);
+            } else {
+                applyNoteAdded(envelope, eventId);
             }
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
@@ -163,6 +185,53 @@ public class WorkorderEventsListener {
                 payload.partyId(),
                 payload.workorderId(),
                 payload.totalAmount());
+    }
+
+    /**
+     * Projects a workorder note onto the party timeline (#1584): the raw {@code party_note} row the
+     * workorder feed has always written, plus the unified {@link CustomerInteraction} a CSR reads,
+     * so workorder notes and campaign touches show in one history.
+     *
+     * <p>No party-existence check, unlike the retired handler: there are no cross-service foreign
+     * keys, the sibling projections in this listener do not check either, and a note arriving
+     * before the party replica catches up is a fact worth keeping rather than a violation.
+     */
+    private void applyNoteAdded(JsonNode envelope, String eventId) {
+        WorkorderNoteAddedV1 payload = objectMapper.treeToValue(envelope.path("payload"), WorkorderNoteAddedV1.class);
+        if (payload.partyId() == null) {
+            log.debug("Workorder note {} has no party; nothing to project", payload.noteId());
+            return;
+        }
+        String sourceWorkorderId = payload.workorderId().toString();
+        if (partyNoteRepository.existsBySourceEventId(eventId)) {
+            log.debug("Party note already exists for eventId={}", eventId);
+        } else {
+            partyNoteRepository.save(PartyNote.builder()
+                    .partyId(payload.partyId())
+                    .noteText(payload.noteText())
+                    .noteType(payload.noteType())
+                    .sourceWorkorderId(sourceWorkorderId)
+                    .sourceEventId(eventId)
+                    .createdAt(Instant.now(clock))
+                    .build());
+        }
+        // Idempotent on source_event_id itself, so a redelivery that already wrote the note row
+        // still reaches the timeline if that half was the one that committed.
+        customerInteractionService.ingest(CustomerInteraction.builder()
+                .partyId(payload.partyId())
+                .type(InteractionType.WORKORDER_NOTE)
+                .direction(InteractionDirection.INBOUND)
+                .summary(payload.noteType())
+                .body(payload.noteText())
+                .sourceWorkorderId(sourceWorkorderId)
+                .sourceEventId(eventId)
+                .occurredAt(payload.addedAt())
+                .build());
+        log.info(
+                "Projected workorder note partyId={} workorderId={} noteId={}",
+                payload.partyId(),
+                payload.workorderId(),
+                payload.noteId());
     }
 
     private void applyServiceLineDeclined(JsonNode envelope, String eventId) {

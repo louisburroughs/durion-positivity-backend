@@ -11,7 +11,7 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 - Record and validate promotion redemptions
 - Maintain customer-linked vehicle associations (CRM vehicles); the vehicle records themselves are a read-only `ext_vehicle` replica fed by `vehicle.events.v1` from pos-vehicle-inventory (ADR-0044 §6, #843) — vehicle registry writes go directly to pos-vehicle-inventory through the gateway
 - Project `vehicle.care-preference.updated` facts into a read-only `ext_vehicle_care_preference` replica (#1175); the `service.due` segment attribute and the `SERVICE_DUE_REMINDER` job resolve each vehicle's effective service interval as its replicated care-preference override, falling back to `pos.customer.crm.service-due-months`
-- Handle workorder event-driven customer updates via `WorkorderEventHandler`
+- Project workorder facts from `workorder.events.v1` (`WorkorderEventsListener`): service completions into service history, declined service lines into follow-up tasks, and customer notes into `party_note` plus the `WORKORDER_NOTE` interaction timeline (#1584)
 - Consume `vehicle.events.v1` (`VehicleEventsListener`, idempotent via `processed_events`) and reconcile the replica against `vehicle.manifest.v1` manifests (`VehicleManifestListener`)
 - Support bulk customer import via `POST /v1/customer/bulk-ingest`
 

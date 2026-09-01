@@ -30,10 +30,7 @@ public class EventEnvelope {
     @JsonAlias({"event_id", "eventID", "id"})
     private String eventId;
 
-    /**
-     * The type of event: VehicleUpdated, ContactPreferenceUpdated, or
-     * PartyNoteAdded.
-     */
+    /** The type of event, e.g. {@code customer.party.updated.v1}. */
     @JsonProperty("eventType")
     @JsonAlias({"event_type", "type"})
     private String eventType;

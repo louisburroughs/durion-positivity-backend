@@ -44,6 +44,8 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `GET /v1/workorders/picked-items` — picked item status
 - `POST /v1/workexec/time-tracking` — submit labor time entry
 - `GET /v1/workexec/adjustments` — time entry adjustments
+- `POST /v1/workorders/{workorderId}/notes` — record a note about the customer
+- `GET /v1/workorders/{workorderId}/notes` — the workorder's customer notes
 
 ## Estimate/workorder snapshot facts (order parity E1)
 
@@ -52,6 +54,19 @@ flag per part line (resolved order-spec Q6 — set at settlement time, never inf
 `EstimateFactPublisher` emits `workorder.estimate.updated` snapshots (header + full item set
 with approval status) on every estimate mutation, feeding pos-order's source-document import
 replicas. Both are gated by `workorder.kafka.enabled`.
+
+## Customer notes on a workorder (#1584)
+
+A note about the customer — something they said while the job was open, not a note about the work —
+is recorded through `POST /v1/workorders/{workorderId}/notes` and stored in `workorder_note`, which
+this module owns. `WorkorderNoteServiceImpl` publishes `workorder.note.added.v1` to the
+transactional outbox in the same transaction, so the note and its fact commit together;
+pos-customer projects it onto the party's CRM timeline. Gated by `workorder.kafka.enabled` like the
+other fact publishers: with Kafka off the note is still saved, it just is not published.
+
+This is distinct from `workorder.completion_notes`, `workorder.approval_notes`, and
+`change_request.approval_note`, which describe the work or a decision about it and are
+single-valued.
 
 ## Part quantity divisibility (ADR-0055)
 

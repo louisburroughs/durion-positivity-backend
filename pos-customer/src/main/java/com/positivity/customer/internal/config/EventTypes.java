@@ -282,23 +282,6 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "CRM_PUBLIC_INQUIRY_SUBMIT", "Capture an inquiry from the public unauthenticated form")
                         .apiVersion("1")
-                        .build(),
-
-                // WorkorderEventHandler - 3 inbound event processing entries (Story #92)
-                EventTypeRegistration.write(
-                                "CUSTOMER_EVENT_VEHICLE_UPDATED_PROCESSED",
-                                "Process VehicleUpdated event from workorder")
-                        .apiVersion("1")
-                        .build(),
-                EventTypeRegistration.write(
-                                "CUSTOMER_EVENT_CONTACT_PREFERENCE_UPDATED_PROCESSED",
-                                "Process ContactPreferenceUpdated event from workorder")
-                        .apiVersion("1")
-                        .build(),
-                EventTypeRegistration.write(
-                                "CUSTOMER_EVENT_PARTY_NOTE_ADDED_PROCESSED",
-                                "Process PartyNoteAdded event from workorder")
-                        .apiVersion("1")
                         .build());
     }
 }

@@ -300,7 +300,7 @@ services:
         set -e
         BOOTSTRAP=kafka:29092
         # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
-        # 76 topics (38 DLQ). Regenerate with
+        # 74 topics (37 DLQ). Regenerate with
         # scripts/generate-kafka-topics.py --apply after adding a listener or a
         # *-topic property; CI fails on a stale block.
         #
@@ -309,7 +309,6 @@ services:
         # Names that do not follow ADR-0044 section 3:
         #   payment.settlement-config.v1 — compacted config feed, not {domain}.{kind}.v1
         #   sender.outcomes.v1 — externally owned feed, consumed only
-        #   workorder-events — pre-ADR-0044 name; consumed by pos-customer, published by nothing
         TOPICS="
         catalog.commands.v1              604800000
         catalog.commands.v1.dlq          2592000000
@@ -379,8 +378,6 @@ services:
         vehicle.manifest.v1.dlq          2592000000
         warranty.events.v1               604800000
         warranty.events.v1.dlq           2592000000
-        workorder-events                 604800000
-        workorder-events.dlq             2592000000
         workorder.commands.v1            604800000
         workorder.commands.v1.dlq        2592000000
         workorder.events.v1              604800000
