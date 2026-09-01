@@ -6,10 +6,12 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
+import com.positivity.invoice.internal.dto.InvoiceSearchFilters;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceItem;
@@ -18,6 +20,7 @@ import com.positivity.invoice.internal.repository.InvoiceItemRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -36,8 +39,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Unit tests for the free-text invoice search service. Covers the customer-name and
- * workorder-number resolution legs (with row enrichment) and the empty-match sentinel path.
+ * Unit tests for the free-text/structured-filter invoice search service (#1599, E11). Covers
+ * the customer-name and workorder-number resolution legs (with row enrichment), the
+ * empty-match sentinel path, the structured-filter combinations, and the filters-only
+ * (blank {@code q}) path.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -74,6 +79,11 @@ class InvoiceSearchServiceImplTest {
         return invoice;
     }
 
+    private void stubEmptyRepositoryPage(Pageable pageable) {
+        when(invoiceRepository.searchByQuery(any(), any(), any(), any(), any(), any(), any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+    }
+
     @Test
     void search_byCustomerName_returnsEnrichedResult() {
         Pageable pageable = PageRequest.of(0, 25);
@@ -81,12 +91,12 @@ class InvoiceSearchServiceImplTest {
 
         when(customerReferenceClient.searchIdsByName(eq("Acme"), anyInt())).thenReturn(List.of(PARTY_ID));
         when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
-        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
+        when(invoiceRepository.searchByQuery(any(), any(), any(), any(), any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(invoice)));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of(PARTY_ID, "Acme Towing LLC"));
         when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of(WORKORDER_ID, "WO-2026-1001"));
 
-        Page<InvoiceSearchResult> result = invoiceSearchService.search("Acme", pageable);
+        Page<InvoiceSearchResult> result = invoiceSearchService.search("Acme", InvoiceSearchFilters.NONE, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         InvoiceSearchResult row = result.getContent().get(0);
@@ -104,18 +114,26 @@ class InvoiceSearchServiceImplTest {
 
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
         when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
-        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
+        stubEmptyRepositoryPage(pageable);
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
         when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
 
-        invoiceSearchService.search("INV-2026", pageable);
+        invoiceSearchService.search("INV-2026", InvoiceSearchFilters.NONE, pageable);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<String>> customerIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> workorderIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         verify(invoiceRepository)
-                .searchByQuery(eq("INV-2026"), customerIdsCaptor.capture(), workorderIdsCaptor.capture(), eq(pageable));
+                .searchByQuery(
+                        eq("INV-2026"),
+                        customerIdsCaptor.capture(),
+                        workorderIdsCaptor.capture(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        eq(pageable));
 
         // Empty reference matches → non-matching sentinels keep the JPQL IN clauses non-empty.
         assertThat(customerIdsCaptor.getValue()).containsExactly("__none__");
@@ -123,13 +141,59 @@ class InvoiceSearchServiceImplTest {
     }
 
     @Test
-    void search_blankQuery_shortCircuitsWithoutTouchingClientsOrRepository() {
-        Page<InvoiceSearchResult> result = invoiceSearchService.search("  ", PageRequest.of(0, 25));
+    void search_blankQueryAndNoFilters_shortCircuitsWithoutTouchingClientsOrRepository() {
+        Page<InvoiceSearchResult> result =
+                invoiceSearchService.search("  ", InvoiceSearchFilters.NONE, PageRequest.of(0, 25));
 
         assertThat(result.getContent()).isEmpty();
-        verify(customerReferenceClient, org.mockito.Mockito.never()).searchIdsByName(anyString(), anyInt());
-        verify(workorderReferenceService, org.mockito.Mockito.never()).searchIdsByNumber(anyString(), anyInt());
-        verify(invoiceRepository, org.mockito.Mockito.never()).searchByQuery(any(), any(), any(), any());
+        verify(customerReferenceClient, never()).searchIdsByName(anyString(), anyInt());
+        verify(workorderReferenceService, never()).searchIdsByNumber(anyString(), anyInt());
+        verify(invoiceRepository, never()).searchByQuery(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void search_blankQueryWithStatusFilter_fallsThroughToFilteredListing() {
+        Pageable pageable = PageRequest.of(0, 25);
+        stubEmptyRepositoryPage(pageable);
+
+        InvoiceSearchFilters filters = new InvoiceSearchFilters(InvoiceStatus.POSTED, null, null, null);
+        Page<InvoiceSearchResult> result = invoiceSearchService.search("  ", filters, pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        verify(customerReferenceClient, never()).searchIdsByName(anyString(), anyInt());
+        verify(workorderReferenceService, never()).searchIdsByNumber(anyString(), anyInt());
+        verify(invoiceRepository)
+                .searchByQuery(
+                        eq(""), any(), any(), eq(InvoiceStatus.POSTED), isNull(), isNull(), isNull(), eq(pageable));
+    }
+
+    @Test
+    void search_combinesStatusIssuedWindowAndCustomerIdFilters() {
+        Pageable pageable = PageRequest.of(0, 25);
+        when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
+        when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
+        stubEmptyRepositoryPage(pageable);
+        when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
+        when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
+
+        InvoiceSearchFilters filters = new InvoiceSearchFilters(
+                InvoiceStatus.FINALIZED, LocalDate.parse("2026-06-01"), LocalDate.parse("2026-06-30"), PARTY_ID);
+        invoiceSearchService.search("INV", filters, pageable);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(invoiceRepository)
+                .searchByQuery(
+                        eq("INV"),
+                        any(),
+                        any(),
+                        eq(InvoiceStatus.FINALIZED),
+                        fromCaptor.capture(),
+                        toCaptor.capture(),
+                        eq(PARTY_ID),
+                        eq(pageable));
+        assertThat(fromCaptor.getValue()).isEqualTo(Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(toCaptor.getValue()).isEqualTo(Instant.parse("2026-06-30T23:59:59.999999999Z"));
     }
 
     @Test
@@ -141,13 +205,15 @@ class InvoiceSearchServiceImplTest {
 
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
         when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
-        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
+        when(invoiceRepository.searchByQuery(any(), any(), any(), any(), any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(invoice)));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
         when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
 
-        InvoiceSearchResult row =
-                invoiceSearchService.search("INV", pageable).getContent().get(0);
+        InvoiceSearchResult row = invoiceSearchService
+                .search("INV", InvoiceSearchFilters.NONE, pageable)
+                .getContent()
+                .get(0);
 
         assertThat(row.getCustomerName()).isNull();
         assertThat(row.getWorkorderNumber()).isNull();
@@ -158,13 +224,14 @@ class InvoiceSearchServiceImplTest {
         Pageable pageable = PageRequest.of(0, 25);
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
         when(workorderReferenceService.searchIdsByNumber(anyString(), anyInt())).thenReturn(List.of());
-        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable))).thenReturn(new PageImpl<>(List.of()));
+        stubEmptyRepositoryPage(pageable);
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of());
         when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of());
 
-        invoiceSearchService.search("50%_x", pageable);
+        invoiceSearchService.search("50%_x", InvoiceSearchFilters.NONE, pageable);
 
-        verify(invoiceRepository).searchByQuery(eq("50\\%\\_x"), any(), any(), eq(pageable));
+        verify(invoiceRepository)
+                .searchByQuery(eq("50\\%\\_x"), any(), any(), isNull(), isNull(), isNull(), isNull(), eq(pageable));
     }
 
     @Test
@@ -224,16 +291,25 @@ class InvoiceSearchServiceImplTest {
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
         when(workorderReferenceService.searchIdsByNumber(eq("WO-2026-1001"), anyInt()))
                 .thenReturn(List.of(WORKORDER_ID));
-        when(invoiceRepository.searchByQuery(any(), any(), any(), eq(pageable)))
+        when(invoiceRepository.searchByQuery(any(), any(), any(), any(), any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(invoice)));
         when(customerReferenceClient.resolveNames(any())).thenReturn(Map.of(PARTY_ID, "Acme Towing LLC"));
         when(workorderReferenceService.resolveNumbers(any())).thenReturn(Map.of(WORKORDER_ID, "WO-2026-1001"));
 
-        invoiceSearchService.search("WO-2026-1001", pageable);
+        invoiceSearchService.search("WO-2026-1001", InvoiceSearchFilters.NONE, pageable);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> workorderIdsCaptor = ArgumentCaptor.forClass(Collection.class);
-        verify(invoiceRepository).searchByQuery(anyString(), any(), workorderIdsCaptor.capture(), eq(pageable));
+        verify(invoiceRepository)
+                .searchByQuery(
+                        anyString(),
+                        any(),
+                        workorderIdsCaptor.capture(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        eq(pageable));
         assertThat(workorderIdsCaptor.getValue()).containsExactly(WORKORDER_ID);
     }
 }

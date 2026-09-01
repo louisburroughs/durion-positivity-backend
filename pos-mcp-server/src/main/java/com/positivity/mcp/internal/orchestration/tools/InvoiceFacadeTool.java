@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.tool.annotation.Tool;
@@ -53,18 +54,58 @@ public class InvoiceFacadeTool {
 
     @Tool(
             description = "Search invoices by a free-text term matched against the invoice number, customer "
-                    + "name, or workorder number. Free-text match only — this tool cannot filter by status, "
-                    + "date, or amount, and returns only the first page of matches (default size 25, newest "
-                    + "first).")
+                    + "name, or workorder number, optionally narrowed by an exact status, an issued-date "
+                    + "window, and/or an exact customerId, each combinable with the query and with each "
+                    + "other. status must be an exact InvoiceStatus value (DRAFT, FINALIZED, POSTED, ERROR, "
+                    + "CANCELLED); an unrecognized value is rejected by the backend. issuedFrom/issuedTo "
+                    + "(YYYY-MM-DD, inclusive on both ends) bound the invoice's finalizedAt date — the date it "
+                    + "was finalized/issued to the customer — so a DRAFT invoice is excluded whenever either "
+                    + "bound is set. Returns only the first page of matches (default size 25, newest first).")
     public String searchInvoices(
             @ToolParam(description = "Free-text term matching invoice number, customer name, or workorder number")
                     @NonNull
-                    String query) {
-        return restClient
-                .get()
-                .uri(invoiceSearchUriTemplate, Map.of("query", query))
-                .retrieve()
-                .body(String.class);
+                    String query,
+            @ToolParam(
+                            description = "Optional exact invoice status filter (DRAFT, FINALIZED, POSTED, ERROR, "
+                                    + "CANCELLED), combinable with the query",
+                            required = false)
+                    String status,
+            @ToolParam(
+                            description = "Optional issued-date window start, inclusive (YYYY-MM-DD); evaluated "
+                                    + "against the invoice's finalizedAt date",
+                            required = false)
+                    String issuedFrom,
+            @ToolParam(
+                            description = "Optional issued-date window end, inclusive (YYYY-MM-DD); evaluated "
+                                    + "against the invoice's finalizedAt date",
+                            required = false)
+                    String issuedTo,
+            @ToolParam(
+                            description = "Optional exact customer id (UUID) filter, combinable with the query",
+                            required = false)
+                    String customerId) {
+        StringBuilder template = new StringBuilder(invoiceSearchUriTemplate);
+        Map<String, String> uriParams = new HashMap<>();
+        uriParams.put("query", query);
+        appendQueryParam(template, uriParams, "status", status);
+        appendQueryParam(template, uriParams, "issuedFrom", issuedFrom);
+        appendQueryParam(template, uriParams, "issuedTo", issuedTo);
+        appendQueryParam(template, uriParams, "customerId", customerId);
+        return restClient.get().uri(template.toString(), uriParams).retrieve().body(String.class);
+    }
+
+    private static void appendQueryParam(
+            StringBuilder template, Map<String, String> uriParams, String name, String value) {
+        if (value != null && !value.isBlank()) {
+            // The default template carries ?q={query}, but the property is env-overridable — a
+            // path-only override must not get the filter glued onto its last path segment.
+            template.append(template.indexOf("?") >= 0 ? '&' : '?')
+                    .append(name)
+                    .append("={")
+                    .append(name)
+                    .append('}');
+            uriParams.put(name, value);
+        }
     }
 
     @Tool(

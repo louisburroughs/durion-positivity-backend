@@ -60,15 +60,50 @@ class InvoiceFacadeToolTest {
     }
 
     @Test
-    @DisplayName("searchInvoices sends GET /invoices/search?q={query} and returns body")
+    @DisplayName("searchInvoices sends GET /invoices/search?q={query} when no structured filters are given")
     void searchInvoices_sendsGetToSearchEndpoint() {
         FacadeContractManifest.Entry entry = contract("searchInvoices");
         mockServer
-                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "POSTED"))))
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "Acme"))))
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"content\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchInvoices("POSTED");
+        String result = tool.searchInvoices("Acme", null, null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchInvoices appends status, issuedFrom, issuedTo and customerId as query params when supplied")
+    void searchInvoices_appendsStructuredFilters() {
+        FacadeContractManifest.Entry entry = contract("searchInvoices");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", "Acme"))
+                        + "&status=POSTED"
+                        + "&issuedFrom=2026-06-01"
+                        + "&issuedTo=2026-06-30"
+                        + "&customerId=" + PARTY_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"content\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchInvoices("Acme", "POSTED", "2026-06-01", "2026-06-30", PARTY_ID);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchInvoices omits blank structured filters from the request URI")
+    void searchInvoices_omitsBlankFilters() {
+        FacadeContractManifest.Entry entry = contract("searchInvoices");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "Acme")) + "&customerId=" + PARTY_ID))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"content\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchInvoices("Acme", "  ", null, "  ", PARTY_ID);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
