@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -17,21 +18,26 @@ import lombok.Data;
                 + " the more specific fields do not narrow.")
 public class ServiceLaborStandardRequestDto {
 
+    @Size(max = 16)
     @Schema(
             description = "Model year or year range the time applies to",
             example = "2019-2023",
             requiredMode = NOT_REQUIRED)
     private String vehicleYear;
 
+    @Size(max = 64)
     @Schema(description = "Vehicle make", example = "Honda", requiredMode = NOT_REQUIRED)
     private String make;
 
+    @Size(max = 64)
     @Schema(description = "Vehicle model", example = "Civic", requiredMode = NOT_REQUIRED)
     private String model;
 
+    @Size(max = 64)
     @Schema(description = "Vehicle submodel or trim", example = "EX", requiredMode = NOT_REQUIRED)
     private String submodel;
 
+    @Size(max = 64)
     @Schema(description = "Engine code", example = "K20C2", requiredMode = NOT_REQUIRED)
     private String engineCode;
 
@@ -49,6 +55,7 @@ public class ServiceLaborStandardRequestDto {
             requiredMode = NOT_REQUIRED)
     private String timeType;
 
+    @Size(max = 64)
     @Schema(
             description = "Operations sharing this group share setup time and must not be summed naively",
             example = "WHEEL-OFF",

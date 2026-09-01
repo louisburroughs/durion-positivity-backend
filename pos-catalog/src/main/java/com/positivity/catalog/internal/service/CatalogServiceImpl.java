@@ -501,6 +501,12 @@ public class CatalogServiceImpl implements CatalogService {
         dto.setName(entity.getName());
         dto.setShortDescription(entity.getShortDescription());
         dto.setLongDescription(entity.getLongDescription());
+        dto.setOperationCode(entity.getOperationCode());
+        dto.setOperationCategory(
+                entity.getOperationCategory() == null
+                        ? null
+                        : entity.getOperationCategory().name());
+        dto.setDefaultLaborHours(entity.getDefaultLaborHours());
         return dto;
     }
 

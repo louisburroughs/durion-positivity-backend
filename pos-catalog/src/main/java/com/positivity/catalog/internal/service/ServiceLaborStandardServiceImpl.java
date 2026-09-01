@@ -147,6 +147,11 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
     /**
      * Two active rows answering the same (vehicle key, time type) would make resolution
      * ambiguous; the correction path for a wrong number is supersession, not a second row.
+     *
+     * <p>Comparison is case-sensitive, as is the V18 backstop index: {@code Honda} and
+     * {@code HONDA} are two keys here. Deliberate deferral, not an oversight — vehicle-key
+     * vocabulary (including canonical casing) is aligned with pos-vehicle-fitment in Phase 1
+     * (sourcing plan §4.3), and canonicalizing ad hoc now would fight that alignment.
      */
     private void rejectDuplicateActiveRow(
             UUID serviceId, ServiceLaborStandardEntity candidate, UUID beingSupersededId) {

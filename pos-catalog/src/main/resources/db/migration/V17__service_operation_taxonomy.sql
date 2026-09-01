@@ -22,5 +22,12 @@ ALTER TABLE service ADD COLUMN operation_code varchar(64);
 ALTER TABLE service ADD COLUMN operation_category varchar(32);
 ALTER TABLE service ADD COLUMN default_labor_hours numeric(5,1);
 
+-- The category domain is enforced here as well as in the app layer because seed SQL and
+-- future imports write this column directly, and a value the @Enumerated(STRING) mapping
+-- cannot hydrate would 500 every subsequent read of the row.
+ALTER TABLE service ADD CONSTRAINT ck_service_operation_category
+    CHECK (operation_category IS NULL
+           OR operation_category IN ('REPAIR', 'DIAGNOSTIC', 'MAINTENANCE', 'TIRE_SERVICE'));
+
 CREATE UNIQUE INDEX ux_service_operation_code ON service (operation_code)
     WHERE operation_code IS NOT NULL;

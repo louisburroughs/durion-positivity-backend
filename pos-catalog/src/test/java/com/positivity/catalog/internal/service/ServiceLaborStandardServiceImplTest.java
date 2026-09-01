@@ -175,6 +175,42 @@ class ServiceLaborStandardServiceImplTest {
         }
 
         @Test
+        @DisplayName("an all-null vehicle key is still a key: two active wildcard rows are a duplicate")
+        void wildcardKeyDuplicateRejected() {
+            ServiceLaborStandardEntity wildcard = activeDurionRow();
+            wildcard.setMake(null);
+            wildcard.setModel(null);
+            wildcard.setVehicleYear(null);
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(wildcard));
+            ServiceLaborStandardRequestDto wildcardRequest = new ServiceLaborStandardRequestDto();
+            wildcardRequest.setLaborHours(new BigDecimal("2.0"));
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, wildcardRequest))
+                    .isInstanceOf(CatalogBusinessRuleException.class)
+                    .hasMessageContaining("supersede");
+        }
+
+        @Test
+        @DisplayName("blank vehicle-key strings are stored as null — the wildcard convention the V18 index relies on")
+        void blankStringsNormalizeToNull() {
+            ServiceLaborStandardRequestDto blanks = request();
+            blanks.setMake("  ");
+            blanks.setModel("");
+            blanks.setSubmodel(" ");
+            blanks.setEngineCode("");
+            blanks.setOverlapGroup("  ");
+
+            ServiceLaborStandardResponseDto response = service.create(SERVICE_ID, blanks);
+
+            assertThat(response.getMake()).isNull();
+            assertThat(response.getModel()).isNull();
+            assertThat(response.getSubmodel()).isNull();
+            assertThat(response.getEngineCode()).isNull();
+            assertThat(response.getOverlapGroup()).isNull();
+        }
+
+        @Test
         @DisplayName("the same vehicle key with a different time type coexists — warranty beside retail")
         void differentTimeTypeCoexists() {
             when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
@@ -202,6 +238,42 @@ class ServiceLaborStandardServiceImplTest {
 
             assertThat(service.list(SERVICE_ID, false)).isEmpty();
             assertThat(service.list(SERVICE_ID, true)).hasSize(2);
+        }
+    }
+
+    /**
+     * The vehicle-key columns are varchar(16)/varchar(64) in V18; over-length values must be
+     * refused as 400 by bean validation at the controller boundary, never surface as a
+     * database error (#1631 review F1).
+     */
+    @Nested
+    @DisplayName("request bean validation")
+    class RequestBeanValidation {
+
+        private final jakarta.validation.Validator validator =
+                jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+
+        @Test
+        @DisplayName("over-length vehicle-key fields violate @Size")
+        void overLengthFieldsRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setVehicleYear("2019-2023 facelift");
+            bad.setMake("M".repeat(65));
+            bad.setOverlapGroup("G".repeat(65));
+
+            assertThat(validator.validate(bad))
+                    .extracting(v -> v.getPropertyPath().toString())
+                    .containsExactlyInAnyOrder("vehicleYear", "make", "overlapGroup");
+        }
+
+        @Test
+        @DisplayName("column-width values pass")
+        void maxWidthValuesPass() {
+            ServiceLaborStandardRequestDto ok = request();
+            ok.setVehicleYear("2019-2023");
+            ok.setMake("M".repeat(64));
+
+            assertThat(validator.validate(ok)).isEmpty();
         }
     }
 

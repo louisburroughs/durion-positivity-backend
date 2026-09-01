@@ -43,7 +43,11 @@ CREATE TABLE service_labor_standard (
     import_manifest_id uuid,
     superseded_at      timestamptz,
     created_at         timestamptz  NOT NULL,
-    updated_at         timestamptz  NOT NULL
+    updated_at         timestamptz  NOT NULL,
+    -- Same rationale as ck_service_operation_category (V17): imports write this column
+    -- directly, and an unhydratable value would 500 every read of the row.
+    CONSTRAINT ck_sls_time_type CHECK (
+        time_type IN ('RETAIL_FLAT_RATE', 'OEM_WARRANTY', 'MANUFACTURER_INSTALL', 'DURION_STANDARD'))
 );
 
 CREATE INDEX ix_sls_lookup ON service_labor_standard (service_id, make, model, vehicle_year)
