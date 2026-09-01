@@ -108,6 +108,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
      * rather than paging. Callers request one row more than their public {@code limit} so the
      * service layer can detect truncation without a second COUNT query.
      *
+     * <p>Deposit-take invoices ({@code depositSourceType} non-null) are excluded (#1623): the
+     * down-payment document is a contract liability, not a sale, and the settlement invoice is
+     * raised gross for the full workorder total — counting both would report a $500 deposit on a
+     * $2,000 job as $2,500 of revenue. Exclusion at the deposit-take document (never netting the
+     * settlement) is the Accounting ruling on #1623.
+     *
      * @param start           window start (inclusive), UTC instant
      * @param end             window end (inclusive), UTC instant
      * @param revenueStatuses invoice statuses counted as recognized revenue
@@ -120,6 +126,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             FROM Invoice i
             WHERE i.partyId IS NOT NULL
               AND i.status IN :revenueStatuses
+              AND i.depositSourceType IS NULL
               AND i.createdAt >= :start AND i.createdAt <= :end
             GROUP BY i.partyId
             ORDER BY SUM(i.total) DESC

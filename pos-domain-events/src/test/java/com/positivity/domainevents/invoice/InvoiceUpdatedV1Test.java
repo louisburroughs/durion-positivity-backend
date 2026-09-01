@@ -121,6 +121,50 @@ class InvoiceUpdatedV1Test {
     }
 
     @Test
+    void roundTripPreservesDepositTakeProvenance() {
+        // #1623: additive deposit-take marker — consumers exclude marked invoices from
+        // revenue-shaped measures.
+        UUID depositSourceId = UUID.fromString("01980a58-0000-7000-8000-000000000003");
+        InvoiceUpdatedV1 evt = new InvoiceUpdatedV1(
+                INVOICE_ID,
+                "INV-2026-000123",
+                WORKORDER_ID,
+                null,
+                null,
+                "party-1",
+                "FINALIZED",
+                new BigDecimal("100.00"),
+                new BigDecimal("8.00"),
+                new BigDecimal("108.00"),
+                BigDecimal.ZERO,
+                Instant.parse("2026-07-20T10:00:00Z"),
+                Instant.parse("2026-07-20T10:05:00Z"),
+                null,
+                null,
+                null,
+                null,
+                "WORKORDER",
+                depositSourceId);
+
+        InvoiceUpdatedV1 read = MAPPER.readValue(MAPPER.writeValueAsString(evt), InvoiceUpdatedV1.class);
+
+        assertThat(read).isEqualTo(evt);
+        assertThat(read.depositSourceType()).isEqualTo("WORKORDER");
+        assertThat(read.depositSourceId()).isEqualTo(depositSourceId);
+    }
+
+    @Test
+    void toleratesAbsentDepositTakeProvenance() {
+        // Pre-#1623 producers emit neither field; consumers must read an ordinary invoice.
+        String legacyJson = MAPPER.writeValueAsString(event(null));
+        assertThat(legacyJson).doesNotContain("depositSourceType\":\"");
+
+        InvoiceUpdatedV1 read = MAPPER.readValue(legacyJson, InvoiceUpdatedV1.class);
+        assertThat(read.depositSourceType()).isNull();
+        assertThat(read.depositSourceId()).isNull();
+    }
+
+    @Test
     void schemaStaysAtVersionOne() {
         assertThat(InvoiceUpdatedV1.SCHEMA_VERSION).isEqualTo(1);
         assertThat(InvoiceUpdatedV1.EVENT_TYPE).isEqualTo("invoice.invoice.updated");

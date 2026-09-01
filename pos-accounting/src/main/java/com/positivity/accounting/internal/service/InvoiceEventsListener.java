@@ -177,6 +177,7 @@ public class InvoiceEventsListener {
                 .invoiceCreatedAt(payload.createdAt())
                 .finalizedAt(payload.finalizedAt())
                 .dueDate(payload.dueDate())
+                .depositSourceType(payload.depositSourceType())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

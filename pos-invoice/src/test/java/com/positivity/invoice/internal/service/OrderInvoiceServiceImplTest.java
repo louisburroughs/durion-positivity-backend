@@ -193,6 +193,51 @@ class OrderInvoiceServiceImplTest {
     }
 
     @Test
+    @DisplayName("OIS-1623a: a deposit-take order stamps deposit provenance on the invoice document")
+    void depositTake_stampsProvenanceOnInvoice() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e3");
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositSourceType("WORKORDER");
+        depositTake.setDepositSourceId(workorderId);
+        depositTake.setDepositAmount(new BigDecimal("108.00"));
+
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(depositTake);
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice saved = captor.getAllValues().get(0);
+        assertThat(saved.getDepositSourceType())
+                .isEqualTo(com.positivity.invoice.internal.enums.DepositSourceType.WORKORDER);
+        assertThat(saved.getDepositSourceId()).isEqualTo(workorderId);
+    }
+
+    @Test
+    @DisplayName("OIS-1623b: an ordinary from-order invoice carries no deposit provenance")
+    void ordinaryInvoice_noDepositProvenance() {
+        ArgumentCaptor<Invoice> captor = ArgumentCaptor.forClass(Invoice.class);
+        service.createInvoiceForOrder(request(null));
+
+        verify(invoiceRepository, times(2)).save(captor.capture());
+        Invoice saved = captor.getAllValues().get(0);
+        assertThat(saved.getDepositSourceType()).isNull();
+        assertThat(saved.getDepositSourceId()).isNull();
+    }
+
+    @Test
+    @DisplayName("OIS-1623c: an unknown deposit source type is rejected before any document is created")
+    void depositTake_unknownSourceType_rejected() {
+        OrderInvoiceCreationRequest depositTake = request(null);
+        depositTake.setDepositSourceType("INVOICE");
+        depositTake.setDepositSourceId(UUID.randomUUID());
+        depositTake.setDepositAmount(new BigDecimal("50.00"));
+
+        assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown deposit source type");
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("OIS-001: creates a DRAFT invoice carrying the order's authoritative figures")
     void createsInvoiceFromOrder() {
         OrderInvoiceResponse response = service.createInvoiceForOrder(request(null));

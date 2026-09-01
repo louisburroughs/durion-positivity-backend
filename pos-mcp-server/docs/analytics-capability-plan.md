@@ -297,7 +297,7 @@ the E-table above has been updated accordingly.
 
 ### W2.5 Money-measure semantics — **RESOLVED 2026-09-01 (issue #1605)**
 
-D5–D7 settle what E2's figures mean. They were raised by #1605 against D3's premise and decided by
+D5–D8 settle what E2's figures mean. D5–D7 were raised by #1605 against D3's premise and decided by
 the invoicing, accounting and architecture owners; the durable record is **ADR-0057**
 (`durion/docs/adr/0057-analytics-money-measure-semantics-and-ownership.adr.md`), which every later
 analytics endpoint must obey.
@@ -335,11 +335,30 @@ analytics endpoint must obey.
   point-in-time question, E2 measures movement. That divergence is deliberate and documented at both
   endpoints so it is not later "unified" in the wrong direction.
 
+- **D8 — deposit-take invoices (E1/E2): excluded from `invoiced` and revenue, by
+  `depositSourceType`. RESOLVED 2026-09-01 (issue #1623).** The Accounting domain owner ruled that
+  the deposit-take document — the invoice a deposit-take order renders for the down-payment itself —
+  is a **liability event** (advance payment / contract liability under ASC 606), not a revenue
+  event: deposit receipt and settlement are two distinct economic events, and only the settlement
+  recognizes revenue, gross, for the full workorder amount. So any measure summing invoice totals
+  as a revenue proxy (E2 `invoiced`, E1 revenue-by-customer, E13 customer margin when it lands)
+  must **exclude** invoices whose `depositSourceType` is non-null — never net the deposit out of
+  the settlement invoice, which would understate its gross total and break traceability to the
+  workorder price. Implementation: pos-invoice stamps `invoices.deposit_source_type` /
+  `deposit_source_id` at from-order creation (backfilled from `deposit_credit.order_id`), the
+  marker rides `invoice.invoice.updated` additively within schema v1, pos-accounting replicates it
+  to `ext_invoice.deposit_source_type`, and E1/E2 filter on it. **Replica caveat:** pos-invoice has
+  no facts/replay endpoint, so `ext_invoice` rows replicated before the enrichment stay unmarked
+  until their invoice next emits; historical windows containing pre-existing deposit-take invoices
+  remain inflated until a replay mechanism (or one-shot re-publish, which `ReplicaVersionGuard`'s
+  equal-version-applies rule was built for) lands. Deliberately not extended to E3 payment-lag
+  cohorts: the ruling covers revenue-shaped measures, and whether a deposit-take document belongs
+  in payment-behaviour cohorts is a separate question — file a follow-up before touching it.
+
 Follow-ups filed from this decision: **#1620** refunds (`refunded`/`netCashCollected`), **#1621**
 non-cash settlement (`nonCashSettled`/`settled`/`settlementRatePct`, both sources together),
 **#1622** `received` (true cash receipts, which resolves the A/R-relief-vs-cash base mismatch), and
-**#1623** — whether `invoiced` double-counts deposit-take orders, which is a revenue-recognition
-question the invoicing and accounting owners both declined to arbitrate.
+**#1623** — whether `invoiced` double-counts deposit-take orders — **resolved as D8 above**.
 
 ### Wave 2 exit gate
 

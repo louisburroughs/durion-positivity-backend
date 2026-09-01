@@ -51,7 +51,11 @@ public class InvoiceAnalyticsController {
                     can be null for a non-finalized invoice — ordered by revenue descending and bounded to \
                     `limit` rows — the top N by revenue, with no pagination to walk. \
                     Only revenue-recognized invoices count (status FINALIZED or POSTED); DRAFT invoices have not \
-                    been billed and CANCELLED/ERROR invoices never will be. Each row's avgInvoiceValue is \
+                    been billed and CANCELLED/ERROR invoices never will be. Deposit-take invoices — the document \
+                    a deposit-take order renders for the down-payment itself — are excluded (#1623): a deposit is \
+                    a contract liability, not a sale, and the later settlement invoice already carries the full \
+                    gross amount, so counting both would overstate revenue by every deposit taken. \
+                    Each row's avgInvoiceValue is \
                     revenue / invoiceCount, computed here rather than left to the caller, and lastInvoiceDate is \
                     that customer's most recent contributing invoice in the window.
                     Use this tool to find the highest-revenue customers in a period; the response's `truncated` \

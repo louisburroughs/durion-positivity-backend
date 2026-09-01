@@ -125,7 +125,13 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
         Instant startInstant = toStartInstant(startDate);
         Instant endInstant = toEndInstant(endDate);
 
+        // Deposit-take invoices excluded (#1623, Accounting ruling): the down-payment document is
+        // a contract liability, not a sale, and the settlement invoice is later raised gross for
+        // the full workorder total — counting both would report a $500 deposit on a $2,000 job as
+        // $2,500 invoiced across the two windows. Exclusion at the deposit-take document (never
+        // netting the settlement) keeps the settlement's total traceable to the workorder price.
         BigDecimal invoiced = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant).stream()
+                .filter(invoice -> invoice.getDepositSourceType() == null)
                 .map(ExtInvoice::getTotal)
                 .map(AccountingAnalyticsServiceImpl::nullSafe)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

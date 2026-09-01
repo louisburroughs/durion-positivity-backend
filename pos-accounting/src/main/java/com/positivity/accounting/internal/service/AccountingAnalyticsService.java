@@ -11,8 +11,7 @@ import org.jspecify.annotations.NonNull;
  *
  * <p>All three endpoints are single-window aggregates over data pos-accounting already
  * persists — the {@code ExtInvoice} replica (fed from {@code invoice.events.v1}) and this
- * module's own {@code PaymentApplication}/{@code APPayment}/{@code VendorBill} records. No
- * schema changes; no new replica field.
+ * module's own {@code PaymentApplication}/{@code APPayment}/{@code VendorBill} records.
  */
 public interface AccountingAnalyticsService {
 
@@ -24,7 +23,12 @@ public interface AccountingAnalyticsService {
      * generateTaxLiability} and {@code ExtInvoiceRepository#findByFinalizedAtBetween} already use for
      * "invoice date" elsewhere in this module, and the semantically correct one: {@code
      * invoiceCreatedAt} is only the draft-creation timestamp, not yet a real financial event. A still-
-     * {@code DRAFT} invoice (null {@code finalizedAt}) never contributes.
+     * {@code DRAFT} invoice (null {@code finalizedAt}) never contributes. Deposit-take invoices
+     * (non-null {@code ExtInvoice.depositSourceType}) never contribute either (#1623): the
+     * down-payment document is a contract liability, not a sale, and the settlement invoice is
+     * later raised gross for the full workorder total, so counting both would overstate {@code
+     * invoiced} by every deposit taken. The exclusion is at the deposit-take document — the
+     * settlement invoice is never netted, keeping its total traceable to the workorder price.
      *
      * <p><b>collected</b> sums {@code PaymentApplication.appliedAmount} for applications whose {@code
      * applicationTimestamp} falls in the same inclusive window — settled cash only. {@code

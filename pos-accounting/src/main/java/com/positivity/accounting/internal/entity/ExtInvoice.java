@@ -82,6 +82,16 @@ public class ExtInvoice {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    /**
+     * Deposit-take provenance (#1623), replicated from pos-invoice: non-null marks the document a
+     * deposit-take order rendered for the down-payment itself — a contract liability, not a sale —
+     * so revenue-shaped measures summing {@link #total} (E2 {@code invoiced}) must exclude it.
+     * Values mirror pos-invoice's {@code DepositSourceType} ({@code ESTIMATE}/{@code WORKORDER}/
+     * {@code ORDER}); null on ordinary invoices and on rows replicated before the enrichment.
+     */
+    @Column(name = "deposit_source_type", length = 16)
+    private String depositSourceType;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 

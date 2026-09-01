@@ -86,4 +86,32 @@ class InvoiceEventPublisherTest {
 
         assertThat(payload.taxBreakdown()).isNotNull().isEmpty();
     }
+
+    @Test
+    @DisplayName("deposit-take invoice → emits the provenance so replicas can exclude it from revenue (#1623)")
+    void depositTakeInvoiceEmitsProvenance() {
+        Invoice invoice = finalizedInvoice();
+        UUID depositSourceId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(invoice.getDepositSourceType())
+                .thenReturn(com.positivity.invoice.internal.enums.DepositSourceType.WORKORDER);
+        when(invoice.getDepositSourceId()).thenReturn(depositSourceId);
+        when(invoiceLineTaxRepository.findByInvoiceId(eq(invoice.getId()))).thenReturn(List.of());
+
+        InvoiceUpdatedV1 payload = capturePayload(invoice);
+
+        assertThat(payload.depositSourceType()).isEqualTo("WORKORDER");
+        assertThat(payload.depositSourceId()).isEqualTo(depositSourceId);
+    }
+
+    @Test
+    @DisplayName("ordinary invoice → emits null deposit provenance")
+    void ordinaryInvoiceEmitsNullProvenance() {
+        Invoice invoice = finalizedInvoice();
+        when(invoiceLineTaxRepository.findByInvoiceId(eq(invoice.getId()))).thenReturn(List.of());
+
+        InvoiceUpdatedV1 payload = capturePayload(invoice);
+
+        assertThat(payload.depositSourceType()).isNull();
+        assertThat(payload.depositSourceId()).isNull();
+    }
 }

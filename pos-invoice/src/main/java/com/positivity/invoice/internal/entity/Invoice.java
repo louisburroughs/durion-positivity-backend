@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.entity;
 
+import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.CascadeType;
@@ -104,6 +105,22 @@ public class Invoice {
     /** The payment-terms rule (validated {@link com.positivity.invoice.internal.enums.PaymentTerms} code) frozen with {@link #dueDate}. */
     @Column(name = "payment_terms_code", length = 20)
     private String paymentTermsCode;
+
+    /**
+     * Deposit-take provenance (#1623): non-null marks this document as the invoice a deposit-take
+     * order rendered for the down-payment itself — a contract liability, not a sale (Accounting
+     * ruling on #1623). Revenue-shaped measures summing invoice totals (E1/E2 {@code invoiced})
+     * must exclude marked invoices; the settlement invoice stays gross, so counting both
+     * double-counts the deposit. Set once at from-order creation, mirroring the
+     * {@link DepositCredit} the same request registers; null on every other invoice.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deposit_source_type", length = 16, updatable = false)
+    private DepositSourceType depositSourceType;
+
+    /** The estimate/workorder/order the deposit was taken against, paired with {@link #depositSourceType}. */
+    @Column(name = "deposit_source_id", columnDefinition = "UUID", updatable = false)
+    private UUID depositSourceId;
 
     // Pending Flyway migration: keep these fields transient until DB columns exist.
     @Transient
