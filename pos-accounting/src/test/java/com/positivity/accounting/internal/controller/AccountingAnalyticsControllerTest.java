@@ -120,14 +120,26 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("GET /payment-lag-cohorts passes an explicit limit through to the service")
     void cohortsPassesLimit() throws Exception {
+        PaymentLagCohortsReport truncatedReport = PaymentLagCohortsReport.builder()
+                .issuedFrom(LocalDate.of(2026, 1, 1))
+                .issuedTo(LocalDate.of(2026, 6, 30))
+                .generatedAt(Instant.parse("2026-06-30T08:00:00Z"))
+                .truncated(true)
+                .cohorts(List.of(PaymentLagCohortRow.builder()
+                        .cohort("<=30")
+                        .invoiceCount(1)
+                        .amount(new BigDecimal("100.00"))
+                        .build()))
+                .build();
         when(accountingAnalyticsService.getPaymentLagCohorts(any(), any(), eq(2)))
-                .thenReturn(stubCohortsReport());
+                .thenReturn(truncatedReport);
 
         mockMvc.perform(withAuth(get(COHORTS_PATH)
                         .param("issuedFrom", "2026-01-01")
                         .param("issuedTo", "2026-06-30")
                         .param("limit", "2")))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.truncated").value(true));
     }
 
     @Test

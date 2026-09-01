@@ -14,6 +14,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -28,7 +30,20 @@ import org.springframework.data.domain.PageRequest;
  *
  * <p>Flyway is disabled (migrations are Postgres-oriented); schema comes from the JPA mappings,
  * and auditing is not enabled so {@code createdAt} can be pinned per row.
+ *
+ * <p>{@code @Execution(SAME_THREAD)}: this module's {@code junit-platform.properties} opts every
+ * top-level class into concurrent scheduling (2 classes at a time) and explicitly asks classes
+ * that hit trouble under that to opt back out here. This class reproducibly returned empty result
+ * sets in CI (two full-reactor runs, six failing assertions each, all "expected N rows, got []")
+ * while passing every local rerun — including repeated full-module-suite runs that do exercise
+ * class-level parallelism — which points at a timing-sensitive concurrent-bootstrap interaction
+ * (this class and whichever sibling class shares its worker thread each stand up their own
+ * create-drop H2 schema and Hibernate SessionFactory at the same time) rather than a defect in
+ * {@link InvoiceRepository#revenueByCustomer} or {@link InvoiceRepository#invoicingLagPairs}
+ * themselves. Forcing this one class onto the main execution thread removes it from that
+ * concurrent pairing without disabling parallelism for the rest of the module.
  */
+@Execution(ExecutionMode.SAME_THREAD)
 @DataJpaTest(
         properties = {
             "spring.datasource.url=jdbc:h2:mem:pos_invoice_analytics;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",

@@ -996,6 +996,7 @@ FROM (VALUES
     ('ADMIN', 'inventory:transfer:view'),
     ('ADMIN', 'inventory:valuation:adjust'),
     ('ADMIN', 'inventory:valuation:view'),
+    ('ADMIN', 'invoice:analytics:view'),
     ('ADMIN', 'invoice:billing-rules'),
     ('ADMIN', 'invoice:analytics:view'),
     ('ADMIN', 'invoice:finalize'),

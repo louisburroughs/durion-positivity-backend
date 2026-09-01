@@ -46,8 +46,10 @@ public class InvoiceAnalyticsController {
     private final InvoiceAnalyticsService invoiceAnalyticsService;
 
     @Operation(operationId = "getRevenueByCustomer", summary = "Get Revenue By Customer", description = """
-                    Returns per-customer revenue for invoices in [startDate, endDate], ordered by revenue \
-                    descending and bounded to `limit` rows — the top N by revenue, with no pagination to walk. \
+                    Returns per-customer revenue for invoices in [startDate, endDate], anchored on \
+                    Invoice.createdAt — this invoice's own draft-creation timestamp, not finalizedAt, which \
+                    can be null for a non-finalized invoice — ordered by revenue descending and bounded to \
+                    `limit` rows — the top N by revenue, with no pagination to walk. \
                     Only revenue-recognized invoices count (status FINALIZED or POSTED); DRAFT invoices have not \
                     been billed and CANCELLED/ERROR invoices never will be. Each row's avgInvoiceValue is \
                     revenue / invoiceCount, computed here rather than left to the caller, and lastInvoiceDate is \

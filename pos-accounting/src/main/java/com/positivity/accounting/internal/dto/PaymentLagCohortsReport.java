@@ -48,6 +48,12 @@ public class PaymentLagCohortsReport {
     private Instant generatedAt;
 
     @Schema(
+            description =
+                    "True when `limit` is below the fixed cohort count (4) and dropped cohorts that would otherwise appear, false otherwise",
+            requiredMode = REQUIRED)
+    private boolean truncated;
+
+    @Schema(
             description = "Cohort rows in fixed order (<=30, 31-60, 61-90, unpaid), truncated to the requested limit",
             requiredMode = REQUIRED)
     @NonNull

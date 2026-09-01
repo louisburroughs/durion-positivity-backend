@@ -1142,7 +1142,7 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 66")
+    @DisplayName("CATALOG_VERSION is 68")
     void catalogVersionMatchesCurrent() {
         assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(68);
     }
@@ -1382,10 +1382,9 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(493)).isEqualTo("PERM_people:timeEntry:view");
         // catalog v66 (#1612): invoice reads split out of invoice:manage in pos-invoice (bit 494)
         assertThat(GatewayPermissionCatalog.authorityForBit(494)).isEqualTo("PERM_invoice:invoice:view");
-        // catalog v67 (#1589/#1592): invoice analytics (revenue-by-customer, invoicing lag) (bit 495)
+        // catalog v68 (#1589-#1595): analytics read authorities appended in pos-invoice,
+        // pos-accounting and pos-workorder (bits 495-497)
         assertThat(GatewayPermissionCatalog.authorityForBit(495)).isEqualTo("PERM_invoice:analytics:view");
-        // catalog v68 (#1590/#1591/#1593-#1595): accounting and workorder Wave 2 analytics grants,
-        // shared across each module's dimensioned aggregates rather than split per report (bits 496-497)
         assertThat(GatewayPermissionCatalog.authorityForBit(496)).isEqualTo("PERM_accounting:analytics:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(497)).isEqualTo("PERM_workorder:analytics:view");
         // beyond array must return null

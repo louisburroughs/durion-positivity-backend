@@ -373,9 +373,11 @@ class AccountingAnalyticsServiceImplTest {
             assertThat(truncated.getCohorts())
                     .extracting(PaymentLagCohortRow::getCohort)
                     .containsExactly("<=30", "31-60");
+            assertThat(truncated.isTruncated()).isTrue();
 
             PaymentLagCohortsReport overCapped = service.getPaymentLagCohorts(issuedFrom, issuedTo, 999);
             assertThat(overCapped.getCohorts()).hasSize(4);
+            assertThat(overCapped.isTruncated()).isFalse();
         }
 
         private Map<String, PaymentLagCohortRow> byCohort(PaymentLagCohortsReport report) {
