@@ -10,7 +10,6 @@ import com.positivity.domainevents.payment.DepositCreditAppliedV1;
 import com.positivity.domainevents.payment.PaymentReversedV1;
 import com.positivity.domainevents.payment.PaymentSettledV1;
 import com.positivity.domainevents.payment.SettlementReportedV1;
-import com.positivity.shared.id.UUIDv7Generator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
@@ -472,7 +471,6 @@ public class SettlementEventsListener {
         }
 
         extInvoiceDepositCreditApplicationRepository.save(ExtInvoiceDepositCreditApplication.builder()
-                .applicationId(UUIDv7Generator.generate())
                 .depositCreditId(payload.depositCreditId())
                 .invoiceId(payload.invoiceId())
                 .amountApplied(payload.amountApplied())

@@ -103,8 +103,8 @@ class SettlementEventsListenerDepositCreditAppliedTest {
     }
 
     @Test
-    @DisplayName("an applied event is replicated with the payload fields, a generated applicationId, and"
-            + " sourceEventId, then marked processed")
+    @DisplayName("an applied event is replicated with the payload fields and sourceEventId, then marked"
+            + " processed (applicationId is minted at persist per ADR-0013)")
     void appliedEventIsReplicated() {
         listener().onPaymentEvent(envelope(EVENT_ID, applied(new BigDecimal("25.00"))));
 
@@ -112,7 +112,6 @@ class SettlementEventsListenerDepositCreditAppliedTest {
                 ArgumentCaptor.forClass(ExtInvoiceDepositCreditApplication.class);
         verify(extInvoiceDepositCreditApplicationRepository).save(captor.capture());
         ExtInvoiceDepositCreditApplication saved = captor.getValue();
-        assertThat(saved.getApplicationId()).isNotNull();
         assertThat(saved.getDepositCreditId()).isEqualTo(DEPOSIT_CREDIT_ID);
         assertThat(saved.getInvoiceId()).isEqualTo(INVOICE_ID);
         assertThat(saved.getAmountApplied()).isEqualByComparingTo("25.00");

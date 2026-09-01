@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.shared.id.AssignedIdentifier;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -32,6 +33,8 @@ import lombok.NoArgsConstructor;
 public class ExtInvoicePaymentReversal {
 
     @Id
+    @AssignedIdentifier("pos-invoice's RefundRecord id, carried on payment.payment.reversed; minting one here"
+            + " would sever the replica row from its owning fact and defeat the same-refund replay dedup")
     @Column(name = "refund_id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID refundId;
 

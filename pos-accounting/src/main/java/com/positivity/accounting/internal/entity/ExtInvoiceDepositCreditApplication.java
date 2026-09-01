@@ -1,7 +1,9 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -19,10 +21,10 @@ import lombok.NoArgsConstructor;
  * fact. Feeds the collections-analytics {@code nonCashSettled} figure.
  *
  * <p>The parent {@code DepositCredit} is deliberately not replicated — a windowed draw-down sum
- * needs only these application facts. {@link #applicationId} is generated locally (UUID v7) by
- * {@code SettlementEventsListener#onDepositCreditApplied}: the event carries no application id,
- * only the {@code (depositCreditId, invoiceId)} pair pos-invoice's {@code
- * applyAvailableCredits()} applies at most once.
+ * needs only these application facts. {@link #applicationId} is a locally minted surrogate
+ * (ADR-0013 {@code @UUIDv7Id}): the event carries no application id, only the {@code
+ * (depositCreditId, invoiceId)} pair pos-invoice's {@code applyAvailableCredits()} applies at
+ * most once.
  */
 @Entity
 @Data
@@ -38,6 +40,8 @@ import lombok.NoArgsConstructor;
 public class ExtInvoiceDepositCreditApplication {
 
     @Id
+    @GeneratedValue
+    @UUIDv7Id
     @Column(name = "application_id", columnDefinition = "UUID", nullable = false, updatable = false)
     private UUID applicationId;
 
