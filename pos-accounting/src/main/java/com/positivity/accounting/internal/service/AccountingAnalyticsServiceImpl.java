@@ -157,6 +157,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 .issuedFrom(issuedFrom)
                 .issuedTo(issuedTo)
                 .generatedAt(Instant.now(clock))
+                .truncated(capped < DEFAULT_COHORT_LIMIT)
                 .cohorts(rows)
                 .build();
     }

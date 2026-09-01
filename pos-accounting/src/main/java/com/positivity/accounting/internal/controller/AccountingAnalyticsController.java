@@ -76,6 +76,8 @@ public class AccountingAnalyticsController {
                     invoiced and collected are deliberately different invoice cohorts, since a payment can \
                     settle in a later window than the invoice it pays, so collectionRatePct is a period \
                     cash-efficiency signal rather than a cohort collection rate.
+                    There is no limit parameter and no truncated flag, since the response is always exactly \
+                    one aggregate row, not a list to cap.
                     Emits an ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW audit event; no other state changes.
                     Returns 400 when endDate is before startDate.
                     """,
@@ -147,6 +149,8 @@ public class AccountingAnalyticsController {
                     edge; unpaid absorbs invoices with no application, invoices only partially applied, and \
                     invoices whose full-payment lag exceeded 90 days, each counted at its full invoice total \
                     rather than a remaining balance.
+                    The response's truncated flag is true when limit dropped one or more of the four fixed \
+                    cohorts, false when all four are present.
                     Emits an ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW audit event; no state changes.
                     Returns 400 when issuedTo is before issuedFrom.
                     """,

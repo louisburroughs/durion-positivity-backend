@@ -69,6 +69,8 @@ paths:
 
         Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; invoiced and collected are deliberately different invoice cohorts, since a payment can settle in a later window than the invoice it pays, so collectionRatePct is a period cash-efficiency signal rather than a cohort collection rate.
 
+        There is no limit parameter and no truncated flag, since the response is always exactly one aggregate row, not a list to cap.
+
         Emits an ACCOUNTING_ANALYTICS_COLLECTIONS_VIEW audit event; no other state changes.
 
         Returns 400 when endDate is before startDate.
@@ -136,6 +138,8 @@ paths:
         Required inputs: issuedFrom and issuedTo (ISO dates), with issuedTo on or after issuedFrom; limit is optional, defaults to 4, and is capped at 4 since the result is always at most four rows.
 
         Lag is measured in whole days from the issue-date anchor to the PaymentApplication at which invoiceBalanceAfter first reaches zero, with boundaries inclusive at the upper edge; unpaid absorbs invoices with no application, invoices only partially applied, and invoices whose full-payment lag exceeded 90 days, each counted at its full invoice total rather than a remaining balance.
+
+        The response''s truncated flag is true when limit dropped one or more of the four fixed cohorts, false when all four are present.
 
         Emits an ACCOUNTING_ANALYTICS_PAYMENT_LAG_COHORTS_VIEW audit event; no state changes.
 
@@ -11698,11 +11702,15 @@ components:
           example: 2026-06-30
           format: date
           type: string
+        truncated:
+          description: True when `limit` is below the fixed cohort count (4) and dropped cohorts that would otherwise appear, false otherwise
+          type: boolean
       required:
       - cohorts
       - generatedAt
       - issuedFrom
       - issuedTo
+      - truncated
       type: object
     PostingCategoryCreateRequest:
       description: Request payload for creating a new posting category
