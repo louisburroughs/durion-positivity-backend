@@ -315,6 +315,7 @@ INSERT INTO permissions (
 SELECT gen_random_uuid(), c.name, c.name, c.domain, c.resource, c.action,
        NOW(), 'pos-security-service', '1.0', c.bit_index
 FROM (VALUES
+    ('accounting:analytics:view', 'accounting', 'analytics', 'view', 496),
     ('accounting:ap:approve', 'accounting', 'ap', 'approve', 262),
     ('accounting:ap:pay', 'accounting', 'ap', 'pay', 4),
     ('accounting:ap:reject', 'accounting', 'ap', 'reject', 263),
@@ -529,6 +530,7 @@ FROM (VALUES
     ('inventory:transfer:view', 'inventory', 'transfer', 'view', 401),
     ('inventory:valuation:adjust', 'inventory', 'valuation', 'adjust', 417),
     ('inventory:valuation:view', 'inventory', 'valuation', 'view', 416),
+    ('invoice:analytics:view', 'invoice', 'analytics', 'view', 495),
     ('invoice:billing-rules', 'invoice', '', 'billing-rules', 83),
     ('invoice:finalize', 'invoice', '', 'finalize', 84),
     ('invoice:finalize:override', 'invoice', 'finalize', 'override', 346),
@@ -737,6 +739,7 @@ FROM (VALUES
     ('warranty:registration:view', 'warranty', 'registration', 'view', 366),
     ('warranty:reimbursement:manage', 'warranty', 'reimbursement', 'manage', 376),
     ('warranty:reimbursement:view', 'warranty', 'reimbursement', 'view', 375),
+    ('workorder:analytics:view', 'workorder', 'analytics', 'view', 497),
     ('workorder:approval_config:create', 'workorder', 'approval_config', 'create', 204),
     ('workorder:approval_config:delete', 'workorder', 'approval_config', 'delete', 206),
     ('workorder:approval_config:edit', 'workorder', 'approval_config', 'edit', 205),
@@ -800,6 +803,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM (VALUES
+    ('ADMIN', 'accounting:analytics:view'),
     ('ADMIN', 'accounting:ap:pay'),
     ('ADMIN', 'accounting:ap:view'),
     ('ADMIN', 'accounting:coa:create'),
@@ -984,6 +988,7 @@ FROM (VALUES
     ('ADMIN', 'inventory:transfer:view'),
     ('ADMIN', 'inventory:valuation:adjust'),
     ('ADMIN', 'inventory:valuation:view'),
+    ('ADMIN', 'invoice:analytics:view'),
     ('ADMIN', 'invoice:billing-rules'),
     ('ADMIN', 'invoice:finalize'),
     ('ADMIN', 'invoice:finalize:override'),
@@ -1175,6 +1180,7 @@ FROM (VALUES
     ('ADMIN', 'warranty:registration:view'),
     ('ADMIN', 'warranty:reimbursement:manage'),
     ('ADMIN', 'warranty:reimbursement:view'),
+    ('ADMIN', 'workorder:analytics:view'),
     ('ADMIN', 'workorder:approval_config:create'),
     ('ADMIN', 'workorder:approval_config:delete'),
     ('ADMIN', 'workorder:approval_config:edit'),
@@ -1300,6 +1306,8 @@ FROM (VALUES
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:stream'),
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:read'),
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:submit'),
+    ('SHOP_MANAGER', 'accounting:analytics:view'),
+    ('SHOP_MANAGER', 'invoice:analytics:view'),
     ('SHOP_MANAGER', 'invoice:finalize:override'),
     ('SHOP_MANAGER', 'location:bay:read'),
     ('SHOP_MANAGER', 'location:read'),
@@ -1311,6 +1319,7 @@ FROM (VALUES
     ('SHOP_MANAGER', 'shop:schedule:edit'),
     ('SHOP_MANAGER', 'shop:schedule:view'),
     ('SHOP_MANAGER', 'shop:technician:view'),
+    ('SHOP_MANAGER', 'workorder:analytics:view'),
     ('SHOP_MANAGER', 'workorder:workorder:delete'),
     ('SYSTEM_ADMINISTRATOR', 'image:image:store'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:chat:execute'),
@@ -1384,6 +1393,7 @@ BEGIN
     SELECT string_agg(DISTINCT g.permission_name, ', ' ORDER BY g.permission_name)
       INTO missing_permissions
       FROM (VALUES
+        ('accounting:analytics:view'),
         ('accounting:ap:pay'),
         ('accounting:ap:view'),
         ('accounting:coa:create'),
@@ -1568,6 +1578,7 @@ BEGIN
         ('inventory:transfer:view'),
         ('inventory:valuation:adjust'),
         ('inventory:valuation:view'),
+        ('invoice:analytics:view'),
         ('invoice:billing-rules'),
         ('invoice:finalize'),
         ('invoice:finalize:override'),
@@ -1760,6 +1771,7 @@ BEGIN
         ('warranty:registration:view'),
         ('warranty:reimbursement:manage'),
         ('warranty:reimbursement:view'),
+        ('workorder:analytics:view'),
         ('workorder:approval_config:create'),
         ('workorder:approval_config:delete'),
         ('workorder:approval_config:edit'),
