@@ -84,8 +84,8 @@ public class WorkorderSearchController {
                     (a larger request is silently clamped, visible in the response's own size/totalElements).
                     Emits a WORKORDER_SEARCH audit event; no workorder state changes — this is a read-only \
                     projection.
-                    Returns 200 with an empty page when nothing matches; no 404 is produced for empty results. \
-                    Returns 400 when status is not a valid WorkorderStatus value.
+                    Returns 200 with an empty page when nothing matches, 400 when status is not a valid \
+                    WorkorderStatus value, and no 404 for empty results.
                     """)
     @ApiResponse(responseCode = "200", description = "Page of workorder search results returned.")
     @ApiResponse(responseCode = "400", description = "status is not a valid WorkorderStatus value.")

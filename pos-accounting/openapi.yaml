@@ -202,6 +202,83 @@ paths:
       - Accounting Analytics
       x-required-permissions:
       - accounting:analytics:view
+  /v1/accounting/analytics/vendor-spend:
+    get:
+      description: 'Returns per-vendor spend rows for a single date window, ordered by paidAmount descending and capped at limit, so the top N vendors by spend is simply the first rows with no paging needed.
+
+        Use this tool to find which vendors received the most A/P cash, or billed the most, in a period; do not use listApBills for this, which lists individual eligible bills rather than a per-vendor aggregate.
+
+        Preconditions: none; a window with no settled payments and no bills yields an empty rows list.
+
+        Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; limit is optional, defaults to 20, and is hard-capped at 100.
+
+        IMPORTANT: paidAmount (settled A/P cash — APPayment.grossAmount for payments whose paymentDate falls in the window and whose gateway status shows the cash already moved) and billCount/avgBillAmount (VendorBill records whose billDate falls in the window) are DIFFERENT POPULATIONS of the same vendor — a payment can settle bills billed in an earlier or later window, so avgBillAmount * billCount does not reconcile to paidAmount. avgBillAmount is 0, never null, when billCount is 0.
+
+        Emits an ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW audit event; no state changes.
+
+        Returns 400 when endDate is before startDate, or limit is not a positive integer.
+
+        '
+      operationId: getVendorSpend
+      parameters:
+      - description: Window start date (YYYY-MM-DD)
+        example: 2026-06-01
+        in: query
+        name: startDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Window end date (YYYY-MM-DD)
+        example: 2026-06-30
+        in: query
+        name: endDate
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Maximum vendor rows to return, top-by-paidAmount (default 20, hard-capped at 100)
+        example: 20
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 20
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSpendReport'
+          description: Vendor spend analytics generated successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid date range or limit
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - missing accounting:analytics:view
+      security:
+      - bearerAuth:
+        - accounting:analytics:view
+      summary: Get Vendor Spend Analytics
+      tags:
+      - Accounting Analytics
+      x-required-permissions:
+      - accounting:analytics:view
   /v1/accounting/ap/bills:
     get:
       description: 'Lists vendor bills eligible for payment, meaning those in APPROVED status, ordered by due date oldest first with nulls last, then bill date, then bill id.
@@ -4056,6 +4133,92 @@ paths:
       - GL Mapping API
       x-required-permissions:
       - accounting:posting_rules:view
+  /v1/accounting/payment-applications:
+    get:
+      description: 'Lists pos-accounting cash applications of customer payments to invoices whose applied date falls in [appliedFrom, appliedTo], ordered by appliedAt ascending.
+
+        Use this tool to review A/R cash application activity in a period; do not use getPaymentLagCohorts or getCollectionsAnalytics for this, which are aggregate reports rather than a row-level application list, and note this endpoint is SCOPED TO pos-accounting cash applications only — it does not include pos-invoice deposit-credit draw-downs (DepositCreditApplication) or refunds (RefundRecord); see issue #1605 for that open cross-module question.
+
+        Preconditions: none beyond the caller holding accounting:analytics:view.
+
+        Required inputs: appliedFrom and appliedTo (ISO dates, appliedTo on or after appliedFrom); the window cannot exceed 366 days, to bound the scan. includeReversed is optional and defaults to false, in which case applications later reversed via PaymentApplicationReversal are EXCLUDED from the list entirely (not merely flagged); pass includeReversed=true to include them, with each row''s reversed field then reporting whether that application was reversed. page/size/sort are standard, though the appliedAt-ascending sort is server-controlled and any caller-supplied sort is ignored.
+
+        Emits an ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW audit event; no state changes.
+
+        Returns 400 when appliedTo is before appliedFrom or the window exceeds 366 days.
+
+        '
+      operationId: listPaymentApplications
+      parameters:
+      - description: Applied-date window start (YYYY-MM-DD)
+        example: 2026-06-01
+        in: query
+        name: appliedFrom
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Applied-date window end (YYYY-MM-DD)
+        example: 2026-06-30
+        in: query
+        name: appliedTo
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: 'Include applications later reversed, flagged via the row''s reversed field (default false: reversed applications are excluded entirely)'
+        example: false
+        in: query
+        name: includeReversed
+        required: false
+        schema:
+          default: false
+          type: boolean
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagePaymentApplicationListRow'
+          description: Payment applications retrieved successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagePaymentApplicationListRow'
+          description: Invalid date range or window too wide
+      security:
+      - bearerAuth:
+        - accounting:analytics:view
+      summary: List Payment Applications By Applied Date
+      tags:
+      - Payment Applications
+      x-required-permissions:
+      - accounting:analytics:view
   /v1/accounting/payment-applications/{applicationId}/reverse:
     post:
       description: 'Reverses one payment application as a new compensating record, restoring the invoice''s balance and the payment''s unapplied amount.
@@ -7356,6 +7519,97 @@ paths:
       x-required-permissions:
       - accounting:reconciliation:view
   /v1/accounting/vendor-bills:
+    get:
+      description: 'Lists vendor bills whose due date falls in [dueFrom, dueTo], optionally filtered by status, ordered by due date ascending.
+
+        Use this tool to browse or triage upcoming/overdue payables across vendors; do not use listApBills for this, which is scoped to APPROVED-only bills sorted for payment selection, and use getVendorBillById when the bill id is already known.
+
+        Preconditions: none beyond the caller holding accounting:ap:view.
+
+        Required inputs: dueFrom and dueTo (ISO dates, dueTo on or after dueFrom); the window cannot exceed 366 days, to bound the scan. status is an optional filter (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION, APPROVED, REJECTED, PAID, VOIDED); page/size/sort are standard, though the due-date-ascending sort is server-controlled and any caller-supplied sort is ignored.
+
+        Emits an ACCOUNTING_VENDOR_BILL_LIST_VIEW audit event; no state changes.
+
+        Returns 400 when dueTo is before dueFrom, the window exceeds 366 days, or status is not a recognized VendorBillStatus value.
+
+        '
+      operationId: listVendorBills
+      parameters:
+      - description: Due-date window start (YYYY-MM-DD)
+        example: 2026-06-01
+        in: query
+        name: dueFrom
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Due-date window end (YYYY-MM-DD)
+        example: 2026-06-30
+        in: query
+        name: dueTo
+        required: true
+        schema:
+          format: date
+          type: string
+      - description: Optional bill status filter
+        example: APPROVED
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - PENDING_RECEIPT_MATCH
+          - MATCH_EXCEPTION
+          - APPROVED
+          - REJECTED
+          - PAID
+          - VOIDED
+          type: string
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageVendorBillListRow'
+          description: Vendor bills retrieved successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageVendorBillListRow'
+          description: Invalid date range, window too wide, or unrecognized status
+      security:
+      - bearerAuth:
+        - accounting:ap:view
+      summary: List Vendor Bills By Due Date
+      tags:
+      - Vendor Bill API
+      x-required-permissions:
+      - accounting:ap:view
     post:
       description: 'Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, totaling the received line items and syncing the vendor into the AP vendor directory.
 
@@ -11445,11 +11699,75 @@ components:
           format: int32
           type: integer
       type: object
+    PagePaymentApplicationListRow:
+      properties:
+        content:
+          items:
+            $ref: '#/components/schemas/PaymentApplicationListRow'
+          type: array
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          format: int32
+          type: integer
+        numberOfElements:
+          format: int32
+          type: integer
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          format: int32
+          type: integer
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
     PageReportExportResponse:
       properties:
         content:
           items:
             $ref: '#/components/schemas/ReportExportResponse'
+          type: array
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          format: int32
+          type: integer
+        numberOfElements:
+          format: int32
+          type: integer
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          format: int32
+          type: integer
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
+    PageVendorBillListRow:
+      properties:
+        content:
+          items:
+            $ref: '#/components/schemas/VendorBillListRow'
           type: array
         empty:
           type: boolean
@@ -11564,6 +11882,45 @@ components:
           type: integer
       required:
       - items
+      type: object
+    PaymentApplicationListRow:
+      description: One pos-accounting cash application of a customer payment to an invoice
+      properties:
+        amount:
+          description: Amount applied to the invoice
+          example: 450.0
+          type: number
+        applicationId:
+          description: Payment application identifier
+          example: 01936e5f-1234-7a3d-8b6e-3c4567890124
+          format: uuid
+          type: string
+        appliedAt:
+          description: Timestamp the application was recorded (application_timestamp)
+          example: 2026-06-15 14:32:00+00:00
+          format: date-time
+          type: string
+        invoiceId:
+          description: Invoice identifier this application was made against
+          example: 01936e61-1234-7a3d-8b6e-3c4567890126
+          format: uuid
+          type: string
+        paymentId:
+          description: Receivable payment identifier this application belongs to
+          example: 01936e60-1234-7a3d-8b6e-3c4567890125
+          format: uuid
+          type: string
+        reversed:
+          description: True when this application has since been reversed (PaymentApplicationReversal exists). Always false when the caller did not set includeReversed=true, since reversed applications are excluded from the list entirely by default.
+          example: false
+          type: boolean
+      required:
+      - amount
+      - applicationId
+      - appliedAt
+      - invoiceId
+      - paymentId
+      - reversed
       type: object
     PaymentApplicationRequest:
       description: Request payload for applying a payment to one or more invoices
@@ -13021,6 +13378,45 @@ components:
       - totalCredit
       - totalDebit
       type: object
+    VendorBillListRow:
+      description: One vendor bill in a due-date-window listing
+      properties:
+        amount:
+          description: Total bill amount
+          example: 1200.0
+          type: number
+        billId:
+          description: Vendor bill identifier
+          example: 01936e5d-1234-7a3d-8b6e-3c4567890123
+          format: uuid
+          type: string
+        dueDate:
+          description: Bill due date; bills matched by this endpoint always have a due date in the requested window
+          example: 2026-02-14 00:00:00
+          format: date-time
+          type: string
+        status:
+          description: Bill lifecycle status
+          enum:
+          - PENDING_RECEIPT_MATCH
+          - MATCH_EXCEPTION
+          - APPROVED
+          - REJECTED
+          - PAID
+          - VOIDED
+          example: APPROVED
+          type: string
+        vendorId:
+          description: Vendor identifier
+          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+          format: uuid
+          type: string
+      required:
+      - amount
+      - billId
+      - status
+      - vendorId
+      type: object
     VendorBillMatchCandidateResponse:
       description: Vendor bill match candidate presented for manual selection during ambiguous matching
       properties:
@@ -13297,6 +13693,78 @@ components:
           type: string
       required:
       - name
+      - vendorId
+      type: object
+    VendorSpendReport:
+      description: Per-vendor spend report for one date window, ordered by paidAmount descending. paidAmount (settled A/P cash) and billCount/avgBillAmount (bill records) are different populations — see VendorSpendRow field descriptions.
+      properties:
+        endDate:
+          description: Window end date (inclusive)
+          example: 2026-06-30
+          format: date
+          type: string
+        generatedAt:
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+          format: date-time
+          type: string
+        limit:
+          description: The effective row cap applied to this response
+          example: 20
+          format: int32
+          type: integer
+        rows:
+          description: Per-vendor rows, paidAmount descending, bounded to `limit` entries
+          items:
+            $ref: '#/components/schemas/VendorSpendRow'
+          type: array
+        startDate:
+          description: Window start date (inclusive)
+          example: 2026-06-01
+          format: date
+          type: string
+        truncated:
+          description: True when more vendors had settled payments or bills in the window than `limit` allowed through — rows beyond the cap are not included
+          type: boolean
+      required:
+      - endDate
+      - generatedAt
+      - limit
+      - rows
+      - startDate
+      - truncated
+      type: object
+    VendorSpendRow:
+      description: One vendor's spend over the report window; see field descriptions for the paidAmount vs billCount/avgBillAmount population split
+      properties:
+        avgBillAmount:
+          description: Sum of VendorBill.totalAmount for this vendor's bills in the window divided by billCount; 0 (never null) when billCount is 0 — there is nothing to average, and 0 keeps this field a well-defined BigDecimal for every row
+          example: 1425.75
+          type: number
+        billCount:
+          description: Count of VendorBill records for this vendor whose billDate falls in the window, regardless of status; 0 when none billed in the window. Bill-side figure, a DIFFERENT population from paidAmount above — see class Javadoc.
+          example: 4
+          format: int32
+          type: integer
+        name:
+          description: Resolved vendor display name, from the AP vendor directory; falls back to the vendor name snapshot recorded on the vendor's own bills/payments when the vendor has no directory entry, and is null only if neither source has a name
+          example: Acme Parts Co
+          type:
+          - string
+          - 'null'
+        paidAmount:
+          description: Sum of APPayment.grossAmount for settled payments (status GATEWAY_SUCCEEDED or later) to this vendor whose paymentDate falls in the window; 0 when none settled in the window. This is A/P cash, a DIFFERENT population from billCount/avgBillAmount below — see class Javadoc.
+          example: 18250.0
+          type: number
+        vendorId:
+          description: Vendor identifier
+          example: 01936e5b-4567-7a3d-8b6e-1a2345678901
+          format: uuid
+          type: string
+      required:
+      - avgBillAmount
+      - billCount
+      - paidAmount
       - vendorId
       type: object
     VoidCreditMemoRequest:

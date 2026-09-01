@@ -9,6 +9,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1analytics~1collections
   /v1/accounting/analytics/payment-lag-cohorts:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1analytics~1payment-lag-cohorts
+  /v1/accounting/analytics/vendor-spend:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1analytics~1vendor-spend
   /v1/accounting/ap/bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1bills
   /v1/accounting/ap/payments:
@@ -119,6 +121,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1mappings~1resolve
   /v1/accounting/mappings/resolve-test:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1mappings~1resolve-test
+  /v1/accounting/payment-applications:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications
   /v1/accounting/payment-applications/{applicationId}/reverse:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1payment-applications~1{applicationId}~1reverse
   /v1/accounting/payments/{paymentId}/applications:
