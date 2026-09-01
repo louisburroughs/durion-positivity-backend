@@ -1599,6 +1599,8 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1labor~1{entryId}~1adjust
   /v1/workorders/{workorderId}/labor/{entryId}/stop:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1labor~1{entryId}~1stop
+  /v1/workorders/{workorderId}/notes:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1notes
   /v1/workorders/{workorderId}/operationalContext:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1operationalContext
   /v1/workorders/{workorderId}/operationalContext/override:

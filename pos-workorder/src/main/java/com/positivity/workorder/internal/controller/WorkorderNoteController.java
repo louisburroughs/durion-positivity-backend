@@ -53,10 +53,12 @@ public class WorkorderNoteController {
                     Use this tool for a note about the CUSTOMER; do not use it for notes about the work itself \
                     or about a decision on it — completion notes and approval notes are fields on the workorder \
                     and the change request respectively.
+                    Preconditions: the workorder must exist; the author is taken from the authenticated \
+                    caller rather than the request body.
                     Required inputs: workorderId (UUID) as a path parameter and noteText (max 2000 characters); \
                     noteType is an optional free-text classification such as CUSTOMER_REQUEST.
-                    The author is taken from the authenticated caller, not the request body.
-                    Emits a WORKORDER_NOTE_ADD event and publishes the workorder.note.added.v1 fact.
+                    Emits a WORKORDER_NOTE_ADD event and publishes the workorder.note.added.v1 fact, which \
+                    pos-customer projects onto the party's timeline.
                     Returns 201 with the saved note, and 404 when the workorder does not exist.
                     """)
     @ApiResponse(
@@ -97,9 +99,11 @@ public class WorkorderNoteController {
     @PreAuthorize("hasAuthority('workorder:note:view')")
     @Operation(operationId = "listWorkorderNotes", summary = "List a Workorder's Customer Notes", description = """
                     Returns the notes recorded about the customer on one workorder, most recent first.
-                    Use this tool to read the workorder's own notes; the same notes also appear on the \
-                    customer's CRM interaction timeline, which spans every workorder for that customer.
+                    Use this tool to read one workorder's own notes; read the customer's CRM interaction \
+                    timeline instead when the question spans every workorder for that customer.
+                    Preconditions: the workorder must exist.
                     Required inputs: workorderId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only query.
                     Returns 200 with the notes (an empty list when none were recorded), and 404 when the \
                     workorder does not exist.
                     """)
