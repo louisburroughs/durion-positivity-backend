@@ -36,8 +36,16 @@ import org.jspecify.annotations.Nullable;
  * <p>Excluded by name: settlement by <b>deposit credit</b> or <b>customer credit</b> (pos-invoice
  * {@code DepositCredit}/{@code DepositCreditApplication}), because that cash was received when the
  * deposit was taken, not when the credit was drawn down — a window in which deposit-funded invoices
- * finalize therefore shows {@code collectionRatePct} understated. <b>Refunds are not represented in
- * this endpoint at all</b> (pos-invoice {@code RefundRecord}; tracked as a follow-up).
+ * finalize therefore shows {@code collectionRatePct} understated.
+ *
+ * <p><b>Refunds have no dedicated figure in this endpoint</b> (pos-invoice {@code RefundRecord}; a
+ * dedicated refund measure is tracked as issue #1620) — but they are not invisible here. The
+ * commonest shape, a refunded invoice payment, produces <b>both</b> a {@code RefundRecord} in
+ * pos-invoice <b>and</b> a {@code PaymentApplicationReversal} in pos-accounting (ADR-0057 §4), and
+ * that reversal reduces {@code collected} in the window the reversal was recorded, on the movement
+ * basis above. So a refund of an applied invoice payment does depress {@code collected} — via the
+ * reversal, in the reversal's window. Standalone refunds and credit-balance refunds relieve no
+ * receivable and are not reflected at all.
  */
 @Data
 @Builder
@@ -47,8 +55,10 @@ import org.jspecify.annotations.Nullable;
         description = "Invoiced-vs-collected analytics for one date window. invoiced and collected are different"
                 + " invoice cohorts (see field descriptions) — do not present collectionRatePct as a"
                 + " cohort collection rate. collected is applied-to-A/R net of reversals recorded in the"
-                + " window, not cash received: it excludes deposit-credit and customer-credit settlement"
-                + " and does not represent refunds at all.")
+                + " window, not cash received: it excludes deposit-credit and customer-credit settlement."
+                + " Refunds have no dedicated figure (see #1620), but a refund accompanied by a"
+                + " payment-application reversal — the commonest shape — reduces collected in the window"
+                + " that reversal was recorded; standalone and credit-balance refunds are not reflected.")
 public class CollectionsAnalyticsReport {
 
     @Schema(description = "Window start date (inclusive)", example = "2026-06-01", requiredMode = REQUIRED)
@@ -86,10 +96,13 @@ public class CollectionsAnalyticsReport {
                     + " and never restates January, so sub-windows remain additive). Settlement by deposit"
                     + " credit or customer credit is EXCLUDED, because that cash was received when the"
                     + " deposit was taken rather than when the credit was drawn down, so a window in which"
-                    + " deposit-funded invoices finalize shows collectionRatePct understated. Refunds are"
-                    + " not represented in this endpoint at all. May be NEGATIVE in a heavy-reversal"
-                    + " window; it is deliberately not clamped. 0 when nothing was applied or reversed in"
-                    + " the window",
+                    + " deposit-funded invoices finalize shows collectionRatePct understated. Refunds have"
+                    + " no dedicated figure in this endpoint (see #1620): where a refund is accompanied by a"
+                    + " payment-application reversal — the commonest shape — that reversal reduces collected"
+                    + " in the window the reversal was recorded, per the movement basis above, whereas"
+                    + " standalone refunds and credit-balance refunds are not reflected at all. May be"
+                    + " NEGATIVE in a heavy-reversal window; it is deliberately not clamped. 0 when nothing"
+                    + " was applied or reversed in the window",
             example = "98250.00",
             requiredMode = REQUIRED)
     @NonNull
@@ -108,7 +121,9 @@ public class CollectionsAnalyticsReport {
     @Schema(
             description = "collected divided by invoiced, times 100, rounded HALF_UP to 2 decimals; null when invoiced"
                     + " is zero (the ratio is undefined — never a divide-by-zero error and never a"
-                    + " misleading 0)",
+                    + " misleading 0). May be NEGATIVE when in-window application reversals exceed in-window"
+                    + " applications (see collected); it is not clamped. HALF_UP rounds away from zero for"
+                    + " negative values.",
             example = "78.60",
             requiredMode = NOT_REQUIRED,
             nullable = true)

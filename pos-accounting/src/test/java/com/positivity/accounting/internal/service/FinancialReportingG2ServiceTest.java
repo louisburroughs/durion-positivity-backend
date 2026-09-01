@@ -36,6 +36,7 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -375,6 +376,87 @@ class FinancialReportingG2ServiceTest {
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("100.00");
     }
 
+    @Test
+    @DisplayName("Aged AR: totalOutstanding is invariant under any change of due dates (only the bucket split moves)")
+    void agedReceivablesTotalIsIndependentOfDueDates() {
+        // The A/R inclusion predicate keys on the DOCUMENT date alone: an invoice is in the report
+        // iff its document date is on or before asOfDate. The due date chooses the BUCKET and
+        // nothing else. That makes totalOutstanding, the grand totals and rows.size() invariant
+        // across a due-date-basis change — the property the aging-basis change did not alter and
+        // that two documents nevertheless described as a totals increase. (A/P is genuinely
+        // different: payableAgingDate already used the due date, so its totals really do move.)
+        //
+        // Pinned by reporting the SAME invoices twice with the only difference being their due
+        // dates: once with a spread of past/future/absent due dates, once with every invoice made
+        // not-yet-due. Totals must match to the cent; the bucket split must not.
+        List<ArFixture> fixtures = List.of(
+                new ArFixture(customer(1), AS_OF.minusDays(10), AS_OF.plusDays(45), "100.00"), // not yet due
+                new ArFixture(customer(2), AS_OF.minusDays(30), AS_OF, "200.00"), // due exactly today
+                new ArFixture(customer(3), AS_OF.minusDays(200), AS_OF.minusDays(150), "300.00"), // long overdue
+                new ArFixture(customer(4), AS_OF.minusDays(5), null, "400.00"), // no due date recorded
+                new ArFixture(customer(5), AS_OF, AS_OF.plusDays(90), "500.00"), // raised on asOfDate
+                new ArFixture(customer(6), AS_OF.plusDays(1), AS_OF.plusDays(30), "999.00")); // does not exist yet
+
+        // Expected total is derived from the fixture by the DOCUMENT-date rule, not hard-coded, so
+        // it stays honest if the fixture grows.
+        BigDecimal expectedTotal = fixtures.stream()
+                .filter(f -> !f.documentDate().isAfter(AS_OF))
+                .map(f -> new BigDecimal(f.open()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long expectedRows =
+                fixtures.stream().filter(f -> !f.documentDate().isAfter(AS_OF)).count();
+
+        AgedReceivablesReport asDated = reportFor(fixtures, ArFixture::dueDate);
+        // Same invoices, same open balances, same document dates — every due date pushed out.
+        AgedReceivablesReport allNotYetDue = reportFor(fixtures, f -> AS_OF.plusDays(60));
+
+        assertThat(asDated.getTotals().getTotalOutstanding())
+                .as("total covers every invoice whose DOCUMENT date is on or before asOfDate")
+                .isEqualByComparingTo(expectedTotal);
+        assertThat(asDated.getRows()).hasSize((int) expectedRows);
+
+        assertThat(allNotYetDue.getTotals().getTotalOutstanding())
+                .as("moving every due date cannot change what the report totals")
+                .isEqualByComparingTo(asDated.getTotals().getTotalOutstanding());
+        assertThat(allNotYetDue.getRows()).hasSameSizeAs(asDated.getRows());
+
+        // ...and the bucket split is what moves, so the invariance above is not vacuous.
+        assertThat(asDated.getTotals().getCurrent()).isEqualByComparingTo("1200.00"); // 100 + 200 + 400 + 500
+        assertThat(asDated.getTotals().getDays90Plus()).isEqualByComparingTo("300.00");
+        assertThat(allNotYetDue.getTotals().getCurrent()).isEqualByComparingTo(expectedTotal);
+        assertThat(allNotYetDue.getTotals().getDays90Plus()).isEqualByComparingTo("0");
+
+        // The invoice dated after asOfDate is excluded outright — it is not merely bucketed early.
+        assertThat(asDated.getRows()).noneMatch(row -> row.getCustomerId().equals(customer(6)));
+    }
+
+    /** One A/R invoice in {@link #agedReceivablesTotalIsIndependentOfDueDates}'s fixture. */
+    private record ArFixture(UUID partyId, LocalDate documentDate, LocalDate dueDate, String open) {}
+
+    /**
+     * Runs aged receivables over {@code fixtures}, taking each invoice's due date from
+     * {@code dueDateOf} so one fixture can be reported under two different due-date regimes while
+     * document dates, customers and open balances stay fixed.
+     */
+    private AgedReceivablesReport reportFor(List<ArFixture> fixtures, Function<ArFixture, LocalDate> dueDateOf) {
+        List<ExtInvoice> invoices = fixtures.stream()
+                .map(f -> arInvoice(f.partyId(), new BigDecimal(f.open()), f.documentDate(), dueDateOf.apply(f)))
+                .toList();
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(invoices);
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        for (ExtInvoice invoice : invoices) {
+            // The report must sum the OPEN balance, which the fixture keeps equal to the invoice
+            // total for readability; the point under test is the inclusion rule, not the balance.
+            when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(invoice.getTotal());
+        }
+        return service.generateAgedReceivables(AS_OF);
+    }
+
+    /** Stable per-fixture customer id, so the two runs group into the same rows. */
+    private static UUID customer(int n) {
+        return UUID.fromString(String.format("c0000000-0000-7000-8000-%012d", n));
+    }
+
     // ================= Aged Payables — bucket boundaries =================
 
     @Test
@@ -548,6 +630,18 @@ class FinancialReportingG2ServiceTest {
     /** Invoice with no due date recorded — ages from the invoice (document) date. */
     private static ExtInvoice arInvoice(BigDecimal total, LocalDate invoiceDate) {
         return arInvoice(total, invoiceDate, null);
+    }
+
+    /** Invoice for a named customer, so several invoices can be grouped onto one report row. */
+    private static ExtInvoice arInvoice(UUID partyId, BigDecimal total, LocalDate invoiceDate, LocalDate dueDate) {
+        return ExtInvoice.builder()
+                .invoiceId(UUID.randomUUID())
+                .partyId(partyId.toString())
+                .status("POSTED")
+                .total(total)
+                .invoiceCreatedAt(invoiceDate.atStartOfDay().toInstant(ZoneOffset.UTC))
+                .dueDate(dueDate)
+                .build();
     }
 
     /** Invoice carrying both dates: {@code invoiceDate} governs existence, {@code dueDate} aging. */

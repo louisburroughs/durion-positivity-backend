@@ -78,7 +78,15 @@ public class AccountingAnalyticsController {
                     Settlement by deposit credit or customer credit is EXCLUDED, because that cash was \
                     received when the deposit was taken rather than when the credit was drawn down; a \
                     window in which deposit-funded invoices finalize therefore shows collectionRatePct \
-                    understated. Refunds are not represented in this endpoint at all.
+                    understated.
+                    Refunds have no dedicated figure in this endpoint (see issue #1620), but they are not \
+                    absent from it. The commonest shape — a refunded invoice payment — produces both a \
+                    RefundRecord in pos-invoice and a PaymentApplicationReversal in pos-accounting, and \
+                    that reversal reduces collected in the window the reversal was recorded, on the \
+                    movement basis above. So a refund of an applied invoice payment does depress \
+                    collected, via the reversal, in the reversal's window — do not explain such a dip as \
+                    anything else. Standalone refunds and credit-balance refunds relieve no receivable and \
+                    are not reflected at all.
                     Use this tool for a single window's cash-application efficiency; do not loop it across \
                     more than 3 periods for a multi-period trend such as 12 weekly windows, since that \
                     exceeds this endpoint's call budget — narrow the request instead, or wait for a future \

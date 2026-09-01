@@ -12,11 +12,13 @@ import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
 import com.positivity.accounting.internal.dto.VendorSpendReport;
 import com.positivity.accounting.internal.dto.VendorSpendRow;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.CustomerCreditTransaction;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
@@ -342,6 +344,57 @@ class AccountingAnalyticsServiceImplTest {
             assertThat(report.getApplicationReversals()).isPositive();
             assertThat(report.getApplicationReversals()).isEqualByComparingTo("900.00");
             assertThat(report.getCollectionRatePct()).isEqualByComparingTo("-80.00");
+        }
+
+        @Test
+        @DisplayName("A customer-credit draw-down in the window contributes ZERO to collected (ADR-0057)")
+        void customerCreditDrawDownContributesNothingToCollected() {
+            // ADR-0057 names this as an acceptance condition: a deposit/customer-credit draw-down
+            // relieves A/R but is NOT cash collected in the window, so it must contribute to
+            // `collected` exactly once and only in the take window — i.e. never here.
+            //
+            // Today the exclusion holds only STRUCTURALLY: applying a customer credit writes a
+            // CustomerCreditTransaction (CustomerCreditServiceImpl#applyCreditToInvoice) and never a
+            // PaymentApplication, and InvoiceBalanceCalculator#balanceDue keeps `creditApplied` as a
+            // separate term from `applied`. A structural guarantee is exactly what a future
+            // "sum all A/R relief in one query" refactor breaks silently, so it is pinned here.
+            CustomerCreditTransaction drawDown = CustomerCreditTransaction.builder()
+                    .creditTransactionId(UUID.randomUUID())
+                    .creditId(UUID.randomUUID())
+                    .transactionType(CustomerCreditTransactionType.APPLICATION)
+                    .invoiceId(UUID.randomUUID())
+                    .amount(new BigDecimal("750.00"))
+                    .currency("USD")
+                    .requestId(UUID.randomUUID().toString())
+                    .createdAt(Instant.parse("2026-06-12T00:00:00Z")) // inside the reported window
+                    .createdBy("test")
+                    .build();
+
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(invoice(UUID.randomUUID(), Instant.parse("2026-06-02T00:00:00Z"), "1000.00")));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of(
+                            application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "300.00", "0.00")));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            // Only the cash application counts. Had the draw-down been folded in, collected would
+            // read 1050.00 and the rate 105.00% — an invoice "over-collected" without cash moving.
+            assertThat(report.getCollected()).isEqualByComparingTo("300.00");
+            assertThat(report.getCollected())
+                    .as("credit draw-down of %s must not be added to collected", drawDown.getAmount())
+                    .isNotEqualByComparingTo(new BigDecimal("300.00").add(drawDown.getAmount()));
+            assertThat(report.getCollectionRatePct()).isEqualByComparingTo("30.00");
+
+            // The tripwire for the refactor that would break the structural guarantee: collected is
+            // derived from payment applications and their reversals only, so the service must hold no
+            // customer-credit dependency to sum. Wiring one in is the moment ADR-0057 needs re-reading.
+            assertThat(AccountingAnalyticsServiceImpl.class.getDeclaredFields())
+                    .as("collections analytics must not depend on customer-credit state")
+                    .noneMatch(field -> field.getType().getSimpleName().contains("CustomerCredit"));
         }
 
         @Test

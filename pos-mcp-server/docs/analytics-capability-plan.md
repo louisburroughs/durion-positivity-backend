@@ -126,7 +126,12 @@ the agent. No backend changes.
     *document* date, not the aging date, so it means "not raised yet" rather than "not due yet".
   - **Not-yet-due amounts are included, in `current`.** `daysPastDue` may be negative and negatives
     satisfy the `<= 30` test — which is what `AgedReceivablesRow.current`'s schema always promised
-    ("includes not-yet-due"). Previously those rows were dropped entirely.
+    ("includes not-yet-due"). On **A/P** that is a real widening: `payableAgingDate` already used the
+    due date, so the old guard dropped not-yet-due bills entirely. On **A/R** nothing is added — the
+    old aging date *was* the document date, so the old and new guards are the same predicate; the A/R
+    inclusion set, row count, `totalOutstanding` and grand totals are unchanged and only the bucket
+    split moves. A not-yet-due invoice raised in the past was never dropped from A/R; it was
+    mis-bucketed as `days31To60`, which is the defect #1604 reports.
 
   Bucket boundaries are unchanged (`current` ≤ 30, 31–60, 61–90, > 90). The prediction above held:
   the fix shifts every A/R bucket and invalidated the Q13 ground-truth SQL, which has been rewritten

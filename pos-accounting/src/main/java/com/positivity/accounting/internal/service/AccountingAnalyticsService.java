@@ -50,11 +50,17 @@ public interface AccountingAnalyticsService {
      *
      * <p>Params are anchored by invoice <b>issue date</b> ({@code ExtInvoice.finalizedAt} — reliably
      * populated by {@code InvoiceEventsListener} whenever pos-invoice has finalized the invoice, the
-     * same field the tax-liability and aged-receivables reports already treat as the invoice's
-     * effective date; {@code invoiceCreatedAt} is only the draft timestamp and is not used), not
-     * payment date: the cohort bucket is a property of invoices <i>issued</i> in the window, whatever
-     * happened to them since. A still-{@code DRAFT} invoice (null {@code finalizedAt}) has not been
-     * issued and never contributes.
+     * same field the tax-liability report already treats as the invoice's effective date; {@code
+     * invoiceCreatedAt} is only the draft timestamp and is not used), not payment date: the cohort
+     * bucket is a property of invoices <i>issued</i> in the window, whatever happened to them since.
+     * A still-{@code DRAFT} invoice (null {@code finalizedAt}) has not been issued and never
+     * contributes.
+     *
+     * <p><b>Aged receivables is not a precedent for this anchor.</b> {@code generateAgedReceivables}
+     * ages from the invoice's <b>due date</b> (falling back to a document date of {@code
+     * invoiceCreatedAt} → {@code finalizedAt} → {@code updatedAt}, which is also what its
+     * existence filter tests), so its effective date for aging is neither this anchor nor the
+     * tax-liability report's.
      *
      * <p><b>Lag</b> is the whole days between that issue-date anchor and the {@code
      * PaymentApplication.applicationTimestamp} at which {@code invoiceBalanceAfter} first reaches

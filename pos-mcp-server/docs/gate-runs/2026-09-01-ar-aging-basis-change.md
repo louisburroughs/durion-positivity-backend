@@ -46,15 +46,31 @@ is after `asOfDate`. Previously the same test was applied to the aging date, whi
 becomes the due date — would have meant "not yet due" rather than "not raised yet". The filter keeps its
 original intent only because it was re-based.
 
-**3. Not-yet-due balances are now reported, in `current`.** `daysPastDue` may be negative
-(`:662-667`), and `AgingBuckets.add` puts anything `<= 30` in `current` (`:1376-1378`). That is what
-`AgedReceivablesRow`'s schema already promised — "Outstanding 0-30 days past due (includes not-yet-due)"
-(`pos-accounting/src/main/java/com/positivity/accounting/internal/dto/AgedReceivablesRow.java:56`). Before
-this change such rows were dropped from the report entirely, so `current`, `totalOutstanding`, and every
-grand total move upward on any dataset containing not-yet-due invoices.
+**3. Not-yet-due balances are now bucketed as `current` — but on A/R they were never missing.**
+`daysPastDue` may be negative (`:662-667`), and `AgingBuckets.add` puts anything `<= 30` in `current`
+(`:1376-1378`). That is what `AgedReceivablesRow`'s schema already promised — "Outstanding 0-30 days past
+due (includes not-yet-due)"
+(`pos-accounting/src/main/java/com/positivity/accounting/internal/dto/AgedReceivablesRow.java:56`).
+
+**The A/R inclusion set is invariant across this change.** Pre-fix, `receivableAgingDate` *was* the
+document date (`invoiceCreatedAt` → `finalizedAt` → `updatedAt`), so the old guard `daysPastDue < 0` and
+the new guard `receivableDocumentDate(invoice).isAfter(asOfDate)` are the same predicate written two ways.
+The set of invoices that reach the buckets, `rows.size()`, each row's `totalOutstanding`, and every grand
+total are therefore **unchanged**. Only the bucket distribution moves. A not-yet-due invoice raised in the
+past was never dropped from A/R — it was mis-bucketed as `days31To60`, which is exactly the defect #1604
+describes.
+
+This was checked empirically: the Q13 ground-truth SQL was executed against a seeded Postgres fixture,
+pre-fix and post-fix. `total_outstanding` was `700.00` in both runs, while the buckets moved — `current`
+100.00 → 300.00, `90+` 500.00 → 100.00, past-due share 85.71% → 57.14%. **That was a targeted SQL fixture
+check, not a gate run.** It carries no Q-number and no pass/fail, and it does not alter the status of Q13
+or any other gate question; the "Observed" section above still stands in full.
+
+**"Dropped entirely" is true of A/P only**, where `payableAgingDate` already used the due date so the old
+guard really was deleting the not-yet-due book — see claim 4. Claim 3 must not be generalised onto A/R.
 
 **4. A/P totals move as well, and the issue title does not say so.** `payableAgingDate` already used the
-due date, so claim 1 is a no-op there — but claim 3 is not. `FinancialReportingServiceImpl:736-746`
+due date, so claim 1 is a no-op there — but the existence-filter re-basing in claim 2 is not. `FinancialReportingServiceImpl:736-746`
 applies the same document-date existence filter and the same negative-`daysPastDue` retention to vendor
 bills, so not-yet-due bills that were previously dropped from aged payables now appear in `current`.
 Aged **payables** figures are therefore also not comparable across this change.

@@ -428,6 +428,10 @@ public class FinancialReportingController {
             description = """
                     Generates the Aged Receivables report as of a date: per-customer open invoice balances \
                     bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+                    Buckets are days past the invoice's DUE date, falling back to the invoice date when an \
+                    invoice carries no due date — the same rule generateAgedPayables uses — and not-yet-due \
+                    balances are INCLUDED in the 0-30 bucket, which therefore means "not yet due, or up to \
+                    30 days past due".
                     Use this tool to review customer collection exposure; do not use generateAgedPayables, \
                     which is the vendor-side mirror of this report.
                     Preconditions: none; rows are empty when no open receivables exist.
@@ -478,6 +482,10 @@ public class FinancialReportingController {
             description = """
                     Generates the Aged Payables report as of a date: per-vendor open vendor-bill balances \
                     bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+                    Buckets are days past the bill's DUE date, falling back to the bill date when a bill \
+                    carries no due date — the same rule generateAgedReceivables uses — and not-yet-due \
+                    bills are INCLUDED in the 0-30 bucket, which therefore means "not yet due, or up to 30 \
+                    days past due".
                     Use this tool to review what is owed to vendors and how overdue it is; do not use \
                     generateAgedReceivables, which is the customer-side mirror, and use listApBills to pick \
                     individual bills for payment.
