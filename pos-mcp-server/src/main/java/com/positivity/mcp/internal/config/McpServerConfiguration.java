@@ -8,6 +8,7 @@ import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.transport.HttpServletSseServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.restclient.RestClientCustomizer;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
@@ -76,9 +77,19 @@ public class McpServerConfiguration {
         return registration;
     }
 
+    /**
+     * WebClient for OpenAPI discovery. The default codec buffer is 256KB, and service specs outgrow
+     * it — on alpha (2026-09-01, #1632) pos-workorder's spec exceeded the cap and the whole domain
+     * silently vanished from the tool registry ({@code DataBufferLimitException} is not transient,
+     * so retries never help). Specs only grow; default to 16MB, overridable via
+     * {@code mcp.server.discovery-max-spec-bytes}.
+     */
     @Bean
-    public WebClient discoveryWebClient() {
-        return WebClient.builder().build();
+    public WebClient discoveryWebClient(
+            @Value("${mcp.server.discovery-max-spec-bytes:16777216}") int discoveryMaxSpecBytes) {
+        return WebClient.builder()
+                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(discoveryMaxSpecBytes))
+                .build();
     }
 
     @Bean

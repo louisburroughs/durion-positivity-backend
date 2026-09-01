@@ -249,6 +249,45 @@ class ToolRegistrationServiceImplTest {
      * guard, not a real branch to characterise.
      */
     @Test
+    @DisplayName("registerDiscoveredTools skips the prune when any per-service spec fetch failed (#1632)")
+    void registerDiscoveredTools_skipsPrune_whenAnyServiceFetchFailed() {
+        // A partial aggregate: this cycle persisted real ops, but /workorder's spec fetch failed.
+        // Pruning would treat every workorder_* op as removed and delete it — exactly what
+        // happened on alpha (2026-09-01) after a transient routing fault. The guard must skip the
+        // prune entirely and leave reconciliation to the next fully-successful cycle.
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered = new OpenApiDocumentFetcher.DiscoveredOpenApi(
+                "aggregate", GATEWAY_BASE_URI, new OpenAPI(), List.of("/workorder"));
+        DiscoveredOperation op = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        // Ops still persist (upsert-only is safe on a partial view) — only the prune is withheld.
+        verify(repo).upsertDiscoveredOperation(any(), any());
+        verify(repo, never()).pruneDiscoveredOperationsExcept(any());
+    }
+
+    @Test
     @DisplayName("registerDiscoveredTools does not prune when the aggregate persists no ops (#1121 safety guard)")
     void registerDiscoveredTools_doesNotPrune_whenNothingPersisted() {
         McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");

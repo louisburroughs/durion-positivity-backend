@@ -212,19 +212,39 @@ public class OpenApiDocumentFetcher {
                     }
                     return Flux.fromIterable(docs)
                             .flatMap(doc -> fetchAndPrefixService(baseUri, doc))
-                            .reduce(new Paths(), (merged, servicePaths) -> {
-                                merged.putAll(servicePaths);
-                                return merged;
-                            })
-                            .map(mergedPaths -> {
+                            .collectList()
+                            .map(results -> {
+                                Paths mergedPaths = new Paths();
+                                List<String> failedPrefixes = new ArrayList<>();
+                                for (ServiceFetchResult result : results) {
+                                    if (result.failed()) {
+                                        failedPrefixes.add(result.routingPrefix());
+                                    } else {
+                                        mergedPaths.putAll(result.paths());
+                                    }
+                                }
                                 OpenAPI merged = new OpenAPI();
                                 merged.setPaths(mergedPaths);
-                                log.info(
-                                        "Aggregated {} service specs via swagger-config from {} → {} paths",
-                                        docs.size(),
-                                        swaggerConfigUri,
-                                        mergedPaths.size());
-                                return new DiscoveredOpenApi(AGGREGATE, baseUri, merged);
+                                if (failedPrefixes.isEmpty()) {
+                                    log.info(
+                                            "Aggregated {} service specs via swagger-config from {} → {} paths",
+                                            docs.size(),
+                                            swaggerConfigUri,
+                                            mergedPaths.size());
+                                } else {
+                                    // ERROR, not WARN: a partial aggregate silently narrows the
+                                    // assistant's tool surface for whole domains (#1632).
+                                    log.error(
+                                            "Aggregated {} of {} service specs via swagger-config from {} → {} paths; "
+                                                    + "FAILED prefixes {} — their previously-registered ops will be "
+                                                    + "kept, not pruned, this cycle",
+                                            docs.size() - failedPrefixes.size(),
+                                            docs.size(),
+                                            swaggerConfigUri,
+                                            mergedPaths.size(),
+                                            failedPrefixes);
+                                }
+                                return new DiscoveredOpenApi(AGGREGATE, baseUri, merged, List.copyOf(failedPrefixes));
                             });
                 })
                 .onErrorResume(ex -> {
@@ -233,7 +253,7 @@ public class OpenApiDocumentFetcher {
                 });
     }
 
-    private Mono<Paths> fetchAndPrefixService(URI baseUri, ServiceDoc doc) {
+    private Mono<ServiceFetchResult> fetchAndPrefixService(URI baseUri, ServiceDoc doc) {
         URI docUri = baseUri.resolve(doc.url());
         return webClient
                 .get()
@@ -248,10 +268,33 @@ public class OpenApiDocumentFetcher {
                 .map(result -> prefixPaths(result.getOpenAPI(), doc.routingPrefix()))
                 .doOnNext(paths -> log.info(
                         "Fetched service spec {} → {} paths (prefix {})", docUri, paths.size(), doc.routingPrefix()))
+                .map(paths -> ServiceFetchResult.success(doc.routingPrefix(), paths))
+                // #1632: a failed fetch must stay distinguishable from an empty service. Collapsing
+                // to an empty Paths made a transient failure look like a removed service, and the
+                // #1121 prune then deleted that domain's previously-registered ops. Log the CAUSE
+                // too — Retry exhaustion reports only "Retries exhausted: 3/3" in getMessage().
                 .onErrorResume(ex -> {
-                    log.warn("Could not fetch/merge service spec at {}: {}", docUri, ex.getMessage());
-                    return Mono.just(new Paths());
+                    Throwable cause = ex.getCause();
+                    log.warn(
+                            "Could not fetch/merge service spec at {} (prefix {}): {}{}",
+                            docUri,
+                            doc.routingPrefix(),
+                            ex.getMessage(),
+                            cause != null ? " — cause: " + cause : "");
+                    return Mono.just(ServiceFetchResult.failure(doc.routingPrefix()));
                 });
+    }
+
+    /** Outcome of one per-service spec fetch: its prefixed paths on success, or a failure marker. */
+    record ServiceFetchResult(
+            @NonNull String routingPrefix, @NonNull Paths paths, boolean failed) {
+        static ServiceFetchResult success(@NonNull String prefix, @NonNull Paths paths) {
+            return new ServiceFetchResult(prefix, paths, false);
+        }
+
+        static ServiceFetchResult failure(@NonNull String prefix) {
+            return new ServiceFetchResult(prefix, new Paths(), true);
+        }
     }
 
     /**
@@ -396,7 +439,17 @@ public class OpenApiDocumentFetcher {
         return result;
     }
 
-    public record DiscoveredOpenApi(String serviceId, URI baseUri, OpenAPI openApi) {}
+    /**
+     * @param failedPrefixes routing prefixes whose per-service spec fetch FAILED this cycle (empty
+     *     when the aggregate came from a single merged document). #1632: a failed fetch is not an
+     *     empty service — consumers must not treat the aggregate as complete when this is non-empty,
+     *     and in particular must not prune previously-registered ops for these prefixes.
+     */
+    public record DiscoveredOpenApi(String serviceId, URI baseUri, OpenAPI openApi, List<String> failedPrefixes) {
+        public DiscoveredOpenApi(String serviceId, URI baseUri, OpenAPI openApi) {
+            this(serviceId, baseUri, openApi, List.of());
+        }
+    }
 
     private static long elapsedMs(long startNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);

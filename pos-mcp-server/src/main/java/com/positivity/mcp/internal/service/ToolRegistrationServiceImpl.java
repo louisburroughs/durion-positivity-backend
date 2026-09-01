@@ -119,7 +119,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         toolsDiscoveredTotal.increment(specifications.size());
         log.info("Registering {} MCP tools from gateway aggregate spec: {}", specifications.size(), toolNames);
 
-        return persistDiscoveredOperations(discovered.openApi())
+        return persistDiscoveredOperations(discovered.openApi(), discovered.failedPrefixes())
                 .then(Flux.fromIterable(specifications)
                         .flatMap(this::addToolWithTiming)
                         .then(mcpAsyncServer.notifyToolsListChanged()))
@@ -180,7 +180,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * {@code x-required-permissions} extension (#781, fail-closed — an op with no extension gets no
      * grant and is never selected until curated via the #785 admin surface).
      */
-    private @NonNull Mono<Void> persistDiscoveredOperations(@NonNull OpenAPI openApi) {
+    private @NonNull Mono<Void> persistDiscoveredOperations(
+            @NonNull OpenAPI openApi, @NonNull List<String> failedPrefixes) {
         return Mono.fromRunnable(() -> {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
@@ -192,7 +193,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                                     + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
-                    pruneStaleOperations(persisted, discoveredNames);
+                    pruneStaleOperations(persisted, discoveredNames, failedPrefixes);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();
@@ -252,8 +253,24 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * persisted > 0} so a run that wrote nothing (bad/empty spec, DB trouble) can never wipe the
      * catalog; {@code pruneDiscoveredOperationsExcept} also no-ops on an empty set.
      */
-    private void pruneStaleOperations(int persisted, @NonNull Set<String> discoveredNames) {
+    private void pruneStaleOperations(
+            int persisted, @NonNull Set<String> discoveredNames, @NonNull List<String> failedPrefixes) {
         if (persisted <= 0 || discoveredNames.isEmpty()) {
+            return;
+        }
+        // #1632: never prune against a PARTIAL aggregate. When any per-service spec fetch failed
+        // this cycle, the failed domains' ops are absent from discoveredNames not because the
+        // services removed them but because we could not see them — on alpha (2026-09-01) exactly
+        // this deleted every previously-registered pos-invoice op after a transient routing fault.
+        // Skipping the prune is safe: persistence is upsert-only, and the next fully-successful
+        // cycle reconciles orphans.
+        if (!failedPrefixes.isEmpty()) {
+            log.error(
+                    "Skipping the #1121 stale-op prune: {} service spec fetch(es) failed this cycle "
+                            + "(prefixes {}). Pruning against this partial aggregate would delete the "
+                            + "registered ops of every failed domain.",
+                    failedPrefixes.size(),
+                    failedPrefixes);
             return;
         }
         int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames);
