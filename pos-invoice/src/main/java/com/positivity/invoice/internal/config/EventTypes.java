@@ -51,6 +51,20 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    // ==================== WAVE 2 ANALYTICS — ISSUES #1589, #1592 ====================
+
+    public static final EventTypeRegistration INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW = EventTypeRegistration.search(
+                    "INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW",
+                    "View per-customer revenue analytics for a date window (#1589)")
+            .apiVersion("1")
+            .build();
+
+    public static final EventTypeRegistration INVOICE_ANALYTICS_INVOICING_LAG_VIEW = EventTypeRegistration.fastRead(
+                    "INVOICE_ANALYTICS_INVOICING_LAG_VIEW",
+                    "View average workorder-creation-to-invoice-creation lag for a date window (#1592)")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_ADJUSTMENT_APPLY = EventTypeRegistration.write(
                     "INVOICE_ADJUSTMENT_APPLY", "Apply adjustment to draft invoice")
             .apiVersion("1")
@@ -189,6 +203,8 @@ public final class EventTypes {
                 INVOICE_GET,
                 INVOICE_SEARCH,
                 INVOICE_ITEM_SEARCH,
+                INVOICE_ANALYTICS_REVENUE_BY_CUSTOMER_VIEW,
+                INVOICE_ANALYTICS_INVOICING_LAG_VIEW,
                 INVOICE_ADJUSTMENT_APPLY,
                 INVOICE_FINALIZATION_REQUESTED,
                 INVOICE_FINALIZED,

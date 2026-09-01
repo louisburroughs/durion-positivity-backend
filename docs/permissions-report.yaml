@@ -1,9 +1,9 @@
-generatedAt: "2026-08-31T22:27:48.834012+00:00"
+generatedAt: "2026-09-01T01:35:24.749542+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 459
-  uniquePermissionCount: 459
+  permissionCount: 460
+  uniquePermissionCount: 460
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -467,8 +467,10 @@ manifests:
     domain: "invoice"
     serviceName: "pos-invoice"
     version: "1.0"
-    permissionCount: 5
+    permissionCount: 6
     permissions:
+      - name: "invoice:analytics:view"
+        description: "View invoice analytics reports (revenue-by-customer, invoicing lag; #1589, #1592)"
       - name: "invoice:billing-rules"
         description: "Manage invoice billing rules and defaults"
       - name: "invoice:finalize"
@@ -2311,6 +2313,12 @@ permissions:
     serviceName: "pos-inventory"
     module: "pos-inventory"
     source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "invoice:analytics:view"
+    description: "View invoice analytics reports (revenue-by-customer, invoicing lag; #1589, #1592)"
+    domain: "invoice"
+    serviceName: "pos-invoice"
+    module: "pos-invoice"
+    source: "pos-invoice/src/main/resources/permissions.yaml"
   - name: "invoice:billing-rules"
     description: "Manage invoice billing rules and defaults"
     domain: "invoice"
