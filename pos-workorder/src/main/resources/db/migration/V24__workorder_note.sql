@@ -13,7 +13,7 @@ CREATE TABLE workorder_note (
     note_type character varying(100),
     note_text character varying(2000) NOT NULL,
     authored_by character varying(255),
-    created_at timestamp with time zone NOT NULL,
+    created_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT pk_workorder_note PRIMARY KEY (note_id)
 );
 

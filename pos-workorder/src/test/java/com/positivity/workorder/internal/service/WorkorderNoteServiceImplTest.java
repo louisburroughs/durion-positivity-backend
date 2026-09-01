@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,9 +19,7 @@ import com.positivity.workorder.internal.entity.WorkorderNote;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderNoteRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,11 +48,11 @@ import org.springframework.beans.factory.ObjectProvider;
 class WorkorderNoteServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-09-01T10:00:00Z");
-    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final UUID WORKORDER_ID = UUID.fromString("019200aa-0000-7000-8000-000000000101");
     private static final UUID NOTE_ID = UUID.fromString("019200aa-0000-7000-8000-000000000102");
     private static final UUID PARTY_ID = UUID.fromString("019200aa-0000-7000-8000-000000000103");
     private static final UUID VEHICLE_ID = UUID.fromString("019200aa-0000-7000-8000-000000000104");
+    private static final UUID SHOP_ID = UUID.fromString("019200aa-0000-7000-8000-000000000105");
     private static final String NOTE_TEXT = "Customer says the noise only happens on a cold start.";
 
     @Mock
@@ -72,8 +71,7 @@ class WorkorderNoteServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new WorkorderNoteServiceImpl(
-                CLOCK, workorderNoteRepository, workorderRepository, outboxEventWriterProvider);
+        service = new WorkorderNoteServiceImpl(workorderNoteRepository, workorderRepository, outboxEventWriterProvider);
         when(outboxEventWriterProvider.getIfAvailable()).thenReturn(outboxEventWriter);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder()));
         when(workorderNoteRepository.save(any(WorkorderNote.class))).thenAnswer(invocation -> {
@@ -90,6 +88,7 @@ class WorkorderNoteServiceImplTest {
         workorder.setWorkorderNumber("WO-2026-1001");
         workorder.setCustomerId(PARTY_ID);
         workorder.setVehicleId(VEHICLE_ID);
+        workorder.setShopId(SHOP_ID);
         return workorder;
     }
 
@@ -112,11 +111,27 @@ class WorkorderNoteServiceImplTest {
         WorkorderNoteAddedV1 fact = (WorkorderNoteAddedV1) payload.getValue();
         assertThat(fact.partyId()).isEqualTo(PARTY_ID);
         assertThat(fact.vehicleId()).isEqualTo(VEHICLE_ID);
+        assertThat(fact.shopId()).isEqualTo(SHOP_ID);
         assertThat(fact.noteId()).isEqualTo(NOTE_ID);
         assertThat(fact.noteType()).isEqualTo("CUSTOMER_REQUEST");
         assertThat(fact.noteText()).isEqualTo(NOTE_TEXT);
         assertThat(fact.workorderNumber()).isEqualTo("WO-2026-1001");
         assertThat(fact.addedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("A no-customer job publishes a fact with no party, which the consumer skips")
+    void publishesFactWithoutParty() {
+        Workorder noCustomer = workorder();
+        noCustomer.setCustomerId(null);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(noCustomer));
+
+        service.addNote(WORKORDER_ID, new AddWorkorderNoteRequest(null, NOTE_TEXT), null);
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(outboxEventWriter)
+                .publish(eq(WorkorderNoteAddedV1.EVENT_TYPE), anyInt(), eq(WORKORDER_ID), payload.capture());
+        assertThat(((WorkorderNoteAddedV1) payload.getValue()).partyId()).isNull();
     }
 
     @Test
@@ -157,10 +172,23 @@ class WorkorderNoteServiceImplTest {
     }
 
     @Test
+    @DisplayName("A blank note is rejected as a bad argument, not an NPE, for non-HTTP callers")
+    void rejectsBlankNoteText() {
+        assertThatThrownBy(() -> service.addNote(WORKORDER_ID, new AddWorkorderNoteRequest(null, "  "), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noteText");
+        assertThatThrownBy(() -> service.addNote(WORKORDER_ID, new AddWorkorderNoteRequest(null, null), null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(workorderNoteRepository, never()).save(any());
+        verifyNoInteractions(outboxEventWriter);
+    }
+
+    @Test
     @DisplayName("Notes are listed newest first for an existing workorder")
     void listsNotes() {
         when(workorderRepository.existsById(WORKORDER_ID)).thenReturn(true);
-        when(workorderNoteRepository.findByWorkorderIdOrderByCreatedAtDesc(WORKORDER_ID))
+        when(workorderNoteRepository.findByWorkorderIdOrderByCreatedAtDescNoteIdDesc(WORKORDER_ID))
                 .thenReturn(List.of(WorkorderNote.builder()
                         .noteId(NOTE_ID)
                         .workorderId(WORKORDER_ID)

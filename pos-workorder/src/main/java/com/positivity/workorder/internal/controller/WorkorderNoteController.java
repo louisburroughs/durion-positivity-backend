@@ -1,8 +1,10 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.AddWorkorderNoteRequest;
 import com.positivity.workorder.internal.dto.WorkorderNoteResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderNoteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,8 +22,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,8 +44,8 @@ public class WorkorderNoteController {
     @EmitEvent(id = "WORKORDER_NOTE_ADD", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:note:add"})
-    @PreAuthorize("hasAuthority('workorder:note:add')")
+            scopes = {WorkorderPermissions.NOTE_ADD})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.NOTE_ADD + "')")
     @Operation(operationId = "addWorkorderNote", summary = "Record a Note About the Customer", description = """
                     Records a free-text note about the customer against a workorder, such as something the \
                     customer said while the job was open, and publishes it so it lands on the customer's CRM \
@@ -95,15 +95,16 @@ public class WorkorderNoteController {
     @EmitEvent(id = "WORKORDER_NOTE_LIST", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"workorder:note:view"})
-    @PreAuthorize("hasAuthority('workorder:note:view')")
+            scopes = {WorkorderPermissions.NOTE_VIEW})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.NOTE_VIEW + "')")
     @Operation(operationId = "listWorkorderNotes", summary = "List a Workorder's Customer Notes", description = """
                     Returns the notes recorded about the customer on one workorder, most recent first.
                     Use this tool to read one workorder's own notes; read the customer's CRM interaction \
                     timeline instead when the question spans every workorder for that customer.
                     Preconditions: the workorder must exist.
                     Required inputs: workorderId (UUID) as a path parameter.
-                    No events are emitted and no state changes; this is a read-only query.
+                    Emits a WORKORDER_NOTE_LIST audit event; no domain events are published and no state \
+                    changes, since this is a read-only query.
                     Returns 200 with the notes (an empty list when none were recorded), and 404 when the \
                     workorder does not exist.
                     """)
@@ -117,10 +118,18 @@ public class WorkorderNoteController {
         return ResponseEntity.ok(workorderNoteService.listNotes(workorderId));
     }
 
-    /** The authenticated caller, as populated by the gateway authorities filter. */
+    /**
+     * The {@code X-User} identity the gateway put on the request (ADR-0018), or null when there is
+     * none. Deliberately not {@code authentication.getName()}: the authorities filter substitutes
+     * the literal principal {@code anonymousUser} when the header is absent, and that string would
+     * otherwise be persisted and published as if it were an actor.
+     */
     @Nullable
     private static String currentActor() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null ? authentication.getName() : null;
+        try {
+            return SecurityContextHelper.getCurrentUsername().orElse(null);
+        } catch (IllegalStateException unauthenticated) {
+            return null;
+        }
     }
 }

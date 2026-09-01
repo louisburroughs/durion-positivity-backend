@@ -4305,7 +4305,7 @@ paths:
 
         Required inputs: workorderId (UUID) as a path parameter.
 
-        No events are emitted and no state changes; this is a read-only query.
+        Emits a WORKORDER_NOTE_LIST audit event; no domain events are published and no state changes, since this is a read-only query.
 
         Returns 200 with the notes (an empty list when none were recorded), and 404 when the workorder does not exist.
 
@@ -6284,7 +6284,7 @@ components:
           description: The note as written.
           example: Customer says the noise only happens on a cold start.
           maxLength: 2000
-          minLength: 0
+          minLength: 1
           type: string
         noteType:
           description: Caller-supplied classification of the note. Free text; the shops' vocabularies differ and CRM only displays it.

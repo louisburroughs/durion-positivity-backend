@@ -14,6 +14,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -29,6 +30,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * or a decision about it, are single-valued, and are not about the customer.
  */
 @Entity
+// Append-only: a note is what someone wrote at a moment, so there is nothing to update and no
+// updatedAt column (ADR-0024 §1, category 1). CRM's projection is downstream of this row.
+@Immutable
 @Table(
         name = "workorder_note",
         indexes = {@Index(name = "idx_workorder_note_workorder", columnList = "workorder_id, created_at")})

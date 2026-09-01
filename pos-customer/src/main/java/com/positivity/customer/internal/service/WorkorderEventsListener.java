@@ -46,7 +46,9 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>{@code workorder.service-line.declined.v1} → exactly one {@code DECLINED_SERVICE_FOLLOWUP}
  *       {@link FollowUpTask}, and the declined-service segment predicate.
  *   <li>{@code workorder.note.added.v1} → a {@link PartyNote} row and a {@code WORKORDER_NOTE}
- *       {@link CustomerInteraction} on the party timeline (#1584).
+ *       {@link CustomerInteraction} on the party timeline (#1584). Both carry the originating
+ *       {@code source_event_id} under a unique index, so a concurrent redelivery cannot double-write
+ *       one and not the other.
  * </ul>
  *
  * <p>The note projection used to live in a {@code WorkorderEventHandler} on a {@code
@@ -112,7 +114,9 @@ public class WorkorderEventsListener {
         try {
             envelope = objectMapper.readTree(message);
         } catch (Exception e) {
-            log.warn("Skipping unparsable workorder event: {}", message, e);
+            // Deliberately not logging the record: since #1584 this topic carries customer note
+            // text, and an unparsable record is diagnosed from the exception and the offset.
+            log.warn("Skipping unparsable workorder event ({} bytes)", message.length(), e);
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
@@ -125,7 +129,7 @@ public class WorkorderEventsListener {
         }
         String eventId = envelope.path("eventId").stringValue(null);
         if (eventId == null || eventId.isBlank()) {
-            log.warn("Skipping workorder event without eventId: {}", message);
+            log.warn("Skipping workorder event without eventId, type={}", eventType);
             return;
         }
         if (processedEventRepository.existsById(eventId)) {
@@ -215,14 +219,16 @@ public class WorkorderEventsListener {
                     .createdAt(Instant.now(clock))
                     .build());
         }
-        // Idempotent on source_event_id itself, so a redelivery that already wrote the note row
-        // still reaches the timeline if that half was the one that committed.
+        // Offered unconditionally: ingest has its own source_event_id guard, and both writes share
+        // this listener's transaction, so the worst case is one redundant SELECT.
         customerInteractionService.ingest(CustomerInteraction.builder()
                 .partyId(payload.partyId())
                 .type(InteractionType.WORKORDER_NOTE)
                 .direction(InteractionDirection.INBOUND)
                 .summary(payload.noteType())
                 .body(payload.noteText())
+                // The advisor who wrote it, so a CSR reading the timeline can tell who to ask.
+                .actor(payload.authoredBy() != null ? payload.authoredBy() : SYSTEM_ACTOR)
                 .sourceWorkorderId(sourceWorkorderId)
                 .sourceEventId(eventId)
                 .occurredAt(payload.addedAt())

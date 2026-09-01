@@ -1,7 +1,6 @@
 package com.positivity.customer.internal.service;
 
-import com.positivity.customer.internal.enums.ProcessingStatus;
-import com.positivity.customer.internal.repository.ProcessingLogRepository;
+import com.positivity.customer.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import io.micrometer.core.instrument.Counter;
@@ -23,8 +22,11 @@ import tools.jackson.databind.ObjectMapper;
  * Consumer-side reconciliation for the workorder replica (ADR-0044 §4, issue #840).
  *
  * <p>For every {@link ReconciliationManifestV1} on {@code workorder.manifest.v1}, recomputes the
- * same count + checksum from {@code processing_log} — window membership is the UUIDv7 timestamp
- * embedded in each recorded eventId, exactly the definition the owner used. On mismatch it
+ * same count + checksum from {@code processed_events} — window membership is the UUIDv7 timestamp
+ * embedded in each recorded eventId, exactly the definition the owner used. It must read the same
+ * table {@link WorkorderEventsListener} writes: it used to read {@code processing_log}, which only
+ * the retired {@code WorkorderEventHandler} ever wrote, so every non-empty window mismatched and
+ * asked the owner to replay it (#1584). On mismatch it
  * increments {@code replica.drift} (Prometheus: {@code replica_drift_total{owner="workorder"}})
  * and publishes a {@code workorder.outbox.replay-requested} command for the window; the replayed
  * events are deduplicated by the unique {@code event_id} guard, so repair is idempotent.
@@ -41,7 +43,7 @@ public class WorkorderManifestListener {
 
     private static final String REPLAY_COMMAND_TYPE = "workorder.outbox.replay-requested";
 
-    private final ProcessingLogRepository processingLogRepository;
+    private final ProcessedEventRepository processedEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final Counter driftCounter;
@@ -50,11 +52,11 @@ public class WorkorderManifestListener {
     private String workorderCommandsTopic;
 
     public WorkorderManifestListener(
-            ProcessingLogRepository processingLogRepository,
+            ProcessedEventRepository processedEventRepository,
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
             ObjectProvider<MeterRegistry> meterRegistry) {
-        this.processingLogRepository = processingLogRepository;
+        this.processedEventRepository = processedEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -81,10 +83,10 @@ public class WorkorderManifestListener {
             return;
         }
 
-        List<String> receivedIds = processingLogRepository.findEventIdsInRange(
+        List<String> receivedIds = processedEventRepository.findEventIdsInRange(
+                WorkorderEventsListener.OWNER,
                 UuidV7Timestamps.minStringAt(manifest.windowStartUtc()),
-                UuidV7Timestamps.minStringAt(manifest.windowEndUtc()),
-                ProcessingStatus.SKIPPED_DUPLICATE);
+                UuidV7Timestamps.minStringAt(manifest.windowEndUtc()));
         String observedChecksum = ReconciliationManifestV1.checksumOf(receivedIds);
 
         if (manifest.matches(receivedIds.size(), observedChecksum)) {

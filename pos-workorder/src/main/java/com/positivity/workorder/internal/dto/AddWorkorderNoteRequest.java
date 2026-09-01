@@ -27,7 +27,7 @@ public class AddWorkorderNoteRequest {
     private String noteType;
 
     @NotBlank
-    @Size(max = 2000)
+    @Size(min = 1, max = 2000)
     @Schema(
             description = "The note as written.",
             example = "Customer says the noise only happens on a cold start.",

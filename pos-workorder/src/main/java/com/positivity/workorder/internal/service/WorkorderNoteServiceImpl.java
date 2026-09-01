@@ -9,7 +9,6 @@ import com.positivity.workorder.internal.entity.WorkorderNote;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderNoteRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkorderNoteServiceImpl implements WorkorderNoteService {
 
-    private final Clock clock;
     private final WorkorderNoteRepository workorderNoteRepository;
     private final WorkorderRepository workorderRepository;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
@@ -43,6 +41,12 @@ public class WorkorderNoteServiceImpl implements WorkorderNoteService {
     @Transactional
     public WorkorderNoteResponse addNote(
             @NonNull UUID workorderId, @NonNull AddWorkorderNoteRequest request, @Nullable String authoredBy) {
+        String noteText = normalize(request.getNoteText());
+        if (noteText == null) {
+            // @NotBlank covers the HTTP path; this is for any other caller of the bean, which would
+            // otherwise get an NPE out of normalize() instead of a 400 naming the field.
+            throw new IllegalArgumentException("noteText must not be blank");
+        }
         Workorder workorder = workorderRepository
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
@@ -50,7 +54,7 @@ public class WorkorderNoteServiceImpl implements WorkorderNoteService {
         WorkorderNote saved = workorderNoteRepository.save(WorkorderNote.builder()
                 .workorderId(workorderId)
                 .noteType(normalize(request.getNoteType()))
-                .noteText(request.getNoteText().trim())
+                .noteText(noteText)
                 .authoredBy(normalize(authoredBy))
                 .build());
 
@@ -67,7 +71,7 @@ public class WorkorderNoteServiceImpl implements WorkorderNoteService {
         if (!workorderRepository.existsById(workorderId)) {
             throw new WorkorderNotFoundException(workorderId);
         }
-        return workorderNoteRepository.findByWorkorderIdOrderByCreatedAtDesc(workorderId).stream()
+        return workorderNoteRepository.findByWorkorderIdOrderByCreatedAtDescNoteIdDesc(workorderId).stream()
                 .map(WorkorderNoteResponse::from)
                 .toList();
     }
@@ -77,9 +81,9 @@ public class WorkorderNoteServiceImpl implements WorkorderNoteService {
         if (writer == null) {
             return;
         }
-        // createdAt is stamped by the auditing listener at persist; fall back only if a caller
-        // supplied its own entity manager behaviour that skipped it.
-        Instant addedAt = note.getCreatedAt() != null ? note.getCreatedAt() : Instant.now(clock);
+        // createdAt is stamped by AuditingEntityListener at @PrePersist, which save() on an id-less
+        // entity always triggers, so it is set by the time this runs.
+        Instant addedAt = note.getCreatedAt();
         WorkorderNoteAddedV1 payload = new WorkorderNoteAddedV1(
                 workorder.getId(),
                 workorder.getWorkorderNumber(),

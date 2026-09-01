@@ -162,6 +162,8 @@ class WorkorderEventsListenerTest {
         assertThat(interaction.getPartyId()).isEqualTo(PARTY_ID);
         assertThat(interaction.getBody()).isEqualTo("Customer says the noise only happens on a cold start.");
         assertThat(interaction.getOccurredAt()).isEqualTo(Instant.parse("2026-07-20T11:00:00Z"));
+        // The author has to survive the hop, or a CSR cannot tell who recorded the note.
+        assertThat(interaction.getActor()).isEqualTo("advisor@example.com");
         verify(processedEvents).save(any(ProcessedEvent.class));
     }
 
