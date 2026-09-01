@@ -18,7 +18,7 @@ on:
       - "Dockerfile"
       - "docker-compose.yml"
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 5 * * *"
   workflow_dispatch:
 
 # Job-level permissions only (Sonar githubactions:S8264); jobs without a
