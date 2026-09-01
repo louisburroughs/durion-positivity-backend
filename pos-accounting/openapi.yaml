@@ -9342,7 +9342,7 @@ components:
           example: 110750.0
           type: number
         settlementRatePct:
-          description: settled divided by invoiced, times 100, rounded HALF_UP to 2 decimals; null when invoiced is zero, same convention as collectionRatePct (#1621). An invoice settled entirely by deposit credit reaches 100% here while collectionRatePct — deliberately unchanged and cash-only — stays at 0 for that same invoice, since no cash was applied to it. May be NEGATIVE when in-window reversals leave collected negative enough to outweigh nonCashSettled; it is not clamped.
+          description: 'settled divided by invoiced, times 100, rounded HALF_UP to 2 decimals; null when invoiced is zero, same convention as collectionRatePct (#1621). An invoice settled entirely by deposit credit reaches 100% here while collectionRatePct — deliberately unchanged and cash-only — stays at 0 for that same invoice, since no cash was applied to it — but only holds when both sides land in the same window: nonCashSettled attributes the draw-down to its appliedAt (draft-creation time) while invoiced counts finalizedAt, so that 100% is the typical same-day case, not a guarantee — a draw-down and its invoice''s finalization straddling a window boundary land in different windows by design (movement basis). May be NEGATIVE when in-window reversals leave collected negative enough to outweigh nonCashSettled; it is not clamped.'
           example: 88.6
           type:
           - number
