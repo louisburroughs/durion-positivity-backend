@@ -61,6 +61,25 @@ public interface PaymentApplicationReversalRepository extends JpaRepository<Paym
     java.math.BigDecimal sumReversedAmountByInvoiceId(UUID invoiceId);
 
     /**
+     * Sum of reversal amounts whose {@code reversedAt} falls in the inclusive instant range. Used
+     * by the invoiced-vs-collected analytics endpoint (Wave 2 E2, issue #1590) to net reversals out
+     * of {@code collected} on a MOVEMENT basis: a reversal reduces the window it was recorded in,
+     * never the window the original application landed in, so a closed period is never restated.
+     *
+     * <p>Sums the reversal's own {@code amount}, not the original application's {@code
+     * appliedAmount} — a reversal carries the amount actually backed out.
+     *
+     * @param start inclusive lower bound
+     * @param end   inclusive upper bound
+     * @return total reversed amount recorded within the range; zero when there are none
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(r.amount), 0) FROM PaymentApplicationReversal r"
+            + " WHERE r.reversedAt BETWEEN :start AND :end")
+    java.math.BigDecimal sumAmountByReversedAtBetween(
+            @org.springframework.data.repository.query.Param("start") java.time.Instant start,
+            @org.springframework.data.repository.query.Param("end") java.time.Instant end);
+
+    /**
      * Bulk-resolve which of the given payment application ids have a reversal. Used by the
      * payment-application list endpoint (Wave 2 E10, issue #1598) with {@code
      * includeReversed=true} to flag each row's {@code reversed} field in one round trip instead

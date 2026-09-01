@@ -219,9 +219,16 @@ public class SecurityConfig {
 
 ```bash
 cd pos-inventory
-./mvnw -Popenapi clean verify -DskipTests
+./mvnw -Popenapi clean verify -DskipTests -Djacoco.skip=true
 # Output: openapi.yaml
 ```
+
+> `-Djacoco.skip=true` is required, not optional. With `-DskipTests` the JaCoCo
+> ratchet (`jacoco:check`) fails on near-zero coverage, and because the
+> `sanitize-openapi` antrun step is bound to the same `verify` phase *after*
+> JaCoCo, it never runs. The spec is still written, but unnormalised — producing
+> a spurious whole-file reordering of ~10,000 lines that buries the real change.
+> If you get a diff that size from a one-line annotation edit, this is why.
 
 **Method 2: Manual**
 
@@ -469,7 +476,7 @@ restClient.get().uri(url).retrieve().body(Response.class);
 cd pos-order && ./mvnw spring-boot:run
 
 # Generate OpenAPI spec
-./mvnw -pl pos-order -Popenapi clean verify -DskipTests
+./mvnw -pl pos-order -Popenapi clean verify -DskipTests -Djacoco.skip=true
 
 # Check dependency updates
 ./mvnw versions:display-dependency-updates

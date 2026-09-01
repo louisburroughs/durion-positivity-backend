@@ -97,7 +97,20 @@ an empty A/R aging report and a silently wrong Q13.
    dates — which is exactly what the controlled payment lags create. Either the seed keeps
    post-as-of payments out of the trend window, or the gate records this as a known-fail until a
    true point-in-time replay ships.
-3. **Aging date is not the due date.** Receivable aging uses `invoice_created_at`, falling back to
-   `finalized_at` then `updated_at` — **not** `due_date`. "60 days past due" in Q5/Q13 therefore
-   means 60 days since invoice creation. Seed dates accordingly, or the two designed past-due
-   customers land in the wrong bucket.
+3. **Aging date is the due date (changed by #1604 — re-check existing seed data).** Receivable
+   aging uses `ext_invoice.due_date`, falling back to the document date
+   (`invoice_created_at` → `finalized_at` → `updated_at`) only when `due_date` is null. "60 days
+   past due" in Q5/Q13 therefore means 60 days past the due date, the same measure A/P already
+   used. Two consequences for seeding:
+   - The two designed 60+-days-past-due customers must carry **real `due_date` values** on their
+     invoices, set 61+ days before the gate's `asOfDate`. Leaving `due_date` null makes the
+     invoice age by its invoice date instead, which is a different (usually earlier-aging) figure.
+   - Not-yet-due invoices are no longer dropped: they land in `current`. A seed can now include
+     future-due invoices deliberately, and they will show up in `current` and in
+     `totalOutstanding`. What is still excluded is an invoice whose **document** date is after
+     `asOfDate` — it did not exist yet.
+
+   **Seed data written to the previous instruction is now wrong.** Any fixture built to age by
+   `invoice_created_at` (null `due_date`s, or due dates chosen to be ignored) will produce
+   different buckets under the corrected rule and must be revisited before it is used as ground
+   truth. See `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.

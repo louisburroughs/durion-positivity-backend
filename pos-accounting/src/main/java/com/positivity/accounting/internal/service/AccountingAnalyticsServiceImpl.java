@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
+import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
@@ -89,6 +90,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
     private final Clock clock;
     private final ExtInvoiceRepository extInvoiceRepository;
     private final PaymentApplicationRepository paymentApplicationRepository;
+    private final PaymentApplicationReversalRepository paymentApplicationReversalRepository;
     private final APPaymentRepository apPaymentRepository;
     private final VendorBillRepository vendorBillRepository;
     private final VendorRepository vendorRepository;
@@ -97,12 +99,14 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             Clock clock,
             ExtInvoiceRepository extInvoiceRepository,
             PaymentApplicationRepository paymentApplicationRepository,
+            PaymentApplicationReversalRepository paymentApplicationReversalRepository,
             APPaymentRepository apPaymentRepository,
             VendorBillRepository vendorBillRepository,
             VendorRepository vendorRepository) {
         this.clock = clock;
         this.extInvoiceRepository = extInvoiceRepository;
         this.paymentApplicationRepository = paymentApplicationRepository;
+        this.paymentApplicationReversalRepository = paymentApplicationReversalRepository;
         this.apPaymentRepository = apPaymentRepository;
         this.vendorBillRepository = vendorBillRepository;
         this.vendorRepository = vendorRepository;
@@ -126,11 +130,26 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 .map(AccountingAnalyticsServiceImpl::nullSafe)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal collected =
+        BigDecimal applied =
                 paymentApplicationRepository.findByApplicationTimestampBetween(startInstant, endInstant).stream()
                         .map(PaymentApplication::getAppliedAmount)
                         .map(AccountingAnalyticsServiceImpl::nullSafe)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Movement basis (issue #1605): a reversal reduces the window it was RECORDED in, not the
+        // window its original application landed in. A January application reversed in March keeps
+        // January whole and reduces March, so a closed period is never restated (consistent with
+        // the PERIOD_CLOSED/PERIOD_HARD_LOCKED gate and ADR-0047 correction-by-reversal), and the
+        // measure stays additive across sub-windows: Jan + Feb + Mar == Jan-Mar.
+        // This is deliberately a different basis from the payment-application list endpoint (E10),
+        // which excludes currently-reversed applications because it answers a point-in-time
+        // question rather than measuring movement in a window.
+        BigDecimal applicationReversals =
+                nullSafe(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(startInstant, endInstant));
+
+        // Not clamped at zero: a window whose reversals exceed its applications is genuinely
+        // net-negative cash application, and hiding that would misstate the period.
+        BigDecimal collected = applied.subtract(applicationReversals);
 
         BigDecimal collectionRatePct = invoiced.compareTo(BigDecimal.ZERO) == 0
                 ? null
@@ -142,6 +161,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                 .generatedAt(Instant.now(clock))
                 .invoiced(invoiced)
                 .collected(collected)
+                .applicationReversals(applicationReversals)
                 .collectionRatePct(collectionRatePct)
                 .build();
     }

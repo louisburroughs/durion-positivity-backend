@@ -621,9 +621,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         log.info("Generating aged receivables as of {}", asOfDate);
 
-        // As-of semantics (finding 10): items whose aging date is after asOfDate are
-        // excluded
-        // (daysPastDue < 0), and buckets are keyed on asOfDate. KNOWN LIMITATION: the
+        // As-of semantics (finding 10): an item whose DOCUMENT (invoice) date is after asOfDate
+        // did not exist yet and is excluded; everything that did exist is bucketed on asOfDate,
+        // including not-yet-due items (they land in `current`). Aging basis is the due date,
+        // falling back to the document date — the same rule generateAgedPayables uses.
+        // KNOWN LIMITATION: the
         // open balance is
         // the invoice's CURRENT balance (InvoiceBalanceCalculator derives it from all
         // payment
@@ -651,11 +653,17 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             if (customerId == null) {
                 continue; // non-UUID party cannot be represented in the contract's UUID field
             }
+            if (receivableDocumentDate(invoice).isAfter(asOfDate)) {
+                // Raised after asOfDate — the invoice did not exist yet (finding 10). This
+                // existence test is against the DOCUMENT date, never the aging date: a
+                // not-yet-due invoice already exists and must still be reported.
+                continue;
+            }
             LocalDate agingDate = receivableAgingDate(invoice);
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
-            if (daysPastDue < 0) {
-                continue; // future-dated as of asOfDate — not yet an outstanding item (finding 10)
-            }
+            // A negative daysPastDue (not yet due) is kept deliberately: it satisfies
+            // AgingBuckets' `<= 30` test and so lands in `current`, which is exactly what
+            // AgedReceivablesRow.current documents ("includes not-yet-due").
             byCustomer.computeIfAbsent(customerId, key -> new AgingBuckets()).add(daysPastDue, openBalance);
         }
 
@@ -697,9 +705,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         log.info("Generating aged payables as of {}", asOfDate);
 
-        // As-of semantics (finding 10): items whose aging date is after asOfDate are
-        // excluded
-        // (daysPastDue < 0), and buckets are keyed on asOfDate. KNOWN LIMITATION: the
+        // As-of semantics (finding 10): an item whose DOCUMENT (bill) date is after asOfDate
+        // did not exist yet and is excluded; everything that did exist is bucketed on asOfDate,
+        // including not-yet-due items (they land in `current`). Aging basis is the due date,
+        // falling back to the document date — the same rule generateAgedReceivables uses.
+        // KNOWN LIMITATION: the
         // open balance is
         // the bill's CURRENT balance (total minus all allocations to date), not a
         // balance reconstructed
@@ -723,11 +733,17 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             if (openBalance.signum() <= 0) {
                 continue; // only positive-open items contribute
             }
+            if (payableDocumentDate(bill).isAfter(asOfDate)) {
+                // Billed after asOfDate — the bill did not exist yet (finding 10). This
+                // existence test is against the DOCUMENT date, never the aging date: a
+                // not-yet-due bill already exists and must still be reported.
+                continue;
+            }
             LocalDate agingDate = payableAgingDate(bill);
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
-            if (daysPastDue < 0) {
-                continue; // future-dated as of asOfDate — not yet an outstanding item (finding 10)
-            }
+            // A negative daysPastDue (not yet due) is kept deliberately: it satisfies
+            // AgingBuckets' `<= 30` test and so lands in `current`, which is exactly what
+            // AgedPayablesRow.current documents ("includes not-yet-due").
             VendorAging aging =
                     byVendor.computeIfAbsent(bill.getVendorId(), key -> new VendorAging(bill.getVendorName()));
             aging.buckets.add(daysPastDue, openBalance);
@@ -1249,20 +1265,30 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     }
 
     /**
-     * AR aging date: {@code invoiceCreatedAt}, falling back to {@code finalizedAt}, then
-     * {@code updatedAt}. Instants are read at UTC for timezone-independent, deterministic day math.
+     * AR aging basis: the invoice's due date, falling back to the invoice document date
+     * ({@link #receivableDocumentDate}). This is deliberately the same rule
+     * {@link #payableAgingDate} applies on the A/P side (due date, falling back to the bill date),
+     * so both halves of the aging report age from one documented basis.
      *
-     * <p><strong>KNOWN DEFECT.</strong> This javadoc previously justified the choice by saying the
-     * {@code ext_invoice} replica carries no due date. That is stale: {@code due_date} was added by
-     * {@code V22__ext_invoice_due_date.sql} ("collections-aging due date frozen at finalization by
-     * pos-invoice") and is used for collections aging elsewhere in this module (see
-     * {@code PaymentApplicationServiceImpl} OLDEST_FIRST). The contract's rule — due date, falling
-     * back to the invoice date — is therefore not being honoured here, and
-     * {@link #payableAgingDate} on the A/P side does honour it. Consequence: a not-yet-due invoice
-     * is bucketed as past due by its age. Correcting this shifts every A/R bucket, so it is
-     * deliberately left for its own change rather than folded into a documentation fix.
+     * <p>{@code due_date} arrived with {@code V22__ext_invoice_due_date.sql} ("collections-aging
+     * due date frozen at finalization by pos-invoice") and is also what {@code OLDEST_FIRST}
+     * allocation ages by. It is null on drafts and on replica rows built from events predating
+     * that enrichment; those rows fall back to the document date.
      */
     private LocalDate receivableAgingDate(ExtInvoice invoice) {
+        LocalDate dueDate = invoice.getDueDate();
+        return dueDate != null ? dueDate : receivableDocumentDate(invoice);
+    }
+
+    /**
+     * AR document date (the invoice's own date): {@code invoiceCreatedAt}, falling back to
+     * {@code finalizedAt}, then {@code updatedAt}. Instants are read at UTC for
+     * timezone-independent, deterministic day math.
+     *
+     * <p>This answers "did the invoice exist as of the report date?" and is kept distinct from
+     * {@link #receivableAgingDate}, which answers "how far past due is it?".
+     */
+    private LocalDate receivableDocumentDate(ExtInvoice invoice) {
         Instant source = invoice.getInvoiceCreatedAt();
         if (source == null) {
             source = invoice.getFinalizedAt();
@@ -1273,9 +1299,27 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         return source.atZone(ZoneOffset.UTC).toLocalDate();
     }
 
-    /** AP aging date: bill due date, falling back to the bill date. */
+    /**
+     * AP aging basis: the bill's due date, falling back to the bill date — deliberately the same
+     * rule {@link #receivableAgingDate} applies on the A/R side (due date, falling back to the
+     * invoice date). {@code due_date} is nullable on {@code vendor_bill} (terms not yet known);
+     * those bills fall back to the bill date.
+     */
     private LocalDate payableAgingDate(VendorBill bill) {
         LocalDateTime source = bill.getDueDate() != null ? bill.getDueDate() : bill.getBillDate();
+        return source.toLocalDate();
+    }
+
+    /**
+     * AP document date (the bill's own date): {@code billDate}, which the schema declares
+     * non-null, falling back to the due date for the same defensive reason
+     * {@link #payableAgingDate} falls back the other way.
+     *
+     * <p>This answers "did the bill exist as of the report date?" and is kept distinct from
+     * {@link #payableAgingDate}, which answers "how far past due is it?".
+     */
+    private LocalDate payableDocumentDate(VendorBill bill) {
+        LocalDateTime source = bill.getBillDate() != null ? bill.getBillDate() : bill.getDueDate();
         return source.toLocalDate();
     }
 
@@ -1317,11 +1361,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     /**
      * Item-level aging accumulator: each item's full open balance lands in exactly
      * one bucket keyed on whole days past due ({@code asOfDate - agingDate}).
-     * Boundaries: {@code 0 <= d <= 30} current, {@code 31..60}, {@code 61..90},
-     * {@code d >= 91} 90+. Callers exclude future-dated items ({@code d < 0})
-     * before
-     * adding, so {@code current} holds only items already dated on/before asOfDate
-     * (finding 10).
+     * Boundaries: {@code d <= 30} current, {@code 31..60}, {@code 61..90},
+     * {@code d >= 91} 90+. Not-yet-due items carry a negative {@code d} and land in
+     * {@code current} by that same {@code d <= 30} test. Callers exclude items that did
+     * not yet exist as of the report date by comparing the item's DOCUMENT date, before
+     * adding (finding 10).
      */
     private static final class AgingBuckets {
         private BigDecimal current = BigDecimal.ZERO;

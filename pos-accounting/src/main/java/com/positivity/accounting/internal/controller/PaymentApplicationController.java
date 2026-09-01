@@ -352,8 +352,13 @@ public class PaymentApplicationController {
                     optional and defaults to false, in which case applications later reversed via \
                     PaymentApplicationReversal are EXCLUDED from the list entirely (not merely flagged); \
                     pass includeReversed=true to include them, with each row's reversed field then reporting \
-                    whether that application was reversed. page/size/sort are standard, though the \
-                    appliedAt-ascending sort is server-controlled and any caller-supplied sort is ignored.
+                    whether that application was reversed. That exclusion default is a DELIBERATELY \
+                    DIFFERENT basis from getCollectionsAnalytics, which nets reversals on a movement basis \
+                    (reducing the window a reversal was recorded in rather than the window its application \
+                    landed in) because it measures movement in a window while this endpoint answers the \
+                    point-in-time question of which applications are currently live; do not unify the two. \
+                    page/size/sort are standard, though the appliedAt-ascending sort is server-controlled \
+                    and any caller-supplied sort is ignored.
                     Emits an ACCOUNTING_PAYMENT_APPLICATION_LIST_VIEW audit event; no state changes.
                     Returns 400 when appliedTo is before appliedFrom or the window exceeds 366 days.
                     """,

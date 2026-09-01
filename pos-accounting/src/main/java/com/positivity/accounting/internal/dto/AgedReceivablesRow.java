@@ -13,14 +13,22 @@ import org.jspecify.annotations.NonNull;
  * One per-customer row of the Aged Receivables report.
  *
  * Buckets the customer's open (unpaid) invoice balances by days past due as of
- * the report date. All bucket amounts are non-negative; {@code totalOutstanding}
- * is their sum.
+ * the report date. "Past due" is measured from the invoice's DUE date, falling
+ * back to the invoice date when no due date is recorded (drafts, and replica rows
+ * built from events predating due-date enrichment). Aged Payables applies the same
+ * rule with the bill date as its fallback. An invoice not yet due has a negative
+ * age and is reported in {@code current}; an invoice dated after the report date
+ * did not yet exist and is not reported at all. All bucket amounts are
+ * non-negative; {@code totalOutstanding} is their sum.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Per-customer aged receivables row with bucketed open invoice balances")
+@Schema(
+        description = "Per-customer aged receivables row with bucketed open invoice balances. Age is measured "
+                + "from the invoice due date, falling back to the invoice date when no due date is recorded; "
+                + "not-yet-due invoices are reported in the current bucket.")
 public class AgedReceivablesRow {
 
     /**

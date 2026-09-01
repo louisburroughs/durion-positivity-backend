@@ -114,13 +114,32 @@ the agent. No backend changes.
   and A/R ages from invoice creation while A/P ages from due date. Tool descriptions corrected;
   Q10/Q14 partials withdrawn below.
 
-  **Open defect — A/R aging basis.** The A/R side ignoring due date is a bug, not a design choice:
-  `ext_invoice.due_date` exists and is populated (`V22__ext_invoice_due_date.sql`, "collections-aging
-  due date frozen at finalization") and pos-accounting already ages collections by it elsewhere, so
-  a not-yet-due invoice raised 45 days ago is reported as "31-60 days past due". Descriptions now
-  name it as a known defect rather than presenting it as intent. Fixing it shifts every A/R bucket
-  and invalidates the Q13 ground-truth SQL, so it is scheduled as its own change alongside Wave 2's
-  accounting work — not folded into a documentation PR.
+  **Resolved (2026-09-01, issue #1604) — A/R aging basis.** The defect recorded above (A/R ignoring
+  `due_date` while A/P used it, so a not-yet-due invoice raised 45 days ago was reported as "31-60
+  days past due") is fixed in `FinancialReportingServiceImpl`. Both halves of the aging report now
+  apply one rule:
+  - **Aging basis** = the document's due date, falling back to the document date when the due date
+    is null (A/R document date `invoice_created_at` → `finalized_at` → `updated_at`; A/P `bill_date`).
+    `ext_invoice.due_date` is nullable on drafts and on replica rows built from events predating
+    `V22__ext_invoice_due_date.sql`, so the fallback is permanent, not transitional.
+  - **Existence filter re-based.** "Raised after `asOfDate` → excluded" is now tested on the
+    *document* date, not the aging date, so it means "not raised yet" rather than "not due yet".
+  - **Not-yet-due amounts are included, in `current`.** `daysPastDue` may be negative and negatives
+    satisfy the `<= 30` test — which is what `AgedReceivablesRow.current`'s schema always promised
+    ("includes not-yet-due"). On **A/P** that is a real widening: `payableAgingDate` already used the
+    due date, so the old guard dropped not-yet-due bills entirely. On **A/R** nothing is added — the
+    old aging date *was* the document date, so the old and new guards are the same predicate; the A/R
+    inclusion set, row count, `totalOutstanding` and grand totals are unchanged and only the bucket
+    split moves. A not-yet-due invoice raised in the past was never dropped from A/R; it was
+    mis-bucketed as `days31To60`, which is the defect #1604 reports.
+
+  Bucket boundaries are unchanged (`current` ≤ 30, 31–60, 61–90, > 90). The prediction above held:
+  the fix shifts every A/R bucket and invalidated the Q13 ground-truth SQL, which has been rewritten
+  to the new rule; the recorded Wave 1 Q13/Q5 outcomes below predate it and are not comparable.
+  A/P bucket totals moved too, because not-yet-due vendor bills are no longer dropped. Tool
+  descriptions on both `getAgedReceivables` and `getAgedPayables` were corrected in the same change
+  (the "the two reports are not the same measure" caveat is now false and removed). Full record:
+  `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
 - Seed `mcp_tool` rows + `mcp_tool_permission` mappings (migration; follow the V37 rederivation
   pattern, permission from the endpoint's `x-required-permissions`).
 
@@ -248,15 +267,79 @@ the E-table above has been updated accordingly.
   (event-fed cost replica vs. a costing endpoint) before it is specified.
 - **D3 — cash-application ownership (E2/E10): pos-accounting.** It owns `ReceivablePayment`,
   `PaymentApplication`, `PaymentApplicationReversal`, `PaymentAppliedEvent` on the A/R side and
-  `APPayment`/`APPaymentAllocation` on the A/P side. pos-invoice holds only `PaymentIntent` and
-  `Receipt` — pre-settlement artifacts. **E2 and E10 move from pos-invoice to pos-accounting**,
-  which also means Q18's two sides come from one module. Simpler than assumed.
+  `APPayment`/`APPaymentAllocation` on the A/P side. **E2 and E10 move from pos-invoice to
+  pos-accounting**, which also means Q18's two sides come from one module.
+
+  **Premise corrected 2026-09-01 (issue #1605) — the conclusion stands, the original reason does
+  not.** This decision originally read "pos-invoice holds only `PaymentIntent` and `Receipt` —
+  pre-settlement artifacts." That sentence is **false and is withdrawn**: pos-invoice also owns
+  `DepositCredit`/`DepositCreditApplication` (a draw-down applied against a named invoice — a real
+  settlement event) and `RefundRecord` (cash out). Both affect whether an invoice is settled.
+
+  The ownership answer is unchanged, on a corrected rationale: **analytics ownership follows the
+  ledger, not the artifact.** `collected` measures A/R relief, and every input to A/R relief is
+  accounting-owned — `ReceivablePayment`, `PaymentApplication`, `PaymentApplicationReversal`,
+  `CustomerCredit`/`CustomerCreditTransaction`, plus the `ext_invoice` replica that supplies
+  `invoiced`. pos-invoice's deposit credits and refunds are cash and liability artifacts; the GL
+  entries they cause are posted in accounting. Relocating E2 to pos-invoice would force it to
+  replicate `PaymentApplication` and `PaymentApplicationReversal` — replicating the ledger.
+
+  The missed artifacts turn out to contribute **zero** to `collected` by decision rather than by
+  oversight (D5), so the corrected premise does not move the numerator. Full semantics, including
+  the transport for the fields that are still to come, are recorded in **ADR-0057** (analytics
+  money-measure semantics and ownership); D5–D7 below are its plan-side summary.
 - **D4 — status-transition storage (E7): already exists.** `WorkorderStateTransition`
   (table `work_order_state_transitions`) persists `fromStatus`, `toStatus`, `transitionedAt`,
   `transitionedBy`, `reason`, `metadata`. `WorkorderStateTransitionRepository` currently exposes
   only per-workorder finders (`findByWorkorder_Id`, `…OrderByTransitionedAtDesc`).
   **E7 collapses to a date-range query method plus the endpoint** — no new table, no backfill.
   Cheapest item in the wave, and it unblocks Q3 outright.
+
+### W2.5 Money-measure semantics — **RESOLVED 2026-09-01 (issue #1605)**
+
+D5–D7 settle what E2's figures mean. They were raised by #1605 against D3's premise and decided by
+the invoicing, accounting and architecture owners; the durable record is **ADR-0057**
+(`durion/docs/adr/0057-analytics-money-measure-semantics-and-ownership.adr.md`), which every later
+analytics endpoint must obey.
+
+- **D5 — deposit and customer credit draw-downs (E2): excluded from `collected`, by name and
+  permanently.** Counting a draw-down as a collection double-counts cash. A deposit-take order is
+  itself invoiced for the deposit amount (`pos-order/.../SalesOrderServiceImpl.java:667-673` sets
+  `depositAmount(order.getGrandTotal())` on that same order's invoice request), so the deposit cash
+  already entered `collected` through the ordinary invoice → `PaymentSettledV1` → `ReceivablePayment`
+  → `PaymentApplication` path, in the take window. The GL agrees: applying a customer credit posts
+  `Dr 2300 Customer Credit Liability / Cr 1200 A/R` and touches no cash account. E2 already excludes
+  accounting's own `CustomerCreditApplication` draw-downs, so this is the consistent answer, not a
+  new exclusion. **Decision:** `collected` is cash only. The exclusion is stated in the endpoint
+  description rather than left implicit, because the ratio is genuinely understated in any window
+  where deposit-funded invoices finalize. Non-cash settlement gets its own later field
+  (`nonCashSettled`/`settled`/`settlementRatePct`), fed from the deposit **and** customer-credit
+  sources together — never one alone, because a half-fed field looks complete (#1621).
+- **D6 — refunds (E2): measured separately, never netted inside `collected`.** Refund shapes are
+  heterogeneous — invoice-linked, standalone with no invoice (#926), and credit-balance refunds — so
+  folding one scalar into an A/R-relief numerator would assert a debit-credit mapping no ADR
+  authorizes. It would also double-subtract: the commonest shape, a refunded invoice payment,
+  produces **both** a `RefundRecord` in pos-invoice **and** a `PaymentApplicationReversal` in
+  accounting. **Decision:** refunds sit outside `collected` in their own field (#1620), attributed to the
+  refund-completion window, counting `reversalType="REFUND"` only. `"VOID"` is a released
+  authorization that never captured and must never appear in E2.
+- **D7 — application reversals (E2): movement basis. The shipped behaviour was a defect.**
+  `collected` summed every `PaymentApplication` in the window with no reversal handling, so it
+  overstated cash by every reversal ever recorded. **Decision:** `collected` = Σ applied amounts
+  dated in the window − Σ application-reversal amounts dated in the window. A January payment
+  reversed in March reduces March; **January is never restated.** Chosen over E10's
+  "exclude reversed applications" because exclusion retroactively rewrites a closed period — against
+  `PERIOD_CLOSED`/`PERIOD_HARD_LOCKED` and ADR-0047's correction-by-reversal model — and is not
+  additive, so twelve monthly buckets would not sum to the annual figure once W3.1 adds
+  `groupBy=week|month`. **E10 keeps its `includeReversed=false` default:** a list answers a
+  point-in-time question, E2 measures movement. That divergence is deliberate and documented at both
+  endpoints so it is not later "unified" in the wrong direction.
+
+Follow-ups filed from this decision: **#1620** refunds (`refunded`/`netCashCollected`), **#1621**
+non-cash settlement (`nonCashSettled`/`settled`/`settlementRatePct`, both sources together),
+**#1622** `received` (true cash receipts, which resolves the A/R-relief-vs-cash base mismatch), and
+**#1623** — whether `invoiced` double-counts deposit-take orders, which is a revenue-recognition
+question the invoicing and accounting owners both declined to arbitrate.
 
 ### Wave 2 exit gate
 

@@ -46,6 +46,7 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
                 .generatedAt(Instant.parse("2026-06-30T08:00:00Z"))
                 .invoiced(new BigDecimal("1500.00"))
                 .collected(new BigDecimal("1200.00"))
+                .applicationReversals(new BigDecimal("150.00"))
                 .collectionRatePct(new BigDecimal("80.00"))
                 .build();
     }
@@ -81,6 +82,7 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.invoiced").value(1500.00))
                 .andExpect(jsonPath("$.collected").value(1200.00))
+                .andExpect(jsonPath("$.applicationReversals").value(150.00))
                 .andExpect(jsonPath("$.collectionRatePct").value(80.00));
     }
 
@@ -91,6 +93,29 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
                         get(COLLECTIONS_PATH).param("startDate", "2026-06-30").param("endDate", "2026-06-01")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("GET /collections serializes a negative collected unclamped alongside a gross applicationReversals")
+    void collectionsSerializesNegativeCollectedUnclamped() throws Exception {
+        when(accountingAnalyticsService.getCollectionsAnalytics(
+                        eq(LocalDate.of(2026, 3, 1)), eq(LocalDate.of(2026, 3, 31))))
+                .thenReturn(CollectionsAnalyticsReport.builder()
+                        .startDate(LocalDate.of(2026, 3, 1))
+                        .endDate(LocalDate.of(2026, 3, 31))
+                        .generatedAt(Instant.parse("2026-03-31T08:00:00Z"))
+                        .invoiced(new BigDecimal("1000.00"))
+                        .collected(new BigDecimal("-800.00"))
+                        .applicationReversals(new BigDecimal("900.00"))
+                        .collectionRatePct(new BigDecimal("-80.00"))
+                        .build());
+
+        mockMvc.perform(withAuth(
+                        get(COLLECTIONS_PATH).param("startDate", "2026-03-01").param("endDate", "2026-03-31")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collected").value(-800.00))
+                .andExpect(jsonPath("$.applicationReversals").value(900.00))
+                .andExpect(jsonPath("$.collectionRatePct").value(-80.00));
     }
 
     @Test
