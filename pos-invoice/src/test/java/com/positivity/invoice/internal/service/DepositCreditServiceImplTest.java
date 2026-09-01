@@ -206,7 +206,7 @@ class DepositCreditServiceImplTest {
     }
 
     @Test
-    @DisplayName("DCS-009: a single draw-down publishes exactly one payment.deposit_credit.applied event")
+    @DisplayName("DCS-009: a single draw-down publishes exactly one payment.deposit-credit.applied event")
     void apply_publishesEventForSingleDrawDown() {
         UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
         DepositCredit c = credit(creditId, "200.0000", DepositCreditStatus.AVAILABLE);

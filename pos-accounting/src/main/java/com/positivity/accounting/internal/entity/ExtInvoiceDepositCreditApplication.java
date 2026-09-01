@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -28,7 +29,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "ext_invoice_deposit_credit_application")
+@Table(
+        name = "ext_invoice_deposit_credit_application",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_ext_invoice_deposit_credit_application_pair",
+                        columnNames = {"deposit_credit_id", "invoice_id"}))
 public class ExtInvoiceDepositCreditApplication {
 
     @Id

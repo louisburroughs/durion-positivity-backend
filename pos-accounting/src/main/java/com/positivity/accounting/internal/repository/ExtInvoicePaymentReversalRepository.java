@@ -4,10 +4,15 @@ import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Repository for {@link ExtInvoicePaymentReversal} persistence operations — pos-accounting's
+ * read-only replica of pos-invoice's completed-refund reversals (issue #1620).
+ */
 public interface ExtInvoicePaymentReversalRepository extends JpaRepository<ExtInvoicePaymentReversal, UUID> {
 
     /**
@@ -24,7 +29,8 @@ public interface ExtInvoicePaymentReversalRepository extends JpaRepository<ExtIn
      * @param end inclusive upper bound
      * @return total refunded amount recorded within the range; zero when there are none
      */
+    @NonNull
     @Query("SELECT COALESCE(SUM(r.amount), 0) FROM ExtInvoicePaymentReversal r"
             + " WHERE r.reversedAt BETWEEN :start AND :end")
-    BigDecimal sumAmountByReversedAtBetween(@Param("start") Instant start, @Param("end") Instant end);
+    BigDecimal sumAmountByReversedAtBetween(@Param("start") @NonNull Instant start, @Param("end") @NonNull Instant end);
 }

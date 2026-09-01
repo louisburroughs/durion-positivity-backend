@@ -380,6 +380,12 @@ class SalesOrderCheckoutTest {
         assertThat(request.getDepositAmount()).isEqualByComparingTo(order.getGrandTotal());
         assertThat(request.getLines())
                 .allSatisfy(line -> assertThat(line.getTaxAmount()).isEqualByComparingTo(BigDecimal.ZERO));
+        // Tripwire (#1629 regression): line amounts must be gross so lineSum == subtotal, or
+        // pos-invoice's validateTotals rejects the request whenever taxTotal != 0.
+        BigDecimal lineAmountSum = request.getLines().stream()
+                .map(com.positivity.shared.dto.OrderInvoiceLineItem::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(lineAmountSum).isEqualByComparingTo(request.getSubtotal());
     }
 
     @Test

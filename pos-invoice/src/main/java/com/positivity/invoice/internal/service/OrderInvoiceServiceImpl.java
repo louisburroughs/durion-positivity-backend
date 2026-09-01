@@ -144,15 +144,19 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         }
 
         // #1629: a deposit-take invoice is a contract-liability/cash-receipt artifact, not a
-        // taxable sale — force zero tax here regardless of what the request carried, guarding
-        // against callers that still compute tax on a deposit-take order.
-        if (isDepositTake(request)) {
-            invoice.setSubtotal(money(request.getTotalAmount(), BigDecimal.ZERO));
-            invoice.setTax(BigDecimal.ZERO);
-        } else {
-            invoice.setSubtotal(money(request.getSubtotal(), BigDecimal.ZERO));
-            invoice.setTax(money(request.getTaxAmount(), BigDecimal.ZERO));
+        // taxable sale — it must carry zero tax. Reject a malformed request outright rather than
+        // silently zeroing tax while leaving the header subtotal desynced from the line items
+        // (which still sum to the request's line total): validateTotals already guarantees
+        // arithmetic consistency of what remains, and with the order-side fix (#1629) the only
+        // caller (pos-order) sends zero-tax deposit requests, so this should never trip in
+        // practice.
+        if (isDepositTake(request)
+                && request.getTaxAmount() != null
+                && request.getTaxAmount().signum() != 0) {
+            throw new IllegalArgumentException("deposit-take invoice requests must carry zero tax (#1629)");
         }
+        invoice.setSubtotal(money(request.getSubtotal(), BigDecimal.ZERO));
+        invoice.setTax(money(request.getTaxAmount(), BigDecimal.ZERO));
         invoice.setTotal(money(request.getTotalAmount(), BigDecimal.ZERO));
         return invoice;
     }

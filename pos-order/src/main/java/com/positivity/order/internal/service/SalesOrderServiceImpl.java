@@ -654,7 +654,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         .description(line.getItemDescription())
                         .quantity(BigDecimal.valueOf(line.getQuantity()))
                         .unitPrice(line.getUnitPrice())
-                        .amount(line.getLineTotal().subtract(line.getTaxAmount()))
+                        .amount(
+                                depositTake
+                                        ? line.getLineTotal()
+                                        : line.getLineTotal().subtract(line.getTaxAmount()))
                         .taxAmount(depositTake ? BigDecimal.ZERO : line.getTaxAmount())
                         .type("PART")
                         .build())

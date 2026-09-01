@@ -299,6 +299,30 @@ public class SettlementEventsListener {
             return;
         }
 
+        if (payload == null) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected payment.payment.reversed event with missing payload eventId={}", eventId);
+            markProcessed(eventId);
+            return;
+        }
+
+        // A null reversalType is malformed, not a VOID: treating it as VOID would silently drop
+        // a reversal fact instead of rejecting it — fail loud rather than falling into the
+        // REFUND/VOID branch below.
+        if (payload.reversalType() == null) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error(
+                    "Rejected payment.payment.reversed payload with null reversalType eventId={} refundId={}",
+                    eventId,
+                    payload.refundId());
+            markProcessed(eventId);
+            return;
+        }
+
         if (!"REFUND".equals(payload.reversalType())) {
             log.debug(
                     "Ignoring non-REFUND payment.payment.reversed eventId={} reversalType={} (issue #1620: a VOID"
@@ -393,6 +417,15 @@ public class SettlementEventsListener {
             return;
         } catch (Exception e) {
             log.warn("Skipping malformed payment.deposit-credit.applied event eventId={}", eventId, e);
+            markProcessed(eventId);
+            return;
+        }
+
+        if (payload == null) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected payment.deposit-credit.applied event with missing payload eventId={}", eventId);
             markProcessed(eventId);
             return;
         }

@@ -213,6 +213,28 @@ class SettlementEventsListenerPaymentReversedTest {
     }
 
     @Test
+    @DisplayName("a null reversalType is rejected as malformed, not silently dropped as VOID")
+    void nullReversalTypeRejected() {
+        listener().onPaymentEvent(envelope(EVENT_ID, reversal(null, PAYMENT_INTENT_ID, INVOICE_ID, PARTY_ID)));
+
+        assertThat(rejectedCount()).isEqualTo(1d);
+        verify(extInvoicePaymentReversalRepository, never()).save(any());
+        verify(processedEventRepository).save(any(ProcessedEvent.class));
+    }
+
+    @Test
+    @DisplayName("an envelope with no payload node is rejected as malformed, not an NPE poison-pill")
+    void missingPayloadNodeRejected() {
+        String msg = mapper.writeValueAsString(Map.of("eventType", PaymentReversedV1.EVENT_TYPE, "eventId", EVENT_ID));
+
+        listener().onPaymentEvent(msg);
+
+        assertThat(rejectedCount()).isEqualTo(1d);
+        verify(extInvoicePaymentReversalRepository, never()).save(any());
+        verify(processedEventRepository).save(any(ProcessedEvent.class));
+    }
+
+    @Test
     @DisplayName("a repository save failure propagates unmarked, for container retry/DLQ")
     void repositorySaveFailurePropagatesUnmarked() {
         doThrow(new RuntimeException("db unavailable"))

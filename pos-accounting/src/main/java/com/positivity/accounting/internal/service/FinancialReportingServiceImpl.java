@@ -872,6 +872,35 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         }
     }
 
+    /**
+     * Filters out credit memos whose {@code originalInvoiceId} is a deposit-take invoice (#1629).
+     *
+     * <p>The credit legs of the tax-liability report can reference an original invoice finalized
+     * outside this report's own window — {@link #accumulateInvoiceTax} only loads invoices
+     * finalized within {@code [startInstant, endInstant]}, but a credit memo posted or voided in
+     * that window may sit against an invoice finalized long before it. So the deposit flag is
+     * loaded fresh here, scoped to just the credits' own {@code originalInvoiceId}s, rather than
+     * reused from that window-scoped load.
+     */
+    private List<CreditMemo> excludeDepositTakeOriginals(List<CreditMemo> credits) {
+        List<UUID> originalInvoiceIds = credits.stream()
+                .map(CreditMemo::getOriginalInvoiceId)
+                .distinct()
+                .toList();
+        Set<UUID> depositTakeOriginalIds = originalInvoiceIds.isEmpty()
+                ? Set.of()
+                : extInvoiceRepository.findAllById(originalInvoiceIds).stream()
+                        .filter(invoice -> invoice.getDepositSourceType() != null)
+                        .map(ExtInvoice::getInvoiceId)
+                        .collect(Collectors.toSet());
+        if (depositTakeOriginalIds.isEmpty()) {
+            return credits;
+        }
+        return credits.stream()
+                .filter(credit -> !depositTakeOriginalIds.contains(credit.getOriginalInvoiceId()))
+                .toList();
+    }
+
     /** Adds one invoice tax row to its jurisdiction's exempt or taxable running totals. */
     private static void applyInvoiceTaxRow(
             Map<JurisdictionKey, JurisdictionAccumulator> byJurisdiction, ExtInvoiceTax row) {
@@ -904,7 +933,17 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (credits.isEmpty()) {
             return BigDecimal.ZERO;
         }
-        List<UUID> originalInvoiceIds = credits.stream()
+        // #1629: a credit memo against a deposit-take original must contribute nothing here —
+        // its tax was never counted on the gross side (accumulateInvoiceTax excludes deposit-take
+        // invoices), so netting the reversal would drive a jurisdiction's netTax negative against
+        // tax never counted. The original can be finalized outside this report's window, so the
+        // deposit flag is loaded fresh by these credits' originalInvoiceIds rather than reused
+        // from accumulateInvoiceTax's window-scoped invoice load.
+        List<CreditMemo> eligibleCredits = excludeDepositTakeOriginals(credits);
+        if (eligibleCredits.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        List<UUID> originalInvoiceIds = eligibleCredits.stream()
                 .map(CreditMemo::getOriginalInvoiceId)
                 .distinct()
                 .toList();
@@ -913,13 +952,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                         .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
 
         List<UUID> creditMemoIds =
-                credits.stream().map(CreditMemo::getCreditMemoId).toList();
+                eligibleCredits.stream().map(CreditMemo::getCreditMemoId).toList();
         Map<UUID, List<CreditMemoTax>> attributionByCredit =
                 creditMemoTaxRepository.findByCreditMemoIdIn(creditMemoIds).stream()
                         .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
 
         BigDecimal unattributed = BigDecimal.ZERO;
-        for (CreditMemo credit : credits) {
+        for (CreditMemo credit : eligibleCredits) {
             unattributed = unattributed.add(netCreditAcrossJurisdictions(
                     credit, attributionByCredit, taxByOriginalInvoice, byJurisdiction, false));
         }
@@ -943,20 +982,29 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (voids.isEmpty()) {
             return BigDecimal.ZERO;
         }
-        List<UUID> voidInvoiceIds =
-                voids.stream().map(CreditMemo::getOriginalInvoiceId).distinct().toList();
+        // #1629: symmetry with accumulatePostedCredits — a void against a deposit-take original
+        // never entered netTax on the posted leg, so it must not restore anything here either.
+        List<CreditMemo> eligibleVoids = excludeDepositTakeOriginals(voids);
+        if (eligibleVoids.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        List<UUID> voidInvoiceIds = eligibleVoids.stream()
+                .map(CreditMemo::getOriginalInvoiceId)
+                .distinct()
+                .toList();
         Map<UUID, List<ExtInvoiceTax>> taxByVoidInvoice =
                 extInvoiceTaxRepository.findByInvoiceIdIn(voidInvoiceIds).stream()
                         .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
         Map<UUID, List<CreditMemoTax>> attributionByVoid =
                 creditMemoTaxRepository
-                        .findByCreditMemoIdIn(
-                                voids.stream().map(CreditMemo::getCreditMemoId).toList())
+                        .findByCreditMemoIdIn(eligibleVoids.stream()
+                                .map(CreditMemo::getCreditMemoId)
+                                .toList())
                         .stream()
                         .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
 
         BigDecimal unattributed = BigDecimal.ZERO;
-        for (CreditMemo voided : voids) {
+        for (CreditMemo voided : eligibleVoids) {
             unattributed = unattributed.add(
                     netCreditAcrossJurisdictions(voided, attributionByVoid, taxByVoidInvoice, byJurisdiction, true));
         }

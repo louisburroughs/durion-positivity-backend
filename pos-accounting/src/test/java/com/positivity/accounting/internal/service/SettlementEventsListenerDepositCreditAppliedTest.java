@@ -173,6 +173,19 @@ class SettlementEventsListenerDepositCreditAppliedTest {
     }
 
     @Test
+    @DisplayName("an envelope with no payload node is rejected as malformed, not an NPE poison-pill")
+    void missingPayloadNodeRejected() {
+        String msg =
+                mapper.writeValueAsString(Map.of("eventType", DepositCreditAppliedV1.EVENT_TYPE, "eventId", EVENT_ID));
+
+        listener().onPaymentEvent(msg);
+
+        assertThat(rejectedCount()).isEqualTo(1d);
+        verify(extInvoiceDepositCreditApplicationRepository, never()).save(any());
+        verify(processedEventRepository).save(any(ProcessedEvent.class));
+    }
+
+    @Test
     @DisplayName("a zero or negative amountApplied is skipped and marked processed, nothing saved")
     void nonPositiveAmountSkipped() {
         listener().onPaymentEvent(envelope(EVENT_ID, applied(BigDecimal.ZERO)));
