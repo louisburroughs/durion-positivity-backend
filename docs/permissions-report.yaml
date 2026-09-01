@@ -1,9 +1,9 @@
-generatedAt: "2026-09-01T01:35:24.749542+00:00"
+generatedAt: "2026-09-01T03:39:27.760561+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 460
-  uniquePermissionCount: 460
+  permissionCount: 462
+  uniquePermissionCount: 462
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,8 +12,10 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 52
+    permissionCount: 53
     permissions:
+      - name: "accounting:analytics:view"
+        description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
       - name: "accounting:ap:pay"
         description: "Process payments"
       - name: "accounting:ap:view"
@@ -980,8 +982,10 @@ manifests:
     domain: "workorder"
     serviceName: "pos-workorder"
     version: "1.0"
-    permissionCount: 53
+    permissionCount: 54
     permissions:
+      - name: "workorder:analytics:view"
+        description: "View cross-workorder analytics (status-transition history, reopened-workorder and technician-labor summaries)"
       - name: "workorder:approval_config:create"
         description: "Create approval configurations"
       - name: "workorder:approval_config:delete"
@@ -1089,6 +1093,12 @@ manifests:
       - name: "workorder:financials:view"
         description: "View workorder financial detail (cost and margin) on the workorder detail response"
 permissions:
+  - name: "accounting:analytics:view"
+    description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:ap:pay"
     description: "Process payments"
     domain: "accounting"
@@ -3531,6 +3541,12 @@ permissions:
     serviceName: "pos-warranty"
     module: "pos-warranty"
     source: "pos-warranty/src/main/resources/permissions.yaml"
+  - name: "workorder:analytics:view"
+    description: "View cross-workorder analytics (status-transition history, reopened-workorder and technician-labor summaries)"
+    domain: "workorder"
+    serviceName: "pos-workorder"
+    module: "pos-workorder"
+    source: "pos-workorder/src/main/resources/permissions.yaml"
   - name: "workorder:approval_config:create"
     description: "Create approval configurations"
     domain: "workorder"
