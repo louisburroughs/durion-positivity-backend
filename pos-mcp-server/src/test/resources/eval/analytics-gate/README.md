@@ -14,7 +14,11 @@ counts and currency, ±0.5 % for derived ratios).
 ## Status
 
 - `ground-truth/q13-ar-pareto.sql` — **written** (the Wave 1 gate question; runnable today).
-- The other nineteen ground-truth scripts — **not written**.
+- `ground-truth/q11-weekly-invoiced-vs-collected.sql` — **written** from the #1620/#1621 settlement
+  semantics (invoiced / settled / settlementRatePct; runnable once the fixture lands).
+- `ground-truth/q18-weekly-cash-in-vs-out.sql` — **written** from the #1620/#1622 cash-basis
+  semantics (received vs refunded + A/P paid; runnable once the fixture lands).
+- The other seventeen ground-truth scripts — **not written**.
 - The seed data itself — **not written.** This is the remaining work; the shape it must have is
   specified below.
 

@@ -16,34 +16,40 @@ import org.jspecify.annotations.NonNull;
 public interface AccountingAnalyticsService {
 
     /**
-     * Invoiced-vs-collected analytics for one date window (Issue #1590, E2).
+     * Invoiced-vs-collected analytics for one date window (Issue #1590 E2, #1620, #1621, #1622).
      *
-     * <p><b>invoiced</b> sums {@code ExtInvoice.total} for invoices whose {@code finalizedAt}
-     * (accrual/posting date) falls in the inclusive window — the same anchor {@code
-     * generateTaxLiability} and {@code ExtInvoiceRepository#findByFinalizedAtBetween} already use for
-     * "invoice date" elsewhere in this module, and the semantically correct one: {@code
-     * invoiceCreatedAt} is only the draft-creation timestamp, not yet a real financial event. A still-
-     * {@code DRAFT} invoice (null {@code finalizedAt}) never contributes. Deposit-take invoices
-     * (non-null {@code ExtInvoice.depositSourceType}) never contribute either (#1623): the
-     * down-payment document is a contract liability, not a sale, and the settlement invoice is
-     * later raised gross for the full workorder total, so counting both would overstate {@code
-     * invoiced} by every deposit taken. The exclusion is at the deposit-take document — the
-     * settlement invoice is never netted, keeping its total traceable to the workorder price.
+     * <p>Ten figures, each on its own basis (see {@link
+     * com.positivity.accounting.internal.dto.CollectionsAnalyticsReport} field docs for the full
+     * detail):
      *
-     * <p><b>collected</b> sums {@code PaymentApplication.appliedAmount} for applications whose {@code
-     * applicationTimestamp} falls in the same inclusive window — settled cash only. {@code
-     * PaymentIntent}/{@code Receipt} (pos-invoice pre-settlement artifacts) are never consulted: an
-     * intent is not a collection.
-     *
-     * <p>These are deliberately different invoice cohorts: the invoice finalized in this window and
-     * the invoice whose payment settled in this window can be entirely different invoices. {@code
-     * collectionRatePct} is a period-level cash-efficiency signal, not a per-cohort collection rate.
+     * <ul>
+     *   <li><b>invoiced</b> — {@code ExtInvoice.total} for invoices finalized in the window;
+     *       deposit-take invoices excluded (#1623, contract liability, not a sale).
+     *   <li><b>collected</b> — A/R relief: {@code PaymentApplication.appliedAmount} applied in the
+     *       window, net of application reversals recorded in the window (movement basis); cash
+     *       settled by deposit/customer credit is excluded.
+     *   <li><b>applicationReversals</b> — gross reversal amount already netted out of {@code
+     *       collected}, reported for attribution.
+     *   <li><b>collectionRatePct</b> — {@code collected / invoiced * 100}; a period-level
+     *       cash-efficiency signal, not a per-cohort rate (invoiced and collected are different
+     *       invoice cohorts).
+     *   <li><b>refunded</b> — cash out: gross completed refunds recorded in the window.
+     *   <li><b>netCashCollected</b> — {@code collected - refunded}; mixed-basis and generally
+     *       under-counts (see the DTO doc) — prefer {@code received - refunded}.
+     *   <li><b>received</b> — cash in: {@code ReceivablePayment.totalAmount} by {@code clearedAt},
+     *       independent of whether it has been applied to an invoice yet.
+     *   <li><b>nonCashSettled</b> — invoice settlement without new cash: deposit-credit and
+     *       customer-credit draw-downs, attributed to the draw-down moment.
+     *   <li><b>settled</b> — {@code collected + nonCashSettled}: billed vs. settled by any means.
+     *   <li><b>settlementRatePct</b> — {@code settled / invoiced * 100}, the broader counterpart to
+     *       {@code collectionRatePct}.
+     * </ul>
      *
      * @param startDate window start date (inclusive)
      * @param endDate   window end date (inclusive)
-     * @return single-row collections analytics; {@code collectionRatePct} is {@code null} when {@code
-     *         invoiced} is zero (undefined ratio — never a divide-by-zero exception, never a
-     *         misleading {@code 0})
+     * @return single-row collections analytics; {@code collectionRatePct}/{@code settlementRatePct}
+     *         are {@code null} when {@code invoiced} is zero (undefined ratio — never a
+     *         divide-by-zero exception, never a misleading {@code 0})
      * @throws IllegalArgumentException if {@code endDate} is before {@code startDate}
      */
     @NonNull

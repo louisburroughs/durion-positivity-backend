@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.PaymentEventPublisher;
 import com.positivity.invoice.internal.dto.DepositCreditSummary;
 import com.positivity.invoice.internal.entity.DepositCredit;
 import com.positivity.invoice.internal.entity.DepositCreditApplication;
@@ -38,6 +39,7 @@ public class DepositCreditServiceImpl implements DepositCreditService {
 
     private final DepositCreditRepository depositCreditRepository;
     private final DepositCreditApplicationRepository depositCreditApplicationRepository;
+    private final PaymentEventPublisher paymentEventPublisher;
     private final Clock clock;
 
     @Override
@@ -120,6 +122,7 @@ public class DepositCreditServiceImpl implements DepositCreditService {
                             ? DepositCreditStatus.FULLY_APPLIED
                             : DepositCreditStatus.PARTIALLY_APPLIED);
             depositCreditRepository.save(credit);
+            paymentEventPublisher.publishDepositCreditApplied(credit, invoiceId, drawable);
 
             appliedTotal = appliedTotal.add(drawable);
             remaining = scale(remaining.subtract(drawable));
