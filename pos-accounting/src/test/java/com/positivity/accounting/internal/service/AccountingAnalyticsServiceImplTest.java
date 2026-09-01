@@ -96,6 +96,13 @@ class AccountingAnalyticsServiceImplTest {
                 .build();
     }
 
+    /** The document a deposit-take order renders for the down-payment itself (#1623). */
+    private static ExtInvoice depositTakeInvoice(UUID id, Instant finalizedAt, String total) {
+        ExtInvoice invoice = invoice(id, finalizedAt, total);
+        invoice.setDepositSourceType("WORKORDER");
+        return invoice;
+    }
+
     private static PaymentApplication application(
             UUID invoiceId, Instant timestamp, String appliedAmount, String balanceAfter) {
         PaymentApplication app = new PaymentApplication();
@@ -173,6 +180,47 @@ class AccountingAnalyticsServiceImplTest {
             assertThat(report.getApplicationReversals()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(report.getCollectionRatePct()).isEqualByComparingTo("80.00");
             assertThat(report.getGeneratedAt()).isEqualTo(TEST_CLOCK.instant());
+        }
+
+        @Test
+        @DisplayName("Excludes deposit-take invoices from invoiced and the rate denominator (#1623)")
+        void excludesDepositTakeInvoicesFromInvoiced() {
+            // The issue's motivating shape: a $500 deposit taken on a $2,000 job. Both documents
+            // finalize (here in one window for brevity); invoiced must report the $2,000 sale
+            // once, not $2,500 across the deposit-take and gross settlement documents.
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(
+                            depositTakeInvoice(UUID.randomUUID(), Instant.parse("2026-06-05T00:00:00Z"), "500.00"),
+                            invoice(UUID.randomUUID(), Instant.parse("2026-06-20T00:00:00Z"), "2000.00")));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of(
+                            application(UUID.randomUUID(), Instant.parse("2026-06-10T00:00:00Z"), "1000.00", "0.00")));
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo("2000.00");
+            assertThat(report.getCollectionRatePct()).isEqualByComparingTo("50.00");
+        }
+
+        @Test
+        @DisplayName("A window of only deposit-take invoices reports invoiced=0 and a null rate (#1623)")
+        void depositTakeOnlyWindowReportsZeroInvoiced() {
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(
+                            depositTakeInvoice(UUID.randomUUID(), Instant.parse("2026-06-05T00:00:00Z"), "500.00")));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of());
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(report.getCollectionRatePct()).isNull();
         }
 
         @Test

@@ -135,6 +135,34 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("Materializes the deposit-take marker into the replica (#1623) and tolerates its absence")
+    void projectsDepositSourceType() {
+        when(processedEvents.existsById("e-dep")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        String depositTake = """
+                {"eventId":"e-dep","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":4,
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED",
+                            "total":108.00,"depositSourceType":"WORKORDER",
+                            "depositSourceId":"00000000-0000-0000-0000-0000000000e1"}}
+                """.formatted(INVOICE_ID, INVOICE_ID, WORKORDER_ID);
+
+        listener.onInvoiceEvent(depositTake);
+
+        ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getDepositSourceType()).isEqualTo("WORKORDER");
+
+        // Pre-#1623 events carry no marker: the replica column stays null (ordinary invoice).
+        when(processedEvents.existsById("e-nodep")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        listener.onInvoiceEvent(event("e-nodep", 5));
+        ArgumentCaptor<ExtInvoice> savedLegacy = ArgumentCaptor.forClass(ExtInvoice.class);
+        verify(replica, org.mockito.Mockito.times(2)).save(savedLegacy.capture());
+        assertThat(savedLegacy.getAllValues().get(1).getDepositSourceType()).isNull();
+    }
+
+    @Test
     @DisplayName("Materializes the tax breakdown into ext_invoice_tax matching the scalar to the cent")
     void materializesTaxBreakdown() {
         when(processedEvents.existsById("e-tb")).thenReturn(false);

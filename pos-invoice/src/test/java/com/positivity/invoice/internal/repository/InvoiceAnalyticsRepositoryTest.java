@@ -145,6 +145,32 @@ class InvoiceAnalyticsRepositoryTest {
     }
 
     @Test
+    void excludesDepositTakeInvoices() {
+        // #1623: the deposit-take document is a contract liability, not a sale — a $500 deposit
+        // on a $2,000 job must report $2,000 of revenue, not $2,500, once the gross settlement
+        // invoice lands.
+        Invoice depositTake =
+                invoice("INV-DEP", PARTY_A, InvoiceStatus.FINALIZED, new BigDecimal("500.0000"), IN_WINDOW);
+        depositTake.setDepositSourceType(com.positivity.invoice.internal.enums.DepositSourceType.WORKORDER);
+        depositTake.setDepositSourceId(UUID.randomUUID());
+        entityManager.persist(depositTake);
+        entityManager.persist(
+                invoice("INV-SETTLE", PARTY_A, InvoiceStatus.FINALIZED, new BigDecimal("2000.0000"), LATER_IN_WINDOW));
+        entityManager.flush();
+        entityManager.clear();
+
+        List<RevenueByCustomerProjection> rows = invoiceRepository.revenueByCustomer(
+                WINDOW_START,
+                WINDOW_END,
+                EnumSet.of(InvoiceStatus.FINALIZED, InvoiceStatus.POSTED),
+                PageRequest.of(0, 10));
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().getRevenue()).isEqualByComparingTo("2000.0000");
+        assertThat(rows.getFirst().getInvoiceCount()).isEqualTo(1);
+    }
+
+    @Test
     void excludesInvoicesOutsideTheWindowAndWithNoPartyId() {
         entityManager.persist(
                 invoice("INV-1", PARTY_A, InvoiceStatus.FINALIZED, new BigDecimal("100.0000"), OUT_OF_WINDOW));

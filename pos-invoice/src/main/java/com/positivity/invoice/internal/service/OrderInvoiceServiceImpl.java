@@ -21,6 +21,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -130,6 +131,14 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         invoice.setAdjustments(BigDecimal.ZERO);
         invoice.setAdjustmentsAmount(BigDecimal.ZERO);
 
+        // #1623: a deposit-take request renders the down-payment document itself — a contract
+        // liability, not a sale — so stamp the provenance under the same condition
+        // registerDepositIfPresent registers the credit. Revenue measures exclude marked invoices.
+        if (isDepositTake(request) && request.getDepositSourceType() != null) {
+            invoice.setDepositSourceType(parseDepositSourceType(request.getDepositSourceType()));
+            invoice.setDepositSourceId(request.getDepositSourceId());
+        }
+
         for (OrderInvoiceLineItem line : request.getLines()) {
             invoice.addItem(buildLineItem(line));
         }
@@ -172,9 +181,24 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
                 DepositSourceType.WORKORDER, saved.getWorkorderId(), saved.getId(), saved.getTotal());
     }
 
+    /** A request whose {@code depositAmount} is positive renders the down-payment document itself (#1623). */
+    private static boolean isDepositTake(@NonNull OrderInvoiceCreationRequest request) {
+        return request.getDepositAmount() != null && request.getDepositAmount().signum() > 0;
+    }
+
+    /** Same normalization as {@code DepositCreditServiceImpl}: the two artifacts must agree on the type. */
+    @NonNull
+    private static DepositSourceType parseDepositSourceType(@NonNull String raw) {
+        try {
+            return DepositSourceType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unknown deposit source type: " + raw);
+        }
+    }
+
     private void registerDepositIfPresent(@NonNull OrderInvoiceCreationRequest request) {
         BigDecimal depositAmount = request.getDepositAmount();
-        if (depositAmount == null || depositAmount.signum() <= 0) {
+        if (!isDepositTake(request)) {
             return;
         }
         if (request.getDepositSourceType() == null || request.getDepositSourceId() == null) {

@@ -41,6 +41,15 @@ import org.jspecify.annotations.Nullable;
  * within schema v1 (ADR-0044 §3) and {@code null} on drafts and on events from producers that
  * predate the enrichment; consumers must tolerate their absence. {@code dueDate} is a business
  * calendar date, not an instant — aging buckets are calendar-based.
+ *
+ * <p>{@code depositSourceType} and {@code depositSourceId} (#1623) mark a deposit-take invoice:
+ * the document a deposit-take order renders for the down-payment itself, whose full total funds a
+ * {@code DepositCredit} rather than recognizing revenue (a contract liability under ASC 606, not
+ * a sale). Consumers computing revenue-shaped measures from invoice totals must exclude invoices
+ * carrying a non-null {@code depositSourceType} — the settlement invoice stays gross, so counting
+ * both double-counts the deposit. Additive within schema v1; {@code null} on ordinary invoices
+ * and on events from producers predating the enrichment. Values mirror pos-invoice's
+ * {@code DepositSourceType} ({@code ESTIMATE}/{@code WORKORDER}/{@code ORDER}).
  */
 public record InvoiceUpdatedV1(
         @NonNull UUID invoiceId,
@@ -59,7 +68,9 @@ public record InvoiceUpdatedV1(
         @Nullable List<TaxBreakdownLine> taxBreakdown,
         @Nullable List<InvoiceLine> lines,
         @Nullable LocalDate dueDate,
-        @Nullable String paymentTermsCode) {
+        @Nullable String paymentTermsCode,
+        @Nullable String depositSourceType,
+        @Nullable UUID depositSourceId) {
 
     public static final String EVENT_TYPE = "invoice.invoice.updated";
     public static final int SCHEMA_VERSION = 1;
@@ -79,6 +90,47 @@ public record InvoiceUpdatedV1(
             @Nullable BigDecimal amount,
             @Nullable UUID workorderItemId,
             @Nullable String itemType) {}
+
+    /** Pre-#1623 arity (no deposit-take provenance): older producers/tests project no marker. */
+    public InvoiceUpdatedV1(
+            @NonNull UUID invoiceId,
+            @Nullable String invoiceNumber,
+            @NonNull UUID workorderId,
+            @Nullable UUID estimateId,
+            @Nullable UUID locationId,
+            @Nullable String partyId,
+            @NonNull String status,
+            @Nullable BigDecimal subtotal,
+            @Nullable BigDecimal tax,
+            @Nullable BigDecimal total,
+            @Nullable BigDecimal adjustmentsAmount,
+            @Nullable Instant createdAt,
+            @Nullable Instant finalizedAt,
+            @Nullable List<TaxBreakdownLine> taxBreakdown,
+            @Nullable List<InvoiceLine> lines,
+            @Nullable LocalDate dueDate,
+            @Nullable String paymentTermsCode) {
+        this(
+                invoiceId,
+                invoiceNumber,
+                workorderId,
+                estimateId,
+                locationId,
+                partyId,
+                status,
+                subtotal,
+                tax,
+                total,
+                adjustmentsAmount,
+                createdAt,
+                finalizedAt,
+                taxBreakdown,
+                lines,
+                dueDate,
+                paymentTermsCode,
+                null,
+                null);
+    }
 
     /** Pre-#993 arity (no due-date facts): older producers/tests project no aging enrichment. */
     public InvoiceUpdatedV1(
@@ -114,6 +166,8 @@ public record InvoiceUpdatedV1(
                 taxBreakdown,
                 lines,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -148,6 +202,8 @@ public record InvoiceUpdatedV1(
                 createdAt,
                 finalizedAt,
                 taxBreakdown,
+                null,
+                null,
                 null,
                 null,
                 null);

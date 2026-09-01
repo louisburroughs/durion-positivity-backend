@@ -67,6 +67,10 @@ public class AccountingAnalyticsController {
                     Returns one aggregate row for a single date window: invoiced (the sum of ExtInvoice \
                     totals for invoices finalized in the window), collected, applicationReversals, and a \
                     server-derived collectionRatePct.
+                    invoiced EXCLUDES deposit-take invoices — the document a deposit-take order renders \
+                    for the down-payment itself (#1623): a deposit is a contract liability, not a sale, \
+                    and the settlement invoice is later raised gross for the full workorder total, so \
+                    counting both would overstate billing by every deposit taken.
                     collected is payment amounts APPLIED to accounts receivable within the window, NET of \
                     application reversals recorded within the window — it is NOT cash received. Reversals \
                     net on a movement basis: a January payment reversed in March reduces March and never \

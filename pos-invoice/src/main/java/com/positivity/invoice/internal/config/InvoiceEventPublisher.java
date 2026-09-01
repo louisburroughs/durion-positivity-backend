@@ -66,7 +66,11 @@ public class InvoiceEventPublisher {
                 buildTaxBreakdown(invoice.getId()),
                 buildLines(invoice),
                 invoice.getDueDate(),
-                invoice.getPaymentTermsCode());
+                invoice.getPaymentTermsCode(),
+                invoice.getDepositSourceType() == null
+                        ? null
+                        : invoice.getDepositSourceType().name(),
+                invoice.getDepositSourceId());
         DomainEventEnvelope<InvoiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 InvoiceUpdatedV1.EVENT_TYPE,
                 InvoiceUpdatedV1.SCHEMA_VERSION,
