@@ -49,10 +49,25 @@ public class AddEstimateItemRequest {
         };
     }
 
-    @NotNull(message = "quantity is required")
+    @Nullable
     @DecimalMin(value = "0.0001", message = "quantity must be greater than 0")
-    @Schema(description = "Requested quantity", example = "2", requiredMode = REQUIRED)
+    @Schema(
+            description = "Requested quantity (hours for LABOR). Required, EXCEPT on a LABOR item that names a"
+                    + " serviceId: omitting it there asks the labor guide to prefill the book time (#1569);"
+                    + " when no guide time is available the request is rejected and an explicit quantity must"
+                    + " be sent. A supplied quantity always wins over the guide.",
+            example = "2",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal quantity;
+
+    @jakarta.validation.constraints.AssertTrue(
+            message = "quantity is required unless a LABOR item names a serviceId for guide defaulting")
+    private boolean isQuantityPresentWhenRequired() {
+        if (quantity != null) {
+            return true;
+        }
+        return itemType == EstimateItemType.LABOR && serviceId != null;
+    }
 
     @NotNull(message = "unitPrice is required")
     @DecimalMin(value = "0.00", message = "unitPrice must be 0 or greater")

@@ -61,8 +61,19 @@ class DashboardServiceTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    // Answers "no estimate" unless a case stubs otherwise — pre-#1569 scenarios unchanged.
+    @Mock
+    private EstimatedLaborService estimatedLaborService;
+
     @InjectMocks
     private DashboardServiceImpl dashboardService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubEstimatedLabor() {
+        org.mockito.Mockito.lenient()
+                .when(estimatedLaborService.estimateForWorkorder(any(UUID.class)))
+                .thenReturn(EstimatedLaborService.EstimatedLabor.none());
+    }
 
     // -----------------------------------------------------------------------
     // AC-1: getDashboard returns non-null DashboardResponse with lastRefreshed

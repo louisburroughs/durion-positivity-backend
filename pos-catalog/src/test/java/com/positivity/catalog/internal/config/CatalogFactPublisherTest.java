@@ -244,7 +244,8 @@ class CatalogFactPublisherTest {
 
             DomainEventEnvelope<?> envelope = capturedServiceEnvelope();
             assertThat(envelope.eventType()).isEqualTo("catalog.service.updated");
-            assertThat(envelope.schemaVersion()).isEqualTo(1);
+            // Schema v2 (#1569): the additive operation-taxonomy bump.
+            assertThat(envelope.schemaVersion()).isEqualTo(2);
             assertThat(envelope.aggregateId()).isEqualTo(entity.getId());
             // Flushed before the version is read (#1486), so the fact carries the entity's current
             // @Version rather than the retired updatedAt-epoch-millis value.

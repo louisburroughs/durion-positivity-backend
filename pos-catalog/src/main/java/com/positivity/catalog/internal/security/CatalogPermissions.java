@@ -213,6 +213,22 @@ public final class CatalogPermissions {
     public static final String LABOR_STANDARD_MANAGE = "catalog:labor_standard:manage";
 
     /**
+     * Resolve the applicable labor time for (service operation, vehicle) over the ADR-0058 §5
+     * REST edge. Held by pos-workorder's service identity, not by end users: the edge is
+     * service-to-service, and the user-facing authorization already happened on the workorder
+     * endpoint that triggered the quote.
+     */
+    public static final String LABOR_TIME_RESOLVE = "catalog:labor_time:resolve";
+
+    /**
+     * Trigger a labor-guide feed import from a STORE-licensed source (#1569 Phase 1). Operator
+     * capability: one call rewrites guide-sourced standards wholesale, which is why it is not
+     * folded into {@link #LABOR_STANDARD_MANAGE} (hand-authoring one row and replacing a
+     * vendor's whole dataset are different trust levels).
+     */
+    public static final String LABOR_STANDARD_IMPORT = "catalog:labor_standard:import";
+
+    /**
      * Re-publish catalog facts to seed or repair a downstream replica.
      *
      * <p>One code shared by all three fact-replay endpoints — product facts, service facts, and

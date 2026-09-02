@@ -11,3 +11,10 @@ logging:
             resolver:
               aws:
                 ConfigClusterResolver: WARN
+
+pos:
+  catalog:
+    labor-guide:
+      # No licensed labor-guide source exists yet (#1569 Phase 2); the mock roster must never
+      # answer in a deployed environment.
+      enabled: false

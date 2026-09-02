@@ -1,10 +1,15 @@
 # Service Time Estimate Sourcing Plan (and Parts-Fitment Sourcing Mirror)
 
-**Status:** DRAFT for vetting — round 1. Load-bearing decisions (§4.1 keying, §3.1 pattern,
-naming, licensing gate, timekeeping boundary) are drafted as durion ADR-0058/ADR-0059
-(PROPOSED). Phase 0 plus the §4.4 DURION authoring surface (V17/V18, taxonomy fields,
-`/labor-standards` CRUD, permissions, event ids) landed under #1569; the §6 transport
-decision remains PENDING until the consumer side is built.
+**Status:** Phases 0–1 IMPLEMENTED (#1569; Phase 0 merged via PR #1631, Phase 1 on the
+follow-up branch). Load-bearing decisions are recorded in durion ADR-0058/ADR-0059; the §6
+transport split was ratified by the ADR-0044 amendment dated 2026-09-02 (ADR-0058 §5 now
+Resolved). Deliberate Phase-1 deviations from the sketches below: the fact bump reuses
+`CatalogServiceUpdatedV1` with `SCHEMA_VERSION = 2` (repo precedent: `ProductUpdatedV1`)
+rather than a new `V2` class; import completeness is verified by counted chunks/lines with the
+vendor checksum recorded for audit rather than recomputed; overlap arithmetic v1 is
+`max(group) + factor × others` with `pos.workorder.labor.overlap-additional-factor`
+(default 0.5) per §12 Q6. Next: Phase 2 (licensed aggregator) is gated on procurement per
+§5.4; the §9 fitment mirror track is untouched.
 **Owner module:** pos-catalog (system of record per decision recorded on
 [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569), 2026-08-29)
 **Inputs:** [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569)

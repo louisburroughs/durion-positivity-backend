@@ -1,9 +1,12 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.ReplicaVersionGuard;
+import com.positivity.domainevents.catalog.CatalogServiceUpdatedV1;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.workorder.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.workorder.internal.entity.ExtProductUomReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
+import com.positivity.workorder.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
@@ -48,6 +51,7 @@ public class CatalogEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtProductUomReplicaRepository productUomReplicaRepository;
+    private final ExtCatalogServiceReplicaRepository catalogServiceReplicaRepository;
 
     @KafkaListener(
             topics = "${workorder.kafka.catalog-events-topic:catalog.events.v1}",
@@ -61,7 +65,10 @@ public class CatalogEventsListener {
             log.warn("Skipping unparsable catalog event: {}", message, e);
             return;
         }
-        if (!ProductUpdatedV1.EVENT_TYPE.equals(envelope.path("eventType").stringValue(null))) {
+        String eventType = envelope.path("eventType").stringValue(null);
+        boolean productFact = ProductUpdatedV1.EVENT_TYPE.equals(eventType);
+        boolean serviceFact = CatalogServiceUpdatedV1.EVENT_TYPE.equals(eventType);
+        if (!productFact && !serviceFact) {
             return;
         }
         String eventId = envelope.path("eventId").stringValue(null);
@@ -74,7 +81,11 @@ public class CatalogEventsListener {
         }
 
         try {
-            applyUomConversions(envelope);
+            if (productFact) {
+                applyUomConversions(envelope);
+            } else {
+                applyCatalogService(envelope);
+            }
             processedEventRepository.save(ProcessedEvent.builder()
                     .eventId(eventId)
                     .owner(OWNER)
@@ -106,6 +117,41 @@ public class CatalogEventsListener {
      * this guards is redelivery after a rebalance. A product that currently holds no rows has
      * nothing to roll backwards, so the guard does not apply and the fact lands.
      */
+    /**
+     * Upserts the service-taxonomy replica row from a {@code catalog.service.updated} fact
+     * (#1569 Phase 1, schema v2). Same stale-guard semantics as the UoM apply below: apply on
+     * equal version (replay repairs), skip only strictly-older facts. A delete tombstone lands
+     * as {@code active=false} — kept, so a retired service stops resolving without vanishing.
+     *
+     * <p>The taxonomy fields are schema-v2 additions; on a v1 fact they read as null, which is
+     * exactly "the catalog stated nothing" — never zero hours.
+     */
+    private void applyCatalogService(JsonNode envelope) {
+        JsonNode payload = envelope.path("payload");
+        UUID serviceId = UUID.fromString(payload.path("serviceId").stringValue(null));
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
+
+        Long held = catalogServiceReplicaRepository
+                .findById(serviceId)
+                .map(ExtCatalogServiceReplica::getAggregateVersion)
+                .orElse(null);
+        if (held != null && ReplicaVersionGuard.isStale(held, aggregateVersion)) {
+            return;
+        }
+
+        JsonNode hoursNode = payload.path("defaultLaborHours");
+        catalogServiceReplicaRepository.save(ExtCatalogServiceReplica.builder()
+                .serviceId(serviceId)
+                .name(payload.path("name").stringValue(null))
+                .operationCode(payload.path("operationCode").stringValue(null))
+                .operationCategory(payload.path("operationCategory").stringValue(null))
+                .defaultLaborHours(hoursNode.isNumber() ? hoursNode.decimalValue() : null)
+                .active(payload.path("active").booleanValue(false))
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+    }
+
     private void applyUomConversions(JsonNode envelope) {
         JsonNode payload = envelope.path("payload");
         UUID productId = UUID.fromString(payload.path("productId").stringValue(null));

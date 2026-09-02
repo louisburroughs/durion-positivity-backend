@@ -133,7 +133,10 @@ class EstimateItemQuantityGateTest {
                 customerReferenceService,
                 vehicleReferenceService,
                 estimateFactPublisher,
-                new PartQuantityDivisibilityService(productUomRepository));
+                new PartQuantityDivisibilityService(productUomRepository),
+                // Un-stubbed mock: lookupGuideTime answers Optional.empty(), i.e. "no guide",
+                // which keeps every pre-#1569 scenario behaviorally identical.
+                org.mockito.Mockito.mock(LaborTimeDefaultingService.class));
 
         Estimate estimate = new Estimate();
         estimate.setId(ESTIMATE_ID);

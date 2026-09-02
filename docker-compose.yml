@@ -1414,6 +1414,29 @@ services:
   #     timeout: 3s
   #     retries: 20
 
+  # Fake EXTERNAL labor-guide vendor (pos-catalog/docs/service-time-sourcing-plan.md §10,
+  # #1569 Phase 1). Deliberately outside the platform mesh: no Eureka registration, no
+  # gateway route, no security, no database — adapters reach it only via base-url config
+  # (http://pos-reference-mock:8095). Fixed port 8095; no /actuator, so the healthcheck
+  # probes the deterministic feed-manifest endpoint instead.
+  pos-reference-mock:
+    build:
+      context: ./pos-reference-mock
+      dockerfile: Dockerfile
+    ports:
+      - "8095:8095"
+    environment:
+      SERVER_PORT: 8095
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8095/mock/labor-guide/v1/feed/manifest || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 300s
+
   pos-warranty:
     build:
       context: ./pos-warranty

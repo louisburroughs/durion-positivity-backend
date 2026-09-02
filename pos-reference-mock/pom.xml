@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.positivity</groupId>
+        <artifactId>positivity</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>pos-reference-mock</artifactId>
+    <name>pos-reference-mock</name>
+    <description>Fake external labor-guide vendor serving the Durion-normalized provider contract from
+        checked-in JSON fixtures (pos-catalog/docs/service-time-sourcing-plan.md §10, issue #1569
+        Phase 1). Deliberately OUTSIDE the platform mesh: no Eureka registration, no gateway route,
+        no JWT/security, no database, no Kafka, no pos-events. Reached only via adapter base-url
+        config on fixed port 8095. Its OpenAPI spec is the normative provider contract that Phase-2
+        vendor adapters translate onto.</description>
+
+    <!-- Deliberately NO jacoco.line.min / jacoco.branch.min floors: plan §10 excludes this
+         contract-test double from coverage aggregation thresholds (it stays in the reactor
+         build so it cannot rot, and in pos-coverage-aggregate so the drift check passes). -->
+
+    <packaging>jar</packaging>
+    <dependencies>
+        <!-- Lombok for boilerplate code reduction -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- JSpecify for null safety annotations -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <!-- Spring Web for the mock vendor REST endpoints -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!-- OpenAPI: this module's spec is the normative Durion-normalized provider contract -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc-openapi.version}</version>
+        </dependency>
+        <!-- Kotlin Reflect - required by springdoc-openapi 3.x -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-reflect</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>false</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

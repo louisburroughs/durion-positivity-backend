@@ -39,8 +39,19 @@ class WorkorderDetailServiceImplTest {
     @Mock
     private WorkorderPartRepository workorderPartRepository;
 
+    @Mock
+    private EstimatedLaborService estimatedLaborService;
+
     @InjectMocks
     private WorkorderDetailServiceImpl service;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubEstimatedLabor() {
+        // Answers "no estimate" unless a case stubs otherwise — pre-#1569 scenarios unchanged.
+        org.mockito.Mockito.lenient()
+                .when(estimatedLaborService.estimateForLines(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(EstimatedLaborService.EstimatedLabor.none());
+    }
 
     @Test
     @DisplayName("getWorkorderDetail: unassigned workorder returns detail with null assignment fields")
