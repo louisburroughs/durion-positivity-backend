@@ -155,6 +155,31 @@ public class LocationController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @Operation(operationId = "getTopLevelLocation", summary = "Get Top-Level Default Location", description = """
+                    Returns the platform's top-level location: the active root of the parent-child hierarchy \
+                    (a location that is a parent of others but a child of none), falling back to the oldest \
+                    active location when no hierarchy edges exist. The pick is deterministic (ties break on id).
+                    Use this tool when a caller needs a default location, e.g. resolving a fallback for users \
+                    with no primary staffing assignment; use getLocationById when the id is already known.
+                    Preconditions: at least one active location must exist.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no active location exists.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Top-level location resolved and returned.")
+    @ApiResponse(responseCode = "404", description = "No active location exists.")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:read"})
+    @GetMapping("/top-level")
+    public ResponseEntity<LocationResponseDTO> getTopLevelLocation() {
+        return locationService
+                .getTopLevelLocationDto()
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @Operation(
             operationId = "validateLocation",
             summary = "Validate Location Existence and Active State",

@@ -1,6 +1,8 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.people.internal.client.LocationClient;
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
@@ -31,6 +33,8 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     private final UserPersonTranslationService userPersonTranslationService;
 
     private final Clock clock;
+
+    private final LocationClient locationClient;
 
     @Override
     @NonNull
@@ -69,11 +73,35 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     @Override
     @NonNull
-    public UUID resolveCurrentUserPrimaryLocationId() {
+    public PrimaryLocationResolution resolveCurrentUserPrimaryLocation() {
         LocalDate targetDate = LocalDate.now(clock);
-        return findPrimaryLocationId(resolveRequesterPersonId(), targetDate)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "No primary location assignment exists for requester on " + targetDate));
+        String username = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new EntityNotFoundException("Authenticated user context is missing"));
+
+        Optional<UUID> primaryLocationId =
+                tryResolvePersonId(username).flatMap(personId -> findPrimaryLocationId(personId, targetDate));
+        if (primaryLocationId.isPresent()) {
+            return new PrimaryLocationResolution(primaryLocationId.get(), false);
+        }
+
+        return locationClient
+                .fetchTopLevelLocationId()
+                .map(topLevelId -> new PrimaryLocationResolution(topLevelId, true))
+                .orElseThrow(() -> new EntityNotFoundException("No primary location assignment exists for requester on "
+                        + targetDate + " and no top-level default location is available"));
+    }
+
+    /**
+     * Person-link resolution that treats a missing link as "no assignment" (so the
+     * top-level default can apply) instead of an error. Issue: #1636.
+     */
+    @NonNull
+    private Optional<UUID> tryResolvePersonId(@NonNull String username) {
+        try {
+            return Optional.of(userPersonTranslationService.getPersonUuidForUser(username));
+        } catch (EntityNotFoundException ex) {
+            return Optional.empty();
+        }
     }
 
     @Override

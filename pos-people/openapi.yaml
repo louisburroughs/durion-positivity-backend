@@ -861,17 +861,17 @@ paths:
       - people:availability:view
   /v1/people/me/primary-location:
     get:
-      description: 'Resolves the authenticated caller''s primary active location from their staffing assignments as of today.
+      description: 'Resolves the authenticated caller''s primary active location from their staffing assignments as of today, defaulting to the platform''s top-level location when none is assigned.
 
         Use this tool when a UI or service needs the current user''s home location; use listMyLocations instead to see every active assignment, and getPersonPrimaryLocation for a different person.
 
-        Preconditions: the caller must be linked to a person, and that person must have an ACTIVE assignment flagged primary whose effective dates cover today.
+        Preconditions: none beyond authentication; callers without a person link or a primary assignment receive the top-level default location with defaulted=true.
 
         Required inputs: none; identity comes from the bearer token and there are no parameters.
 
         Emits a PEOPLE_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only projection.
 
-        Returns 404 when the caller has no person link or no active assignment flagged as primary today.
+        Returns 404 only when the caller has no primary assignment AND no top-level default location could be resolved from the location service.
 
         '
       operationId: getMyPrimaryLocation
@@ -887,7 +887,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
-          description: No primary location assignment found for current user.
+          description: No primary location assignment found and no top-level default location available.
       security:
       - bearerAuth:
         - people:availability:view
@@ -3497,6 +3497,10 @@ components:
     PrimaryLocationResponse:
       description: Primary location resolved from the authenticated user's active staffing assignments
       properties:
+        defaulted:
+          description: True when the caller has no active primary assignment and locationId carries the platform's top-level default location instead
+          example: false
+          type: boolean
         locationId:
           description: Location identifier of the user's primary active assignment
           example: 22222222-2222-2222-2222-222222222222

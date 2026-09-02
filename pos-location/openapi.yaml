@@ -438,6 +438,43 @@ paths:
       - Storage Location Bulk Ingest API
       x-required-permissions:
       - location:write
+  /v1/locations/top-level:
+    get:
+      description: 'Returns the platform''s top-level location: the active root of the parent-child hierarchy (a location that is a parent of others but a child of none), falling back to the oldest active location when no hierarchy edges exist. The pick is deterministic (ties break on id).
+
+        Use this tool when a caller needs a default location, e.g. resolving a fallback for users with no primary staffing assignment; use getLocationById when the id is already known.
+
+        Preconditions: at least one active location must exist.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no active location exists.
+
+        '
+      operationId: getTopLevelLocation
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
+          description: Top-level location resolved and returned.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
+          description: No active location exists.
+      security:
+      - bearerAuth:
+        - location:read
+      summary: Get Top-Level Default Location
+      tags:
+      - Location API
+      x-required-permissions:
+      - location:read
   /v1/locations/{childId}/parents/{parentId}:
     post:
       description: 'Creates a typed parent-child edge between two existing locations, giving the child at most one parent per relationship type.

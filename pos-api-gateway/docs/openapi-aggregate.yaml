@@ -261,6 +261,10 @@ paths:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1tus
   /v1/tus/{uploadId}:
     $ref: ../../pos-bulk-loader/openapi.yaml#/paths/~1v1~1tus~1{uploadId}
+  /v1/catalog-items/service/{serviceId}/labor-standards:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1service~1{serviceId}~1labor-standards
+  /v1/catalog-items/service/{serviceId}/labor-standards/{standardId}/supersede:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1service~1{serviceId}~1labor-standards~1{standardId}~1supersede
   /v1/catalog-items/services/facts/replay:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1services~1facts~1replay
   /v1/catalog-items/{type}:
@@ -833,6 +837,8 @@ paths:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1roster
   /v1/locations/storage-locations/bulk-ingest:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1storage-locations~1bulk-ingest
+  /v1/locations/top-level:
+    $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1top-level
   /v1/locations/{childId}/parents/{parentId}:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations~1{childId}~1parents~1{parentId}
   /v1/locations/{locationId}:

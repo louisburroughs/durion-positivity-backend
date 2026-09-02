@@ -22,4 +22,11 @@ public class PrimaryLocationResponse {
             example = "22222222-2222-2222-2222-222222222222",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID locationId;
+
+    @Schema(
+            description = "True when the caller has no active primary assignment and locationId carries the"
+                    + " platform's top-level default location instead",
+            example = "false",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private boolean defaulted;
 }

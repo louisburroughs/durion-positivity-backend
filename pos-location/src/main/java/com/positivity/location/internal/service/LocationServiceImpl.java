@@ -86,6 +86,20 @@ public class LocationServiceImpl implements LocationService {
     }
 
     /**
+     * Prefers the active hierarchy root; a flat deployment (no parent-child edges) falls
+     * back to the oldest active location so the default stays stable as locations are added.
+     *
+     * Issue: #1636
+     */
+    @Transactional(readOnly = true)
+    public Optional<LocationResponseDTO> getTopLevelLocationDto() {
+        return locationRepository.findActiveHierarchyRoots().stream()
+                .findFirst()
+                .or(locationRepository::findFirstByActiveTrueOrderByIdAsc)
+                .map(this::toLocationResponse);
+    }
+
+    /**
      * Returns locations for a status filter, defaulting to ACTIVE when blank.
      *
      * Issue: CAP-136 #78

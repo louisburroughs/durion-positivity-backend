@@ -587,6 +587,44 @@ class LocationServiceTest {
     }
 
     @Test
+    @DisplayName("top-level resolution prefers the active hierarchy root (#1636)")
+    void getTopLevelLocation_prefersHierarchyRoot() {
+        UUID rootId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Location root = Location.builder().id(rootId).name("HQ").active(true).build();
+        when(locationRepository.findActiveHierarchyRoots()).thenReturn(List.of(root));
+
+        var result = locationService.getTopLevelLocationDto();
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo(rootId);
+        verify(locationRepository, never()).findFirstByActiveTrueOrderByIdAsc();
+    }
+
+    @Test
+    @DisplayName("a flat deployment with no hierarchy edges falls back to the oldest active location (#1636)")
+    void getTopLevelLocation_flatDeployment_fallsBackToOldestActive() {
+        UUID oldestId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        Location oldest =
+                Location.builder().id(oldestId).name("Main").active(true).build();
+        when(locationRepository.findActiveHierarchyRoots()).thenReturn(List.of());
+        when(locationRepository.findFirstByActiveTrueOrderByIdAsc()).thenReturn(Optional.of(oldest));
+
+        var result = locationService.getTopLevelLocationDto();
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo(oldestId);
+    }
+
+    @Test
+    @DisplayName("no active locations at all resolves to empty (controller answers 404) (#1636)")
+    void getTopLevelLocation_noActiveLocations_returnsEmpty() {
+        when(locationRepository.findActiveHierarchyRoots()).thenReturn(List.of());
+        when(locationRepository.findFirstByActiveTrueOrderByIdAsc()).thenReturn(Optional.empty());
+
+        assertThat(locationService.getTopLevelLocationDto()).isEmpty();
+    }
+
+    @Test
     void getLocationValidation_existingLocation_marksExistsAndActive() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         Location location = Location.builder().id(id).active(true).build();
