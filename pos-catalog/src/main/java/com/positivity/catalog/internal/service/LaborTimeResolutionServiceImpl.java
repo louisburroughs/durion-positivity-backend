@@ -1,5 +1,8 @@
 package com.positivity.catalog.internal.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import com.positivity.catalog.internal.entity.LaborTimeSourcePolicyEntity;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
 import com.positivity.catalog.internal.enums.LaborTimeType;
@@ -24,7 +27,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -74,7 +76,33 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
     private final Map<String, Duration> laborTimeProviderCacheTtls;
     private final Clock clock;
 
-    private final Map<LiveCacheKey, CachedLiveAnswer> liveCache = new ConcurrentHashMap<>();
+    /**
+     * QUERY_ONLY answers, bounded two ways because both bounds are license terms (ADR-0058 §4):
+     * per-entry lifetime is the source's configured TTL (a vendor answer must not outlive its
+     * license window even in memory), and the size cap keeps request-derived vehicle keys —
+     * every null-widened CRM variant is a distinct key — from growing the heap without limit.
+     */
+    private final Cache<LiveCacheKey, CachedLiveAnswer> liveCache = Caffeine.newBuilder()
+            .maximumSize(10_000)
+            .expireAfter(new Expiry<LiveCacheKey, CachedLiveAnswer>() {
+                @Override
+                public long expireAfterCreate(LiveCacheKey key, CachedLiveAnswer value, long currentTime) {
+                    return value.ttl().toNanos();
+                }
+
+                @Override
+                public long expireAfterUpdate(
+                        LiveCacheKey key, CachedLiveAnswer value, long currentTime, long currentDuration) {
+                    return value.ttl().toNanos();
+                }
+
+                @Override
+                public long expireAfterRead(
+                        LiveCacheKey key, CachedLiveAnswer value, long currentTime, long currentDuration) {
+                    return currentDuration;
+                }
+            })
+            .build();
 
     public LaborTimeResolutionServiceImpl(
             ServiceLaborStandardRepository standardRepository,
@@ -249,19 +277,24 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
 
     private record LiveCacheKey(String sourceCode, String providerCode, VehicleKey vehicle) {}
 
-    private record CachedLiveAnswer(Optional<ProviderLaborTime> answer, Instant expiresAt) {}
+    /**
+     * {@code expiresAt} (against the injected {@link Clock}) is the authoritative TTL check so
+     * expiry is deterministic under test; {@code ttl} feeds Caffeine's wall-clock eviction, which
+     * is the memory bound, not the freshness contract.
+     */
+    private record CachedLiveAnswer(Optional<ProviderLaborTime> answer, Instant expiresAt, Duration ttl) {}
 
     private Optional<ProviderLaborTime> liveLookup(
             LaborTimeProviderPort port, String sourceCode, String providerCode, VehicleKey vehicle) {
         LiveCacheKey key = new LiveCacheKey(sourceCode, providerCode, vehicle);
         Instant now = Instant.now(clock);
-        CachedLiveAnswer cached = liveCache.get(key);
+        CachedLiveAnswer cached = liveCache.getIfPresent(key);
         if (cached != null && cached.expiresAt().isAfter(now)) {
             return cached.answer();
         }
         Optional<ProviderLaborTime> answer = port.getLaborTime(vehicle, providerCode);
         Duration ttl = laborTimeProviderCacheTtls.getOrDefault(sourceCode, Duration.ofMinutes(5));
-        liveCache.put(key, new CachedLiveAnswer(answer, now.plus(ttl)));
+        liveCache.put(key, new CachedLiveAnswer(answer, now.plus(ttl), ttl));
         return answer;
     }
 }

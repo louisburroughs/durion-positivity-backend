@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -33,6 +34,8 @@ public class LaborGuideProviderConfig {
 
     private static final int DEFAULT_PRECEDENCE = 100;
     private static final long DEFAULT_CACHE_TTL_SECONDS = 300;
+    private static final int DEFAULT_CONNECT_TIMEOUT_MS = 2_000;
+    private static final int DEFAULT_READ_TIMEOUT_MS = 10_000;
 
     /** Ports keyed by source code, in configuration order. Empty when no providers configured. */
     @Bean
@@ -107,11 +110,22 @@ public class LaborGuideProviderConfig {
             LaborGuideProviderProperties.ProviderSpec spec, LaborTimeProviderDescriptor descriptor) {
         String adapter = spec.adapter() == null ? "" : spec.adapter().trim().toLowerCase(Locale.ROOT);
         if (MockGuideLaborTimeAdapter.ADAPTER_KEY.equals(adapter)) {
-            RestClient restClient =
-                    RestClient.builder().baseUrl(spec.baseUrl().trim()).build();
+            RestClient restClient = RestClient.builder()
+                    .baseUrl(spec.baseUrl().trim())
+                    .requestFactory(timeoutFactory(spec))
+                    .build();
             return new MockGuideLaborTimeAdapter(descriptor, restClient);
         }
         throw new IllegalStateException("labor-guide provider " + descriptor.sourceCode() + " names unknown adapter '"
                 + spec.adapter() + "'; known: " + MockGuideLaborTimeAdapter.ADAPTER_KEY);
+    }
+
+    private static SimpleClientHttpRequestFactory timeoutFactory(LaborGuideProviderProperties.ProviderSpec spec) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(
+                spec.connectTimeoutMs() == null ? DEFAULT_CONNECT_TIMEOUT_MS : spec.connectTimeoutMs()));
+        factory.setReadTimeout(
+                Duration.ofMillis(spec.readTimeoutMs() == null ? DEFAULT_READ_TIMEOUT_MS : spec.readTimeoutMs()));
+        return factory;
     }
 }

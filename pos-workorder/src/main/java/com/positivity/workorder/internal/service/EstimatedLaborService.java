@@ -8,7 +8,10 @@ import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +33,10 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li><b>Included operations contribute zero.</b> A line whose operation code appears in
  *       another line's guide-included list is already paid for inside that line's hours
- *       (rotors include pads); charging it again would bill the same work twice.</li>
+ *       (rotors include pads); charging it again would bill the same work twice. Only a line
+ *       that is itself charged can include others — resolved greedily largest-hours-first —
+ *       so a zeroed line's include list never cascades (A includes B, B includes C: C stays
+ *       charged) and mutual includes keep the larger line.</li>
  *   <li><b>Overlap groups share setup.</b> Lines sharing a guide overlap group (wheels come
  *       off once) contribute the group's largest time in full and each additional line at a
  *       configured fraction — the v1 simplification the plan records (§12 Q6); real per-pair
@@ -94,23 +100,33 @@ public class EstimatedLaborService {
 
         Map<UUID, String> opCodesByServiceId = replicaOpCodes(counted);
 
-        // Codes some line's guide time already includes; those lines are paid for already.
-        Set<String> includedByOthers = counted.stream()
-                .map(WorkorderServiceLine::getGuideIncludedOpCodes)
-                .filter(Objects::nonNull)
-                .flatMap(csv -> java.util.Arrays.stream(csv.split(",")))
-                .map(String::trim)
-                .filter(code -> !code.isEmpty())
-                .collect(Collectors.toSet());
-
+        // A line is zeroed only when a line that is itself still CHARGED includes it: a
+        // greedy pass in descending-hours order, so only charged lines' include lists zero
+        // anyone. This settles the chained/mutual-include cases deterministically — if A
+        // includes B and B includes C, zeroing B must not also zero C (nobody charged is
+        // absorbing C's work), and if A and B include each other the larger line survives.
+        List<WorkorderServiceLine> byHoursDesc = counted.stream()
+                .sorted(Comparator.comparing(WorkorderServiceLine::getQuantity).reversed())
+                .toList();
+        Set<String> chargedIncludes = new HashSet<>();
+        // Identity-keyed: entity equality may be id-based and ids can be unassigned pre-persist.
+        Set<WorkorderServiceLine> zeroedLines = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
         List<String> zeroed = new ArrayList<>();
+        for (WorkorderServiceLine line : byHoursDesc) {
+            String opCode =
+                    line.getServiceEntityId() == null ? null : opCodesByServiceId.get(line.getServiceEntityId());
+            if (opCode != null && chargedIncludes.contains(opCode)) {
+                zeroedLines.add(line);
+                zeroed.add(opCode);
+                continue;
+            }
+            includedOpCodes(line).forEach(chargedIncludes::add);
+        }
+
         Map<String, List<BigDecimal>> hoursByGroup = new LinkedHashMap<>();
         int standaloneKey = 0;
         for (WorkorderServiceLine line : counted) {
-            String opCode =
-                    line.getServiceEntityId() == null ? null : opCodesByServiceId.get(line.getServiceEntityId());
-            if (opCode != null && includedByOthers.contains(opCode)) {
-                zeroed.add(opCode);
+            if (zeroedLines.contains(line)) {
                 continue;
             }
             String group = line.getGuideOverlapGroup() == null
@@ -130,6 +146,14 @@ public class EstimatedLaborService {
             total = total.add(max).add(others.multiply(overlapAdditionalFactor));
         }
         return new EstimatedLabor(total.setScale(1, RoundingMode.HALF_UP), List.copyOf(zeroed));
+    }
+
+    private static java.util.stream.Stream<String> includedOpCodes(WorkorderServiceLine line) {
+        String csv = line.getGuideIncludedOpCodes();
+        if (csv == null || csv.isBlank()) {
+            return java.util.stream.Stream.empty();
+        }
+        return java.util.Arrays.stream(csv.split(",")).map(String::trim).filter(code -> !code.isEmpty());
     }
 
     private Map<UUID, String> replicaOpCodes(List<WorkorderServiceLine> lines) {

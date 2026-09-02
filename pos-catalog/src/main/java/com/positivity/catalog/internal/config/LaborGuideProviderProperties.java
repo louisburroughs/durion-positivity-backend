@@ -48,6 +48,11 @@ public record LaborGuideProviderProperties(
      * @param enabled null = true
      * @param defaultPrecedence resolution tie-break when no policy row exists; null = 100
      * @param cacheTtlSeconds QUERY_ONLY live-answer cache TTL; null = 300
+     * @param connectTimeoutMs HTTP connect timeout to the vendor; null = 2000. Bounded because a
+     *     QUERY_ONLY source sits on the quote path — a hung vendor must fail into the
+     *     default-hours ladder, not hold the request thread
+     * @param readTimeoutMs HTTP read timeout to the vendor; null = 10000 (feed chunks are the
+     *     slowest calls; the import runner tolerates this, the live path degrades on it)
      */
     public record ProviderSpec(
             @Nullable String sourceCode,
@@ -56,5 +61,7 @@ public record LaborGuideProviderProperties(
             @Nullable String licenseMode,
             @Nullable Boolean enabled,
             @Nullable Integer defaultPrecedence,
-            @Nullable Long cacheTtlSeconds) {}
+            @Nullable Long cacheTtlSeconds,
+            @Nullable Integer connectTimeoutMs,
+            @Nullable Integer readTimeoutMs) {}
 }

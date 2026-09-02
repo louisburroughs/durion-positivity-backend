@@ -13,7 +13,8 @@ server:
 
 # Metrics on the service port, unauthenticated: the mock simulates an external vendor with no
 # JWT boundary, and the prometheus scrape job for it carries no basic_auth (unlike platform
-# services). health also backs the compose healthcheck.
+# services). The compose healthcheck deliberately probes the feed-manifest endpoint, not
+# /actuator/health — it proves the vendor API is serving, not just that the app is up.
 management:
   endpoints:
     web:

@@ -139,6 +139,19 @@ public class LaborGuideIngestServiceImpl implements LaborGuideIngestService {
                 log.warn("Labor-guide import {} interrupted at chunk {}: {}", normalized, seq, e.getMessage());
                 return toSummary(persistProgress(importRow, false), standardsWritten, linesUnchanged);
             }
+            if (!manifest.importManifestId().equals(chunk.importManifestId()) || chunk.chunkSequence() != seq) {
+                // A vendor answering with the wrong chunk identity (revision rolled mid-import,
+                // or a broken sequence handler) must not be applied under this manifest's
+                // bookkeeping — bail out resumable, exactly like a failed fetch.
+                log.warn(
+                        "Labor-guide import {} chunk identity mismatch: asked ({}, {}), got ({}, {})",
+                        normalized,
+                        manifest.importManifestId(),
+                        seq,
+                        chunk.importManifestId(),
+                        chunk.chunkSequence());
+                return toSummary(persistProgress(importRow, false), standardsWritten, linesUnchanged);
+            }
             ChunkOutcome outcome = applyChunkTransactionally(normalized, importRow, chunk);
             standardsWritten += outcome.written();
             linesUnchanged += outcome.unchanged();
