@@ -101,6 +101,35 @@ public class EstimateItem {
     @Nullable
     private UUID serviceId; // Reference to Service entity (for LABOR items)
 
+    // Guide-time snapshot (#1569, sourcing plan §6.3): the book-time baseline the labor guide
+    // published when this LABOR line was created, with its provenance. quantity stays the
+    // AGREED hours; these record what the guide said, so an adjusted quote keeps both numbers.
+    @Column(name = "guide_hours", precision = 5, scale = 1)
+    @Nullable
+    private BigDecimal guideHours;
+
+    @Column(name = "guide_source_code", length = 32)
+    @Nullable
+    private String guideSourceCode;
+
+    @Column(name = "guide_source_revision", length = 64)
+    @Nullable
+    private String guideSourceRevision;
+
+    @Column(name = "guide_match_grade", length = 24)
+    @Nullable
+    private String guideMatchGrade;
+
+    @Column(name = "guide_overlap_group", length = 64)
+    @Nullable
+    private String guideOverlapGroup;
+
+    // Comma-separated Durion operation codes whose time this line's guide hours already
+    // include; read back whole for the overlap-aware summation, never queried relationally.
+    @Column(name = "guide_included_op_codes")
+    @Nullable
+    private String guideIncludedOpCodes;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

@@ -16,6 +16,8 @@ tags:
   name: UOM Conversion API
 - description: Vehicle-keyed estimated service times (book time) with provenance, per service operation. Hand-authored DURION rows only; imported guide rows are read-only here.
   name: Service Labor Standards
+- description: Chunked-manifest ingestion of labor-guide feeds from STORE-licensed sources into service labor standards, with counted completeness and an unmapped-operation curation queue.
+  name: Labor Guide Imports
 - description: Manage standard, last, and average item costs
   name: Item Cost API
 - description: 'Vendor price entries applied from supplier PRICAT imports: latest applicable cost, full cost history, and import application state. Read-only.'
@@ -28,6 +30,8 @@ tags:
   name: Supplier Article Codes
 - description: API for products, lifecycle, and pricing
   name: Products API
+- description: 'Scoped service-to-service edge: resolve the applicable estimated labor time for a service operation on a specific vehicle, with provenance and typed degradation.'
+  name: Labor Time Resolution
 - description: Manage MSRP values with effective dates
   name: Product MSRP API
 - description: API for managing catalogs
@@ -589,6 +593,199 @@ paths:
       - Catalog Bulk Ingest API
       x-required-permissions:
       - catalog:product:create
+  /v1/catalog/labor-guide-imports:
+    post:
+      description: 'Opens the named STORE-licensed source''s current feed revision and applies every not-yet-applied
+
+        chunk: mapped lines upsert vehicle-keyed labor standards (unchanged lines skip, changed lines
+
+        supersede the active row), and vendor codes with no cross-reference land in the unmapped curation
+
+        queue while the import continues.
+
+        Use this tool after a vendor publishes a new revision, or to resume an import that stopped mid-run;
+
+        do not use it for QUERY_ONLY sources, whose license forbids persisting their times.
+
+        Preconditions: the source must be configured under pos.catalog.labor-guide.providers with STORE mode.
+
+        Required inputs: the sourceCode query parameter; there is no request body.
+
+        Emits a CATALOG_LABOR_GUIDE_IMPORT event; re-running an already-complete revision is a recorded no-op.
+
+        Returns 404 for an unconfigured source and 409 for a QUERY_ONLY source or an unreachable vendor.
+
+        '
+      operationId: runLaborGuideImport
+      parameters:
+      - description: Configured source to import from, e.g. MOCKGUIDE.
+        in: query
+        name: sourceCode
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborGuideImportSummaryDto'
+          description: The import's counted outcome — COMPLETE only when every chunk and line reconciled.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No provider configured for the source
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Source is QUERY_ONLY, or the vendor was unreachable before the import started
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:import
+      summary: Import the Current Labor-Guide Feed Revision
+      tags:
+      - Labor Guide Imports
+      x-required-permissions:
+      - catalog:labor_standard:import
+  /v1/catalog/labor-guide-imports/incomplete:
+    get:
+      description: 'Returns every import whose status is APPLYING or INCOMPLETE — revisions where chunks or lines have
+
+        not reconciled against the vendor''s manifest, newest first.
+
+        Use this tool to decide whether to re-run an import (a re-run resumes from the first missing chunk);
+
+        do not use it as an import history, since completed revisions are deliberately not listed.
+
+        Preconditions: none.
+
+        Required inputs: none.
+
+        Emits a CATALOG_LABOR_GUIDE_IMPORT_GAPS event; no state changes.
+
+        Returns 200 with an empty array when every recorded import is complete, and 403 when the caller lacks the view permission.
+
+        '
+      operationId: listIncompleteLaborGuideImports
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborGuideImportSummaryDto'
+                type: array
+          description: Imports still applying or closed incomplete.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:view
+      summary: List Labor-Guide Imports Not Confirmed Complete
+      tags:
+      - Labor Guide Imports
+      x-required-permissions:
+      - catalog:labor_standard:view
+  /v1/catalog/labor-guide-imports/unmapped:
+    get:
+      description: 'Returns vendor operation codes that imports carried but no service_operation_xref row maps, most
+
+        recently seen first, with occurrence counts so a curator can drain the queue by impact.
+
+        Use this tool for mapping curation after an import; do not expect entries to clear themselves —
+
+        adding the xref row is deliberate human work, and the next import then lands the lines.
+
+        Preconditions: none.
+
+        Required inputs: none.
+
+        Emits a CATALOG_LABOR_GUIDE_UNMAPPED_LIST event; no state changes.
+
+        Returns 200 with an empty array when every code the feeds carry is mapped, and 403 when the caller lacks the view permission.
+
+        '
+      operationId: listUnmappedLaborGuideOperations
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborGuideUnmappedOperationDto'
+                type: array
+          description: The unmapped-operation curation queue.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:view
+      summary: List Vendor Operation Codes Awaiting Curation
+      tags:
+      - Labor Guide Imports
+      x-required-permissions:
+      - catalog:labor_standard:view
+  /v1/catalog/labor-times/resolve:
+    post:
+      description: 'Answers the one applicable estimated labor time for a catalog service operation on the described
+
+        vehicle: stored vehicle-keyed standards first (most specific match wins, source precedence is
+
+        policy data), then live QUERY_ONLY guides under a license-bounded cache, then the service''s
+
+        vehicle-agnostic default hours, each answer carrying source, revision and match grade.
+
+        Use this tool from the approved pos-workorder client to prefill a LABOR estimate line; do not use
+
+        it to browse what times exist, which is the labor-standards listing''s job.
+
+        Preconditions: the service must exist; unknown vehicle fields are sent null and widen the match.
+
+        Required inputs: a body with serviceId; vehicle fields and preferredTimeType are optional.
+
+        Emits a CATALOG_LABOR_TIME_RESOLVE event; no state changes.
+
+        Returns 200 always for a well-formed request — a miss is the typed NO_TIME_AVAILABLE or
+
+        SOURCE_UNAVAILABLE status, never an error, and callers degrade to a blank prefill.
+
+        '
+      operationId: resolveLaborTime
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Front brake pads on a Civic:
+                description: Front brake pads on a Civic
+                value:
+                  make: Honda
+                  model: Civic
+                  preferredTimeType: RETAIL_FLAT_RATE
+                  serviceId: 56b14899-cb6c-7628-0763-4c603ec0a325
+                  vehicleYear: 2019-2023
+            schema:
+              $ref: '#/components/schemas/LaborTimeQuoteRequest'
+        description: The operation being quoted, the vehicle on the lift (null fields widen the match), and an optional time-class preference.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborTimeQuoteResponse'
+          description: The resolved time with provenance, or a typed miss.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_time:resolve
+      summary: Resolve the Labor Time for an Operation on a Vehicle
+      tags:
+      - Labor Time Resolution
+      x-required-permissions:
+      - catalog:labor_time:resolve
   /v1/catalog/supplier-article-codes/replay:
     post:
       description: 'Re-publishes catalog.supplier-article-code.updated facts for one bounded page of vendor-article-code rows so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
@@ -4850,6 +5047,196 @@ components:
           type: number
       required:
       - itemId
+      type: object
+    LaborGuideImportSummaryDto:
+      description: 'Outcome of one labor-guide import run. Completeness is counted, never assumed: COMPLETE means every expected chunk applied and the line count reconciled.'
+      properties:
+        alreadyImported:
+          description: True when this run found the revision already imported and did nothing
+          type: boolean
+        chunksApplied:
+          description: Chunks applied so far vs expected
+          format: int32
+          type: integer
+        completedAt:
+          description: When the import reached a terminal status
+          format: date-time
+          type: string
+        expectedChunkCount:
+          format: int32
+          type: integer
+        expectedLineCount:
+          format: int64
+          type: integer
+        importManifestId:
+          description: Provider-assigned manifest identity of the imported revision
+          format: uuid
+          type: string
+        linesApplied:
+          description: Feed lines seen (mapped + unmapped) vs expected
+          format: int64
+          type: integer
+        linesUnchanged:
+          description: Lines identical to the active row — no write
+          format: int64
+          type: integer
+        linesUnmapped:
+          description: Lines skipped into the unmapped-operation queue
+          format: int64
+          type: integer
+        sourceCode:
+          description: Source the feed came from
+          example: MOCKGUIDE
+          type: string
+        sourceRevision:
+          description: Feed revision the rows carry
+          example: 2026-09-01
+          type: string
+        standardsWritten:
+          description: Standards inserted (new or superseding replacements) this run
+          format: int64
+          type: integer
+        status:
+          description: APPLYING | COMPLETE | INCOMPLETE
+          type: string
+      required:
+      - alreadyImported
+      - chunksApplied
+      - expectedChunkCount
+      - expectedLineCount
+      - importManifestId
+      - linesApplied
+      - linesUnchanged
+      - linesUnmapped
+      - sourceCode
+      - sourceRevision
+      - standardsWritten
+      - status
+      type: object
+    LaborGuideUnmappedOperationDto:
+      description: 'A vendor operation code awaiting curation: the feed carried it, no xref maps it. Draining this queue is deliberate mapping work, never automatic.'
+      properties:
+        firstSeenAt:
+          format: date-time
+          type: string
+        lastManifestId:
+          description: Import that most recently carried it
+          format: uuid
+          type: string
+        lastSeenAt:
+          format: date-time
+          type: string
+        occurrenceCount:
+          description: Times the code has been seen across imports
+          format: int64
+          type: integer
+        providerOpCode:
+          description: The vendor's operation code
+          example: MG-FOG-LAMP-ALIGN
+          type: string
+        sourceCode:
+          description: Source that published the code
+          example: MOCKGUIDE
+          type: string
+      required:
+      - firstSeenAt
+      - lastSeenAt
+      - occurrenceCount
+      - providerOpCode
+      - sourceCode
+      type: object
+    LaborTimeQuoteRequest:
+      description: Which service operation is being quoted, on which vehicle (null fields widen the match), and which time class the workorder wants (null = retail-first).
+      properties:
+        engineCode:
+          description: Engine code; null = unknown.
+          example: K20C2
+          maxLength: 64
+          minLength: 0
+          type: string
+        make:
+          description: Vehicle make; null = unknown.
+          example: Honda
+          maxLength: 64
+          minLength: 0
+          type: string
+        model:
+          description: Vehicle model; null = unknown.
+          example: Civic
+          maxLength: 64
+          minLength: 0
+          type: string
+        preferredTimeType:
+          description: Preferred time class; null = retail-first default ordering.
+          enum:
+          - RETAIL_FLAT_RATE
+          - OEM_WARRANTY
+          - MANUFACTURER_INSTALL
+          - DURION_STANDARD
+          example: RETAIL_FLAT_RATE
+          type: string
+        serviceId:
+          description: Catalog service being quoted.
+          format: uuid
+          type: string
+        submodel:
+          description: Submodel or trim; null = unknown.
+          example: EX
+          maxLength: 64
+          minLength: 0
+          type: string
+        vehicleYear:
+          description: Model year or range; null = unknown.
+          example: 2019-2023
+          maxLength: 16
+          minLength: 0
+          type: string
+      required:
+      - serviceId
+      type: object
+    LaborTimeQuoteResponse:
+      description: The resolved labor time with provenance, or a typed miss. Callers must degrade on non-RESOLVED statuses — render the line without a prefill — never fail their flow.
+      properties:
+        includedOpCodes:
+          description: Durion operation codes already included in this time.
+          items:
+            type: string
+          type: array
+        laborHours:
+          description: Decimal hours in tenths; only when RESOLVED.
+          example: 1.5
+          type: number
+        matchGrade:
+          description: Vehicle-match confidence.
+          enum:
+          - EXACT
+          - ENGINE_WILDCARD
+          - MODEL_LEVEL
+          - DEFAULT_HOURS
+          example: EXACT
+          type: string
+        overlapGroup:
+          description: Shared-setup group; lines sharing it must not be summed naively.
+          type: string
+        sourceCode:
+          description: Provenance source.
+          example: MOCKGUIDE
+          type: string
+        sourceRevision:
+          description: Provenance revision.
+          example: 2026-09-01
+          type: string
+        status:
+          description: Whether a time was found, and if not, why not.
+          enum:
+          - RESOLVED
+          - NO_TIME_AVAILABLE
+          - SOURCE_UNAVAILABLE
+          type: string
+        timeType:
+          description: Time class that answered.
+          example: RETAIL_FLAT_RATE
+          type: string
       type: object
     LeadTimeInfo:
       description: Lead time information with source indicator

@@ -158,6 +158,28 @@ class CatalogEventsListenerTest {
         }
 
         @Test
+        @DisplayName("tolerates the schema-v2 taxonomy fields it does not consume (#1569)")
+        void toleratesSchemaV2AdditiveFields() {
+            // catalog.service.updated schema v2 appends operationCode/operationCategory/
+            // defaultLaborHours (ADR-0044 §3 additive). This listener reads field-by-field off
+            // the JsonNode, so unknown fields must be ignored — this test pins that a v2 fact
+            // still applies exactly like a v1 fact, which is what makes the bump additive in
+            // practice and not just by declaration.
+            String v2Payload = """
+                    {"serviceId":"%s","name":"Wheel alignment","active":true,
+                     "operationCode":"ALIGNMENT-4-WHEEL","operationCategory":"REPAIR",
+                     "defaultLaborHours":1.2}""".formatted(SERVICE_ID);
+
+            listener.onCatalogEvent(
+                    envelope("evt-v2", CatalogServiceUpdatedV1.EVENT_TYPE, 1_700_000_000_009L, v2Payload));
+
+            ExtCatalogReplica saved = captureSaved();
+            assertThat(saved.getCatalogItemId()).isEqualTo(SERVICE_ID);
+            assertThat(saved.getName()).isEqualTo("Wheel alignment");
+            assertThat(saved.isActive()).isTrue();
+        }
+
+        @Test
         @DisplayName("the delete tombstone keeps the row and marks it inactive")
         void tombstoneMarksInactive() {
             listener.onCatalogEvent(

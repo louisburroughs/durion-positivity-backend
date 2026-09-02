@@ -131,6 +131,39 @@ public class WorkorderDetailResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private BigDecimal taxTotal;
 
+    // Estimate vs actual labor (#1569). Hours are effort, not money, so these are not gated by
+    // canViewFinancials — the per-line totalLaborHours never was either.
+    @Schema(
+            description = "Overlap-aware sum of the agreed labor hours across active service lines, in tenths."
+                    + " Null when no line carries hours.",
+            example = "3.4",
+            requiredMode = NOT_REQUIRED)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private BigDecimal estimatedLaborHours;
+
+    @Schema(
+            description = "Actual technician hours clocked across all service lines, in hours.",
+            example = "2.9",
+            requiredMode = NOT_REQUIRED)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private BigDecimal actualLaborHours;
+
+    @Schema(
+            description = "actualLaborHours minus estimatedLaborHours; positive means the job ran over the"
+                    + " estimate. Null unless both operands exist.",
+            example = "-0.5",
+            requiredMode = NOT_REQUIRED)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private BigDecimal laborVarianceHours;
+
+    @Schema(
+            description = "Labor variance as a percentage of the estimate. Null unless both operands exist"
+                    + " and the estimate is non-zero.",
+            example = "-14.7",
+            requiredMode = NOT_REQUIRED)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private BigDecimal laborVariancePct;
+
     // Capability flags
     @Schema(description = "Capability flags indicating allowed actions", requiredMode = REQUIRED)
     @NotNull

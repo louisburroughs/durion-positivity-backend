@@ -41,6 +41,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
     private final TechnicianAssignmentRepository technicianAssignmentRepository;
     private final WorkorderLaborEntryRepository laborEntryRepository;
     private final WorkorderPartRepository workorderPartRepository;
+    private final EstimatedLaborService estimatedLaborService;
 
     @Override
     @Transactional(readOnly = true)
@@ -98,6 +99,25 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .services(serviceResponses)
                 .parts(partResponses)
                 .capabilities(capabilities);
+
+        // Estimate vs actual labor (#1569 scope item 7): the overlap-aware estimate against the
+        // already-flowing clocked hours. Variance is a subtraction — that was the whole point of
+        // finally storing the estimate side.
+        BigDecimal estimatedLaborHours =
+                estimatedLaborService.estimateForLines(workorder.getServices()).estimatedHours();
+        BigDecimal actualLaborHours = serviceResponses.stream()
+                .map(WorkorderServiceResponse::getTotalLaborHours)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        builder.estimatedLaborHours(estimatedLaborHours).actualLaborHours(actualLaborHours);
+        if (estimatedLaborHours != null) {
+            BigDecimal variance = actualLaborHours.subtract(estimatedLaborHours);
+            builder.laborVarianceHours(variance);
+            if (estimatedLaborHours.signum() != 0) {
+                builder.laborVariancePct(variance.multiply(BigDecimal.valueOf(100))
+                        .divide(estimatedLaborHours, 1, java.math.RoundingMode.HALF_UP));
+            }
+        }
 
         // Conditionally include financial fields
         if (capabilities.isCanViewFinancials()) {

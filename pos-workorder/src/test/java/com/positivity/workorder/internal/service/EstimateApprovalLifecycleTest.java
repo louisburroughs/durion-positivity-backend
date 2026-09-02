@@ -139,7 +139,10 @@ class EstimateApprovalLifecycleTest {
                 customerReferenceService,
                 vehicleReferenceService,
                 estimateFactPublisher,
-                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class));
+                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
+                // Un-stubbed mock: lookupGuideTime answers Optional.empty(), i.e. "no guide",
+                // which keeps every pre-#1569 scenario behaviorally identical.
+                org.mockito.Mockito.mock(LaborTimeDefaultingService.class));
 
         when(estimateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(estimateItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

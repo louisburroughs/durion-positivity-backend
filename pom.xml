@@ -275,6 +275,7 @@
 		<module>pos-vehicle-fitment</module>
 		<module>pos-vehicle-reference-nhtsa</module>
 		<module>pos-vehicle-reference-carapi</module>
+		<module>pos-reference-mock</module>
 		<module>pos-security-service</module>
 		<module>pos-people</module>
 		<module>pos-people-contact</module>

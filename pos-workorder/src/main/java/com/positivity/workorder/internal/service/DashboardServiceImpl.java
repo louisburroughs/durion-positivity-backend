@@ -50,6 +50,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final WorkorderRepository workorderRepository;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
+    private final EstimatedLaborService estimatedLaborService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -103,6 +104,13 @@ public class DashboardServiceImpl implements DashboardService {
                         .assignedMechanicId(parseFirstMechanic(wo.getMechanicIds()))
                         .assignedBayId(
                                 wo.getResourceId() != null ? wo.getResourceId().toString() : null)
+                        // #1569: the overlap-aware sum of the workorder's agreed labor hours —
+                        // the field stops serialising as an unkept promise. One line query per
+                        // workorder; dashboard pages are small, and the summation reads
+                        // snapshots, not the live catalog.
+                        .estimatedLaborHours(estimatedLaborService
+                                .estimateForWorkorder(wo.getId())
+                                .estimatedHours())
                         .build())
                 .toList();
     }

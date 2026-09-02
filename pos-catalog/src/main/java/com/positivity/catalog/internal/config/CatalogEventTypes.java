@@ -169,6 +169,25 @@ public final class CatalogEventTypes {
                         .build(),
                 EventTypeRegistration.search(
                                 "CATALOG_LABOR_STANDARD_LIST", "List a service's labor standards with provenance")
+                        .build(),
+                // Labor-guide ingestion + resolution (#1569 Phase 1). The import gets an
+                // approval-grade budget for the same reason the fact replays do: one call
+                // legitimately writes thousands of rows, so a write threshold would alert on
+                // every healthy import.
+                EventTypeRegistration.approval(
+                                "CATALOG_LABOR_GUIDE_IMPORT", "Import a labor-guide feed revision from a STORE source")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CATALOG_LABOR_GUIDE_IMPORT_GAPS",
+                                "List labor-guide imports this module could not confirm complete")
+                        .build(),
+                EventTypeRegistration.search(
+                                "CATALOG_LABOR_GUIDE_UNMAPPED_LIST",
+                                "List vendor operation codes awaiting curation into the xref")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CATALOG_LABOR_TIME_RESOLVE",
+                                "Resolve the applicable labor time for a service operation and vehicle")
                         .build());
     }
 }

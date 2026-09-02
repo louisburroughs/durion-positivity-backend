@@ -35,12 +35,16 @@ class CatalogEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtProductUomReplicaRepository productUoms = mock(ExtProductUomReplicaRepository.class);
+    private final com.positivity.workorder.internal.repository.ExtCatalogServiceReplicaRepository
+            catalogServiceReplicas =
+                    mock(com.positivity.workorder.internal.repository.ExtCatalogServiceReplicaRepository.class);
 
     private CatalogEventsListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new CatalogEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, productUoms);
+        listener = new CatalogEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, productUoms, catalogServiceReplicas);
         when(processedEvents.existsById(any())).thenReturn(false);
         when(productUoms.findAggregateVersions(any())).thenReturn(List.of());
     }
@@ -127,6 +131,70 @@ class CatalogEventsListenerTest {
 
         verify(productUoms).deleteByProductId(PRODUCT_ID);
         verify(productUoms, never()).save(any());
+        verify(processedEvents).save(any());
+    }
+
+    // ── catalog.service.updated → ext_catalog_service (#1569 Phase 1) ──────────────────
+
+    private static final UUID SERVICE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+
+    private static String serviceEvent(String eventId, long version, String extraPayloadFields) {
+        return """
+                {"eventId":"%s","eventType":"catalog.service.updated","aggregateVersion":%d,
+                 "payload":{"serviceId":"%s","name":"Brake Pad Replacement - Front","active":true%s}}""".formatted(eventId, version, SERVICE_ID, extraPayloadFields);
+    }
+
+    @Test
+    @DisplayName("upserts the service-taxonomy replica from a schema-v2 fact")
+    void upsertsServiceReplica() {
+        when(catalogServiceReplicas.findById(SERVICE_ID)).thenReturn(java.util.Optional.empty());
+
+        listener.onCatalogEvent(serviceEvent(
+                "s1",
+                7L,
+                ",\"operationCode\":\"BRAKE-PAD-FRONT\",\"operationCategory\":\"REPAIR\","
+                        + "\"defaultLaborHours\":1.5"));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.positivity.workorder.internal.entity.ExtCatalogServiceReplica.class);
+        verify(catalogServiceReplicas).save(captor.capture());
+        assertThat(captor.getValue().getServiceId()).isEqualTo(SERVICE_ID);
+        assertThat(captor.getValue().getOperationCode()).isEqualTo("BRAKE-PAD-FRONT");
+        assertThat(captor.getValue().getDefaultLaborHours()).isEqualByComparingTo("1.5");
+        assertThat(captor.getValue().getAggregateVersion()).isEqualTo(7L);
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("a v1 service fact lands with null taxonomy — absent means the catalog stated nothing")
+    void v1ServiceFactLandsWithNullTaxonomy() {
+        when(catalogServiceReplicas.findById(SERVICE_ID)).thenReturn(java.util.Optional.empty());
+
+        listener.onCatalogEvent(serviceEvent("s2", 3L, ""));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.positivity.workorder.internal.entity.ExtCatalogServiceReplica.class);
+        verify(catalogServiceReplicas).save(captor.capture());
+        assertThat(captor.getValue().getOperationCode()).isNull();
+        assertThat(captor.getValue().getDefaultLaborHours()).isNull();
+    }
+
+    @Test
+    @DisplayName("an older service fact does not roll the replica backwards")
+    void staleServiceFactIgnored() {
+        when(catalogServiceReplicas.findById(SERVICE_ID))
+                .thenReturn(java.util.Optional.of(
+                        com.positivity.workorder.internal.entity.ExtCatalogServiceReplica.builder()
+                                .serviceId(SERVICE_ID)
+                                .active(true)
+                                .aggregateVersion(9L)
+                                .updatedAt(Instant.parse("2026-09-01T00:00:00Z"))
+                                .build()));
+
+        listener.onCatalogEvent(serviceEvent("s3", 8L, ""));
+
+        verify(catalogServiceReplicas, never()).save(any());
+        // Seen and deliberately not applied — still recorded as processed.
         verify(processedEvents).save(any());
     }
 }

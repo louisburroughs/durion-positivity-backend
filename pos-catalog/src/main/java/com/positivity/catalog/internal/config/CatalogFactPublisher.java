@@ -239,7 +239,12 @@ public class CatalogFactPublisher {
                 service.getLongDescription(),
                 active,
                 service.getCreatedAt(),
-                updatedAt);
+                updatedAt,
+                service.getOperationCode(),
+                service.getOperationCategory() == null
+                        ? null
+                        : service.getOperationCategory().name(),
+                service.getDefaultLaborHours());
         DomainEventEnvelope<CatalogServiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 CatalogServiceUpdatedV1.EVENT_TYPE,
                 CatalogServiceUpdatedV1.SCHEMA_VERSION,

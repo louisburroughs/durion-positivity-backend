@@ -127,7 +127,15 @@ class DomainWallsTest {
             // Granted by file name for the same reason as the first — a third caller has to argue
             // its own case rather than inherit either of these.
             "pos-order",
-            Map.of("SupplierStockClientImpl.java", Set.of("pos-supplier")));
+            Map.of("SupplierStockClientImpl.java", Set.of("pos-supplier")),
+            // pos-workorder → pos-catalog, from CatalogLaborTimeClientImpl only: vehicle-specific
+            // labor-time resolution at quote time (#1569, ADR-0044 amendment 2026-09-02,
+            // ADR-0058 §5). The vehicle-keyed time matrix cannot ride events — it is large,
+            // licensed, and query-shaped, and QUERY_ONLY guide sources may never be replicated at
+            // all; the degraded/offline path is the vehicle-agnostic default hours on the catalog
+            // service fact, not a replica of the matrix.
+            "pos-workorder",
+            Map.of("CatalogLaborTimeClientImpl.java", Set.of("pos-catalog")));
 
     /**
      * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
@@ -142,33 +150,45 @@ class DomainWallsTest {
     private static final Pattern LOAD_BALANCED_URI = Pattern.compile("lb://([A-Za-z0-9-]+)");
 
     /**
-     * The supplier grants stay attached to the one file each, and never widen to a module.
+     * The file-scoped grants stay attached to one file each, and never widen to a module.
      *
-     * <p>Two modules may call pos-supplier synchronously for live stock, and both entries name a
-     * single class. Converting either to a module-level grant would let any future client in that
-     * module reach pos-supplier without anybody deciding it should — which is the whole thing the
-     * file-scoped form prevents (ADR-0044 amendment 2026-08-10).
+     * <p>Each grant names a single class. Converting any to a module-level grant would let every
+     * future client in that module reach the target without anybody deciding it should — which is
+     * the whole thing the file-scoped form prevents. The census below is exhaustive on purpose:
+     * a new grant must be added here, with its ADR amendment, or this test fails.
      */
     @Test
-    void supplierStockGrantsAreScopedToOneFileEach() {
+    void fileScopedGrantsAreExhaustiveAndOneFileEach() {
         assertThat(SCOPED_FILE_EXCEPTIONS)
-                .as("only pos-catalog and pos-order may reach pos-supplier synchronously")
-                .containsOnlyKeys("pos-catalog", "pos-order");
+                .as("the file-scoped grant census: supplier stock (2 callers, ADR-0044 amendment"
+                        + " 2026-08-10) and catalog labor time (1 caller, ADR-0044 amendment 2026-09-02)")
+                .containsOnlyKeys("pos-catalog", "pos-order", "pos-workorder");
 
-        for (Map.Entry<String, Map<String, Set<String>>> module : SCOPED_FILE_EXCEPTIONS.entrySet()) {
-            assertThat(module.getValue())
-                    .as("%s grants the supplier edge to exactly one file", module.getKey())
+        // Supplier stock: pos-catalog and pos-order, one named class, one target each.
+        for (String supplierCaller : List.of("pos-catalog", "pos-order")) {
+            assertThat(SCOPED_FILE_EXCEPTIONS.get(supplierCaller))
+                    .as("%s grants the supplier edge to exactly one file", supplierCaller)
                     .containsOnlyKeys("SupplierStockClientImpl.java");
-            assertThat(module.getValue().get("SupplierStockClientImpl.java"))
-                    .as("%s grants that file exactly one target", module.getKey())
+            assertThat(SCOPED_FILE_EXCEPTIONS.get(supplierCaller).get("SupplierStockClientImpl.java"))
+                    .as("%s grants that file exactly one target", supplierCaller)
                     .containsExactly("pos-supplier");
         }
 
+        // Catalog labor time: pos-workorder, one named class, one target (#1569, ADR-0058 §5).
+        assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-workorder"))
+                .as("pos-workorder grants the catalog labor-time edge to exactly one file")
+                .containsOnlyKeys("CatalogLaborTimeClientImpl.java");
+        assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-workorder").get("CatalogLaborTimeClientImpl.java"))
+                .as("pos-workorder grants that file exactly one target")
+                .containsExactly("pos-catalog");
+
         // A module-level grant would defeat the point: SCOPED_MODULE_EXCEPTIONS must not quietly
-        // acquire pos-supplier for either of these modules.
+        // acquire any file-granted target for these modules.
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-catalog", Set.of()))
                 .doesNotContain("pos-supplier");
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-order", Set.of())).doesNotContain("pos-supplier");
+        assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-workorder", Set.of()))
+                .doesNotContain("pos-catalog");
     }
 
     @Test

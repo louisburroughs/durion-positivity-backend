@@ -15,4 +15,9 @@ public interface ServiceLaborStandardRepository extends JpaRepository<ServiceLab
     /** Full history including superseded rows, for audit views. */
     @NonNull
     List<ServiceLaborStandardEntity> findByServiceIdOrderByCreatedAtAsc(@NonNull UUID serviceId);
+
+    /** Active rows one source holds for one service — the import's upsert-by-natural-key read. */
+    @NonNull
+    List<ServiceLaborStandardEntity> findByServiceIdAndSourceCodeAndSupersededAtIsNull(
+            @NonNull UUID serviceId, @NonNull String sourceCode);
 }
