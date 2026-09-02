@@ -512,7 +512,8 @@ public class StreamingSessionAgentManager
                 resilientContentRetriever,
                 this::chatMemoryFor,
                 openApiToolProvider,
-                toolInvocationRecorder);
+                toolInvocationRecorder,
+                requestScopedUserContext);
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,

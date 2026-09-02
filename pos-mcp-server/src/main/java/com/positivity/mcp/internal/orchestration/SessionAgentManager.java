@@ -402,7 +402,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 this::chatMemoryFor,
                 openApiToolProvider,
                 answerResolutionLadder,
-                toolInvocationRecorder);
+                toolInvocationRecorder,
+                requestScopedUserContext);
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,

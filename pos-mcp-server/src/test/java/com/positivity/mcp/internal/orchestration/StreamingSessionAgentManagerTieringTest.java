@@ -46,6 +46,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.model.StreamingChatModel;
@@ -65,7 +66,11 @@ class StreamingSessionAgentManagerTieringTest {
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-07T02:00:00Z"), ZoneOffset.UTC);
     private static final String BUSINESS_MESSAGE = "show inventory stock";
 
-    @Mock
+    /**
+     * Must implement {@link ChatModel} too: the production beans do, and the streaming assistant now
+     * requires it because tool execution runs through {@code ChatClient} (#1653).
+     */
+    @Mock(extraInterfaces = ChatModel.class)
     private StreamingChatModel streamingChatModel;
 
     @Mock
