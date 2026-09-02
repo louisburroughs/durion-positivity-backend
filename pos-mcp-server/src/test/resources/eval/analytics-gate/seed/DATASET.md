@@ -277,6 +277,25 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
    state": that is what the state machine actually records (status never leaves
    COMPLETED on reopen), and E6 pairs completions with those markers.
 7. **Tax excluded** (user decision) — no tax tables seeded, all tax amounts 0.
+8. **Live-alpha schema drift (found on first apply, 2026-09-02).** The live database
+   is the sole authority over Flyway DDL in this checkout; the full live column
+   inventory used for validation was pulled from `information_schema` into
+   `/tmp/alpha-live-columns.json`. Per-table drift found and fixed:
+   - `pos_customer_db.commercial_party`: live has **no `party_number`** (present in
+     Flyway V1; live also drops `email`/`phone_number` and adds `br_*` billing-rule
+     columns, `lifecycle_stage`, `version` — all nullable or defaulted). Column
+     removed from the insert.
+   - `pos_customer_db.person_party`: live has **no `first_name`/`last_name`** (and no
+     `email`/`phone_number`) — identity moved to pos-people-contact (#874/#875);
+     live adds defaulted `lifecycle_stage`/`version`. Name columns removed from the
+     insert. Person display names therefore live only in `pos_people_contact_db`,
+     which this seed deliberately does not touch: **nothing the gate endpoints read
+     needs them** — customer names in answers resolve from the `ext_customer_party`
+     replicas (pos_invoice_db / pos_workorder_db) and technician names from
+     `ext_people_contact_person` (pos_workorder_db), all of which are seeded.
+   - Every other table in all five databases (33 of 35) validated clean against the
+     live inventory in both directions: no unknown columns emitted, and every
+     live NOT-NULL-without-default column supplied.
 
 ## Columns filled with constants (not scenario-bearing)
 
@@ -294,10 +313,28 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
   payment_date+1h, status `GL_POSTED` (in E8's settled set).
 - pos_customer parties: ordinal columns status=0 (ACTIVE), tier=0 (STANDARD),
   party_type=1 (COMMERCIAL) / person rows have no party_type;
-  `preferred_contact_method 'EMAIL'`.
+  `preferred_contact_method 'EMAIL'`. No name columns on live `person_party` (see
+  drift note above); commercial names go in `legal_name`/`display_name`.
 - pos_people `employee`: hire_date 2024-01-15, status ACTIVE;
   `employee_location_assignment` role TECHNICIAN (not read by any gate endpoint,
   seeded for coherence).
+
+## Lesson: Flyway DDL and a live schema can diverge
+
+The first alpha apply failed on `commercial_party.party_number` — a column that
+exists in this branch's Flyway V1 baseline but not on alpha. A live database may
+carry newer migrations than the checked-out branch, repeatable migrations, or
+baseline collapses that the working tree has not caught up with. Two safeguards are
+therefore load-bearing, not optional:
+
+1. **`apply_seed.sh` wraps each file in one BEGIN/COMMIT with `ON_ERROR_STOP=1`** —
+   the failed apply landed nothing partial.
+2. **Validate the generator against a live column inventory before applying**: pull
+   `{db: {table: [[column, is_nullable, data_type, has_default], ...]}}` from
+   `information_schema` on the target host (the 2026-09-02 snapshot is
+   `/tmp/alpha-live-columns.json`) and check every emitted INSERT for unknown
+   columns and for missing NOT-NULL-without-default columns. Where live disagrees
+   with Flyway, live wins.
 
 ## Known not-seeded (read-adjacent, deliberately out)
 

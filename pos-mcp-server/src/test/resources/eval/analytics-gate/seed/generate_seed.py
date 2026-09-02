@@ -430,22 +430,27 @@ def gen_customer_db():
         n += 1
         num = "%s-CUST-%d" % (MARK, n)
         if kind == "person":
-            first, last = name.split(" ", 1)
+            # Live-alpha shape (alpha-live-columns.json): person_party carries NO name
+            # columns (identity moved to pos-people-contact, #874/#875) — the Flyway V1
+            # first_name/last_name columns do not exist on alpha. Names served to the
+            # gate come from the ext_customer_party replicas, which we seed.
             f.insert(
                 "person_party",
-                ["customer_id", "person_id", "customer_number", "first_name", "last_name",
+                ["customer_id", "person_id", "customer_number",
                  "preferred_contact_method", "status", "tier", "tier_manual_override",
                  "created_at", "updated_at"],
-                [q(CUST_ID[ck]), q(CUST_PERSON[ck]), q(num), q(first), q(last),
+                [q(CUST_ID[ck]), q(CUST_PERSON[ck]), q(num),
                  q("EMAIL"), "0", "0", "FALSE", q(DIM_TS), q(DIM_TS)],
             )
         else:
+            # Live-alpha shape: commercial_party has NO party_number column (present in
+            # Flyway V1, absent on alpha).
             f.insert(
                 "commercial_party",
-                ["customer_id", "customer_number", "party_number", "legal_name",
+                ["customer_id", "customer_number", "legal_name",
                  "display_name", "party_type", "status", "tier", "tier_manual_override",
                  "created_at", "updated_at"],
-                [q(CUST_ID[ck]), q(num), q(num + "-P"), q(name), q(name),
+                [q(CUST_ID[ck]), q(num), q(name), q(name),
                  "1", "0", "0", "FALSE", q(DIM_TS), q(DIM_TS)],
             )
     f.raw("COMMIT;")
