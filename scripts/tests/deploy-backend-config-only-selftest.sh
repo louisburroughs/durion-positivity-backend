@@ -167,6 +167,19 @@ started_services() {
   grep '^UP:' <<< "${OUT}" | tr ' ' '\n' | grep -v '^UP:$' | sort -u
 }
 
+# The last entry of DOMAIN_SERVICES in deploy-backend.sh. Read from the script rather than
+# hardcoded: the assertion below only needs "the final batch still ran", and pinning a
+# service name would fail that assertion whenever a service is appended to the start order
+# — a routine change, and not one this test has an opinion about.
+last_domain_service() {
+  awk '
+    /^DOMAIN_SERVICES=\(/ { in_list = 1; next }
+    in_list && /^\)/       { exit }
+    in_list && /^  [a-z0-9-]+$/ { last = $1 }
+    END { print last }
+  ' "${SCRIPT}"
+}
+
 echo "case 1: every image resolves"
 make_stubs
 run_case "all-present" "" "pos-order pos-catalog"
@@ -185,7 +198,9 @@ assert "names the skipped service" "$(grep -qE '^ +pos-reference-mock$' <<< "${O
 assert "does NOT start pos-reference-mock" "$(! started_services | grep -qx 'pos-reference-mock' && echo pass)"
 assert "still starts pos-catalog" "$(started_services | grep -qx 'pos-catalog' && echo pass)"
 assert "still starts eureka-server" "$(started_services | grep -qx 'eureka-server' && echo pass)"
-assert "still starts the last domain batch" "$(started_services | grep -qx 'pos-workorder' && echo pass)"
+LAST_DOMAIN="$(last_domain_service)"
+assert "resolved the last domain service from deploy-backend.sh" "$([[ -n "${LAST_DOMAIN}" ]] && echo pass)"
+assert "still starts the last domain batch (${LAST_DOMAIN})" "$(started_services | grep -qx "${LAST_DOMAIN}" && echo pass)"
 end_case
 
 echo "case 3: a service on the box has no image"

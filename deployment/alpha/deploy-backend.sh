@@ -500,13 +500,18 @@ if [[ "${MODE}" == "config-only" ]]; then
     mapfile -t MISSING_SERVICES < <(missing_backend_images)
 
     UNDEPLOYABLE_SERVICES=()
-    for SVC in ${MISSING_SERVICES[@]+"${MISSING_SERVICES[@]}"}; do
-      if service_has_container "${SVC}"; then
-        UNDEPLOYABLE_SERVICES+=("${SVC}")
-      else
-        SKIPPED_SERVICES+=("${SVC}")
-      fi
-    done
+    # Guarded on the count rather than expanded with the ${arr[@]+"${arr[@]}"} idiom: mapfile
+    # always assigns the array, so the only thing to defend against is expanding it empty
+    # under `set -u`, and the count guard says that plainly and matches the two below.
+    if [[ ${#MISSING_SERVICES[@]} -gt 0 ]]; then
+      for SVC in "${MISSING_SERVICES[@]}"; do
+        if service_has_container "${SVC}"; then
+          UNDEPLOYABLE_SERVICES+=("${SVC}")
+        else
+          SKIPPED_SERVICES+=("${SVC}")
+        fi
+      done
+    fi
 
     if [[ ${#UNDEPLOYABLE_SERVICES[@]} -gt 0 ]]; then
       echo "" >&2
