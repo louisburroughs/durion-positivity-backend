@@ -1,0 +1,22 @@
+-- Ground truth for gate question Q6 (analytics-capability-plan.md §6):
+--   "Revenue / parts / labor / margin by customer, last month."
+--
+-- Serving endpoint: E13 — …/analytics/customer-margin — DEFERRED TO WAVE 3 by decision D2
+--   (plan §W2.4): true parts COST lives in pos-inventory (avgCost / unitCostSnapshot /
+--   costAtTimeOfAdjustment), making margin a five-domain problem; the cost-sourcing decision
+--   (event-fed cost replica vs a costing endpoint) has not been made, and the endpoint does
+--   not exist. Budget (§6): 2. Wave: 2→3.
+--
+-- STATUS: BLOCKED — parts cost is unseeded and unseedable until D2's sourcing decision
+--   lands (the TRACKB seed deliberately excludes pos-inventory; DATASET.md scope). Revenue
+--   and the labor/parts REVENUE split per customer are computable from invoice_items /
+--   ext_invoice.labor_total, but margin — the question's point — is not, and a ground truth
+--   for half the question would let a fabricated margin figure pass criterion 1. No figures
+--   are specified; see EXPECTED.md Q6.
+--
+-- When E13 ships: replace this stub with SQL mirroring its implementation, extend the seed
+--   with the pos-inventory cost side in the same PR (plan §7 fixture-drift rule), and derive
+--   EXPECTED.md Q6 from DATASET.md.
+-- DB: pos_invoice_db
+SELECT 'BLOCKED' AS status,
+       'Q6 customer margin: E13 deferred to Wave 3 by D2; parts cost lives in pos-inventory and is not seeded' AS reason;
