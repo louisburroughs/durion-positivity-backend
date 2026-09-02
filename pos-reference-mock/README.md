@@ -49,5 +49,6 @@ cd pos-reference-mock && ../mvnw spring-boot:run   # http://localhost:8095
 ```
 
 In Docker Compose the service is `pos-reference-mock` on `pos-network`
-(`http://pos-reference-mock:8095`). Excluded from coverage-floor thresholds (plan §10) but part
+(`http://pos-reference-mock:8095`), published on the host as `localhost:8100` — 8095 is
+pos-people-contact's host port. Excluded from coverage-floor thresholds (plan §10) but part
 of the reactor build and of `pos-coverage-aggregate` so it cannot rot.

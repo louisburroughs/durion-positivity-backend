@@ -382,6 +382,8 @@ collects (#1580).
 - Each of the four remaining lists, in both directions: a deployed service with no entry, and an
   entry for a service that is not deployed
 - Gateway `lb://` routes pointing at a service in no deploy list (they can only 503)
+- Two compose services publishing the same host port — compose accepts it, and the second
+  container to start dies with "port is already allocated", taking its alpha start batch with it
 - Stale `ALLOWLIST` entries — a module listed as not-deployed that is in fact wired up, or that no
   longer has a `Dockerfile`
 
