@@ -20,7 +20,7 @@ public class LocationTypeDTO {
 
     @Schema(
             description = "Unique identifier of the location type",
-            example = "01960003-0000-7000-8000-000000000001",
+            example = "01960001-0000-7000-8000-000000000001",
             requiredMode = NOT_REQUIRED)
     private UUID id;
 
