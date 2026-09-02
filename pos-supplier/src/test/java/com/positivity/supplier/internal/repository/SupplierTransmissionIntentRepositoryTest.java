@@ -8,15 +8,18 @@ import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.SupplierPurchaseOrder;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
 import com.positivity.supplier.internal.enums.TransmissionAttemptState;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 /**
@@ -46,6 +49,9 @@ class SupplierTransmissionIntentRepositoryTest {
 
     @Autowired
     private SupplierTransmissionIntentRepository intentRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private SupplierTransmissionIntentEntity intent(String documentId, String activeKey, Instant lastPolledAt) {
         return SupplierTransmissionIntentEntity.builder()
@@ -122,5 +128,165 @@ class SupplierTransmissionIntentRepositoryTest {
         assertThat(intentRepository.findDueForStatusPolling(PageRequest.of(0, 10)))
                 .extracting(SupplierTransmissionIntentEntity::getDocumentId)
                 .doesNotContain("DUR00000000000000000000000000000009");
+    }
+
+    /**
+     * The cross-purchase-order ledger search (issue #1638 decision 6). Exercised against the real
+     * schema because every one of its behaviours is a query behaviour: which predicate a null
+     * parameter switches off, how the window's half-open bounds land on {@code createdAt}, and the
+     * newest-first ordering the worklist promises.
+     */
+    @Nested
+    @DisplayName("search across purchase orders")
+    class SearchAcrossPurchaseOrders {
+
+        private static final UUID OTHER_PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d");
+
+        private int sequence = 0;
+
+        private SupplierTransmissionIntentEntity searchable(
+                TransmissionAttemptState state,
+                UUID vendorProfileId,
+                String purchaseOrderNumber,
+                String supplierOrderNumber,
+                Instant createdAt) {
+            String documentId = "DURSEARCH%026d".formatted(++sequence);
+            SupplierTransmissionIntentEntity row = SupplierTransmissionIntentEntity.builder()
+                    .vendorProfileId(vendorProfileId)
+                    .supplierRef("michelin-eu")
+                    .purchaseOrderId(UUID.randomUUID())
+                    .purchaseOrderNumber(purchaseOrderNumber)
+                    .supplierOrderNumber(supplierOrderNumber)
+                    .intentType(SupplierPurchaseOrder.IntentType.INITIAL)
+                    .revision(0)
+                    .documentId(documentId)
+                    .attemptState(state)
+                    .build();
+            intentRepository.saveAndFlush(row);
+            // JPA auditing stamps createdAt from the clock on persist, so a controlled history has
+            // to be written underneath it; the context is then cleared so the query rereads rows.
+            entityManager
+                    .createNativeQuery("UPDATE supplier_transmission_intent SET created_at = :createdAt"
+                            + " WHERE document_id = :documentId")
+                    .setParameter("createdAt", createdAt)
+                    .setParameter("documentId", documentId)
+                    .executeUpdate();
+            entityManager.clear();
+            return row;
+        }
+
+        private Page<SupplierTransmissionIntentEntity> search(
+                TransmissionAttemptState state, UUID vendorProfileId, String pattern, Instant from, Instant to) {
+            return intentRepository.search(state, vendorProfileId, pattern, from, to, PageRequest.of(0, 10));
+        }
+
+        @Test
+        void filtersTheManualReviewQueue() {
+            // The filter the whole surface exists for: the rows waiting on a human.
+            searchable(TransmissionAttemptState.MANUAL_REVIEW, PROFILE_ID, "PO-1", null, Instant.now());
+            searchable(TransmissionAttemptState.CONFIRMED, PROFILE_ID, "PO-2", null, Instant.now());
+            searchable(TransmissionAttemptState.PENDING, PROFILE_ID, "PO-3", null, Instant.now());
+
+            assertThat(search(TransmissionAttemptState.MANUAL_REVIEW, null, null, null, null))
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-1");
+        }
+
+        @Test
+        void filtersByVendorProfile() {
+            searchable(TransmissionAttemptState.CONFIRMED, PROFILE_ID, "PO-OURS", null, Instant.now());
+            searchable(TransmissionAttemptState.CONFIRMED, OTHER_PROFILE_ID, "PO-THEIRS", null, Instant.now());
+
+            assertThat(search(null, OTHER_PROFILE_ID, null, null, null))
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-THEIRS");
+        }
+
+        @Test
+        void matchesEitherSideOfThePhoneCallCaseInsensitively() {
+            // The buyer quotes the purchase-order number; the vendor quotes its own. Either must
+            // find the row.
+            searchable(TransmissionAttemptState.CONFIRMED, PROFILE_ID, "PO-4471", null, Instant.now());
+            searchable(TransmissionAttemptState.CONFIRMED, PROFILE_ID, "PO-9999", "MICH-770412", Instant.now());
+
+            assertThat(search(null, null, "%po-44%", null, null))
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-4471");
+            assertThat(search(null, null, "%mich-77%", null, null))
+                    .extracting(SupplierTransmissionIntentEntity::getSupplierOrderNumber)
+                    .containsExactly("MICH-770412");
+        }
+
+        @Test
+        void boundsTheWindowHalfOpenOnCreatedAt() {
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-BEFORE",
+                    null,
+                    Instant.parse("2026-08-09T23:59:59Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-AT-FROM",
+                    null,
+                    Instant.parse("2026-08-10T00:00:00Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-INSIDE",
+                    null,
+                    Instant.parse("2026-08-10T12:00:00Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-AT-TO",
+                    null,
+                    Instant.parse("2026-08-11T00:00:00Z"));
+
+            assertThat(search(
+                            null,
+                            null,
+                            null,
+                            Instant.parse("2026-08-10T00:00:00Z"),
+                            Instant.parse("2026-08-11T00:00:00Z")))
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    // from is inclusive, to is exclusive: adjacent windows tile without listing a
+                    // boundary intent twice.
+                    .containsExactlyInAnyOrder("PO-AT-FROM", "PO-INSIDE");
+        }
+
+        @Test
+        void listsNewestFirstAndPages() {
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-OLDEST",
+                    null,
+                    Instant.parse("2026-08-01T00:00:00Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-NEWEST",
+                    null,
+                    Instant.parse("2026-08-03T00:00:00Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-MIDDLE",
+                    null,
+                    Instant.parse("2026-08-02T00:00:00Z"));
+
+            Page<SupplierTransmissionIntentEntity> firstPage =
+                    intentRepository.search(null, null, null, null, null, PageRequest.of(0, 2));
+
+            assertThat(firstPage.getTotalElements()).isEqualTo(3);
+            assertThat(firstPage.getContent())
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-NEWEST", "PO-MIDDLE");
+            assertThat(intentRepository.search(null, null, null, null, null, PageRequest.of(1, 2)))
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-OLDEST");
+        }
     }
 }

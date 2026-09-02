@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,8 @@ import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.order.service.model.OrderTransmissionStatus;
 import com.positivity.supplier.internal.order.service.model.TransmissionResolutionRequest;
 import com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepository;
+import com.positivity.supplier.internal.service.model.PagedResponse;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +33,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -71,6 +76,43 @@ class SupplierOrderServiceImplTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void searchesTheLedgerWithTheContractStateMappedAndTheSearchTextEscaped() {
+        UUID vendorProfileId = UUID.randomUUID();
+        Instant from = Instant.parse("2026-08-01T00:00:00Z");
+        Instant to = Instant.parse("2026-09-01T00:00:00Z");
+        when(intentRepository.search(
+                        eq(TransmissionAttemptState.MANUAL_REVIEW),
+                        eq(vendorProfileId),
+                        eq("%po!_44%"),
+                        eq(from),
+                        eq(to),
+                        eq(PageRequest.of(0, 50))))
+                .thenReturn(new PageImpl<>(List.of(intent), PageRequest.of(0, 50), 1));
+
+        // The search text is lowercased and its LIKE metacharacters escaped: a pasted order
+        // number containing '_' is a literal reference, not a wildcard.
+        PagedResponse<OrderTransmissionStatus> result = service.searchTransmissions(
+                OrderTransmissionStatus.State.MANUAL_REVIEW, vendorProfileId, "PO_44", from, to, 0, 50);
+
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.items())
+                .singleElement()
+                .satisfies(view -> assertThat(view.state()).isEqualTo(OrderTransmissionStatus.State.MANUAL_REVIEW));
+    }
+
+    @Test
+    void treatsABlankSearchAsNoSearchAtAll() {
+        when(intentRepository.search(isNull(), isNull(), isNull(), isNull(), isNull(), eq(PageRequest.of(0, 50))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+
+        PagedResponse<OrderTransmissionStatus> result =
+                service.searchTransmissions(null, null, "   ", null, null, 0, 50);
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalElements()).isZero();
     }
 
     @Test

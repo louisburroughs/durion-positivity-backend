@@ -27,6 +27,16 @@ public class SupplierNotFoundException extends RuntimeException {
      */
     public static final String TRANSMISSION_NOT_FOUND = "SUPPLIER_TRANSMISSION_NOT_FOUND";
 
+    /**
+     * No stock snapshot with that id for the addressed vendor profile — or, for the latest-snapshot
+     * read, no snapshot at all (CAP-322).
+     *
+     * <p>Deliberately one code for both "no such snapshot" and "that snapshot belongs to a different
+     * profile": a snapshot is addressed under its profile, and confirming that an id exists under
+     * some <em>other</em> profile would leak another trading relationship's fetch history.
+     */
+    public static final String STOCK_SNAPSHOT_NOT_FOUND = "SUPPLIER_STOCK_SNAPSHOT_NOT_FOUND";
+
     private final String code;
 
     public SupplierNotFoundException(String code, String message) {

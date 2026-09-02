@@ -8,10 +8,16 @@ import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.order.service.model.OrderTransmissionStatus;
 import com.positivity.supplier.internal.order.service.model.TransmissionResolutionRequest;
 import com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepository;
+import com.positivity.supplier.internal.service.model.PagedResponse;
+import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -45,6 +51,55 @@ public class SupplierOrderServiceImpl implements SupplierOrderService {
         return intentRepository.findByPurchaseOrderIdOrderByTransmissionIntentIdDesc(purchaseOrderId).stream()
                 .map(SupplierOrderServiceImpl::toView)
                 .toList();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public PagedResponse<OrderTransmissionStatus> searchTransmissions(
+            OrderTransmissionStatus.@Nullable State attemptState,
+            @Nullable UUID vendorProfileId,
+            @Nullable String search,
+            @Nullable Instant createdFrom,
+            @Nullable Instant createdTo,
+            int page,
+            int size) {
+        Page<SupplierTransmissionIntentEntity> result = intentRepository.search(
+                attemptState == null ? null : TransmissionAttemptState.valueOf(attemptState.name()),
+                vendorProfileId,
+                toLikePattern(search),
+                createdFrom,
+                createdTo,
+                PageRequest.of(page, size));
+        return new PagedResponse<>(
+                result.getContent().stream()
+                        .map(SupplierOrderServiceImpl::toView)
+                        .toList(),
+                page,
+                size,
+                result.getTotalElements(),
+                result.getTotalPages());
+    }
+
+    /**
+     * A contains-match {@code LIKE} pattern for the free-text search, or null when there is
+     * nothing to search for.
+     *
+     * <p>Lowercased here (the query compares against lowercased columns) and with the {@code LIKE}
+     * metacharacters escaped under escape character {@code !}: an operator pasting an order number
+     * containing {@code _} is quoting a literal reference, not writing a wildcard.
+     */
+    @Nullable
+    private static String toLikePattern(@Nullable String search) {
+        if (search == null || search.isBlank()) {
+            return null;
+        }
+        String escaped = search.trim()
+                .toLowerCase(Locale.ROOT)
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_");
+        return "%" + escaped + "%";
     }
 
     @Override

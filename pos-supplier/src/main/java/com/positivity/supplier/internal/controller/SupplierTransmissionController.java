@@ -6,6 +6,7 @@ import com.positivity.supplier.internal.order.service.SupplierOrderService;
 import com.positivity.supplier.internal.order.service.model.OrderTransmissionStatus;
 import com.positivity.supplier.internal.order.service.model.TransmissionResolutionRequest;
 import com.positivity.supplier.internal.security.SupplierPermissions;
+import com.positivity.supplier.internal.service.model.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -16,7 +17,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -81,6 +86,98 @@ public class SupplierTransmissionController {
             }""";
 
     private final SupplierOrderService orderService;
+
+    @Operation(
+            operationId = "searchSupplierTransmissions",
+            summary = "Search the transmission ledger across purchase orders",
+            description = """
+                    Returns one page of transmission intents across every purchase order, newest first, filterable to
+                    the states, vendor and window an operator is working — above all attemptState=MANUAL_REVIEW, which
+                    is the queue of transmissions waiting on a human (issue #1638 decision 6).
+                    Use this tool for the operator worklist and for ledger-wide searches by order reference; use
+                    listSupplierTransmissionsForPurchaseOrder for one purchase order's history, and
+                    getSupplierTransmission when the intent id is already known.
+                    Preconditions: the caller must hold supplier:transmission:read; no filter is required and an
+                    unfiltered call pages the whole ledger.
+                    Optional inputs: attemptState (PENDING, DISPATCHING, SENT_AWAITING_RESULT, CONFIRMED, REJECTED,
+                    MANUAL_REVIEW, FAILED, CANCELLED); vendorProfileId (UUIDv7); search, matched case-insensitively as
+                    a contains-match against the purchase-order number and the vendor's own order number — the two
+                    references either side of a phone call would quote; dateFrom (inclusive) and dateTo (exclusive),
+                    which bound the intent's createdAt — the moment the order entered the vendor queue — chosen over
+                    the last-update time because it is immutable, so a row cannot move out of a window an operator has
+                    already searched, and adjacent half-open windows tile without listing an intent twice. Results are
+                    sorted newest-first on that same createdAt. page defaults to 0 and size to 50, at most 200.
+                    Emits a SUPPLIER_TRANSMISSION_SEARCH event. Read-only: nothing is transmitted, retried or changed —
+                    resolving a MANUAL_REVIEW row found here is resolveSupplierTransmission, and no endpoint re-sends.
+                    Returns 200 with an empty items array when nothing matches — a clear queue is the healthy answer,
+                    not an error — and 400 when the page size is outside the permitted range or dates are malformed.
+                    """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "A page of transmission states, newest intent first; empty when nothing matches.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = PagedResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request — page size outside the permitted range, or a malformed filter value.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = UNAUTHENTICATED_DESCRIPTION,
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "The caller lacks supplier:transmission:read.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @GetMapping
+    @PreAuthorize("hasAuthority('" + SupplierPermissions.TRANSMISSION_READ + "')")
+    @EmitEvent(id = "SUPPLIER_TRANSMISSION_SEARCH", apiVersion = "1")
+    public ResponseEntity<PagedResponse<OrderTransmissionStatus>> searchTransmissions(
+            @Parameter(
+                            description = "Only transmissions currently in this state; MANUAL_REVIEW is the"
+                                    + " needs-a-human queue.",
+                            schema = @Schema(implementation = OrderTransmissionStatus.State.class))
+                    @RequestParam(required = false)
+                    OrderTransmissionStatus.State attemptState,
+            @Parameter(
+                            description = "Only transmissions to this vendor profile (UUIDv7).",
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @RequestParam(required = false)
+                    UUID vendorProfileId,
+            @Parameter(
+                            description = "Case-insensitive contains-match against the purchase-order number and the"
+                                    + " vendor's own order number. Blank is treated as absent.",
+                            schema = @Schema(type = "string", example = "MICH-770412"))
+                    @RequestParam(required = false)
+                    String search,
+            @Parameter(
+                            description = "Window start on the intent's createdAt, INCLUSIVE. ISO-8601 instant.",
+                            schema = @Schema(type = "string", format = "date-time", example = "2026-08-01T00:00:00Z"))
+                    @RequestParam(required = false)
+                    Instant dateFrom,
+            @Parameter(
+                            description = "Window end on the intent's createdAt, EXCLUSIVE. Half-open so adjacent"
+                                    + " windows tile without listing a boundary intent twice.",
+                            schema = @Schema(type = "string", format = "date-time", example = "2026-09-01T00:00:00Z"))
+                    @RequestParam(required = false)
+                    Instant dateTo,
+            @Parameter(description = "Zero-based page index.", schema = @Schema(type = "integer", example = "0"))
+                    @RequestParam(defaultValue = "0")
+                    @Min(0)
+                    int page,
+            @Parameter(
+                            description = "Page size, 1–200.",
+                            schema = @Schema(type = "integer", example = "50", defaultValue = "50"))
+                    @RequestParam(defaultValue = "50")
+                    @Min(1)
+                    @Max(200)
+                    int size) {
+        return ResponseEntity.ok(
+                orderService.searchTransmissions(attemptState, vendorProfileId, search, dateFrom, dateTo, page, size));
+    }
 
     @Operation(
             operationId = "listSupplierTransmissionsForPurchaseOrder",

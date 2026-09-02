@@ -84,6 +84,18 @@ public final class SupplierPermissions {
     public static final String STOCK_INQUIRE = "supplier:stock:inquire";
 
     /**
+     * Read fetched vendor stock-report snapshots: what a vendor said it had, for a whole market, at
+     * one moment (CAP-322).
+     *
+     * <p>Its own permission rather than a reuse of {@link #STOCK_INQUIRE}, because the acts differ
+     * in kind: an inquiry places a live call to a trading partner, while this reads what an earlier
+     * scheduled fetch already stored — no vendor is contacted. And not {@link #PROFILE_READ} either:
+     * a snapshot is a received commercial document about a vendor's stock position, not
+     * configuration, and it deliberately outlives the profile that produced it.
+     */
+    public static final String STOCK_SNAPSHOT_READ = "supplier:stocksnapshot:read";
+
+    /**
      * Running a vendor invoice fetch on demand.
      *
      * <p>Its own permission rather than an admin catch-all: it reaches out to a vendor and can
