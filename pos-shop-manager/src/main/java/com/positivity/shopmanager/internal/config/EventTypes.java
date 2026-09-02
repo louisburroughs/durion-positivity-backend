@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the shop manager module.
-     * Total: 16 event types.
+     * Total: 18 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -83,6 +83,18 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "SHOPMGR_TECHNICIAN_PERSON_GET",
                                 "Get technician person details from the people-contact replica")
+                        .build(),
+                // MechanicRosterController - 1 event (#1648)
+                EventTypeRegistration.search(
+                                "SHOPMGR_MECHANIC_ROSTER_LIST",
+                                "List the HR-synchronized mechanic roster with status and skill filters")
+                        .apiVersion("1")
+                        .build(),
+                // TechnicianController roster query - 1 event (#1648)
+                EventTypeRegistration.search(
+                                "SHOPMGR_LOCATION_TECHNICIAN_LIST",
+                                "List technicians assigned to a shop location with status and skill filters")
+                        .apiVersion("1")
                         .build());
     }
 }

@@ -613,7 +613,19 @@ paths:
       - shop:schedule:view
   /v1/shop-manager/mechanics:
     get:
-      description: Returns the eventually consistent mechanic read model synchronized from People/HR.
+      description: 'Returns the eventually consistent mechanic read model synchronized from People/HR, one page at a time.
+
+        Use this tool when building a shop-wide mechanic picker or capability report; use listLocationTechnicians instead when the roster must be scoped to a single shop location, and getTechnicianPerson for one technician''s contact details.
+
+        Preconditions: mechanics are projected from ACTIVE TECHNICIAN staffing assignments over Kafka, so a newly hired mechanic appears only once that projection has caught up.
+
+        Required inputs: none, and there is no request body; optionally narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, and page with the standard page, size and sort parameters, which default to a stable lastName, firstName, personId ordering.
+
+        Emits a SHOPMGR_MECHANIC_ROSTER_LIST audit event; no state changes occur, and rows trail the People/HR authority by the event-propagation delay.
+
+        Returns 403 when the caller lacks shop:technician:view, and an empty page rather than an error when no mechanic matches the filters.
+
+        '
       operationId: listMechanics
       parameters:
       - in: query
@@ -630,11 +642,34 @@ paths:
         required: false
         schema:
           type: string
-      - in: query
-        name: pageable
-        required: true
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
         schema:
-          $ref: '#/components/schemas/Pageable'
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          default:
+          - lastName,ASC
+          - firstName,ASC
+          - personId,ASC
+          items:
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -646,7 +681,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedModelMechanicRosterEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks technician roster permission.
       security:
       - bearerAuth:
@@ -771,7 +806,19 @@ paths:
       - shop:schedule:edit
   /v1/shop-manager/{locationId}/technicians:
     get:
-      description: Returns location assignments enriched from the eventually consistent HR mechanic read model.
+      description: 'Returns the technicians assigned to one shop location, enriched with mechanic identity and skills from the eventually consistent HR read model.
+
+        Use this tool when staffing or dispatching work at a single location; use listMechanics instead for the shop-wide roster, and getTechnicianPerson instead for one technician''s contact details.
+
+        Preconditions: the location must exist as a shop, and both the technician assignments and their mechanic projection must have arrived over Kafka.
+
+        Required inputs: locationId (UUID) as a path parameter, and there is no request body; optionally narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, and page with page and size, since sort is accepted but ignored and the location roster is returned in a fixed order.
+
+        Emits a SHOPMGR_LOCATION_TECHNICIAN_LIST audit event; no state changes occur, and the enrichment trails the People/HR authority by the event-propagation delay.
+
+        Returns 404 when no shop exists for the location id, 403 when the caller lacks shop:technician:view, and an empty page rather than an error when no technician matches the filters.
+
+        '
       operationId: listLocationTechnicians
       parameters:
       - description: Shop location ID
@@ -795,11 +842,30 @@ paths:
         required: false
         schema:
           type: string
-      - in: query
-        name: pageable
-        required: true
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
         schema:
-          $ref: '#/components/schemas/Pageable'
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -811,13 +877,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedModelLocationTechnicianRosterEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Caller lacks technician roster permission.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedModelLocationTechnicianRosterEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Shop location not found.
       security:
       - bearerAuth:
@@ -1683,21 +1749,6 @@ components:
         totalPages:
           format: int64
           type: integer
-      type: object
-    Pageable:
-      properties:
-        page:
-          format: int32
-          minimum: 0
-          type: integer
-        size:
-          format: int32
-          minimum: 1
-          type: integer
-        sort:
-          items:
-            type: string
-          type: array
       type: object
     PagedModelLocationTechnicianRosterEntryResponse:
       properties:

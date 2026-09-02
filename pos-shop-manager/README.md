@@ -40,7 +40,13 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 
 Both roster endpoints require `shop:technician:view` and support optional exact
 `status` and `skillCode` filters. Status defaults to `ACTIVE`. The location roster
-is ordered by mechanic last name, first name, and person ID before pagination.
+is ordered by mechanic last name, first name, and person ID before pagination, so
+it accepts `page` and `size` but ignores `sort`; the mechanic roster honours `sort`
+and defaults to that same ordering.
+
+Both emit audit events registered in `internal/config/EventTypes` —
+`SHOPMGR_MECHANIC_ROSTER_LIST` and `SHOPMGR_LOCATION_TECHNICIAN_LIST`, each with
+the `search` latency preset.
 
 ## Configuration
 
