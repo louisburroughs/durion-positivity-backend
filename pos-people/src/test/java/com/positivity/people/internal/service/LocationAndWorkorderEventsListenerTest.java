@@ -11,9 +11,11 @@ import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.workorder.JobTimeRecordedV1;
 import com.positivity.people.internal.entity.ExtJobTimeReplica;
+import com.positivity.people.internal.entity.ExtLocationParentReplica;
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.entity.ProcessedEvent;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
+import com.positivity.people.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
@@ -71,6 +73,9 @@ class LocationAndWorkorderEventsListenerTest {
     private ExtLocationReplicaRepository extLocationReplicaRepository;
 
     @Mock
+    private ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+
+    @Mock
     private ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
     private LocationEventsListener locationListener;
@@ -83,6 +88,7 @@ class LocationAndWorkorderEventsListenerTest {
                 objectMapper,
                 processedEventRepository,
                 extLocationReplicaRepository,
+                extLocationParentReplicaRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class));
         workorderListener = new WorkorderEventsListener(
                 clock,
@@ -155,13 +161,44 @@ class LocationAndWorkorderEventsListenerTest {
         }
 
         @Test
-        @DisplayName("removes the replica row when the location is deleted upstream")
+        @DisplayName("removes the replica row and its parent edges when the location is deleted upstream")
         void deleteRemovesReplica() {
             locationListener.onLocationEvent("""
                     {"eventId":"evt-3","eventType":"%s","payload":{"locationId":"%s"}}""".formatted(LocationDeletedV1.EVENT_TYPE, LOCATION_ID));
 
             verify(extLocationReplicaRepository).deleteById(LOCATION_ID);
+            verify(extLocationParentReplicaRepository).deleteByChildId(LOCATION_ID);
             verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("replaces the child's typed parent-edge set from the fact (#1636)")
+        void parentEdgesAreReplacedWholesale() {
+            UUID parentId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+            locationListener.onLocationEvent("""
+                    {"eventId":"evt-4","eventType":"%s","aggregateVersion":6,
+                     "payload":{"locationId":"%s","name":"Main Shop","active":true,
+                       "parents":[{"parentId":"%s","parentType":"PHYSICAL"}]}}
+                    """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID, parentId));
+
+            verify(extLocationParentReplicaRepository).deleteByChildId(LOCATION_ID);
+            ArgumentCaptor<ExtLocationParentReplica> captor = ArgumentCaptor.forClass(ExtLocationParentReplica.class);
+            verify(extLocationParentReplicaRepository).save(captor.capture());
+            assertThat(captor.getValue().getChildId()).isEqualTo(LOCATION_ID);
+            assertThat(captor.getValue().getParentId()).isEqualTo(parentId);
+            assertThat(captor.getValue().getParentType()).isEqualTo("PHYSICAL");
+        }
+
+        @Test
+        @DisplayName("a fact without the parents field leaves existing edges untouched")
+        void nullParentsLeaveEdgesUntouched() {
+            locationListener.onLocationEvent("""
+                    {"eventId":"evt-5","eventType":"%s","aggregateVersion":6,
+                     "payload":{"locationId":"%s","name":"Main Shop","active":true}}
+                    """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID));
+
+            verify(extLocationParentReplicaRepository, never()).deleteByChildId(any());
+            verify(extLocationParentReplicaRepository, never()).save(any());
         }
 
         @Test

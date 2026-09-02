@@ -2,14 +2,17 @@ package com.positivity.people.internal.service;
 
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.people.internal.entity.ExtLocationParentReplica;
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.entity.ProcessedEvent;
+import com.positivity.people.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
@@ -47,6 +50,7 @@ public class LocationEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
+    private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
     private final Counter payloadRejectedCounter;
 
     public LocationEventsListener(
@@ -54,11 +58,13 @@ public class LocationEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtLocationReplicaRepository extLocationReplicaRepository,
+            ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extLocationReplicaRepository = extLocationReplicaRepository;
+        this.extLocationParentReplicaRepository = extLocationParentReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -133,12 +139,26 @@ public class LocationEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+
+        // The fact carries the child's full typed parent-edge set — replace, don't merge.
+        // A null list means the producer predates the field; leave existing edges untouched.
+        // (Same contract as pos-inventory's ext_location_parent replica; issue #1636.)
+        List<LocationUpdatedV1.ParentRef> parents = payload.parents();
+        if (parents != null) {
+            extLocationParentReplicaRepository.deleteByChildId(payload.locationId());
+            parents.forEach(edge -> extLocationParentReplicaRepository.save(ExtLocationParentReplica.builder()
+                    .childId(payload.locationId())
+                    .parentId(edge.parentId())
+                    .parentType(edge.parentType())
+                    .build()));
+        }
         log.info("Updated ext_location locationId={} version={}", payload.locationId(), aggregateVersion);
     }
 
     private void applyLocationDeleted(JsonNode envelope) {
         LocationDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LocationDeletedV1.class);
         extLocationReplicaRepository.deleteById(payload.locationId());
+        extLocationParentReplicaRepository.deleteByChildId(payload.locationId());
         log.info("Deleted ext_location locationId={}", payload.locationId());
     }
 }

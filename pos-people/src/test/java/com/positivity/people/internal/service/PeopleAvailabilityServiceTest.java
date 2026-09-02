@@ -5,11 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.positivity.people.internal.client.LocationClient;
 import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
@@ -56,7 +57,7 @@ class PeopleAvailabilityServiceTest {
     private UserPersonTranslationService userPersonTranslationService;
 
     @Mock
-    private LocationClient locationClient;
+    private ExtLocationReplicaRepository extLocationReplicaRepository;
 
     private PeopleAvailabilityServiceImpl service;
 
@@ -67,7 +68,15 @@ class PeopleAvailabilityServiceTest {
                 extPersonReplicaRepository,
                 userPersonTranslationService,
                 FIXED_CLOCK,
-                locationClient);
+                extLocationReplicaRepository);
+    }
+
+    private ExtLocationReplica topLevelReplica() {
+        return ExtLocationReplica.builder()
+                .locationId(TOP_LEVEL_LOCATION_ID)
+                .name("HQ")
+                .active(true)
+                .build();
     }
 
     private EmployeeLocationAssignment assignment(UUID locationId, boolean primary) {
@@ -93,7 +102,7 @@ class PeopleAvailabilityServiceTest {
 
             assertThat(resolution.locationId()).isEqualTo(PRIMARY_LOCATION_ID);
             assertThat(resolution.defaulted()).isFalse();
-            verifyNoInteractions(locationClient);
+            verifyNoInteractions(extLocationReplicaRepository);
         }
     }
 
@@ -104,7 +113,7 @@ class PeopleAvailabilityServiceTest {
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(List.of(assignment(SECONDARY_LOCATION_ID, false)));
-            when(locationClient.fetchTopLevelLocationId()).thenReturn(Optional.of(TOP_LEVEL_LOCATION_ID));
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
 
             PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
 
@@ -120,7 +129,7 @@ class PeopleAvailabilityServiceTest {
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(List.of());
-            when(locationClient.fetchTopLevelLocationId()).thenReturn(Optional.of(TOP_LEVEL_LOCATION_ID));
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
 
             PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
 
@@ -135,7 +144,7 @@ class PeopleAvailabilityServiceTest {
             helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME))
                     .thenThrow(new EntityNotFoundException("No person link found for username: " + USERNAME));
-            when(locationClient.fetchTopLevelLocationId()).thenReturn(Optional.of(TOP_LEVEL_LOCATION_ID));
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
 
             PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
 
@@ -151,7 +160,9 @@ class PeopleAvailabilityServiceTest {
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(List.of(assignment(SECONDARY_LOCATION_ID, false)));
-            when(locationClient.fetchTopLevelLocationId()).thenReturn(Optional.empty());
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of());
+            when(extLocationReplicaRepository.findFirstByActiveTrueOrderByLocationIdAsc())
+                    .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocation())
                     .isInstanceOf(EntityNotFoundException.class)
@@ -167,7 +178,7 @@ class PeopleAvailabilityServiceTest {
             assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocation())
                     .isInstanceOf(EntityNotFoundException.class)
                     .hasMessageContaining("user context is missing");
-            verifyNoInteractions(locationClient);
+            verifyNoInteractions(extLocationReplicaRepository);
         }
     }
 

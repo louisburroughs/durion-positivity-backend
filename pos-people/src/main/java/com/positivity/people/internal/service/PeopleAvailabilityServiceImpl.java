@@ -1,11 +1,12 @@
 package com.positivity.people.internal.service;
 
-import com.positivity.people.internal.client.LocationClient;
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
@@ -34,7 +35,7 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     private final Clock clock;
 
-    private final LocationClient locationClient;
+    private final ExtLocationReplicaRepository extLocationReplicaRepository;
 
     @Override
     @NonNull
@@ -84,8 +85,7 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
             return new PrimaryLocationResolution(primaryLocationId.get(), false);
         }
 
-        return locationClient
-                .fetchTopLevelLocationId()
+        return resolveTopLevelLocationId()
                 .map(topLevelId -> new PrimaryLocationResolution(topLevelId, true))
                 .orElseThrow(() -> new EntityNotFoundException("No primary location assignment exists for requester on "
                         + targetDate + " and no top-level default location is available"));
@@ -102,6 +102,20 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
         } catch (EntityNotFoundException ex) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Resolves the platform's top-level default location from the event-fed {@code ext_location}
+     * / {@code ext_location_parent} replicas (ADR-0044 §6): the active hierarchy root (a parent
+     * that is no location's child), else the oldest active location (UUID v7 order). Mirrors
+     * pos-location's own {@code GET /v1/locations/top-level} semantics. Issue: #1636.
+     */
+    @NonNull
+    private Optional<UUID> resolveTopLevelLocationId() {
+        return extLocationReplicaRepository.findActiveHierarchyRoots().stream()
+                .findFirst()
+                .or(extLocationReplicaRepository::findFirstByActiveTrueOrderByLocationIdAsc)
+                .map(ExtLocationReplica::getLocationId);
     }
 
     @Override

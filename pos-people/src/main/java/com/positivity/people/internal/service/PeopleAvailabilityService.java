@@ -17,7 +17,7 @@ public interface PeopleAvailabilityService {
      * context to identify the user, translates to personId, and returns their primary
      * active staffing location. When the user has no person link or no active primary
      * assignment, falls back to the platform's top-level location (resolved from the
-     * location service) with {@code defaulted=true}.
+     * event-fed {@code ext_location} replicas) with {@code defaulted=true}.
      *
      * Issue: #1636
      *

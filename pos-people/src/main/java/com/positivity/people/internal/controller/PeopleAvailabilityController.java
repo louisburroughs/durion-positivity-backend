@@ -90,7 +90,7 @@ public class PeopleAvailabilityController {
                     Emits a PEOPLE_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only \
                     projection.
                     Returns 404 only when the caller has no primary assignment AND no top-level default location \
-                    could be resolved from the location service.
+                    could be resolved from the location replica.
                     """)
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
     @ApiResponse(
