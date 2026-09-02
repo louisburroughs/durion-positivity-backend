@@ -1,7 +1,5 @@
 package com.positivity.referencemock.internal.controller;
 
-import java.time.Clock;
-import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +27,9 @@ public class VendorErrorAdvice {
     public ResponseEntity<Map<String, Object>> handleAny(Exception e) {
         String referenceId = UUID.randomUUID().toString();
         log.error("Mock vendor unhandled error, referenceId={}", referenceId, e);
+        // No timestamp on purpose: the platform time rules route every clock read through the
+        // shared TimeSource in pos-events, a dependency this vendor simulator must not take —
+        // the logged reference id is the correlation device, and log lines carry the time.
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(
                         "error",
@@ -36,8 +37,6 @@ public class VendorErrorAdvice {
                         "message",
                         "The labor guide service encountered an unexpected error.",
                         "referenceId",
-                        referenceId,
-                        "timestamp",
-                        Instant.now(Clock.systemUTC()).toString()));
+                        referenceId));
     }
 }
