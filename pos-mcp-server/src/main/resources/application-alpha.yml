@@ -45,6 +45,17 @@ mcp:
       - /admin/
       - /actuator/
       - /internal/
+    # #1632 follow-up: periodic re-discovery, alpha only. Self-heals a domain whose spec fetch
+    # (and same-cycle targeted fallback) failed — without this, its tools stay absent from the live
+    # tool list until a restart. 30 min, not the 5-min default: each cycle re-fetches ~22 specs
+    # (up to 16MB each) and re-upserts 600+ mcp_tool rows, and alpha only needs convergence, not
+    # freshness. Registration is idempotent and cycles serialize (see DiscoveryRefreshScheduler).
+    discovery-refresh:
+      enabled: ${MCP_DISCOVERY_REFRESH_ENABLED:true}
+      interval-ms: ${MCP_DISCOVERY_REFRESH_INTERVAL_MS:1800000}
+      # First refresh 5 min after startup: post-deploy is when stale Eureka routes exist, so the
+      # first self-heal should not wait the full 30-minute interval (#1643 review).
+      initial-delay-ms: ${MCP_DISCOVERY_REFRESH_INITIAL_DELAY_MS:300000}
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): single embedding column, 1024-dim bge-m3 —

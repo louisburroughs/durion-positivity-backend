@@ -151,9 +151,9 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * is not enough: {@link McpAsyncServer}'s tool list is in-memory, so if the server (re)started
      * during a partial fetch the kept rows do NOT restore those tools in {@code tools/list} — and
      * {@code DiscoveryRefreshScheduler} is opt-in ({@code mcp.server.discovery-refresh.enabled}) and
-     * enabled in no environment, so without this retry the failed domains would stay absent
-     * indefinitely. Fail-soft per service: a prefix whose targeted fetch also fails is logged at WARN
-     * and remains absent until a successful refresh.
+     * enabled only on alpha (30-min interval), so without this retry the failed domains would stay
+     * absent indefinitely everywhere else. Fail-soft per service: a prefix whose targeted fetch also
+     * fails is logged at WARN and remains absent until a successful refresh.
      */
     private @NonNull Mono<Void> registerFailedPrefixesViaTargetedFallback(@NonNull List<String> failedPrefixes) {
         // Routing prefixes map 1:1 to Eureka service ids by stripping the leading slash

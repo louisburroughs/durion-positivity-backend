@@ -24,7 +24,12 @@ import org.springframework.stereotype.Component;
 public class DiscoveryRefreshScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(DiscoveryRefreshScheduler.class);
-    private static final Duration REFRESH_TIMEOUT = Duration.ofMinutes(2);
+    // 10 min, not 2 (#1643 review): a degraded mesh — the exact scenario the refresh exists to heal —
+    // can legitimately take minutes (per-doc worst case ≈ 34s of retries/backoffs, ~22 docs at
+    // concurrency 4), and a timeout mid-registration cancels between removeTool and addTool,
+    // stranding a healthy tool out of the live list until the next cycle. Must stay well under the
+    // refresh interval so cycles never queue.
+    private static final Duration REFRESH_TIMEOUT = Duration.ofMinutes(10);
 
     private final ToolRegistrationService toolRegistrationService;
 
@@ -32,9 +37,12 @@ public class DiscoveryRefreshScheduler {
         this.toolRegistrationService = toolRegistrationService;
     }
 
+    // Separate initial delay (#1643 review): the first self-heal matters most right after a restart —
+    // i.e. right after the deploys that cause stale Eureka routes — so it should not wait a full
+    // 30-minute alpha interval. Default 5 min.
     @Scheduled(
             fixedDelayString = "${mcp.server.discovery-refresh.interval-ms:300000}",
-            initialDelayString = "${mcp.server.discovery-refresh.interval-ms:300000}")
+            initialDelayString = "${mcp.server.discovery-refresh.initial-delay-ms:300000}")
     public void refresh() {
         log.debug("Periodic MCP tool discovery refresh starting");
         try {

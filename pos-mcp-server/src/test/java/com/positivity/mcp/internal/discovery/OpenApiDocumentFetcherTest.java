@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.client.ServiceInstance;
@@ -241,6 +242,228 @@ class OpenApiDocumentFetcherTest {
         assertThat(result.failedPrefixes()).isEmpty();
     }
 
+    @Test
+    @DisplayName("fetchAggregateSpec treats a parseable spec whose title names another service as a failed fetch "
+            + "(#1632 spec-identity guard)")
+    void fetchAggregateSpec_recordsFailedPrefix_whenSpecTitleBelongsToAnotherService() {
+        // The alpha 2026-09-01 incident: a stale Eureka registration routed /invoice to pos-price,
+        // so the fetch succeeded (200 OK, valid spec) but carried the WRONG service's operations.
+        // The identity guard must turn that into a fetch failure, not a silent re-labeling.
+        WebClient client = swaggerConfigFallbackClient(ClientResponse.create(HttpStatus.OK)
+                .body(serviceSpecJson("Positivity Price API", "/v1/promotions"))
+                .build());
+        OpenApiDocumentFetcher fetcher = fetcherWith(client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/alpha/v1/things");
+        assertThat(result.openApi().getPaths()).doesNotContainKey("/failed/v1/promotions");
+        assertThat(result.failedPrefixes()).containsExactly("/failed");
+    }
+
+    @Test
+    @DisplayName("fetchAggregateSpec accepts a title that only matches via a configured spec-identity alias (#1632)")
+    void fetchAggregateSpec_acceptsSpec_whenTitleMatchesConfiguredAlias() {
+        // pos-catalog's real title is "Positivity Product API" — no "catalog" token. The configured
+        // alias (catalog → product) must keep the guard from failing a healthy fetch.
+        WebClient client = swaggerConfigFallbackClient(ClientResponse.create(HttpStatus.OK)
+                .body(serviceSpecJson("Positivity Product API", "/v1/items"))
+                .build());
+        OpenApiDocumentFetcher fetcher = fetcherWith(
+                mock(DiscoveryClient.class), client, AGGREGATE_URL, List.of(), Map.of("failed", List.of("product")));
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKeys("/alpha/v1/things", "/failed/v1/items");
+        assertThat(result.failedPrefixes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("fetchAggregateSpec honors an alias keyed by the hyphenated routing token, not just the "
+            + "normalized form (PR #1643 review)")
+    void fetchAggregateSpec_acceptsSpec_whenAliasIsKeyedByHyphenatedRoutingToken() {
+        // The natural way to write the property is the routing token as it appears in the URL
+        // ("vehicle-fitment"); the guard normalizes tokens internally ("vehiclefitment") and must
+        // look aliases up under BOTH spellings, or a hyphenated domain's alias silently never
+        // applies and the guard false-fails a healthy service.
+        ExchangeFunction exchange = request -> Mono.just(
+                switch (request.url().getPath()) {
+                    case "/v3/api-docs" ->
+                        ClientResponse.create(HttpStatus.OK).body("""
+                            {"openapi":"3.0.1","info":{"title":"Positivity API Gateway","version":"v1"},"paths":{}}
+                            """).build();
+                    case "/v3/api-docs/swagger-config" ->
+                        ClientResponse.create(HttpStatus.OK).body("""
+                            {"urls":[{"url":"/vehicle-fitment/v3/api-docs","name":"vehicle-fitment"}]}
+                            """).build();
+                    case "/vehicle-fitment/v3/api-docs" ->
+                        ClientResponse.create(HttpStatus.OK)
+                                .body(serviceSpecJson("Tires API", "/v1/fitments"))
+                                .build();
+                    default -> throw new IllegalStateException("Unexpected request: " + request.url());
+                });
+        WebClient client = WebClient.builder().exchangeFunction(exchange).build();
+        OpenApiDocumentFetcher fetcher = fetcherWith(
+                mock(DiscoveryClient.class),
+                client,
+                AGGREGATE_URL,
+                List.of(),
+                Map.of("vehicle-fitment", List.of("tires")));
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/vehicle-fitment/v1/fitments");
+        assertThat(result.failedPrefixes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("fetchAggregateSpec passes a spec with the unverifiable springdoc default title (#1632)")
+    void fetchAggregateSpec_acceptsSpec_whenTitleIsUnverifiableDefault() {
+        // Services without an OpenApiConfig serve springdoc's default "OpenAPI definition" title.
+        // The guard is best-effort: what cannot be verified must never be failed.
+        WebClient client = swaggerConfigFallbackClient(ClientResponse.create(HttpStatus.OK)
+                .body(serviceSpecJson("OpenAPI definition", "/v1/other"))
+                .build());
+        OpenApiDocumentFetcher fetcher = fetcherWith(client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKeys("/alpha/v1/things", "/failed/v1/other");
+        assertThat(result.failedPrefixes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("fetchForService skips a spec whose title names another service (#1632 spec-identity guard)")
+    void fetchForService_returnsEmpty_whenSpecTitleBelongsToAnotherService() {
+        // The per-service Eureka path (and the targeted failed-prefix fallback built on it) is just
+        // as exposed to stale instance URIs as the gateway path — it must not hand back the wrong
+        // domain's spec under this service id.
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        ServiceInstance instance = mock(ServiceInstance.class);
+        when(instance.getUri()).thenReturn(URI.create("http://invoice.local:8081"));
+        when(discoveryClient.getInstances("invoice")).thenReturn(List.of(instance));
+        WebClient client = webClientReturning(serviceSpecJson("Positivity Price API", "/v1/promotions"));
+        OpenApiDocumentFetcher fetcher = fetcherWith(discoveryClient, client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchForService("invoice").block(Duration.ofSeconds(5));
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("fetchForService accepts a spec whose title contains the service id token")
+    void fetchForService_returnsSpec_whenTitleMatchesServiceId() {
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        ServiceInstance instance = mock(ServiceInstance.class);
+        when(instance.getUri()).thenReturn(URI.create("http://invoice.local:8081"));
+        when(discoveryClient.getInstances("invoice")).thenReturn(List.of(instance));
+        WebClient client = webClientReturning(serviceSpecJson("POS Invoice API", "/v1/invoices"));
+        OpenApiDocumentFetcher fetcher = fetcherWith(discoveryClient, client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchForService("invoice").block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/v1/invoices");
+    }
+
+    @Test
+    @DisplayName("identityToken strips the leading slash, the pos- module prefix, and non-alphanumerics")
+    void identityToken_normalizesPrefixesAndServiceIds() {
+        assertThat(OpenApiDocumentFetcher.identityToken("/vehicle-fitment")).isEqualTo("vehiclefitment");
+        assertThat(OpenApiDocumentFetcher.identityToken("/security-service")).isEqualTo("securityservice");
+        assertThat(OpenApiDocumentFetcher.identityToken("pos-order")).isEqualTo("order");
+        assertThat(OpenApiDocumentFetcher.identityToken("INVOICE")).isEqualTo("invoice");
+        // Degenerate inputs normalize to an empty token, which identityMismatch treats as
+        // unverifiable (guard passes) rather than matching against everything.
+        assertThat(OpenApiDocumentFetcher.identityToken("/")).isEmpty();
+        assertThat(OpenApiDocumentFetcher.identityToken("pos-")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("specIdentityMatches accepts ALL 22 gateway-exposed platform titles for their own routing "
+            + "tokens and rejects cross-service titles")
+    void specIdentityMatches_matchesRealPlatformTitles() {
+        // Every gateway-exposed domain (pos-api-gateway springdoc urls list) paired with its
+        // service's ACTUAL configured OpenAPI title — the guard must not fail any healthy domain
+        // on alpha. A service rename that breaks containment must fail here first, not on alpha.
+        record TitleCase(String title, String token) {}
+        List<TitleCase> directContainment = List.of(
+                new TitleCase("POS Accounting Service API", "accounting"),
+                new TitleCase("POS Bulk Loader Service API", "bulkloader"),
+                new TitleCase("Positivity Customer API", "customer"),
+                new TitleCase("Image API", "image"),
+                new TitleCase("Positivity Inquiry API", "inquiry"),
+                new TitleCase("Positivity Inventory API", "inventory"),
+                new TitleCase("POS Invoice API", "invoice"),
+                new TitleCase("Positivity Location API", "location"),
+                new TitleCase("Marketing API", "marketing"),
+                new TitleCase("Positivity Order API", "order"),
+                new TitleCase("POS People Contact Service API", "peoplecontact"),
+                new TitleCase("Positivity Price API", "price"),
+                new TitleCase("POS Security Service API", "securityservice"),
+                new TitleCase("POS Shop Manager Service API", "shopmanager"),
+                new TitleCase("Supplier API", "supplier"),
+                new TitleCase("Vehicle Fitment API", "vehiclefitment"),
+                new TitleCase("Vehicle Inventory API", "vehicleinventory"),
+                new TitleCase("Warranty API", "warranty"),
+                new TitleCase("POS Workorder Service API", "workorder"));
+        for (TitleCase c : directContainment) {
+            assertThat(OpenApiDocumentFetcher.specIdentityMatches(c.title(), c.token(), List.of()))
+                    .as("title '%s' must match token '%s'", c.title(), c.token())
+                    .isTrue();
+        }
+        // Aliased outliers (the shipped spec-identity-aliases defaults).
+        assertThat(OpenApiDocumentFetcher.specIdentityMatches("Positivity Product API", "catalog", List.of("product")))
+                .isTrue();
+        assertThat(OpenApiDocumentFetcher.specIdentityMatches(
+                        "POS Human Resources Service API", "people", List.of("human resources")))
+                .isTrue();
+        // pos-event-receiver configures no title → springdoc default → unverifiable pass (22nd domain).
+        assertThat(OpenApiDocumentFetcher.specIdentityMatches("OpenAPI definition", "eventreceiver", List.of()))
+                .isTrue();
+        // The alpha incident: price's title under the invoice token must be a mismatch.
+        assertThat(OpenApiDocumentFetcher.specIdentityMatches("Positivity Price API", "invoice", List.of()))
+                .isFalse();
+        // Unverifiable titles pass.
+        assertThat(OpenApiDocumentFetcher.specIdentityMatches(null, "invoice", List.of()))
+                .isTrue();
+        assertThat(OpenApiDocumentFetcher.specIdentityMatches("  ", "invoice", List.of()))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("fetchForService honors an alias keyed by the natural routing token for a pos-prefixed Eureka "
+            + "service id (#1643 review)")
+    void fetchForService_honorsNaturalKeyAlias_whenServiceIdHasPosPrefix() {
+        // The full #645 fallback iterates raw Eureka ids, which may carry the pos- module prefix.
+        // An alias keyed "vehicle-fitment" (the documented natural spelling) must still apply for
+        // service id "pos-vehicle-fitment", or the Eureka path re-opens the silent-miss trap the
+        // dual-key lookup fixed on the gateway path.
+        DiscoveryClient discoveryClient = mock(DiscoveryClient.class);
+        ServiceInstance instance = mock(ServiceInstance.class);
+        when(instance.getUri()).thenReturn(URI.create("http://fitment.local:8081"));
+        when(discoveryClient.getInstances("pos-vehicle-fitment")).thenReturn(List.of(instance));
+        WebClient client = webClientReturning(serviceSpecJson("Tires API", "/v1/fitments"));
+        OpenApiDocumentFetcher fetcher = fetcherWith(
+                discoveryClient, client, AGGREGATE_URL, List.of(), Map.of("vehicle-fitment", List.of("tires")));
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchForService("pos-vehicle-fitment").block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/v1/fitments");
+    }
+
     // --- helpers ---
 
     @Test
@@ -275,6 +498,20 @@ class OpenApiDocumentFetcherTest {
             WebClient webClient,
             String aggregateSpecUrl,
             List<String> includedServices) {
+        return fetcherWith(discoveryClient, webClient, aggregateSpecUrl, includedServices, Map.of());
+    }
+
+    private static OpenApiDocumentFetcher fetcherWith(
+            DiscoveryClient discoveryClient, WebClient webClient, String aggregateSpecUrl) {
+        return fetcherWith(discoveryClient, webClient, aggregateSpecUrl, List.of(), Map.of());
+    }
+
+    private static OpenApiDocumentFetcher fetcherWith(
+            DiscoveryClient discoveryClient,
+            WebClient webClient,
+            String aggregateSpecUrl,
+            List<String> includedServices,
+            Map<String, List<String>> specIdentityAliases) {
         McpServerProperties props = new McpServerProperties(
                 "http://localhost:8086",
                 "/mcp/message",
@@ -284,22 +521,8 @@ class OpenApiDocumentFetcherTest {
                 includedServices,
                 List.of(),
                 aggregateSpecUrl,
-                List.of());
-        return new OpenApiDocumentFetcher(discoveryClient, webClient, props);
-    }
-
-    private static OpenApiDocumentFetcher fetcherWith(
-            DiscoveryClient discoveryClient, WebClient webClient, String aggregateSpecUrl) {
-        McpServerProperties props = new McpServerProperties(
-                "http://localhost:8086",
-                "/mcp/message",
-                "/mcp/sse",
-                "/v3/api-docs",
-                Duration.ofSeconds(5),
                 List.of(),
-                List.of(),
-                aggregateSpecUrl,
-                List.of());
+                specIdentityAliases);
         return new OpenApiDocumentFetcher(discoveryClient, webClient, props);
     }
 
