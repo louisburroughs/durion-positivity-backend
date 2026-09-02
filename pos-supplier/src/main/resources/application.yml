@@ -150,6 +150,11 @@ pos:
       # a burst of requests for one import; the cap stops a genuinely broken consumer, loudly.
       republish-cooldown: ${SUPPLIER_PRICAT_REPUBLISH_COOLDOWN:PT10M}
       republish-max-attempts: ${SUPPLIER_PRICAT_REPUBLISH_MAX_ATTEMPTS:3}
+      # How old the last vendor fetch may be before the freshness read reports the catalog stale
+      # (#1637 decision 3). Catalog-currency policy, returned to every client in the freshness
+      # response so they all judge by the same rule. NOT a cache TTL -- in particular not the
+      # stock-inquiry cache-ttl below, which bounds request coalescing, not data currency.
+      staleness-threshold: ${SUPPLIER_PRICAT_STALENESS_THRESHOLD:P7D}
     # ── Live stock inquiry / A2.5 (CAP-319) ─────────────────────────────────────────────
     #
     # The one synchronous supplier read the platform allows (ADR-0044 amendment). A customer is
@@ -161,6 +166,17 @@ pos:
       # worth repeating while it is still plausibly true.
       cache-ttl: ${SUPPLIER_STOCKINQUIRY_CACHE_TTL:PT60S}
       cache-enabled: ${SUPPLIER_STOCKINQUIRY_CACHE_ENABLED:true}
+      # Budget for the whole product-keyed availability fan-out (#1637 decision 1). A vendor that
+      # has not answered when it expires is reported SUPPLIER_UNAVAILABLE alongside the vendors
+      # that did; without it the read's latency would be the slowest vendor's.
+      fanout-deadline: ${SUPPLIER_STOCKINQUIRY_FANOUT_DEADLINE:PT10S}
+    # ── Product-keyed availability (#1637 decisions 1/3) ────────────────────────────────
+    availability:
+      # How old a vendor's stated observation instant (asOf) may be before its answer is flagged
+      # stale. Backend-owned and echoed in the response so every client judges by the same rule.
+      # NOT the cache TTL above, which bounds request coalescing, not data currency; and judged
+      # from the vendor's asOf, not from fetchedAt.
+      staleness-threshold: ${SUPPLIER_AVAILABILITY_STALENESS_THRESHOLD:PT15M}
     # ── Stock report / B2.1 (CAP-322) ───────────────────────────────────────────────────
     #
     # Same chunking problem as PRICAT: a country-level report is as wide as a catalog. A binding

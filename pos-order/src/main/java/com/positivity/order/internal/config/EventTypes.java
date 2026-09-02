@@ -156,5 +156,10 @@ public final class EventTypes {
                             "ORDER_PURCHASE_ORDER_AVAILABILITY",
                             "Read live vendor availability for a purchase order's lines")
                     .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead(
+                            "ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS",
+                            "Read a purchase order's vendor transmission timeline")
+                    .apiVersion("1")
                     .build());
 }

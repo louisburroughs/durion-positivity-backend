@@ -75,7 +75,11 @@ public class StockInquiryCache {
      * <p>Silently ignores anything else, so a caller cannot accidentally extend a vendor outage by
      * caching it.
      */
-    public void put(@NonNull Key key, SupplierStockInquiryResult.@NonNull Line line, @NonNull Instant asOf) {
+    public void put(
+            @NonNull Key key,
+            SupplierStockInquiryResult.@NonNull Line line,
+            @NonNull Instant fetchedAt,
+            @NonNull Instant asOf) {
         if (!enabled) {
             return;
         }
@@ -83,7 +87,7 @@ public class StockInquiryCache {
                 && line.status() != SupplierStockInquiryResult.LineStatus.UNAVAILABLE) {
             return;
         }
-        entries.put(key, new Answer(line, asOf));
+        entries.put(key, new Answer(line, fetchedAt, asOf));
     }
 
     /** Drops everything; used by tests and by an operator-triggered refresh. */
@@ -113,16 +117,25 @@ public class StockInquiryCache {
     /**
      * A remembered answer.
      *
+     * <p>Two instants because they are two facts (#1637 decision 1). {@code fetchedAt} is when this
+     * module obtained the answer — the age of the cache entry — and {@code asOf} is the observation
+     * time the vendor stated for it, when the norm carries one. A2.5 states none, in which case the
+     * caller stamps both with the fetch instant; a norm that does state one must not have its
+     * statement overwritten by our clock. Both are carried so a cached answer reports each fact's
+     * own age rather than the age of the cache hit.
+     *
      * @param line what the vendor said
-     * @param asOf when the vendor said it — carried so a cached answer reports the age of the fact
-     *     rather than the age of the cache hit
+     * @param fetchedAt when this module obtained the answer from the vendor
+     * @param asOf the vendor's stated observation instant, or the fetch instant when it stated none
      */
     public record Answer(
             SupplierStockInquiryResult.@NonNull Line line,
+            @NonNull Instant fetchedAt,
             @NonNull Instant asOf) {
 
         public Answer {
             Objects.requireNonNull(line, "line must not be null");
+            Objects.requireNonNull(fetchedAt, "fetchedAt must not be null");
             Objects.requireNonNull(asOf, "asOf must not be null");
         }
     }

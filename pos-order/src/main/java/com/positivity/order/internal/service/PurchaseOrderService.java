@@ -4,6 +4,7 @@ import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderReque
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -33,6 +34,13 @@ public interface PurchaseOrderService {
     @NonNull
     Page<PurchaseOrderResponse> listPurchaseOrders(
             @NonNull ListPurchaseOrdersRequest filter, @NonNull Pageable pageable);
+
+    /**
+     * The order's append-only vendor transmission timeline, ordered by the vendor's clock
+     * ({@code observedAt}) with ties broken by receipt time ({@code recordedAt}) and then event id.
+     */
+    @NonNull
+    Page<PurchaseOrderTransmissionEventResponse> listTransmissionEvents(@NonNull UUID poId, @NonNull Pageable pageable);
 
     @NonNull
     PurchaseOrderResponse approvePurchaseOrder(

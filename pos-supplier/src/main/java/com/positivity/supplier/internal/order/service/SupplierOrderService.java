@@ -2,9 +2,12 @@ package com.positivity.supplier.internal.order.service;
 
 import com.positivity.supplier.internal.order.service.model.OrderTransmissionStatus;
 import com.positivity.supplier.internal.order.service.model.TransmissionResolutionRequest;
+import com.positivity.supplier.internal.service.model.PagedResponse;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Read and resolution surface over purchase-order <em>transmission</em> state (ADR-0026
@@ -32,6 +35,35 @@ public interface SupplierOrderService {
      */
     @NonNull
     List<OrderTransmissionStatus> findTransmissionsByPurchaseOrderId(@NonNull UUID purchaseOrderId);
+
+    /**
+     * Searches the whole transmission ledger across purchase orders (issue #1638 decision 6) —
+     * the queue view an operator works, above all filtered to {@code MANUAL_REVIEW}.
+     *
+     * <p>Every filter is optional and they compose conjunctively. The window binds against the
+     * intent's {@code createdAt} (when the order entered the vendor queue), half-open —
+     * {@code createdFrom} inclusive, {@code createdTo} exclusive — and results come back newest
+     * first on that same timestamp.
+     *
+     * @param attemptState only transmissions currently in this state, when given
+     * @param vendorProfileId only transmissions to this vendor profile, when given
+     * @param search case-insensitive contains-match against the purchase-order number and the
+     *     vendor's own order number; blank is treated as absent
+     * @param createdFrom window start on {@code createdAt}, inclusive, when given
+     * @param createdTo window end on {@code createdAt}, exclusive, when given
+     * @param page zero-based page index
+     * @param size page size
+     * @return one page of matching transmissions, newest intent first
+     */
+    @NonNull
+    PagedResponse<OrderTransmissionStatus> searchTransmissions(
+            OrderTransmissionStatus.@Nullable State attemptState,
+            @Nullable UUID vendorProfileId,
+            @Nullable String search,
+            @Nullable Instant createdFrom,
+            @Nullable Instant createdTo,
+            int page,
+            int size);
 
     /**
      * Returns one transmission by its intent id.

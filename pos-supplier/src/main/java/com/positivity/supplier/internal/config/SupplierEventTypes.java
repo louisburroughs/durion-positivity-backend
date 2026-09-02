@@ -90,9 +90,17 @@ public final class SupplierEventTypes {
                                 "SUPPLIER_PRICECATALOG_REAPPLY",
                                 "Re-apply quarantined price-catalog lines after a catalog fix")
                         .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_PRICECATALOG_FRESHNESS_GET",
+                                "Read one vendor price-catalog's freshness and staleness verdict")
+                        .build(),
                 // Order transmission ledger (ADR-0052, CAP-320)
                 EventTypeRegistration.search(
                                 "SUPPLIER_TRANSMISSION_LIST", "List the vendor transmissions of one purchase order")
+                        .build(),
+                EventTypeRegistration.search(
+                                "SUPPLIER_TRANSMISSION_SEARCH",
+                                "Search the transmission ledger across purchase orders (manual-review worklist)")
                         .build(),
                 EventTypeRegistration.fastRead("SUPPLIER_TRANSMISSION_GET", "Get one vendor transmission")
                         .build(),
@@ -107,6 +115,22 @@ public final class SupplierEventTypes {
                 // synchronous call to a trading partner while a customer waits, so the latency worth
                 // alerting on is the vendor's, not this module's.
                 EventTypeRegistration.write("SUPPLIER_STOCK_INQUIRY", "Ask a vendor for live stock availability")
+                        .build(),
+                // Same reasoning, multiplied: the availability fan-out asks every enabled vendor
+                // concurrently while a customer waits, so its latency is the slowest vendor's (up
+                // to the fan-out deadline) — a write's threshold, not a local read's, exactly as
+                // for the single-vendor inquiry above.
+                EventTypeRegistration.write(
+                                "SUPPLIER_STOCK_AVAILABILITY_GET",
+                                "Check a product's live availability across all enabled stock-inquiry vendors")
+                        .build(),
+                // Stock-report snapshots (CAP-322). Local reads of already-fetched documents — no
+                // vendor is contacted, so a fast read's threshold is the right one.
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_STOCK_SNAPSHOT_GET", "Get a vendor profile's latest stock-snapshot metadata")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_STOCK_SNAPSHOT_LINES_LIST", "List the lines of one stock snapshot")
                         .build(),
                 EventTypeRegistration.write(
                                 "SUPPLIER_INVOICE_FETCH", "Run a vendor invoice fetch for an explicit window")

@@ -20,16 +20,20 @@ tags:
   name: Supplier Commercial Accounts
 - description: Fleet workorder authorization and lookups
   name: Supplier Fleet Authorization
-- description: Admin CRUD over capability endpoint bindings — capability → (family, version, URL, auth)
-  name: Supplier Endpoint Bindings
-- description: Read the purchase-order transmission ledger and resolve transmissions awaiting manual review. No endpoint here places or re-sends an order.
-  name: Supplier Order Transmission
+- description: 'Read fetched vendor stock-report snapshots: latest-snapshot metadata per vendor profile, and paged lines of one immutable snapshot. No endpoint here contacts a vendor.'
+  name: Supplier Stock Snapshots
+- description: Live availability of one catalog product across every enabled stock-inquiry vendor. The backend resolves catalog identity to vendor article codes internally and fans out concurrently under a deadline; per-vendor failure is a status on a 200 body, never an error.
+  name: Supplier Stock Availability
 - description: Admin CRUD over vendor profiles — one row per configured supplier connection
   name: Supplier Vendor Profiles
 - description: Read the supplier exchange-audit trail. Metadata is free to browse; reading stored payload content requires the same permission and is itself recorded.
   name: Supplier Exchange Audit
 - description: 'Ask a vendor, live, what stock it holds for a receiving location. Vendor-side failure is reported as a status on a 200 response, never as an error status: callers are expected to degrade and render without live stock rather than fail their own flow.'
   name: Supplier Stock Inquiry
+- description: Admin CRUD over capability endpoint bindings — capability → (family, version, URL, auth)
+  name: Supplier Endpoint Bindings
+- description: Read the purchase-order transmission ledger and resolve transmissions awaiting manual review. No endpoint here places or re-sends an order.
+  name: Supplier Order Transmission
 - description: Manufacturer marketing enrichment (MKCAT C1.2)
   name: Supplier Marketing Catalog
 paths:
@@ -425,6 +429,87 @@ paths:
       - Supplier Exchange Audit
       x-required-permissions:
       - supplier:audit:read
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/freshness:
+    get:
+      description: 'Returns how fresh one vendor profile''s price catalog is: latestEffectiveDate — the newest catalog
+
+        document date the vendor itself stated on a completed import, which is vendor document metadata —
+
+        kept strictly apart from lastFetchedAt, the platform''s own last retrieval attempt over every run
+
+        including failed and empty ones. Alongside them: lastCompletedAt, the open unmatched-line count,
+
+        the backend-configured staleness threshold (ISO-8601 duration) with the stale verdict it implies,
+
+        and each PRICE_CATALOG binding''s schedule plus its scheduler-lease state (checkpointAt,
+
+        lastRunOutcome, lastRunStartedAt). Window and checkpoint fields are null for full-snapshot
+
+        protocols — every current PRICAT protocol: B4.0 fetches the vendor''s whole catalog, so there is no
+
+        retrieval window to advance.
+
+        Use this tool to answer "can these vendor prices be trusted today" in one read; do not use it for
+
+        run-by-run history, which is listSupplierPriceCatalogImports.
+
+        Preconditions: the caller must hold supplier:pricecatalog:read; the profile need not have imported
+
+        anything — a profile with no completed import reports stale=true with null timestamps, not an
+
+        error.
+
+        Required inputs: vendorProfileId (UUIDv7) as a path parameter.
+
+        Emits a SUPPLIER_PRICECATALOG_FRESHNESS_GET event; no state changes and no vendor call is made,
+
+        and the stale verdict is computed server-side from lastCompletedAt, the last successful import,
+
+        against the returned threshold — catalog-currency policy unrelated to any cache TTL — so every
+
+        client behaves consistently.
+
+        Returns 200 with the freshness view, and 404 only when the vendor profile does not exist.
+
+        '
+      operationId: getSupplierPriceCatalogFreshness
+      parameters:
+      - description: Vendor profile whose catalog freshness to read (UUIDv7).
+        in: path
+        name: vendorProfileId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceCatalogFreshnessView'
+          description: The profile's catalog freshness; a never-imported profile is stale, not an error.
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Authenticated caller lacks supplier:pricecatalog:read.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No vendor profile exists with the supplied id.
+      security:
+      - bearerAuth: []
+      summary: Read a vendor price-catalog's freshness
+      tags:
+      - Supplier Price Catalog
+      x-required-permissions:
+      - supplier:pricecatalog:read
   /v1/supplier/admin/price-catalog/{vendorProfileId}/imports:
     get:
       description: 'Returns a page of PRICAT import runs for one vendor profile, newest first, including failed and
@@ -443,13 +528,21 @@ paths:
 
         Required inputs: vendorProfileId (UUIDv7) path parameter; page defaults to 0 and size defaults to
 
-        50 with a maximum of 200.
+        50 with a maximum of 200. Optional filters: bindingId narrows a profile''s history to one endpoint
+
+        binding (runs recorded before binding ids were persisted carry none and never match), status keeps
+
+        one run status, and dateFrom/dateTo bound fetchedAt as a half-open window — dateFrom inclusive,
+
+        dateTo exclusive.
 
         Emits a SUPPLIER_PRICECATALOG_IMPORT_LIST event; no state changes and no vendor call is made.
 
-        Returns 200 with an empty items array when the profile has never imported, so an empty result is
+        Returns 200 with an empty items array when the profile has never imported or nothing matches the
 
-        not an error, and 400 when the page size is outside the permitted range.
+        filters, so an empty result is not an error, and 400 when the page size is outside the permitted
+
+        range or a filter value does not parse.
 
         '
       operationId: listSupplierPriceCatalogImports
@@ -461,6 +554,39 @@ paths:
         schema:
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
           format: uuid
+          type: string
+      - description: Narrow to runs fetched over one endpoint binding (UUIDv7). Runs recorded before binding ids were persisted carry none and never match this filter.
+        in: query
+        name: bindingId
+        required: false
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+          format: uuid
+          type: string
+      - description: Narrow to one run status.
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - IN_PROGRESS
+          - COMPLETED
+          - EMPTY
+          - FAILED
+          type: string
+      - description: Inclusive lower bound on fetchedAt (ISO-8601 instant).
+        in: query
+        name: dateFrom
+        required: false
+        schema:
+          format: date-time
+          type: string
+      - description: Exclusive upper bound on fetchedAt (ISO-8601 instant); the window is half-open so adjacent windows tile without listing a boundary run twice.
+        in: query
+        name: dateTo
+        required: false
+        schema:
+          format: date-time
           type: string
       - description: Zero-based page index.
         in: query
@@ -665,27 +791,35 @@ paths:
       - supplier:pricecatalog:import
   /v1/supplier/admin/price-catalog/{vendorProfileId}/unmatched-lines:
     get:
-      description: 'Returns a page of PRICAT lines that could not be attached to a catalog product and are still open,
+      description: 'Returns a page of PRICAT lines that could not be attached to a catalog product, newest first, each
 
-        newest first, each with the reason it was quarantined.
+        with the reason it was quarantined. By default only open lines are listed — a line stays listed
+
+        until a later import or re-application matches it — and resolved=true flips the listing to closed
+
+        lines instead, for auditing what a catalog fix healed.
 
         Use this tool to work the catalog-data backlog a vendor catalog exposes; do not use it for the
 
         run-level totals those lines roll up into, which is listSupplierPriceCatalogImports instead.
 
-        Preconditions: the caller must hold supplier:pricecatalog:read; a line stays listed until a later
-
-        import or re-application matches it, so an empty page means nothing is waiting.
+        Preconditions: the caller must hold supplier:pricecatalog:read.
 
         Required inputs: vendorProfileId (UUIDv7) path parameter; page defaults to 0 and size defaults to
 
-        50 with a maximum of 200.
+        50 with a maximum of 200. Optional filters: reason keeps one quarantine reason, search is a
+
+        case-insensitive contains-match over the line''s EAN, vendor article code and cross-reference code
+
+        (LIKE metacharacters are treated literally), and dateFrom/dateTo bound fetchedAt as a half-open
+
+        window — dateFrom inclusive, dateTo exclusive.
 
         Emits a SUPPLIER_PRICECATALOG_UNMATCHED_LIST event; no state changes and no vendor call is made.
 
-        Returns 200 with an empty items array when the quarantine is clear, and 400 when the page size is
+        Returns 200 with an empty items array when the quarantine is clear or nothing matches the filters,
 
-        outside the permitted range.
+        and 400 when the page size is outside the permitted range or a filter value does not parse.
 
         '
       operationId: listSupplierPriceCatalogUnmatchedLines
@@ -698,6 +832,47 @@ paths:
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
           format: uuid
           type: string
+      - description: Narrow to one quarantine reason.
+        in: query
+        name: reason
+        required: false
+        schema:
+          enum:
+          - NO_IDENTIFIER
+          - NO_CATALOG_MATCH
+          - AMBIGUOUS_CATALOG_MATCH
+          - CATALOG_UNAVAILABLE
+          - DUPLICATE_LINE
+          - MALFORMED_LINE
+          type: string
+      - description: Case-insensitive contains-match over the line's EAN, vendor article code and cross-reference code. LIKE metacharacters are treated literally, so a pasted code containing an underscore matches itself, not a wildcard.
+        in: query
+        name: search
+        required: false
+        schema:
+          example: '3528709999083'
+          type: string
+      - description: Inclusive lower bound on fetchedAt (ISO-8601 instant).
+        in: query
+        name: dateFrom
+        required: false
+        schema:
+          format: date-time
+          type: string
+      - description: Exclusive upper bound on fetchedAt (ISO-8601 instant); the window is half-open so adjacent windows tile without listing a boundary line twice.
+        in: query
+        name: dateTo
+        required: false
+        schema:
+          format: date-time
+          type: string
+      - description: 'True lists resolved lines instead of the open worklist. Omitted or false keeps the default the worklist has always had: open lines only.'
+        in: query
+        name: resolved
+        required: false
+        schema:
+          default: false
+          type: boolean
       - description: Zero-based page index.
         in: query
         name: page
@@ -2625,6 +2800,119 @@ paths:
       - Supplier Marketing Catalog
       x-required-permissions:
       - supplier:mktcat:import
+  /v1/supplier/stock/availability:
+    get:
+      description: 'Resolves the named catalog product to its vendor-queryable article identity internally and asks every enabled STOCK_INQUIRY vendor binding concurrently, for the named receiving location; no EAN, UPC or vendor article code appears in the request or the response, because product-to-vendor identity mapping stays a backend implementation detail.
+
+        Use this tool when composing a product panel that must show what every configured vendor holds right now; use the per-vendor inquiry instead when the caller already knows exactly which vendor to ask.
+
+        Preconditions: availability is consignee-specific, so the answer is valid only for the named delivery location, and the product must resolve to a code in the catalog replica.
+
+        Required inputs: exactly one of productId or sku, plus deliveryLocationId; quantity is optional, at least 1, default 1.
+
+        The fan-out runs under a configured deadline — a vendor that has not answered in time is reported as SUPPLIER_UNAVAILABLE while the vendors that did answer are returned alongside it, so the response is partial by design and every combination of per-vendor outcomes, an empty vendors list included, is a 200.
+
+        Each vendor result carries fetchedAt (when this platform obtained the answer; a cached answer keeps its original fetch instant) and the vendor-stated observation time asOf, and the stale flag is judged from asOf against the backend-owned stalenessThreshold echoed in the response so every client applies the same freshness rule.
+
+        Emits a SUPPLIER_STOCK_AVAILABILITY_GET event; availableQuantity is the canonical item/piece count — null means the vendor stated nothing, zero means it stated it has none, and no unit of measure or warehouse name travels because the supplier wire data carries neither.
+
+        Returns 400 when neither or both of productId and sku are given or quantity is below 1, 404 when the product identity resolves to no vendor-queryable code, 409 when the sku ambiguously names more than one replicated product, and 403 when the caller lacks supplier:stockavailability:read.
+
+        '
+      operationId: getSupplierStockAvailability
+      parameters:
+      - description: Catalog product id. Exactly one of productId and sku must be given.
+        in: query
+        name: productId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Catalog SKU, matched case-insensitively (pos-catalog keeps SKUs unique ignoring case). Exactly one of productId and sku must be given.
+        in: query
+        name: sku
+        required: false
+        schema:
+          type: string
+      - description: The receiving location the availability question is about.
+        in: query
+        name: deliveryLocationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Quantity whose availability is checked; at least 1.
+        in: query
+        name: quantity
+        required: false
+        schema:
+          default: 1
+          format: int32
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                mixedOutcomes:
+                  description: mixedOutcomes
+                  value:
+                    deliveryLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f
+                    productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    requestedQuantity: 4
+                    stalenessThreshold: PT15M
+                    vendors:
+                    - asOf: 2026-08-14 12:00:00+00:00
+                      fetchedAt: 2026-08-14 12:00:00+00:00
+                      lines:
+                      - availableQuantity: 8
+                        earliestDeliveryDate: 2026-08-20
+                        status: AVAILABLE
+                      stale: false
+                      status: OK
+                      vendorDisplayName: Michelin Europe
+                      vendorProfileId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    - lines: []
+                      status: SUPPLIER_UNAVAILABLE
+                      vendorDisplayName: Conti DACH
+                      vendorProfileId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+              schema:
+                $ref: '#/components/schemas/SupplierStockAvailability'
+          description: 'The fan-out completed within the deadline budget. Partial by design: read each vendor''s status — a non-answering vendor is a normal degraded case, not an error.'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Neither or both of `productId`/`sku` were given (the envelope's fieldErrors name both parameters), `deliveryLocationId` is missing, or `quantity` is below 1.
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The caller lacks `supplier:stockavailability:read`.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'The product identity resolves to no vendor-queryable code: the product is unknown to the catalog replica, or carries no EAN/UPC. Code `SUPPLIER_PRODUCT_CODES_NOT_FOUND`.'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The `sku` ambiguously names more than one replicated product — a replication defect refused rather than guessed at. Code `SUPPLIER_PRODUCT_SKU_AMBIGUOUS`.
+      security:
+      - bearerAuth: []
+      summary: Check a product's live availability across all enabled stock-inquiry vendors
+      tags:
+      - Supplier Stock Availability
+      x-required-permissions:
+      - supplier:stockavailability:read
   /v1/supplier/stock/inquiries:
     post:
       description: 'Places a real-time availability inquiry with the vendor bound to the given profile, for the given receiving location, and returns what the vendor said; availability is consignee-specific, so an answer for one location is never valid for another.
@@ -2702,6 +2990,143 @@ paths:
       - Supplier Stock Inquiry
       x-required-permissions:
       - supplier:stock:inquire
+  /v1/supplier/transmissions:
+    get:
+      description: 'Returns one page of transmission intents across every purchase order, newest first, filterable to
+
+        the states, vendor and window an operator is working — above all attemptState=MANUAL_REVIEW, which
+
+        is the queue of transmissions waiting on a human (issue #1638 decision 6).
+
+        Use this tool for the operator worklist and for ledger-wide searches by order reference; use
+
+        listSupplierTransmissionsForPurchaseOrder instead for one purchase order''s history, and
+
+        getSupplierTransmission when the intent id is already known.
+
+        Preconditions: the caller must hold supplier:transmission:read; no filter is required and an
+
+        unfiltered call pages the whole ledger.
+
+        Optional inputs: attemptState (PENDING, DISPATCHING, SENT_AWAITING_RESULT, CONFIRMED, REJECTED,
+
+        MANUAL_REVIEW, FAILED, CANCELLED); vendorProfileId (UUIDv7); search, matched case-insensitively as
+
+        a contains-match against the purchase-order number and the vendor''s own order number — the two
+
+        references either side of a phone call would quote; dateFrom (inclusive) and dateTo (exclusive),
+
+        which bound the intent''s createdAt — the moment the order entered the vendor queue — chosen over
+
+        the last-update time because it is immutable, so a row cannot move out of a window an operator has
+
+        already searched, and adjacent half-open windows tile without listing an intent twice. Results are
+
+        sorted newest-first on that same createdAt. page defaults to 0 and size to 50, at most 200.
+
+        Emits a SUPPLIER_TRANSMISSION_SEARCH event. Read-only: nothing is transmitted, retried or changed —
+
+        resolving a MANUAL_REVIEW row found here is resolveSupplierTransmission, and no endpoint re-sends.
+
+        Returns 200 with an empty items array when nothing matches — a clear queue is the healthy answer,
+
+        not an error — and 400 when the page size is outside the permitted range or dates are malformed.
+
+        '
+      operationId: searchSupplierTransmissions
+      parameters:
+      - description: Only transmissions currently in this state; MANUAL_REVIEW is the needs-a-human queue.
+        in: query
+        name: attemptState
+        required: false
+        schema:
+          enum:
+          - PENDING
+          - DISPATCHING
+          - SENT_AWAITING_RESULT
+          - CONFIRMED
+          - REJECTED
+          - MANUAL_REVIEW
+          - FAILED
+          - CANCELLED
+          type: string
+      - description: Only transmissions to this vendor profile (UUIDv7).
+        in: query
+        name: vendorProfileId
+        required: false
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      - description: Case-insensitive contains-match against the purchase-order number and the vendor's own order number. Blank is treated as absent.
+        in: query
+        name: search
+        required: false
+        schema:
+          example: MICH-770412
+          type: string
+      - description: Window start on the intent's createdAt, INCLUSIVE. ISO-8601 instant.
+        in: query
+        name: dateFrom
+        required: false
+        schema:
+          example: 2026-08-01 00:00:00+00:00
+          format: date-time
+          type: string
+      - description: Window end on the intent's createdAt, EXCLUSIVE. Half-open so adjacent windows tile without listing a boundary intent twice.
+        in: query
+        name: dateTo
+        required: false
+        schema:
+          example: 2026-09-01 00:00:00+00:00
+          format: date-time
+          type: string
+      - description: Zero-based page index.
+        in: query
+        name: page
+        required: false
+        schema:
+          example: 0
+          minimum: 0
+          type: integer
+      - description: Page size, 1–200.
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+          description: A page of transmission states, newest intent first; empty when nothing matches.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request — page size outside the permitted range, or a malformed filter value.
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The caller lacks supplier:transmission:read.
+      security:
+      - bearerAuth: []
+      summary: Search the transmission ledger across purchase orders
+      tags:
+      - Supplier Order Transmission
+      x-required-permissions:
+      - supplier:transmission:read
   /v1/supplier/transmissions/purchase-order/{purchaseOrderId}:
     get:
       description: 'Returns every transmission intent recorded for a purchase order — initial, revision, replacement
@@ -2929,6 +3354,197 @@ paths:
       - Supplier Order Transmission
       x-required-permissions:
       - supplier:transmission:resolve
+  /v1/supplier/vendor-profiles/{vendorProfileId}/stock-snapshots/latest:
+    get:
+      description: 'Returns the metadata of the profile''s newest stock snapshot — newest by the vendor-stated
+
+        snapshotAsOf, never by fetch time — including the buyerAccountNumber and countryCode scope the
+
+        report was fetched for, without any lines.
+
+        The two clocks matter: snapshotAsOf and issuedOn are the VENDOR''s claims about the vendor''s own
+
+        moment, while fetchedAt and completedAt are this platform''s record of when it asked and finished
+
+        storing the answer. Staleness of the stock picture is judged against snapshotAsOf — a report
+
+        fetched a minute ago can describe yesterday''s warehouse — and snapshots carrying no vendor-stated
+
+        instant (a failed or unparseable fetch) never outrank one that has one.
+
+        Use this tool to resolve the snapshotId to browse and to judge how fresh and complete the latest
+
+        report is; do not use it to ask what the vendor holds right now, which is the live stock inquiry
+
+        under supplier:stock:inquire.
+
+        Preconditions: the caller must hold supplier:stocksnapshot:read.
+
+        Required inputs: vendorProfileId (UUIDv7) as a path parameter; there is no request body.
+
+        Emits a SUPPLIER_STOCK_SNAPSHOT_GET event; read-only, and no vendor call is made.
+
+        Returns 200 with the metadata, or 404 when the profile has no snapshot — including for an unknown
+
+        vendorProfileId, since snapshots deliberately outlive profile configuration and are the only
+
+        record consulted here.
+
+        '
+      operationId: getLatestSupplierStockSnapshot
+      parameters:
+      - description: Vendor profile whose latest snapshot to read (UUIDv7).
+        in: path
+        name: vendorProfileId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSnapshotSummary'
+          description: The latest snapshot's metadata, without lines.
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The caller lacks supplier:stocksnapshot:read.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No stock snapshot exists for the profile (or no such profile is known).
+      security:
+      - bearerAuth: []
+      summary: Get a vendor profile's latest stock-snapshot metadata
+      tags:
+      - Supplier Stock Snapshots
+      x-required-permissions:
+      - supplier:stocksnapshot:read
+  /v1/supplier/vendor-profiles/{vendorProfileId}/stock-snapshots/{snapshotId}/lines:
+    get:
+      description: 'Returns one page of a snapshot''s lines, in the order the vendor''s document stated them.
+
+        Pages are addressed by the immutable snapshotId rather than by "latest" on purpose: a snapshot is
+
+        append-only and never changes, so every page of one browse describes the same snapshot even if a
+
+        newer report arrives mid-browse — paging "latest" directly would silently switch documents
+
+        between pages, so resolve the id with getLatestSupplierStockSnapshot first.
+
+        A line''s availableQuantity is nullable and the nullability is the contract: null means the vendor
+
+        reported the article WITHOUT stating a quantity, zero means it explicitly reported none.
+
+        Use this tool to browse or look an article up in what the vendor last reported; do not use it for
+
+        a live availability check, which is the stock inquiry under supplier:stock:inquire.
+
+        Preconditions: the caller must hold supplier:stocksnapshot:read and the snapshot must exist under
+
+        the given vendor profile.
+
+        Required inputs: vendorProfileId and snapshotId (UUIDv7) as path parameters; optional search is
+
+        matched case-insensitively as a contains-match against the article EAN, the vendor''s article
+
+        code and the description, and page defaults to 0 with size 50, at most 200.
+
+        Emits a SUPPLIER_STOCK_SNAPSHOT_LINES_LIST event; read-only, and no vendor call is made.
+
+        Returns 200 with an empty items array when nothing matches the search, 404 when the snapshot does
+
+        not exist or does not belong to the given vendorProfileId, and 400 when the page size is outside
+
+        the permitted range.
+
+        '
+      operationId: listSupplierStockSnapshotLines
+      parameters:
+      - description: Vendor profile the snapshot must belong to (UUIDv7).
+        in: path
+        name: vendorProfileId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      - description: Immutable snapshot to page (UUIDv7), from getLatestSupplierStockSnapshot.
+        in: path
+        name: snapshotId
+        required: true
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+          format: uuid
+          type: string
+      - description: Case-insensitive contains-match against the article EAN, the vendor's article code and the description. Blank is treated as absent.
+        in: query
+        name: search
+        required: false
+        schema:
+          example: '3528709999083'
+          type: string
+      - description: Zero-based page index.
+        in: query
+        name: page
+        required: false
+        schema:
+          example: 0
+          minimum: 0
+          type: integer
+      - description: Page size, 1–200.
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+          description: One page of snapshot lines, in document order; empty when nothing matches the search.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Page size outside the permitted range.
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The caller lacks supplier:stocksnapshot:read.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The snapshot does not exist, or belongs to a different vendor profile.
+      security:
+      - bearerAuth: []
+      summary: List the lines of one stock snapshot
+      tags:
+      - Supplier Stock Snapshots
+      x-required-permissions:
+      - supplier:stocksnapshot:read
 components:
   schemas:
     ApiError:
@@ -3735,9 +4351,88 @@ components:
           format: int32
           type: integer
       type: object
+    PriceCatalogBindingFreshness:
+      description: One PRICE_CATALOG binding's schedule and scheduler-lease state.
+      properties:
+        bindingId:
+          description: The endpoint binding.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+          format: uuid
+          type: string
+        checkpointAt:
+          description: End of the last window the schedule coordinator checkpointed. Null for full-snapshot protocols — every current PRICAT protocol — and for bindings a scheduled run has never claimed.
+          format: date-time
+          type: string
+        enabled:
+          description: Whether the binding is enabled.
+          type: boolean
+        lastRunOutcome:
+          description: How the last scheduled run ended; null when a scheduled run never ran.
+          example: COMPLETED
+          type: string
+        lastRunStartedAt:
+          description: When the last scheduled run started; null when a scheduled run never ran.
+          format: date-time
+          type: string
+        scheduleCron:
+          description: The binding's schedule cron; null when the feed only runs on demand.
+          example: 0 0 3 * * *
+          type: string
+      type: object
+    PriceCatalogFreshnessView:
+      description: 'Freshness of one vendor profile''s price catalog: what the vendor last stated (latestEffectiveDate, vendor document metadata) versus when this platform last retrieved it (lastFetchedAt), judged against the backend-owned staleness threshold.'
+      properties:
+        bindings:
+          description: The profile's PRICE_CATALOG bindings with their schedule and lease state; empty when none is configured.
+          items:
+            $ref: '#/components/schemas/PriceCatalogBindingFreshness'
+          type: array
+        lastCompletedAt:
+          description: When staging last committed; null when no run ever completed.
+          format: date-time
+          type: string
+        lastFetchedAt:
+          description: When the vendor was last called, over every run including failed and empty ones. Platform retrieval time, NOT vendor metadata; null when never fetched.
+          format: date-time
+          type: string
+        latestEffectiveDate:
+          description: Newest vendor-stated catalog document date over completed imports. Vendor document metadata, NOT retrieval time; null when no completed import stated one.
+          example: 2026-08-13
+          format: date
+          type: string
+        stale:
+          description: 'True when lastCompletedAt is older than the threshold, or no import ever completed. Judged from the last successful import: a fetch attempt that stored nothing refreshed no prices.'
+          type: boolean
+        stalenessThreshold:
+          description: The backend-configured staleness threshold, as an ISO-8601 duration. Every client judges freshness by this same value.
+          example: P7D
+          type: string
+        unresolvedUnmatchedCount:
+          description: Open quarantine lines still awaiting a catalog fix.
+          example: 42
+          format: int64
+          type: integer
+        vendorProfileId:
+          description: Vendor profile this freshness read describes.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      type: object
     PriceCatalogImportSummary:
       description: Bookkeeping summary of one vendor PRICAT import run.
       properties:
+        bindingId:
+          description: Endpoint binding the run was fetched over. Null on runs recorded before the binding was persisted (forward-only) and on quarantine re-application manifests, which make no vendor call.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+          format: uuid
+          type: string
+        checkpointAt:
+          description: When the checkpoint state was committed; null whenever checkpointState is null.
+          format: date-time
+          type: string
+        checkpointState:
+          description: Opaque continuation state committed for the next incremental run; null for full-snapshot protocols, which have nothing to resume from.
+          type: string
         chunkCount:
           description: Number of chunk events published for the import.
           example: 25
@@ -3754,6 +4449,13 @@ components:
         currency:
           description: Currency of the catalog, when stated.
           example: SEK
+          type: string
+        errorCode:
+          description: Stable machine-readable failure category for a failed import, alongside the free-text failureDetail. Null unless the run failed.
+          enum:
+          - FETCH_FAILED
+          - DECODE_FAILED
+          example: FETCH_FAILED
           type: string
         failureDetail:
           description: Operator-facing failure summary for a failed import.
@@ -3813,6 +4515,14 @@ components:
           description: Vendor profile the catalog was fetched for.
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
           format: uuid
+          type: string
+        windowFrom:
+          description: 'Inclusive start of the incremental retrieval interval requested for the run. Null for full-snapshot protocols — every current PRICAT protocol: B4.0 fetches the vendor''s whole catalog, so there is no window.'
+          format: date-time
+          type: string
+        windowTo:
+          description: Exclusive end of the requested retrieval interval; null for full-snapshot protocols.
+          format: date-time
           type: string
       type: object
     StockInquiryLine:
@@ -3898,6 +4608,162 @@ components:
           - NOT_LISTED
           - CAPABILITY_NOT_CONFIGURED
           - CONFIGURATION_ERROR
+          type: string
+      type: object
+    StockSnapshotSummary:
+      description: Metadata of one vendor stock-report snapshot fetch; lines are served separately, paged.
+      properties:
+        buyerAccountNumber:
+          description: Buyer account the vendor answered for; the report's commercial scope.
+          example: '4046266'
+          type: string
+        completedAt:
+          description: When storing the snapshot finished (platform time); null after a failure.
+          format: date-time
+          type: string
+        countryCode:
+          description: Market the report covers, when the vendor scopes reports by country.
+          example: DE
+          type: string
+        documentId:
+          description: Vendor document id, when the vendor stated one.
+          example: STOCK-4046266
+          type: string
+        fetchedAt:
+          description: When this platform called the vendor (platform time).
+          format: date-time
+          type: string
+        issuedOn:
+          description: Vendor-stated issue date of the document (vendor time).
+          example: 2026-08-13
+          format: date
+          type: string
+        linesRejected:
+          description: Lines that did not decode.
+          example: 3
+          format: int32
+          type: integer
+        linesReported:
+          description: Lines the vendor reported.
+          example: 12500
+          format: int32
+          type: integer
+        protocolVersion:
+          description: Norm version the fetch used.
+          example: EDIWHEEL_B-2.1
+          type: string
+        snapshotAsOf:
+          description: Vendor-stated instant the stock picture describes (vendor time). Staleness is judged against this, never against fetchedAt.
+          format: date-time
+          type: string
+        snapshotId:
+          description: Immutable snapshot identity; the handle the lines endpoint pages by.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        status:
+          description: Outcome of the fetch. A FAILED or EMPTY snapshot is a recorded answer, not an error.
+          enum:
+          - COMPLETED
+          - EMPTY
+          - REJECTED
+          - FAILED
+          example: COMPLETED
+          type: string
+        supplierRef:
+          description: Profile alias at fetch time; descriptive only.
+          example: michelin-eu
+          type: string
+        vendorProfileId:
+          description: Vendor profile the report was fetched for.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+          format: uuid
+          type: string
+      type: object
+    SupplierStockAvailability:
+      description: 'Live availability of one catalog product across every enabled stock-inquiry vendor, for one receiving location. Partial by design: each vendor answers (or fails) independently, carried as a per-vendor status. An empty vendors list means no vendor is configured for stock inquiry — a valid answer, not an error.'
+      properties:
+        deliveryLocationId:
+          description: The receiving location every vendor was asked about.
+          format: uuid
+          type: string
+        productId:
+          description: The resolved catalog product, echoed even when the caller asked by SKU.
+          format: uuid
+          type: string
+        requestedQuantity:
+          description: The quantity whose availability was checked.
+          format: int32
+          type: integer
+        stalenessThreshold:
+          description: The backend-configured availability staleness threshold, as an ISO-8601 duration. Echoed so every client judges freshness by the same rule; staleness is evaluated from each vendor's asOf.
+          type: string
+        vendors:
+          description: One entry per enabled stock-inquiry vendor; empty when none is configured.
+          items:
+            $ref: '#/components/schemas/SupplierStockAvailabilityVendor'
+          type: array
+      type: object
+    SupplierStockAvailabilityLine:
+      description: 'One vendor''s answer about the product. Carries no EAN/UPC/vendor article codes — product identity mapping is a backend implementation detail. availableQuantity is the canonical item/piece count: no unit of measure travels because none exists in the supplier wire data.'
+      properties:
+        availableQuantity:
+          description: Quantity the vendor can supply, as a canonical item/piece count. Null when the vendor stated no quantity; zero only when the status is UNAVAILABLE, meaning the vendor stated it has none.
+          format: int32
+          type: integer
+        currency:
+          description: ISO 4217 currency of the quoted price, when quoted.
+          type: string
+        earliestDeliveryDate:
+          description: Earliest date the vendor promised any quantity, when stated.
+          format: date
+          type: string
+        quotedUnitPrice:
+          description: Quoted unit price, when the vendor norm carries one.
+          type: number
+        status:
+          description: What the vendor said about the article.
+          enum:
+          - AVAILABLE
+          - UNAVAILABLE
+          - NOT_LISTED
+          - NOT_ANSWERED
+          type: string
+      type: object
+    SupplierStockAvailabilityVendor:
+      description: One vendor's live answer about the product, or the reason it gave none. fetchedAt is when this platform obtained the answer (a cached answer keeps its original fetch instant); asOf is the observation time the vendor stated, and staleness is judged from asOf alone.
+      properties:
+        asOf:
+          description: The observation instant the vendor stated for its answer; the fetch instant when the vendor norm states none. Null when the vendor gave no answer. This is a different fact from fetchedAt.
+          format: date-time
+          type: string
+        fetchedAt:
+          description: When this platform obtained the answer. A cached answer carries the instant of the original vendor call, not of the cache hit. Null when the vendor gave no answer.
+          format: date-time
+          type: string
+        lines:
+          description: Per-article answers; empty unless the vendor answered.
+          items:
+            $ref: '#/components/schemas/SupplierStockAvailabilityLine'
+          type: array
+        stale:
+          description: Whether asOf is older than the echoed stalenessThreshold. Null exactly when asOf is null.
+          type: boolean
+        status:
+          description: 'Whether this vendor answered: OK and NOT_LISTED are answers; SUPPLIER_UNAVAILABLE covers failure AND a vendor that had not answered by the fan-out deadline; CAPABILITY_NOT_CONFIGURED and CONFIGURATION_ERROR are deployment states.'
+          enum:
+          - OK
+          - SUPPLIER_UNAVAILABLE
+          - NOT_LISTED
+          - CAPABILITY_NOT_CONFIGURED
+          - CONFIGURATION_ERROR
+          type: string
+        vendorDisplayName:
+          description: The vendor profile's display name.
+          type: string
+        vendorProfileId:
+          description: The vendor profile that was asked.
+          format: uuid
           type: string
       type: object
     TransmissionResolutionRequest:

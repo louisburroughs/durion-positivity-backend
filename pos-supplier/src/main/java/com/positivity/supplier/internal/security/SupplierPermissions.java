@@ -84,6 +84,31 @@ public final class SupplierPermissions {
     public static final String STOCK_INQUIRE = "supplier:stock:inquire";
 
     /**
+     * Check one catalog product's live availability across every enabled stock-inquiry vendor
+     * (#1637 decision 1).
+     *
+     * <p>Its own permission rather than a reuse of {@link #STOCK_INQUIRE}, because the audiences
+     * differ: {@code supplier:stock:inquire} is held by composing <em>services</em> and its request
+     * names vendors and raw article identities — granting it to a person hands them the
+     * vendor/article mapping that decision 1 keeps internal. This read is the frontend-facing
+     * shape, keyed by catalog product only, and a deployment must be able to give a product-detail
+     * role the panel without giving it the per-vendor machinery underneath.
+     */
+    public static final String STOCK_AVAILABILITY_READ = "supplier:stockavailability:read";
+
+    /**
+     * Read fetched vendor stock-report snapshots: what a vendor said it had, for a whole market, at
+     * one moment (CAP-322).
+     *
+     * <p>Its own permission rather than a reuse of {@link #STOCK_INQUIRE}, because the acts differ
+     * in kind: an inquiry places a live call to a trading partner, while this reads what an earlier
+     * scheduled fetch already stored — no vendor is contacted. And not {@link #PROFILE_READ} either:
+     * a snapshot is a received commercial document about a vendor's stock position, not
+     * configuration, and it deliberately outlives the profile that produced it.
+     */
+    public static final String STOCK_SNAPSHOT_READ = "supplier:stocksnapshot:read";
+
+    /**
      * Running a vendor invoice fetch on demand.
      *
      * <p>Its own permission rather than an admin catch-all: it reaches out to a vendor and can

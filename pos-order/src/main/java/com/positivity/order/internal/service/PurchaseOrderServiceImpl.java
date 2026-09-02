@@ -6,12 +6,15 @@ import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
+import com.positivity.order.internal.entity.PurchaseOrderTransmissionEvent;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
+import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -26,6 +29,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +57,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final long MAX_PO_NUMBER_SEQUENCE = 2_821_109_907_455L;
 
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PurchaseOrderTransmissionEventRepository transmissionEventRepository;
 
     /**
      * Used only by {@link #createRequested}, which needs an insert that fails on a duplicate id
@@ -186,6 +191,40 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .toList();
 
         return new PageImpl<>(content, pageable, page.getTotalElements());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull Page<PurchaseOrderTransmissionEventResponse> listTransmissionEvents(
+            @NonNull UUID poId, @NonNull Pageable pageable) {
+        if (!purchaseOrderRepository.existsById(poId)) {
+            throw new PurchaseOrderNotFoundException(poId);
+        }
+        // The ordering is the semantics of the timeline, so the client's sort parameter is
+        // deliberately not honoured: only the page window is taken from the request, and the
+        // derived query supplies observedAt, recordedAt, eventId ascending.
+        Pageable window = pageable.isPaged()
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize())
+                : Pageable.unpaged();
+        return transmissionEventRepository
+                .findByPurchaseOrderIdOrderByObservedAtAscRecordedAtAscEventIdAsc(poId, window)
+                .map(PurchaseOrderServiceImpl::toTransmissionEventResponse);
+    }
+
+    private static PurchaseOrderTransmissionEventResponse toTransmissionEventResponse(
+            PurchaseOrderTransmissionEvent event) {
+        return new PurchaseOrderTransmissionEventResponse(
+                event.getEventId(),
+                event.getTransmissionIntentId(),
+                event.getEventType(),
+                event.getStatus(),
+                event.getVendorDocumentId(),
+                event.getSupplierOrderNumber(),
+                event.getVendorReason(),
+                event.getDespatchDate(),
+                event.getEstimatedDeliveryDate(),
+                event.getObservedAt(),
+                event.getRecordedAt());
     }
 
     @Override

@@ -22,10 +22,18 @@ import org.jspecify.annotations.Nullable;
  *
  * @param importManifestId   identity of the import run; the event aggregate id
  * @param vendorProfileId    vendor profile the catalog was fetched for
+ * @param bindingId          endpoint binding the run was fetched over; null on rows recorded before
+ *                           the binding was persisted and on re-application manifests (#1637)
  * @param supplierRef        profile alias at fetch time; descriptive only, never a key
  * @param status             {@code IN_PROGRESS}, {@code COMPLETED}, {@code EMPTY} or {@code FAILED}
  * @param fetchedAt          when the vendor was called
  * @param completedAt        when staging committed; null while in progress or on a failed fetch
+ * @param windowFrom         inclusive start of the incremental retrieval interval requested for the
+ *                           run; null for full-snapshot protocols — all current PRICAT protocols
+ * @param windowTo           exclusive end of that interval; null for full-snapshot protocols
+ * @param checkpointState    opaque continuation state committed for the next incremental run; null
+ *                           for full-snapshot protocols
+ * @param checkpointAt       when the checkpoint state was committed; null whenever it is null
  * @param linesFetched       lines the vendor sent
  * @param linesMatched       lines resolved to a catalog product and published
  * @param linesUnmatched     lines quarantined for review (ADR-0053 §5)
@@ -36,6 +44,8 @@ import org.jspecify.annotations.Nullable;
  * @param countryCode        market the catalog was fetched for, when stated
  * @param currency           currency of the catalog, when stated
  * @param failureDetail      operator-facing failure summary for a failed import; never a credential
+ * @param errorCode          stable machine-readable failure category for a failed import,
+ *                           complementing {@code failureDetail}; null unless the run failed
  */
 @Schema(description = "Bookkeeping summary of one vendor PRICAT import run.")
 public record PriceCatalogImportSummary(
@@ -50,6 +60,14 @@ public record PriceCatalogImportSummary(
                 example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c")
         @NonNull
         UUID vendorProfileId,
+
+        @Schema(
+                description = "Endpoint binding the run was fetched over. Null on runs recorded before the"
+                        + " binding was persisted (forward-only) and on quarantine re-application manifests,"
+                        + " which make no vendor call.",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e")
+        @Nullable
+        UUID bindingId,
 
         @Schema(description = "Profile alias at fetch time; descriptive only.", example = "michelin-eu") @NonNull
         String supplierRef,
@@ -66,6 +84,27 @@ public record PriceCatalogImportSummary(
 
         @Schema(description = "When staging committed; null while in progress or after a failed fetch.") @Nullable
         Instant completedAt,
+
+        @Schema(
+                description = "Inclusive start of the incremental retrieval interval requested for the run."
+                        + " Null for full-snapshot protocols — every current PRICAT protocol: B4.0 fetches the"
+                        + " vendor's whole catalog, so there is no window.")
+        @Nullable
+        Instant windowFrom,
+
+        @Schema(description = "Exclusive end of the requested retrieval interval; null for full-snapshot protocols.")
+        @Nullable
+        Instant windowTo,
+
+        @Schema(
+                description = "Opaque continuation state committed for the next incremental run; null for"
+                        + " full-snapshot protocols, which have nothing to resume from.")
+        @Nullable
+        String checkpointState,
+
+        @Schema(description = "When the checkpoint state was committed; null whenever checkpointState is null.")
+        @Nullable
+        Instant checkpointAt,
 
         @Schema(description = "Lines the vendor sent.", example = "12500")
         int linesFetched,
@@ -96,7 +135,15 @@ public record PriceCatalogImportSummary(
         String currency,
 
         @Schema(description = "Operator-facing failure summary for a failed import.") @Nullable
-        String failureDetail) {
+        String failureDetail,
+
+        @Schema(
+                description = "Stable machine-readable failure category for a failed import, alongside the"
+                        + " free-text failureDetail. Null unless the run failed.",
+                example = "FETCH_FAILED",
+                allowableValues = {"FETCH_FAILED", "DECODE_FAILED"})
+        @Nullable
+        String errorCode) {
 
     public PriceCatalogImportSummary {
         Objects.requireNonNull(importManifestId, "importManifestId must not be null");

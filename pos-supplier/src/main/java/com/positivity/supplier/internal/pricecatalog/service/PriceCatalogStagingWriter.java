@@ -10,6 +10,7 @@ import com.positivity.supplier.internal.entity.PriceCatalogEntryEntity;
 import com.positivity.supplier.internal.entity.PriceCatalogImportEntity;
 import com.positivity.supplier.internal.entity.PriceCatalogUnmatchedLineEntity;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
+import com.positivity.supplier.internal.enums.PriceCatalogErrorCode;
 import com.positivity.supplier.internal.enums.PriceCatalogImportStatus;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogImporter.MatchedLine;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogImporter.PreparedImport;
@@ -91,6 +92,7 @@ public class PriceCatalogStagingWriter {
         PriceCatalogImportEntity importRow = importRepository.save(PriceCatalogImportEntity.builder()
                 .importManifestId(importManifestId)
                 .vendorProfileId(binding.profile().getVendorProfileId())
+                .bindingId(binding.binding().getId())
                 .supplierRef(binding.profile().getSupplierRef())
                 .protocolFamily(binding.family())
                 .protocolVersion(binding.version().value())
@@ -141,6 +143,10 @@ public class PriceCatalogStagingWriter {
      * Records a failed fetch or decode. No entries, no quarantine rows, and no events: the previous
      * import stays the latest word on this vendor's prices, because a vendor outage is not a
      * statement that the catalog is empty.
+     *
+     * <p>The failure is recorded twice on purpose (#1637 decision 5): {@code errorCode} is the
+     * stable category a client or an alert rule switches on, {@code failureDetail} is the free text
+     * the operator investigating this one run reads. Neither replaces the other.
      */
     @NonNull
     @Transactional
@@ -150,10 +156,12 @@ public class PriceCatalogStagingWriter {
             @NonNull SupplierAccountEntity billing,
             @NonNull Instant fetchedAt,
             @NonNull String correlationId,
-            @Nullable String failureDetail) {
+            @Nullable String failureDetail,
+            @NonNull PriceCatalogErrorCode errorCode) {
         PriceCatalogImportEntity row = importRepository.save(PriceCatalogImportEntity.builder()
                 .importManifestId(importManifestId)
                 .vendorProfileId(binding.profile().getVendorProfileId())
+                .bindingId(binding.binding().getId())
                 .supplierRef(binding.profile().getSupplierRef())
                 .protocolFamily(binding.family())
                 .protocolVersion(binding.version().value())
@@ -163,6 +171,7 @@ public class PriceCatalogStagingWriter {
                 .fetchedAt(fetchedAt)
                 .correlationId(correlationId)
                 .failureDetail(truncate(failureDetail, 2000))
+                .errorCode(errorCode)
                 .build());
         log.warn("PRICAT import {} failed: {}", importManifestId, failureDetail);
         return row;

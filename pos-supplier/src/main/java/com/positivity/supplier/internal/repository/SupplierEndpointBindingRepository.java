@@ -27,6 +27,14 @@ public interface SupplierEndpointBindingRepository extends JpaRepository<Supplie
     List<SupplierEndpointBindingEntity> findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(
             @NonNull SupplierCapability capability);
 
+    /**
+     * Every enabled binding of one capability, cron or not — the fan-out set of the availability
+     * read (#1637 decision 1). Disabled bindings are excluded here rather than filtered later, for
+     * the same reason as the scheduler query above: a switched-off vendor must not be asked.
+     */
+    @NonNull
+    List<SupplierEndpointBindingEntity> findByCapabilityAndEnabledTrue(@NonNull SupplierCapability capability);
+
     /** Child lookup scoped to its owning profile (a foreign profile's child is not-found). */
     @NonNull
     Optional<SupplierEndpointBindingEntity> findByIdAndVendorProfileId(@NonNull UUID id, @NonNull UUID vendorProfileId);

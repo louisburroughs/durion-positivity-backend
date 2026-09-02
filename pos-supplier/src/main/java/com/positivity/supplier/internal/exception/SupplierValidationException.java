@@ -1,5 +1,8 @@
 package com.positivity.supplier.internal.exception;
 
+import com.positivity.shared.error.ApiError;
+import java.util.List;
+
 /**
  * Thrown when a well-formed admin request carries semantically invalid vendor profile data —
  * unknown capability/protocol-family keys, per-{@code SupplierAuthType} secret-reference
@@ -35,14 +38,35 @@ public class SupplierValidationException extends RuntimeException {
      */
     public static final String TRANSMISSION_RESOLUTION_INCOMPLETE = "SUPPLIER_TRANSMISSION_RESOLUTION_INCOMPLETE";
 
+    /**
+     * An availability read naming neither of {@code productId}/{@code sku}, or both (#1637
+     * decision 1). Exactly one is required: naming both invites the two to disagree, and the read
+     * would have to silently pick which identity it answered for.
+     */
+    public static final String AVAILABILITY_IDENTITY_INVALID = "SUPPLIER_AVAILABILITY_IDENTITY_INVALID";
+
     private final String code;
+    private final transient List<ApiError.FieldError> fieldErrors;
 
     public SupplierValidationException(String code, String message) {
+        this(code, message, List.of());
+    }
+
+    /**
+     * A validation failure that can name the offending fields; they travel on the {@code ApiError}
+     * envelope's {@code fieldErrors} so a form can attach each message to its input.
+     */
+    public SupplierValidationException(String code, String message, List<ApiError.FieldError> fieldErrors) {
         super(message);
         this.code = code;
+        this.fieldErrors = List.copyOf(fieldErrors);
     }
 
     public String getCode() {
         return code;
+    }
+
+    public List<ApiError.FieldError> getFieldErrors() {
+        return fieldErrors;
     }
 }

@@ -26,6 +26,14 @@ public class SupplierConflictException extends RuntimeException {
      */
     public static final String TRANSMISSION_STATE_CONFLICT = "SUPPLIER_TRANSMISSION_STATE_CONFLICT";
 
+    /**
+     * More than one replicated product carries the SKU the availability read was asked about.
+     * pos-catalog's uniqueness makes this a replication defect, and it is refused rather than
+     * guessed — answering with an arbitrary product's availability would look right and be about
+     * the wrong article.
+     */
+    public static final String PRODUCT_SKU_AMBIGUOUS = "SUPPLIER_PRODUCT_SKU_AMBIGUOUS";
+
     private final String code;
 
     public SupplierConflictException(String code, String message) {

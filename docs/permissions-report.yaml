@@ -1,9 +1,9 @@
-generatedAt: "2026-09-01T21:49:25.513753+00:00"
+generatedAt: "2026-09-02T12:20:28.156542+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 466
-  uniquePermissionCount: 466
+  permissionCount: 468
+  uniquePermissionCount: 468
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -859,7 +859,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 12
+    permissionCount: 14
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -877,6 +877,10 @@ manifests:
         description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
       - name: "supplier:stock:inquire"
         description: "Ask a vendor, live, what stock it holds for a receiving location (the approved synchronous supplier read)"
+      - name: "supplier:stockavailability:read"
+        description: "Check one catalog product's live availability across every enabled stock-inquiry vendor (product-keyed fan-out; no vendor/article mapping is exposed)"
+      - name: "supplier:stocksnapshot:read"
+        description: "View fetched vendor stock-report snapshots and their lines (no vendor call is made)"
       - name: "supplier:invoice:fetch"
         description: "Run a vendor invoice fetch on demand"
       - name: "supplier:workorderauth:request"
@@ -3329,6 +3333,18 @@ permissions:
     source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:stock:inquire"
     description: "Ask a vendor, live, what stock it holds for a receiving location (the approved synchronous supplier read)"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:stockavailability:read"
+    description: "Check one catalog product's live availability across every enabled stock-inquiry vendor (product-keyed fan-out; no vendor/article mapping is exposed)"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:stocksnapshot:read"
+    description: "View fetched vendor stock-report snapshots and their lines (no vendor call is made)"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"

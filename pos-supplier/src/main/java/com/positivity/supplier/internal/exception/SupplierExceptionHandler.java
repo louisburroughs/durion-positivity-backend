@@ -93,7 +93,22 @@ public class SupplierExceptionHandler {
     /** Semantically invalid vendor profile data — unknown canonical keys, bad refs (ADR-0050). */
     @ExceptionHandler(SupplierValidationException.class)
     public ResponseEntity<ApiError> handleValidation(SupplierValidationException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), request);
+        if (ex.getFieldErrors().isEmpty()) {
+            return build(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), request);
+        }
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.withFieldErrors(
+                        ex.getCode(),
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        ex.getFieldErrors()),
+                headers,
+                HttpStatus.BAD_REQUEST);
     }
 
     /**

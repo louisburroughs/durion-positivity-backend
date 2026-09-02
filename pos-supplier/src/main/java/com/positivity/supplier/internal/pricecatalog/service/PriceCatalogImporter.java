@@ -15,6 +15,7 @@ import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.entity.PriceCatalogImportEntity;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
+import com.positivity.supplier.internal.enums.PriceCatalogErrorCode;
 import com.positivity.supplier.internal.enums.PriceCatalogMatchMethod;
 import com.positivity.supplier.internal.enums.UnmatchedLineReason;
 import com.positivity.supplier.internal.exception.PriceCatalogFetchException;
@@ -111,7 +112,7 @@ public class PriceCatalogImporter implements SupplierPriceCatalogPort {
             // Recorded rather than raised: an import run is scheduled work, and an operator needs
             // the manifest row saying this vendor was asked and did not answer usably.
             return stagingWriter.persistFailure(
-                    importManifestId, binding, billing, fetchedAt, correlationId, e.getMessage());
+                    importManifestId, binding, billing, fetchedAt, correlationId, e.getMessage(), e.getErrorCode());
         }
 
         PreparedImport prepared = prepare(document, importManifestId);
@@ -317,13 +318,15 @@ public class PriceCatalogImporter implements SupplierPriceCatalogPort {
         SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
 
         if (!response.isSuccess()) {
-            throw new PriceCatalogFetchException("vendor exchange failed: " + response.outcome()
-                    + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
+            throw new PriceCatalogFetchException(
+                    PriceCatalogErrorCode.FETCH_FAILED,
+                    "vendor exchange failed: " + response.outcome()
+                            + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
         }
         try {
             return codec.decode(response.body());
         } catch (PricatDecodeException e) {
-            throw new PriceCatalogFetchException(e.getMessage(), e);
+            throw new PriceCatalogFetchException(PriceCatalogErrorCode.DECODE_FAILED, e.getMessage(), e);
         }
     }
 }

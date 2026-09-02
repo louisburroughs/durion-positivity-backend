@@ -17,6 +17,7 @@ import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
+import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -60,6 +61,9 @@ class PurchaseOrderServiceImplTest {
     private PurchaseOrderRepository purchaseOrderRepository;
 
     @Mock
+    private PurchaseOrderTransmissionEventRepository transmissionEventRepository;
+
+    @Mock
     private PurchaseOrderFactPublisher purchaseOrderFactPublisher;
 
     @Mock
@@ -74,6 +78,7 @@ class PurchaseOrderServiceImplTest {
     void setUp() {
         service = new PurchaseOrderServiceImpl(
                 purchaseOrderRepository,
+                transmissionEventRepository,
                 entityManager,
                 purchaseOrderFactPublisher,
                 documentQuantityConverter,

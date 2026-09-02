@@ -23,6 +23,7 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.enums.PriceCatalogErrorCode;
 import com.positivity.supplier.internal.enums.PriceCatalogImportStatus;
 import com.positivity.supplier.internal.enums.PriceCatalogMatchMethod;
 import com.positivity.supplier.internal.enums.UnmatchedLineReason;
@@ -326,7 +327,13 @@ class PriceCatalogStagingWriterTest {
         @Test
         void recordsAFailedImportWithoutStagingOrPublishingAnything() {
             PriceCatalogImportEntity row = writer.persistFailure(
-                    MANIFEST_ID, binding(), billing(), FETCHED_AT, "corr-1", "vendor exchange failed: TIMEOUT");
+                    MANIFEST_ID,
+                    binding(),
+                    billing(),
+                    FETCHED_AT,
+                    "corr-1",
+                    "vendor exchange failed: TIMEOUT",
+                    PriceCatalogErrorCode.FETCH_FAILED);
 
             assertThat(row.getStatus()).isEqualTo(PriceCatalogImportStatus.FAILED);
             assertThat(row.getFailureDetail()).contains("TIMEOUT");
@@ -336,13 +343,76 @@ class PriceCatalogStagingWriterTest {
         }
 
         @Test
+        void recordsTheStructuredErrorCodeAlongsideTheFreeTextNotInsteadOfIt() {
+            // #1637 decision 5: the code is for clients and alerting, the text for the operator.
+            PriceCatalogImportEntity row = writer.persistFailure(
+                    MANIFEST_ID,
+                    binding(),
+                    billing(),
+                    FETCHED_AT,
+                    "corr-1",
+                    "not a B4.0 catalog document",
+                    PriceCatalogErrorCode.DECODE_FAILED);
+
+            assertThat(row.getErrorCode()).isEqualTo(PriceCatalogErrorCode.DECODE_FAILED);
+            assertThat(row.getFailureDetail()).isEqualTo("not a B4.0 catalog document");
+        }
+
+        @Test
+        void recordsTheBindingTheFailedRunWasFetchedOver() {
+            PriceCatalogImportEntity row = writer.persistFailure(
+                    MANIFEST_ID,
+                    binding(),
+                    billing(),
+                    FETCHED_AT,
+                    "corr-1",
+                    "vendor exchange failed: TIMEOUT",
+                    PriceCatalogErrorCode.FETCH_FAILED);
+
+            assertThat(row.getBindingId()).isEqualTo(binding().binding().getId());
+        }
+
+        @Test
         void truncatesAnOverlongFailureDetailToItsColumnWidth() {
             String longDetail = "x".repeat(5000);
 
-            PriceCatalogImportEntity row =
-                    writer.persistFailure(MANIFEST_ID, binding(), billing(), FETCHED_AT, "corr-1", longDetail);
+            PriceCatalogImportEntity row = writer.persistFailure(
+                    MANIFEST_ID,
+                    binding(),
+                    billing(),
+                    FETCHED_AT,
+                    "corr-1",
+                    longDetail,
+                    PriceCatalogErrorCode.FETCH_FAILED);
 
             assertThat(row.getFailureDetail()).hasSize(2000);
+        }
+    }
+
+    @Nested
+    @DisplayName("run metadata")
+    class RunMetadata {
+
+        @Test
+        void stampsTheBindingOnACommittedImport() {
+            // #1637 decision 4: scheduler-driven and operator-driven runs both commit through this
+            // writer with the resolved binding, so both histories are narrowable per feed.
+            PriceCatalogImportEntity row = commit(new PreparedImport(matchedLines(1), List.of(), 0), 1, 500);
+
+            assertThat(row.getBindingId()).isEqualTo(binding().binding().getId());
+        }
+
+        @Test
+        void leavesWindowAndCheckpointNullForAFullSnapshotProtocol() {
+            // #1637 decision 5: B4.0 fetches the whole catalog; recording a window or checkpoint
+            // would fabricate a fact the exchange never had.
+            PriceCatalogImportEntity row = commit(new PreparedImport(matchedLines(1), List.of(), 0), 1, 500);
+
+            assertThat(row.getWindowFrom()).isNull();
+            assertThat(row.getWindowTo()).isNull();
+            assertThat(row.getCheckpointState()).isNull();
+            assertThat(row.getCheckpointAt()).isNull();
+            assertThat(row.getErrorCode()).isNull();
         }
     }
 }

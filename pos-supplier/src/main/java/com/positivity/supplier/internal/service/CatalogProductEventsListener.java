@@ -114,6 +114,12 @@ public class CatalogProductEventsListener {
                 .productId(productId)
                 .codeType(trimToNull(payload.productCodeType()))
                 .code(trimToNull(payload.productCode()))
+                // The SKU travels on the same fact and is kept for the same reason the codes are:
+                // the availability read resolves a caller's SKU locally (ADR-0044 R1/R3), and a
+                // synchronous ask to pos-catalog is forbidden. Stored uppercased: pos-catalog keeps
+                // the SKU mixed-case but unique case-insensitively, so canonicalising here lets the
+                // lookup match case-insensitively over a plain index.
+                .sku(upperOrNull(trimToNull(payload.sku())))
                 .aggregateVersion(aggregateVersion)
                 .build());
     }
@@ -124,5 +130,9 @@ public class CatalogProductEventsListener {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String upperOrNull(String value) {
+        return value == null ? null : value.toUpperCase(java.util.Locale.ROOT);
     }
 }

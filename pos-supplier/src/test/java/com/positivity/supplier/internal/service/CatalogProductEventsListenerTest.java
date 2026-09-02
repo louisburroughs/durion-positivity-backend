@@ -77,7 +77,28 @@ class CatalogProductEventsListenerTest {
         assertThat(captor.getValue().getCode()).isEqualTo("3528709999083");
         assertThat(captor.getValue().getCodeType()).isEqualTo("EAN");
         assertThat(captor.getValue().getAggregateVersion()).isEqualTo(100L);
+        // The SKU rides the same fact (#1637 decision 1): the availability read resolves a
+        // caller's SKU from this replica rather than asking pos-catalog synchronously.
+        assertThat(captor.getValue().getSku()).isEqualTo("SKU-1");
         verify(processedEventRepository).save(any(ProcessedEvent.class));
+    }
+
+    @Test
+    void canonicalisesAMixedCaseSkuToUppercaseOnWrite() {
+        // pos-catalog keeps SKUs mixed-case but unique case-insensitively; the replica stores the
+        // canonical uppercase form so the availability lookup can match case-insensitively over a
+        // plain index (#1637 review fix).
+        listener.onCatalogEvent("""
+                {"eventId":"e-sku-case","eventType":"catalog.product.updated","schemaVersion":2,
+                 "aggregateId":"%s","aggregateVersion":100,"occurredAtUtc":"2026-08-14T08:59:00Z",
+                 "sourceService":"pos-catalog",
+                 "payload":{"productId":"%s","sku":"  AbC-123 ","name":"Tire","active":true,
+                   "productCode":"3528709999083","productCodeType":"EAN"}}
+                """.formatted(PRODUCT_ID, PRODUCT_ID));
+
+        ArgumentCaptor<ExtProductCodeReplica> captor = ArgumentCaptor.forClass(ExtProductCodeReplica.class);
+        verify(replicaRepository).save(captor.capture());
+        assertThat(captor.getValue().getSku()).isEqualTo("ABC-123");
     }
 
     @Test
