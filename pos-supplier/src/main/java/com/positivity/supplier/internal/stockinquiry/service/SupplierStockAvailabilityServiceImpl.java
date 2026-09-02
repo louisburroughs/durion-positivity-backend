@@ -142,7 +142,10 @@ public class SupplierStockAvailabilityServiceImpl implements SupplierStockAvaila
                 throw notResolvable("product " + productId + " is not known to the supplier catalog replica");
             }
         } else {
-            List<ExtProductCodeReplica> matches = replicaRepository.findBySku(sku.trim());
+            // The replica stores the SKU uppercased (canonicalised by the catalog events listener),
+            // so uppercasing the input makes the match case-insensitive over a plain index.
+            List<ExtProductCodeReplica> matches =
+                    replicaRepository.findBySku(sku.trim().toUpperCase(java.util.Locale.ROOT));
             if (matches.isEmpty()) {
                 throw notResolvable("no replicated product carries SKU '" + sku.trim() + "'");
             }
@@ -263,15 +266,25 @@ public class SupplierStockAvailabilityServiceImpl implements SupplierStockAvaila
 
         Instant fetchedAt = Instant.now(clock);
         Instant asOf = result.asOf() == null ? fetchedAt : result.asOf();
+        // Invariant: this inquiry named exactly one article, so every line the vendor answered is
+        // an answer about the requested article — it must be findable under the requested key
+        // (which is what the next fan-out probes), not only under whatever identity the vendor
+        // echoed back.
+        String requestedKey = ArticleKeys.of(articleCode, null);
         for (SupplierStockInquiryResult.Line line : result.lines()) {
+            String echoedKey = ArticleKeys.of(line.articleEan(), line.supplierArticleCode());
             cache.put(
-                    new StockInquiryCache.Key(
-                            vendor.getVendorProfileId(),
-                            deliveryLocationId,
-                            ArticleKeys.of(line.articleEan(), line.supplierArticleCode())),
+                    new StockInquiryCache.Key(vendor.getVendorProfileId(), deliveryLocationId, echoedKey),
                     line,
                     fetchedAt,
                     asOf);
+            if (!echoedKey.equals(requestedKey)) {
+                cache.put(
+                        new StockInquiryCache.Key(vendor.getVendorProfileId(), deliveryLocationId, requestedKey),
+                        line,
+                        fetchedAt,
+                        asOf);
+            }
         }
         // The vendor-level verdict mirrors the per-vendor inquiry's: a document the codec already
         // judged NOT_LISTED stays that, and an OK document whose every line is NOT_LISTED becomes

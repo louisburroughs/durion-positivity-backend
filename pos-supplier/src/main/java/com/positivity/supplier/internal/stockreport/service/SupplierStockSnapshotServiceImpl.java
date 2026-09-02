@@ -96,6 +96,8 @@ public class SupplierStockSnapshotServiceImpl implements SupplierStockSnapshotSe
                 snapshot.getSnapshotId(),
                 snapshot.getVendorProfileId(),
                 snapshot.getSupplierRef(),
+                snapshot.getBuyerAccountNumber(),
+                snapshot.getCountryCode(),
                 snapshot.getStatus(),
                 snapshot.getDocumentId(),
                 snapshot.getIssuedOn(),

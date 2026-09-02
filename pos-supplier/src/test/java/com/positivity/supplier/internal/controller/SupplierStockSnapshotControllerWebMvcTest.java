@@ -88,6 +88,8 @@ class SupplierStockSnapshotControllerWebMvcTest {
                 SNAPSHOT_ID,
                 PROFILE_ID,
                 "michelin-eu",
+                "4046266",
+                "DE",
                 "COMPLETED",
                 "STOCK-4046266",
                 LocalDate.of(2026, 8, 12),

@@ -17,10 +17,11 @@ public interface ExtProductCodeReplicaRepository extends JpaRepository<ExtProduc
     List<ExtProductCodeReplica> findByCodeTypeAndCode(String codeType, String code);
 
     /**
-     * Products carrying an exact catalog SKU. A list for the same reason as
-     * {@link #findByCodeTypeAndCode(String, String)}: SKU uniqueness is pos-catalog's invariant,
-     * and a second row here is a replication defect that must surface as a detectable ambiguity
-     * instead of an arbitrary pick.
+     * Products carrying an exact catalog SKU, in the replica's canonical uppercased form —
+     * callers uppercase their input, which makes the match case-insensitive over a plain index.
+     * A list for the same reason as {@link #findByCodeTypeAndCode(String, String)}: SKU uniqueness
+     * is pos-catalog's invariant, and a second row here is a replication defect that must surface
+     * as a detectable ambiguity instead of an arbitrary pick.
      */
     List<ExtProductCodeReplica> findBySku(String sku);
 }

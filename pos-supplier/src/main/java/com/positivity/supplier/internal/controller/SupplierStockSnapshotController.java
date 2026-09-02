@@ -66,7 +66,8 @@ public class SupplierStockSnapshotController {
             summary = "Get a vendor profile's latest stock-snapshot metadata",
             description = """
                     Returns the metadata of the profile's newest stock snapshot — newest by the vendor-stated
-                    snapshotAsOf, never by fetch time — without any lines.
+                    snapshotAsOf, never by fetch time — including the buyerAccountNumber and countryCode scope the
+                    report was fetched for, without any lines.
                     The two clocks matter: snapshotAsOf and issuedOn are the VENDOR's claims about the vendor's own
                     moment, while fetchedAt and completedAt are this platform's record of when it asked and finished
                     storing the answer. Staleness of the stock picture is judged against snapshotAsOf — a report

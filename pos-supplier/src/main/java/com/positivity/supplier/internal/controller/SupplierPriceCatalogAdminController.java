@@ -401,11 +401,13 @@ public class SupplierPriceCatalogAdminController {
                     Use this tool to answer "can these vendor prices be trusted today" in one read; do not use it for
                     run-by-run history, which is listSupplierPriceCatalogImports.
                     Preconditions: the caller must hold supplier:pricecatalog:read; the profile need not have imported
-                    anything — a never-fetched profile reports stale=true with null timestamps, not an error.
+                    anything — a profile with no completed import reports stale=true with null timestamps, not an
+                    error.
                     Required inputs: vendorProfileId (UUIDv7) as a path parameter.
                     Emits a SUPPLIER_PRICECATALOG_FRESHNESS_GET event; no state changes and no vendor call is made,
-                    and the stale verdict is computed server-side against the returned threshold — catalog-currency
-                    policy unrelated to any cache TTL — so every client behaves consistently.
+                    and the stale verdict is computed server-side from lastCompletedAt, the last successful import,
+                    against the returned threshold — catalog-currency policy unrelated to any cache TTL — so every
+                    client behaves consistently.
                     Returns 200 with the freshness view, and 404 only when the vendor profile does not exist.
                     """)
     @ApiResponse(

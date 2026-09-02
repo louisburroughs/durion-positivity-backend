@@ -455,15 +455,19 @@ paths:
 
         Preconditions: the caller must hold supplier:pricecatalog:read; the profile need not have imported
 
-        anything — a never-fetched profile reports stale=true with null timestamps, not an error.
+        anything — a profile with no completed import reports stale=true with null timestamps, not an
+
+        error.
 
         Required inputs: vendorProfileId (UUIDv7) as a path parameter.
 
         Emits a SUPPLIER_PRICECATALOG_FRESHNESS_GET event; no state changes and no vendor call is made,
 
-        and the stale verdict is computed server-side against the returned threshold — catalog-currency
+        and the stale verdict is computed server-side from lastCompletedAt, the last successful import,
 
-        policy unrelated to any cache TTL — so every client behaves consistently.
+        against the returned threshold — catalog-currency policy unrelated to any cache TTL — so every
+
+        client behaves consistently.
 
         Returns 200 with the freshness view, and 404 only when the vendor profile does not exist.
 
@@ -2812,7 +2816,7 @@ paths:
 
         Emits a SUPPLIER_STOCK_AVAILABILITY_GET event; availableQuantity is the canonical item/piece count — null means the vendor stated nothing, zero means it stated it has none, and no unit of measure or warehouse name travels because the supplier wire data carries neither.
 
-        Returns 400 when neither or both of productId and sku are given or quantity is below 1, 404 when the product identity resolves to no vendor-queryable code, and 403 when the caller lacks supplier:stockavailability:read.
+        Returns 400 when neither or both of productId and sku are given or quantity is below 1, 404 when the product identity resolves to no vendor-queryable code, 409 when the sku ambiguously names more than one replicated product, and 403 when the caller lacks supplier:stockavailability:read.
 
         '
       operationId: getSupplierStockAvailability
@@ -2824,7 +2828,7 @@ paths:
         schema:
           format: uuid
           type: string
-      - description: Catalog SKU. Exactly one of productId and sku must be given.
+      - description: Catalog SKU, matched case-insensitively (pos-catalog keeps SKUs unique ignoring case). Exactly one of productId and sku must be given.
         in: query
         name: sku
         required: false
@@ -2896,6 +2900,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'The product identity resolves to no vendor-queryable code: the product is unknown to the catalog replica, or carries no EAN/UPC. Code `SUPPLIER_PRODUCT_CODES_NOT_FOUND`.'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The `sku` ambiguously names more than one replicated product — a replication defect refused rather than guessed at. Code `SUPPLIER_PRODUCT_SKU_AMBIGUOUS`.
       security:
       - bearerAuth: []
       summary: Check a product's live availability across all enabled stock-inquiry vendors
@@ -3348,7 +3358,9 @@ paths:
     get:
       description: 'Returns the metadata of the profile''s newest stock snapshot — newest by the vendor-stated
 
-        snapshotAsOf, never by fetch time — without any lines.
+        snapshotAsOf, never by fetch time — including the buyerAccountNumber and countryCode scope the
+
+        report was fetched for, without any lines.
 
         The two clocks matter: snapshotAsOf and issuedOn are the VENDOR''s claims about the vendor''s own
 
@@ -4389,7 +4401,7 @@ components:
           format: date
           type: string
         stale:
-          description: True when lastFetchedAt is older than the threshold, or the profile was never fetched at all.
+          description: 'True when lastCompletedAt is older than the threshold, or no import ever completed. Judged from the last successful import: a fetch attempt that stored nothing refreshed no prices.'
           type: boolean
         stalenessThreshold:
           description: The backend-configured staleness threshold, as an ISO-8601 duration. Every client judges freshness by this same value.
@@ -4601,9 +4613,17 @@ components:
     StockSnapshotSummary:
       description: Metadata of one vendor stock-report snapshot fetch; lines are served separately, paged.
       properties:
+        buyerAccountNumber:
+          description: Buyer account the vendor answered for; the report's commercial scope.
+          example: '4046266'
+          type: string
         completedAt:
           description: When storing the snapshot finished (platform time); null after a failure.
           format: date-time
+          type: string
+        countryCode:
+          description: Market the report covers, when the vendor scopes reports by country.
+          example: DE
           type: string
         documentId:
           description: Vendor document id, when the vendor stated one.

@@ -137,7 +137,8 @@ public class SupplierStockAvailabilityController {
                     count — null means the vendor stated nothing, zero means it stated it has none, and no unit of \
                     measure or warehouse name travels because the supplier wire data carries neither.
                     Returns 400 when neither or both of productId and sku are given or quantity is below 1, 404 \
-                    when the product identity resolves to no vendor-queryable code, and 403 when the caller lacks \
+                    when the product identity resolves to no vendor-queryable code, 409 when the sku ambiguously \
+                    names more than one replicated product, and 403 when the caller lacks \
                     supplier:stockavailability:read.
                     """)
     @ApiResponse(
@@ -164,11 +165,18 @@ public class SupplierStockAvailabilityController {
             description = "The product identity resolves to no vendor-queryable code: the product is unknown to the"
                     + " catalog replica, or carries no EAN/UPC. Code `SUPPLIER_PRODUCT_CODES_NOT_FOUND`.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The `sku` ambiguously names more than one replicated product — a replication defect"
+                    + " refused rather than guessed at. Code `SUPPLIER_PRODUCT_SKU_AMBIGUOUS`.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<StockAvailabilityView> getSupplierStockAvailability(
             @Parameter(description = "Catalog product id. Exactly one of productId and sku must be given.")
                     @RequestParam(required = false)
                     UUID productId,
-            @Parameter(description = "Catalog SKU. Exactly one of productId and sku must be given.")
+            @Parameter(
+                            description = "Catalog SKU, matched case-insensitively (pos-catalog keeps SKUs unique"
+                                    + " ignoring case). Exactly one of productId and sku must be given.")
                     @RequestParam(required = false)
                     String sku,
             @Parameter(description = "The receiving location the availability question is about.", required = true)

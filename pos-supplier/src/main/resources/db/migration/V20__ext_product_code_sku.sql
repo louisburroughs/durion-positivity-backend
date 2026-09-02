@@ -9,6 +9,10 @@
 -- yet or the product has none", and the availability read reports it as an unresolvable identity
 -- rather than guessing.
 --
+-- Stored uppercased by the consumer: pos-catalog keeps the SKU mixed-case but unique
+-- case-insensitively, so the replica canonicalises on write and the lookup uppercases its input —
+-- case-insensitive matching over the plain index below, on H2 and PostgreSQL alike.
+--
 -- H2(MODE=PostgreSQL)-compatible, matching V9.
 ALTER TABLE ext_product_code ADD COLUMN sku character varying(64);
 

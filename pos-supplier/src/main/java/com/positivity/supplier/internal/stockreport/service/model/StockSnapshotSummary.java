@@ -26,6 +26,8 @@ import org.jspecify.annotations.Nullable;
  * @param snapshotId immutable snapshot identity (UUIDv7); the handle the lines endpoint pages by
  * @param vendorProfileId vendor profile the report was fetched for
  * @param supplierRef profile alias at fetch time; descriptive only, never a key
+ * @param buyerAccountNumber buyer account the vendor answered for; the report's commercial scope
+ * @param countryCode market the report covers, when the vendor scopes reports by country
  * @param status {@code COMPLETED}, {@code EMPTY}, {@code REJECTED} or {@code FAILED}
  * @param documentId vendor document id, when the vendor stated one
  * @param issuedOn vendor-stated issue date of the document, when stated
@@ -52,6 +54,16 @@ public record StockSnapshotSummary(
 
         @Schema(description = "Profile alias at fetch time; descriptive only.", example = "michelin-eu") @NonNull
         String supplierRef,
+
+        @Schema(
+                description = "Buyer account the vendor answered for; the report's commercial scope.",
+                example = "4046266")
+        @NonNull
+        String buyerAccountNumber,
+
+        @Schema(description = "Market the report covers, when the vendor scopes reports by country.", example = "DE")
+        @Nullable
+        String countryCode,
 
         @Schema(
                 description = "Outcome of the fetch. A FAILED or EMPTY snapshot is a recorded answer, not an error.",
@@ -92,6 +104,7 @@ public record StockSnapshotSummary(
         Objects.requireNonNull(snapshotId, "snapshotId must not be null");
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");
+        Objects.requireNonNull(buyerAccountNumber, "buyerAccountNumber must not be null");
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(fetchedAt, "fetchedAt must not be null");
         Objects.requireNonNull(protocolVersion, "protocolVersion must not be null");

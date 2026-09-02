@@ -32,8 +32,10 @@ import org.jspecify.annotations.Nullable;
  * @param lastCompletedAt          when staging last committed; null when no run ever completed
  * @param unresolvedUnmatchedCount open quarantine lines still awaiting a catalog fix
  * @param stalenessThreshold       the configured threshold, ISO-8601 duration (e.g. {@code P7D})
- * @param stale                    true when {@code lastFetchedAt} is older than the threshold, or
- *                                 the profile was never fetched at all
+ * @param stale                    true when {@code lastCompletedAt} is older than the threshold, or
+ *                                 no import ever completed; judged from the last successful import
+ *                                 because staleness is about price-data currency, and a fetch
+ *                                 attempt that stored nothing refreshed no prices
  * @param bindings                 the profile's PRICE_CATALOG bindings with their schedule and
  *                                 lease state; empty when none is configured
  */
@@ -75,8 +77,9 @@ public record PriceCatalogFreshnessView(
         String stalenessThreshold,
 
         @Schema(
-                description = "True when lastFetchedAt is older than the threshold, or the profile was never"
-                        + " fetched at all.")
+                description = "True when lastCompletedAt is older than the threshold, or no import ever"
+                        + " completed. Judged from the last successful import: a fetch attempt that stored"
+                        + " nothing refreshed no prices.")
         boolean stale,
 
         @Schema(

@@ -389,17 +389,17 @@ class SupplierPriceCatalogServiceImplTest {
         }
 
         @Test
-        @DisplayName("a fetch exactly at the threshold boundary is not yet stale")
+        @DisplayName("a completed import exactly at the threshold boundary is not yet stale")
         void thresholdBoundaryIsNotStale() {
-            when(importRepository.findLastFetchedAt(PROFILE_ID)).thenReturn(NOW.minus(THRESHOLD));
+            when(importRepository.findLastCompletedAt(PROFILE_ID)).thenReturn(NOW.minus(THRESHOLD));
 
             assertThat(service.getFreshness(PROFILE_ID).stale()).isFalse();
         }
 
         @Test
-        @DisplayName("a fetch just past the threshold is stale")
+        @DisplayName("a completed import just past the threshold is stale")
         void justPastTheThresholdIsStale() {
-            when(importRepository.findLastFetchedAt(PROFILE_ID))
+            when(importRepository.findLastCompletedAt(PROFILE_ID))
                     .thenReturn(NOW.minus(THRESHOLD).minusSeconds(1));
 
             assertThat(service.getFreshness(PROFILE_ID).stale()).isTrue();

@@ -44,8 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The staleness threshold is backend configuration (#1637 decision 3):
  * {@code pos.supplier.pricat.staleness-threshold}, an ISO-8601 duration defaulting to seven days.
- * It is a policy about how old a catalog fetch may be before an operator should worry, returned in
- * the freshness view so every client applies the same rule — and it has nothing to do with any
+ * It is a policy about price-data currency — how old the last <em>successful</em> import
+ * ({@code lastCompletedAt}) may be before an operator should worry; a fetch attempt that stored
+ * nothing refreshes no prices and so does not reset the clock. The threshold is returned in the
+ * freshness view so every client applies the same rule — and it has nothing to do with any
  * request-cache TTL.
  */
 @Service
@@ -144,9 +146,10 @@ public class SupplierPriceCatalogServiceImpl implements SupplierPriceCatalogServ
         long unresolvedUnmatchedCount =
                 unmatchedLineRepository.countByVendorProfileIdAndResolvedAtIsNull(profile.getVendorProfileId());
 
-        // Never fetched is the stalest a feed can be; otherwise strictly older than the threshold.
-        boolean stale = lastFetchedAt == null
-                || lastFetchedAt.isBefore(Instant.now(clock).minus(stalenessThreshold));
+        // Staleness is about price-data currency, so it is judged from the last SUCCESSFUL import:
+        // a feed that keeps failing to fetch has old prices no matter how recently it tried.
+        boolean stale = lastCompletedAt == null
+                || lastCompletedAt.isBefore(Instant.now(clock).minus(stalenessThreshold));
 
         List<PriceCatalogBindingFreshness> bindings = bindingRepository
                 .findByVendorProfileIdAndCapability(profile.getVendorProfileId(), SupplierCapability.PRICE_CATALOG)
