@@ -406,6 +406,35 @@ class SupplierPriceCatalogServiceImplTest {
         }
 
         @Test
+        @DisplayName("a feed failing every night is stale: a recent fetch attempt does not reset the clock")
+        void aRecentFailedFetchDoesNotResetTheStalenessClock() {
+            // Staleness is about price-data currency: a fetch that stored nothing refreshed no
+            // prices, so the verdict is judged from the last SUCCESSFUL import, not any attempt.
+            when(importRepository.findLastFetchedAt(PROFILE_ID)).thenReturn(NOW.minusSeconds(3_600));
+            when(importRepository.findLastCompletedAt(PROFILE_ID))
+                    .thenReturn(NOW.minus(THRESHOLD).minusSeconds(1));
+
+            PriceCatalogFreshnessView view = service.getFreshness(PROFILE_ID);
+
+            assertThat(view.stale()).isTrue();
+            // Both facts still travel, so an operator can see the feed is trying and failing.
+            assertThat(view.lastFetchedAt()).isEqualTo(NOW.minusSeconds(3_600));
+            assertThat(view.lastCompletedAt()).isEqualTo(NOW.minus(THRESHOLD).minusSeconds(1));
+        }
+
+        @Test
+        @DisplayName("no import ever succeeded: stale even though a fetch was attempted minutes ago")
+        void neverCompletedDespiteARecentFetchIsStale() {
+            when(importRepository.findLastFetchedAt(PROFILE_ID)).thenReturn(NOW.minusSeconds(300));
+            when(importRepository.findLastCompletedAt(PROFILE_ID)).thenReturn(null);
+
+            PriceCatalogFreshnessView view = service.getFreshness(PROFILE_ID);
+
+            assertThat(view.stale()).isTrue();
+            assertThat(view.lastCompletedAt()).isNull();
+        }
+
+        @Test
         @DisplayName("carries the binding's schedule and lease state when a lease row exists")
         void bindingWithLease() {
             when(bindingRepository.findByVendorProfileIdAndCapability(PROFILE_ID, SupplierCapability.PRICE_CATALOG))

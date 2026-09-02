@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.config.SecurityConfig;
+import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
@@ -209,6 +210,25 @@ class SupplierStockAvailabilityControllerWebMvcTest {
                         SupplierPermissions.STOCK_AVAILABILITY_READ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SUPPLIER_PRODUCT_CODES_NOT_FOUND"));
+    }
+
+    @Test
+    void reportsAnAmbiguousSkuAsA409InTheStandardEnvelope() throws Exception {
+        // Two replica rows carrying the same SKU is a data conflict the service refuses to guess
+        // about; the web contract surfaces it as a 409 in the ApiError envelope (#1637 review fix).
+        when(availabilityService.checkAvailability(null, "MICH-1", LOCATION, 1))
+                .thenThrow(new SupplierConflictException(
+                        SupplierConflictException.PRODUCT_SKU_AMBIGUOUS, "SKU 'MICH-1' matches more than one product"));
+
+        mockMvc.perform(authed(
+                        get(BASE + "?sku=MICH-1&deliveryLocationId=" + LOCATION),
+                        SupplierPermissions.STOCK_AVAILABILITY_READ))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SUPPLIER_PRODUCT_SKU_AMBIGUOUS"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("SKU 'MICH-1' matches more than one product"))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test

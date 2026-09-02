@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -218,6 +219,28 @@ class SupplierStockAvailabilityServiceImplTest {
         }
 
         @Test
+        void resolvesASkuCaseInsensitivelyAgainstTheUppercasedReplica() {
+            // The replica stores the SKU uppercased (canonicalised on write by the catalog events
+            // listener), and the lookup uppercases its input — so a caller typing the SKU in any
+            // case still resolves the same product.
+            when(replicaRepository.findBySku("ABC-123"))
+                    .thenReturn(List.of(ExtProductCodeReplica.builder()
+                            .productId(PRODUCT_ID)
+                            .codeType("EAN")
+                            .code(EAN)
+                            .sku("ABC-123")
+                            .aggregateVersion(1L)
+                            .build()));
+            givenVendors(profile(VENDOR_A, "michelin-eu", "Michelin Europe", true));
+            answerFor("michelin-eu", available(8, null));
+
+            StockAvailabilityView view = service(DEADLINE).checkAvailability(null, "abc-123", LOCATION, 1);
+
+            assertThat(view.productId()).isEqualTo(PRODUCT_ID);
+            verify(replicaRepository).findBySku("ABC-123");
+        }
+
+        @Test
         void reportsAnUnknownProductAsProductCodesNotFound() {
             when(replicaRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 
@@ -415,6 +438,42 @@ class SupplierStockAvailabilityServiceImplTest {
                     cache.get(new StockInquiryCache.Key(VENDOR_A, LOCATION, ArticleKeys.of(EAN, null)));
             assertThat(cached).isNotNull();
             assertThat(cached.fetchedAt()).isEqualTo(NOW);
+        }
+
+        @Test
+        void anAnswerWhoseLineEchoesTheVendorsOwnArticleCodeStillServesTheNextFanOutFromCache() {
+            // The vendor echoes its own supplierArticleCode on the answered line, so the echoed
+            // identity ("EAN|CODE") differs from the requested one ("EAN|") the next fan-out
+            // probes with. The answer must also be stored under the requested key, or every
+            // repeat of the same question would go back to the vendor.
+            givenProductWithCode("EAN", EAN);
+            givenVendors(profile(VENDOR_A, "michelin-eu", "Michelin", true));
+            answerFor(
+                    "michelin-eu",
+                    new SupplierStockInquiryResult(
+                            SupplierStockInquiryResult.Status.OK,
+                            List.of(new SupplierStockInquiryResult.Line(
+                                    EAN,
+                                    "MICH-417",
+                                    SupplierStockInquiryResult.LineStatus.AVAILABLE,
+                                    8,
+                                    LocalDate.of(2026, 8, 20),
+                                    null,
+                                    null)),
+                            null));
+
+            StockAvailabilityView first = service(DEADLINE).checkAvailability(PRODUCT_ID, null, LOCATION, 1);
+            StockAvailabilityView second = service(DEADLINE).checkAvailability(PRODUCT_ID, null, LOCATION, 1);
+
+            // The second read is a cache hit: the vendor was asked exactly once.
+            verify(runner, times(1)).inquireAvailability(any(), any(), any());
+            StockAvailabilityView.VendorAvailability cachedVendor =
+                    second.vendors().getFirst();
+            assertThat(cachedVendor.status()).isEqualTo(StockInquiryResponse.Status.OK);
+            assertThat(cachedVendor.lines().getFirst().availableQuantity()).isEqualTo(8);
+            // And it carries the honest original fetch instant, not a fresh one.
+            assertThat(cachedVendor.fetchedAt())
+                    .isEqualTo(first.vendors().getFirst().fetchedAt());
         }
 
         @Test

@@ -131,6 +131,19 @@ class SupplierStockSnapshotControllerWebMvcTest {
         }
 
         @Test
+        void servesTheReportsCommercialScopeOnTheLatestSnapshot() throws Exception {
+            // Which buyer account and market the vendor answered for is part of the snapshot's
+            // meaning (#1638 decision 5): the same vendor can serve several accounts and
+            // countries, and a reader must be able to tell whose stock picture this is.
+            when(stockSnapshotService.getLatestSnapshot(PROFILE_ID)).thenReturn(summary());
+
+            mockMvc.perform(authed(get(BASE + "/latest"), SupplierPermissions.STOCK_SNAPSHOT_READ))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.buyerAccountNumber").value("4046266"))
+                    .andExpect(jsonPath("$.countryCode").value("DE"));
+        }
+
+        @Test
         void reportsAProfileWithoutSnapshotsAsNotFoundInTheStandardEnvelope() throws Exception {
             when(stockSnapshotService.getLatestSnapshot(PROFILE_ID))
                     .thenThrow(new SupplierNotFoundException(
