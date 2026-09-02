@@ -189,6 +189,58 @@ class OpenApiDocumentFetcherTest {
         assertThat(requestedUris.getFirst().toString()).isEqualTo("http://localhost:8080/v3/api-docs");
     }
 
+    @Test
+    @DisplayName(
+            "fetchAggregateSpec marks a failed service fetch in failedPrefixes without losing healthy paths (#1632)")
+    void fetchAggregateSpec_recordsFailedPrefixAndKeepsHealthyPaths_whenServiceFetchFails() {
+        // 404 is non-transient (isTransient), so the retry backoff never engages and the test stays fast.
+        WebClient client = swaggerConfigFallbackClient(
+                ClientResponse.create(HttpStatus.NOT_FOUND).build());
+        OpenApiDocumentFetcher fetcher = fetcherWith(client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/alpha/v1/things");
+        assertThat(result.failedPrefixes()).containsExactly("/failed");
+    }
+
+    @Test
+    @DisplayName(
+            "fetchAggregateSpec treats a 200-OK unparseable service body as a failure, not an empty service (#1632)")
+    void fetchAggregateSpec_recordsFailedPrefix_whenServiceBodyIsUnparseable() {
+        // OpenAPIV3Parser returns a result with null getOpenAPI() for garbage input (e.g. a proxy
+        // error page); that must land in failedPrefixes, never collapse to success-with-zero-paths.
+        WebClient client = swaggerConfigFallbackClient(ClientResponse.create(HttpStatus.OK)
+                .body("<html><body>502 Bad Gateway</body></html>")
+                .build());
+        OpenApiDocumentFetcher fetcher = fetcherWith(client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/alpha/v1/things");
+        assertThat(result.failedPrefixes()).containsExactly("/failed");
+    }
+
+    @Test
+    @DisplayName("fetchAggregateSpec reports no failedPrefixes when every service spec fetch succeeds (#1632)")
+    void fetchAggregateSpec_reportsNoFailedPrefixes_whenAllServiceFetchesSucceed() {
+        WebClient client = swaggerConfigFallbackClient(ClientResponse.create(HttpStatus.OK)
+                .body(serviceSpecJson("Failed", "/v1/other"))
+                .build());
+        OpenApiDocumentFetcher fetcher = fetcherWith(client, AGGREGATE_URL);
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKeys("/alpha/v1/things", "/failed/v1/other");
+        assertThat(result.failedPrefixes()).isEmpty();
+    }
+
     // --- helpers ---
 
     @Test
@@ -249,6 +301,38 @@ class OpenApiDocumentFetcherTest {
                 aggregateSpecUrl,
                 List.of());
         return new OpenApiDocumentFetcher(discoveryClient, webClient, props);
+    }
+
+    /**
+     * A WebClient driving {@code fetchAggregateSpec()} into the swagger-config fallback: the
+     * aggregate URL serves a valid zero-paths spec, swagger-config lists {@code /alpha} (a healthy
+     * one-path service) and {@code /failed} (whose response is supplied by the test).
+     */
+    private static WebClient swaggerConfigFallbackClient(ClientResponse failedServiceResponse) {
+        ExchangeFunction exchange = request -> Mono.just(
+                switch (request.url().getPath()) {
+                    case "/v3/api-docs" ->
+                        ClientResponse.create(HttpStatus.OK).body("""
+                            {"openapi":"3.0.1","info":{"title":"Positivity API Gateway","version":"v1"},"paths":{}}
+                            """).build();
+                    case "/v3/api-docs/swagger-config" ->
+                        ClientResponse.create(HttpStatus.OK).body("""
+                            {"urls":[{"url":"/alpha/v3/api-docs","name":"alpha"},{"url":"/failed/v3/api-docs","name":"failed"}]}
+                            """).build();
+                    case "/alpha/v3/api-docs" ->
+                        ClientResponse.create(HttpStatus.OK)
+                                .body(serviceSpecJson("Alpha", "/v1/things"))
+                                .build();
+                    case "/failed/v3/api-docs" -> failedServiceResponse;
+                    default -> throw new IllegalStateException("Unexpected request: " + request.url());
+                });
+        return WebClient.builder().exchangeFunction(exchange).build();
+    }
+
+    private static String serviceSpecJson(String title, String path) {
+        return """
+                {"openapi":"3.0.1","info":{"title":"%s","version":"v1"},"paths":{"%s":{"get":{"operationId":"list%s","responses":{"200":{"description":"ok"}}}}}}
+                """.formatted(title, path, title);
     }
 
     private static WebClient webClientReturning(String body) {

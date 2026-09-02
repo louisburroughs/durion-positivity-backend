@@ -39,6 +39,8 @@ mcp:
     open-api-path: /v3/api-docs
     discovery-timeout: 5s
     aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://localhost:8080/v3/api-docs}
+    # Max in-memory buffer per fetched OpenAPI spec during discovery (16MB; specs only grow, #1632).
+    discovery-max-spec-bytes: ${MCP_DISCOVERY_MAX_SPEC_BYTES:16777216}
     excluded-path-fragments:
       - /admin/
       - /actuator/

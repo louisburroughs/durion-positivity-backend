@@ -265,10 +265,28 @@ public class OpenApiDocumentFetcher {
                         .maxBackoff(DISCOVERY_RETRY_MAX_BACKOFF)
                         .filter(OpenApiDocumentFetcher::isTransient))
                 .map(raw -> deserialize(doc.routingPrefix(), raw))
-                .map(result -> prefixPaths(result.getOpenAPI(), doc.routingPrefix()))
-                .doOnNext(paths -> log.info(
-                        "Fetched service spec {} → {} paths (prefix {})", docUri, paths.size(), doc.routingPrefix()))
-                .map(paths -> ServiceFetchResult.success(doc.routingPrefix(), paths))
+                .map(result -> {
+                    OpenAPI openAPI = result.getOpenAPI();
+                    if (openAPI == null) {
+                        // OpenAPIV3Parser does not throw on garbage input — it returns a result
+                        // whose OpenAPI is null. A 200-OK non-spec body (proxy error page,
+                        // truncated spec) must be a failure, not a clean empty service, or the
+                        // #1121 prune deletes this domain's registered ops (#1632).
+                        log.warn(
+                                "Unparseable service spec at {} (prefix {}): {}",
+                                docUri,
+                                doc.routingPrefix(),
+                                result.getMessages());
+                        return ServiceFetchResult.failure(doc.routingPrefix());
+                    }
+                    Paths paths = prefixPaths(openAPI, doc.routingPrefix());
+                    log.info(
+                            "Fetched service spec {} → {} paths (prefix {})",
+                            docUri,
+                            paths.size(),
+                            doc.routingPrefix());
+                    return ServiceFetchResult.success(doc.routingPrefix(), paths);
+                })
                 // #1632: a failed fetch must stay distinguishable from an empty service. Collapsing
                 // to an empty Paths made a transient failure look like a removed service, and the
                 // #1121 prune then deleted that domain's previously-registered ops. Log the CAUSE
