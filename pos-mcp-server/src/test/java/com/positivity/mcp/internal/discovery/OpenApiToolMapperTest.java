@@ -235,7 +235,8 @@ class OpenApiToolMapperTest {
                 List.of(),
                 List.of(),
                 null,
-                excludedFragments);
+                excludedFragments,
+                Map.of());
     }
 
     private static McpServerProperties propertiesWithPrefixesAndExclusions(
@@ -249,7 +250,8 @@ class OpenApiToolMapperTest {
                 List.of(),
                 includedPrefixes,
                 null,
-                excludedFragments);
+                excludedFragments,
+                Map.of());
     }
 
     private static OpenAPI openApiWith(Map<String, PathItem> pathItems) {

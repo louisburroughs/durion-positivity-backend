@@ -41,6 +41,13 @@ mcp:
     aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://localhost:8080/v3/api-docs}
     # Max in-memory buffer per fetched OpenAPI spec during discovery (16MB; specs only grow, #1632).
     discovery-max-spec-bytes: ${MCP_DISCOVERY_MAX_SPEC_BYTES:16777216}
+    # Spec-identity guard (#1632 defect 3): a fetched per-service spec whose info.title does not
+    # contain its routing token is treated as a FAILED fetch (stale gateway/Eureka route serving
+    # another service's spec), so its previously-registered ops are kept, not replaced or pruned.
+    # Aliases list extra accepted title tokens for domains whose title doesn't name the domain.
+    spec-identity-aliases:
+      catalog: [product]        # pos-catalog's title is "Positivity Product API"
+      people: [human resources] # pos-people's title is "POS Human Resources Service API"
     excluded-path-fragments:
       - /admin/
       - /actuator/

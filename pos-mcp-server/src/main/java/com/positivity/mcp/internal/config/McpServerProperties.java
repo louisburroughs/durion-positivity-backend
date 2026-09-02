@@ -3,9 +3,16 @@ package com.positivity.mcp.internal.config;
 import io.modelcontextprotocol.server.transport.HttpServletSseServerTransportProvider;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * @param specIdentityAliases per-domain extra title tokens accepted by the spec-identity guard
+ *     (#1632 follow-up), keyed by routing token (routing prefix without the leading slash). Needed
+ *     where a service's OpenAPI {@code info.title} does not contain its routing token — e.g.
+ *     pos-catalog's title says "Product" and pos-people's says "Human Resources".
+ */
 @ConfigurationProperties(prefix = "mcp.server")
 public record McpServerProperties(
         @NonNull String baseUrl,
@@ -16,7 +23,8 @@ public record McpServerProperties(
         @NonNull List<String> includedServices,
         @NonNull List<String> includedPathPrefixes,
         String aggregateSpecUrl,
-        @NonNull List<String> excludedPathFragments) {
+        @NonNull List<String> excludedPathFragments,
+        @NonNull Map<String, List<String>> specIdentityAliases) {
     public McpServerProperties {
         if (baseUrl == null) {
             baseUrl = "http://localhost:8080";
@@ -42,6 +50,14 @@ public record McpServerProperties(
         if (excludedPathFragments == null) {
             excludedPathFragments = List.of();
         }
+        if (specIdentityAliases == null) {
+            specIdentityAliases = Map.of();
+        }
+    }
+
+    /** Extra accepted identity tokens for a routing token; empty when none are configured. */
+    public @NonNull List<String> identityAliasesFor(@NonNull String routingToken) {
+        return specIdentityAliases.getOrDefault(routingToken, List.of());
     }
 
     public boolean includesService(@NonNull String serviceId) {

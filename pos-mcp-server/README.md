@@ -198,6 +198,15 @@ Discovery runs once at startup. Set `mcp.server.discovery-refresh.enabled=true` 
 `mcp.server.discovery-refresh.interval-ms`, default 5 min) to periodically re-discover and pick up new or changed
 backend operations without a restart — re-registration is idempotent (each tool is removed then re-added).
 
+**Spec-identity guard (#1632).** After a rolling deploy, a stale Eureka registration can route a domain's doc URL to a
+*different* service (on alpha, `/invoice/v3/api-docs` briefly served pos-price's spec — 200 OK and parseable, so no
+transport or parse guard fires). Discovery therefore verifies each fetched per-service spec's `info.title` against its
+routing token and treats a mismatch as a **failed fetch**: the wrong domain's ops are not registered under the prefix,
+and the domain's previously-registered ops are kept, not pruned. Titles that are missing, blank, or springdoc's default
+(`OpenAPI definition`) are unverifiable and always pass. Domains whose title doesn't contain their routing token get
+extra accepted tokens via `mcp.server.spec-identity-aliases` (shipped defaults: `catalog: [product]`,
+`people: [human resources]` — keep these in sync if a service's OpenAPI title changes).
+
 ## Audit & Adaptive Tuning
 
 Every tool decision is logged (selected tool, semantic rank, final score, `selected`, `success`, `fallback_invoked`,

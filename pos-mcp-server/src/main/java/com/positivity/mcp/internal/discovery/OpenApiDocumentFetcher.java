@@ -12,6 +12,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.jspecify.annotations.NonNull;
@@ -282,6 +283,21 @@ public class OpenApiDocumentFetcher {
                                 result.getMessages());
                         return ServiceFetchResult.failure(doc.routingPrefix());
                     }
+                    if (identityMismatch(openAPI, doc.routingPrefix())) {
+                        // #1632 defect 3: a stale Eureka registration can route this prefix to a
+                        // DIFFERENT service's spec — 200 OK and parseable, so neither the transport
+                        // guard nor the parse guard fires, and the wrong domain's ops would be
+                        // registered under this prefix while the real ones are pruned as stale.
+                        // Treat a wrong-identity spec exactly like a failed fetch.
+                        log.warn(
+                                "Service spec at {} (prefix {}) has title '{}' which does not match the "
+                                        + "routing prefix — likely a stale gateway/Eureka route serving "
+                                        + "another service's spec; treating as a failed fetch (#1632)",
+                                docUri,
+                                doc.routingPrefix(),
+                                specTitle(openAPI));
+                        return ServiceFetchResult.failure(doc.routingPrefix());
+                    }
                     Paths paths = prefixPaths(openAPI, doc.routingPrefix());
                     log.info(
                             "Fetched service spec {} → {} paths (prefix {})",
@@ -365,6 +381,63 @@ public class OpenApiDocumentFetcher {
         return docs;
     }
 
+    /**
+     * Spec-identity guard (#1632 defect 3). True when the fetched spec's {@code info.title}
+     * verifiably belongs to a different service than {@code prefixOrServiceId} routes to. A spec
+     * whose title is missing, blank, or the springdoc default ("OpenAPI definition") is
+     * unverifiable and passes — the guard is best-effort and must never fail a service that simply
+     * hasn't configured a title. Titles that don't contain the routing token get a second chance
+     * via {@code mcp.server.spec-identity-aliases} (e.g. catalog → "product").
+     */
+    private boolean identityMismatch(@NonNull OpenAPI openAPI, @NonNull String prefixOrServiceId) {
+        String token = identityToken(prefixOrServiceId);
+        if (token.isEmpty()) {
+            return false;
+        }
+        return !specIdentityMatches(specTitle(openAPI), token, properties.identityAliasesFor(token));
+    }
+
+    private static @Nullable String specTitle(@NonNull OpenAPI openAPI) {
+        return openAPI.getInfo() != null ? openAPI.getInfo().getTitle() : null;
+    }
+
+    /**
+     * Normalizes a routing prefix or Eureka service id to the token the identity check matches on:
+     * leading slash and conventional {@code pos-} module prefix stripped, lowercased, non-alphanumerics
+     * removed ({@code "/vehicle-fitment"} → {@code "vehiclefitment"}, {@code "pos-order"} → {@code
+     * "order"}).
+     */
+    static @NonNull String identityToken(@NonNull String prefixOrServiceId) {
+        String stripped = prefixOrServiceId.startsWith("/") ? prefixOrServiceId.substring(1) : prefixOrServiceId;
+        String lower = stripped.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("pos-")) {
+            lower = lower.substring(4);
+        }
+        return lower.replaceAll("[^a-z0-9]", "");
+    }
+
+    /**
+     * True when {@code title} plausibly identifies the service {@code expectedToken} routes to: the
+     * normalized title contains the token or one of its configured aliases. Null/blank and the
+     * springdoc default title are unverifiable → true (never fail what can't be checked).
+     */
+    static boolean specIdentityMatches(
+            @Nullable String title, @NonNull String expectedToken, @NonNull List<String> aliases) {
+        if (title == null || title.isBlank()) {
+            return true;
+        }
+        String normalizedTitle = title.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        if (normalizedTitle.isEmpty() || normalizedTitle.equals("openapidefinition")) {
+            return true;
+        }
+        if (normalizedTitle.contains(expectedToken)) {
+            return true;
+        }
+        return aliases.stream()
+                .map(alias -> alias.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", ""))
+                .anyMatch(alias -> !alias.isEmpty() && normalizedTitle.contains(alias));
+    }
+
     /** Returns a copy of {@code serviceSpec}'s paths with {@code routingPrefix} prepended to each. */
     static @NonNull Paths prefixPaths(@Nullable OpenAPI serviceSpec, @NonNull String routingPrefix) {
         Paths prefixed = new Paths();
@@ -429,6 +502,20 @@ public class OpenApiDocumentFetcher {
                     OpenAPI openAPI = result.getOpenAPI();
                     if (openAPI == null) {
                         log.warn("Failed to parse OpenAPI for service {}: {}", serviceId, result.getMessages());
+                        return Mono.empty();
+                    }
+                    if (identityMismatch(openAPI, serviceId)) {
+                        // #1632 defect 3: the Eureka instance URI can be stale after a rolling
+                        // deploy (Docker reassigned the IP to another service), so this path is
+                        // just as exposed as the gateway one — and it backs the targeted
+                        // failed-prefix fallback, which must not re-register the wrong domain.
+                        log.warn(
+                                "OpenAPI for service {} at {} has title '{}' which does not match the "
+                                        + "service id — likely a stale Eureka instance serving another "
+                                        + "service's spec; skipping (#1632)",
+                                serviceId,
+                                apiDocUri,
+                                specTitle(openAPI));
                         return Mono.empty();
                     }
                     return Mono.just(new DiscoveredOpenApi(serviceId, baseUri, openAPI));

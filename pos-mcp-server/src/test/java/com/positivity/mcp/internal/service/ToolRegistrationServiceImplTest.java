@@ -25,6 +25,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -566,7 +567,8 @@ class ToolRegistrationServiceImplTest {
                 List.of(),
                 List.of(),
                 "http://gateway.test/v3/api-docs",
-                List.of());
+                List.of(),
+                Map.of());
         return new ToolRegistrationServiceImpl(
                 properties,
                 openApiDocumentFetcher,
@@ -587,7 +589,8 @@ class ToolRegistrationServiceImplTest {
                 includedServices,
                 List.of(),
                 "http://gateway.test/v3/api-docs",
-                List.of());
+                List.of(),
+                Map.of());
         return new ToolRegistrationServiceImpl(
                 properties,
                 openApiDocumentFetcher,
