@@ -95,7 +95,7 @@ public class SupplierTransmissionController {
                     the states, vendor and window an operator is working — above all attemptState=MANUAL_REVIEW, which
                     is the queue of transmissions waiting on a human (issue #1638 decision 6).
                     Use this tool for the operator worklist and for ledger-wide searches by order reference; use
-                    listSupplierTransmissionsForPurchaseOrder for one purchase order's history, and
+                    listSupplierTransmissionsForPurchaseOrder instead for one purchase order's history, and
                     getSupplierTransmission when the intent id is already known.
                     Preconditions: the caller must hold supplier:transmission:read; no filter is required and an
                     unfiltered call pages the whole ledger.

@@ -70,14 +70,14 @@ public class SupplierStockSnapshotController {
                     The two clocks matter: snapshotAsOf and issuedOn are the VENDOR's claims about the vendor's own
                     moment, while fetchedAt and completedAt are this platform's record of when it asked and finished
                     storing the answer. Staleness of the stock picture is judged against snapshotAsOf — a report
-                    fetched a minute ago can describe yesterday's warehouse. Snapshots carrying no vendor-stated
+                    fetched a minute ago can describe yesterday's warehouse — and snapshots carrying no vendor-stated
                     instant (a failed or unparseable fetch) never outrank one that has one.
                     Use this tool to resolve the snapshotId to browse and to judge how fresh and complete the latest
                     report is; do not use it to ask what the vendor holds right now, which is the live stock inquiry
                     under supplier:stock:inquire.
                     Preconditions: the caller must hold supplier:stocksnapshot:read.
                     Required inputs: vendorProfileId (UUIDv7) as a path parameter; there is no request body.
-                    Emits a SUPPLIER_STOCK_SNAPSHOT_GET event. Read-only; no vendor call is made.
+                    Emits a SUPPLIER_STOCK_SNAPSHOT_GET event; read-only, and no vendor call is made.
                     Returns 200 with the metadata, or 404 when the profile has no snapshot — including for an unknown
                     vendorProfileId, since snapshots deliberately outlive profile configuration and are the only
                     record consulted here.
@@ -126,17 +126,17 @@ public class SupplierStockSnapshotController {
                     Pages are addressed by the immutable snapshotId rather than by "latest" on purpose: a snapshot is
                     append-only and never changes, so every page of one browse describes the same snapshot even if a
                     newer report arrives mid-browse — paging "latest" directly would silently switch documents
-                    between pages. Resolve the id with getLatestSupplierStockSnapshot first.
+                    between pages, so resolve the id with getLatestSupplierStockSnapshot first.
                     A line's availableQuantity is nullable and the nullability is the contract: null means the vendor
                     reported the article WITHOUT stating a quantity, zero means it explicitly reported none.
                     Use this tool to browse or look an article up in what the vendor last reported; do not use it for
                     a live availability check, which is the stock inquiry under supplier:stock:inquire.
                     Preconditions: the caller must hold supplier:stocksnapshot:read and the snapshot must exist under
                     the given vendor profile.
-                    Required inputs: vendorProfileId and snapshotId (UUIDv7) as path parameters. Optional inputs:
-                    search, matched case-insensitively as a contains-match against the article EAN, the vendor's
-                    article code and the description; page defaults to 0 and size to 50, at most 200.
-                    Emits a SUPPLIER_STOCK_SNAPSHOT_LINES_LIST event. Read-only; no vendor call is made.
+                    Required inputs: vendorProfileId and snapshotId (UUIDv7) as path parameters; optional search is
+                    matched case-insensitively as a contains-match against the article EAN, the vendor's article
+                    code and the description, and page defaults to 0 with size 50, at most 200.
+                    Emits a SUPPLIER_STOCK_SNAPSHOT_LINES_LIST event; read-only, and no vendor call is made.
                     Returns 200 with an empty items array when nothing matches the search, 404 when the snapshot does
                     not exist or does not belong to the given vendorProfileId, and 400 when the page size is outside
                     the permitted range.

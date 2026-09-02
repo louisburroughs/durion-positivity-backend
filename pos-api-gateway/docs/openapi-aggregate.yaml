@@ -979,6 +979,8 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1revisions
   /v1/orders/purchase-orders/{poId}/supplier-availability:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1supplier-availability
+  /v1/orders/purchase-orders/{poId}/transmission-events:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1transmission-events
   /v1/orders/purchase-orders/{poId}/transmit:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1transmit
   /v1/orders/sessions:
@@ -1321,6 +1323,8 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1accesses
   /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/payload:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1payload
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/freshness:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1price-catalog~1{vendorProfileId}~1freshness
   /v1/supplier/admin/price-catalog/{vendorProfileId}/imports:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1price-catalog~1{vendorProfileId}~1imports
   /v1/supplier/admin/price-catalog/{vendorProfileId}/quarantine/reapply:
@@ -1361,14 +1365,22 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1mktcat~1{supplierRef}~1imports
   /v1/supplier/mktcat/{supplierRef}/variants:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1mktcat~1{supplierRef}~1variants
+  /v1/supplier/stock/availability:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1stock~1availability
   /v1/supplier/stock/inquiries:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1stock~1inquiries
+  /v1/supplier/transmissions:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1transmissions
   /v1/supplier/transmissions/purchase-order/{purchaseOrderId}:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1transmissions~1purchase-order~1{purchaseOrderId}
   /v1/supplier/transmissions/{transmissionIntentId}:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1transmissions~1{transmissionIntentId}
   /v1/supplier/transmissions/{transmissionIntentId}/resolve:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1transmissions~1{transmissionIntentId}~1resolve
+  /v1/supplier/vendor-profiles/{vendorProfileId}/stock-snapshots/latest:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendor-profiles~1{vendorProfileId}~1stock-snapshots~1latest
+  /v1/supplier/vendor-profiles/{vendorProfileId}/stock-snapshots/{snapshotId}/lines:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendor-profiles~1{vendorProfileId}~1stock-snapshots~1{snapshotId}~1lines
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
   /v1/tax/exemption-certificates:

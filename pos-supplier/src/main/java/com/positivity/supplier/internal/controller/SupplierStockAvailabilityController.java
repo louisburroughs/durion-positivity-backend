@@ -115,36 +115,30 @@ public class SupplierStockAvailabilityController {
             summary = "Check a product's live availability across all enabled stock-inquiry vendors",
             description = """
                     Resolves the named catalog product to its vendor-queryable article identity internally and asks \
-                    every enabled STOCK_INQUIRY vendor binding concurrently, for the named receiving location; \
-                    availability is consignee-specific, so an answer for one location is never valid for another. \
-                    No EAN, UPC or vendor article code appears in the request or the response — product-to-vendor \
-                    identity mapping is a backend implementation detail.
+                    every enabled STOCK_INQUIRY vendor binding concurrently, for the named receiving location; no \
+                    EAN, UPC or vendor article code appears in the request or the response, because product-to-vendor \
+                    identity mapping stays a backend implementation detail.
                     Use this tool when composing a product panel that must show what every configured vendor holds \
                     right now; use the per-vendor inquiry instead when the caller already knows exactly which \
                     vendor to ask.
-                    Required inputs: exactly one of productId or sku (naming neither, or both, is a 400), plus \
-                    deliveryLocationId; quantity is optional, at least 1, default 1.
-                    The whole fan-out runs under a configured deadline, so latency is bounded rather than set by the \
-                    slowest vendor: a vendor that has not answered when the deadline expires is reported as \
-                    SUPPLIER_UNAVAILABLE, exactly like an unreachable one, and the vendors that did answer are \
-                    returned alongside it — the response is partial by design and every combination of per-vendor \
-                    outcomes is a 200. An empty vendors list means no vendor is configured for stock inquiry, which \
-                    is also a valid 200.
-                    Each vendor result carries two distinct instants: fetchedAt is when this platform obtained the \
-                    answer — a cached answer keeps the instant of the original vendor call, so vendors may show \
-                    different fetch times — and asOf is the observation time the vendor stated (the fetch instant \
-                    when its protocol states none). The stale flag is judged from asOf against the backend-owned \
-                    stalenessThreshold echoed in the response, so every client applies the same freshness rule.
-                    availableQuantity is the canonical item/piece count the vendor can supply; no unit of measure or \
-                    warehouse name travels, because the supplier wire data carries neither. A null quantity means \
-                    the vendor stated nothing; zero means it stated it has none; only the second justifies showing \
-                    a customer that an article is out of stock.
-                    Emits a SUPPLIER_STOCK_AVAILABILITY_GET event; the read creates nothing and changes nothing, and \
-                    repeating it within the per-vendor cache window re-serves cached answers without new vendor \
-                    calls.
-                    Returns 400 when neither or both of productId and sku are given, or quantity is below 1; 404 \
-                    when the product identity resolves to no vendor-queryable code in the catalog replica; 403 when \
-                    the caller lacks supplier:stockavailability:read.
+                    Preconditions: availability is consignee-specific, so the answer is valid only for the named \
+                    delivery location, and the product must resolve to a code in the catalog replica.
+                    Required inputs: exactly one of productId or sku, plus deliveryLocationId; quantity is optional, \
+                    at least 1, default 1.
+                    The fan-out runs under a configured deadline — a vendor that has not answered in time is \
+                    reported as SUPPLIER_UNAVAILABLE while the vendors that did answer are returned alongside it, so \
+                    the response is partial by design and every combination of per-vendor outcomes, an empty vendors \
+                    list included, is a 200.
+                    Each vendor result carries fetchedAt (when this platform obtained the answer; a cached answer \
+                    keeps its original fetch instant) and the vendor-stated observation time asOf, and the stale \
+                    flag is judged from asOf against the backend-owned stalenessThreshold echoed in the response so \
+                    every client applies the same freshness rule.
+                    Emits a SUPPLIER_STOCK_AVAILABILITY_GET event; availableQuantity is the canonical item/piece \
+                    count — null means the vendor stated nothing, zero means it stated it has none, and no unit of \
+                    measure or warehouse name travels because the supplier wire data carries neither.
+                    Returns 400 when neither or both of productId and sku are given or quantity is below 1, 404 \
+                    when the product identity resolves to no vendor-queryable code, and 403 when the caller lacks \
+                    supplier:stockavailability:read.
                     """)
     @ApiResponse(
             responseCode = "200",

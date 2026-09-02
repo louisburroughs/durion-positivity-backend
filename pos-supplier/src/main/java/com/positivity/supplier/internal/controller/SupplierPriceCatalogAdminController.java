@@ -403,9 +403,9 @@ public class SupplierPriceCatalogAdminController {
                     Preconditions: the caller must hold supplier:pricecatalog:read; the profile need not have imported
                     anything — a never-fetched profile reports stale=true with null timestamps, not an error.
                     Required inputs: vendorProfileId (UUIDv7) as a path parameter.
-                    Emits a SUPPLIER_PRICECATALOG_FRESHNESS_GET event; no state changes and no vendor call is made.
-                    The stale verdict is computed server-side against the returned threshold so every client behaves
-                    consistently; the threshold is catalog-currency policy and is unrelated to any cache TTL.
+                    Emits a SUPPLIER_PRICECATALOG_FRESHNESS_GET event; no state changes and no vendor call is made,
+                    and the stale verdict is computed server-side against the returned threshold — catalog-currency
+                    policy unrelated to any cache TTL — so every client behaves consistently.
                     Returns 200 with the freshness view, and 404 only when the vendor profile does not exist.
                     """)
     @ApiResponse(
