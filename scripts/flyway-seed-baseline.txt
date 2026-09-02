@@ -21,6 +21,7 @@ pos-catalog/R__seed_reference_catalog_2_products.sql tier2
 pos-catalog/R__seed_reference_catalog_3_services.sql tier2
 pos-catalog/R__seed_reference_catalog_4_pricing.sql tier2
 pos-catalog/R__seed_reference_catalog_5_uom.sql tier2
+pos-catalog/R__seed_reference_catalog_6_labor_guide.sql tier2
 pos-customer/R__seed_customer_operational_data.sql tier2
 pos-inventory/R__seed_reference_inventory.sql tier1
 pos-invoice/R__seed_reference_invoice.sql tier1

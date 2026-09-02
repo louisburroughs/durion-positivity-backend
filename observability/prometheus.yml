@@ -316,6 +316,17 @@ scrape_configs:
           service: 'pos-workorder'
           application: 'pos-workorder'
 
+  # The labor-guide mock vendor (#1569 Phase 1, sourcing plan §10). No basic_auth on purpose:
+  # it simulates an external vendor outside the JWT boundary, so its actuator is open on the
+  # compose network and serves metrics on the service port (8095, no separate management port).
+  - job_name: 'pos-reference-mock'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-reference-mock:8095']
+        labels:
+          service: 'pos-reference-mock'
+          application: 'pos-reference-mock'
+
   # Kafka exporter (#838): topic depth (DLQ), consumer lag, manifest activity
   - job_name: 'kafka-exporter'
     static_configs:

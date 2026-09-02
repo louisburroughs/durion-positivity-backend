@@ -55,6 +55,22 @@ flag per part line (resolved order-spec Q6 — set at settlement time, never inf
 with approval status) on every estimate mutation, feeding pos-order's source-document import
 replicas. Both are gated by `workorder.kafka.enabled`.
 
+## Estimated labor hours and guide-time defaulting (#1569)
+
+A LABOR estimate item naming a `serviceId` asks the catalog labor guide for its book time via
+`CatalogLaborTimeClientImpl` — the module's one granted synchronous edge to pos-catalog
+(ADR-0044 amendment 2026-09-02, file-scoped). The guide answer is always snapshotted onto the
+line (`guide_hours` + source/revision/match-grade/overlap metadata) and becomes the `quantity`
+only when the writer omitted it: a prefill, never a lock, and `quantity` remains the agreed
+hours. The vehicle key comes from `VehicleReferenceService` (CRM year/make/model, fail-soft).
+When the edge cannot answer, the `ext_catalog_service` replica's vehicle-agnostic
+`default_labor_hours` (fed by `catalog.service.updated` schema v2) prefills instead; failing
+that the writer types the hours — estimating never blocks on a guide. Promotion carries the
+snapshot onto `workorder_service`, and `EstimatedLaborService` computes the overlap-aware
+`estimatedLaborHours` (included operations contribute zero; overlap-group lines contribute
+max + `pos.workorder.labor.overlap-additional-factor` × the rest) for the dashboard summary
+and the detail response, which also exposes `actualLaborHours` and the labor variance.
+
 ## Customer notes on a workorder (#1584)
 
 A note about the customer — something they said while the job was open, not a note about the work —

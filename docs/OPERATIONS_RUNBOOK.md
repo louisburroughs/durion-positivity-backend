@@ -855,6 +855,31 @@ Until producers emit the full `DomainEventEnvelope` (with `aggregateVersion`), m
 **lost/undelivered events**, not corrupted-in-place replica rows; per-aggregate state comparison
 arrives with the envelope migration (Phase 1/2).
 
+## Labor-Guide Imports (pos-catalog, #1569)
+
+Estimated service times enter `service_labor_standard` through operator-triggered feed imports
+from STORE-licensed sources — never a lazy read-through refresh, so the quote path never pays
+vendor latency. Full design: `pos-catalog/docs/service-time-sourcing-plan.md`.
+
+- **Trigger an import** (`catalog:labor_standard:import`):
+  `POST /v1/catalog/labor-guide-imports?sourceCode=MOCKGUIDE`. Re-running a revision resumes
+  from the first missing chunk; an already-COMPLETE revision is a recorded no-op.
+- **Check completeness**: `GET /v1/catalog/labor-guide-imports/incomplete` lists revisions whose
+  chunks or line counts have not reconciled (status `APPLYING` or `INCOMPLETE`); re-run the
+  import to resume. COMPLETE is a counted fact — every expected chunk applied and the line
+  count matched the vendor's manifest.
+- **Curate unmapped operations**: `GET /v1/catalog/labor-guide-imports/unmapped` lists vendor
+  codes no `service_operation_xref` row maps (entries suffixed `#<TYPE>` carry a time class the
+  platform does not model). Add the xref row (or decide the code is not wanted), then re-run
+  the import — mapping is deliberate curation, never automatic.
+- **Source precedence** is data: `labor_time_source_policy` rows order sources per time type
+  (lower `precedence` wins) and are seeded by `R__seed_reference_catalog_6_labor_guide.sql`;
+  edit rows rather than code to re-rank sources.
+- **Degradation**: if the resolve edge is down, pos-workorder prefills from its
+  `ext_catalog_service` replica's `default_labor_hours` (fed by `catalog.service.updated`
+  schema v2) and, failing that, the service writer types the hours — estimating never blocks
+  on a guide.
+
 ## Related Documentation
 
 - **Platform-level runbook**: `durion/docs/OPERATIONS_RUNBOOK.md`

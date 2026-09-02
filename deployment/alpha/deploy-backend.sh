@@ -335,6 +335,9 @@ DOMAIN_SERVICES=(
   pos-vehicle-inventory
   pos-accounting
   pos-bulk-loader
+  # The labor-guide mock vendor precedes pos-catalog, which is configured to reach it
+  # (same-or-earlier-batch convention, like pos-vehicle-inventory before pos-customer).
+  pos-reference-mock
   pos-catalog
   pos-customer
   pos-documents

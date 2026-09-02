@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: pos-reference-mock
+
+# Fixed port per service-time-sourcing-plan §10 (8080 gateway / 8761 eureka / 8090 bulk-loader
+# taken). Deliberately NOT server.port: 0 — this app simulates an external vendor outside the
+# platform mesh: no Eureka registration, no gateway route, no JWT. Adapters reach it only via
+# base-url config (e.g. pos.catalog.labor-guide.providers[mockguide].base-url).
+server:
+  port: 8095
+  tomcat:
+    max-http-header-size: 65536
+
+# Metrics on the service port, unauthenticated: the mock simulates an external vendor with no
+# JWT boundary, and the prometheus scrape job for it carries no basic_auth (unlike platform
+# services). The compose healthcheck deliberately probes the feed-manifest endpoint, not
+# /actuator/health — it proves the vendor API is serving, not just that the app is up.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+logging:
+  level:
+    root: INFO
+    com:
+      positivity:
+        referencemock: INFO

@@ -48,6 +48,26 @@ pos:
     base-path: /v1/price
     default-customer-tier-id: ${POS_PRICE_DEFAULT_CUSTOMER_TIER_ID:00000000-0000-0000-0000-000000000001}
   catalog:
+    labor-guide:
+      # Estimated-service-time sourcing (#1569 Phase 1, sourcing plan §3.3/§5.1). Phase 1 runs
+      # the pos-reference-mock vendor twice: once STORE (exercises the chunked import) and once
+      # QUERY_ONLY (exercises the live path + TTL cache). Cutover to a licensed vendor in
+      # Phase 2 is a roster edit here, not code. prod/alpha set enabled: false in their
+      # profiles until a licensed source exists.
+      enabled: ${POS_CATALOG_LABOR_GUIDE_ENABLED:true}
+      mock-base-url: ${POS_CATALOG_LABOR_GUIDE_MOCK_URL:http://pos-reference-mock:8095}
+      providers:
+        - source-code: MOCKGUIDE
+          adapter: mockguide
+          base-url: ${pos.catalog.labor-guide.mock-base-url}
+          license-mode: STORE
+          default-precedence: 100
+        - source-code: MOCKGUIDE_LIVE
+          adapter: mockguide
+          base-url: ${pos.catalog.labor-guide.mock-base-url}
+          license-mode: QUERY_ONLY
+          default-precedence: 110
+          cache-ttl-seconds: 300
     kafka:
       # Inventory availability/lead-time replica feed + reconciliation (ADR-0044 §6, #899), and the
       # catalog.product.updated fact producer (#924).

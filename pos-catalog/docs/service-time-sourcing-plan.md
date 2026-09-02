@@ -1,10 +1,18 @@
 # Service Time Estimate Sourcing Plan (and Parts-Fitment Sourcing Mirror)
 
-**Status:** DRAFT for vetting — round 1. Load-bearing decisions (§4.1 keying, §3.1 pattern,
-naming, licensing gate, timekeeping boundary) are drafted as durion ADR-0058/ADR-0059
-(PROPOSED). Phase 0 plus the §4.4 DURION authoring surface (V17/V18, taxonomy fields,
-`/labor-standards` CRUD, permissions, event ids) landed under #1569; the §6 transport
-decision remains PENDING until the consumer side is built.
+**Status:** Phases 0–1 IMPLEMENTED (#1569; Phase 0 merged via PR #1631, Phase 1 on the
+follow-up branch). Load-bearing decisions are recorded in durion ADR-0058/ADR-0059; the §6
+transport split was ratified by the ADR-0044 amendment dated 2026-09-02 (ADR-0058 §5 now
+Resolved). Deliberate Phase-1 deviations from the sketches below: the fact bump reuses
+`CatalogServiceUpdatedV1` with `SCHEMA_VERSION = 2` (repo precedent: `ProductUpdatedV1`)
+rather than a new `V2` class; import completeness is verified by counted chunks/lines with the
+vendor checksum recorded for audit rather than recomputed; overlap arithmetic v1 is
+`max(group) + factor × others` with `pos.workorder.labor.overlap-additional-factor`
+(default 0.5) per §12 Q6; `CATALOG_LABOR_GUIDE_IMPORT` registered at the `approval`
+threshold rather than the `write` sketched in §4.4 — an import rewrites priced reference
+data wholesale, so it warrants the strictest preset (rationale in `CatalogEventTypes`).
+Next: Phase 2 (licensed aggregator) is gated on procurement per
+§5.4; the §9 fitment mirror track is untouched.
 **Owner module:** pos-catalog (system of record per decision recorded on
 [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569), 2026-08-29)
 **Inputs:** [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569)
@@ -369,8 +377,9 @@ corrections need a human write path, not just feeds:
   `CATALOG_LABOR_STANDARD_CREATE/SUPERSEDE` (`write`), `CATALOG_LABOR_STANDARD_LIST`
   (`search`). There is deliberately no `..._UPDATE` — rows are corrected by supersession
   only, so an update event would name an operation the API refuses. Phase 1 adds
-  `CATALOG_LABOR_GUIDE_IMPORT` (`write`) and `CATALOG_LABOR_TIME_RESOLVE` (`fastRead`) with
-  their endpoints.
+  `CATALOG_LABOR_GUIDE_IMPORT` (`approval` — an import rewrites priced reference data
+  wholesale; deviation from the original `write` sketch recorded in the Status header) and
+  `CATALOG_LABOR_TIME_RESOLVE` (`fastRead`) with their endpoints.
 - Vehicle-key strings are stored and deduplicated case-sensitively for now; canonical casing
   arrives with the §4.3 vocabulary alignment in Phase 1 rather than as an ad-hoc rule here.
 
@@ -576,7 +585,11 @@ Deliverables:
    unmapped queue becomes real work (assign owner).
 4. Scale pass: import volume (aggregator feeds are millions of rows once vehicle-keyed) —
    partitioning/pruning decision on `service_labor_standard`, import batch sizing, resolve-path
-   latency budget (< 50 ms p95 inside pos-catalog).
+   latency budget (< 50 ms p95 inside pos-catalog). Includes revisiting `ux_sls_active_key`:
+   the Phase-1 partial unique index has no `source_code` column, so once two STORE sources
+   publish the same (service, vehicle-key, time-type) the second import's insert collides
+   with the first source's active row — multi-source storage needs the source in the active
+   key (or a cross-source supersession rule) before a second STORE feed is enabled.
 5. Attribution rendering on estimate/quote documents per license.
 6. The mock is retired from *default* config but kept green in CI as the contract-test double
    for the SPI (adapters are additionally contract-tested against recorded vendor fixtures).

@@ -129,14 +129,17 @@ public class VehicleReferenceService {
     }
 
     private @NonNull VehicleReference toReference(@NonNull Map<String, Object> payload, @NonNull UUID vehicleId) {
+        String year = extract(payload, "year");
+        String make = extract(payload, "make");
+        String model = extract(payload, "model");
         String label = firstNonBlank(
-                composeLabel(extract(payload, "year"), extract(payload, "make"), extract(payload, "model")),
+                composeLabel(year, make, model),
                 extract(payload, "description"),
                 extract(payload, "vehicleInfo"),
                 extract(payload, "displayName"),
                 "vehicle-" + vehicleId);
         String vin = firstNonBlank(extract(payload, "vin"), extract(payload, "vinNormalized"));
-        return new VehicleReference(label, vin);
+        return new VehicleReference(label, vin, year, make, model);
     }
 
     private @Nullable String composeLabel(@Nullable String year, @Nullable String make, @Nullable String model) {
@@ -186,8 +189,24 @@ public class VehicleReferenceService {
         return null;
     }
 
+    /**
+     * A resolved vehicle. {@code vehicleInfo} is the display label; the raw {@code year} /
+     * {@code make} / {@code model} fields (#1569) are the labor-time vehicle key — null when
+     * the CRM record does not state them, which correctly widens the labor-time match rather
+     * than inventing a vehicle.
+     */
     public record VehicleReference(
-            @Nullable String vehicleInfo, @Nullable String vin) {
+            @Nullable String vehicleInfo,
+            @Nullable String vin,
+            @Nullable String year,
+            @Nullable String make,
+            @Nullable String model) {
+
+        /** Label-and-vin form for callers that predate the labor-time key fields. */
+        public VehicleReference(@Nullable String vehicleInfo, @Nullable String vin) {
+            this(vehicleInfo, vin, null, null, null);
+        }
+
         public static @NonNull VehicleReference empty() {
             return new VehicleReference("", null);
         }

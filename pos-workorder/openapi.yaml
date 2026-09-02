@@ -6250,7 +6250,7 @@ components:
           format: uuid
           type: string
         quantity:
-          description: Requested quantity
+          description: 'Requested quantity (hours for LABOR). Required, EXCEPT on a LABOR item that names a serviceId: omitting it there asks the labor guide to prefill the book time (#1569); when no guide time is available the request is rejected and an explicit quantity must be sent. A supplied quantity always wins over the guide.'
           example: 2
           minimum: 0.0001
           type: number
@@ -6274,7 +6274,6 @@ components:
           type: string
       required:
       - itemType
-      - quantity
       - unitPrice
       type: object
     AddWorkorderNoteRequest:
@@ -9176,6 +9175,10 @@ components:
     WorkorderDetailResponse:
       description: Comprehensive workorder detail with role-based visibility
       properties:
+        actualLaborHours:
+          description: Actual technician hours clocked across all service lines, in hours.
+          example: 2.9
+          type: number
         assignedTechnicianId:
           description: Assigned technician ID
           example: 550e8400-e29b-41d4-a716-446655440004
@@ -9202,6 +9205,10 @@ components:
           description: Customer name
           example: John Doe
           type: string
+        estimatedLaborHours:
+          description: Overlap-aware sum of the agreed labor hours across active service lines, in tenths. Null when no line carries hours.
+          example: 3.4
+          type: number
         estimatedTotal:
           description: Estimated total (conditionally included based on canViewFinancials)
           example: 1245.5
@@ -9221,6 +9228,14 @@ components:
         laborTotal:
           description: Total labor cost (conditionally included)
           example: 425.0
+          type: number
+        laborVarianceHours:
+          description: actualLaborHours minus estimatedLaborHours; positive means the job ran over the estimate. Null unless both operands exist.
+          example: -0.5
+          type: number
+        laborVariancePct:
+          description: Labor variance as a percentage of the estimate. Null unless both operands exist and the estimate is non-zero.
+          example: -14.7
           type: number
         parts:
           description: Part line items with usage totals

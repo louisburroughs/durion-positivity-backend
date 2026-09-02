@@ -387,14 +387,18 @@ class ArchitectureTests {
      * grant maps in {@link DomainWallsTest} — an entry without a justification is how a grant
      * list quietly stops meaning anything.
      *
-     * <p>Today the platform has exactly one granted type: {@code SupplierStockService}, per the
-     * ADR-0044 amendment dated 2026-08-10 ("Live supplier stock inquiry is the single approved
-     * synchronous cross-module supplier read"). Adding an entry here requires an ADR amendment.
+     * <p>The platform holds two granted types: {@code SupplierStockService} (ADR-0044 amendment
+     * 2026-08-10) and {@code ServiceLaborTimeService} (#1569, ADR-0044 amendment 2026-09-02,
+     * ADR-0058 §5). Adding an entry here requires an ADR amendment.
      */
     private static final Map<String, String> GRANTED_GRANT_SURFACE_TYPES = Map.of(
             "com.positivity.supplier.service.SupplierStockService",
-            "sole granted type — ADR-0044 amendment 2026-08-10: live supplier stock inquiry is the"
-                    + " single approved synchronous cross-module supplier read");
+            "ADR-0044 amendment 2026-08-10: live supplier stock inquiry is an approved"
+                    + " synchronous cross-module supplier read",
+            "com.positivity.catalog.service.ServiceLaborTimeService",
+            "ADR-0044 amendment 2026-09-02 (#1569, ADR-0058 §5): vehicle-specific labor-time"
+                    + " resolution at quote time; sole approved caller is pos-workorder's"
+                    + " CatalogLaborTimeClientImpl");
 
     /** Package roots a granted grant-surface type may depend on besides its own grant surface. */
     private static final List<String> GRANT_SURFACE_ALLOWED_SHARED_ROOTS = List.of(

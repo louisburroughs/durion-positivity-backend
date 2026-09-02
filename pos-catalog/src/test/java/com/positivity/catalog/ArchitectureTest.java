@@ -119,14 +119,18 @@ public class ArchitectureTest {
     static final ArchRule only_service_layer_should_be_public_api = classes()
             .that()
             .resideInAPackage("com.positivity.catalog.service..")
+            .and()
+            // Grant-statement javadoc holders, not API types (pos-supplier convention).
+            .doNotHaveSimpleName("package-info")
             .should()
             .bePublic()
             .allowEmptyShould(true)
             .because("service layer is the public API of this module");
 
     // ADR-0026 D4: the public service package is a grant surface. Grant-surface types may not
-    // depend on this module's internal implementation. pos-catalog holds no grant, so this package
-    // is empty; the rule (with allowEmptyShould) keeps it honest if a grant is ever added.
+    // depend on this module's internal implementation. pos-catalog holds one grant —
+    // ServiceLaborTimeService and its service.model records (#1569, ADR-0044 amendment
+    // 2026-09-02, ADR-0058 §5) — so this rule is now load-bearing, not just honest-keeping.
     // Package patterns are exact-anchored on purpose: "com.positivity.catalog.service.." must NOT
     // match "com.positivity.catalog.internal.service".
     @ArchTest
@@ -194,19 +198,26 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule service_package_should_only_contain_interfaces = classes()
             .that()
-            .resideInAPackage("com.positivity.catalog.service..")
+            .resideInAPackage("com.positivity.catalog.service")
             .and()
-            .areNotInterfaces()
-            .and()
-            .areNotEnums()
-            .and()
-            .areNotAnnotations()
-            .and()
-            .areNotAnonymousClasses()
-            .and()
-            .areNotInnerClasses()
+            .doNotHaveSimpleName("package-info")
             .should()
             .beInterfaces()
             .allowEmptyShould(true)
-            .because("only interfaces are allowed in com.positivity.catalog.service");
+            .because("com.positivity.catalog.service is the contract-only interface surface (ADR-0026);"
+                    + " contract DTO records live in service.model, mirroring the pos-supplier convention");
+
+    @ArchTest
+    static final ArchRule service_model_should_contain_only_records_and_enums = classes()
+            .that()
+            .resideInAPackage("com.positivity.catalog.service.model")
+            .and()
+            .doNotHaveSimpleName("package-info")
+            .should()
+            .beRecords()
+            .orShould()
+            .beEnums()
+            .allowEmptyShould(true)
+            .because("service.model carries immutable contract DTOs (records/enums) only,"
+                    + " mirroring the pos-supplier service.model convention (ADR-0026)");
 }

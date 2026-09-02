@@ -32,3 +32,10 @@ eureka:
   instance:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.uuid}
+
+pos:
+  catalog:
+    labor-guide:
+      # Local JVM dev: the mock runs standalone on localhost (cd pos-reference-mock && ../mvnw
+      # spring-boot:run); the compose hostname only resolves on pos-network.
+      mock-base-url: http://localhost:8095

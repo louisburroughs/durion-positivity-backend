@@ -80,6 +80,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final VehicleReferenceService vehicleReferenceService;
     private final EstimateFactPublisher estimateFactPublisher;
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
+    private final LaborTimeDefaultingService laborTimeDefaultingService;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -903,17 +904,44 @@ public class EstimateServiceImpl implements EstimateService {
             throw new IllegalArgumentException("uomCode is not valid for LABOR items");
         }
 
+        // Guide-time defaulting (#1569, sourcing plan §6.3 item 1): a LABOR line naming a
+        // catalog service asks the labor guide for its book time. The guide answer is always
+        // snapshotted as the baseline; it becomes the quantity only when the writer sent none —
+        // a prefill, never a lock. A writer's explicit quantity is the agreed hours and wins.
+        LaborTimeDefaultingService.GuideDefault guide = null;
+        BigDecimal quantity = request.getQuantity();
+        if (request.getItemType() == EstimateItemType.LABOR && request.getServiceId() != null) {
+            guide = laborTimeDefaultingService
+                    .lookupGuideTime(request.getServiceId(), estimate.getCustomerId(), estimate.getVehicleId())
+                    .orElse(null);
+            if (quantity == null && guide != null) {
+                quantity = guide.hours();
+            }
+        }
+        if (quantity == null) {
+            // Bean validation lets quantity be omitted only for guide-eligible LABOR lines; a
+            // guide miss must surface as a request problem, not a null-quantity row.
+            throw new IllegalArgumentException(
+                    "quantity is required: no labor guide time is available for this service and vehicle");
+        }
+
         // Build and validate item
         EstimateItem item = EstimateItem.builder()
                 .estimate(estimate)
                 .itemType(request.getItemType())
                 .description(request.getDescription())
-                .quantity(request.getQuantity())
+                .quantity(quantity)
                 .uomCode(normalizedUomCode)
                 .unitPrice(request.getUnitPrice())
                 .taxCode(request.getTaxCode())
                 .productId(request.getProductId())
                 .serviceId(request.getServiceId())
+                .guideHours(guide == null ? null : guide.hours())
+                .guideSourceCode(guide == null ? null : guide.sourceCode())
+                .guideSourceRevision(guide == null ? null : guide.sourceRevision())
+                .guideMatchGrade(guide == null ? null : guide.matchGrade())
+                .guideOverlapGroup(guide == null ? null : guide.overlapGroup())
+                .guideIncludedOpCodes(guide == null ? null : guide.includedOpCodes())
                 .createdById(username)
                 .build();
 

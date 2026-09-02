@@ -209,6 +209,14 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # Fake external labor-guide vendor (#1569 Phase 1, sourcing plan §10). Runs in alpha so the
+  # labor-guide flow can be demoed there, but pos-catalog's alpha profile ships with
+  # pos.catalog.labor-guide.enabled=false, so nothing calls it until that flag is flipped.
+  pos-reference-mock:
+    image: ${ECR_REGISTRY}/durion/pos-reference-mock:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+
   pos-security-service:
     image: ${ECR_REGISTRY}/durion/pos-security-service:${BACKEND_TAG}
     restart: unless-stopped
