@@ -356,7 +356,7 @@ revenue/completions/hours is now itself a real feature of the data an answer may
   sections, zero SQL errors) after the TRACKB seed applied cleanly (2,257 inserts; the
   live-schema reconciliation touched only pos_customer_db party column lists — numbers
   untouched). The tables above transcribe that run's output
-  (checked-in `runs/2026-09-02-alpha-run.log`); each transcription was cross-checked line-by-line and by
+  (checked-in `runs/2026-09-02-alpha-run.txt`); each transcription was cross-checked line-by-line and by
   the delta arithmetic in the policy section.
 - Every seed contribution measured live matched the DATASET.md analytic derivation and the
   prior throwaway-Postgres run exactly. No contradiction found — the only differences from

@@ -16,7 +16,7 @@ counts and currency, ±0.5 % for derived ratios).
 - Seed: WRITTEN and APPLIED to alpha (2,257 rows, 5 databases) — `seed/`, marker-scoped and
   idempotent; regenerate with `python3 seed/generate_seed.py`, apply with `seed/apply_seed.sh`.
 - Ground truth: ALL 20 scripts written (`ground-truth/q01..q20.sql`), executed live on alpha
-  2026-09-02 (26/26 sections clean, `ground-truth/runs/2026-09-02-alpha-run.log`).
+  2026-09-02 (26/26 sections clean, `ground-truth/runs/2026-09-02-alpha-run.txt`).
 - `ground-truth/EXPECTED.md` is the gate reference sheet, re-derived from that live run under the
   recorded co-tenancy policy. Fixtures and ground truth change together — a change to one without
   the other is a review blocker.

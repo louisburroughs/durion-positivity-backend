@@ -1,0 +1,780 @@
+==== q01-top-technicians-labor-revenue.sql  [section 1 -> pos_workorder_db] ====
+            technician_id             |     name     | completed_wo_count | billed_hours | labor_revenue | avg_hours_per_completed_wo 
+--------------------------------------+--------------+--------------------+--------------+---------------+----------------------------
+ 343b5366-8531-5a2e-9976-b1eec230bf0e | Nadia Torres |                  2 |         4.00 |     1500.0000 |                       2.00
+ 8eea60f6-2807-5578-90ee-187caf666b3b | Alex Kim     |                  3 |         5.00 |      950.0000 |                       1.67
+ 9dc929b7-1e21-5ccc-89e0-4938905332ca | Sam Ellison  |                  1 |         4.00 |      600.0000 |                       4.00
+ 01960010-0000-7000-8000-000000000005 |              |                  0 |         0.00 |             0 |                           
+ 01a026c4-f6a7-7b54-8a79-d564b7f3b772 | James Rivera |                  0 |         9.20 |             0 |                           
+ d981cd20-55a1-b43c-9332-0ef2cd630e1a |              |                  0 |         0.00 |             0 |                           
+(6 rows)
+
+
+==== q02-technician-three-month-comparison.sql  [section 1 -> pos_workorder_db] ====
+ month_start |            technician_id             |     name     | completed_wo_count | billed_hours | labor_revenue 
+-------------+--------------------------------------+--------------+--------------------+--------------+---------------
+ 2026-06-01  | 343b5366-8531-5a2e-9976-b1eec230bf0e | Nadia Torres |                  3 |         8.00 |     1100.0000
+ 2026-06-01  | 8eea60f6-2807-5578-90ee-187caf666b3b | Alex Kim     |                  2 |         3.00 |      250.0000
+ 2026-07-01  | 343b5366-8531-5a2e-9976-b1eec230bf0e | Nadia Torres |                  3 |         8.00 |     2100.0000
+ 2026-07-01  | 9dc929b7-1e21-5ccc-89e0-4938905332ca | Sam Ellison  |                  1 |         4.00 |      600.0000
+ 2026-07-01  | 8eea60f6-2807-5578-90ee-187caf666b3b | Alex Kim     |                  1 |         2.00 |      250.0000
+ 2026-08-01  | 343b5366-8531-5a2e-9976-b1eec230bf0e | Nadia Torres |                  2 |         4.00 |     1500.0000
+ 2026-08-01  | 8eea60f6-2807-5578-90ee-187caf666b3b | Alex Kim     |                  3 |         5.00 |      950.0000
+ 2026-08-01  | 9dc929b7-1e21-5ccc-89e0-4938905332ca | Sam Ellison  |                  1 |         4.00 |      600.0000
+ 2026-08-01  | 01960010-0000-7000-8000-000000000005 |              |                  0 |         0.00 |             0
+ 2026-08-01  | 01a026c4-f6a7-7b54-8a79-d564b7f3b772 | James Rivera |                  0 |         9.20 |             0
+ 2026-08-01  | d981cd20-55a1-b43c-9332-0ef2cd630e1a |              |                  0 |         0.00 |             0
+(11 rows)
+
+
+==== q03-reopened-within-7-days.sql  [section 1 -> pos_workorder_db] ====
+            technician_id             |    name     |             workorder_id             |      completed_at      |      reopened_at       
+--------------------------------------+-------------+--------------------------------------+------------------------+------------------------
+ 9dc929b7-1e21-5ccc-89e0-4938905332ca | Sam Ellison | d1fc8f9e-6f41-5b8c-88fd-34a8e3b59912 | 2026-07-01 10:00:00+00 | 2026-07-04 11:00:00+00
+ 8eea60f6-2807-5578-90ee-187caf666b3b | Alex Kim    | 787232db-9aaf-585b-b810-9599debd9493 | 2026-07-01 10:00:00+00 | 2026-07-05 11:00:00+00
+ 9dc929b7-1e21-5ccc-89e0-4938905332ca | Sam Ellison | 0394a2d8-45b0-5b23-a44d-ef4aca4155bf | 2026-08-01 10:00:00+00 | 2026-08-06 11:00:00+00
+(3 rows)
+
+            technician_id             |    name     | reopens_within_window 
+--------------------------------------+-------------+-----------------------
+ 9dc929b7-1e21-5ccc-89e0-4938905332ca | Sam Ellison |                     2
+ 8eea60f6-2807-5578-90ee-187caf666b3b | Alex Kim    |                     1
+(2 rows)
+
+
+==== q04-invoicing-lag-by-month.sql  [section 1 -> pos_invoice_db] ====
+ month_start | avg_days_wo_creation_to_invoice | pair_count | excluded_null_anchor 
+-------------+---------------------------------+------------+----------------------
+ 2026-03-01  |                          2.0000 |          6 |                    0
+ 2026-04-01  |                          3.0000 |          7 |                    0
+ 2026-05-01  |                          4.0000 |          7 |                    0
+ 2026-06-01  |                          5.0000 |          5 |                    1
+ 2026-07-01  |                          6.0000 |          5 |                    0
+ 2026-08-01  |                          7.0000 |          5 |                   41
+(6 rows)
+
+
+==== q05-open-workorders-past-due-customers.sql  [section 1 -> pos_accounting_db] ====
+             customer_id              | current_bucket | days_31_60 | days_61_90 | days_90_plus | total_outstanding 
+--------------------------------------+----------------+------------+------------+--------------+-------------------
+ e79a3e7a-e63b-5633-ae72-2c84233f0dfc |      2500.0000 |          0 |          0 |    2000.0000 |         4500.0000
+ b4b79106-4dde-5458-8e66-c017ffc2f111 |      1000.0000 |          0 |  1500.0000 |            0 |         2500.0000
+(2 rows)
+
+
+==== q05-open-workorders-past-due-customers.sql  [section 2 -> pos_workorder_db] ====
+             workorder_id             |      workorder_number      |      status      |             customer_id              |                    customer_name                    |          created_at           
+--------------------------------------+----------------------------+------------------+--------------------------------------+-----------------------------------------------------+-------------------------------
+ 01a02cb9-e4fb-7893-927f-53cb76ff3399 | WO-2026-1001               | DRAFT            | 01a02cb9-d4ea-747d-9cc2-515205ba8282 | Nichole Thiel [itest-1787456765-wcve]               | 2026-08-23 03:46:15.41971+00
+ 01a02cba-7f5b-7d88-98f0-862b00a1c236 | WO-2026-1002               | DRAFT            | 01a02cba-7aba-70bf-9ff4-64ae6b9ecd0b | Eula Funk [itest-1787456808-8d5p]                   | 2026-08-23 03:46:54.939398+00
+ 01a02cbb-2f22-72f6-bef4-6bc63d1ae8c2 | WO-2026-1003               | DRAFT            | 01a02cbb-2ae1-7958-9eb4-8b66af83b52a | Preston Murazik [itest-1787456853-wbzd]             | 2026-08-23 03:47:39.939096+00
+ 01a02cbc-39bb-7fd5-9d56-b1e53f58f0e0 | WO-2026-1004               | DRAFT            | 01a02cbc-359a-7c1a-9fd2-86753e56daa5 | Rita O'Connell [itest-1787456924-w6j8]              | 2026-08-23 03:48:48.187989+00
+ 01a02eea-b1fe-7a51-a159-ec0fc6d42a87 | WO-2026-1005               | DRAFT            | 01a02eea-a6c0-7d4f-87ef-f72b1da9239b | Erik Hane [itest-1787493513-wo1t]                   | 2026-08-23 13:58:48.063223+00
+ 01a02eee-e3de-7d21-8fef-c7e87d046b1b | WO-2026-1009               | APPROVED         | 01a02eee-e0ee-7e5d-8cb3-351616ca82d2 | Christop Hegmann [itest-1787493699-go2b]            | 2026-08-23 14:03:22.974952+00
+ 01a02ef3-eac9-709a-a283-f49170f3fc7c | WO-2026-1011               | APPROVED         | 01a02ef3-e5c0-76a3-a444-533f424e0ad1 | Einar Miller [itest-1787494025-h49v]                | 2026-08-23 14:08:52.425478+00
+ 01a02ef5-b7da-7837-9b86-4355272952fb | WO-2026-1013               | APPROVED         | 01a02ef5-b4f7-7a99-88ae-6b9c66cb411c | Lance Koelpin [itest-1787494235-jgwe]               | 2026-08-23 14:10:50.458402+00
+ 01a02ef7-cda9-7539-8a61-cf7c2dad28fb | WO-2026-1015               | APPROVED         | 01a02ef7-caf3-7314-ae47-524b7f915456 | Alisha Huel [itest-1787494280-v1x5]                 | 2026-08-23 14:13:07.113442+00
+ 01a02efa-0256-7665-bed2-a61aa4b86ee9 | WO-2026-1017               | APPROVED         | 01a02ef9-fefa-7dd4-82de-46948729bab9 | Garret Herzog [itest-1787494424-91e0]               | 2026-08-23 14:15:31.670266+00
+ 01a02fd2-f3ae-7506-910a-76a158d74a76 | WO-2026-1019               | APPROVED         | 01a02fd2-f071-7b83-b4bd-6dac57739bf4 | Myles Mayert [itest-1787508718-rbtd]                | 2026-08-23 18:12:29.230168+00
+ 01a02fd3-ba95-7e22-9995-4978a1586596 | WO-2026-1020               | DRAFT            | 01a02fd3-b7e3-7e6d-9fed-674c5e802d20 | Remington Wolff [itest-1787508780-wxbb]             | 2026-08-23 18:13:20.149591+00
+ 01a02fda-702f-782f-a38d-5860e6543fc6 | WO-2026-1021               | DRAFT            | 01a02fda-6d79-7c9b-b2b2-2523b4f14666 | Marion Lind [itest-1787509142-wmkx]                 | 2026-08-23 18:20:39.856068+00
+ 01a02fdd-08b0-780e-98e5-a0dc8de58dc1 | WO-2026-1022               | DRAFT            | 01a02fdd-0626-7c20-8db8-43ecc9b16889 | Tito Skiles [itest-1787509401-bpuu]                 | 2026-08-23 18:23:29.969049+00
+ 01a02fdf-65f5-7eec-93cd-798045362b46 | WO-2026-1023               | DRAFT            | 01a02fdf-6366-753d-8930-3757d27023b7 | Marilyne Morissette [itest-1787509557-uopc]         | 2026-08-23 18:26:04.917975+00
+ 01a02fe1-380f-7448-b2d8-ec5f53a58ce9 | WO-2026-1024               | DRAFT            | 01a02fe1-358a-7f5c-b87a-7aae7ad07547 | Lurline Koss [itest-1787509673-1n2y]                | 2026-08-23 18:28:04.239433+00
+ 01a02fe1-76c3-7943-90a6-fa77f41519a0 | WO-2026-1026               | APPROVED         | 01a02fe1-7405-7558-8d02-37f6f954e1af | Chesley McClure [itest-1787509673-1n2y]             | 2026-08-23 18:28:20.291552+00
+ 01a02fe1-801d-7919-8328-efa3f546cdee | WO-2026-1027               | DRAFT            | 01a02fe1-7c37-7f3f-a7c9-0ef0c80b8c37 | Stuart Feil [itest-1787509673-1n2y]                 | 2026-08-23 18:28:22.68579+00
+ 01a0301e-b185-7393-8511-97bf5cd8c42d | WO-2026-1030               | APPROVED         | 01a0301e-aeb7-742d-bc52-a1b9072f44f8 | Gaetano Yost [itest-1787513691-biex]                | 2026-08-23 19:35:13.02961+00
+ 01a0301e-d54c-727e-bb58-cb542054cc15 | WO-2026-1032               | DRAFT            | 01a0301e-d1a1-73b1-932f-5ed2fe73447a | America Cummerata [itest-1787513691-biex]           | 2026-08-23 19:35:22.18843+00
+ 01a03021-0013-7425-a1ef-1fa46506baff | WO-2026-1038               | DRAFT            | 01a03020-fd87-7109-ae9c-fff2cd9e552c | Probe 1787513863368                                 | 2026-08-23 19:37:44.211792+00
+ 01a03021-0240-7107-bb1e-bd31081bce79 | WO-2026-1039               | DRAFT            | 01a03020-fd87-7109-ae9c-fff2cd9e552c | Probe 1787513863368                                 | 2026-08-23 19:37:44.768161+00
+ 01a03021-52a0-75f4-847e-be89ef3ac4be | WO-2026-1040               | DRAFT            | 01a03020-fd87-7109-ae9c-fff2cd9e552c | Probe 1787513863368                                 | 2026-08-23 19:38:05.344352+00
+ 01a03023-f3f4-7533-8894-d344273006d0 | WO-2026-1042               | DRAFT            | 01a03023-f18a-7f97-876f-19fac81955b6 | Kathryn Buckridge [itest-1787514002-hwzc-probe6899] | 2026-08-23 19:40:57.716854+00
+ 01a03027-2273-780f-9568-3d20fac1f9b8 | WO-2026-1044               | DRAFT            | 01a03027-1bb6-7e77-8f6f-c1a8351878e1 | Cletus McKenzie [itest-1787514256-ganm]             | 2026-08-23 19:44:26.227494+00
+ 01a03027-dfcc-72f1-baac-32c9b1ec136a | WO-2026-1046               | APPROVED         | 01a03027-d7e0-7e2b-8f0d-f5f7610bfe70 | Stanford Dare [itest-1787514292-abw1]               | 2026-08-23 19:45:14.700626+00
+ 01a03027-f159-75b9-aec9-dfcfaea344b8 | WO-2026-1047               | DRAFT            | 01a03027-ea78-75b4-a6c1-0520e062a2a5 | Elias Nader [itest-1787514292-abw1]                 | 2026-08-23 19:45:19.194135+00
+ 01a03029-1737-7275-8337-1fa5c70561ea | WO-2026-1050               | DRAFT            | 01a03029-1389-71f2-b347-4ed10c67fd4f | Soledad Pacocha [itest-1787514384-zcmy]             | 2026-08-23 19:46:34.423809+00
+ 01a03029-5259-7935-9386-befa0e249ac3 | WO-2026-1053               | APPROVED         | 01a03029-4af4-7d2c-9c07-80228d1ff36c | Julianne Fritsch [itest-1787514384-zcmy]            | 2026-08-23 19:46:49.56188+00
+ 01a03029-651f-714e-8255-7e2aa1c7e280 | WO-2026-1054               | DRAFT            | 01a03029-5e34-72da-9bdf-b9751ccbab2a | Pauline Schamberger [itest-1787514384-zcmy]         | 2026-08-23 19:46:54.367136+00
+ 01a03048-1c73-7118-b2dc-3bc3969c2383 | WO-2026-1056               | APPROVED         | 01a03048-194d-7152-9f31-2e11e7ee6858 | Sammie Kuhlman [itest-1787516404-vull]              | 2026-08-23 20:20:27.37962+00
+ 01a03048-3327-7403-aa17-6eb32ec69a92 | WO-2026-1057               | DRAFT            | 01a03048-2bfb-7029-ba9c-a111e68aa67d | Alphonso Zboncak [itest-1787516404-vull]            | 2026-08-23 20:20:33.191408+00
+ 01a03048-4322-7db4-9f2f-bfa6643de93a | WO-2026-1058               | DRAFT            | 01a03048-3f1b-74a2-b3f4-e6b15e7c2933 | Zion Durgan [itest-1787516404-vull]                 | 2026-08-23 20:20:37.282637+00
+ 01a03048-d8b5-7f8c-8413-3b3162df44a6 | WO-2026-1061               | APPROVED         | 01a03048-d4d8-7d1c-b63f-32efdc24fb52 | Amir Watsica [itest-1787516460-h8x1]                | 2026-08-23 20:21:15.574062+00
+ 01a03048-ea97-703e-a50b-1247c39f94ee | WO-2026-1062               | DRAFT            | 01a03048-e3b1-7426-9b42-89c82afc2151 | Norwood Ruecker [itest-1787516460-h8x1]             | 2026-08-23 20:21:20.151236+00
+ 01a03049-0996-7114-8b42-5da99c33a03f | WO-2026-1063               | DRAFT            | 01a03049-0597-7683-b8ae-1433a8d3e6e8 | Dariana Hettinger [itest-1787516460-h8x1]           | 2026-08-23 20:21:28.086761+00
+ 01a0304a-dd01-7fb2-877d-31df819fc483 | WO-2026-1066               | APPROVED         | 01a0304a-da25-7b7e-82fa-2eccee936e58 | Eugene Lind [itest-1787516593-dyx4]                 | 2026-08-23 20:23:27.74602+00
+ 01a0304a-ef5a-781f-86a8-69e79014541d | WO-2026-1067               | DRAFT            | 01a0304a-e867-740e-9f2c-b290c20079c5 | Velva Fadel [itest-1787516593-dyx4]                 | 2026-08-23 20:23:32.442491+00
+ 01a0304b-0fb4-7efd-be3c-3da0b8d5cf6c | WO-2026-1068               | DRAFT            | 01a0304b-0c01-781b-be88-24cc1973d9d6 | Providenci Koss [itest-1787516593-dyx4]             | 2026-08-23 20:23:40.724224+00
+ 01a0304b-7596-73e5-9918-100de5f82aa9 | WO-2026-1071               | APPROVED         | 01a0304b-72da-79a3-8bd7-5c7899ebe9ab | Amalia Swaniawski [itest-1787516632-lx1r]           | 2026-08-23 20:24:06.806145+00
+ 01a0304b-88e6-7e2c-9d2f-41af53ceffbb | WO-2026-1072               | DRAFT            | 01a0304b-820f-7784-b60b-bdc8bf516aa7 | Wilhelmine Kuhic [itest-1787516632-lx1r]            | 2026-08-23 20:24:11.750336+00
+ 01a0304b-a2e4-7a09-9634-daa1145b9d70 | WO-2026-1073               | DRAFT            | 01a0304b-9f2c-7014-99db-3e8b0bc4ef0e | Calista Harris [itest-1787516632-lx1r]              | 2026-08-23 20:24:18.40508+00
+ 01a0304d-0824-7d6f-9f47-8f72012f3a35 | WO-2026-1076               | APPROVED         | 01a0304d-010c-7a3f-83ce-1d84dc93759f | Hulda Schuster [itest-1787516733-5i2d]              | 2026-08-23 20:25:49.860829+00
+ 01a0304d-1b2f-77f0-bcee-2ff8835e2302 | WO-2026-1077               | DRAFT            | 01a0304d-144b-7053-8742-8b3b373323bc | Vernon Davis [itest-1787516733-5i2d]                | 2026-08-23 20:25:54.735508+00
+ 01a0304d-317a-74d8-bfe0-32d4985ce96a | WO-2026-1078               | DRAFT            | 01a0304d-2dcc-72fa-9d99-385264398224 | Bette Quigley [itest-1787516733-5i2d]               | 2026-08-23 20:26:00.442709+00
+ 01a0306d-e465-7c84-ab85-fa997ca9e2de | WO-2026-1081               | APPROVED         | 01a0306d-e0bc-7df4-a836-ad144759cd7e | Jarred Cartwright [itest-1787518887-znjl]           | 2026-08-23 21:01:43.397232+00
+ 01a0306d-f309-7b2b-bdf0-fcd254bf55fd | WO-2026-1082               | DRAFT            | 01a0306d-f089-7bb5-971b-fd149d94148b | Lila Prohaska [itest-1787518887-znjl]               | 2026-08-23 21:01:47.145802+00
+ 01a0306e-13f8-731e-9674-780d3465d02d | WO-2026-1083               | DRAFT            | 01a0306e-100e-7438-a0bc-32cbbf910c03 | Eriberto Lindgren [itest-1787518887-znjl]           | 2026-08-23 21:01:55.576494+00
+ 01a030d3-e7f1-7dc2-abab-6c2726faadc8 | WO-2026-1086               | APPROVED         | 01a030d3-e4da-700a-8afa-4439ba117f4f | Ezra Casper [itest-1787525555-0sef]                 | 2026-08-23 22:53:08.97773+00
+ 01a030d4-0260-73dc-81ca-9e7684d8d63b | WO-2026-1087               | DRAFT            | 01a030d3-fb50-7259-9986-45b2cb910d53 | Marisa Little [itest-1787525555-0sef]               | 2026-08-23 22:53:15.74461+00
+ 01a030d4-22e7-7f40-a60e-5efa28b3e174 | WO-2026-1088               | DRAFT            | 01a030d4-1ef1-704b-ae80-fc973b75b434 | Tatum Von [itest-1787525555-0sef]                   | 2026-08-23 22:53:24.071824+00
+ 01a0343d-394d-719f-80fa-390f480f433e | WO-2026-1090               | DRAFT            | 01a0343d-2746-7f0d-b069-a91833df2ce8 | Anne Kemmer [itest-1787582802-w5pa]                 | 2026-08-24 14:47:02.733179+00
+ 01a0343d-614e-797a-84fa-aa602075796f | WO-2026-1091               | DRAFT            | 01a0343d-5d03-7a37-a5a4-1de0428b0691 | Furman Mayer [itest-1787582802-w5pa]                | 2026-08-24 14:47:12.975061+00
+ 01a03440-5214-7f36-b255-88033fc83af6 | WO-2026-1096               | DRAFT            | 01a03440-4dde-7cd8-a274-d51bad9077ca | Jevon Willms [itest-1787583001-cvxl]                | 2026-08-24 14:50:25.685053+00
+ 01a03442-32b5-7091-ae40-370f1e82aa04 | WO-2026-1101               | APPROVED         | 01a03442-2f94-7cb2-8ba3-9ce304b17484 | Anastacio Tillman [itest-1787583125-m3rd]           | 2026-08-24 14:52:28.725257+00
+ 01a03442-4bf4-7c18-8eec-d3b809175895 | WO-2026-1102               | DRAFT            | 01a03442-44d4-7725-8252-8dc96c9fa671 | Jordyn Schinner [itest-1787583125-m3rd]             | 2026-08-24 14:52:35.1885+00
+ 01a03442-63c5-7c68-85f0-98032ba0eb7c | WO-2026-1103               | DRAFT            | 01a03442-5fed-731d-9322-72a5f1afa265 | Cale Bednar [itest-1787583125-m3rd]                 | 2026-08-24 14:52:41.285855+00
+ 01a0344b-3216-7acc-8e96-92fd20336649 | WO-2026-1106               | DRAFT            | 01a0344b-26a5-7fe4-b2cf-4fc6b2940702 | Rylee Heidenreich [itest-1787583724-kncd]           | 2026-08-24 15:02:18.390959+00
+ 01a0344c-9f5e-73dc-ae6b-386709a952f4 | WO-2026-1108               | APPROVED         | 01a0344c-9bf7-7cec-a42e-244280b24691 | Layne Nienow [itest-1787583724-kncd]                | 2026-08-24 15:03:51.902779+00
+ 01a0344c-ad4e-78d7-b732-347faee6f141 | WO-2026-1109               | DRAFT            | 01a0344c-a96f-70a2-81f0-e29734380c58 | Aglae Williamson [itest-1787583724-kncd]            | 2026-08-24 15:03:55.470671+00
+ 01a03450-e4d0-77af-b055-a228cf9541cc | WO-2026-1113               | APPROVED         | 01a03450-e1be-71fc-bb12-ffd8ad1d62be | Pearlie Mertz [itest-1787584090-l3on]               | 2026-08-24 15:08:31.824879+00
+ 01a03450-f6c6-79dd-87ab-84de6bc306b0 | WO-2026-1114               | DRAFT            | 01a03450-f3de-7f0e-94a4-40b74bdb828e | Heber Cummings [itest-1787584090-l3on]              | 2026-08-24 15:08:36.422749+00
+ 01a03451-0b41-7391-863f-daae537252db | WO-2026-1115               | DRAFT            | 01a03451-0727-797e-aaad-869a59d68044 | Melody Hudson [itest-1787584090-l3on]               | 2026-08-24 15:08:41.66597+00
+ 01a03454-688d-7bcd-bd36-4564439ccb2f | WO-2026-1119               | APPROVED         | 01a03454-6589-783c-ad9f-7647ebb8286a | Brendon Reilly [itest-1787584326-chny]              | 2026-08-24 15:12:22.157324+00
+ 01a03454-7cdb-7a3a-adc9-f90f685d9419 | WO-2026-1120               | DRAFT            | 01a03454-75af-7c97-be4c-828f031f914f | Keagan Nicolas [itest-1787584326-chny]              | 2026-08-24 15:12:27.355963+00
+ 01a03454-a6e0-7c07-a988-7acd9c62120d | WO-2026-1121               | DRAFT            | 01a03454-a2e7-7b3b-affb-ca0cef9a8476 | Jacinthe Ziemann [itest-1787584326-chny]            | 2026-08-24 15:12:38.113074+00
+ 01a0345a-8ebd-7bd2-afce-7743f80b32e9 | WO-2026-1124               | DRAFT            | 01a0345a-8797-7915-b443-41d591920612 | Eda Ondricka [itest-1787584734-5o7d]                | 2026-08-24 15:19:05.149357+00
+ 01a0345c-6601-7682-9da2-65f05eb23914 | WO-2026-1126               | APPROVED         | 01a0345c-6338-7961-90f4-317b9214a9d9 | Annabelle Homenick [itest-1787584822-jlz7]          | 2026-08-24 15:21:05.793205+00
+ 01a0345c-8472-7efd-80bf-bec59a5c7a28 | WO-2026-1127               | DRAFT            | 01a0345c-81f4-7641-882d-d5d2cfa1321a | Charity Hills [itest-1787584822-jlz7]               | 2026-08-24 15:21:13.586583+00
+ 01a03460-9509-726f-a30d-0cff9ffabd78 | WO-2026-1128               | DRAFT            | 01a03460-928e-7ae0-99d9-6f129d585480 | Soledad Douglas [itest-1787585127-1esa]             | 2026-08-24 15:25:39.977434+00
+ 01a03461-d953-7b62-8324-7ce908ac7a49 | WO-2026-1130               | APPROVED         | 01a03461-d685-7347-9d56-6fa5403fc373 | Emmalee Hand [itest-1787585127-1esa]                | 2026-08-24 15:27:02.996261+00
+ 01a03461-e54a-7197-b82d-5ca2f0cdd56d | WO-2026-1131               | DRAFT            | 01a03461-e148-782b-a19b-78f3387798d4 | Aletha Yost-McGlynn [itest-1787585127-1esa]         | 2026-08-24 15:27:06.058432+00
+ 01a03462-9478-7076-953d-1990e560f3d4 | WO-2026-1134               | DRAFT            | 01a03462-91ee-7688-861c-732c94fa9b07 | Karl Hammes [itest-1787585261-kudr]                 | 2026-08-24 15:27:50.905277+00
+ 01a03464-14ca-7b7b-a1c3-e2745326bcae | WO-2026-1136               | APPROVED         | 01a03464-11fb-731a-a043-677d3b0e2744 | Jarrell Frami [itest-1787585261-kudr]               | 2026-08-24 15:29:29.290386+00
+ 01a03464-1ff0-7576-bcd4-bfc5438a599b | WO-2026-1137               | DRAFT            | 01a03464-1c2d-782e-9296-6d753fbea185 | Ayana Schimmel [itest-1787585261-kudr]              | 2026-08-24 15:29:32.144594+00
+ 01a034a8-c507-745a-b4ab-035086322bf3 | WO-2026-1140               | DRAFT            | 01a034a8-c259-7b0c-8b4f-26c8b616ef83 | Mason Buckridge [itest-1787589862-8utl]             | 2026-08-24 16:44:30.855934+00
+ 01a034aa-04d6-712d-b750-21fe6830d6d2 | WO-2026-1142               | APPROVED         | 01a034aa-0248-728b-b20d-22866846cbed | Ardella Mraz [itest-1787589862-8utl]                | 2026-08-24 16:45:52.726274+00
+ 01a034aa-1479-7254-b66b-2e9c76107a1b | WO-2026-1143               | DRAFT            | 01a034aa-0c82-7b0f-a629-65183db6c3ec | Brian Kling [itest-1787589862-8utl]                 | 2026-08-24 16:45:56.729707+00
+ 01a034de-95e0-7fda-afd0-e444a92da14a | WO-2026-1146               | DRAFT            | 01a034de-8ac1-7c82-8330-427a40bbf586 | Rodolfo McClure [itest-1787593385-227v]             | 2026-08-24 17:43:17.729042+00
+ 01a034df-d954-7e33-9396-f8185c3aaa27 | WO-2026-1148               | APPROVED         | 01a034df-d5a6-776f-99bb-40cd492d22e5 | Wayne Connelly [itest-1787593385-227v]              | 2026-08-24 17:44:40.533126+00
+ 01a034df-e53d-73b7-a66b-59618c7e02bf | WO-2026-1149               | DRAFT            | 01a034df-e17e-7c57-9433-3a06ffad9b01 | Candido Torp [itest-1787593385-227v]                | 2026-08-24 17:44:43.581769+00
+ 01a034fd-8cc6-7e5a-b3e7-764b0489ac0c | WO-2026-1152               | DRAFT            | 01a034fd-816a-7649-b85f-76d5ad8cf344 | Samir Schowalter [itest-1787595413-jdko]            | 2026-08-24 18:17:07.015086+00
+ 01a034fe-d359-7cd5-a42e-42851d89fbe1 | WO-2026-1154               | APPROVED         | 01a034fe-d014-7723-9137-f34f04903b74 | Haskell Stokes [itest-1787595413-jdko]              | 2026-08-24 18:18:30.617244+00
+ 01a034fe-eb98-782d-8489-7b17b4cba615 | WO-2026-1155               | DRAFT            | 01a034fe-e79b-7954-b9bf-d341472365c4 | Maudie Walter [itest-1787595413-jdko]               | 2026-08-24 18:18:36.824344+00
+ 01a03528-abc6-7c25-b4c1-f250193a4841 | WO-2026-1158               | DRAFT            | 01a03528-a8f3-77e0-8140-688d6a9dc251 | Chloe Schmidt-Nicolas [itest-1787598240-dr47]       | 2026-08-24 19:04:12.998998+00
+ 01a0352a-60f5-72fe-8623-37c5825d8cd7 | WO-2026-1159               | DRAFT            | 01a0352a-5e03-73cb-9149-8be0c7ebf890 | Laisha Maggio [itest-1787598352-dffb]               | 2026-08-24 19:06:04.917951+00
+ 01a0352c-31db-7ca6-9ad5-ecc6640cd0be | WO-2026-1160               | DRAFT            | 01a0352c-2ee0-7aff-8fbc-9254ea84ac22 | Mekhi Leffler [itest-1787598474-sd2d]               | 2026-08-24 19:08:03.931481+00
+ 01a0352d-a224-730f-b2b2-1d98bcf22fd4 | WO-2026-1161               | DRAFT            | 01a0352d-9f26-7bdf-b3c3-0af067d94cdf | Reanna Jast [itest-1787598566-7kr8]                 | 2026-08-24 19:09:38.212597+00
+ 01a0352e-e998-7cd1-a0e5-a6bdeb95ede5 | WO-2026-1162               | DRAFT            | 01a0352e-e6be-770d-8b97-cd50fe99cded | Dangelo Herzog [itest-1787598651-ut49]              | 2026-08-24 19:11:02.040153+00
+ 01a03530-224b-7cfb-8c3c-bd942e7f2f18 | WO-2026-1164               | APPROVED         | 01a03530-1ee6-7b3e-b721-1e1d7c8baece | Fanny Reilly [itest-1787598651-ut49]                | 2026-08-24 19:12:22.091871+00
+ 01a03530-2ed3-7705-b55f-d2d024c6a8b9 | WO-2026-1165               | DRAFT            | 01a03530-2a8a-7d5e-9dd0-54ef8b2b5b24 | Emie Toy [itest-1787598651-ut49]                    | 2026-08-24 19:12:25.299706+00
+ 01a0353a-061b-7832-9f1f-562e8b3ac981 | WO-2026-1168               | DRAFT            | 01a0353a-0362-7bbf-9e86-7a19df01f5c4 | Leanne Grady [itest-1787599379-igdn]                | 2026-08-24 19:23:10.235191+00
+ 01a0353b-31a1-790d-910b-26527c795acc | WO-2026-1169               | DRAFT            | 01a0353b-2f07-7a29-b51a-b4e06955093c | Marvin Breitenberg [itest-1787599456-8xso]          | 2026-08-24 19:24:26.913567+00
+ 01a0353c-6bd1-7e9b-ac2c-bb140e157d35 | WO-2026-1171               | APPROVED         | 01a0353c-68e8-75b4-af08-794526116782 | Kamron Ortiz [itest-1787599456-8xso]                | 2026-08-24 19:25:47.345818+00
+ 01a0353c-77b0-7e64-bc9f-45bb52eb73b2 | WO-2026-1172               | DRAFT            | 01a0353c-7393-7600-a60a-ca76ed4c158e | Loraine O'Connell [itest-1787599456-8xso]           | 2026-08-24 19:25:50.384461+00
+ 01a03a6e-2e72-75b4-abb5-0adec92b5998 | WO-2026-1175               | DRAFT            | 01a03a6e-2196-7b49-8d9a-1809b9ec332b | Anastasia Fahey [itest-1787686680-lsl3]             | 2026-08-25 19:38:14.5147+00
+ 01a03a6f-74a2-77d6-9439-34c03bd3d322 | WO-2026-1177               | APPROVED         | 01a03a6f-716d-7075-a3d3-c97506934d75 | Myrl Grant [itest-1787686680-lsl3]                  | 2026-08-25 19:39:38.018705+00
+ 01a03a6f-80f3-79bf-a668-348434720fc5 | WO-2026-1178               | DRAFT            | 01a03a6f-7cb9-7889-a602-904effc6c8a9 | Jennyfer Rath [itest-1787686680-lsl3]               | 2026-08-25 19:39:41.171973+00
+ 01a03a78-0a8e-7454-9f3f-446c48c8614a | WO-2026-1181               | DRAFT            | 01a03a78-075a-7c88-9fed-31590d989a96 | Clemens Schumm [itest-1787687326-4vuu]              | 2026-08-25 19:49:00.68658+00
+ 01a03a7a-78a0-7341-b193-75f471890bf8 | WO-2026-1182               | DRAFT            | 01a03a7a-75f5-78e0-9679-a77571f1dd20 | Jalen Langosh [itest-1787687487-aba5]               | 2026-08-25 19:51:39.936173+00
+ 01a03a7c-bd07-76c2-b534-853e0dc5c15f | WO-2026-1183               | DRAFT            | 01a03a7c-b5bc-7895-8334-0409de434f86 | Laron Ledner [itest-1787687634-2wq6]                | 2026-08-25 19:54:08.51946+00
+ 01a03a7e-034f-72d6-9ca2-b66dd7a3feb4 | WO-2026-1185               | APPROVED         | 01a03a7e-0066-798a-9696-43f690580365 | Alf Mohr [itest-1787687634-2wq6]                    | 2026-08-25 19:55:32.048063+00
+ 01a03a7e-0ecb-7ca4-846d-7ed025ce4db6 | WO-2026-1186               | DRAFT            | 01a03a7e-0ae2-7a0d-8f75-4af088b56cc9 | Dawn Quigley [itest-1787687634-2wq6]                | 2026-08-25 19:55:34.987262+00
+ 01a03a8f-c826-70b7-a442-f7d83be0fcd1 | WO-2026-1189               | DRAFT            | 01a03a8f-c570-7712-b367-e086d49b334e | Sharon Sipes [itest-1787688884-qixq]                | 2026-08-25 20:14:56.550392+00
+ 01a03a91-06ae-7994-964e-efcdcbfedbef | WO-2026-1190               | DRAFT            | 01a03a90-ff90-798e-842c-62ee53c82866 | Kayli Kuvalis [itest-1787688964-dimz]               | 2026-08-25 20:16:18.094932+00
+ 01a03a92-4c6d-79f7-bf38-70199056996c | WO-2026-1192               | APPROVED         | 01a03a92-499b-7800-af12-d66740a54be0 | Elyssa Flatley [itest-1787688964-dimz]              | 2026-08-25 20:17:41.485426+00
+ 01a03a92-59e8-7d45-aa40-8541f967b57b | WO-2026-1193               | DRAFT            | 01a03a92-55cf-75f2-a7b9-16b7cfa34c78 | Arianna Witting [itest-1787688964-dimz]             | 2026-08-25 20:17:44.936537+00
+ 01a0451d-03db-739e-9329-3716ccfeba8b | WO-2026-1196               | DRAFT            | 01a0451c-f43e-7321-9529-1c257282cdd0 | Tyson Bayer [itest-1787865898-mw45]                 | 2026-08-27 21:25:24.571335+00
+ 01a0451e-4b86-798c-89a7-b9924738d88b | WO-2026-1198               | APPROVED         | 01a0451e-481c-7ed0-80d8-fa87641dadb2 | Kari Murray [itest-1787865898-mw45]                 | 2026-08-27 21:26:48.454907+00
+ 01a0451e-57b8-70ba-abbd-5d2e600561c5 | WO-2026-1199               | DRAFT            | 01a0451e-5389-7af0-8b9a-1302484a9916 | Hazel Lindgren [itest-1787865898-mw45]              | 2026-08-27 21:26:51.576783+00
+ 01a04523-f4a7-78c5-a499-ed56e9579b1e | WO-2026-1202               | DRAFT            | 01a04523-ed55-7861-9add-3ab89917143d | Lessie Legros [itest-1787866367-4lt0]               | 2026-08-27 21:32:59.431504+00
+ 01a04525-3cfd-78df-a21c-e783e4c50f89 | WO-2026-1204               | APPROVED         | 01a04525-35c0-7f6e-b657-e6cf5d89b074 | Casey Dach [itest-1787866367-4lt0]                  | 2026-08-27 21:34:23.486143+00
+ 01a04525-483a-7288-89e0-524134db1eee | WO-2026-1205               | DRAFT            | 01a04525-4467-7165-9cab-dd576a508c79 | Freeman Wilkinson [itest-1787866367-4lt0]           | 2026-08-27 21:34:26.362371+00
+ 01a0452f-a200-70d6-8306-d55c5bc71e50 | WO-2026-1208               | DRAFT            | 01a0452f-9e11-754b-84f9-c2ff1a764b55 | Faustino Feest [itest-1787867140-12le]              | 2026-08-27 21:45:44.704263+00
+ 01a0453f-2824-7b6d-bdfb-f00d65fa9abd | WO-2026-1212               | DRAFT            | 01a0453f-2465-7cce-9d49-46813cdfe879 | Ryleigh Luettgen [itest-1787868157-1kjh]            | 2026-08-27 22:02:42.084235+00
+ 01a04544-9ca6-73c0-be1e-aefd8f72ae8d | WO-2026-1215               | DRAFT            | 01a04544-95c5-7132-8324-d77daf10933b | Fabiola Barrows [itest-1787868507-vln4]             | 2026-08-27 22:08:39.590668+00
+ 01a04545-e54a-7225-92ac-4cea9888a2fa | WO-2026-1217               | APPROVED         | 01a04545-de28-7688-b7e8-5ecd320c153f | Jeramy Kozey [itest-1787868507-vln4]                | 2026-08-27 22:10:03.722404+00
+ 01a04545-f00b-76f1-b7e6-7cc4e057d8e2 | WO-2026-1218               | DRAFT            | 01a04545-ec6c-78c8-b5d9-57cd5e7a78e5 | Ally Nicolas [itest-1787868507-vln4]                | 2026-08-27 22:10:06.475567+00
+ 01a045f0-94f5-75d5-84cf-be3fff4e7137 | WO-2026-1221               | DRAFT            | 01a045f0-9177-7d21-bcd5-bba7bed92454 | Edd Armstrong [itest-1787879773-7qqp]               | 2026-08-28 01:16:29.813712+00
+ 01a0482c-92de-78ee-ab2b-0c1e6351f487 | WO-2026-1222               | DRAFT            | 01a0482c-85d0-7ceb-a022-d9a303bd06e5 | Zena Williamson [itest-1787917259-54iu]             | 2026-08-28 11:41:15.870698+00
+ 01a0482d-e0b9-72b6-ba27-d84f7c36cdb6 | WO-2026-1224               | APPROVED         | 01a0482d-ddb8-793b-9ad8-9dd1035369ae | Jacky Beier [itest-1787917259-54iu]                 | 2026-08-28 11:42:41.338041+00
+ 01a0482d-edb2-7cd6-97d0-3fc3acd76c63 | WO-2026-1225               | DRAFT            | 01a0482d-e92e-7241-81b9-45c69e36bd8b | Kevon Welch [itest-1787917259-54iu]                 | 2026-08-28 11:42:44.659058+00
+ 01a0485c-785c-7f0c-94b9-1d5f8f2d6b32 | WO-2026-1228               | DRAFT            | 01a0485c-6bc5-7c9c-9fb1-f405d4855439 | Carson Raynor [itest-1787920399-bzr9]               | 2026-08-28 12:33:34.812762+00
+ 01a04868-d3f7-7135-b1ae-e9c18e24324c | WO-2026-1229               | DRAFT            | 01a04868-d0f2-701a-9ce2-d9a0db8bd979 | Rosendo Haley [itest-1787921208-9bcy]               | 2026-08-28 12:47:04.695167+00
+ 01a049cb-61d7-7b7c-98b0-adcef66dc14b | WO-2026-1230               | DRAFT            | 01a049cb-4f16-7379-93d2-f2899542dcce | Lucile Dare [itest-1787944427-1czr]                 | 2026-08-28 19:14:20.759987+00
+ 01a04a60-dbb5-7941-8dbc-f79135f39038 | WO-2026-1231               | WORK_IN_PROGRESS | 01a04a60-d67f-7406-9d42-4afec65c3c9e | Charley Ortiz [itest-1787954248-mqjf]               | 2026-08-28 21:57:36.821483+00
+ 01a04a66-9b20-7140-9264-844c2c314b63 | WO-2026-1232               | WORK_IN_PROGRESS | 01a04a66-945c-7a3b-abdd-0b968ec3da8c | Garrison Tromp [itest-1787954624-a8hw]              | 2026-08-28 22:03:53.504589+00
+ 01a04a6c-3d4b-74bc-8678-adc1f7b5fdc8 | WO-2026-1233               | WORK_IN_PROGRESS | 01a04a6c-3685-70d0-8c95-5f8c7fa0b854 | Anahi Lind [itest-1787954994-v9h4]                  | 2026-08-28 22:10:02.699286+00
+ 01a04a71-8de2-7046-9adb-6d46a496d8ff | WO-2026-1234               | DRAFT            | 01a04a71-86c4-7bca-a805-9065327f054e | Alena Wunsch [itest-1787955333-65s0]                | 2026-08-28 22:15:51.010492+00
+ 01a04a72-de8e-73dc-8d1c-9cada24da589 | WO-2026-1236               | APPROVED         | 01a04a72-d75c-7aa8-90f6-3b63023790d5 | Maynard Roberts [itest-1787955333-65s0]             | 2026-08-28 22:17:17.198425+00
+ 01a04a72-f783-75ea-8a08-801220455037 | WO-2026-1237               | WORK_IN_PROGRESS | 01a04a72-f50c-764f-bbb4-582b1b1cfc37 | Kali Renner [itest-1787955333-65s0]                 | 2026-08-28 22:17:23.587866+00
+ 01a04a73-1861-75d8-948f-e04ad715b11e | WO-2026-1238               | DRAFT            | 01a04a73-14ac-7968-9473-bbedfb6cc9fb | Brandy Leffler [itest-1787955333-65s0]              | 2026-08-28 22:17:32.001314+00
+ 01a04a95-8502-7a5f-b8b8-cf43306c5660 | WO-2026-1241               | DRAFT            | 01a04a95-7770-7a0f-b745-c7d1eb553ce5 | Camilla Stracke [itest-1787957700-ojds]             | 2026-08-28 22:55:08.035066+00
+ e0db3a34-8f6b-5793-83e3-54b7ace1fda3 | TRACKB-WO-OPEN-C3-APPROVED | APPROVED         | 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                      | 2026-08-26 14:00:00+00
+ 2fc96566-8fc6-572f-8d3d-95b593b2c984 | TRACKB-WO-OPEN-C2-PARTS    | AWAITING_PARTS   | b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                               | 2026-08-20 14:00:00+00
+ bdfd7679-885a-5a89-beeb-36422923cde6 | TRACKB-WO-OPEN-C1-ASSIGNED | ASSIGNED         | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                                | 2026-08-18 14:00:00+00
+ 49e864e3-7692-510e-99d5-f7b0339538f5 | TRACKB-WO-OPEN-C1-WIP      | WORK_IN_PROGRESS | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                                | 2026-08-24 14:00:00+00
+(137 rows)
+
+
+==== q06-customer-margin.sql  [section 1 -> pos_invoice_db] ====
+ status  |                                                reason                                                 
+---------+-------------------------------------------------------------------------------------------------------
+ BLOCKED | Q6 customer margin: E13 deferred to Wave 3 by D2; parts cost lives in pos-inventory and is not seeded
+(1 row)
+
+
+==== q07-top-customers-yoy.sql  [section 1 -> pos_invoice_db] ====
+ window_label |             customer_id              |                      name                       |  revenue   | invoice_count | avg_invoice_value |       last_invoice_date       
+--------------+--------------------------------------+-------------------------------------------------+------------+---------------+-------------------+-------------------------------
+ last-12mo    | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            | 16500.0000 |            14 |         1178.5714 | 2026-08-01 14:00:00+00
+ last-12mo    | b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           | 10300.0000 |            13 |          792.3077 | 2026-08-12 14:00:00+00
+ last-12mo    | 61ef5d96-2e4b-5138-8295-22c74b3d004f | Marcus Webb                                     |  8100.0000 |             9 |          900.0000 | 2026-05-30 14:00:00+00
+ last-12mo    | 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  |  6000.0000 |            13 |          461.5385 | 2026-08-13 14:00:00+00
+ last-12mo    | ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |  3900.0000 |            12 |          325.0000 | 2026-08-21 14:00:00+00
+ last-12mo    | 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                    |  2300.0000 |            11 |          209.0909 | 2026-08-15 14:00:00+00
+ last-12mo    | 01a02ef2-627c-7556-bc18-96e8813cf3ff | Carleton Mayert [itest-1787494025-h49v]         |   286.1700 |             1 |          286.1700 | 2026-08-23 14:08:49.471877+00
+ last-12mo    | 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec | Brenna Thiel [itest-1787494235-jgwe]            |   286.1700 |             1 |          286.1700 | 2026-08-23 14:10:48.179328+00
+ last-12mo    | 01a02ef6-48b5-737d-8302-3be964e26ea7 | Trevion Marvin [itest-1787494280-v1x5]          |   286.1700 |             1 |          286.1700 | 2026-08-23 14:13:05.512144+00
+ last-12mo    | 01a02ef8-7ac2-782b-b89f-7030888a3877 | Cleora Veum [itest-1787494424-91e0]             |   286.1700 |             1 |          286.1700 | 2026-08-23 14:15:29.274692+00
+ last-12mo    | 01a02fd2-bb43-7119-89df-78d8ef042e59 | Antwan Hessel [itest-1787508718-rbtd]           |   286.1700 |             1 |          286.1700 | 2026-08-23 18:12:26.291924+00
+ last-12mo    | 01a02fe1-4fca-7e60-b3a4-10535095e920 | Jacinthe Dicki [itest-1787509673-1n2y]          |   286.1700 |             1 |          286.1700 | 2026-08-23 18:28:18.660143+00
+ last-12mo    | 01a0301e-8693-7dba-8332-f3259011e003 | Jalen Renner [itest-1787513691-biex]            |   286.1700 |             1 |          286.1700 | 2026-08-23 19:35:10.821302+00
+ last-12mo    | 01a03027-b2bf-77ce-9380-fa83fde6d476 | Joshuah Koss [itest-1787514292-abw1]            |   286.1700 |             1 |          286.1700 | 2026-08-23 19:45:11.194576+00
+ last-12mo    | 01a03029-2450-73b0-86e0-78d63915cef5 | Elise Wehner [itest-1787514384-zcmy]            |   286.1700 |             1 |          286.1700 | 2026-08-23 19:46:46.750268+00
+ last-12mo    | 01a03047-e8c3-7888-8bb5-4c4702891206 | Katelin Hilpert [itest-1787516404-vull]         |   286.1700 |             1 |          286.1700 | 2026-08-23 20:20:24.851501+00
+ last-12mo    | 01a03048-acfd-794c-be74-9a018f5e75f4 | Mazie Kuvalis [itest-1787516460-h8x1]           |   286.1700 |             1 |          286.1700 | 2026-08-23 20:21:13.596863+00
+ last-12mo    | 01a0304a-b743-72b6-adbc-16983849662a | Pattie Brown [itest-1787516593-dyx4]            |   286.1700 |             1 |          286.1700 | 2026-08-23 20:23:26.080806+00
+ last-12mo    | 01a0304b-4d2c-7cf4-a8cb-794c4d072ace | Brennon Oberbrunner [itest-1787516632-lx1r]     |   286.1700 |             1 |          286.1700 | 2026-08-23 20:24:04.619917+00
+ last-12mo    | 01a0304c-dc4d-77ee-b251-8246a34cd878 | Cheyenne Lang [itest-1787516733-5i2d]           |   286.1700 |             1 |          286.1700 | 2026-08-23 20:25:46.550111+00
+ last-12mo    | 01a0306d-b70f-78c4-bb9c-770c411be1e7 | Skylar Steuber [itest-1787518887-znjl]          |   286.1700 |             1 |          286.1700 | 2026-08-23 21:01:40.945813+00
+ last-12mo    | 01a030d3-aa93-78ad-885d-57a1093d2138 | Jeremie Moore [itest-1787525555-0sef]           |   286.1700 |             1 |          286.1700 | 2026-08-23 22:53:05.94751+00
+ last-12mo    | 01a03440-1633-772b-8ec1-0eed4bdba939 | Doug Bergnaum [itest-1787583001-cvxl]           |   286.1700 |             1 |          286.1700 | 2026-08-24 14:50:19.11841+00
+ last-12mo    | 01a03441-f8c7-76a7-849f-6f598eb45f4b | Doug Dooley [itest-1787583125-m3rd]             |   286.1700 |             1 |          286.1700 | 2026-08-24 14:52:26.935645+00
+ last-12mo    | 01a0344b-5395-7a96-98c8-a647a6cb9fa2 | Jermey Feil [itest-1787583724-kncd]             |   286.1700 |             1 |          286.1700 | 2026-08-24 15:03:47.4247+00
+ last-12mo    | 01a03450-af63-7942-9ddc-c8bf7a9f6714 | Dayna Skiles [itest-1787584090-l3on]            |   286.1700 |             1 |          286.1700 | 2026-08-24 15:08:29.46347+00
+ last-12mo    | 01a03454-3b8f-7715-8b9f-c0ecec6411f8 | Berta Grady [itest-1787584326-chny]             |   286.1700 |             1 |          286.1700 | 2026-08-24 15:12:19.886549+00
+ last-12mo    | 01a0345b-d432-7500-a308-ea3ffe0fc744 | Maddison Jacobs [itest-1787584822-jlz7]         |   286.1700 |             1 |          286.1700 | 2026-08-24 15:21:04.16631+00
+ last-12mo    | 01a03461-3baf-7b20-8e26-31be03a78dc2 | Carolyne Williamson [itest-1787585127-1esa]     |   286.1700 |             1 |          286.1700 | 2026-08-24 15:27:01.365279+00
+ last-12mo    | 01a03463-7c9a-7947-b994-9ed5437228a1 | Dion Bernhard [itest-1787585261-kudr]           |   286.1700 |             1 |          286.1700 | 2026-08-24 15:29:27.575118+00
+ last-12mo    | 01a034a9-6cdb-7714-b72e-a432df50856c | Dusty Ferry [itest-1787589862-8utl]             |   286.1700 |             1 |          286.1700 | 2026-08-24 16:45:50.617655+00
+ last-12mo    | 01a034df-3f9a-70e9-a809-65b426a7ec64 | Mortimer Heidenreich [itest-1787593385-227v]    |   286.1700 |             1 |          286.1700 | 2026-08-24 17:44:37.602586+00
+ last-12mo    | 01a034fe-3696-7581-916c-152fd589e1e1 | Braeden Schmitt-Cormier [itest-1787595413-jdko] |   286.1700 |             1 |          286.1700 | 2026-08-24 18:18:27.157531+00
+ last-12mo    | 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc | Pearlie Bailey [itest-1787598651-ut49]          |   286.1700 |             1 |          286.1700 | 2026-08-24 19:12:20.265695+00
+ last-12mo    | 01a0353b-d65f-7d16-bd0f-0b3a46190c20 | Ahmed Gottlieb [itest-1787599456-8xso]          |   286.1700 |             1 |          286.1700 | 2026-08-24 19:25:45.114086+00
+ last-12mo    | 01a03a6e-d83c-714f-a4af-41ef3f800e50 | Oleta Jast [itest-1787686680-lsl3]              |   286.1700 |             1 |          286.1700 | 2026-08-25 19:39:35.500577+00
+ last-12mo    | 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 | Edwardo Kozey [itest-1787687634-2wq6]           |   286.1700 |             1 |          286.1700 | 2026-08-25 19:55:30.373145+00
+ last-12mo    | 01a03a91-b864-7de7-82f1-014c2803a86d | Hillary Thompson [itest-1787688964-dimz]        |   286.1700 |             1 |          286.1700 | 2026-08-25 20:17:39.277922+00
+ last-12mo    | 01a0451d-ab2d-76ae-946a-a55dd904ef87 | Althea Deckow [itest-1787865898-mw45]           |   286.1700 |             1 |          286.1700 | 2026-08-27 21:26:44.454764+00
+ last-12mo    | 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a | Regan Gleason [itest-1787866367-4lt0]           |   286.1700 |             1 |          286.1700 | 2026-08-27 21:34:20.704176+00
+ last-12mo    | 01a04545-43da-736a-be62-0b96a884bdb3 | Alvis Hagenes [itest-1787868507-vln4]           |   286.1700 |             1 |          286.1700 | 2026-08-27 22:10:01.006493+00
+ last-12mo    | 01a0482d-3972-71a8-bae0-7a4a60a25347 | Molly Pollich [itest-1787917259-54iu]           |   286.1700 |             1 |          286.1700 | 2026-08-28 11:42:38.041414+00
+ last-12mo    | 01a04a72-3569-7480-bbd4-eafcfe3e5cbd | Marcellus McKenzie [itest-1787955333-65s0]      |   286.1700 |             1 |          286.1700 | 2026-08-28 22:17:13.614109+00
+ prior-12mo   | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            | 12000.0000 |            12 |         1000.0000 | 2025-08-01 14:00:00+00
+ prior-12mo   | 61ef5d96-2e4b-5138-8295-22c74b3d004f | Marcus Webb                                     | 10800.0000 |            12 |          900.0000 | 2025-08-25 14:00:00+00
+ prior-12mo   | b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           |  6000.0000 |            12 |          500.0000 | 2025-08-03 14:00:00+00
+ prior-12mo   | 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  |  4800.0000 |            12 |          400.0000 | 2025-08-01 14:00:00+00
+ prior-12mo   | ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |  3600.0000 |            12 |          300.0000 | 2025-08-01 14:00:00+00
+ prior-12mo   | 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                    |  2400.0000 |            12 |          200.0000 | 2025-08-15 14:00:00+00
+(49 rows)
+
+
+==== q08-lapsed-high-value-customers.sql  [section 1 -> pos_invoice_db] ====
+             customer_id              |    name     | prior_year_revenue |    last_invoice_at     | days_since_last_invoice 
+--------------------------------------+-------------+--------------------+------------------------+-------------------------
+ 61ef5d96-2e4b-5138-8295-22c74b3d004f | Marcus Webb |         10800.0000 | 2026-05-30 14:00:00+00 |                      94
+(1 row)
+
+
+==== q09-top-customers-revenue-balance-days-to-pay.sql  [section 1 -> pos_invoice_db] ====
+             customer_id              |                    name                     |  revenue   | invoice_count | avg_invoice_value |       last_invoice_date       
+--------------------------------------+---------------------------------------------+------------+---------------+-------------------+-------------------------------
+ e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                        | 16500.0000 |            14 |         1178.5714 | 2026-08-01 14:00:00+00
+ b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                       | 10300.0000 |            13 |          792.3077 | 2026-08-12 14:00:00+00
+ 61ef5d96-2e4b-5138-8295-22c74b3d004f | Marcus Webb                                 |  8100.0000 |             9 |          900.0000 | 2026-05-30 14:00:00+00
+ 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                              |  6000.0000 |            13 |          461.5385 | 2026-08-13 14:00:00+00
+ ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                              |  3900.0000 |            12 |          325.0000 | 2026-08-21 14:00:00+00
+ 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                |  2300.0000 |            11 |          209.0909 | 2026-08-15 14:00:00+00
+ 01a02ef2-627c-7556-bc18-96e8813cf3ff | Carleton Mayert [itest-1787494025-h49v]     |   286.1700 |             1 |          286.1700 | 2026-08-23 14:08:49.471877+00
+ 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec | Brenna Thiel [itest-1787494235-jgwe]        |   286.1700 |             1 |          286.1700 | 2026-08-23 14:10:48.179328+00
+ 01a02ef6-48b5-737d-8302-3be964e26ea7 | Trevion Marvin [itest-1787494280-v1x5]      |   286.1700 |             1 |          286.1700 | 2026-08-23 14:13:05.512144+00
+ 01a02ef8-7ac2-782b-b89f-7030888a3877 | Cleora Veum [itest-1787494424-91e0]         |   286.1700 |             1 |          286.1700 | 2026-08-23 14:15:29.274692+00
+ 01a02fd2-bb43-7119-89df-78d8ef042e59 | Antwan Hessel [itest-1787508718-rbtd]       |   286.1700 |             1 |          286.1700 | 2026-08-23 18:12:26.291924+00
+ 01a02fe1-4fca-7e60-b3a4-10535095e920 | Jacinthe Dicki [itest-1787509673-1n2y]      |   286.1700 |             1 |          286.1700 | 2026-08-23 18:28:18.660143+00
+ 01a0301e-8693-7dba-8332-f3259011e003 | Jalen Renner [itest-1787513691-biex]        |   286.1700 |             1 |          286.1700 | 2026-08-23 19:35:10.821302+00
+ 01a03027-b2bf-77ce-9380-fa83fde6d476 | Joshuah Koss [itest-1787514292-abw1]        |   286.1700 |             1 |          286.1700 | 2026-08-23 19:45:11.194576+00
+ 01a03029-2450-73b0-86e0-78d63915cef5 | Elise Wehner [itest-1787514384-zcmy]        |   286.1700 |             1 |          286.1700 | 2026-08-23 19:46:46.750268+00
+ 01a03047-e8c3-7888-8bb5-4c4702891206 | Katelin Hilpert [itest-1787516404-vull]     |   286.1700 |             1 |          286.1700 | 2026-08-23 20:20:24.851501+00
+ 01a03048-acfd-794c-be74-9a018f5e75f4 | Mazie Kuvalis [itest-1787516460-h8x1]       |   286.1700 |             1 |          286.1700 | 2026-08-23 20:21:13.596863+00
+ 01a0304a-b743-72b6-adbc-16983849662a | Pattie Brown [itest-1787516593-dyx4]        |   286.1700 |             1 |          286.1700 | 2026-08-23 20:23:26.080806+00
+ 01a0304b-4d2c-7cf4-a8cb-794c4d072ace | Brennon Oberbrunner [itest-1787516632-lx1r] |   286.1700 |             1 |          286.1700 | 2026-08-23 20:24:04.619917+00
+ 01a0304c-dc4d-77ee-b251-8246a34cd878 | Cheyenne Lang [itest-1787516733-5i2d]       |   286.1700 |             1 |          286.1700 | 2026-08-23 20:25:46.550111+00
+(20 rows)
+
+
+==== q09-top-customers-revenue-balance-days-to-pay.sql  [section 2 -> pos_accounting_db] ====
+             customer_id              | outstanding_balance | avg_days_to_pay | paid_invoice_count 
+--------------------------------------+---------------------+-----------------+--------------------
+ e79a3e7a-e63b-5633-ae72-2c84233f0dfc |           4500.0000 |           20.02 |                 12
+ b4b79106-4dde-5458-8e66-c017ffc2f111 |           2500.0000 |           22.10 |                 12
+ 1dc41416-eec7-5788-9416-042d5af62667 |           1200.0000 |           10.02 |                 12
+ 61ef5d96-2e4b-5138-8295-22c74b3d004f |            900.0000 |           15.02 |                  8
+ ece9efad-e5d4-5bcd-98e0-078cd83ef629 |            600.0000 |           40.02 |                 10
+ 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 |            300.0000 |           75.02 |                  9
+ 01a02ef2-627c-7556-bc18-96e8813cf3ff |            286.1700 |                 |                  0
+ 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec |            286.1700 |                 |                  0
+ 01a02ef6-48b5-737d-8302-3be964e26ea7 |            286.1700 |                 |                  0
+ 01a02ef8-7ac2-782b-b89f-7030888a3877 |            286.1700 |                 |                  0
+ 01a02fd2-bb43-7119-89df-78d8ef042e59 |            286.1700 |                 |                  0
+ 01a02fe1-4fca-7e60-b3a4-10535095e920 |            286.1700 |                 |                  0
+ 01a0301e-8693-7dba-8332-f3259011e003 |            286.1700 |                 |                  0
+ 01a03027-b2bf-77ce-9380-fa83fde6d476 |            286.1700 |                 |                  0
+ 01a03029-2450-73b0-86e0-78d63915cef5 |            286.1700 |                 |                  0
+ 01a03047-e8c3-7888-8bb5-4c4702891206 |            286.1700 |                 |                  0
+ 01a03048-acfd-794c-be74-9a018f5e75f4 |            286.1700 |                 |                  0
+ 01a0304a-b743-72b6-adbc-16983849662a |            286.1700 |                 |                  0
+ 01a0304b-4d2c-7cf4-a8cb-794c4d072ace |            286.1700 |                 |                  0
+ 01a0304c-dc4d-77ee-b251-8246a34cd878 |            286.1700 |                 |                  0
+ 01a0306d-b70f-78c4-bb9c-770c411be1e7 |            286.1700 |                 |                  0
+ 01a030d3-aa93-78ad-885d-57a1093d2138 |            286.1700 |                 |                  0
+ 01a03440-1633-772b-8ec1-0eed4bdba939 |            286.1700 |                 |                  0
+ 01a03441-f8c7-76a7-849f-6f598eb45f4b |            286.1700 |                 |                  0
+ 01a0344b-5395-7a96-98c8-a647a6cb9fa2 |            286.1700 |                 |                  0
+ 01a03450-af63-7942-9ddc-c8bf7a9f6714 |            286.1700 |                 |                  0
+ 01a03454-3b8f-7715-8b9f-c0ecec6411f8 |            286.1700 |                 |                  0
+ 01a0345b-d432-7500-a308-ea3ffe0fc744 |            286.1700 |                 |                  0
+ 01a03461-3baf-7b20-8e26-31be03a78dc2 |            286.1700 |                 |                  0
+ 01a03463-7c9a-7947-b994-9ed5437228a1 |            286.1700 |                 |                  0
+ 01a034a9-6cdb-7714-b72e-a432df50856c |            286.1700 |                 |                  0
+ 01a034df-3f9a-70e9-a809-65b426a7ec64 |            286.1700 |                 |                  0
+ 01a034fe-3696-7581-916c-152fd589e1e1 |            286.1700 |                 |                  0
+ 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc |            286.1700 |                 |                  0
+ 01a0353b-d65f-7d16-bd0f-0b3a46190c20 |            286.1700 |                 |                  0
+ 01a03a6e-d83c-714f-a4af-41ef3f800e50 |            286.1700 |                 |                  0
+ 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 |            286.1700 |                 |                  0
+ 01a03a91-b864-7de7-82f1-014c2803a86d |            286.1700 |                 |                  0
+ 01a0451d-ab2d-76ae-946a-a55dd904ef87 |            286.1700 |                 |                  0
+ 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a |            286.1700 |                 |                  0
+ 01a04545-43da-736a-be62-0b96a884bdb3 |            286.1700 |                 |                  0
+ 01a0482d-3972-71a8-bae0-7a4a60a25347 |            286.1700 |                 |                  0
+ 01a04a72-3569-7480-bbd4-eafcfe3e5cbd |            286.1700 |                 |                  0
+(43 rows)
+
+
+==== q10-rising-sales-rising-past-due.sql  [section 1 -> pos_invoice_db] ====
+ month_start |             customer_id              |                      name                       |  revenue  | invoice_count 
+-------------+--------------------------------------+-------------------------------------------------+-----------+---------------
+ 2026-06-01  | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            | 1000.0000 |             1
+ 2026-06-01  | b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           |  800.0000 |             1
+ 2026-06-01  | 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  |  400.0000 |             1
+ 2026-06-01  | ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |  300.0000 |             1
+ 2026-06-01  | 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                    |  200.0000 |             1
+ 2026-07-01  | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            | 3500.0000 |             2
+ 2026-07-01  | b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           | 1000.0000 |             1
+ 2026-07-01  | 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  |  400.0000 |             1
+ 2026-07-01  | ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |  300.0000 |             1
+ 2026-08-01  | b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           | 2500.0000 |             1
+ 2026-08-01  | 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  | 1600.0000 |             2
+ 2026-08-01  | e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            | 1000.0000 |             1
+ 2026-08-01  | ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |  600.0000 |             1
+ 2026-08-01  | 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                    |  300.0000 |             1
+ 2026-08-01  | 01a02ef2-627c-7556-bc18-96e8813cf3ff | Carleton Mayert [itest-1787494025-h49v]         |  286.1700 |             1
+ 2026-08-01  | 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec | Brenna Thiel [itest-1787494235-jgwe]            |  286.1700 |             1
+ 2026-08-01  | 01a02ef6-48b5-737d-8302-3be964e26ea7 | Trevion Marvin [itest-1787494280-v1x5]          |  286.1700 |             1
+ 2026-08-01  | 01a02ef8-7ac2-782b-b89f-7030888a3877 | Cleora Veum [itest-1787494424-91e0]             |  286.1700 |             1
+ 2026-08-01  | 01a02fd2-bb43-7119-89df-78d8ef042e59 | Antwan Hessel [itest-1787508718-rbtd]           |  286.1700 |             1
+ 2026-08-01  | 01a02fe1-4fca-7e60-b3a4-10535095e920 | Jacinthe Dicki [itest-1787509673-1n2y]          |  286.1700 |             1
+ 2026-08-01  | 01a0301e-8693-7dba-8332-f3259011e003 | Jalen Renner [itest-1787513691-biex]            |  286.1700 |             1
+ 2026-08-01  | 01a03027-b2bf-77ce-9380-fa83fde6d476 | Joshuah Koss [itest-1787514292-abw1]            |  286.1700 |             1
+ 2026-08-01  | 01a03029-2450-73b0-86e0-78d63915cef5 | Elise Wehner [itest-1787514384-zcmy]            |  286.1700 |             1
+ 2026-08-01  | 01a03047-e8c3-7888-8bb5-4c4702891206 | Katelin Hilpert [itest-1787516404-vull]         |  286.1700 |             1
+ 2026-08-01  | 01a03048-acfd-794c-be74-9a018f5e75f4 | Mazie Kuvalis [itest-1787516460-h8x1]           |  286.1700 |             1
+ 2026-08-01  | 01a0304a-b743-72b6-adbc-16983849662a | Pattie Brown [itest-1787516593-dyx4]            |  286.1700 |             1
+ 2026-08-01  | 01a0304b-4d2c-7cf4-a8cb-794c4d072ace | Brennon Oberbrunner [itest-1787516632-lx1r]     |  286.1700 |             1
+ 2026-08-01  | 01a0304c-dc4d-77ee-b251-8246a34cd878 | Cheyenne Lang [itest-1787516733-5i2d]           |  286.1700 |             1
+ 2026-08-01  | 01a0306d-b70f-78c4-bb9c-770c411be1e7 | Skylar Steuber [itest-1787518887-znjl]          |  286.1700 |             1
+ 2026-08-01  | 01a030d3-aa93-78ad-885d-57a1093d2138 | Jeremie Moore [itest-1787525555-0sef]           |  286.1700 |             1
+ 2026-08-01  | 01a03440-1633-772b-8ec1-0eed4bdba939 | Doug Bergnaum [itest-1787583001-cvxl]           |  286.1700 |             1
+ 2026-08-01  | 01a03441-f8c7-76a7-849f-6f598eb45f4b | Doug Dooley [itest-1787583125-m3rd]             |  286.1700 |             1
+ 2026-08-01  | 01a0344b-5395-7a96-98c8-a647a6cb9fa2 | Jermey Feil [itest-1787583724-kncd]             |  286.1700 |             1
+ 2026-08-01  | 01a03450-af63-7942-9ddc-c8bf7a9f6714 | Dayna Skiles [itest-1787584090-l3on]            |  286.1700 |             1
+ 2026-08-01  | 01a03454-3b8f-7715-8b9f-c0ecec6411f8 | Berta Grady [itest-1787584326-chny]             |  286.1700 |             1
+ 2026-08-01  | 01a0345b-d432-7500-a308-ea3ffe0fc744 | Maddison Jacobs [itest-1787584822-jlz7]         |  286.1700 |             1
+ 2026-08-01  | 01a03461-3baf-7b20-8e26-31be03a78dc2 | Carolyne Williamson [itest-1787585127-1esa]     |  286.1700 |             1
+ 2026-08-01  | 01a03463-7c9a-7947-b994-9ed5437228a1 | Dion Bernhard [itest-1787585261-kudr]           |  286.1700 |             1
+ 2026-08-01  | 01a034a9-6cdb-7714-b72e-a432df50856c | Dusty Ferry [itest-1787589862-8utl]             |  286.1700 |             1
+ 2026-08-01  | 01a034df-3f9a-70e9-a809-65b426a7ec64 | Mortimer Heidenreich [itest-1787593385-227v]    |  286.1700 |             1
+ 2026-08-01  | 01a034fe-3696-7581-916c-152fd589e1e1 | Braeden Schmitt-Cormier [itest-1787595413-jdko] |  286.1700 |             1
+ 2026-08-01  | 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc | Pearlie Bailey [itest-1787598651-ut49]          |  286.1700 |             1
+ 2026-08-01  | 01a0353b-d65f-7d16-bd0f-0b3a46190c20 | Ahmed Gottlieb [itest-1787599456-8xso]          |  286.1700 |             1
+ 2026-08-01  | 01a03a6e-d83c-714f-a4af-41ef3f800e50 | Oleta Jast [itest-1787686680-lsl3]              |  286.1700 |             1
+ 2026-08-01  | 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 | Edwardo Kozey [itest-1787687634-2wq6]           |  286.1700 |             1
+ 2026-08-01  | 01a03a91-b864-7de7-82f1-014c2803a86d | Hillary Thompson [itest-1787688964-dimz]        |  286.1700 |             1
+ 2026-08-01  | 01a0451d-ab2d-76ae-946a-a55dd904ef87 | Althea Deckow [itest-1787865898-mw45]           |  286.1700 |             1
+ 2026-08-01  | 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a | Regan Gleason [itest-1787866367-4lt0]           |  286.1700 |             1
+ 2026-08-01  | 01a04545-43da-736a-be62-0b96a884bdb3 | Alvis Hagenes [itest-1787868507-vln4]           |  286.1700 |             1
+ 2026-08-01  | 01a0482d-3972-71a8-bae0-7a4a60a25347 | Molly Pollich [itest-1787917259-54iu]           |  286.1700 |             1
+ 2026-08-01  | 01a04a72-3569-7480-bbd4-eafcfe3e5cbd | Marcellus McKenzie [itest-1787955333-65s0]      |  286.1700 |             1
+(51 rows)
+
+
+==== q10-rising-sales-rising-past-due.sql  [section 2 -> pos_accounting_db] ====
+ as_of_date |             customer_id              | current_bucket | past_due  | total_outstanding 
+------------+--------------------------------------+----------------+-----------+-------------------
+ 2026-06-30 | 61ef5d96-2e4b-5138-8295-22c74b3d004f |       900.0000 |         0 |          900.0000
+ 2026-06-30 | b4b79106-4dde-5458-8e66-c017ffc2f111 |      1500.0000 |         0 |         1500.0000
+ 2026-06-30 | e79a3e7a-e63b-5633-ae72-2c84233f0dfc |              0 | 2000.0000 |         2000.0000
+ 2026-07-31 | 61ef5d96-2e4b-5138-8295-22c74b3d004f |       900.0000 |         0 |          900.0000
+ 2026-07-31 | b4b79106-4dde-5458-8e66-c017ffc2f111 |              0 | 1500.0000 |         1500.0000
+ 2026-07-31 | e79a3e7a-e63b-5633-ae72-2c84233f0dfc |      2500.0000 | 2000.0000 |         4500.0000
+ 2026-08-31 | 01a02ef2-627c-7556-bc18-96e8813cf3ff |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a02ef6-48b5-737d-8302-3be964e26ea7 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a02ef8-7ac2-782b-b89f-7030888a3877 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a02fd2-bb43-7119-89df-78d8ef042e59 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a02fe1-4fca-7e60-b3a4-10535095e920 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0301e-8693-7dba-8332-f3259011e003 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03027-b2bf-77ce-9380-fa83fde6d476 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03029-2450-73b0-86e0-78d63915cef5 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03047-e8c3-7888-8bb5-4c4702891206 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03048-acfd-794c-be74-9a018f5e75f4 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0304a-b743-72b6-adbc-16983849662a |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0304b-4d2c-7cf4-a8cb-794c4d072ace |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0304c-dc4d-77ee-b251-8246a34cd878 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0306d-b70f-78c4-bb9c-770c411be1e7 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a030d3-aa93-78ad-885d-57a1093d2138 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03440-1633-772b-8ec1-0eed4bdba939 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03441-f8c7-76a7-849f-6f598eb45f4b |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0344b-5395-7a96-98c8-a647a6cb9fa2 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03450-af63-7942-9ddc-c8bf7a9f6714 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03454-3b8f-7715-8b9f-c0ecec6411f8 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0345b-d432-7500-a308-ea3ffe0fc744 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03461-3baf-7b20-8e26-31be03a78dc2 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03463-7c9a-7947-b994-9ed5437228a1 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a034a9-6cdb-7714-b72e-a432df50856c |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a034df-3f9a-70e9-a809-65b426a7ec64 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a034fe-3696-7581-916c-152fd589e1e1 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0353b-d65f-7d16-bd0f-0b3a46190c20 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03a6e-d83c-714f-a4af-41ef3f800e50 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a03a91-b864-7de7-82f1-014c2803a86d |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0451d-ab2d-76ae-946a-a55dd904ef87 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a04545-43da-736a-be62-0b96a884bdb3 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a0482d-3972-71a8-bae0-7a4a60a25347 |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 01a04a72-3569-7480-bbd4-eafcfe3e5cbd |       286.1700 |         0 |          286.1700
+ 2026-08-31 | 1dc41416-eec7-5788-9416-042d5af62667 |      1200.0000 |         0 |         1200.0000
+ 2026-08-31 | 61ef5d96-2e4b-5138-8295-22c74b3d004f |              0 |  900.0000 |          900.0000
+ 2026-08-31 | 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 |       300.0000 |         0 |          300.0000
+ 2026-08-31 | b4b79106-4dde-5458-8e66-c017ffc2f111 |      1000.0000 | 1500.0000 |         2500.0000
+ 2026-08-31 | e79a3e7a-e63b-5633-ae72-2c84233f0dfc |      2500.0000 | 2000.0000 |         4500.0000
+ 2026-08-31 | ece9efad-e5d4-5bcd-98e0-078cd83ef629 |       600.0000 |         0 |          600.0000
+(49 rows)
+
+
+==== q11-weekly-invoiced-vs-collected.sql  [section 1 -> pos_accounting_db] ====
+ week_starting | invoiced  | collected | non_cash_settled |  settled  | collection_rate_pct | settlement_rate_pct 
+---------------+-----------+-----------+------------------+-----------+---------------------+---------------------
+ 2026-06-08    |         0 |  700.0000 |                0 |  700.0000 |                     |                    
+ 2026-06-15    |  200.0000 | 1000.0000 |                0 | 1000.0000 |              500.00 |              500.00
+ 2026-06-22    |         0 |  800.0000 |                0 |  800.0000 |                     |                    
+ 2026-06-29    | 2700.0000 |  200.0000 |                0 |  200.0000 |                7.41 |                7.41
+ 2026-07-06    |         0 |  700.0000 |                0 |  700.0000 |                     |                    
+ 2026-07-13    |         0 |         0 |                0 |         0 |                     |                    
+ 2026-07-20    | 2500.0000 | 2000.0000 |                0 | 2000.0000 |               80.00 |               80.00
+ 2026-07-27    | 1400.0000 |  200.0000 |                0 |  200.0000 |               14.29 |               14.29
+ 2026-08-03    |         0 |  100.0000 |                0 |  100.0000 |                     |                    
+ 2026-08-10    | 4000.0000 | 1100.0000 |         500.0000 | 1600.0000 |               27.50 |               40.00
+ 2026-08-17    | 5178.7200 | 2500.0000 |                0 | 2500.0000 |               48.27 |               48.27
+ 2026-08-24    | 6009.5700 |  200.0000 |                0 |  200.0000 |                3.33 |                3.33
+(12 rows)
+
+
+==== q12-payment-lag-cohorts.sql  [section 1 -> pos_accounting_db] ====
+ cohort | invoice_count |   amount   
+--------+---------------+------------
+ <=30   |            20 | 14000.0000
+ 31-60  |             5 |  1500.0000
+ 61-90  |             4 |   800.0000
+ unpaid |            45 | 22088.2900
+(4 rows)
+
+
+==== q13-ar-pareto.sql  [section 1 -> pos_accounting_db] ====
+ rank_position |             customer_id              | total_outstanding | current_0_30 | days_31_60 | days_61_90 | days_90_plus | past_due_amount | past_due_pct_of_customer | share_of_ar_pct | cumulative_share_pct | in_pareto_80 
+---------------+--------------------------------------+-------------------+--------------+------------+------------+--------------+-----------------+--------------------------+-----------------+----------------------+--------------
+             1 | e79a3e7a-e63b-5633-ae72-2c84233f0dfc |           4500.00 |      2500.00 |       0.00 |       0.00 |      2000.00 |         2000.00 |                    44.44 |           21.86 |                21.86 | t
+             2 | b4b79106-4dde-5458-8e66-c017ffc2f111 |           2500.00 |      1000.00 |       0.00 |    1500.00 |         0.00 |         1500.00 |                    60.00 |           12.14 |                34.00 | t
+             3 | 1dc41416-eec7-5788-9416-042d5af62667 |           1200.00 |      1200.00 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            5.83 |                39.83 | t
+             4 | 61ef5d96-2e4b-5138-8295-22c74b3d004f |            900.00 |         0.00 |     900.00 |       0.00 |         0.00 |          900.00 |                   100.00 |            4.37 |                44.20 | t
+             5 | ece9efad-e5d4-5bcd-98e0-078cd83ef629 |            600.00 |       600.00 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            2.91 |                47.11 | t
+             6 | 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 |            300.00 |       300.00 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.46 |                48.57 | t
+             7 | 01a02ef2-627c-7556-bc18-96e8813cf3ff |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                49.96 | t
+             8 | 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                51.35 | t
+             9 | 01a02ef6-48b5-737d-8302-3be964e26ea7 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                52.74 | t
+            10 | 01a02ef8-7ac2-782b-b89f-7030888a3877 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                54.13 | t
+            11 | 01a02fd2-bb43-7119-89df-78d8ef042e59 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                55.52 | t
+            12 | 01a02fe1-4fca-7e60-b3a4-10535095e920 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                56.91 | t
+            13 | 01a0301e-8693-7dba-8332-f3259011e003 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                58.30 | t
+            14 | 01a03027-b2bf-77ce-9380-fa83fde6d476 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                59.69 | t
+            15 | 01a03029-2450-73b0-86e0-78d63915cef5 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                61.08 | t
+            16 | 01a03047-e8c3-7888-8bb5-4c4702891206 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                62.47 | t
+            17 | 01a03048-acfd-794c-be74-9a018f5e75f4 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                63.86 | t
+            18 | 01a0304a-b743-72b6-adbc-16983849662a |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                65.25 | t
+            19 | 01a0304b-4d2c-7cf4-a8cb-794c4d072ace |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                66.64 | t
+            20 | 01a0304c-dc4d-77ee-b251-8246a34cd878 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                68.03 | t
+            21 | 01a0306d-b70f-78c4-bb9c-770c411be1e7 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                69.42 | t
+            22 | 01a030d3-aa93-78ad-885d-57a1093d2138 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                70.81 | t
+            23 | 01a03440-1633-772b-8ec1-0eed4bdba939 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                72.20 | t
+            24 | 01a03441-f8c7-76a7-849f-6f598eb45f4b |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                73.59 | t
+            25 | 01a0344b-5395-7a96-98c8-a647a6cb9fa2 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                74.98 | t
+            26 | 01a03450-af63-7942-9ddc-c8bf7a9f6714 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                76.37 | t
+            27 | 01a03454-3b8f-7715-8b9f-c0ecec6411f8 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                77.76 | t
+            28 | 01a0345b-d432-7500-a308-ea3ffe0fc744 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                79.15 | t
+            29 | 01a03461-3baf-7b20-8e26-31be03a78dc2 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                80.54 | t
+            30 | 01a03463-7c9a-7947-b994-9ed5437228a1 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                81.93 | f
+            31 | 01a034a9-6cdb-7714-b72e-a432df50856c |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                83.32 | f
+            32 | 01a034df-3f9a-70e9-a809-65b426a7ec64 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                84.71 | f
+            33 | 01a034fe-3696-7581-916c-152fd589e1e1 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                86.10 | f
+            34 | 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                87.49 | f
+            35 | 01a0353b-d65f-7d16-bd0f-0b3a46190c20 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                88.88 | f
+            36 | 01a03a6e-d83c-714f-a4af-41ef3f800e50 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                90.27 | f
+            37 | 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                91.66 | f
+            38 | 01a03a91-b864-7de7-82f1-014c2803a86d |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                93.05 | f
+            39 | 01a0451d-ab2d-76ae-946a-a55dd904ef87 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                94.44 | f
+            40 | 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                95.83 | f
+            41 | 01a04545-43da-736a-be62-0b96a884bdb3 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                97.22 | f
+            42 | 01a0482d-3972-71a8-bae0-7a4a60a25347 |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |                98.61 | f
+            43 | 01a04a72-3569-7480-bbd4-eafcfe3e5cbd |            286.17 |       286.17 |       0.00 |       0.00 |         0.00 |            0.00 |                     0.00 |            1.39 |               100.00 | f
+(43 rows)
+
+
+==== q14-ar-balance-dso-by-month.sql  [section 1 -> pos_accounting_db] ====
+ as_of_date | endpoint_total_outstanding | true_point_in_time_balance | dso 
+------------+----------------------------+----------------------------+-----
+ 2025-09-30 |                          0 |                            |    
+ 2025-10-31 |                          0 |                            |    
+ 2025-11-30 |                          0 |                            |    
+ 2025-12-31 |                          0 |                            |    
+ 2026-01-31 |                          0 |                            |    
+ 2026-02-28 |                          0 |                            |    
+ 2026-03-31 |                          0 |                            |    
+ 2026-04-30 |                  2000.0000 |                            |    
+ 2026-05-31 |                  4400.0000 |                            |    
+ 2026-06-30 |                  4400.0000 |                            |    
+ 2026-07-31 |                  6900.0000 |                            |    
+ 2026-08-31 |                 20588.2900 |                            |    
+(12 rows)
+
+
+==== q15-top-vendors-six-month-yoy.sql  [section 1 -> pos_accounting_db] ====
+    window_label    |              vendor_id               |          name          | paid_amount | bill_count | avg_bill_amount 
+--------------------+--------------------------------------+------------------------+-------------+------------+-----------------
+ last-6mo           | d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5 | Cascade Auto Warehouse |  12000.0000 |          6 |         2000.00
+ last-6mo           | 7268ed6c-9d68-586b-bba6-24e8f368db9f | Evergreen Parts Supply |   6720.0000 |          6 |         1120.00
+ last-6mo           | dbf6dae0-1caa-5d5b-b234-18856f126b7b | Summit Lubricants      |   2400.0000 |          6 |          400.00
+ same-6mo-last-year | d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5 | Cascade Auto Warehouse |  12000.0000 |          6 |         2000.00
+ same-6mo-last-year | 7268ed6c-9d68-586b-bba6-24e8f368db9f | Evergreen Parts Supply |   6000.0000 |          6 |         1000.00
+ same-6mo-last-year | dbf6dae0-1caa-5d5b-b234-18856f126b7b | Summit Lubricants      |   2400.0000 |          6 |          400.00
+(6 rows)
+
+
+==== q16-vendor-bills-due-14-days.sql  [section 1 -> pos_accounting_db] ====
+               bill_id                |              vendor_id               |      vendor_name       |      bill_number       |      due_date       |  amount   |  status  
+--------------------------------------+--------------------------------------+------------------------+------------------------+---------------------+-----------+----------
+ abc1c2f3-f167-584c-bf96-384023e608da | 7268ed6c-9d68-586b-bba6-24e8f368db9f | Evergreen Parts Supply | TRACKB-BILL-V1-DUE0904 | 2026-09-04 00:00:00 |  800.0000 | APPROVED
+ 65e2b35a-3ab3-5970-a77f-b5174620eec1 | d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5 | Cascade Auto Warehouse | TRACKB-BILL-V2-DUE0908 | 2026-09-08 00:00:00 | 2000.0000 | APPROVED
+ 270da643-d8dd-5e57-9043-13ccdcbce6e0 | d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5 | Cascade Auto Warehouse | TRACKB-BILL-V2-DUE0912 | 2026-09-12 00:00:00 |  600.0000 | APPROVED
+ 395a635b-207a-5620-980c-cdbc897e1c15 | dbf6dae0-1caa-5d5b-b234-18856f126b7b | Summit Lubricants      | TRACKB-BILL-V3-DUE0915 | 2026-09-15 00:00:00 |  400.0000 | APPROVED
+(4 rows)
+
+  due_day   | cash_needed 
+------------+-------------
+ 2026-09-04 |    800.0000
+ 2026-09-08 |   2000.0000
+ 2026-09-12 |    600.0000
+ 2026-09-15 |    400.0000
+(4 rows)
+
+              vendor_id               |      vendor_name       | current_bucket | days_31_60 | days_61_90 | days_90_plus | total_outstanding 
+--------------------------------------+------------------------+----------------+------------+------------+--------------+-------------------
+ d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5 | Cascade Auto Warehouse |      2600.0000 |          0 |          0 |            0 |         2600.0000
+ 7268ed6c-9d68-586b-bba6-24e8f368db9f | Evergreen Parts Supply |       800.0000 |          0 |          0 |            0 |          800.0000
+ dbf6dae0-1caa-5d5b-b234-18856f126b7b | Summit Lubricants      |       400.0000 |          0 |          0 |            0 |          400.0000
+(3 rows)
+
+
+==== q17-vendor-avg-bill-increase-yoy.sql  [section 1 -> pos_accounting_db] ====
+              vendor_id               |          name          | avg_bill_prior_year | avg_bill_current | yoy_increase_pct | exceeds_10_pct 
+--------------------------------------+------------------------+---------------------+------------------+------------------+----------------
+ 7268ed6c-9d68-586b-bba6-24e8f368db9f | Evergreen Parts Supply |             1000.00 |          1120.00 |            12.00 | t
+ d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5 | Cascade Auto Warehouse |             2000.00 |          2000.00 |             0.00 | f
+ dbf6dae0-1caa-5d5b-b234-18856f126b7b | Summit Lubricants      |              400.00 |           400.00 |             0.00 | f
+(3 rows)
+
+
+==== q18-weekly-cash-in-vs-out.sql  [section 1 -> pos_accounting_db] ====
+ week_starting |  cash_in  | cash_out  | refunded |  ap_paid  |  net_cash  | negative_week 
+---------------+-----------+-----------+----------+-----------+------------+---------------
+ 2026-06-01    |         0 |         0 |        0 |         0 |          0 | f
+ 2026-06-08    |  700.0000 |         0 |        0 |         0 |   700.0000 | f
+ 2026-06-15    | 1000.0000 |         0 |        0 |         0 |  1000.0000 | f
+ 2026-06-22    |  800.0000 | 3520.0000 |        0 | 3520.0000 | -2720.0000 | t
+ 2026-06-29    |  200.0000 |         0 |        0 |         0 |   200.0000 | f
+ 2026-07-06    |  700.0000 |         0 |        0 |         0 |   700.0000 | f
+ 2026-07-13    |         0 |         0 |        0 |         0 |          0 | f
+ 2026-07-20    | 2000.0000 | 3520.0000 |        0 | 3520.0000 | -1520.0000 | t
+ 2026-07-27    |  200.0000 |         0 |        0 |         0 |   200.0000 | f
+ 2026-08-03    |  500.0000 |  400.0000 | 400.0000 |         0 |   100.0000 | f
+ 2026-08-10    | 1100.0000 |   50.0000 |  50.0000 |         0 |  1050.0000 | f
+ 2026-08-17    | 2500.0000 |         0 |        0 |         0 |  2500.0000 | f
+ 2026-08-24    |  200.0000 | 3520.0000 |        0 | 3520.0000 | -3320.0000 | t
+(13 rows)
+
+
+==== q19-customer-efficiency.sql  [section 1 -> pos_invoice_db] ====
+             customer_id              |                      name                       |  revenue  | invoice_count 
+--------------------------------------+-------------------------------------------------+-----------+---------------
+ b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           | 2500.0000 |             1
+ 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  | 1600.0000 |             2
+ e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            | 1000.0000 |             1
+ ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |  600.0000 |             1
+ 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                    |  300.0000 |             1
+ 01a02ef2-627c-7556-bc18-96e8813cf3ff | Carleton Mayert [itest-1787494025-h49v]         |  286.1700 |             1
+ 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec | Brenna Thiel [itest-1787494235-jgwe]            |  286.1700 |             1
+ 01a02ef6-48b5-737d-8302-3be964e26ea7 | Trevion Marvin [itest-1787494280-v1x5]          |  286.1700 |             1
+ 01a02ef8-7ac2-782b-b89f-7030888a3877 | Cleora Veum [itest-1787494424-91e0]             |  286.1700 |             1
+ 01a02fd2-bb43-7119-89df-78d8ef042e59 | Antwan Hessel [itest-1787508718-rbtd]           |  286.1700 |             1
+ 01a02fe1-4fca-7e60-b3a4-10535095e920 | Jacinthe Dicki [itest-1787509673-1n2y]          |  286.1700 |             1
+ 01a0301e-8693-7dba-8332-f3259011e003 | Jalen Renner [itest-1787513691-biex]            |  286.1700 |             1
+ 01a03027-b2bf-77ce-9380-fa83fde6d476 | Joshuah Koss [itest-1787514292-abw1]            |  286.1700 |             1
+ 01a03029-2450-73b0-86e0-78d63915cef5 | Elise Wehner [itest-1787514384-zcmy]            |  286.1700 |             1
+ 01a03047-e8c3-7888-8bb5-4c4702891206 | Katelin Hilpert [itest-1787516404-vull]         |  286.1700 |             1
+ 01a03048-acfd-794c-be74-9a018f5e75f4 | Mazie Kuvalis [itest-1787516460-h8x1]           |  286.1700 |             1
+ 01a0304a-b743-72b6-adbc-16983849662a | Pattie Brown [itest-1787516593-dyx4]            |  286.1700 |             1
+ 01a0304b-4d2c-7cf4-a8cb-794c4d072ace | Brennon Oberbrunner [itest-1787516632-lx1r]     |  286.1700 |             1
+ 01a0304c-dc4d-77ee-b251-8246a34cd878 | Cheyenne Lang [itest-1787516733-5i2d]           |  286.1700 |             1
+ 01a0306d-b70f-78c4-bb9c-770c411be1e7 | Skylar Steuber [itest-1787518887-znjl]          |  286.1700 |             1
+ 01a030d3-aa93-78ad-885d-57a1093d2138 | Jeremie Moore [itest-1787525555-0sef]           |  286.1700 |             1
+ 01a03440-1633-772b-8ec1-0eed4bdba939 | Doug Bergnaum [itest-1787583001-cvxl]           |  286.1700 |             1
+ 01a03441-f8c7-76a7-849f-6f598eb45f4b | Doug Dooley [itest-1787583125-m3rd]             |  286.1700 |             1
+ 01a0344b-5395-7a96-98c8-a647a6cb9fa2 | Jermey Feil [itest-1787583724-kncd]             |  286.1700 |             1
+ 01a03450-af63-7942-9ddc-c8bf7a9f6714 | Dayna Skiles [itest-1787584090-l3on]            |  286.1700 |             1
+ 01a03454-3b8f-7715-8b9f-c0ecec6411f8 | Berta Grady [itest-1787584326-chny]             |  286.1700 |             1
+ 01a0345b-d432-7500-a308-ea3ffe0fc744 | Maddison Jacobs [itest-1787584822-jlz7]         |  286.1700 |             1
+ 01a03461-3baf-7b20-8e26-31be03a78dc2 | Carolyne Williamson [itest-1787585127-1esa]     |  286.1700 |             1
+ 01a03463-7c9a-7947-b994-9ed5437228a1 | Dion Bernhard [itest-1787585261-kudr]           |  286.1700 |             1
+ 01a034a9-6cdb-7714-b72e-a432df50856c | Dusty Ferry [itest-1787589862-8utl]             |  286.1700 |             1
+ 01a034df-3f9a-70e9-a809-65b426a7ec64 | Mortimer Heidenreich [itest-1787593385-227v]    |  286.1700 |             1
+ 01a034fe-3696-7581-916c-152fd589e1e1 | Braeden Schmitt-Cormier [itest-1787595413-jdko] |  286.1700 |             1
+ 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc | Pearlie Bailey [itest-1787598651-ut49]          |  286.1700 |             1
+ 01a0353b-d65f-7d16-bd0f-0b3a46190c20 | Ahmed Gottlieb [itest-1787599456-8xso]          |  286.1700 |             1
+ 01a03a6e-d83c-714f-a4af-41ef3f800e50 | Oleta Jast [itest-1787686680-lsl3]              |  286.1700 |             1
+ 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 | Edwardo Kozey [itest-1787687634-2wq6]           |  286.1700 |             1
+ 01a03a91-b864-7de7-82f1-014c2803a86d | Hillary Thompson [itest-1787688964-dimz]        |  286.1700 |             1
+ 01a0451d-ab2d-76ae-946a-a55dd904ef87 | Althea Deckow [itest-1787865898-mw45]           |  286.1700 |             1
+ 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a | Regan Gleason [itest-1787866367-4lt0]           |  286.1700 |             1
+ 01a04545-43da-736a-be62-0b96a884bdb3 | Alvis Hagenes [itest-1787868507-vln4]           |  286.1700 |             1
+ 01a0482d-3972-71a8-bae0-7a4a60a25347 | Molly Pollich [itest-1787917259-54iu]           |  286.1700 |             1
+ 01a04a72-3569-7480-bbd4-eafcfe3e5cbd | Marcellus McKenzie [itest-1787955333-65s0]      |  286.1700 |             1
+(42 rows)
+
+
+==== q19-customer-efficiency.sql  [section 2 -> pos_workorder_db] ====
+             customer_id              |                      name                       | technician_hours 
+--------------------------------------+-------------------------------------------------+------------------
+ 01a02eeb-4e27-7978-bc67-52bdc0b5a0de | Laurel Wolf [itest-1787493554-akmp]             |             0.00
+ 01a02eed-6461-7fc5-b3ee-ba2f4955cc84 | Albertha Rohan [itest-1787493699-go2b]          |             0.00
+ 01a02ef2-627c-7556-bc18-96e8813cf3ff | Carleton Mayert [itest-1787494025-h49v]         |             0.00
+ 01a02ef5-906c-7c1f-9afa-0c6a1f72ddec | Brenna Thiel [itest-1787494235-jgwe]            |             0.00
+ 01a02ef6-48b5-737d-8302-3be964e26ea7 | Trevion Marvin [itest-1787494280-v1x5]          |             0.00
+ 01a02ef8-7ac2-782b-b89f-7030888a3877 | Cleora Veum [itest-1787494424-91e0]             |             0.00
+ 01a02fd2-bb43-7119-89df-78d8ef042e59 | Antwan Hessel [itest-1787508718-rbtd]           |             0.00
+ 01a02fe1-4fca-7e60-b3a4-10535095e920 | Jacinthe Dicki [itest-1787509673-1n2y]          |             0.00
+ 01a0301e-8693-7dba-8332-f3259011e003 | Jalen Renner [itest-1787513691-biex]            |             0.00
+ 01a03027-b2bf-77ce-9380-fa83fde6d476 | Joshuah Koss [itest-1787514292-abw1]            |             0.00
+ 01a03029-2450-73b0-86e0-78d63915cef5 | Elise Wehner [itest-1787514384-zcmy]            |             0.00
+ 01a03047-e8c3-7888-8bb5-4c4702891206 | Katelin Hilpert [itest-1787516404-vull]         |             0.00
+ 01a03048-acfd-794c-be74-9a018f5e75f4 | Mazie Kuvalis [itest-1787516460-h8x1]           |             0.00
+ 01a0304a-b743-72b6-adbc-16983849662a | Pattie Brown [itest-1787516593-dyx4]            |             0.00
+ 01a0304b-4d2c-7cf4-a8cb-794c4d072ace | Brennon Oberbrunner [itest-1787516632-lx1r]     |             0.00
+ 01a0304c-dc4d-77ee-b251-8246a34cd878 | Cheyenne Lang [itest-1787516733-5i2d]           |             0.00
+ 01a0306d-b70f-78c4-bb9c-770c411be1e7 | Skylar Steuber [itest-1787518887-znjl]          |             0.00
+ 01a030d3-aa93-78ad-885d-57a1093d2138 | Jeremie Moore [itest-1787525555-0sef]           |             0.00
+ 01a03440-1633-772b-8ec1-0eed4bdba939 | Doug Bergnaum [itest-1787583001-cvxl]           |             0.00
+ 01a03441-f8c7-76a7-849f-6f598eb45f4b | Doug Dooley [itest-1787583125-m3rd]             |             0.00
+ 01a0344b-5395-7a96-98c8-a647a6cb9fa2 | Jermey Feil [itest-1787583724-kncd]             |             0.00
+ 01a03450-af63-7942-9ddc-c8bf7a9f6714 | Dayna Skiles [itest-1787584090-l3on]            |             0.00
+ 01a03454-3b8f-7715-8b9f-c0ecec6411f8 | Berta Grady [itest-1787584326-chny]             |             0.00
+ 01a0345b-d432-7500-a308-ea3ffe0fc744 | Maddison Jacobs [itest-1787584822-jlz7]         |             0.00
+ 01a03461-3baf-7b20-8e26-31be03a78dc2 | Carolyne Williamson [itest-1787585127-1esa]     |             0.00
+ 01a03463-7c9a-7947-b994-9ed5437228a1 | Dion Bernhard [itest-1787585261-kudr]           |             0.00
+ 01a034a9-6cdb-7714-b72e-a432df50856c | Dusty Ferry [itest-1787589862-8utl]             |             0.00
+ 01a034df-3f9a-70e9-a809-65b426a7ec64 | Mortimer Heidenreich [itest-1787593385-227v]    |             0.00
+ 01a034fe-3696-7581-916c-152fd589e1e1 | Braeden Schmitt-Cormier [itest-1787595413-jdko] |             0.00
+ 01a0352f-8ee7-7dfd-9065-6e9eb10fa1cc | Pearlie Bailey [itest-1787598651-ut49]          |             0.00
+ 01a0353b-d65f-7d16-bd0f-0b3a46190c20 | Ahmed Gottlieb [itest-1787599456-8xso]          |             0.00
+ 01a03a6e-d83c-714f-a4af-41ef3f800e50 | Oleta Jast [itest-1787686680-lsl3]              |             0.00
+ 01a03a7d-64f9-7e86-a77c-57b03b9d1bc9 | Edwardo Kozey [itest-1787687634-2wq6]           |             0.00
+ 01a03a91-b864-7de7-82f1-014c2803a86d | Hillary Thompson [itest-1787688964-dimz]        |             0.00
+ 01a0451d-ab2d-76ae-946a-a55dd904ef87 | Althea Deckow [itest-1787865898-mw45]           |             0.00
+ 01a04524-9a2b-7e0f-a77a-ce6bc67ba17a | Regan Gleason [itest-1787866367-4lt0]           |             0.00
+ 01a04545-43da-736a-be62-0b96a884bdb3 | Alvis Hagenes [itest-1787868507-vln4]           |             0.00
+ 01a0482d-3972-71a8-bae0-7a4a60a25347 | Molly Pollich [itest-1787917259-54iu]           |             0.00
+ 01a04a60-d67f-7406-9d42-4afec65c3c9e | Charley Ortiz [itest-1787954248-mqjf]           |             2.45
+ 01a04a66-945c-7a3b-abdd-0b968ec3da8c | Garrison Tromp [itest-1787954624-a8hw]          |             2.25
+ 01a04a6c-3685-70d0-8c95-5f8c7fa0b854 | Anahi Lind [itest-1787954994-v9h4]              |             2.25
+ 01a04a72-3569-7480-bbd4-eafcfe3e5cbd | Marcellus McKenzie [itest-1787955333-65s0]      |             0.00
+ 01a04a72-f50c-764f-bbb4-582b1b1cfc37 | Kali Renner [itest-1787955333-65s0]             |             2.25
+ 1dc41416-eec7-5788-9416-042d5af62667 | Alice Prescott                                  |             4.00
+ 7f0433a9-2dd1-5afa-8e56-4f803cca15b7 | Peter Okafor                                    |             1.00
+ b4b79106-4dde-5458-8e66-c017ffc2f111 | Harbor Tool & Die Inc                           |             3.00
+ e79a3e7a-e63b-5633-ae72-2c84233f0dfc | Bluerock Freight LLC                            |             4.00
+ ece9efad-e5d4-5bcd-98e0-078cd83ef629 | Dana Whitfield                                  |             1.00
+(48 rows)
+
+
+==== q20-business-summary.sql  [section 1 -> pos_invoice_db] ====
+ month_start |  revenue   | invoice_count 
+-------------+------------+---------------
+ 2025-09-01  |  3300.0000 |             6
+ 2025-10-01  |  3300.0000 |             6
+ 2025-11-01  |  3300.0000 |             6
+ 2025-12-01  |  3300.0000 |             6
+ 2026-01-01  |  3300.0000 |             6
+ 2026-02-01  |  3300.0000 |             6
+ 2026-03-01  |  3300.0000 |             6
+ 2026-04-01  |  5300.0000 |             7
+ 2026-05-01  |  4800.0000 |             7
+ 2026-06-01  |  2700.0000 |             5
+ 2026-07-01  |  5200.0000 |             5
+ 2026-08-01  | 16588.2900 |            43
+(12 rows)
+
+
+==== q20-business-summary.sql  [section 2 -> pos_workorder_db] ====
+ month_start | completed_wo_count | billed_hours 
+-------------+--------------------+--------------
+ 2025-09-01  |                  6 |        13.50
+ 2025-10-01  |                  6 |        13.50
+ 2025-11-01  |                  6 |        13.50
+ 2025-12-01  |                  6 |        13.50
+ 2026-01-01  |                  6 |        13.50
+ 2026-02-01  |                  6 |        13.50
+ 2026-03-01  |                  6 |        13.50
+ 2026-04-01  |                  7 |        17.50
+ 2026-05-01  |                  7 |        16.50
+ 2026-06-01  |                  6 |        11.00
+ 2026-07-01  |                  5 |        14.00
+ 2026-08-01  |                 45 |        22.20
+(12 rows)
+
+
+==== q20-business-summary.sql  [section 3 -> pos_accounting_db] ====
+ month_start |  invoiced  | collected | vendor_paid_and_ap_payments | endpoint_ar_total 
+-------------+------------+-----------+-----------------------------+-------------------
+ 2025-09-01  |  3300.0000 | 3300.0000 |                   3400.0000 |                 0
+ 2025-10-01  |  3300.0000 | 3300.0000 |                   3400.0000 |                 0
+ 2025-11-01  |  3300.0000 | 3400.0000 |                   3400.0000 |                 0
+ 2025-12-01  |  3300.0000 | 3300.0000 |                   3400.0000 |                 0
+ 2026-01-01  |  3300.0000 | 3100.0000 |                   3400.0000 |                 0
+ 2026-02-01  |  3300.0000 | 3300.0000 |                   3400.0000 |                 0
+ 2026-03-01  |  3300.0000 | 3250.0000 |                   3520.0000 |                 0
+ 2026-04-01  |  5300.0000 | 3100.0000 |                   3520.0000 |         2000.0000
+ 2026-05-01  |  4800.0000 | 3500.0000 |                   3520.0000 |         4400.0000
+ 2026-06-01  |  2700.0000 | 2700.0000 |                   3520.0000 |         4400.0000
+ 2026-07-01  |  5200.0000 | 2900.0000 |                   3520.0000 |         6900.0000
+ 2026-08-01  | 16588.2900 | 3900.0000 |                   3520.0000 |        20588.2900
+(12 rows)
+
+
+All ground-truth sections completed.

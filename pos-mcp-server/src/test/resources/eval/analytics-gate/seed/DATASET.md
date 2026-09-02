@@ -353,4 +353,4 @@ therefore load-bearing, not optional:
   were validated against (snapshot; regenerate against the current environment before any future
   apply, e.g. per-DB:
   `SELECT column_name, is_nullable, data_type, column_default IS NOT NULL FROM information_schema.columns WHERE table_schema='public' AND table_name='<t>' ORDER BY ordinal_position`).
-- `ground-truth/runs/2026-09-02-alpha-run.log` — the live run EXPECTED.md was transcribed from.
+- `ground-truth/runs/2026-09-02-alpha-run.txt` — the live run EXPECTED.md was transcribed from.
