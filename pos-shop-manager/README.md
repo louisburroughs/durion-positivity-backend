@@ -34,7 +34,19 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 - `DELETE /v1/{locationId}/bays/{bayId}` — remove a bay
 - `POST /v1/{locationId}/mobileUnit` — register a mobile unit
 - `GET /v1/{locationId}/workorders/{workorderId}/operationalContext` — workorder operational context
-- `GET /v1/{locationId}/technicians/{personId}/person` — technician person detail
+- `GET /v1/shop-manager/mechanics` — paged HR-synchronized mechanic roster
+- `GET /v1/shop-manager/{locationId}/technicians` — paged location technician roster
+- `GET /v1/shop-manager/{locationId}/technicians/{personId}/person` — technician person detail
+
+Both roster endpoints require `shop:technician:view` and support optional exact
+`status` and `skillCode` filters. Status defaults to `ACTIVE`. The location roster
+is ordered by mechanic last name, first name, and person ID before pagination, so
+it accepts `page` and `size` but ignores `sort`; the mechanic roster honours `sort`
+and defaults to that same ordering.
+
+Both emit audit events registered in `internal/config/EventTypes` —
+`SHOPMGR_MECHANIC_ROSTER_LIST` and `SHOPMGR_LOCATION_TECHNICIAN_LIST`, each with
+the `search` latency preset.
 
 ## Configuration
 

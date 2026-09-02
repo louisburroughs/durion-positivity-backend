@@ -14,6 +14,8 @@ tags:
   name: Appointments API
 - description: Bulk set mechanics' skill sets
   name: Mechanic Skill Bulk Ingest API
+- description: Read-only HR-synchronized mechanic roster queries
+  name: Mechanic Roster API
 - description: Operator maintenance of mechanic skill enrichment
   name: Mechanic Skills API
 - description: Create and list technician and resource assignments for an appointment
@@ -609,6 +611,86 @@ paths:
       - Schedule API
       x-required-permissions:
       - shop:schedule:view
+  /v1/shop-manager/mechanics:
+    get:
+      description: 'Returns the eventually consistent mechanic read model synchronized from People/HR, one page at a time.
+
+        Use this tool when building a shop-wide mechanic picker or capability report; use listLocationTechnicians instead when the roster must be scoped to a single shop location, and getTechnicianPerson for one technician''s contact details.
+
+        Preconditions: mechanics are projected from ACTIVE TECHNICIAN staffing assignments over Kafka, so a newly hired mechanic appears only once that projection has caught up.
+
+        Required inputs: none, and there is no request body; optionally narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, and page with the standard page, size and sort parameters, which default to a stable lastName, firstName, personId ordering.
+
+        Emits a SHOPMGR_MECHANIC_ROSTER_LIST audit event; no state changes occur, and rows trail the People/HR authority by the event-propagation delay.
+
+        Returns 403 when the caller lacks shop:technician:view, and an empty page rather than an error when no mechanic matches the filters.
+
+        '
+      operationId: listMechanics
+      parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ON_LEAVE
+          type: string
+      - in: query
+        name: skillCode
+        required: false
+        schema:
+          type: string
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          default:
+          - lastName,ASC
+          - firstName,ASC
+          - personId,ASC
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedModelMechanicRosterEntryResponse'
+          description: Mechanic roster page returned.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks technician roster permission.
+      security:
+      - bearerAuth:
+        - shop:technician:view
+      summary: List mechanics
+      tags:
+      - Mechanic Roster API
+      x-required-permissions:
+      - shop:technician:view
   /v1/shop-manager/mechanics/bulk-ingest:
     post:
       description: 'Sets many mechanics'' skill sets at once, folding the rows of each mechanic into a single replacement.
@@ -722,6 +804,95 @@ paths:
       - Mechanic Skills API
       x-required-permissions:
       - shop:schedule:edit
+  /v1/shop-manager/{locationId}/technicians:
+    get:
+      description: 'Returns the technicians assigned to one shop location, enriched with mechanic identity and skills from the eventually consistent HR read model.
+
+        Use this tool when staffing or dispatching work at a single location; use listMechanics instead for the shop-wide roster, and getTechnicianPerson instead for one technician''s contact details.
+
+        Preconditions: the location must exist as a shop, and both the technician assignments and their mechanic projection must have arrived over Kafka.
+
+        Required inputs: locationId (UUID) as a path parameter, and there is no request body; optionally narrow with status and skillCode, both exact matches, where an omitted status defaults to ACTIVE, and page with page and size, since sort is accepted but ignored and the location roster is returned in a fixed order.
+
+        Emits a SHOPMGR_LOCATION_TECHNICIAN_LIST audit event; no state changes occur, and the enrichment trails the People/HR authority by the event-propagation delay.
+
+        Returns 404 when no shop exists for the location id, 403 when the caller lacks shop:technician:view, and an empty page rather than an error when no technician matches the filters.
+
+        '
+      operationId: listLocationTechnicians
+      parameters:
+      - description: Shop location ID
+        in: path
+        name: locationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ON_LEAVE
+          type: string
+      - in: query
+        name: skillCode
+        required: false
+        schema:
+          type: string
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedModelLocationTechnicianRosterEntryResponse'
+          description: Location technician roster page returned.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks technician roster permission.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Shop location not found.
+      security:
+      - bearerAuth:
+        - shop:technician:view
+      summary: List technicians assigned to a location
+      tags:
+      - Technician API
+      x-required-permissions:
+      - shop:technician:view
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     get:
       description: 'Resolves the person identity (names, emails, phone numbers) of a technician working at a shop location from the local people-contact replica.
@@ -1450,6 +1621,45 @@ components:
       - field
       - message
       type: object
+    LocationTechnicianRosterEntryResponse:
+      description: Location-scoped technician assignment enriched from the HR-synchronized mechanic roster
+      properties:
+        firstName:
+          type: string
+        hireDate:
+          format: date
+          type: string
+        lastName:
+          type: string
+        lastSyncedAt:
+          format: date-time
+          type: string
+        locationId:
+          format: uuid
+          type: string
+        mechanicId:
+          format: uuid
+          type: string
+        personId:
+          format: uuid
+          type: string
+        skills:
+          items:
+            type: string
+          type: array
+        status:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ON_LEAVE
+          type: string
+        technicianId:
+          format: uuid
+          type: string
+        terminationDate:
+          format: date
+          type: string
+      type: object
     MechanicAssignmentItem:
       description: A single mechanic entry within an assignment request
       properties:
@@ -1467,6 +1677,39 @@ components:
           type: string
       required:
       - mechanicPersonId
+      type: object
+    MechanicRosterEntryResponse:
+      description: HR-synchronized mechanic roster entry
+      properties:
+        firstName:
+          type: string
+        hireDate:
+          format: date
+          type: string
+        lastName:
+          type: string
+        lastSyncedAt:
+          format: date-time
+          type: string
+        mechanicId:
+          format: uuid
+          type: string
+        personId:
+          format: uuid
+          type: string
+        skills:
+          items:
+            type: string
+          type: array
+        status:
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ON_LEAVE
+          type: string
+        terminationDate:
+          format: date
+          type: string
       type: object
     MechanicSkillBulkIngestRecord:
       description: One mechanic's proficiency in one skill
@@ -1491,6 +1734,39 @@ components:
       required:
       - personId
       - skillCode
+      type: object
+    PageMetadata:
+      properties:
+        number:
+          format: int64
+          type: integer
+        size:
+          format: int64
+          type: integer
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int64
+          type: integer
+      type: object
+    PagedModelLocationTechnicianRosterEntryResponse:
+      properties:
+        content:
+          items:
+            $ref: '#/components/schemas/LocationTechnicianRosterEntryResponse'
+          type: array
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+      type: object
+    PagedModelMechanicRosterEntryResponse:
+      properties:
+        content:
+          items:
+            $ref: '#/components/schemas/MechanicRosterEntryResponse'
+          type: array
+        page:
+          $ref: '#/components/schemas/PageMetadata'
       type: object
     PersonDTO:
       description: Person details for a technician
