@@ -394,7 +394,32 @@ public class OpenApiDocumentFetcher {
         if (token.isEmpty()) {
             return false;
         }
-        return !specIdentityMatches(specTitle(openAPI), token, properties.identityAliasesFor(token));
+        return !specIdentityMatches(specTitle(openAPI), token, aliasesFor(token, prefixOrServiceId));
+    }
+
+    /**
+     * Aliases may be keyed by the natural spelling of the routing token ({@code vehicle-fitment},
+     * what the property name implies) or by the normalized identity token ({@code vehiclefitment});
+     * accept both, otherwise an alias for a hyphenated domain silently never applies and the guard
+     * false-fails a healthy service (PR #1643 review).
+     */
+    private @NonNull List<String> aliasesFor(@NonNull String normalizedToken, @NonNull String prefixOrServiceId) {
+        String rawKey = (prefixOrServiceId.startsWith("/") ? prefixOrServiceId.substring(1) : prefixOrServiceId)
+                .toLowerCase(Locale.ROOT);
+        List<String> normalized = properties.identityAliasesFor(normalizedToken);
+        if (rawKey.equals(normalizedToken)) {
+            return normalized;
+        }
+        List<String> raw = properties.identityAliasesFor(rawKey);
+        if (raw.isEmpty()) {
+            return normalized;
+        }
+        if (normalized.isEmpty()) {
+            return raw;
+        }
+        List<String> merged = new ArrayList<>(normalized);
+        merged.addAll(raw);
+        return merged;
     }
 
     private static @Nullable String specTitle(@NonNull OpenAPI openAPI) {

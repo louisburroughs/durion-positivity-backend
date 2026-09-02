@@ -45,6 +45,8 @@ mcp:
     # contain its routing token is treated as a FAILED fetch (stale gateway/Eureka route serving
     # another service's spec), so its previously-registered ops are kept, not replaced or pruned.
     # Aliases list extra accepted title tokens for domains whose title doesn't name the domain.
+    # Keys may be spelled as the routing token ("vehicle-fitment") or its normalized form
+    # ("vehiclefitment") — both are honored.
     spec-identity-aliases:
       catalog: [product]        # pos-catalog's title is "Positivity Product API"
       people: [human resources] # pos-people's title is "POS Human Resources Service API"

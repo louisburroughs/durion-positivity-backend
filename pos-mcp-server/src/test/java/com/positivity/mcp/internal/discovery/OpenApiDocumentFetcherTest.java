@@ -283,6 +283,46 @@ class OpenApiDocumentFetcherTest {
     }
 
     @Test
+    @DisplayName("fetchAggregateSpec honors an alias keyed by the hyphenated routing token, not just the "
+            + "normalized form (PR #1643 review)")
+    void fetchAggregateSpec_acceptsSpec_whenAliasIsKeyedByHyphenatedRoutingToken() {
+        // The natural way to write the property is the routing token as it appears in the URL
+        // ("vehicle-fitment"); the guard normalizes tokens internally ("vehiclefitment") and must
+        // look aliases up under BOTH spellings, or a hyphenated domain's alias silently never
+        // applies and the guard false-fails a healthy service.
+        ExchangeFunction exchange = request -> Mono.just(
+                switch (request.url().getPath()) {
+                    case "/v3/api-docs" ->
+                        ClientResponse.create(HttpStatus.OK).body("""
+                            {"openapi":"3.0.1","info":{"title":"Positivity API Gateway","version":"v1"},"paths":{}}
+                            """).build();
+                    case "/v3/api-docs/swagger-config" ->
+                        ClientResponse.create(HttpStatus.OK).body("""
+                            {"urls":[{"url":"/vehicle-fitment/v3/api-docs","name":"vehicle-fitment"}]}
+                            """).build();
+                    case "/vehicle-fitment/v3/api-docs" ->
+                        ClientResponse.create(HttpStatus.OK)
+                                .body(serviceSpecJson("Tires API", "/v1/fitments"))
+                                .build();
+                    default -> throw new IllegalStateException("Unexpected request: " + request.url());
+                });
+        WebClient client = WebClient.builder().exchangeFunction(exchange).build();
+        OpenApiDocumentFetcher fetcher = fetcherWith(
+                mock(DiscoveryClient.class),
+                client,
+                AGGREGATE_URL,
+                List.of(),
+                Map.of("vehicle-fitment", List.of("tires")));
+
+        OpenApiDocumentFetcher.DiscoveredOpenApi result =
+                fetcher.fetchAggregateSpec().block(Duration.ofSeconds(5));
+
+        assertThat(result).isNotNull();
+        assertThat(result.openApi().getPaths()).containsKey("/vehicle-fitment/v1/fitments");
+        assertThat(result.failedPrefixes()).isEmpty();
+    }
+
+    @Test
     @DisplayName("fetchAggregateSpec passes a spec with the unverifiable springdoc default title (#1632)")
     void fetchAggregateSpec_acceptsSpec_whenTitleIsUnverifiableDefault() {
         // Services without an OpenApiConfig serve springdoc's default "OpenAPI definition" title.

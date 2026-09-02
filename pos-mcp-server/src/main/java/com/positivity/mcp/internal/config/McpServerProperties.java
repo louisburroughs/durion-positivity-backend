@@ -9,9 +9,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * @param specIdentityAliases per-domain extra title tokens accepted by the spec-identity guard
- *     (#1632 follow-up), keyed by routing token (routing prefix without the leading slash). Needed
- *     where a service's OpenAPI {@code info.title} does not contain its routing token — e.g.
- *     pos-catalog's title says "Product" and pos-people's says "Human Resources".
+ *     (#1632 follow-up), keyed by routing token — either its natural spelling (routing prefix
+ *     without the leading slash, e.g. {@code vehicle-fitment}) or its normalized form
+ *     ({@code vehiclefitment}); the guard honors both. Needed where a service's OpenAPI
+ *     {@code info.title} does not contain its routing token — e.g. pos-catalog's title says
+ *     "Product" and pos-people's says "Human Resources".
  */
 @ConfigurationProperties(prefix = "mcp.server")
 public record McpServerProperties(
