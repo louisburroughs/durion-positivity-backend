@@ -324,6 +324,10 @@
 			Remove each override once a Spring Boot 4.1.x patch release manages the fixed version.
 			Sourced from the 2026-08-08 OWASP dependency-check scan (issue #1200).
 		-->
+		<!-- CVE-2026-59313 (SSE stream corruption, 9.8), CVE-2026-59283 (SpEL safety guard
+		     bypass, 9.1), CVE-2026-59314 — fixed in Spring Framework 7.0.9 (managed by
+		     Spring Boot 4.1.1; remove once the parent is bumped to it) -->
+		<spring-framework.version>7.0.9</spring-framework.version>
 		<!-- CVE-2026-42198, CVE-2026-54291 -->
 		<postgresql.version>42.7.13</postgresql.version>
 		<!-- CVE-2026-65182, CVE-2026-65637, CVE-2026-65905, CVE-2026-66299, CVE-2026-68525 et al.
