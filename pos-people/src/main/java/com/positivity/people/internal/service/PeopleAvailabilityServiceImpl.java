@@ -1,9 +1,12 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
@@ -31,6 +34,8 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     private final UserPersonTranslationService userPersonTranslationService;
 
     private final Clock clock;
+
+    private final ExtLocationReplicaRepository extLocationReplicaRepository;
 
     @Override
     @NonNull
@@ -69,11 +74,48 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     @Override
     @NonNull
-    public UUID resolveCurrentUserPrimaryLocationId() {
+    public PrimaryLocationResolution resolveCurrentUserPrimaryLocation() {
         LocalDate targetDate = LocalDate.now(clock);
-        return findPrimaryLocationId(resolveRequesterPersonId(), targetDate)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "No primary location assignment exists for requester on " + targetDate));
+        String username = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new EntityNotFoundException("Authenticated user context is missing"));
+
+        Optional<UUID> primaryLocationId =
+                tryResolvePersonId(username).flatMap(personId -> findPrimaryLocationId(personId, targetDate));
+        if (primaryLocationId.isPresent()) {
+            return new PrimaryLocationResolution(primaryLocationId.get(), false);
+        }
+
+        return resolveTopLevelLocationId()
+                .map(topLevelId -> new PrimaryLocationResolution(topLevelId, true))
+                .orElseThrow(() -> new EntityNotFoundException("No primary location assignment exists for requester on "
+                        + targetDate + " and no top-level default location is available"));
+    }
+
+    /**
+     * Person-link resolution that treats a missing link as "no assignment" (so the
+     * top-level default can apply) instead of an error. Issue: #1636.
+     */
+    @NonNull
+    private Optional<UUID> tryResolvePersonId(@NonNull String username) {
+        try {
+            return Optional.of(userPersonTranslationService.getPersonUuidForUser(username));
+        } catch (EntityNotFoundException ex) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Resolves the platform's top-level default location from the event-fed {@code ext_location}
+     * / {@code ext_location_parent} replicas (ADR-0044 §6): the active hierarchy root (a parent
+     * that is no location's child), else the oldest active location (UUID v7 order). Mirrors
+     * pos-location's own {@code GET /v1/locations/top-level} semantics. Issue: #1636.
+     */
+    @NonNull
+    private Optional<UUID> resolveTopLevelLocationId() {
+        return extLocationReplicaRepository.findActiveHierarchyRoots().stream()
+                .findFirst()
+                .or(extLocationReplicaRepository::findFirstByActiveTrueOrderByLocationIdAsc)
+                .map(ExtLocationReplica::getLocationId);
     }
 
     @Override

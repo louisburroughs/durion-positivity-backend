@@ -1,6 +1,7 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -12,15 +13,20 @@ public interface PeopleAvailabilityService {
     List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date);
 
     /**
-     * Resolve the current authenticated user's primary location ID. Uses the security
+     * Resolve the current authenticated user's primary location. Uses the security
      * context to identify the user, translates to personId, and returns their primary
-     * active staffing location.
-     * @return primary location UUID for the current user
-     * @throws jakarta.persistence.EntityNotFoundException if user context is missing or
-     * no active assignment exists
+     * active staffing location. When the user has no person link or no active primary
+     * assignment, falls back to the platform's top-level location (resolved from the
+     * event-fed {@code ext_location} replicas) with {@code defaulted=true}.
+     *
+     * Issue: #1636
+     *
+     * @return primary location resolution for the current user
+     * @throws jakarta.persistence.EntityNotFoundException if the user context is missing,
+     * or no primary assignment exists and no top-level default location could be resolved
      */
     @NonNull
-    UUID resolveCurrentUserPrimaryLocationId();
+    PrimaryLocationResolution resolveCurrentUserPrimaryLocation();
 
     /**
      * Resolve a person's primary location ID from their active staffing assignments.

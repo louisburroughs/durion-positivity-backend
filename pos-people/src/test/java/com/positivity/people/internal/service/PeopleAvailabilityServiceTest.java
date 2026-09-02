@@ -2,11 +2,15 @@ package com.positivity.people.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
+import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,7 +32,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * Unit tests for PeopleAvailabilityServiceImpl, focused on primary-location
  * resolution semantics: the endpoint must return the assignment flagged
- * primary, and 404 (EntityNotFoundException) when none is flagged.
+ * primary, fall back to the platform's top-level location when none is
+ * flagged (#1636), and 404 (EntityNotFoundException) only when neither is
+ * available.
  */
 @ExtendWith(MockitoExtension.class)
 class PeopleAvailabilityServiceTest {
@@ -39,6 +45,7 @@ class PeopleAvailabilityServiceTest {
     private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID PRIMARY_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
     private static final UUID SECONDARY_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
+    private static final UUID TOP_LEVEL_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000030");
 
     @Mock
     private EmployeeLocationAssignmentRepository assignmentRepository;
@@ -49,12 +56,27 @@ class PeopleAvailabilityServiceTest {
     @Mock
     private UserPersonTranslationService userPersonTranslationService;
 
+    @Mock
+    private ExtLocationReplicaRepository extLocationReplicaRepository;
+
     private PeopleAvailabilityServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PeopleAvailabilityServiceImpl(
-                assignmentRepository, extPersonReplicaRepository, userPersonTranslationService, FIXED_CLOCK);
+                assignmentRepository,
+                extPersonReplicaRepository,
+                userPersonTranslationService,
+                FIXED_CLOCK,
+                extLocationReplicaRepository);
+    }
+
+    private ExtLocationReplica topLevelReplica() {
+        return ExtLocationReplica.builder()
+                .locationId(TOP_LEVEL_LOCATION_ID)
+                .name("HQ")
+                .active(true)
+                .build();
     }
 
     private EmployeeLocationAssignment assignment(UUID locationId, boolean primary) {
@@ -68,7 +90,7 @@ class PeopleAvailabilityServiceTest {
     }
 
     @Test
-    void resolveCurrentUserPrimaryLocationId_returnsPrimaryAssignmentLocation() {
+    void resolveCurrentUserPrimaryLocation_returnsPrimaryAssignmentLocation() {
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
@@ -76,46 +98,87 @@ class PeopleAvailabilityServiceTest {
                     .thenReturn(
                             List.of(assignment(PRIMARY_LOCATION_ID, true), assignment(SECONDARY_LOCATION_ID, false)));
 
-            assertThat(service.resolveCurrentUserPrimaryLocationId()).isEqualTo(PRIMARY_LOCATION_ID);
+            PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
+
+            assertThat(resolution.locationId()).isEqualTo(PRIMARY_LOCATION_ID);
+            assertThat(resolution.defaulted()).isFalse();
+            verifyNoInteractions(extLocationReplicaRepository);
         }
     }
 
     @Test
-    void resolveCurrentUserPrimaryLocationId_throwsWhenNoAssignmentIsPrimary() {
+    void resolveCurrentUserPrimaryLocation_defaultsToTopLevelWhenNoAssignmentIsPrimary() {
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(List.of(assignment(SECONDARY_LOCATION_ID, false)));
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
 
-            assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocationId())
-                    .isInstanceOf(EntityNotFoundException.class)
-                    .hasMessageContaining("No primary location assignment");
+            PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
+
+            assertThat(resolution.locationId()).isEqualTo(TOP_LEVEL_LOCATION_ID);
+            assertThat(resolution.defaulted()).isTrue();
         }
     }
 
     @Test
-    void resolveCurrentUserPrimaryLocationId_throwsWhenNoActiveAssignments() {
+    void resolveCurrentUserPrimaryLocation_defaultsToTopLevelWhenNoActiveAssignments() {
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(List.of());
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
 
-            assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocationId())
+            PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
+
+            assertThat(resolution.locationId()).isEqualTo(TOP_LEVEL_LOCATION_ID);
+            assertThat(resolution.defaulted()).isTrue();
+        }
+    }
+
+    @Test
+    void resolveCurrentUserPrimaryLocation_defaultsToTopLevelWhenNoPersonLink() {
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
+            when(userPersonTranslationService.getPersonUuidForUser(USERNAME))
+                    .thenThrow(new EntityNotFoundException("No person link found for username: " + USERNAME));
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
+
+            PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
+
+            assertThat(resolution.locationId()).isEqualTo(TOP_LEVEL_LOCATION_ID);
+            assertThat(resolution.defaulted()).isTrue();
+        }
+    }
+
+    @Test
+    void resolveCurrentUserPrimaryLocation_throwsWhenNoAssignmentAndNoTopLevelFallback() {
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
+            when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
+            when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
+                    .thenReturn(List.of(assignment(SECONDARY_LOCATION_ID, false)));
+            when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of());
+            when(extLocationReplicaRepository.findFirstByActiveTrueOrderByLocationIdAsc())
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocation())
                     .isInstanceOf(EntityNotFoundException.class)
                     .hasMessageContaining("No primary location assignment");
         }
     }
 
     @Test
-    void resolveCurrentUserPrimaryLocationId_throwsWhenUserContextMissing() {
+    void resolveCurrentUserPrimaryLocation_throwsWhenUserContextMissing() {
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocationId())
+            assertThatThrownBy(() -> service.resolveCurrentUserPrimaryLocation())
                     .isInstanceOf(EntityNotFoundException.class)
                     .hasMessageContaining("user context is missing");
+            verifyNoInteractions(extLocationReplicaRepository);
         }
     }
 

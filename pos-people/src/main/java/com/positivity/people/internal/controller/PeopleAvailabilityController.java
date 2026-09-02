@@ -2,6 +2,7 @@ package com.positivity.people.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
+import com.positivity.people.internal.dto.PrimaryLocationResolution;
 import com.positivity.people.internal.dto.PrimaryLocationResponse;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
@@ -80,20 +81,21 @@ public class PeopleAvailabilityController {
 
     @Operation(operationId = "getMyPrimaryLocation", summary = "Get Current User Primary Location", description = """
                     Resolves the authenticated caller's primary active location from their staffing assignments as \
-                    of today.
+                    of today, defaulting to the platform's top-level location when none is assigned.
                     Use this tool when a UI or service needs the current user's home location; use listMyLocations \
                     instead to see every active assignment, and getPersonPrimaryLocation for a different person.
-                    Preconditions: the caller must be linked to a person, and that person must have an ACTIVE \
-                    assignment flagged primary whose effective dates cover today.
+                    Preconditions: none beyond authentication; callers without a person link or a primary \
+                    assignment receive the top-level default location with defaulted=true.
                     Required inputs: none; identity comes from the bearer token and there are no parameters.
                     Emits a PEOPLE_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only \
                     projection.
-                    Returns 404 when the caller has no person link or no active assignment flagged as primary today.
+                    Returns 404 only when the caller has no primary assignment AND no top-level default location \
+                    could be resolved from the location replica.
                     """)
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
     @ApiResponse(
             responseCode = "404",
-            description = "No primary location assignment found for current user.",
+            description = "No primary location assignment found and no top-level default location available.",
             content =
                     @Content(
                             mediaType = "application/problem+json",
@@ -105,10 +107,15 @@ public class PeopleAvailabilityController {
             scopes = {"people:availability:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
     public ResponseEntity<PrimaryLocationResponse> getCurrentUserPrimaryLocation() {
-        UUID locationId = peopleAvailabilityService.resolveCurrentUserPrimaryLocationId();
-        log.info("Resolved primary location(mask) {} for current user", maskForLog(locationId));
-        return ResponseEntity.ok(
-                PrimaryLocationResponse.builder().locationId(locationId).build());
+        PrimaryLocationResolution resolution = peopleAvailabilityService.resolveCurrentUserPrimaryLocation();
+        log.info(
+                "Resolved primary location(mask) {} for current user (defaulted={})",
+                maskForLog(resolution.locationId()),
+                resolution.defaulted());
+        return ResponseEntity.ok(PrimaryLocationResponse.builder()
+                .locationId(resolution.locationId())
+                .defaulted(resolution.defaulted())
+                .build());
     }
 
     @Operation(

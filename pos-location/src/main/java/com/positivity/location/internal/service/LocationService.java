@@ -19,6 +19,19 @@ public interface LocationService {
 
     Optional<LocationResponseDTO> getLocationByIdDto(UUID id);
 
+    /**
+     * Resolves the single top-level location used as the platform-wide default (e.g. when a
+     * user has no primary staffing assignment). Prefers the active root of the parent-child
+     * hierarchy (a parent that is itself no location's child); when no hierarchy edges
+     * exist, falls back to the oldest active location. Deterministic: ties break on id
+     * (UUID v7 is time-ordered).
+     *
+     * Issue: #1636
+     *
+     * @return the top-level location, or empty when no active location exists
+     */
+    Optional<LocationResponseDTO> getTopLevelLocationDto();
+
     Page<LocationResponseDTO> listLocations(String status, Pageable pageable);
 
     LocationValidationResponseDTO getLocationValidation(UUID id);
