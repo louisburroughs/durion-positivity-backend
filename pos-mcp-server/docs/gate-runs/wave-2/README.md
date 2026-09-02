@@ -1,8 +1,13 @@
-# Wave 2 gate runs — PENDING
+# Wave 2 gate runs
 
 Issue: #1601 (W2.3, Wave 2 exit gate) · analytics-capability-plan.md §4 "Wave 2 exit gate"
 
-## Status: not run in this sandbox
+## Status: selection baseline GREEN (2026-09-02); chat-path and answer-correctness runs pending
+
+See `2026-09-02-selection-baseline.md` for the first fully-green live `BaselineCaptureIT` run and
+the explicit list of what remains unverified.
+
+## Original prerequisites note
 
 This directory is a placeholder. The Wave 2 exit gate requires running the Q-gate protocol
 (Q1, Q3, Q4, Q5, Q7, Q8, Q9, Q12, Q15, Q16, Q17 — analytics-capability-plan.md §2/§6) plus the
