@@ -160,7 +160,8 @@ public class LocationController {
                     (a location that is a parent of others but a child of none), falling back to the oldest \
                     active location when no hierarchy edges exist. The pick is deterministic (ties break on id).
                     Use this tool when a caller needs a default location, e.g. resolving a fallback for users \
-                    with no primary staffing assignment; use getLocationById when the id is already known.
+                    with no primary staffing assignment; do not use it when the id is already known — call \
+                    getLocationById instead.
                     Preconditions: at least one active location must exist.
                     Required inputs: none; there are no parameters and no request body.
                     No events are emitted and no state changes; this is a read-only projection.
