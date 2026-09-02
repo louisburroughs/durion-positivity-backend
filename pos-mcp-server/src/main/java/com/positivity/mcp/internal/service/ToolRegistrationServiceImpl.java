@@ -43,6 +43,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private final Counter toolsRegisteredTotal;
     // #1121: orphan openapi rows pruned to reconcile the persisted set with the current spec.
     private final Counter toolsPrunedTotal;
+    // #1632: per-service spec fetches that failed during an aggregate cycle (partial discovery).
+    private final Counter discoveryPartialTotal;
 
     public ToolRegistrationServiceImpl(
             @NonNull McpServerProperties properties,
@@ -69,6 +71,10 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                 .register(meterRegistry);
         this.toolsPrunedTotal = Counter.builder("tools.pruned")
                 .description("Stale openapi-discovered mcp_tool rows pruned to match the current spec (#1121)")
+                .register(meterRegistry);
+        this.discoveryPartialTotal = Counter.builder("discovery.partial")
+                .description("Per-service spec fetches that failed during an aggregate discovery cycle, "
+                        + "leaving that cycle partial (#1632)")
                 .register(meterRegistry);
     }
 
@@ -105,6 +111,13 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
             OpenApiDocumentFetcher.@NonNull DiscoveredOpenApi discovered, long totalStartNanos) {
         var specifications =
                 openApiToolMapper.toAggregateToolSpecifications(discovered.baseUri(), discovered.openApi());
+        // PRCR-202: increment BEFORE the empty-specifications early return, so a cycle that is both
+        // partial and tool-empty still emits the discovery_partial_total signal.
+        List<String> failedPrefixes = discovered.failedPrefixes();
+        if (!failedPrefixes.isEmpty()) {
+            // #1632: alertable partial-discovery signal (see docs/alerts/tool-discovery-alerts.md).
+            discoveryPartialTotal.increment(failedPrefixes.size());
+        }
         if (specifications.isEmpty()) {
             log.warn(
                     "No MCP tools matched the configured allowlist in the aggregate spec. Path prefixes: {}",
@@ -119,13 +132,93 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         toolsDiscoveredTotal.increment(specifications.size());
         log.info("Registering {} MCP tools from gateway aggregate spec: {}", specifications.size(), toolNames);
 
-        return persistDiscoveredOperations(discovered.openApi())
+        return persistDiscoveredOperations(discovered.openApi(), failedPrefixes)
                 .then(Flux.fromIterable(specifications)
                         .flatMap(this::addToolWithTiming)
                         .then(mcpAsyncServer.notifyToolsListChanged()))
+                .then(
+                        failedPrefixes.isEmpty()
+                                ? Mono.<Void>empty()
+                                : registerFailedPrefixesViaTargetedFallback(failedPrefixes))
                 .doOnSuccess(ignored -> log.info(
                         "Registered MCP tools from gateway aggregate spec in {} ms", elapsedMs(totalStartNanos)))
                 .thenReturn(Boolean.TRUE);
+    }
+
+    /**
+     * #1632: after a PARTIAL aggregate cycle, retry the failed prefixes through the per-service Eureka
+     * path so their tools return to the LIVE tool surface, not just the DB. Keeping the DB rows alone
+     * is not enough: {@link McpAsyncServer}'s tool list is in-memory, so if the server (re)started
+     * during a partial fetch the kept rows do NOT restore those tools in {@code tools/list} — and
+     * {@code DiscoveryRefreshScheduler} is opt-in ({@code mcp.server.discovery-refresh.enabled}) and
+     * enabled in no environment, so without this retry the failed domains would stay absent
+     * indefinitely. Fail-soft per service: a prefix whose targeted fetch also fails is logged at WARN
+     * and remains absent until a successful refresh.
+     */
+    private @NonNull Mono<Void> registerFailedPrefixesViaTargetedFallback(@NonNull List<String> failedPrefixes) {
+        // Routing prefixes map 1:1 to Eureka service ids by stripping the leading slash
+        // ("/workorder" → "workorder"), matching how the swagger-config doc URLs are formed.
+        List<String> serviceIds = failedPrefixes.stream()
+                .map(ToolRegistrationServiceImpl::prefixToServiceId)
+                .toList();
+        log.warn(
+                "Aggregate discovery was partial; running targeted per-service fallback for failed prefix(es) {} "
+                        + "(service ids {})",
+                failedPrefixes,
+                serviceIds);
+        return Flux.fromIterable(serviceIds)
+                .flatMap(serviceId -> fetchSpecificationsForService(serviceId)
+                        .filter(specs -> !specs.isEmpty())
+                        .switchIfEmpty(Mono.<List<McpServerFeatures.AsyncToolSpecification>>fromRunnable(() -> log.warn(
+                                "Targeted per-service fallback also failed for service {} — its tools are "
+                                        + "still absent from the live tool list until a successful refresh",
+                                serviceId))))
+                .flatMapIterable(specs -> specs)
+                .collectList()
+                .flatMap(specifications -> {
+                    if (specifications.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    toolsDiscoveredTotal.increment(specifications.size());
+                    log.info(
+                            "Registering {} MCP tools from targeted per-service fallback for failed prefix(es) {}",
+                            specifications.size(),
+                            failedPrefixes);
+                    return Flux.fromIterable(specifications)
+                            .flatMap(this::addToolWithTiming)
+                            .then(mcpAsyncServer.notifyToolsListChanged());
+                })
+                .onErrorResume(ex -> {
+                    log.warn(
+                            "Targeted per-service fallback errored for prefix(es) {}: {} — their tools are still "
+                                    + "absent from the live tool list until a successful refresh",
+                            failedPrefixes,
+                            ex.getMessage());
+                    return Mono.empty();
+                })
+                .then();
+    }
+
+    private static @NonNull String prefixToServiceId(@NonNull String prefix) {
+        return prefix.startsWith("/") ? prefix.substring(1) : prefix;
+    }
+
+    /**
+     * Shared per-service discovery step used by both the full per-service fallback and the #1632
+     * targeted failed-prefix fallback: fetch one service's own OpenAPI via Eureka and map it to tool
+     * specifications. Fail-soft — an unreachable service or fetch/map error is logged at WARN and
+     * yields an empty result, never aborting the batch.
+     */
+    private @NonNull Mono<List<McpServerFeatures.AsyncToolSpecification>> fetchSpecificationsForService(
+            @NonNull String serviceId) {
+        return openApiDocumentFetcher
+                .fetchForService(serviceId)
+                .map(discovered -> openApiToolMapper.toToolSpecifications(
+                        discovered.serviceId(), discovered.baseUri(), discovered.openApi()))
+                .onErrorResume(ex -> {
+                    log.warn("Per-service discovery failed for {}: {}", serviceId, ex.getMessage());
+                    return Mono.empty();
+                });
     }
 
     /**
@@ -146,14 +239,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                 serviceIds.size(),
                 String.join(", ", serviceIds));
         return Flux.fromIterable(serviceIds)
-                .flatMap(serviceId -> openApiDocumentFetcher
-                        .fetchForService(serviceId)
-                        .map(discovered -> openApiToolMapper.toToolSpecifications(
-                                discovered.serviceId(), discovered.baseUri(), discovered.openApi()))
-                        .onErrorResume(ex -> {
-                            log.warn("Per-service discovery failed for {}: {}", serviceId, ex.getMessage());
-                            return Mono.empty();
-                        }))
+                .flatMap(this::fetchSpecificationsForService)
                 .flatMapIterable(specs -> specs)
                 .collectList()
                 .flatMap(specifications -> {
@@ -180,7 +266,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * {@code x-required-permissions} extension (#781, fail-closed — an op with no extension gets no
      * grant and is never selected until curated via the #785 admin surface).
      */
-    private @NonNull Mono<Void> persistDiscoveredOperations(@NonNull OpenAPI openApi) {
+    private @NonNull Mono<Void> persistDiscoveredOperations(
+            @NonNull OpenAPI openApi, @NonNull List<String> failedPrefixes) {
         return Mono.fromRunnable(() -> {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
@@ -192,7 +279,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                                     + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
-                    pruneStaleOperations(persisted, discoveredNames);
+                    pruneStaleOperations(persisted, discoveredNames, failedPrefixes);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();
@@ -251,12 +338,35 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * change or discovery-mode switch, since persistence is otherwise upsert-only). Guarded on {@code
      * persisted > 0} so a run that wrote nothing (bad/empty spec, DB trouble) can never wipe the
      * catalog; {@code pruneDiscoveredOperationsExcept} also no-ops on an empty set.
+     *
+     * <p>#1632: when any per-service spec fetch failed this cycle, the failed domains' ops are absent
+     * from {@code discoveredNames} not because the services removed them but because we could not see
+     * them — on alpha (2026-09-01) pruning against exactly such a partial aggregate deleted every
+     * previously-registered pos-invoice op after a transient routing fault. The prune still RUNS
+     * (per-prefix, so one permanently flappy service can never starve reconciliation for the healthy
+     * domains) but excludes the failed prefixes' domains; their rows are kept until a cycle sees their
+     * spec again.
      */
-    private void pruneStaleOperations(int persisted, @NonNull Set<String> discoveredNames) {
+    private void pruneStaleOperations(
+            int persisted, @NonNull Set<String> discoveredNames, @NonNull List<String> failedPrefixes) {
         if (persisted <= 0 || discoveredNames.isEmpty()) {
             return;
         }
-        int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames);
+        Set<String> excludedDomains = failedPrefixes.stream()
+                .map(ToolRegistrationServiceImpl::prefixToServiceId)
+                .collect(Collectors.toSet());
+        if (excludedDomains.isEmpty()) {
+            log.info("Running the #1121 stale-op prune against a complete aggregate (no excluded domains)");
+        } else {
+            // ERROR, not WARN: a partial aggregate means whole domains are invisible to discovery,
+            // and their rows are only being kept, not reconciled, this cycle.
+            log.error(
+                    "Running the #1121 stale-op prune with {} domain(s) excluded because their spec fetch "
+                            + "failed this cycle: {}. Their rows are kept, not reconciled, until a successful fetch.",
+                    excludedDomains.size(),
+                    excludedDomains);
+        }
+        int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames, excludedDomains);
         if (pruned > 0) {
             toolsPrunedTotal.increment(pruned);
             log.info("Pruned {} stale openapi mcp_tool row(s) not in the current spec (#1121)", pruned);

@@ -54,6 +54,12 @@
       "description": "Path fragment substrings that exclude matching API paths from aggregate MCP tool discovery."
     },
     {
+      "name": "mcp.server.discovery-max-spec-bytes",
+      "type": "java.lang.Integer",
+      "description": "Maximum in-memory buffer size in bytes for a fetched OpenAPI spec during discovery.",
+      "defaultValue": 16777216
+    },
+    {
       "name": "mcp.security.permit-all-transport",
       "type": "java.lang.Boolean",
       "description": "Allow all MCP transport requests without authentication when enabled.",

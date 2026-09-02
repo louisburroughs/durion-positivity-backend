@@ -2,12 +2,15 @@
 
 Alert conditions for OpenAPI-driven MCP tool discovery and registration. The MCP server discovers
 gateway operations at startup (and, when `mcp.server.discovery-refresh.enabled=true`, periodically)
-and registers them as MCP tools. Two Micrometer counters back these alerts (Prometheus names in
+and registers them as MCP tools. Three Micrometer counters back these alerts (Prometheus names in
 parentheses):
 
 - `tools.discovered` (`tools_discovered_total`) — operations matched to tools during a discovery run,
   from either the gateway aggregate spec or the per-service Eureka fallback.
 - `tools.registered` (`tools_registered_total`) — tools successfully added to the MCP server.
+- `discovery.partial` (`discovery_partial_total`) — per-service spec fetches that failed during an
+  aggregate discovery cycle, leaving that cycle partial (#1632). Incremented by the number of failed
+  routing prefixes each partial cycle.
 
 Both are **cumulative counters** that only ever advance, incrementing during each discovery run
 (startup + each refresh cycle). Their raw values are not comparable across time — alert on their
@@ -43,7 +46,17 @@ permanently true after the first-ever failure).
    - Severity: P2
    - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
 
-4. Name: McpPerServiceFallbackEngaged
+4. Name: McpToolDiscoveryPartial
+   - Trigger: any partial discovery cycle in the window — `increase(discovery_partial_total[30m]) > 0`.
+     A partial cycle means one or more services' OpenAPI specs could not be fetched: their domains'
+     rows are kept (excluded from the #1121 prune) but the domains are invisible to discovery this
+     cycle, and if the targeted per-service retry also failed their tools are absent from the live
+     tool surface until a successful refresh. Alerting on the per-window *increase* (never the raw
+     cumulative value) means the alert reflects current cycles, not a single historical failure.
+   - Severity: P2 (whole domains may be missing from the assistant's tool surface)
+   - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
+
+5. Name: McpPerServiceFallbackEngaged
    - Trigger: log-based — the message `falling back to per-service Eureka discovery` appears at WARN/
      INFO. Not an outage on its own (the fallback is doing its job), but it means the gateway aggregate
      endpoint is not serving tools and should be investigated.
@@ -54,6 +67,6 @@ permanently true after the first-ever failure).
 
 - Grace-period thresholds (e.g. 15m) should exceed startup discovery time plus Eureka registration
   lag on the target environment; tune per environment.
-- Alerts 1–3 are metric-based (Prometheus). Alert 4 is log-based (Loki/CloudWatch Logs) — key off the
+- Alerts 1–4 are metric-based (Prometheus). Alert 5 is log-based (Loki/CloudWatch Logs) — key off the
   fixed log phrases in `ToolRegistrationServiceImpl` / `OpenApiDocumentFetcher`.
 - Connect each alert to the on-call rotation and notification channels.

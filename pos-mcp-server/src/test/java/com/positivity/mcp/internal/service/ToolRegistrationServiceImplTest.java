@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -231,12 +232,12 @@ class ToolRegistrationServiceImplTest {
         ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
         when(repo.upsertDiscoveredOperation(any(), any()))
                 .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        when(repo.pruneDiscoveredOperationsExcept(any())).thenReturn(3);
+        when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(3);
 
         serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
 
         // Reconciliation runs with exactly the names discovered this run, and the counter reflects the deletes.
-        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"));
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"), Set.of());
         assertThat(meterRegistry.get("tools.pruned").counter().count()).isEqualTo(3.0);
     }
 
@@ -248,6 +249,114 @@ class ToolRegistrationServiceImplTest {
      * 0) always implies at least one discovered name. That combination is an unreachable defensive
      * guard, not a real branch to characterise.
      */
+    @Test
+    @DisplayName("registerDiscoveredTools runs the prune with the failed domain excluded when a per-service "
+            + "spec fetch failed (#1632)")
+    void registerDiscoveredTools_prunesWithFailedDomainExcluded_whenAnyServiceFetchFailed() {
+        // A partial aggregate: this cycle persisted real ops, but /workorder's spec fetch failed.
+        // Pruning workorder rows would treat every workorder_* op as removed and delete it — exactly
+        // what happened on alpha (2026-09-01) after a transient routing fault. The prune must still
+        // RUN (so healthy domains reconcile every cycle) but with the failed prefix's domain excluded.
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered = new OpenApiDocumentFetcher.DiscoveredOpenApi(
+                "aggregate", GATEWAY_BASE_URI, new OpenAPI(), List.of("/workorder"));
+        DiscoveredOperation op = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        // The #1632 targeted fallback retries the failed prefix per-service; an empty result here
+        // simulates the service still being unreachable (fail-soft, logged, no registration).
+        when(openApiDocumentFetcher.fetchForService("workorder")).thenReturn(Mono.empty());
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+
+        ListAppender<ILoggingEvent> logAppender = attachLogAppender();
+        try {
+            serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+            // #1632 companion path: when the targeted retry ALSO fails, the miss is WARN-logged with
+            // the service id so operators know the domain's tools stay absent until a refresh.
+            boolean hasFallbackMissWarning = logAppender.list.stream()
+                    .filter(e -> e.getLevel() == Level.WARN)
+                    .anyMatch(e -> e.getFormattedMessage().contains("Targeted per-service fallback also failed")
+                            && e.getFormattedMessage().contains("workorder"));
+            assertThat(hasFallbackMissWarning)
+                    .as("Expected a WARN naming 'workorder' when the targeted fallback fetch is also empty")
+                    .isTrue();
+        } finally {
+            detachLogAppender(logAppender);
+        }
+
+        // Ops still persist (upsert-only is safe on a partial view), the targeted fallback retried the
+        // failed prefix, and the prune ran with the failed domain excluded rather than being skipped.
+        verify(repo).upsertDiscoveredOperation(any(), any());
+        verify(openApiDocumentFetcher).fetchForService("workorder");
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"), Set.of("workorder"));
+        // Everything else still registers, but no workorder tool reaches the live surface: the only
+        // addTool this cycle is the healthy aggregate spec.
+        verify(mcpAsyncServer).addTool(spec);
+        verify(mcpAsyncServer, times(1)).addTool(any());
+        // The partial-discovery counter is alertable (#1632): one failed prefix → +1.
+        assertThat(meterRegistry.get("discovery.partial").counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools restores a failed prefix's tools to the LIVE tool surface via the "
+            + "targeted per-service fallback in the same cycle (#1632)")
+    void registerDiscoveredTools_restoresFailedPrefixToolsToLiveSurface_viaTargetedFallback() {
+        // Same partial-aggregate shape as the prune test above, but here the failed service IS
+        // reachable through the per-service Eureka path. Keeping the DB rows alone is not enough —
+        // McpAsyncServer's tool list is in-memory — so the fallback must addTool() the workorder
+        // tools in this cycle, not merely preserve them for a future one.
+        McpServerFeatures.AsyncToolSpecification aggregateSpec = toolSpec("accounting_listinvoices");
+        McpServerFeatures.AsyncToolSpecification workorderSpec = toolSpec("workorder_getworkorder");
+        URI workorderBase = URI.create("http://pos-workorder.test");
+        OpenAPI workorderApi = new OpenAPI();
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered = new OpenApiDocumentFetcher.DiscoveredOpenApi(
+                "aggregate", GATEWAY_BASE_URI, new OpenAPI(), List.of("/workorder"));
+        OpenApiDocumentFetcher.DiscoveredOpenApi workorderDoc =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("workorder", workorderBase, workorderApi);
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        // The "/workorder" prefix maps to service id "workorder", mirroring swagger-config doc URLs.
+        when(openApiDocumentFetcher.fetchForService("workorder")).thenReturn(Mono.just(workorderDoc));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(aggregateSpec));
+        when(openApiToolMapper.toToolSpecifications("workorder", workorderBase, workorderApi))
+                .thenReturn(List.of(workorderSpec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of());
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        serviceUnderTest().registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        // The failed domain's tool reaches tools/list in the SAME cycle: both the aggregate tool and
+        // the fallback-recovered workorder tool are added, and clients are notified after each batch.
+        verify(mcpAsyncServer).addTool(aggregateSpec);
+        verify(mcpAsyncServer).addTool(workorderSpec);
+        verify(mcpAsyncServer, times(2)).notifyToolsListChanged();
+        assertThat(meterRegistry.get("tools.discovered").counter().count()).isEqualTo(2.0);
+        assertThat(meterRegistry.get("tools.registered").counter().count()).isEqualTo(2.0);
+        assertThat(meterRegistry.get("discovery.partial").counter().count()).isEqualTo(1.0);
+    }
+
     @Test
     @DisplayName("registerDiscoveredTools does not prune when the aggregate persists no ops (#1121 safety guard)")
     void registerDiscoveredTools_doesNotPrune_whenNothingPersisted() {
@@ -269,7 +378,7 @@ class ToolRegistrationServiceImplTest {
         ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
         serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
 
-        verify(repo, never()).pruneDiscoveredOperationsExcept(any());
+        verify(repo, never()).pruneDiscoveredOperationsExcept(any(), any());
     }
 
     @Test
@@ -311,7 +420,7 @@ class ToolRegistrationServiceImplTest {
 
         verify(repo, never()).upsertDiscoveredOperation(eq(unmapped), any());
         verify(repo).upsertDiscoveredOperation(eq(mapped), any());
-        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices", "accounting_orphan"));
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices", "accounting_orphan"), Set.of());
     }
 
     @Test
@@ -368,7 +477,7 @@ class ToolRegistrationServiceImplTest {
         // The failing op never reaches linkToolToWorkflow; the ok op still does (persistence continues
         // past the failure rather than aborting the batch).
         verify(repo).linkToolToWorkflow(eq(UUID.fromString("00000000-0000-0000-0000-000000000003")), any());
-        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices", "accounting_broken"));
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices", "accounting_broken"), Set.of());
     }
 
     @Test
@@ -433,11 +542,11 @@ class ToolRegistrationServiceImplTest {
         when(repo.upsertDiscoveredOperation(any(), any()))
                 .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000005"));
         // Current spec's op set matches the DB already, so the #1121 reconciliation deletes nothing.
-        when(repo.pruneDiscoveredOperationsExcept(any())).thenReturn(0);
+        when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(0);
 
         serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
 
-        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"));
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"), Set.of());
         assertThat(meterRegistry.get("tools.pruned").counter().count()).isEqualTo(0.0);
     }
 
