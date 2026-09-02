@@ -406,6 +406,12 @@ public class OpenApiDocumentFetcher {
     private @NonNull List<String> aliasesFor(@NonNull String normalizedToken, @NonNull String prefixOrServiceId) {
         String rawKey = (prefixOrServiceId.startsWith("/") ? prefixOrServiceId.substring(1) : prefixOrServiceId)
                 .toLowerCase(Locale.ROOT);
+        if (rawKey.startsWith("pos-")) {
+            // A pos-prefixed Eureka id ("pos-vehicle-fitment") must find the same natural-spelling
+            // key ("vehicle-fitment") as the routing prefix does, or the Eureka fallback path
+            // re-opens the silent-miss trap the dual-key lookup fixed (#1643 review).
+            rawKey = rawKey.substring(4);
+        }
         List<String> normalized = properties.identityAliasesFor(normalizedToken);
         if (rawKey.equals(normalizedToken)) {
             return normalized;
@@ -445,6 +451,13 @@ public class OpenApiDocumentFetcher {
      * True when {@code title} plausibly identifies the service {@code expectedToken} routes to: the
      * normalized title contains the token or one of its configured aliases. Null/blank and the
      * springdoc default title are unverifiable → true (never fail what can't be checked).
+     *
+     * <p>Known blind spots (#1643 review): containment cannot catch a stale route between
+     * token-nested domains — pos-people-contact's title served at {@code /people} passes (contains
+     * "people"), pos-workorder's at {@code /order} passes (contains "order"), pos-vehicle-inventory's
+     * at {@code /inventory} passes. The failure direction there is no worse than pre-guard (the
+     * pre-#1632 behavior), and untitled specs are inherently unverifiable; do not treat a passing
+     * guard as proof the route is correct when debugging those pairs.
      */
     static boolean specIdentityMatches(
             @Nullable String title, @NonNull String expectedToken, @NonNull List<String> aliases) {

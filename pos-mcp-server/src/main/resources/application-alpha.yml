@@ -53,6 +53,9 @@ mcp:
     discovery-refresh:
       enabled: ${MCP_DISCOVERY_REFRESH_ENABLED:true}
       interval-ms: ${MCP_DISCOVERY_REFRESH_INTERVAL_MS:1800000}
+      # First refresh 5 min after startup: post-deploy is when stale Eureka routes exist, so the
+      # first self-heal should not wait the full 30-minute interval (#1643 review).
+      initial-delay-ms: ${MCP_DISCOVERY_REFRESH_INITIAL_DELAY_MS:300000}
   rag:
     table-name: mcp_document_embedding
     # G5.4 #1194 cutover complete + #1207 (V33): single embedding column, 1024-dim bge-m3 —

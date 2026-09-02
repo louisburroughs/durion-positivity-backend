@@ -195,10 +195,12 @@ maps operations to `mcp_tool` rows, and `OperationProxyFactory` builds the HTTP 
 request. These expand the candidate pool beyond the 17 facades.
 
 Discovery runs once at startup. Set `mcp.server.discovery-refresh.enabled=true` (interval
-`mcp.server.discovery-refresh.interval-ms`, default 5 min) to periodically re-discover and pick up new or changed
-backend operations without a restart — re-registration is idempotent (each tool is removed then re-added). The
-**alpha** profile enables it at a 30-minute interval (#1632 follow-up) so a domain whose fetch and same-cycle
-fallback both failed self-heals without a restart; other profiles leave it off.
+`mcp.server.discovery-refresh.interval-ms`, first run after `mcp.server.discovery-refresh.initial-delay-ms`, both
+default 5 min) to periodically re-discover and pick up new or changed backend operations without a restart —
+re-registration is idempotent (each tool is removed then re-added). The **alpha** profile enables it at a 30-minute
+interval with a 5-minute initial delay (#1632 follow-up) so a domain whose fetch and same-cycle fallback both failed
+self-heals without a restart — and does so shortly after the deploys that cause stale routes; other profiles leave
+it off.
 
 **Spec-identity guard (#1632).** After a rolling deploy, a stale Eureka registration can route a domain's doc URL to a
 *different* service (on alpha, `/invoice/v3/api-docs` briefly served pos-price's spec — 200 OK and parseable, so no
@@ -207,7 +209,11 @@ routing token and treats a mismatch as a **failed fetch**: the wrong domain's op
 and the domain's previously-registered ops are kept, not pruned. Titles that are missing, blank, or springdoc's default
 (`OpenAPI definition`) are unverifiable and always pass. Domains whose title doesn't contain their routing token get
 extra accepted tokens via `mcp.server.spec-identity-aliases` (shipped defaults: `catalog: [product]`,
-`people: [human resources]` — keep these in sync if a service's OpenAPI title changes).
+`people: [human resources]` — keep these in sync if a service's OpenAPI title changes; keys may be spelled as the
+routing token, `vehicle-fitment`, or its normalized form, `vehiclefitment`). The guard is best-effort: it cannot
+catch a stale route between token-nested domains (people-contact's title served at `/people`, workorder's at
+`/order`, vehicle-inventory's at `/inventory` all pass containment) or a service with no configured title — in those
+cases behavior is simply no worse than before the guard existed.
 
 ## Audit & Adaptive Tuning
 
