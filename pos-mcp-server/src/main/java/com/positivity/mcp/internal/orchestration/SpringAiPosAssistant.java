@@ -10,12 +10,16 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
@@ -24,6 +28,8 @@ import org.springframework.ai.tool.ToolCallback;
 
 final class SpringAiPosAssistant implements PosAssistant {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SpringAiPosAssistant.class);
+
     /**
      * Shared grounding instruction ({@link RagGroundingInstruction}) prepended to
      * the RAG snippets.
@@ -31,6 +37,7 @@ final class SpringAiPosAssistant implements PosAssistant {
     private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
 
     private final ChatModel chatModel;
+    private final ChatClient chatClient;
     private final Supplier<String> systemPromptSupplier;
     private final List<ToolCallback> staticToolCallbacks;
     private final QueryDocumentRetriever ragRetriever;
@@ -48,6 +55,8 @@ final class SpringAiPosAssistant implements PosAssistant {
             @Nullable AnswerResolutionLadder answerResolutionLadder,
             @Nullable ToolInvocationRecorder invocationRecorder) {
         this.chatModel = chatModel;
+        // Tool execution lives in ChatClient's ToolCallingAdvisor, not in ChatModel — see chat().
+        this.chatClient = ChatClient.builder(chatModel).build();
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
@@ -73,11 +82,20 @@ final class SpringAiPosAssistant implements PosAssistant {
         promptMessages.add(new SystemMessage(systemPrompt));
         promptMessages.add(new UserMessage(userMessage));
 
-        AssistantMessage output = chatModel
-                .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getOptions(), toolCallbacks)))
-                .getResult()
-                .getOutput();
+        // Must go through ChatClient, not ChatModel.call: as of Spring AI 2.0 the tool-execution loop
+        // lives in ChatClient's ToolCallingAdvisor. ChatModel.call only advertises the tool
+        // definitions and returns the model's tool-call turn verbatim — nothing runs the tool, and
+        // such a turn carries empty content, so the reply degraded to recovered reasoning or a
+        // ladder hand-off and no tool was ever invoked.
+        ChatResponse chatResponse = chatClient
+                .prompt(new Prompt(promptMessages, toolCallingOptions(chatModel.getOptions(), toolCallbacks)))
+                .call()
+                .chatResponse();
+        AssistantMessage output = chatResponse != null && chatResponse.getResult() != null
+                ? chatResponse.getResult().getOutput()
+                : null;
         ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(output);
+        logMissingDirectAnswer(chatResponse, output, extracted, toolCallbacks.size());
         String response = resolveResponse(userMessage, extracted);
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage), new AssistantMessage(response)));
         return response;
@@ -98,6 +116,34 @@ final class SpringAiPosAssistant implements PosAssistant {
             return answerResolutionLadder.resolveFallback(userMessage).text();
         }
         return extracted.text();
+    }
+
+    /**
+     * Records why a turn produced no direct answer.
+     *
+     * <p>A blank {@code content} is otherwise indistinguishable from a turn in which the model
+     * requested a tool that was never executed — both surface only as recovered thinking or a ladder
+     * hand-off. Logging the unexecuted tool-call count and finish reason alongside the extraction
+     * source separates "the model never asked for a tool" from "it asked and the call was dropped",
+     * which cannot be determined from the outside today.
+     */
+    private void logMissingDirectAnswer(
+            @Nullable ChatResponse chatResponse,
+            @Nullable AssistantMessage output,
+            ChatResponseText.@NonNull Extracted extracted,
+            int offeredToolCount) {
+        if (extracted.source() == ChatResponseText.Source.CONTENT) {
+            return;
+        }
+        var result = chatResponse != null ? chatResponse.getResult() : null;
+        var metadata = result != null ? result.getMetadata() : null;
+        List<AssistantMessage.ToolCall> toolCalls = output != null ? output.getToolCalls() : List.of();
+        LOGGER.warn(
+                "Chat turn produced no direct answer: source={}, unexecutedToolCalls={}, offeredTools={}, finishReason={}",
+                extracted.source(),
+                toolCalls == null ? 0 : toolCalls.size(),
+                offeredToolCount,
+                metadata != null ? metadata.getFinishReason() : null);
     }
 
     private @NonNull String buildSystemPrompt(@NonNull String userMessage, @NonNull String userContext) {

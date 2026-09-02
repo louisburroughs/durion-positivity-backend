@@ -96,3 +96,45 @@ python3 gate_run.py /tmp/gaterun           # 12 questions + under-permissioned p
 ```
 Credentials come from `durion-positivity-sdk/.env.itest` and are read by the runner directly; they
 are never passed through SSM parameters or printed.
+
+---
+
+# Root cause determination — 2026-09-02 (#1653)
+
+All three hypotheses above are **refuted**. The agent did not "choose" deflection, and the model is
+not weak at tool use. The tool calls were made and then dropped on the floor.
+
+**As of Spring AI 2.0, `ChatModel.call` does not execute tools.** It advertises the tool definitions
+and returns the model's tool-call turn verbatim; the tool-execution loop moved into `ChatClient`'s
+`ToolCallingAdvisor`. `SpringAiPosAssistant` (and `SpringAiStreamingPosAssistant`) called the model
+directly, so nothing ever ran a tool.
+
+Evidence, each independently checked:
+
+| Check | Result |
+|---|---|
+| Does the model emit `tool_calls`? | **Yes.** Direct probe of the configured endpoint returned `tool_calls=1`, `getAgedReceivables{"asOfDate":"2026-09-01"}` |
+| Were tools offered? | **Yes** — `selectedTools=16` |
+| Tool HTTP calls in the container's whole log | **0** |
+| `executeToolCalls` / `isInternalToolExecutionEnabled` in `OllamaChatModel` | **0 references** |
+| Which type does execute | `chat/client/advisor/ToolCallingAdvisor`, reachable only via `ChatClient` |
+
+The probe also reproduced the exact production shape: on a tool-call turn `content` is **empty**
+while `thinking` is populated. That is what produced the deflections — blank content fell through
+`ChatResponseText` to recovered reasoning, and `resolveResponse` then substituted the ladder's
+screen link. The formulaic screen-link phrasing in 6 of 12 answers was the *symptom* of the dropped
+tool call, not evidence of prompt bias.
+
+`OLLAMA_CHAT_THINK=false` was already set and correctly applied; it is not implicated. Nor were the
+facade descriptions: probes P2 ("Show me per-customer revenue for 2026-08.") and P5 ("Call the aged
+receivables tool for 2026-09-01") were deflected despite being textbook usage, which is explained by
+this defect and not by wording.
+
+## Note on method
+
+Zero tool calls was recorded as "the agent does not invoke the tools it is given" — a statement about
+the *agent's behaviour*. It was actually a statement about the framework: the agent did invoke them.
+The run could not distinguish the two because nothing logged whether a tool call had been returned
+and dropped. `SpringAiPosAssistant` now logs `unexecutedToolCalls` alongside `offeredTools` and the
+extraction source on every turn that yields no direct answer, so this class of failure is legible
+from the logs rather than requiring a library-bytecode audit to find.

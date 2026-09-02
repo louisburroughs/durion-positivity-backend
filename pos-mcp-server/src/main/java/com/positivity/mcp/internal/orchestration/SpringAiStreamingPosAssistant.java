@@ -10,12 +10,14 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -31,6 +33,13 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
 
     private final StreamingChatModel streamingChatModel;
+
+    /**
+     * Non-null whenever the streaming model is also a {@link ChatModel} (the Ollama bean and the
+     * tier-scoped wrapper both are). Tool execution requires it — see {@link #chat}.
+     */
+    private final @Nullable ChatClient chatClient;
+
     private final Supplier<String> systemPromptSupplier;
     private final List<ToolCallback> staticToolCallbacks;
     private final QueryDocumentRetriever ragRetriever;
@@ -46,6 +55,9 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable ToolInvocationRecorder invocationRecorder) {
         this.streamingChatModel = streamingChatModel;
+        this.chatClient = streamingChatModel instanceof ChatModel chatModel
+                ? ChatClient.builder(chatModel).build()
+                : null;
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
@@ -72,8 +84,14 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
         promptMessages.add(new UserMessage(userMessage));
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage)));
         AtomicReference<StringBuilder> responseText = new AtomicReference<>(new StringBuilder());
-        return streamingChatModel.stream(new Prompt(
-                        promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))
+        Prompt prompt =
+                new Prompt(promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks));
+        // As of Spring AI 2.0 the tool-execution loop lives in ChatClient's ToolCallingAdvisor;
+        // StreamingChatModel.stream only advertises the tool definitions and streams the model's
+        // tool-call turn back unexecuted. Stream through the client whenever one could be built so
+        // tools actually run; the raw model remains the fallback when the bean is streaming-only,
+        // where tool execution is not available at all.
+        return streamResponses(prompt)
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
@@ -88,6 +106,12 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
                     }
                 })
                 .filter(token -> !token.isEmpty());
+    }
+
+    private @NonNull Flux<ChatResponse> streamResponses(@NonNull Prompt prompt) {
+        return chatClient != null
+                ? chatClient.prompt(prompt).stream().chatResponse()
+                : streamingChatModel.stream(prompt);
     }
 
     private @NonNull String buildSystemPrompt(@NonNull String userMessage, @NonNull String userContext) {

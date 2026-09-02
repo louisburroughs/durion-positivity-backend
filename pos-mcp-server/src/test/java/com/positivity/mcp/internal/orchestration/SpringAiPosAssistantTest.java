@@ -15,6 +15,7 @@ import com.positivity.mcp.internal.service.AnswerResolutionLadder.Rung;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -211,6 +212,76 @@ class SpringAiPosAssistantTest {
 
         assertThat(response).isEqualTo("There are 12 open work orders.");
         verifyNoInteractions(ladder); // a direct answer must never trigger the fallback
+    }
+
+    /**
+     * Regression guard for the tool-execution path.
+     *
+     * <p>As of Spring AI 2.0 {@code ChatModel.call} does not run tools: it advertises the tool
+     * definitions and returns the model's tool-call turn verbatim, leaving execution to
+     * {@code ChatClient}'s {@code ToolCallingAdvisor}. Calling the model directly therefore invoked
+     * no tool at all, and because a tool-call turn carries empty content the reply silently degraded
+     * to recovered reasoning or a ladder hand-off — indistinguishable, from the outside, from a
+     * model that simply chose not to answer. This asserts the tool actually runs and that the
+     * post-tool answer is what reaches the caller.
+     */
+    @Test
+    void chat_executesToolCallsAndReturnsThePostToolAnswer() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+
+        AtomicInteger invocations = new AtomicInteger();
+        // Turn 1: the model asks for the tool and returns no content (the real gpt-oss shape).
+        // Turn 2: having seen the tool result, it answers.
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(toolCallResponse("ping"), chatResponse("There are 12 open work orders."));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new CountingPingTool(invocations)),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
+
+        assertThat(invocations.get())
+                .as("the requested tool must actually be invoked")
+                .isEqualTo(1);
+        assertThat(response).isEqualTo("There are 12 open work orders.");
+        // A tool-call turn has blank content; the ladder must not pre-empt the post-tool answer.
+        verifyNoInteractions(ladder);
+    }
+
+    private static ChatResponse toolCallResponse(String toolName) {
+        AssistantMessage message = AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-1", "function", toolName, "{}")))
+                .build();
+        return new ChatResponse(List.of(new Generation(message)));
+    }
+
+    static final class CountingPingTool {
+        private final AtomicInteger invocations;
+
+        CountingPingTool(AtomicInteger invocations) {
+            this.invocations = invocations;
+        }
+
+        @org.springframework.ai.tool.annotation.Tool(description = "Health check")
+        public String ping() {
+            invocations.incrementAndGet();
+            return "pong";
+        }
     }
 
     private static ChatResponse chatResponse(String text) {

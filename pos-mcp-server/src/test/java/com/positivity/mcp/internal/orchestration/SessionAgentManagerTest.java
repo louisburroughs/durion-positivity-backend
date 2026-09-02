@@ -56,6 +56,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
@@ -132,6 +133,12 @@ class SessionAgentManagerTest {
 
     @BeforeEach
     void setUp() {
+        // ChatClient (which runs the tool-execution loop) dereferences ChatModel.getOptions()
+        // unconditionally, so a bare @Mock returning null options NPEs the whole chat path.
+        // Real models always carry options; mirror that here.
+        lenient()
+                .when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("test-model").build());
         // Return a FRESH list on every invocation so buildAgent mutations don't bleed
         // across calls
         lenient().when(toolRegistry.resolveDomainTools(anyString())).thenAnswer(inv -> new ArrayList<>());
