@@ -1518,6 +1518,83 @@ paths:
       - Purchase Orders
       x-required-permissions:
       - order:purchase_order:availability_view
+  /v1/orders/purchase-orders/{poId}/transmission-events:
+    get:
+      description: 'Returns a page of the purchase order''s append-only vendor transmission timeline: every confirmation, rejection, status observation and review escalation heard about the order, including the despatchDate and estimatedDeliveryDate a status observation may carry.
+
+        Use this tool when a buyer chasing an order needs what happened to it, not just where it stands; use getPurchaseOrder instead for the order''s current transmission state, which this timeline never collapses to.
+
+        Preconditions: the purchase order must exist; an order that was never transmitted simply has an empty timeline.
+
+        Required inputs: poId (UUIDv7) path parameter; standard page and size parameters control pagination, and the sort parameter is ignored because the ordering is the semantics of the timeline.
+
+        Entries are ordered by the vendor''s clock (observedAt ascending), with ties broken by platform receipt time (recordedAt) and then by event id, so a late-arriving observation sits where the vendor observed it and the sequence is stable across reads.
+
+        Emits an ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS audit event; no state changes, this is a read-only projection.
+
+        Returns 200 with an empty page when the order has no timeline yet, and 404 when the purchase order does not exist.
+
+        '
+      operationId: listPurchaseOrderTransmissionEvents
+      parameters:
+      - description: Purchase order identifier
+        in: path
+        name: poId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 20
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagePurchaseOrderTransmissionEvent'
+          description: Transmission timeline returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required purchase order view authority
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Purchase order not found
+      security:
+      - bearerAuth:
+        - order:purchase_order:view
+      summary: List Purchase Order Transmission Events
+      tags:
+      - Purchase Orders
+      x-required-permissions:
+      - order:purchase_order:view
   /v1/orders/purchase-orders/{poId}/transmit:
     post:
       description: 'Sends an approved purchase order to the supplier named on it, asking pos-supplier to transmit it and report back what the vendor says.
@@ -2910,6 +2987,38 @@ components:
           format: int32
           type: integer
       type: object
+    PagePurchaseOrderTransmissionEvent:
+      properties:
+        content:
+          items:
+            $ref: '#/components/schemas/PurchaseOrderTransmissionEvent'
+          type: array
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          format: int32
+          type: integer
+        numberOfElements:
+          format: int32
+          type: integer
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          format: int32
+          type: integer
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
     PageableObject:
       properties:
         offset:
@@ -3430,6 +3539,49 @@ components:
       - updatedAt
       - vendorId
       - versionNumber
+      type: object
+    PurchaseOrderTransmissionEvent:
+      description: 'One entry on a purchase order''s vendor transmission timeline: a confirmation, rejection, status observation or review escalation. Entries are ordered by the vendor''s clock (observedAt), with ties broken by platform receipt time (recordedAt) and then by event id, so the sequence is stable across reads.'
+      properties:
+        despatchDate:
+          description: Earliest despatch date the vendor stated across the order's lines, when stated.
+          format: date
+          type: string
+        estimatedDeliveryDate:
+          description: Earliest delivery date the vendor scheduled across the order's lines, when stated.
+          format: date
+          type: string
+        eventType:
+          description: CONFIRMED, REJECTED, STATUS_CHANGED or REVIEW_REQUIRED. The last records that the transmission stopped and needs a person, not a vendor answer.
+          type: string
+        observedAt:
+          description: 'The vendor''s clock: when it says this happened. Orders the timeline.'
+          format: date-time
+          type: string
+        recordedAt:
+          description: 'This platform''s clock: when the observation was heard. Breaks observedAt ties and shows how late an observation arrived.'
+          format: date-time
+          type: string
+        status:
+          description: The vendor-reported status on a status change, or the rejection reason code on a rejection; null on a confirmation or review escalation.
+          type: string
+        supplierOrderNumber:
+          description: The order number the vendor assigned, once it stated one.
+          type: string
+        transmissionEventId:
+          description: Identifier of this timeline entry (UUIDv7).
+          format: uuid
+          type: string
+        transmissionIntentId:
+          description: The transmission intent in pos-supplier this observation belongs to.
+          format: uuid
+          type: string
+        vendorDocumentId:
+          description: The vendor-side document id the observation refers to.
+          type: string
+        vendorReason:
+          description: The vendor's own wording — a rejection reason or review detail — when it gave one.
+          type: string
       type: object
     RegisterSessionResponse:
       description: Register session state
