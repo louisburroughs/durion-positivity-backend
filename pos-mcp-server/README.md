@@ -196,7 +196,9 @@ request. These expand the candidate pool beyond the 17 facades.
 
 Discovery runs once at startup. Set `mcp.server.discovery-refresh.enabled=true` (interval
 `mcp.server.discovery-refresh.interval-ms`, default 5 min) to periodically re-discover and pick up new or changed
-backend operations without a restart — re-registration is idempotent (each tool is removed then re-added).
+backend operations without a restart — re-registration is idempotent (each tool is removed then re-added). The
+**alpha** profile enables it at a 30-minute interval (#1632 follow-up) so a domain whose fetch and same-cycle
+fallback both failed self-heals without a restart; other profiles leave it off.
 
 **Spec-identity guard (#1632).** After a rolling deploy, a stale Eureka registration can route a domain's doc URL to a
 *different* service (on alpha, `/invoice/v3/api-docs` briefly served pos-price's spec — 200 OK and parseable, so no
