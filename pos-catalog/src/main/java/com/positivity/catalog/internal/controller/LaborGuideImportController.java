@@ -100,7 +100,7 @@ public class LaborGuideImportController {
             Preconditions: none.
             Required inputs: none.
             Emits a CATALOG_LABOR_GUIDE_IMPORT_GAPS event; no state changes.
-            Returns an empty array when every recorded import is complete.
+            Returns 200 with an empty array when every recorded import is complete, and 403 when the caller lacks the view permission.
             """)
     @ApiResponse(
             responseCode = "200",
@@ -130,7 +130,7 @@ public class LaborGuideImportController {
             Preconditions: none.
             Required inputs: none.
             Emits a CATALOG_LABOR_GUIDE_UNMAPPED_LIST event; no state changes.
-            Returns an empty array when every code the feeds carry is mapped.
+            Returns 200 with an empty array when every code the feeds carry is mapped, and 403 when the caller lacks the view permission.
             """)
     @ApiResponse(
             responseCode = "200",
