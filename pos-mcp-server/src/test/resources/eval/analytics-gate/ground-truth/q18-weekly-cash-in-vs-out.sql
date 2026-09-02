@@ -44,13 +44,20 @@
 --   5. Weeks are UTC calendar weeks, half-open [start, start + 7 days), matching the service's
 --      LocalDate → UTC start/end-of-day conversion to within nanoseconds.
 --
--- Usage:  psql -v last_week_end="'2026-06-28'" -f q18-weekly-cash-in-vs-out.sql <pos-accounting db>
+-- AUDIT 2026-09-02 (Track B ground-truth suite): re-verified against the current
+-- AccountingAnalyticsServiceImpl (received / refunded definitions) and getVendorSpend's
+-- settled-status set for the A/P side — no drift. Only change: the default last_week_end
+-- now matches the TRACKB seed — 2026-08-30, the last complete Mon-Sun week before
+-- EVAL_AS_OF 2026-09-01. Budget (§6): 27 (W2 loops, over budget) -> 3 (W3 groupBy).
+--
+-- Usage:  psql -v last_week_end="'2026-08-30'" -f q18-weekly-cash-in-vs-out.sql <pos_accounting_db>
+-- DB: pos_accounting_db
 --   Emits the 13 weeks (one quarter) ending at last_week_end, oldest first, with a negative-week
 --   flag; the chat answer must name exactly the flagged weeks.
 
 \if :{?last_week_end}
 \else
-\set last_week_end '''2026-06-28'''
+\set last_week_end '''2026-08-30'''
 \endif
 
 WITH weeks AS (

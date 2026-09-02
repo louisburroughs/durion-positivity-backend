@@ -32,13 +32,21 @@
 --      below reproduces to within nanoseconds. Rates are NUMERIC(…, 2), HALF_UP, and NULL (not 0)
 --      when invoiced = 0 for the week.
 --
--- Usage:  psql -v last_week_end="'2026-06-28'" -f q11-weekly-invoiced-vs-collected.sql <pos-accounting db>
+-- AUDIT 2026-09-02 (Track B ground-truth suite): re-verified against the current
+-- AccountingAnalyticsServiceImpl.getCollectionsAnalytics — invoiced (finalized_at basis,
+-- deposit-take excluded), movement-basis collected, both-feeds nonCashSettled and the
+-- NULL-rate rule all match the shipped code; no drift. Only change: the default
+-- last_week_end now matches the TRACKB seed — 2026-08-30, the last complete Mon-Sun week
+-- before EVAL_AS_OF 2026-09-01 (a Tuesday). Budget (§6): 13 (W2 loop) -> 2 (W3 groupBy).
+--
+-- Usage:  psql -v last_week_end="'2026-08-30'" -f q11-weekly-invoiced-vs-collected.sql <pos_accounting_db>
+-- DB: pos_accounting_db
 --   last_week_end = the last day (inclusive) of the most recent complete week; the script emits
 --   that week and the 11 before it, oldest first.
 
 \if :{?last_week_end}
 \else
-\set last_week_end '''2026-06-28'''
+\set last_week_end '''2026-08-30'''
 \endif
 
 WITH weeks AS (

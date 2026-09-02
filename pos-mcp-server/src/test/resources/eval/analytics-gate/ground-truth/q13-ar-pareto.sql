@@ -29,11 +29,19 @@
 --      reconstruct a point-in-time balance (known limitation, documented in the service). Run
 --      this script with the same :as_of_date the gate run used.
 --
--- Usage:  psql -v as_of_date="'2026-06-30'" -f q13-ar-pareto.sql <pos-accounting db>
+-- AUDIT 2026-09-02 (Track B ground-truth suite): re-verified clause-by-clause against the
+-- current FinancialReportingServiceImpl.generateAgedReceivables / receivableAgingDate /
+-- receivableDocumentDate and InvoiceBalanceCalculator.balanceDue — no drift; the post-#1604
+-- due-date basis below is what the service ships today. Only change: the default as_of_date
+-- now matches the TRACKB seed's EVAL_AS_OF (2026-09-01). Budget (§6): 2 tool calls;
+-- tolerance (§2.1): exact currency, ±0.5 % on the derived shares.
+--
+-- Usage:  psql -v as_of_date="'2026-09-01'" -f q13-ar-pareto.sql <pos_accounting_db>
+-- DB: pos_accounting_db
 
 \if :{?as_of_date}
 \else
-\set as_of_date '''2026-06-30'''
+\set as_of_date '''2026-09-01'''
 \endif
 
 WITH params AS (
