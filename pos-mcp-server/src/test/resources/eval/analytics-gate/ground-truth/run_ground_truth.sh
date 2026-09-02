@@ -6,7 +6,7 @@
 # Each script is split on its `-- DB: <database>` section markers (a single-database script
 # carries exactly one marker; a multi-database question like Q5 carries one per section —
 # there are no cross-database joins, per the repo's no-cross-service-FK rule). Every section
-# is piped separately into `docker exec -i $CONTAINER psql -v ON_ERROR_STOP=1` against the
+# is piped separately into `docker exec -i $CONTAINER psql -X -v ON_ERROR_STOP=1` against the
 # database its marker names, and the output is labeled per question/section.
 #
 # Credentials are read LITERALLY from /opt/durion/alpha/.env with grep/cut — the values
@@ -67,7 +67,7 @@ for script in "${SCRIPTS[@]}"; do
         echo "==== ${script##*/}  [section $((idx+1)) -> $db] ===="
         if ! sed -n "${start_line},${end_line}p" "$file" \
             | docker exec -i -e PGPASSWORD="$PGPASSWORD" "$CONTAINER" \
-                psql -U "$PGUSER" -d "$db" -v ON_ERROR_STOP=1 ${PSQL_EXTRA_VARS:-}; then
+                psql -X -U "$PGUSER" -d "$db" -v ON_ERROR_STOP=1 ${PSQL_EXTRA_VARS:-}; then
             echo "FAILED: ${script##*/} section $((idx+1)) ($db)" >&2
             FAILURES=$((FAILURES + 1))
         fi
