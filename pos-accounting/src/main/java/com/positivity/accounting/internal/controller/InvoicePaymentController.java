@@ -79,15 +79,17 @@ public class InvoicePaymentController {
                     Preconditions: the invoice must be known to the accounting module.
                     Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the invoice is not found, and 400 when the identifier is rejected by \
-                    the status service.
+                    An invoice with no payment history answers 200 with status UNPAID, derived from the \
+                    ext_invoice replica and accounting's own application/credit records.
+                    Returns 404 only when accounting has no record of the invoice at all, and 400 when the \
+                    identifier is rejected by the status service.
                     """,
             tags = {"Invoice Payments"})
     @ApiResponse(
             responseCode = "200",
             description = "Invoice status returned",
             content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
+    @ApiResponse(responseCode = "404", description = "Invoice unknown to accounting (no replica record)")
     @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
             @Parameter(description = "Invoice identifier") @PathVariable UUID invoiceId) {

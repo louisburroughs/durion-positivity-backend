@@ -2,14 +2,19 @@ package com.positivity.accounting.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.enums.PaymentStatus;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.InvoiceStatusViewRepository;
 import com.positivity.accounting.internal.repository.PaymentAppliedEventRepository;
+import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,6 +55,9 @@ class InvoicePaymentStatusServiceTest {
     @Autowired
     private InvoiceStatusViewRepository statusViewRepository;
 
+    @Autowired
+    private ExtInvoiceRepository extInvoiceRepository;
+
     private static final UUID INV_001 = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID INV_002 = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID INV_003 = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -61,6 +69,7 @@ class InvoicePaymentStatusServiceTest {
     void setUp() {
         paymentEventRepository.deleteAll();
         statusViewRepository.deleteAll();
+        extInvoiceRepository.deleteAll();
     }
 
     @Test
@@ -202,5 +211,40 @@ class InvoicePaymentStatusServiceTest {
         assertEquals(INV_006, response1.getInvoiceId());
         assertEquals(PaymentStatus.PARTIALLY_PAID, response1.getStatus());
         assertEquals(0, response1.getTotalPaid().compareTo(new BigDecimal("75.00")));
+    }
+
+    @Test
+    @DisplayName("Invoice known to accounting but with no payment history reads as UNPAID, not 404 (#1634)")
+    void testGetInvoiceStatusFallsBackToReplicaWhenNoPaymentsApplied() {
+        // Arrange - invoice exists only in the ext_invoice replica (fed by invoice.events.v1)
+        UUID invoiceId = UUID.fromString("01a0482d-d3d5-7067-9cf0-71dfe9b9c5b3");
+        extInvoiceRepository.save(ExtInvoice.builder()
+                .invoiceId(invoiceId)
+                .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000aa"))
+                .status("FINALIZED")
+                .total(new BigDecimal("250.00"))
+                .aggregateVersion(1L)
+                .updatedAt(Instant.parse("2026-08-01T00:00:00Z"))
+                .build());
+
+        // Act
+        InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus(invoiceId);
+
+        // Assert - a known invoice with no payments is an explicit UNPAID state
+        assertNotNull(response);
+        assertEquals(invoiceId, response.getInvoiceId());
+        assertEquals(PaymentStatus.UNPAID, response.getStatus());
+        assertEquals(0, response.getTotalPaid().compareTo(BigDecimal.ZERO));
+        assertEquals(0, response.getInvoiceTotal().compareTo(new BigDecimal("250.00")));
+        assertEquals(0, response.getRemainingBalance().compareTo(new BigDecimal("250.00")));
+        assertNull(response.getLatestTransactionReference());
+    }
+
+    @Test
+    @DisplayName("Invoice unknown to accounting (no replica record) still raises EntityNotFoundException")
+    void testGetInvoiceStatusUnknownInvoiceStillNotFound() {
+        UUID unknownInvoiceId = UUID.fromString("01a0ffff-ffff-7fff-8fff-ffffffffffff");
+
+        assertThrows(EntityNotFoundException.class, () -> paymentStatusService.getInvoiceStatus(unknownInvoiceId));
     }
 }

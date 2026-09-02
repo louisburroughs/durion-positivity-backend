@@ -3295,7 +3295,9 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when the invoice is not found, and 400 when the identifier is rejected by the status service.
+        An invoice with no payment history answers 200 with status UNPAID, derived from the ext_invoice replica and accounting''s own application/credit records.
+
+        Returns 404 only when accounting has no record of the invoice at all, and 400 when the identifier is rejected by the status service.
 
         '
       operationId: getInvoiceStatus
@@ -3319,7 +3321,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvoiceStatusResponse'
-          description: Invoice not found
+          description: Invoice unknown to accounting (no replica record)
         '500':
           content:
             application/json:
