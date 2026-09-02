@@ -649,7 +649,7 @@ def gen_workorder_db():
         ("ext_invoice", "invoice_number LIKE '%s-%%'" % MARK),
         ("ext_customer_party", "party_id IN (%s)" % ", ".join(q(CUST_ID[c]) for c in CUSTOMERS)),
         ("ext_people_contact_person", "person_id IN (%s)" % ", ".join(q(TECH_PERSON[t]) for t in TECHS)),
-        ("ext_people_contact_user_link", "username IN (%s)" % ", ".join(q(TECHS[t][2]) for t in TECHS)),
+        ("ext_people_contact_user_link", "person_id IN (%s)" % ", ".join(q(TECH_PERSON[t]) for t in TECHS)),
     ])
     return f
 

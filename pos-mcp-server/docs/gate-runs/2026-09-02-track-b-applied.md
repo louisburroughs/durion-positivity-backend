@@ -46,3 +46,10 @@ represent order-fronted invoices, and `InvoiceBalanceCalculator` ignores deposit
 Plan §2.1 criterion 1 (answer correctness) is measurable for the first time. Next: the #1601
 chat-path runs — the four discovery-only questions (Q3/Q4/Q12/Q16) plus scoring facade-path
 answers against EXPECTED.md — and the under-permissioned degradation run.
+
+## Addendum (2026-09-02, post-review)
+
+The #1647 review's delete-scoping fix (`ext_people_contact_user_link` re-keyed from usernames to
+deterministic person_ids) was re-applied to alpha the same day: `apply_seed.sh pos_workorder_db`
+ran clean (1,042 inserts, transactional). Live check before the fix confirmed no collision had
+occurred — the table held the 3 TRACKB links plus one untouched co-tenant row.

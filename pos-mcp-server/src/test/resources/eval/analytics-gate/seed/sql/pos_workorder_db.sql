@@ -1067,5 +1067,5 @@ SELECT 'ext_customer_party' AS seeded_table, count(*) AS seeded_rows FROM ext_cu
 UNION ALL
 SELECT 'ext_people_contact_person' AS seeded_table, count(*) AS seeded_rows FROM ext_people_contact_person WHERE person_id IN ('9dc929b7-1e21-5ccc-89e0-4938905332ca', '343b5366-8531-5a2e-9976-b1eec230bf0e', '8eea60f6-2807-5578-90ee-187caf666b3b')
 UNION ALL
-SELECT 'ext_people_contact_user_link' AS seeded_table, count(*) AS seeded_rows FROM ext_people_contact_user_link WHERE username IN ('sam.ellison', 'nadia.torres', 'alex.kim')
+SELECT 'ext_people_contact_user_link' AS seeded_table, count(*) AS seeded_rows FROM ext_people_contact_user_link WHERE person_id IN ('9dc929b7-1e21-5ccc-89e0-4938905332ca', '343b5366-8531-5a2e-9976-b1eec230bf0e', '8eea60f6-2807-5578-90ee-187caf666b3b')
 ORDER BY seeded_table;
