@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -103,6 +104,16 @@ class AllocationReallocationServiceImplTest {
         service = new AllocationReallocationServiceImpl(
                 inventoryLedgerEntryRepository, allocationAuditRepository, reservationRepository, FIXED_CLOCK);
         authenticateAs("allocation-test-user");
+    }
+
+    /**
+     * The authentication set in {@link #setUp()} must not outlive this class: surefire reuses
+     * the fork, so a leaked context makes actor-attribution tests in unrelated suites (e.g.
+     * putaway's "System" default) order-dependent.
+     */
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     private void authenticateAs(String username) {
