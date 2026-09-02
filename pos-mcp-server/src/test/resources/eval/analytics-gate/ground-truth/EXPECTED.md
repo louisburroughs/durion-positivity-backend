@@ -2,7 +2,7 @@
 
 The expected values below are the **live measured output** of this directory's `qNN-*.sql`
 suite against the alpha stack's databases (run 2026-09-02 via `run_ground_truth.sh`; exit 0,
-all 24 sections, zero SQL errors — script-is-spec on the shared environment). Alongside each
+all 26 sections, zero SQL errors — script-is-spec on the shared environment). Alongside each
 measured value, the **seed contribution** derived analytically from `../seed/DATASET.md`
 is kept, so the designed invariants stay checkable as seed-relative deltas wherever
 co-tenant data moved the absolute shape. Every seed-contribution figure in the live run

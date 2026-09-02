@@ -10,7 +10,7 @@ Plan: analytics-capability-plan.md §2.3 · Branch `claude/mcp-track-b`
    `person_party` names moved to people-contact) — transactionality held, nothing partial landed;
    a full both-direction validation of all 35 seeded tables against alpha's information_schema
    found no other drift, and the fix changed no numbers (four of five SQL files byte-identical).
-2. **Ground truth executed on alpha**: all 24 sections of the 20-question suite, zero SQL errors.
+2. **Ground truth executed on alpha**: all 26 sections of the 20-question suite (multi-database questions contribute one section per database), zero SQL errors.
 3. **EXPECTED.md re-derived from the live run** under the accepted co-tenancy policy.
 
 ## Co-tenancy decision (user, 2026-09-02)

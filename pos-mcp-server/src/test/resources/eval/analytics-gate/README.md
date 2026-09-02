@@ -11,16 +11,15 @@ seeded Postgres. Per plan §2.1 criterion 1, the script *is* the specification o
 answer — a chat response passes only when its figures match the script's output (exact for
 counts and currency, ±0.5 % for derived ratios).
 
-## Status
+## Status (2026-09-02)
 
-- `ground-truth/q13-ar-pareto.sql` — **written** (the Wave 1 gate question; runnable today).
-- `ground-truth/q11-weekly-invoiced-vs-collected.sql` — **written** from the #1620/#1621 settlement
-  semantics (invoiced / settled / settlementRatePct; runnable once the fixture lands).
-- `ground-truth/q18-weekly-cash-in-vs-out.sql` — **written** from the #1620/#1622 cash-basis
-  semantics (received vs refunded + A/P paid; runnable once the fixture lands).
-- The other seventeen ground-truth scripts — **not written**.
-- The seed data itself — **not written.** This is the remaining work; the shape it must have is
-  specified below.
+- Seed: WRITTEN and APPLIED to alpha (2,257 rows, 5 databases) — `seed/`, marker-scoped and
+  idempotent; regenerate with `python3 seed/generate_seed.py`, apply with `seed/apply_seed.sh`.
+- Ground truth: ALL 20 scripts written (`ground-truth/q01..q20.sql`), executed live on alpha
+  2026-09-02 (26/26 sections clean, `ground-truth/runs/2026-09-02-alpha-run.log`).
+- `ground-truth/EXPECTED.md` is the gate reference sheet, re-derived from that live run under the
+  recorded co-tenancy policy. Fixtures and ground truth change together — a change to one without
+  the other is a review blocker.
 
 ## Change rule (plan §7, "fixture drift")
 

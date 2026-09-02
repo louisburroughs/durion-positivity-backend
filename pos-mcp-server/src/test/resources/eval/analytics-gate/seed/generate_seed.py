@@ -517,8 +517,12 @@ def gen_workorder_db():
     f.raw("DELETE FROM ext_invoice WHERE invoice_number LIKE '%s-%%';" % MARK)
     f.raw("DELETE FROM ext_customer_party WHERE party_id IN (%s);"
           % ", ".join(q(CUST_ID[c]) for c in CUSTOMERS))
-    f.raw("DELETE FROM ext_people_contact_user_link WHERE username IN (%s);"
-          % ", ".join(q(TECHS[t][2]) for t in TECHS))
+    # Scoped by deterministic person_id, NOT username: username is a natural, non-namespaced
+    # value, and a real replica row sharing one of our invented usernames would be silently
+    # destroyed (PR #1647 review finding 1 — the one delete in the suite that was not provably
+    # TRACKB-scoped). person_id carries our uuid5 namespace and cannot collide.
+    f.raw("DELETE FROM ext_people_contact_user_link WHERE person_id IN (%s);"
+          % ", ".join(q(TECH_PERSON[t]) for t in TECHS))
     f.raw("DELETE FROM ext_people_contact_person WHERE person_id IN (%s);"
           % ", ".join(q(TECH_PERSON[t]) for t in TECHS))
 

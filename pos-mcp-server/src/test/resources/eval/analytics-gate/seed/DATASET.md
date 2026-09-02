@@ -280,7 +280,7 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
 8. **Live-alpha schema drift (found on first apply, 2026-09-02).** The live database
    is the sole authority over Flyway DDL in this checkout; the full live column
    inventory used for validation was pulled from `information_schema` into
-   `/tmp/alpha-live-columns.json`. Per-table drift found and fixed:
+   `seed/alpha-live-columns.2026-09-02.json (checked in; originally /tmp/alpha-live-columns.json)`. Per-table drift found and fixed:
    - `pos_customer_db.commercial_party`: live has **no `party_number`** (present in
      Flyway V1; live also drops `email`/`phone_number` and adds `br_*` billing-rule
      columns, `lifecycle_stage`, `version` — all nullable or defaulted). Column
@@ -332,7 +332,7 @@ therefore load-bearing, not optional:
 2. **Validate the generator against a live column inventory before applying**: pull
    `{db: {table: [[column, is_nullable, data_type, has_default], ...]}}` from
    `information_schema` on the target host (the 2026-09-02 snapshot is
-   `/tmp/alpha-live-columns.json`) and check every emitted INSERT for unknown
+   `seed/alpha-live-columns.2026-09-02.json (checked in; originally /tmp/alpha-live-columns.json)`) and check every emitted INSERT for unknown
    columns and for missing NOT-NULL-without-default columns. Where live disagrees
    with Flyway, live wins.
 
@@ -346,3 +346,11 @@ therefore load-bearing, not optional:
   `vehicle_id NULL`; the search enrichment skips null vehicles).
 - `event_outbox` / `processed_events` — the seed bypasses Kafka by writing both sides
   of every replica pair with identical ids and totals.
+
+### Retained verification artifacts (PR #1647 review finding 4)
+
+- `seed/alpha-live-columns.2026-09-02.json` — the live information_schema inventory the INSERTs
+  were validated against (snapshot; regenerate against the current environment before any future
+  apply, e.g. per-DB:
+  `SELECT column_name, is_nullable, data_type, column_default IS NOT NULL FROM information_schema.columns WHERE table_schema='public' AND table_name='<t>' ORDER BY ordinal_position`).
+- `ground-truth/runs/2026-09-02-alpha-run.log` — the live run EXPECTED.md was transcribed from.

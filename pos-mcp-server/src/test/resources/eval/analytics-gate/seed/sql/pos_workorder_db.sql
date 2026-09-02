@@ -6,7 +6,7 @@ DELETE FROM workorder_service WHERE work_order_id IN (SELECT id FROM workorder W
 DELETE FROM workorder WHERE workorder_number LIKE 'TRACKB-%';
 DELETE FROM ext_invoice WHERE invoice_number LIKE 'TRACKB-%';
 DELETE FROM ext_customer_party WHERE party_id IN ('e79a3e7a-e63b-5633-ae72-2c84233f0dfc', 'b4b79106-4dde-5458-8e66-c017ffc2f111', '1dc41416-eec7-5788-9416-042d5af62667', '61ef5d96-2e4b-5138-8295-22c74b3d004f', 'ece9efad-e5d4-5bcd-98e0-078cd83ef629', '7f0433a9-2dd1-5afa-8e56-4f803cca15b7');
-DELETE FROM ext_people_contact_user_link WHERE username IN ('sam.ellison', 'nadia.torres', 'alex.kim');
+DELETE FROM ext_people_contact_user_link WHERE person_id IN ('9dc929b7-1e21-5ccc-89e0-4938905332ca', '343b5366-8531-5a2e-9976-b1eec230bf0e', '8eea60f6-2807-5578-90ee-187caf666b3b');
 DELETE FROM ext_people_contact_person WHERE person_id IN ('9dc929b7-1e21-5ccc-89e0-4938905332ca', '343b5366-8531-5a2e-9976-b1eec230bf0e', '8eea60f6-2807-5578-90ee-187caf666b3b');
 INSERT INTO ext_people_contact_person (person_id, first_name, last_name, aggregate_version, updated_at) VALUES ('9dc929b7-1e21-5ccc-89e0-4938905332ca', 'Sam', 'Ellison', 1, '2024-08-15T12:00:00+00:00');
 INSERT INTO ext_people_contact_user_link (link_id, person_id, username, status, aggregate_version, updated_at) VALUES ('657d70f1-2274-52de-881b-2d9f3e688d94', '9dc929b7-1e21-5ccc-89e0-4938905332ca', 'sam.ellison', 'ACTIVE', 1, '2024-08-15T12:00:00+00:00');
