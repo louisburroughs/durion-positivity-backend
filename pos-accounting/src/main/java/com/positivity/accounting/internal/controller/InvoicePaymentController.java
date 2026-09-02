@@ -10,6 +10,7 @@ import com.positivity.accounting.internal.service.InvoiceRegenerationService;
 import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -18,12 +19,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -79,35 +78,31 @@ public class InvoicePaymentController {
                     Preconditions: the invoice must be known to the accounting module.
                     Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the invoice is not found, and 400 when the identifier is rejected by \
-                    the status service.
+                    An invoice with no payment history answers 200 with status UNPAID, derived from the \
+                    ext_invoice replica and accounting's own application/credit records.
+                    Returns 404 only when accounting has no record of the invoice at all, and 400 when the \
+                    identifier is rejected (malformed or invalid invoiceId).
                     """,
             tags = {"Invoice Payments"})
     @ApiResponse(
             responseCode = "200",
             description = "Invoice status returned",
             content = @Content(schema = @Schema(implementation = InvoiceStatusResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Invoice not found")
-    @ApiResponse(responseCode = "500", description = "Error retrieving invoice status")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Identifier rejected (malformed or invalid invoiceId)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice unknown to accounting (no replica record)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Error retrieving invoice status",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
             @Parameter(description = "Invoice identifier") @PathVariable UUID invoiceId) {
-
-        try {
-            InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus(invoiceId);
-            return ResponseEntity.ok(response);
-
-        } catch (EntityNotFoundException _) {
-            log.error("Invoice not found: {}", invoiceId);
-            return ResponseEntity.notFound().build();
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid request for invoice status {}: {}", invoiceId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-
-        } catch (Exception e) {
-            log.error("Error retrieving status for invoice {}: {}", invoiceId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(paymentStatusService.getInvoiceStatus(invoiceId));
     }
 
     @PostMapping("/v1/accounting/invoice/invoices")

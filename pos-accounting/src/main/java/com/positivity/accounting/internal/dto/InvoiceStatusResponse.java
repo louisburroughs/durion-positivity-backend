@@ -33,7 +33,12 @@ public class InvoiceStatusResponse {
     @NotNull
     private PaymentStatus status;
 
-    @Schema(description = "Total amount paid to date", example = "1250.00", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Total settled against the invoice to date. On replica-derived responses (no"
+                    + " payment-status view) this includes posted credit memos and applied customer credits,"
+                    + " not only cash payments.",
+            example = "1250.00",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal totalPaid;
 
     @Schema(description = "Total invoice amount", example = "1250.00", requiredMode = NOT_REQUIRED)
