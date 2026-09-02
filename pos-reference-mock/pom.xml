@@ -40,6 +40,18 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- Actuator + Prometheus: the deploy wiring (check-deploy-service-drift.sh) requires a
+             scrape job for every containerized service; the mock stays outside the JWT boundary,
+             so its metrics endpoint is unauthenticated on the compose network. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <!-- OpenAPI: this module's spec is the normative Durion-normalized provider contract -->
         <dependency>
             <groupId>org.springdoc</groupId>

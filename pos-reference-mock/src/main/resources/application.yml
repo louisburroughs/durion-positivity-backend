@@ -11,6 +11,15 @@ server:
   tomcat:
     max-http-header-size: 65536
 
+# Metrics on the service port, unauthenticated: the mock simulates an external vendor with no
+# JWT boundary, and the prometheus scrape job for it carries no basic_auth (unlike platform
+# services). health also backs the compose healthcheck.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
 logging:
   level:
     root: INFO
