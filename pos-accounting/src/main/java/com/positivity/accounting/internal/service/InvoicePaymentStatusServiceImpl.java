@@ -139,6 +139,11 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      * yet. 404 remains the contract only when accounting has no record of the invoice at all.
      * "Settled" here includes credit memos and customer-credit applications, matching the AR
      * balance the rest of accounting reports.
+     *
+     * <p>Invoices the replica knows but that are not AR-eligible (lifecycle DRAFT/ERROR) are
+     * reported as an explicit {@code UNPAID} known-absence per the #1634 intent — the UI needs a
+     * state, not a 404 — and payments cannot exist for them, so the calculator math is skipped
+     * and {@code totalPaid} is zero.
      */
     private InvoiceStatusResponse buildReplicaFallbackResponse(UUID invoiceId) {
         ExtInvoice invoice = balanceCalculator
@@ -146,6 +151,10 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
                 .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
         BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
+        if (!balanceCalculator.isArEligible(invoice)) {
+            return new InvoiceStatusResponse(
+                    invoiceId, PaymentStatus.UNPAID, BigDecimal.ZERO, total, null, invoice.getUpdatedAt());
+        }
         BigDecimal balanceDue = balanceCalculator.balanceDue(invoice);
         BigDecimal settled = total.subtract(balanceDue).max(BigDecimal.ZERO);
         PaymentStatus status =

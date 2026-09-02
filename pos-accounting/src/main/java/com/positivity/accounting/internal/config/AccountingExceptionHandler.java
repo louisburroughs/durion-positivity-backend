@@ -31,6 +31,7 @@ import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedEx
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
@@ -144,6 +145,17 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleHardLockDateRegression(
             HardLockDateRegressionException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "HARD_LOCK_DATE_REGRESSION", ex.getMessage(), request);
+    }
+
+    /**
+     * Entity lookups that miss entirely (e.g. an invoice unknown to the {@code ext_invoice}
+     * replica, issue #1634). The pos-web-common {@code GlobalApiExceptionHandler} has no mapping
+     * for this exception (it would collapse to 500), so the module advice supplies the ADR-0017
+     * 404 envelope.
+     */
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiError> handleEntityNotFound(EntityNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(AccountingPeriodNotFoundException.class)
