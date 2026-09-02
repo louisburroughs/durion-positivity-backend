@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.InvoiceStatusView;
 import com.positivity.accounting.internal.entity.PaymentAppliedEvent;
 import com.positivity.accounting.internal.enums.PaymentStatus;
@@ -34,16 +35,19 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
     private final PaymentAppliedEventRepository paymentEventRepository;
     private final InvoiceStatusViewRepository statusViewRepository;
     private final IdempotencyService idempotencyService;
+    private final InvoiceBalanceCalculator balanceCalculator;
 
     public InvoicePaymentStatusServiceImpl(
             PaymentAppliedEventRepository paymentEventRepository,
             InvoiceStatusViewRepository statusViewRepository,
             IdempotencyService idempotencyService,
+            InvoiceBalanceCalculator balanceCalculator,
             Clock clock) {
         this.clock = clock;
         this.paymentEventRepository = paymentEventRepository;
         this.statusViewRepository = statusViewRepository;
         this.idempotencyService = idempotencyService;
+        this.balanceCalculator = balanceCalculator;
     }
 
     /**
@@ -107,22 +111,62 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      * Build an {@link InvoiceStatusResponse} from the persisted status view.
      * Extracted so internal callers avoid a self-invocation that would bypass
      * the {@code @Transactional} proxy on {@link #getInvoiceStatus(UUID)}.
+     *
+     * <p>The status view only exists once a payment has been applied through this service, but
+     * the {@code ext_invoice} replica knows every invoice pos-invoice has published (#1634). An
+     * invoice with no payment history must read as a known {@code UNPAID} state, not a 404, so
+     * when the view is absent the response falls back to accounting's derived AR state.
      */
     private InvoiceStatusResponse buildInvoiceStatusResponse(UUID invoiceId) {
         if (log.isInfoEnabled()) {
             log.info("Querying status for invoice {}", maskInvoiceId(invoiceId));
         }
-        InvoiceStatusView statusView = statusViewRepository
+        return statusViewRepository
                 .findByInvoiceId(invoiceId)
+                .map(statusView -> new InvoiceStatusResponse(
+                        statusView.getInvoiceId(),
+                        statusView.getCurrentStatus(),
+                        statusView.getTotalPaid(),
+                        statusView.getInvoiceTotal(),
+                        statusView.getLatestTransactionReference(),
+                        statusView.getLastUpdated()))
+                .orElseGet(() -> buildReplicaFallbackResponse(invoiceId));
+    }
+
+    /**
+     * Status derived from the {@code ext_invoice} replica and accounting's own application/credit
+     * records ({@link InvoiceBalanceCalculator}) for invoices that have no payment-status view
+     * yet. 404 remains the contract only when accounting has no record of the invoice at all.
+     * "Settled" here includes credit memos and customer-credit applications, matching the AR
+     * balance the rest of accounting reports, and is clamped into {@code [0, total]}: an
+     * over-credited or overpaid invoice (negative balance due — the excess becomes customer
+     * credit per CAP-251) reports {@code PAID} with {@code totalPaid == invoiceTotal} and a zero
+     * remaining balance rather than a settled amount above the total.
+     *
+     * <p>Invoices the replica knows but that are not AR-eligible (lifecycle DRAFT/ERROR) are
+     * reported as an explicit {@code UNPAID} known-absence per the #1634 intent — the UI needs a
+     * state, not a 404 — and payments cannot exist for them, so the calculator math is skipped
+     * and {@code totalPaid} is zero.
+     */
+    private InvoiceStatusResponse buildReplicaFallbackResponse(UUID invoiceId) {
+        ExtInvoice invoice = balanceCalculator
+                .findInvoice(invoiceId)
                 .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
-        return new InvoiceStatusResponse(
-                statusView.getInvoiceId(),
-                statusView.getCurrentStatus(),
-                statusView.getTotalPaid(),
-                statusView.getInvoiceTotal(),
-                statusView.getLatestTransactionReference(),
-                statusView.getLastUpdated());
+        BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
+        if (!balanceCalculator.isArEligible(invoice)) {
+            return new InvoiceStatusResponse(
+                    invoiceId, PaymentStatus.UNPAID, BigDecimal.ZERO, total, null, invoice.getUpdatedAt());
+        }
+        BigDecimal balanceDue = balanceCalculator.balanceDue(invoice);
+        BigDecimal settled = total.subtract(balanceDue).max(BigDecimal.ZERO).min(total);
+        PaymentStatus status =
+                switch (balanceCalculator.deriveArStatus(invoice, balanceDue)) {
+                    case PAID_IN_FULL -> PaymentStatus.PAID;
+                    case PARTIALLY_PAID -> PaymentStatus.PARTIALLY_PAID;
+                    default -> PaymentStatus.UNPAID;
+                };
+        return new InvoiceStatusResponse(invoiceId, status, settled, total, null, invoice.getUpdatedAt());
     }
 
     private String maskInvoiceId(UUID invoiceId) {
