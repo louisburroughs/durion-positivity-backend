@@ -1,5 +1,6 @@
 package com.positivity.referencemock.internal.controller;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -37,6 +38,6 @@ public class VendorErrorAdvice {
                         "referenceId",
                         referenceId,
                         "timestamp",
-                        Instant.now().toString()));
+                        Instant.now(Clock.systemUTC()).toString()));
     }
 }
