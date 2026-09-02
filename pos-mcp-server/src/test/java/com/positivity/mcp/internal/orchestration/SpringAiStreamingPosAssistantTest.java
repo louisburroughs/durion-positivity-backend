@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -13,6 +14,7 @@ import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -36,11 +38,14 @@ class SpringAiStreamingPosAssistantTest {
 
     @Test
     void chat_usesRagRetrieverAndPersistsMemoryIdOnStreamCompletion() {
-        StreamingChatModel streamingChatModel = mock(StreamingChatModel.class);
+        StreamingChatModel streamingChatModel =
+                mock(StreamingChatModel.class, withSettings().extraInterfaces(ChatModel.class));
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
 
+        when(((ChatModel) streamingChatModel).getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
         when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
         when(ragRetriever.retrieve("where is stock")).thenReturn(List.of(new Document("Inventory doc")));
         when(chatMemory.get("user-2::ROLE_TECH")).thenReturn(List.of(new AssistantMessage("previous turn")));
@@ -54,6 +59,7 @@ class SpringAiStreamingPosAssistantTest {
                 ragRetriever,
                 ignored -> chatMemory,
                 openApiToolProvider,
+                null,
                 null);
 
         List<String> tokens = assistant
@@ -118,6 +124,7 @@ class SpringAiStreamingPosAssistantTest {
                 ragRetriever,
                 ignored -> chatMemory,
                 openApiToolProvider,
+                null,
                 null);
 
         assistant
@@ -140,6 +147,91 @@ class SpringAiStreamingPosAssistantTest {
     static final class PingTool {
         @org.springframework.ai.tool.annotation.Tool(description = "Health check")
         public String ping() {
+            return "pong";
+        }
+    }
+
+    /**
+     * The streaming counterpart of the call path's tool-execution guard (#1653).
+     *
+     * <p>Streaming had no coverage of tool execution at all: the previous mocks implemented only
+     * {@link StreamingChatModel}, so they exercised a tool-free fallback rather than the path
+     * production runs. `ToolCallingAdvisor.adviseStream` also executes tools on a different
+     * scheduler, so this additionally pins that the aggregated text is still correct afterwards.
+     */
+    @Test
+    void chat_executesToolCallsOnTheStreamingPath() {
+        StreamingChatModel streamingChatModel =
+                mock(StreamingChatModel.class, withSettings().extraInterfaces(ChatModel.class));
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+
+        when(((ChatModel) streamingChatModel).getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+
+        AtomicInteger invocations = new AtomicInteger();
+        when(streamingChatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(toolCallResponse("ping")), Flux.just(chatResponse("12 open")));
+
+        SpringAiStreamingPosAssistant assistant = new SpringAiStreamingPosAssistant(
+                streamingChatModel,
+                () -> "base prompt",
+                List.of(new CountingPingTool(invocations)),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null);
+
+        List<String> tokens = assistant
+                .chat("user-9::ROLE_ADMIN", "how many workorders are open", "ctx")
+                .collectList()
+                .block();
+
+        assertThat(invocations.get())
+                .as("the streamed tool call must actually be executed")
+                .isEqualTo(1);
+        assertThat(String.join("", tokens == null ? List.of() : tokens)).isEqualTo("12 open");
+    }
+
+    /** A streaming-only bean cannot execute tools; construction must fail rather than degrade. */
+    @Test
+    void constructor_rejectsAStreamingOnlyModelRatherThanSilentlyDroppingToolExecution() {
+        StreamingChatModel streamingOnly = mock(StreamingChatModel.class);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new SpringAiStreamingPosAssistant(
+                        streamingOnly,
+                        () -> "base prompt",
+                        List.of(),
+                        mock(QueryDocumentRetriever.class),
+                        ignored -> mock(ChatMemory.class),
+                        null,
+                        null,
+                        null))
+                .withMessageContaining("must also implement ChatModel");
+    }
+
+    private static ChatResponse toolCallResponse(String toolName) {
+        AssistantMessage message = AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall("call-1", "function", toolName, "{}")))
+                .build();
+        return new ChatResponse(List.of(new Generation(message)));
+    }
+
+    static final class CountingPingTool {
+        private final AtomicInteger invocations;
+
+        CountingPingTool(AtomicInteger invocations) {
+            this.invocations = invocations;
+        }
+
+        @org.springframework.ai.tool.annotation.Tool(description = "Health check")
+        public String ping() {
+            invocations.incrementAndGet();
             return "pong";
         }
     }

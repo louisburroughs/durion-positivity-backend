@@ -57,6 +57,7 @@ class SpringAiPosAssistantTest {
                 ignored -> chatMemory,
                 openApiToolProvider,
                 null,
+                null,
                 null);
 
         String response = assistant.chat("user-1::ROLE_TECH", "where is stock", "ctx:role=TECH");
@@ -126,6 +127,7 @@ class SpringAiPosAssistantTest {
                 ignored -> chatMemory,
                 openApiToolProvider,
                 null,
+                null,
                 null);
 
         assistant.chat("user-1::ROLE_TECH", "PO number format", "ctx:role=TECH");
@@ -181,7 +183,15 @@ class SpringAiPosAssistantTest {
                         new LadderResult("View them here — Work Orders: /workorders", Rung.DEEP_LINK, "/workorders"));
 
         SpringAiPosAssistant assistant = new SpringAiPosAssistant(
-                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder, null);
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null,
+                null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
 
@@ -206,7 +216,15 @@ class SpringAiPosAssistantTest {
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("There are 12 open work orders."));
 
         SpringAiPosAssistant assistant = new SpringAiPosAssistant(
-                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder, null);
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null,
+                null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
 
@@ -250,6 +268,7 @@ class SpringAiPosAssistantTest {
                 ignored -> chatMemory,
                 null,
                 ladder,
+                null,
                 null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
@@ -301,5 +320,46 @@ class SpringAiPosAssistantTest {
         public String ping() {
             return "pong";
         }
+    }
+
+    /**
+     * A model naming a tool that is not in the per-request callback list must degrade, not 500.
+     *
+     * <p>{@code DefaultToolCallingManager} throws a raw {@code IllegalStateException} ("No
+     * ToolCallback found for tool name") for an unresolved name, which the session manager would
+     * surface as a 500. With sixteen facades in context this is a realistic model slip. It is also
+     * the permission gate's backstop: because the client is built with a hand-made
+     * {@code ToolCallingManager} that has no bean-name resolver, only callbacks carried in the
+     * request's own options are executable, so naming a tool the caller is not entitled to fails
+     * closed here rather than executing it.
+     */
+    @Test
+    void chat_degradesWhenTheModelNamesAToolItWasNotGiven() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class))).thenReturn(toolCallResponse("accounting_listinvoices"));
+        when(ladder.resolveFallback(any()))
+                .thenReturn(new LadderResult("View them here — Invoices: /invoices", Rung.DEEP_LINK, "/invoices"));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new PingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null,
+                null);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "show open invoices", "ctx");
+
+        assertThat(response).isEqualTo("View them here — Invoices: /invoices");
     }
 }

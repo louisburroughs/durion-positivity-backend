@@ -55,6 +55,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
@@ -90,7 +91,11 @@ class StreamingSessionAgentManagerTest {
     private static final Set<String> PERMISSION_CODES = Set.of("AUTHENTICATED", "mcp:chat:stream");
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
 
-    @Mock
+    /**
+     * Must implement {@link ChatModel} too: the production beans do, and the streaming assistant now
+     * requires it because tool execution runs through {@code ChatClient} (#1653).
+     */
+    @Mock(extraInterfaces = ChatModel.class)
     private StreamingChatModel streamingChatModel;
 
     @Mock

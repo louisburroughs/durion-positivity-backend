@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -24,6 +26,7 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
 
 final class SpringAiPosAssistant implements PosAssistant {
@@ -44,6 +47,7 @@ final class SpringAiPosAssistant implements PosAssistant {
     private final Function<String, ChatMemory> chatMemoryProvider;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable AnswerResolutionLadder answerResolutionLadder;
+    private final @Nullable RequestScopedUserContext requestScopedUserContext;
 
     SpringAiPosAssistant(
             @NonNull ChatModel chatModel,
@@ -53,16 +57,17 @@ final class SpringAiPosAssistant implements PosAssistant {
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable AnswerResolutionLadder answerResolutionLadder,
-            @Nullable ToolInvocationRecorder invocationRecorder) {
+            @Nullable ToolInvocationRecorder invocationRecorder,
+            @Nullable RequestScopedUserContext requestScopedUserContext) {
         this.chatModel = chatModel;
-        // Tool execution lives in ChatClient's ToolCallingAdvisor, not in ChatModel — see chat().
-        this.chatClient = ChatClient.builder(chatModel).build();
+        this.chatClient = buildToolCallingChatClient(chatModel);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;
         this.answerResolutionLadder = answerResolutionLadder;
+        this.requestScopedUserContext = requestScopedUserContext;
     }
 
     @Override
@@ -77,6 +82,9 @@ final class SpringAiPosAssistant implements PosAssistant {
         if (openApiToolProvider != null) {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
+        // Bind the caller per request: facade callbacks were wrapped once in the constructor and this
+        // agent is cached per role, so the recorder must not read the caller at execution time.
+        toolCallbacks = CallerBoundToolCallback.bindCurrentCaller(toolCallbacks, requestScopedUserContext);
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
         promptMessages.add(new SystemMessage(systemPrompt));
@@ -87,10 +95,8 @@ final class SpringAiPosAssistant implements PosAssistant {
         // definitions and returns the model's tool-call turn verbatim — nothing runs the tool, and
         // such a turn carries empty content, so the reply degraded to recovered reasoning or a
         // ladder hand-off and no tool was ever invoked.
-        ChatResponse chatResponse = chatClient
-                .prompt(new Prompt(promptMessages, toolCallingOptions(chatModel.getOptions(), toolCallbacks)))
-                .call()
-                .chatResponse();
+        ChatResponse chatResponse =
+                callModel(new Prompt(promptMessages, toolCallingOptions(chatModel.getOptions(), toolCallbacks)));
         AssistantMessage output = chatResponse != null && chatResponse.getResult() != null
                 ? chatResponse.getResult().getOutput()
                 : null;
@@ -141,9 +147,48 @@ final class SpringAiPosAssistant implements PosAssistant {
         LOGGER.warn(
                 "Chat turn produced no direct answer: source={}, unexecutedToolCalls={}, offeredTools={}, finishReason={}",
                 extracted.source(),
-                toolCalls == null ? 0 : toolCalls.size(),
+                toolCalls.size(),
                 offeredToolCount,
                 metadata != null ? metadata.getFinishReason() : null);
+    }
+
+    /**
+     * Builds the client that owns the tool-execution loop.
+     *
+     * <p>The {@link ToolCallingAdvisor} is supplied explicitly rather than left to the client's
+     * auto-registration so the loop is bounded (see {@link BoundedToolCallingManager}).
+     *
+     * <p>Deliberately NOT the Spring Boot autoconfigured {@code ChatClient.Builder} bean: a
+     * hand-built manager has no bean-name {@code ToolCallbackResolver}, so only the callbacks carried
+     * in the per-request prompt options are executable. That is what makes the permission gate
+     * airtight — with bean resolution, a model naming a tool the caller is not entitled to could
+     * execute it regardless of the gated callback list.
+     */
+    static @NonNull ChatClient buildToolCallingChatClient(@NonNull ChatModel chatModel) {
+        return ChatClient.builder(chatModel)
+                .defaultAdvisors(ToolCallingAdvisor.builder()
+                        .toolCallingManager(new BoundedToolCallingManager(
+                                ToolCallingManager.builder().build()))
+                        .build())
+                .build();
+    }
+
+    /**
+     * Runs the turn, degrading to the blank-response path rather than propagating.
+     *
+     * <p>A model that names a tool which is not in the callback list makes
+     * {@code DefaultToolCallingManager} throw a raw {@code IllegalStateException} ("No ToolCallback
+     * found for tool name"), which the session manager would turn into a 500. With sixteen facades in
+     * context that is a realistic model slip, and the whole point of the answer-resolution ladder is
+     * that this path degrades instead of erroring.
+     */
+    private @Nullable ChatResponse callModel(@NonNull Prompt prompt) {
+        try {
+            return chatClient.prompt(prompt).call().chatResponse();
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Chat turn failed during model call or tool execution; falling back", exception);
+            return null;
+        }
     }
 
     private @NonNull String buildSystemPrompt(@NonNull String userMessage, @NonNull String userContext) {

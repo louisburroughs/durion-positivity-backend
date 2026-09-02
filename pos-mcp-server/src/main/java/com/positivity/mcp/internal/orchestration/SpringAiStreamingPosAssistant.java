@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,6 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -35,16 +35,20 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     private final StreamingChatModel streamingChatModel;
 
     /**
-     * Non-null whenever the streaming model is also a {@link ChatModel} (the Ollama bean and the
-     * tier-scoped wrapper both are). Tool execution requires it — see {@link #chat}.
+     * Owns the tool-execution loop. Required, not optional: a streaming-only bean could not execute
+     * tools at all, and would silently answer every question without them — the exact failure this
+     * class was changed to fix. Both production beans qualify ({@code OllamaChatModel} and
+     * {@code TierScopedChatModel} each implement {@link ChatModel} and {@link StreamingChatModel}),
+     * so this rejects a misconfiguration rather than a supported setup.
      */
-    private final @Nullable ChatClient chatClient;
+    private final ChatClient chatClient;
 
     private final Supplier<String> systemPromptSupplier;
     private final List<ToolCallback> staticToolCallbacks;
     private final QueryDocumentRetriever ragRetriever;
     private final Function<String, ChatMemory> chatMemoryProvider;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
+    private final @Nullable RequestScopedUserContext requestScopedUserContext;
 
     SpringAiStreamingPosAssistant(
             @NonNull StreamingChatModel streamingChatModel,
@@ -53,16 +57,21 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             @NonNull QueryDocumentRetriever ragRetriever,
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider,
-            @Nullable ToolInvocationRecorder invocationRecorder) {
+            @Nullable ToolInvocationRecorder invocationRecorder,
+            @Nullable RequestScopedUserContext requestScopedUserContext) {
         this.streamingChatModel = streamingChatModel;
-        this.chatClient = streamingChatModel instanceof ChatModel chatModel
-                ? ChatClient.builder(chatModel).build()
-                : null;
+        if (!(streamingChatModel instanceof ChatModel chatModel)) {
+            throw new IllegalArgumentException(
+                    "Streaming chat model %s must also implement ChatModel: tool execution runs through ChatClient and would otherwise be silently unavailable"
+                            .formatted(streamingChatModel.getClass().getName()));
+        }
+        this.chatClient = SpringAiPosAssistant.buildToolCallingChatClient(chatModel);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;
+        this.requestScopedUserContext = requestScopedUserContext;
     }
 
     @Override
@@ -78,6 +87,10 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
         if (openApiToolProvider != null) {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
+        // ToolCallingAdvisor executes streamed tool calls on Schedulers.boundedElastic(), after this
+        // request's ThreadLocal caller has been cleared on the assembly thread. Bind it now or every
+        // streamed invocation is audited as "unknown" and loses its correlation id.
+        toolCallbacks = CallerBoundToolCallback.bindCurrentCaller(toolCallbacks, requestScopedUserContext);
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
         promptMessages.add(new SystemMessage(systemPrompt));
@@ -88,10 +101,9 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
                 new Prompt(promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks));
         // As of Spring AI 2.0 the tool-execution loop lives in ChatClient's ToolCallingAdvisor;
         // StreamingChatModel.stream only advertises the tool definitions and streams the model's
-        // tool-call turn back unexecuted. Stream through the client whenever one could be built so
-        // tools actually run; the raw model remains the fallback when the bean is streaming-only,
-        // where tool execution is not available at all.
-        return streamResponses(prompt)
+        // tool-call turn back unexecuted.
+        return chatClient.prompt(prompt).stream()
+                .chatResponse()
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
@@ -106,12 +118,6 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
                     }
                 })
                 .filter(token -> !token.isEmpty());
-    }
-
-    private @NonNull Flux<ChatResponse> streamResponses(@NonNull Prompt prompt) {
-        return chatClient != null
-                ? chatClient.prompt(prompt).stream().chatResponse()
-                : streamingChatModel.stream(prompt);
     }
 
     private @NonNull String buildSystemPrompt(@NonNull String userMessage, @NonNull String userContext) {
@@ -135,12 +141,9 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     }
 
     /**
-     * Returns the streaming chat model's configured default options, used as the
-     * base for the
-     * per-request tool-calling options. Only {@link ChatModel} exposes
-     * {@code getOptions()};
-     * the concrete Ollama bean implements both {@link StreamingChatModel} and
-     * {@link ChatModel}.
+     * Returns the streaming chat model's configured default options, used as the base for the
+     * per-request tool-calling options. Only {@link ChatModel} exposes {@code getOptions()}; the
+     * constructor guarantees the bean implements it.
      */
     private @Nullable ChatOptions defaultOptions() {
         return streamingChatModel instanceof ChatModel chatModel ? chatModel.getOptions() : null;
