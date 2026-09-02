@@ -318,6 +318,24 @@ class InvoicePaymentStatusServiceTest {
     }
 
     @Test
+    @DisplayName("Replica fallback clamps settled to the total when applications exceed it (negative balanceDue)")
+    void testReplicaFallbackClampsSettledToTotalOnOverpayment() {
+        UUID invoiceId = UUID.fromString("01a04008-0000-7000-8000-000000000008");
+        persistReplicaInvoice(invoiceId, "FINALIZED", new BigDecimal("200.00"));
+        // Applications exceeding the total drive balanceDue negative (-50.00); the excess becomes
+        // customer credit per CAP-251, so the status endpoint must not report totalPaid > total.
+        persistPaymentApplication(invoiceId, new BigDecimal("250.00"));
+
+        InvoiceStatusResponse response = paymentStatusService.getInvoiceStatus(invoiceId);
+
+        // settled = (total - balanceDue).max(ZERO).min(total) -> clamped to 200.00, remaining 0.
+        assertNotNull(response);
+        assertEquals(PaymentStatus.PAID, response.getStatus());
+        assertEquals(0, response.getTotalPaid().compareTo(new BigDecimal("200.00")));
+        assertEquals(0, response.getRemainingBalance().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
     @DisplayName("Replica fallback reports a credit-memo-settled invoice as PAID (settled includes posted credits)")
     void testReplicaFallbackCreditMemoSettledInvoiceIsPaid() {
         UUID invoiceId = UUID.fromString("01a04005-0000-7000-8000-000000000005");

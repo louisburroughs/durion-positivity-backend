@@ -138,7 +138,10 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
      * records ({@link InvoiceBalanceCalculator}) for invoices that have no payment-status view
      * yet. 404 remains the contract only when accounting has no record of the invoice at all.
      * "Settled" here includes credit memos and customer-credit applications, matching the AR
-     * balance the rest of accounting reports.
+     * balance the rest of accounting reports, and is clamped into {@code [0, total]}: an
+     * over-credited or overpaid invoice (negative balance due — the excess becomes customer
+     * credit per CAP-251) reports {@code PAID} with {@code totalPaid == invoiceTotal} and a zero
+     * remaining balance rather than a settled amount above the total.
      *
      * <p>Invoices the replica knows but that are not AR-eligible (lifecycle DRAFT/ERROR) are
      * reported as an explicit {@code UNPAID} known-absence per the #1634 intent — the UI needs a
@@ -156,7 +159,7 @@ public class InvoicePaymentStatusServiceImpl implements InvoicePaymentStatusServ
                     invoiceId, PaymentStatus.UNPAID, BigDecimal.ZERO, total, null, invoice.getUpdatedAt());
         }
         BigDecimal balanceDue = balanceCalculator.balanceDue(invoice);
-        BigDecimal settled = total.subtract(balanceDue).max(BigDecimal.ZERO);
+        BigDecimal settled = total.subtract(balanceDue).max(BigDecimal.ZERO).min(total);
         PaymentStatus status =
                 switch (balanceCalculator.deriveArStatus(invoice, balanceDue)) {
                     case PAID_IN_FULL -> PaymentStatus.PAID;
