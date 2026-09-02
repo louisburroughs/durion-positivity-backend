@@ -1417,16 +1417,22 @@ services:
   # Fake EXTERNAL labor-guide vendor (pos-catalog/docs/service-time-sourcing-plan.md §10,
   # #1569 Phase 1). Deliberately outside the platform mesh: no Eureka registration, no
   # gateway route, no security, no database — adapters reach it only via base-url config
-  # (http://pos-reference-mock:8095). Fixed port 8095. Its actuator exposes
+  # (http://pos-reference-mock:8095). Fixed service port 8095. Its actuator exposes
   # health/info/prometheus unauthenticated on the same port (metrics for the
   # pos-reference-mock scrape job), but the healthcheck still probes the deterministic
   # feed-manifest endpoint: that proves the vendor API itself is serving, not just the app.
+  #
+  # Published on host 8100, not 8095: pos-people-contact already publishes 8095, and two
+  # services claiming one host port is not a compose-parse error — the second one fails at
+  # `docker start` with "port is already allocated", which on alpha aborted the deploy with
+  # its whole start batch left in Created (#1646). The in-network port stays 8095, which is
+  # what pos-catalog's base-url, the Prometheus target, and the healthcheck all use.
   pos-reference-mock:
     build:
       context: ./pos-reference-mock
       dockerfile: Dockerfile
     ports:
-      - "8095:8095"
+      - "8100:8095"
     environment:
       SERVER_PORT: 8095
     logging: *logging

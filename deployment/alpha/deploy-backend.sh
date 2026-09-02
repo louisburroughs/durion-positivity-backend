@@ -172,6 +172,52 @@ ecr_login() {
     | docker login --username AWS --password-stdin "${registry}"
 }
 
+# A config-only sync can only bring up a service that already has an image at the tag this
+# box is pinned to. When a commit adds a service, the sync fires on the push while that
+# service's image is published only by the build that runs after it — so the pre-flight
+# pull fails for that one service and used to abort the whole sync. #1577 moved the abort
+# up front, so nothing is half-applied, but the abort itself stayed, which makes every
+# new-service commit a guaranteed red run for a condition the follow-on full deploy
+# resolves on its own (pos-reference-mock, #1646).
+#
+# So classify the misses instead of aborting on all of them. A service whose image is
+# missing and which has no container on this box has simply never been deployed here: skip
+# it and let the build-push-ecr deploy that publishes its image bring it up. A service
+# whose image is missing while it IS on this box is a real break — an image retagged or
+# deleted out from under a live container — and still stops the sync before anything is
+# touched.
+
+# Echoes the backend services whose image cannot be resolved, one per line. The batch pull
+# only reports that something failed, so this re-pulls one at a time to name them; images
+# already on the box make each of those a no-op.
+missing_backend_images() {
+  local svc
+  for svc in "${BACKEND_SERVICES[@]}"; do
+    if ! docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${svc}" >/dev/null 2>&1; then
+      printf '%s\n' "${svc}"
+    fi
+  done
+}
+
+# True when the service has a container on this box, running or stopped.
+service_has_container() {
+  [[ -n "$(docker compose "${COMPOSE_ARGS[@]}" ps -aq "$1" 2>/dev/null)" ]]
+}
+
+# Echoes the arguments that are not in SKIPPED_SERVICES, one per line. Only called with
+# SKIPPED_SERVICES non-empty.
+without_skipped() {
+  local svc skipped
+  for svc in "$@"; do
+    for skipped in "${SKIPPED_SERVICES[@]}"; do
+      if [[ "${svc}" == "${skipped}" ]]; then
+        continue 2
+      fi
+    done
+    printf '%s\n' "${svc}"
+  done
+}
+
 should_run_docker_prune() {
   if ! [[ "${DOCKER_PRUNE_INTERVAL_HOURS}" =~ ^[0-9]+$ ]]; then
     echo "Skipping Docker prune: DOCKER_PRUNE_INTERVAL_HOURS must be an integer, got '${DOCKER_PRUNE_INTERVAL_HOURS}'." >&2
@@ -270,7 +316,10 @@ reconcile_databases() {
 render_prometheus_secret() {
   local prom_config="${BACKEND_DIR}/observability/prometheus.yml"
   local scrape_pw
-  scrape_pw="$(grep -E '^POS_SECURITY_METRICS_SCRAPE_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2-)"
+  # `|| true` as on the sibling reads at env_value/require_supplier_audit_key: `head -n1`
+  # can exit before grep finishes writing, and under `set -o pipefail` that SIGPIPE would
+  # abort the deploy over a value this function is prepared to find missing.
+  scrape_pw="$(grep -E '^POS_SECURITY_METRICS_SCRAPE_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
   if [[ -n "${scrape_pw}" && -f "${prom_config}" ]]; then
     echo "Injecting Prometheus scrape secret into ${prom_config}"
     python3 - "${prom_config}" "${scrape_pw}" <<'PY'
@@ -439,24 +488,66 @@ COMPOSE_ARGS=(
 if [[ "${MODE}" == "config-only" ]]; then
   echo "Config-only sync: recreating only containers whose compose config changed."
 
-  # Resolve every image up front, before a single container is touched. A config-only sync
-  # that adds a service can only work if that service has an image at the BACKEND_TAG the
-  # box is already pinned to — and a service built for the first time in the same commit
-  # does not, because its image is only published by the build that runs after the merge.
-  # Without this the run half-applied: it recreated the early tiers, then failed in the
-  # batch holding the new service and left the later tiers on their old containers (#1577).
-  # Pulls are no-ops for images already present, so this costs nothing on a normal sync.
+  # Resolve every image up front, before a single container is touched. Without this the
+  # run half-applied: it recreated the early tiers, then failed in the batch holding the
+  # service whose image was missing and left the later tiers on their old containers
+  # (#1577). Pulls are no-ops for images already present, so this costs nothing on a
+  # normal sync. What happens when one does not resolve depends on whether the service is
+  # already on this box — see missing_backend_images above.
   echo "Verifying every backend image exists at the pinned BACKEND_TAG"
+  SKIPPED_SERVICES=()
   if ! docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"; then
-    echo "" >&2
-    echo "ERROR: at least one backend image is missing at BACKEND_TAG=$(env_value BACKEND_TAG)." >&2
-    echo "Nothing has been changed on this host." >&2
-    echo "" >&2
-    echo "A service added to docker-compose.yml, the alpha override and DOMAIN_SERVICES in" >&2
-    echo "the same commit has no image at the tag this box is pinned to: config-only sync" >&2
-    echo "cannot deploy it. Run the build-push-ecr workflow on main with deploy_alpha=true," >&2
-    echo "which builds and publishes every service at the new tag and then deploys it." >&2
-    exit 1
+    mapfile -t MISSING_SERVICES < <(missing_backend_images)
+
+    UNDEPLOYABLE_SERVICES=()
+    # Guarded on the count rather than expanded with the ${arr[@]+"${arr[@]}"} idiom: mapfile
+    # always assigns the array, so the only thing to defend against is expanding it empty
+    # under `set -u`, and the count guard says that plainly and matches the two below.
+    if [[ ${#MISSING_SERVICES[@]} -gt 0 ]]; then
+      for SVC in "${MISSING_SERVICES[@]}"; do
+        if service_has_container "${SVC}"; then
+          UNDEPLOYABLE_SERVICES+=("${SVC}")
+        else
+          SKIPPED_SERVICES+=("${SVC}")
+        fi
+      done
+    fi
+
+    if [[ ${#UNDEPLOYABLE_SERVICES[@]} -gt 0 ]]; then
+      echo "" >&2
+      echo "ERROR: these services are on this box but have no image at BACKEND_TAG=$(env_value BACKEND_TAG):" >&2
+      printf '  %s\n' "${UNDEPLOYABLE_SERVICES[@]}" >&2
+      echo "Nothing has been changed on this host." >&2
+      echo "" >&2
+      echo "A service with a container here was deployed at this tag, so its image existed" >&2
+      echo "and has since been retagged or deleted in ECR. Run the build-push-ecr workflow on" >&2
+      echo "main with deploy_alpha=true, which republishes every service at a new tag and" >&2
+      echo "then deploys it." >&2
+      exit 1
+    fi
+
+    if [[ ${#SKIPPED_SERVICES[@]} -gt 0 ]]; then
+      echo "" >&2
+      echo "WARNING: skipping services that have never been deployed on this box and have no" >&2
+      echo "image at BACKEND_TAG=$(env_value BACKEND_TAG):" >&2
+      printf '  %s\n' "${SKIPPED_SERVICES[@]}" >&2
+      echo "A service added to the compose files is published only by the build that runs" >&2
+      echo "after the merge, so it cannot have an image at the tag this box is pinned to." >&2
+      echo "The rest of this sync is applied as usual; the skipped services come up with the" >&2
+      echo "build-push-ecr deploy for the same commit, which moves the box to a tag that has" >&2
+      echo "them." >&2
+      echo "" >&2
+    else
+      echo "Batch pull failed but every image resolved on retry; continuing."
+    fi
+  fi
+
+  # Compose reads a bare `up -d` as "every service", so a tier emptied by the skip list
+  # must not reach the command line.
+  if [[ ${#SKIPPED_SERVICES[@]} -gt 0 ]]; then
+    mapfile -t CORE_SERVICES < <(without_skipped "${CORE_SERVICES[@]}")
+    mapfile -t PLATFORM_SERVICES < <(without_skipped "${PLATFORM_SERVICES[@]}")
+    mapfile -t DOMAIN_SERVICES < <(without_skipped "${DOMAIN_SERVICES[@]}")
   fi
 
   echo "Applying config to postgres"
@@ -477,11 +568,15 @@ if [[ "${MODE}" == "config-only" ]]; then
 
   reconcile_databases
 
-  echo "Applying config to core services: ${CORE_SERVICES[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
+  if [[ ${#CORE_SERVICES[@]} -gt 0 ]]; then
+    echo "Applying config to core services: ${CORE_SERVICES[*]}"
+    docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${CORE_SERVICES[@]}"
+  fi
 
-  echo "Applying config to platform services: ${PLATFORM_SERVICES[*]}"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
+  if [[ ${#PLATFORM_SERVICES[@]} -gt 0 ]]; then
+    echo "Applying config to platform services: ${PLATFORM_SERVICES[*]}"
+    docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --wait --wait-timeout "${WAIT_TIMEOUT}" "${PLATFORM_SERVICES[@]}"
+  fi
 
   for ((i = 0; i < ${#DOMAIN_SERVICES[@]}; i += DOMAIN_BATCH_SIZE)); do
     BATCH=("${DOMAIN_SERVICES[@]:i:DOMAIN_BATCH_SIZE}")

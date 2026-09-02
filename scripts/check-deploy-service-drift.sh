@@ -305,6 +305,37 @@ report "gateway route target matches no module's spring.application.name" \
   "$unmapped_routes" \
   "lb://NAME resolves through Eureka to the service registered under NAME. Fix the route, or the module's spring.application.name."
 
+# --- host port collisions -----------------------------------------------------
+
+# Two compose services publishing the same host port is not a parse error and not a
+# healthcheck failure: compose accepts it, and the second container to start dies at
+# `docker start` with "port is already allocated". On alpha that aborts the deploy with the
+# whole start batch left in Created — which is how pos-reference-mock, published on
+# pos-people-contact's 8095, took six services down (#1646). Nothing else in this repo looks
+# at the published-port space, so check it here.
+duplicate_host_ports="$(
+  awk '
+    /^  [a-zA-Z0-9_-]+:$/ { svc = $1; sub(/:$/, "", svc) }
+    /^[[:space:]]*-[[:space:]]*"?[0-9.:]+:[0-9]+"?([[:space:]]|\/|$)/ {
+      line = $0
+      gsub(/[",]/, "", line)
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      sub(/\/.*$/, "", line)          # drop a /tcp or /udp suffix
+      n = split(line, parts, ":")
+      if (n < 2) next                 # a bare container port publishes nothing
+      print parts[n - 1], svc         # host port is the field before the container port
+    }
+  ' "$COMPOSE" \
+    | sort \
+    | awk '{ ports[$1] = ports[$1] " " $2; count[$1]++ }
+           END { for (p in ports) if (count[p] > 1) print "host port " p " ->" ports[p] }' \
+    | sort
+)"
+
+report "two compose services publish the same host port" \
+  "$duplicate_host_ports" \
+  "Give one of them a free host port. Compose will not complain, but the second container to start fails with \"port is already allocated\" and takes its whole alpha start batch with it."
+
 # --- result ------------------------------------------------------------------
 
 if [[ $status -eq 0 ]]; then
