@@ -92,6 +92,18 @@ public class McpServerConfiguration {
                 .build();
     }
 
+    /**
+     * WebClient for proxied tool invocations ({@code OperationProxyFactory}). Deliberately keeps the
+     * Spring default 256KB codec buffer — the pre-#1632 runtime behaviour — rather than the 16MB
+     * discovery override: proxied tool responses feed an LLM context, so a multi-MB body is a misuse
+     * signal that should fail fast, and {@code mcp.server.discovery-max-spec-bytes} (a spec-size knob)
+     * must not silently govern runtime tool-invocation buffering.
+     */
+    @Bean
+    public WebClient toolProxyWebClient() {
+        return WebClient.builder().build();
+    }
+
     @Bean
     public RestClientCustomizer bearerTokenRelayCustomizer(@NonNull BearerTokenRelayInterceptor interceptor) {
         return builder -> builder.requestInterceptors(list -> list.add(interceptor));

@@ -45,9 +45,9 @@ public class OperationProxyFactory {
     private final LoadBalancerClient loadBalancerClient;
     private final WebClient webClient;
 
-    OperationProxyFactory(@NonNull LoadBalancerClient loadBalancerClient, @NonNull WebClient discoveryWebClient) {
+    OperationProxyFactory(@NonNull LoadBalancerClient loadBalancerClient, @NonNull WebClient toolProxyWebClient) {
         this.loadBalancerClient = loadBalancerClient;
-        this.webClient = discoveryWebClient;
+        this.webClient = toolProxyWebClient;
     }
 
     @NonNull

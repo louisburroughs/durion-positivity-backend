@@ -211,7 +211,10 @@ public class OpenApiDocumentFetcher {
                         return Mono.<DiscoveredOpenApi>empty();
                     }
                     return Flux.fromIterable(docs)
-                            .flatMap(doc -> fetchAndPrefixService(baseUri, doc))
+                            // Concurrency 4: concurrent up-to-16MB spec bodies + resolveFully parses are
+                            // the dominant memory cost of discovery; bounding the fan-out keeps startup
+                            // memory spikes bounded.
+                            .flatMap(doc -> fetchAndPrefixService(baseUri, doc), 4)
                             .collectList()
                             .map(results -> {
                                 Paths mergedPaths = new Paths();

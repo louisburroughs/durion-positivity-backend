@@ -215,7 +215,8 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     @Override
     @Transactional
-    public int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames) {
+    public int pruneDiscoveredOperationsExcept(
+            @NonNull Collection<String> keptNames, @NonNull Set<String> excludedDomains) {
         // Safety: never prune against an empty keep-set — that would delete the entire discovered
         // catalog. The caller only invokes this after a successful, non-empty discovery run.
         if (keptNames.isEmpty()) {
@@ -225,10 +226,26 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         // no placeholder-list concatenation (java:S2077) — matching the ANY(?) style used by the
         // permission-filtered queries above.
         Object[] keptArray = keptNames.toArray();
-        List<UUID> orphanIds = jdbcTemplate.query(
-                "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name <> ALL(?)",
-                ps -> ps.setArray(1, ps.getConnection().createArrayOf(VARCHAR, keptArray)),
-                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        List<UUID> orphanIds;
+        if (excludedDomains.isEmpty()) {
+            orphanIds = jdbcTemplate.query(
+                    "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name <> ALL(?)",
+                    ps -> ps.setArray(1, ps.getConnection().createArrayOf(VARCHAR, keptArray)),
+                    (rs, rowNum) -> rs.getObject("id", UUID.class));
+        } else {
+            // #1632: rows in an excluded domain survive even when absent from keptNames — their
+            // service's spec fetch failed this cycle, so absence means "unseen", not "removed".
+            // A NULL domain is by definition not in excludedDomains and stays prunable.
+            Object[] excludedArray = excludedDomains.toArray();
+            orphanIds = jdbcTemplate.query(
+                    "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name <> ALL(?) "
+                            + "AND (domain IS NULL OR domain <> ALL(?))",
+                    ps -> {
+                        ps.setArray(1, ps.getConnection().createArrayOf(VARCHAR, keptArray));
+                        ps.setArray(2, ps.getConnection().createArrayOf(VARCHAR, excludedArray));
+                    },
+                    (rs, rowNum) -> rs.getObject("id", UUID.class));
+        }
         if (orphanIds.isEmpty()) {
             return 0;
         }

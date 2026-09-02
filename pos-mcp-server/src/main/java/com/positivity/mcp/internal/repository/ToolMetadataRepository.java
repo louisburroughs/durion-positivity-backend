@@ -45,7 +45,20 @@ public interface ToolMetadataRepository {
      * only prune after a successful, non-empty discovery run so a transient empty/failed fetch can
      * never wipe the catalog.
      */
-    int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames);
+    default int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames) {
+        return pruneDiscoveredOperationsExcept(keptNames, Set.of());
+    }
+
+    /**
+     * #1632 (per-prefix prune): like {@link #pruneDiscoveredOperationsExcept(Collection)}, but rows
+     * whose {@code domain} is in {@code excludedDomains} are never deleted regardless of
+     * {@code keptNames}. The caller passes the domains whose per-service spec fetch failed this cycle
+     * — their ops are absent from {@code keptNames} because they could not be seen, not because the
+     * services removed them, so pruning them would wrongly delete a whole domain's tools. An empty
+     * {@code excludedDomains} is exactly the single-arg behaviour. Returns the number of orphan rows
+     * deleted.
+     */
+    int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames, @NonNull Set<String> excludedDomains);
 
     /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
     void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);

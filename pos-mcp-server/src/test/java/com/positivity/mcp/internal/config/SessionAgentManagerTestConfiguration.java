@@ -86,7 +86,8 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public int pruneDiscoveredOperationsExcept(java.util.Collection<String> keptNames) {
+            public int pruneDiscoveredOperationsExcept(
+                    java.util.Collection<String> keptNames, java.util.Set<String> excludedDomains) {
                 return 0;
             }
 
