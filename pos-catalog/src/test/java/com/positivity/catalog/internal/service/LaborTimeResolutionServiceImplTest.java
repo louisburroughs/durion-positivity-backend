@@ -234,6 +234,43 @@ class LaborTimeResolutionServiceImplTest {
         }
 
         @Test
+        @DisplayName("the cache honours the TTL against the injected clock: past expiry the provider is asked again")
+        void cacheExpiresAgainstInjectedClock() {
+            SteppableClock steppable = new SteppableClock(Instant.parse("2026-09-02T08:00:00Z"));
+            service = new LaborTimeResolutionServiceImpl(
+                    standardRepository,
+                    serviceRepository,
+                    xrefRepository,
+                    policyRepository,
+                    Map.of("MOCKGUIDE_LIVE", livePort),
+                    Map.of("MOCKGUIDE_LIVE", Duration.ofMinutes(5)),
+                    steppable);
+            when(livePort.getLaborTime(any(), any()))
+                    .thenReturn(Optional.of(new ProviderLaborTime(
+                            "MG-BRAKE-PAD-FRONT",
+                            new BigDecimal("1.7"),
+                            "RETAIL_FLAT_RATE",
+                            List.of(),
+                            null,
+                            "2026-09-01",
+                            null,
+                            null)));
+
+            // Two calls inside the TTL: one provider hit.
+            service.resolve(SERVICE_ID, CIVIC, null);
+            steppable.advance(Duration.ofMinutes(4));
+            service.resolve(SERVICE_ID, CIVIC, null);
+            verify(livePort, times(1)).getLaborTime(any(), any());
+
+            // Step past the 5-minute TTL: the cached answer's expiresAt is behind the clock, so
+            // the provider must be consulted again — a license window is not stretchable.
+            steppable.advance(Duration.ofMinutes(2));
+            LaborTimeResolution refreshed = service.resolve(SERVICE_ID, CIVIC, null);
+            verify(livePort, times(2)).getLaborTime(any(), any());
+            assertThat(refreshed.status()).isEqualTo(Status.RESOLVED);
+        }
+
+        @Test
         @DisplayName("a failed live source degrades to default hours when the service has them")
         void liveFailureFallsBackToDefaultHours() {
             when(livePort.getLaborTime(any(), any())).thenThrow(new ProviderCallException("down"));
@@ -257,6 +294,34 @@ class LaborTimeResolutionServiceImplTest {
             LaborTimeResolution resolution = service.resolve(SERVICE_ID, CIVIC, null);
 
             assertThat(resolution.status()).isEqualTo(Status.SOURCE_UNAVAILABLE);
+        }
+    }
+
+    /** A clock the test steps forward by hand, so TTL expiry is deterministic. */
+    private static final class SteppableClock extends Clock {
+        private Instant now;
+
+        private SteppableClock(Instant start) {
+            this.now = start;
+        }
+
+        void advance(Duration duration) {
+            now = now.plus(duration);
+        }
+
+        @Override
+        public ZoneOffset getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
         }
     }
 

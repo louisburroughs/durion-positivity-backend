@@ -351,6 +351,48 @@ class LaborGuideIngestServiceImplTest {
         }
 
         @Test
+        @DisplayName("a chunk answering with the wrong manifest id bails resumable — nothing applied under it")
+        void wrongManifestIdBailsResumable() {
+            when(port.openFeedRevision(any())).thenReturn(manifest(1, 1));
+            UUID otherManifest = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9e01");
+            when(port.fetchFeedChunk(MANIFEST_ID, 1))
+                    .thenReturn(new ProviderFeedChunk(
+                            otherManifest, 1, List.of(line("MG-BRAKE-PAD-FRONT", new BigDecimal("1.5")))));
+            when(xrefRepository.findBySourceCodeAndProviderOpCode("MOCKGUIDE", "MG-BRAKE-PAD-FRONT"))
+                    .thenReturn(Optional.of(xref()));
+
+            LaborGuideImportSummaryDto summary = service.runImport("MOCKGUIDE");
+
+            // Exactly like a failed fetch: the APPLYING row stays resumable and no standard or
+            // chunk bookkeeping lands for the impostor chunk.
+            assertThat(summary.getStatus()).isEqualTo("APPLYING");
+            assertThat(summary.getChunksApplied()).isZero();
+            assertThat(summary.getStandardsWritten()).isZero();
+            verify(standardRepository, never()).save(any());
+            verify(chunkRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a chunk answering with the wrong sequence bails resumable — nothing applied under it")
+        void wrongChunkSequenceBailsResumable() {
+            when(port.openFeedRevision(any())).thenReturn(manifest(2, 2));
+            when(port.fetchFeedChunk(MANIFEST_ID, 1))
+                    .thenReturn(new ProviderFeedChunk(
+                            MANIFEST_ID, 2, List.of(line("MG-BRAKE-PAD-FRONT", new BigDecimal("1.5")))));
+            when(xrefRepository.findBySourceCodeAndProviderOpCode("MOCKGUIDE", "MG-BRAKE-PAD-FRONT"))
+                    .thenReturn(Optional.of(xref()));
+
+            LaborGuideImportSummaryDto summary = service.runImport("MOCKGUIDE");
+
+            assertThat(summary.getStatus()).isEqualTo("APPLYING");
+            assertThat(summary.getChunksApplied()).isZero();
+            verify(standardRepository, never()).save(any());
+            verify(chunkRepository, never()).save(any());
+            // The loop stops at the mismatch rather than marching on to chunk 2.
+            verify(port, never()).fetchFeedChunk(MANIFEST_ID, 2);
+        }
+
+        @Test
         @DisplayName("counts that do not reconcile close the import INCOMPLETE, never silently complete")
         void mismatchedCountsIncomplete() {
             // Manifest promises 2 lines but the single chunk carries 1.

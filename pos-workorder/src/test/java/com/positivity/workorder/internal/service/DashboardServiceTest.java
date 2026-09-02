@@ -892,6 +892,47 @@ class DashboardServiceTest {
         assertThat(response.getDataQualityWarning()).isFalse();
     }
 
+    // -----------------------------------------------------------------------
+    // #1569: WorkorderSummary.estimatedLaborHours populated from
+    // EstimatedLaborService — the field stops serialising as an unkept promise.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1569: WorkorderSummary.estimatedLaborHours comes from EstimatedLaborService")
+    void getDashboard_populatesEstimatedLaborHoursFromEstimatedLaborService() {
+        // Arrange
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Workorder wo = buildWorkorder(workorderId, "MECH-080", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+        when(estimatedLaborService.estimateForWorkorder(workorderId))
+                .thenReturn(new EstimatedLaborService.EstimatedLabor(
+                        new java.math.BigDecimal("2.1"), List.of("BRAKE-PAD-FRONT")));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getWorkorders()).hasSize(1);
+        assertThat(response.getWorkorders().get(0).getEstimatedLaborHours()).isEqualByComparingTo("2.1");
+    }
+
+    @Test
+    @DisplayName("#1569: a workorder with no estimate serialises estimatedLaborHours as null, not zero")
+    void getDashboard_noEstimate_estimatedLaborHoursNull() {
+        // Arrange — BeforeEach stubs estimateForWorkorder to EstimatedLabor.none()
+        Workorder wo = buildWorkorder(UUID.fromString("00000000-0000-0000-0000-000000000001"), "MECH-081", null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getWorkorders()).hasSize(1);
+        assertThat(response.getWorkorders().get(0).getEstimatedLaborHours()).isNull();
+    }
+
     private Workorder buildWorkorder(UUID id, String mechanicId, UUID resourceId) {
         return Workorder.builder()
                 .id(id)
