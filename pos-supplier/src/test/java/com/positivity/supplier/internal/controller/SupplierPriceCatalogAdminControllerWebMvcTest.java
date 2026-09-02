@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.controller;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.supplier.internal.config.SecurityConfig;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.pricecatalog.service.SupplierPriceCatalogService;
+import com.positivity.supplier.internal.pricecatalog.service.model.PriceCatalogBindingFreshness;
+import com.positivity.supplier.internal.pricecatalog.service.model.PriceCatalogFreshnessView;
 import com.positivity.supplier.internal.pricecatalog.service.model.PriceCatalogImportSummary;
 import com.positivity.supplier.internal.pricecatalog.service.model.UnmatchedPriceCatalogLineView;
 import com.positivity.supplier.internal.security.SupplierPermissions;
@@ -70,6 +73,7 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
     private static final UUID MANIFEST_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c");
+    private static final UUID BINDING_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e");
     private static final String BASE = "/v1/supplier/admin/price-catalog/" + PROFILE_ID;
 
     @Autowired
@@ -86,10 +90,15 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
         return new PriceCatalogImportSummary(
                 MANIFEST_ID,
                 PROFILE_ID,
+                BINDING_ID,
                 "michelin-eu",
                 status,
                 Instant.parse("2026-08-13T09:00:00Z"),
                 Instant.parse("2026-08-13T09:05:00Z"),
+                null,
+                null,
+                null,
+                null,
                 1200,
                 1180,
                 18,
@@ -99,6 +108,7 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
                 LocalDate.of(2026, 8, 13),
                 "SE",
                 "SEK",
+                null,
                 null);
     }
 
@@ -218,7 +228,8 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
 
         @Test
         void returnsAPageToAReader() throws Exception {
-            when(priceCatalogService.listImports(eq(PROFILE_ID), anyInt(), anyInt()))
+            when(priceCatalogService.listImports(
+                            eq(PROFILE_ID), isNull(), isNull(), isNull(), isNull(), anyInt(), anyInt()))
                     .thenReturn(new PagedResponse<>(List.of(summary("COMPLETED")), 0, 50, 1, 1));
 
             mockMvc.perform(authed(get(BASE + "/imports"), SupplierPermissions.PRICECATALOG_READ))
@@ -246,12 +257,110 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
     }
 
     @Nested
+    @DisplayName("GET /imports filters")
+    class ListImportsFilters {
+
+        @Test
+        void passesEveryFilterThroughToTheService() throws Exception {
+            when(priceCatalogService.listImports(
+                            eq(PROFILE_ID),
+                            eq(BINDING_ID),
+                            eq(com.positivity.supplier.internal.enums.PriceCatalogImportStatus.FAILED),
+                            eq(Instant.parse("2026-08-01T00:00:00Z")),
+                            eq(Instant.parse("2026-09-01T00:00:00Z")),
+                            anyInt(),
+                            anyInt()))
+                    .thenReturn(new PagedResponse<>(List.of(summary("FAILED")), 0, 50, 1, 1));
+
+            mockMvc.perform(authed(
+                            get(BASE + "/imports?bindingId=" + BINDING_ID + "&status=FAILED"
+                                    + "&dateFrom=2026-08-01T00:00:00Z&dateTo=2026-09-01T00:00:00Z"),
+                            SupplierPermissions.PRICECATALOG_READ))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].status").value("FAILED"))
+                    .andExpect(jsonPath("$.items[0].bindingId").value(BINDING_ID.toString()));
+        }
+
+        @Test
+        void rejectsAStatusThatIsNotARunStatus() throws Exception {
+            mockMvc.perform(authed(get(BASE + "/imports?status=SIDEWAYS"), SupplierPermissions.PRICECATALOG_READ))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /freshness")
+    class GetFreshness {
+
+        private static PriceCatalogFreshnessView freshness() {
+            return new PriceCatalogFreshnessView(
+                    PROFILE_ID,
+                    LocalDate.of(2026, 8, 13),
+                    Instant.parse("2026-08-13T09:00:00Z"),
+                    Instant.parse("2026-08-13T09:05:00Z"),
+                    42,
+                    "P7D",
+                    false,
+                    List.of(new PriceCatalogBindingFreshness(
+                            BINDING_ID,
+                            "0 0 3 * * *",
+                            true,
+                            null,
+                            "COMPLETED",
+                            Instant.parse("2026-08-13T09:00:00Z"))));
+        }
+
+        @Test
+        void returnsTheFreshnessViewToAReader() throws Exception {
+            when(priceCatalogService.getFreshness(PROFILE_ID)).thenReturn(freshness());
+
+            mockMvc.perform(authed(get(BASE + "/freshness"), SupplierPermissions.PRICECATALOG_READ))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.vendorProfileId").value(PROFILE_ID.toString()))
+                    .andExpect(jsonPath("$.latestEffectiveDate").value("2026-08-13"))
+                    .andExpect(jsonPath("$.lastFetchedAt").value("2026-08-13T09:00:00Z"))
+                    .andExpect(jsonPath("$.lastCompletedAt").value("2026-08-13T09:05:00Z"))
+                    .andExpect(jsonPath("$.unresolvedUnmatchedCount").value(42))
+                    .andExpect(jsonPath("$.stalenessThreshold").value("P7D"))
+                    .andExpect(jsonPath("$.stale").value(false))
+                    .andExpect(jsonPath("$.bindings[0].bindingId").value(BINDING_ID.toString()))
+                    .andExpect(jsonPath("$.bindings[0].scheduleCron").value("0 0 3 * * *"))
+                    .andExpect(jsonPath("$.bindings[0].lastRunOutcome").value("COMPLETED"));
+        }
+
+        @Test
+        void reportsAnUnknownProfileAsNotFound() throws Exception {
+            when(priceCatalogService.getFreshness(PROFILE_ID))
+                    .thenThrow(new SupplierConfigurationException(
+                            SupplierConfigurationException.UNKNOWN_SUPPLIER,
+                            "No vendor profile exists with id " + PROFILE_ID));
+
+            mockMvc.perform(authed(get(BASE + "/freshness"), SupplierPermissions.PRICECATALOG_READ))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void isDeniedWithoutThePriceCatalogReadAuthority() throws Exception {
+            mockMvc.perform(authed(get(BASE + "/freshness"), SupplierPermissions.PROFILE_READ))
+                    .andExpect(status().isForbidden());
+
+            verify(priceCatalogService, never()).getFreshness(PROFILE_ID);
+        }
+
+        @Test
+        void isRejectedWithoutAuthentication() throws Exception {
+            mockMvc.perform(get(BASE + "/freshness")).andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Nested
     @DisplayName("GET /unmatched-lines")
     class ListUnmatchedLines {
 
         @Test
         void returnsTheOpenQuarantineToAReader() throws Exception {
-            when(priceCatalogService.listUnmatchedLines(eq(PROFILE_ID), anyInt(), anyInt()))
+            when(priceCatalogService.listUnmatchedLines(
+                            eq(PROFILE_ID), isNull(), isNull(), isNull(), isNull(), isNull(), anyInt(), anyInt()))
                     .thenReturn(new PagedResponse<>(List.of(unmatchedLine()), 0, 50, 1, 1));
 
             mockMvc.perform(authed(get(BASE + "/unmatched-lines"), SupplierPermissions.PRICECATALOG_READ))

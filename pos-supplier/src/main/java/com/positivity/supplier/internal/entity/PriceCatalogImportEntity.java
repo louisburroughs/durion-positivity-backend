@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
+import com.positivity.supplier.internal.enums.PriceCatalogErrorCode;
 import com.positivity.supplier.internal.enums.PriceCatalogImportStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -62,6 +63,17 @@ public class PriceCatalogImportEntity {
     @Column(name = "vendor_profile_id", nullable = false, updatable = false)
     private UUID vendorProfileId;
 
+    /**
+     * Endpoint binding the run was fetched over (#1637 decision 4). Scheduling and triggering are
+     * per binding (#1224), and a profile can carry more than one binding, so this is what tells two
+     * feeds' histories apart. Nullable forward-only: rows written before the column existed cannot
+     * be reconstructed, and a quarantine re-application manifest makes no vendor call and has no
+     * binding either. No foreign key, for the same reason the profile has none — the received
+     * record outlives the configuration that produced it.
+     */
+    @Column(name = "binding_id", updatable = false)
+    private UUID bindingId;
+
     /** Profile alias as at the time of the fetch; descriptive snapshot, never a query key. */
     @Column(name = "supplier_ref", nullable = false, updatable = false, length = 100)
     private String supplierRef;
@@ -104,6 +116,33 @@ public class PriceCatalogImportEntity {
 
     @Column(name = "completed_at")
     private Instant completedAt;
+
+    /**
+     * Incremental retrieval interval requested for this run, half-open {@code [windowFrom,
+     * windowTo)} (#1637 decision 5). <strong>Null for full-snapshot protocols</strong> — which is
+     * every PRICAT protocol in service today: B4.0 returns the vendor's whole catalog, so there is
+     * no window to record and recording one would fabricate a fact the exchange never had. Not to
+     * be confused with {@link #sourceDocumentDate}, which is vendor document metadata.
+     */
+    @Column(name = "window_from", updatable = false)
+    private Instant windowFrom;
+
+    /** Exclusive end of the requested retrieval interval; see {@link #windowFrom}. */
+    @Column(name = "window_to", updatable = false)
+    private Instant windowTo;
+
+    /**
+     * Opaque continuation state committed for the next run of an incremental protocol (#1637
+     * decision 5). Null for full-snapshot protocols, which have nothing to resume from — a snapshot
+     * run's "when did this last happen" is {@link #fetchedAt}, not a checkpoint. Opaque on purpose:
+     * its format belongs to the protocol adapter that wrote it.
+     */
+    @Column(name = "checkpoint_state", columnDefinition = "text")
+    private String checkpointState;
+
+    /** Instant {@link #checkpointState} was successfully committed; null whenever it is null. */
+    @Column(name = "checkpoint_at")
+    private Instant checkpointAt;
 
     @Column(name = "lines_fetched", nullable = false)
     @Builder.Default
@@ -176,6 +215,15 @@ public class PriceCatalogImportEntity {
     /** Operator-facing failure summary for a FAILED import; never a credential. */
     @Column(name = "failure_detail", length = 2000)
     private String failureDetail;
+
+    /**
+     * Stable machine-readable failure category for a FAILED import (#1637 decision 5). Complements
+     * {@link #failureDetail} rather than replacing it: the code is for clients and alerting, the
+     * text is for the operator reading one run. Null for every non-failed status.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "error_code", length = 64)
+    private PriceCatalogErrorCode errorCode;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

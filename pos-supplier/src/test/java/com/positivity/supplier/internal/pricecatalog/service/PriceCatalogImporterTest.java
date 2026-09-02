@@ -23,6 +23,7 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.enums.PriceCatalogErrorCode;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.pricecatalog.service.ProductCodeResolver.Resolution;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
@@ -97,7 +98,7 @@ class PriceCatalogImporterTest {
         when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.Matched(PRODUCT_ID));
         when(stagingWriter.commit(any(), any(), any(), any(), any(), anyString(), any(), anyInt()))
                 .thenReturn(PriceCatalogImportEntity.builder().build());
-        when(stagingWriter.persistFailure(any(), any(), any(), any(), anyString(), any()))
+        when(stagingWriter.persistFailure(any(), any(), any(), any(), anyString(), any(), any()))
                 .thenReturn(PriceCatalogImportEntity.builder().build());
     }
 
@@ -151,7 +152,7 @@ class PriceCatalogImporterTest {
         service.runImport(SUPPLIER);
 
         verify(stagingWriter).commit(any(), any(), any(), any(), any(), anyString(), any(), eq(500));
-        verify(stagingWriter, never()).persistFailure(any(), any(), any(), any(), anyString(), any());
+        verify(stagingWriter, never()).persistFailure(any(), any(), any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -188,7 +189,9 @@ class PriceCatalogImporterTest {
 
         service.runImport(SUPPLIER);
 
-        verify(stagingWriter).persistFailure(any(), any(), any(), any(), anyString(), anyString());
+        verify(stagingWriter)
+                .persistFailure(
+                        any(), any(), any(), any(), anyString(), anyString(), eq(PriceCatalogErrorCode.FETCH_FAILED));
         verify(stagingWriter, never()).commit(any(), any(), any(), any(), any(), anyString(), any(), anyInt());
     }
 
@@ -200,7 +203,15 @@ class PriceCatalogImporterTest {
         service.runImport(SUPPLIER);
 
         ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
-        verify(stagingWriter).persistFailure(any(), any(), any(), any(), anyString(), detail.capture());
+        verify(stagingWriter)
+                .persistFailure(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        anyString(),
+                        detail.capture(),
+                        eq(PriceCatalogErrorCode.DECODE_FAILED));
         assertThat(detail.getValue()).contains("not a B4.0 catalog document");
         verify(stagingWriter, never()).commit(any(), any(), any(), any(), any(), anyString(), any(), anyInt());
     }

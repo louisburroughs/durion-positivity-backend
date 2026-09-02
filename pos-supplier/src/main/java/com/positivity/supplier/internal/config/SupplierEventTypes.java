@@ -90,6 +90,10 @@ public final class SupplierEventTypes {
                                 "SUPPLIER_PRICECATALOG_REAPPLY",
                                 "Re-apply quarantined price-catalog lines after a catalog fix")
                         .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_PRICECATALOG_FRESHNESS_GET",
+                                "Read one vendor price-catalog's freshness and staleness verdict")
+                        .build(),
                 // Order transmission ledger (ADR-0052, CAP-320)
                 EventTypeRegistration.search(
                                 "SUPPLIER_TRANSMISSION_LIST", "List the vendor transmissions of one purchase order")

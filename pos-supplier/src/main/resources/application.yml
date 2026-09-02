@@ -150,6 +150,11 @@ pos:
       # a burst of requests for one import; the cap stops a genuinely broken consumer, loudly.
       republish-cooldown: ${SUPPLIER_PRICAT_REPUBLISH_COOLDOWN:PT10M}
       republish-max-attempts: ${SUPPLIER_PRICAT_REPUBLISH_MAX_ATTEMPTS:3}
+      # How old the last vendor fetch may be before the freshness read reports the catalog stale
+      # (#1637 decision 3). Catalog-currency policy, returned to every client in the freshness
+      # response so they all judge by the same rule. NOT a cache TTL -- in particular not the
+      # stock-inquiry cache-ttl below, which bounds request coalescing, not data currency.
+      staleness-threshold: ${SUPPLIER_PRICAT_STALENESS_THRESHOLD:P7D}
     # ── Live stock inquiry / A2.5 (CAP-319) ─────────────────────────────────────────────
     #
     # The one synchronous supplier read the platform allows (ADR-0044 amendment). A customer is
