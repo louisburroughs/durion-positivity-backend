@@ -185,6 +185,13 @@ jobs:
         # fixed by hand three times. Fail fast here instead (#1580).
         run: ./scripts/check-deploy-service-drift.sh
 
+      - name: Verify the config-only sync's image pre-flight
+        # deploy-backend.sh --config-only decides what an alpha sync does when an
+        # image is missing at the pinned BACKEND_TAG, and that decision is
+        # otherwise only observable on the box after a merge. The self-test drives
+        # the real script against a stubbed Docker (#1646).
+        run: bash scripts/tests/deploy-backend-config-only-selftest.sh
+
       - name: Enforce Kafka topic provisioning coverage
         # kafka-topic-init is the authoritative topic provisioner on alpha, so a
         # topic missing from it lands on broker defaults — which for a DLQ means

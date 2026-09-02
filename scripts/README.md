@@ -27,6 +27,7 @@ Utility scripts for development, operations, testing, and deployment.
 | [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
 | [`check-openapi-inventory-drift.sh`](#check-openapi-inventory-driftsh) | API | Verify every spec-producing module is registered in `module-inventory.yaml` |
 | [`check-deploy-service-drift.sh`](#check-deploy-service-driftsh) | Deployment | Verify every deployable service is registered in all five deploy lists |
+| [`tests/deploy-backend-config-only-selftest.sh`](#testsdeploy-backend-config-only-selftestsh) | Deployment | Drive `deploy-backend.sh --config-only`'s image pre-flight against a stubbed Docker |
 | [`generate-kafka-topics.py`](#generate-kafka-topicspy) | Kafka | Derive the `kafka-topic-init` topic map from the topics services configure and consume |
 | [`check-kafka-topic-drift.sh`](#check-kafka-topic-driftsh) | Kafka | Verify `kafka-topic-init` provisions every topic the code uses |
 | [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
@@ -388,6 +389,32 @@ collects (#1580).
 - Exits non-zero on any drift; runs in CI alongside the other drift guards.
 - The universe is anchored on "has a `Dockerfile`", not "has a compose service": deploy drift happens
   at the transition from not-deployed to deployed, which the latter cannot see.
+
+---
+
+### `tests/deploy-backend-config-only-selftest.sh`
+
+Drives the real `deployment/alpha/deploy-backend.sh --config-only` against a stubbed `docker`/`aws`
+and a throwaway `ALPHA_ROOT`, then asserts on the compose commands it issued.
+
+It covers the pre-flight image check, whose whole job is to decide what a config-only sync does when
+an image cannot be resolved at the `BACKEND_TAG` the alpha box is pinned to — a decision that is
+otherwise only observable on the box, after a merge:
+
+- every image resolves — all tiers applied
+- a service missing an image with no container on the box (a service added by the commit being
+  synced) — skipped with a warning, every other tier applied
+- a service missing an image that does have a container — hard failure, nothing applied
+
+**Usage:**
+```bash
+bash scripts/tests/deploy-backend-config-only-selftest.sh
+```
+
+**Notes:**
+- The stub reads `MISSING_IMAGES` and `EXISTING_CONTAINERS` (space-separated service names); it never
+  parses the compose files, which only have to exist.
+- Run it after any change to the `--config-only` branch of `deploy-backend.sh`.
 - Built-but-undeployed modules carry an `ALLOWLIST` entry in the script with a status and a reason.
   Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.
 - The module <-> compose-service mapping is read from each service's `build.context`, so

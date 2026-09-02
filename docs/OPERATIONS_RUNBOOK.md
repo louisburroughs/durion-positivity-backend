@@ -71,6 +71,22 @@ Both paths pass the committed files' sha256 digests (`PROD_OVERRIDE_SHA256`,
 that does not match — a stale override is a loud failure, not a silent no-op. `--config-only`
 also refuses to run on a box that has never had a full deploy (no `BACKEND_TAG` in `.env`).
 
+`--config-only` resolves every backend image before it touches a container, because the box stays
+pinned to the `BACKEND_TAG` of the last full deploy and a config sync never advances it. What it
+does with an image it cannot resolve depends on whether the service is already here:
+
+- **No container on the box** — the service was added by the commit being synced, and its image is
+  published only by the `build-push-ecr` run that follows the merge, so it cannot exist at the
+  pinned tag. The sync skips it with a warning and applies everything else; the service comes up
+  with that run's alpha deploy, which moves the box to a tag that has it. Nothing to do.
+- **A container exists** — the service was deployed at this tag, so its image has been retagged or
+  deleted in ECR. The sync stops before changing anything. Re-run `build-push-ecr` on `main` with
+  `deploy_alpha=true` to republish every service at a new tag and deploy it.
+
+The skip is the reason a new-service merge no longer shows a red **Sync Alpha Config** run beside a
+green build (`pos-reference-mock`, #1646). Behaviour is covered by
+`scripts/tests/deploy-backend-config-only-selftest.sh`.
+
 ### Health and Readiness Checks
 
 ```bash
