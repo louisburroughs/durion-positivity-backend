@@ -37,6 +37,18 @@ public class SupplierNotFoundException extends RuntimeException {
      */
     public static final String STOCK_SNAPSHOT_NOT_FOUND = "SUPPLIER_STOCK_SNAPSHOT_NOT_FOUND";
 
+    /**
+     * The availability read could not resolve the named product identity to any vendor-queryable
+     * code in the local catalog replica (#1637 decision 1): the product is unknown here, or is
+     * known but carries no EAN/UPC code — including a SKU the replica has not learned yet.
+     *
+     * <p>404 rather than a degraded 200: a vendor being down is an answer, but a product this
+     * module cannot even name to a vendor is a question it cannot ask, and pretending every vendor
+     * said NOT_LISTED would send an operator chasing vendor listings when the fix is in the
+     * catalog.
+     */
+    public static final String PRODUCT_CODES_NOT_FOUND = "SUPPLIER_PRODUCT_CODES_NOT_FOUND";
+
     private final String code;
 
     public SupplierNotFoundException(String code, String message) {

@@ -105,7 +105,10 @@ public class SupplierStockServiceImpl implements SupplierStockService {
             return failed(request, map(result.status()));
         }
 
-        Instant asOf = Instant.now(clock);
+        Instant fetchedAt = Instant.now(clock);
+        // A2.5 states no observation instant of its own; a norm that does gets its statement kept
+        // rather than overwritten by our clock (#1637 decision 1: fetchedAt and asOf are two facts).
+        Instant asOf = result.asOf() == null ? fetchedAt : result.asOf();
         for (SupplierStockInquiryResult.Line line : result.lines()) {
             cache.put(
                     new StockInquiryCache.Key(
@@ -113,6 +116,7 @@ public class SupplierStockServiceImpl implements SupplierStockService {
                             request.deliveryLocationId(),
                             articleKey(line.articleEan(), line.supplierArticleCode())),
                     line,
+                    fetchedAt,
                     asOf);
         }
         return served(request, hits, result.lines());
@@ -136,7 +140,10 @@ public class SupplierStockServiceImpl implements SupplierStockService {
 
         for (StockInquiryCache.Answer answer : hits.values()) {
             lines.add(toResponseLine(answer.line()));
-            oldest = older(oldest, answer.asOf());
+            // The document's asOf documents "when this answer was obtained", so a cached line
+            // contributes the instant of its original inquiry — its fetch time — not the vendor's
+            // stated observation instant, which the availability fan-out reports separately.
+            oldest = older(oldest, answer.fetchedAt());
         }
         for (SupplierStockInquiryResult.Line line : fresh) {
             lines.add(toResponseLine(line));
@@ -174,18 +181,8 @@ public class SupplierStockServiceImpl implements SupplierStockService {
         return new StockInquiryResponse(request.inquiryId(), status, List.of(), null);
     }
 
-    /**
-     * The identity an answer is remembered and matched by.
-     *
-     * <p>Both identifiers participate: a vendor may echo either, and keying on one alone would let
-     * an answer about an article identified by EAN be served for a request that named a supplier
-     * code, which are not guaranteed to be the same article.
-     */
+    /** The identity an answer is remembered and matched by; shared via {@link ArticleKeys}. */
     private static String articleKey(@Nullable String articleEan, @Nullable String supplierArticleCode) {
-        return normalise(articleEan) + "|" + normalise(supplierArticleCode);
-    }
-
-    private static String normalise(@Nullable String value) {
-        return value == null ? "" : value.trim().toUpperCase(java.util.Locale.ROOT);
+        return ArticleKeys.of(articleEan, supplierArticleCode);
     }
 }

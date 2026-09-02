@@ -77,6 +77,9 @@ class CatalogProductEventsListenerTest {
         assertThat(captor.getValue().getCode()).isEqualTo("3528709999083");
         assertThat(captor.getValue().getCodeType()).isEqualTo("EAN");
         assertThat(captor.getValue().getAggregateVersion()).isEqualTo(100L);
+        // The SKU rides the same fact (#1637 decision 1): the availability read resolves a
+        // caller's SKU from this replica rather than asking pos-catalog synchronously.
+        assertThat(captor.getValue().getSku()).isEqualTo("SKU-1");
         verify(processedEventRepository).save(any(ProcessedEvent.class));
     }
 

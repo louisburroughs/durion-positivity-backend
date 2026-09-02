@@ -54,6 +54,14 @@ public class ExtProductCodeReplica {
     @Column(name = "code_type", length = 16)
     private String codeType;
 
+    /**
+     * The product's catalog SKU, as pos-catalog stores it. Null when the product has none — or when
+     * the row predates V20 and the product's fact has not been re-consumed yet, which is why an
+     * absent SKU is reported as "identity not resolvable here" rather than "no such product".
+     */
+    @Column(name = "sku", length = 64)
+    private String sku;
+
     /** The code as pos-catalog stores it; matching is exact against this value (ADR-0053 §5). */
     @Column(name = "code", length = 64)
     private String code;

@@ -116,6 +116,14 @@ public final class SupplierEventTypes {
                 // alerting on is the vendor's, not this module's.
                 EventTypeRegistration.write("SUPPLIER_STOCK_INQUIRY", "Ask a vendor for live stock availability")
                         .build(),
+                // Same reasoning, multiplied: the availability fan-out asks every enabled vendor
+                // concurrently while a customer waits, so its latency is the slowest vendor's (up
+                // to the fan-out deadline) — a write's threshold, not a local read's, exactly as
+                // for the single-vendor inquiry above.
+                EventTypeRegistration.write(
+                                "SUPPLIER_STOCK_AVAILABILITY_GET",
+                                "Check a product's live availability across all enabled stock-inquiry vendors")
+                        .build(),
                 // Stock-report snapshots (CAP-322). Local reads of already-fetched documents — no
                 // vendor is contacted, so a fast read's threshold is the right one.
                 EventTypeRegistration.fastRead(

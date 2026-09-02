@@ -114,6 +114,10 @@ public class CatalogProductEventsListener {
                 .productId(productId)
                 .codeType(trimToNull(payload.productCodeType()))
                 .code(trimToNull(payload.productCode()))
+                // The SKU travels on the same fact and is kept for the same reason the codes are:
+                // the availability read resolves a caller's SKU locally (ADR-0044 R1/R3), and a
+                // synchronous ask to pos-catalog is forbidden.
+                .sku(trimToNull(payload.sku()))
                 .aggregateVersion(aggregateVersion)
                 .build());
     }
