@@ -6,6 +6,7 @@ import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderReques
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.ProcurementAvailabilityResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.security.PurchaseOrderPermissions;
 import com.positivity.order.internal.service.ProcurementAvailabilityService;
@@ -482,5 +483,50 @@ public class PurchaseOrderController {
                     UUID deliveryLocationId) {
         return ResponseEntity.ok(
                 procurementAvailabilityService.availabilityFor(poId, vendorProfileId, deliveryLocationId));
+    }
+
+    @GetMapping("/{poId}/transmission-events")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:view"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_VIEW + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS", apiVersion = "1")
+    @Operation(
+            operationId = "listPurchaseOrderTransmissionEvents",
+            summary = "List Purchase Order Transmission Events",
+            description = """
+                    Returns a page of the purchase order's append-only vendor transmission timeline: every \
+                    confirmation, rejection, status observation and review escalation heard about the order, \
+                    including the despatchDate and estimatedDeliveryDate a status observation may carry.
+                    Use this tool when a buyer chasing an order needs what happened to it, not just where it \
+                    stands; use getPurchaseOrder instead for the order's current transmission state, which this \
+                    timeline never collapses to.
+                    Preconditions: the purchase order must exist; an order that was never transmitted simply has \
+                    an empty timeline.
+                    Required inputs: poId (UUIDv7) path parameter; standard page and size parameters control \
+                    pagination, and the sort parameter is ignored because the ordering is the semantics of the \
+                    timeline.
+                    Entries are ordered by the vendor's clock (observedAt ascending), with ties broken by \
+                    platform receipt time (recordedAt) and then by event id, so a late-arriving observation sits \
+                    where the vendor observed it and the sequence is stable across reads.
+                    Emits an ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS audit event; no state changes, this is a \
+                    read-only projection.
+                    Returns 200 with an empty page when the order has no timeline yet, and 404 when the purchase \
+                    order does not exist.
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(responseCode = "200", description = "Transmission timeline returned")
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Page<PurchaseOrderTransmissionEventResponse>> listPurchaseOrderTransmissionEvents(
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(purchaseOrderService.listTransmissionEvents(poId, pageable));
     }
 }
