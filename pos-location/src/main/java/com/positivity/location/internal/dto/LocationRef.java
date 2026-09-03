@@ -60,4 +60,14 @@ public class LocationRef {
             example = "2026-06-18T08:00:00Z",
             requiredMode = NOT_REQUIRED)
     private Instant updatedAt;
+
+    // Issue #1657: computed per request from aggregate queries over bays and mobile
+    // units. The roster projection stays lightweight and carries only the flag; the
+    // underlying counts are on LocationResponseDTO from GET /v1/locations.
+    @Schema(
+            description = "Whether the location can perform repairs, true when it has at least one ACTIVE bay "
+                    + "or at least one ACTIVE mobile unit based there; always false for an inactive location",
+            example = "true",
+            requiredMode = REQUIRED)
+    private boolean hasRepairCapability;
 }

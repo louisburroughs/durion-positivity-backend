@@ -38,6 +38,28 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
 - `GET /v1/mobile-units:eligible` — eligible mobile units for scheduling
 
+## Repair capability on locations (#1657)
+
+`GET /v1/locations` returns `hasRepairCapability`, `activeBayCount` and `activeMobileUnitCount` on every
+`LocationResponseDTO`, and `GET /v1/locations/roster` returns `hasRepairCapability` on every `LocationRef`
+(the roster stays lightweight and carries no counts). Consumers must read these fields instead of fanning
+out over `GET /v1/locations/{locationId}/bays` and `GET /v1/mobile-units` per location.
+
+- `activeBayCount` counts bays owned by the location whose `status` is exactly `ACTIVE`; `OUT_OF_SERVICE`
+  bays are excluded.
+- `activeMobileUnitCount` counts mobile units whose `baseLocationId` is the location and whose `status` is
+  exactly `ACTIVE`. The check is an allow-list, so any status value other than `ACTIVE` — including a value
+  added later — is treated as non-operational.
+- `hasRepairCapability` is `activeBayCount > 0 || activeMobileUnitCount > 0`.
+- An inactive location (`active == false`) always reports `false` with both counts `0`, whatever bays or
+  mobile units it has on record. Whether inactive locations appear in either list is unchanged.
+
+Nothing is denormalized onto `location`: `LocationRepairCapabilityProjector` computes the projection per
+request from two aggregate queries — one `GROUP BY` over `bays` and one over `mobile_units`, each scoped to
+the whole batch of returned location ids — so a bay or mobile unit that was just created, restatused or
+re-based shows up immediately, and list size never adds queries. There is deliberately no
+`?capability=REPAIR` filter parameter; narrow on `hasRepairCapability` client-side.
+
 ## Storage-location putaway capability (#1514)
 
 A storage location carries two orthogonal descriptions, and they are deliberately independent:

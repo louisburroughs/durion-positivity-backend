@@ -76,4 +76,28 @@ public class LocationResponseDTO {
 
     @Schema(description = "Type classification of the location", requiredMode = NOT_REQUIRED)
     private LocationTypeDTO type;
+
+    // Issue #1657: computed per request from aggregate queries over bays and mobile
+    // units; never stored on the location row. An inactive location always reports
+    // false and zero counts.
+    @Schema(
+            description = "Whether the location can perform repairs, true when it has at least one ACTIVE bay "
+                    + "or at least one ACTIVE mobile unit based there; always false for an inactive location",
+            example = "true",
+            requiredMode = REQUIRED)
+    private boolean hasRepairCapability;
+
+    @Schema(
+            description = "Number of bays owned by the location with status ACTIVE; OUT_OF_SERVICE bays are "
+                    + "excluded and an inactive location always reports 0",
+            example = "3",
+            requiredMode = REQUIRED)
+    private int activeBayCount;
+
+    @Schema(
+            description = "Number of mobile units based at the location with status ACTIVE; INACTIVE units are "
+                    + "excluded and an inactive location always reports 0",
+            example = "1",
+            requiredMode = REQUIRED)
+    private int activeMobileUnitCount;
 }

@@ -35,17 +35,17 @@ tags:
 paths:
   /v1/locations:
     get:
-      description: 'Lists every location in the system as a flat, unpaginated collection with address, status and type details.
+      description: 'Lists every location in the system as a flat, unpaginated collection with address, status and type details, plus a query-time repair-capability projection: hasRepairCapability, activeBayCount and activeMobileUnitCount.
 
-        Use this tool when a complete location inventory is needed at once; use getLocationRoster instead for a paginated sync feed with status and updated-since filtering, and do not use it to fetch a single known id, which is getLocationById.
+        Use this tool when a complete location inventory is needed at once, including when deciding which locations can perform repairs; use getLocationRoster instead for a paginated sync feed with status and updated-since filtering, do not use it to fetch a single known id, which is getLocationById, and do not fan out over listBays or listMobileUnits per location to derive repair capability.
 
         Preconditions: none beyond the location:read authority; an empty system returns an empty list.
 
-        Required inputs: none; there are no parameters and no request body.
+        Required inputs: none; there are no parameters and no request body, and there is no capability filter parameter, so narrow on hasRepairCapability after the call.
 
-        No events are emitted and no state changes; this is a read-only projection.
+        No events are emitted and no state changes; this is a read-only projection recomputed on every request, so a bay or mobile unit that was just created, restatused or re-based is reflected immediately.
 
-        Returns 200 with the full list; there are no business error conditions for this operation.
+        Returns 200 with the full list; there are no business error conditions for this operation. activeBayCount counts only bays with status ACTIVE, activeMobileUnitCount only mobile units with status ACTIVE, hasRepairCapability is true when either count is above zero, and an inactive location always reports false with zero counts.
 
         '
       operationId: listLocations
@@ -301,9 +301,9 @@ paths:
       - location:read
   /v1/locations/roster:
     get:
-      description: 'Returns a paginated roster of lightweight location references (id, name, code, status, hrLocationId, timezone, updatedAt) for sync consumers.
+      description: 'Returns a paginated roster of lightweight location references (id, name, code, status, hrLocationId, timezone, updatedAt, hasRepairCapability) for sync consumers.
 
-        Use this tool when incrementally synchronising locations into another system; do not use listLocations, which returns full unpaginated location payloads.
+        Use this tool when incrementally synchronising locations into another system; do not use listLocations, which returns full unpaginated location payloads, unless the activeBayCount and activeMobileUnitCount behind hasRepairCapability are also needed, because the roster projection intentionally carries only the flag.
 
         Preconditions: none beyond the location:read authority.
 
@@ -311,7 +311,7 @@ paths:
 
         Emits a LOCATION_ROSTER_GET event; no location state changes.
 
-        Returns 200 with a page of location refs; an unknown status value yields an empty page rather than an error.
+        Returns 200 with a page of location refs; an unknown status value yields an empty page rather than an error. hasRepairCapability is computed at query time and is true when the location has at least one ACTIVE bay or at least one ACTIVE mobile unit based there; an inactive location always reports false.
 
         '
       operationId: getLocationRoster
@@ -3119,6 +3119,10 @@ components:
           description: Unique business code of the location
           example: LOC-001
           type: string
+        hasRepairCapability:
+          description: Whether the location can perform repairs, true when it has at least one ACTIVE bay or at least one ACTIVE mobile unit based there; always false for an inactive location
+          example: true
+          type: boolean
         hrLocationId:
           description: Identifier of the location in the HR system of record
           example: HR-1001
@@ -3146,6 +3150,7 @@ components:
           format: date-time
           type: string
       required:
+      - hasRepairCapability
       - id
       type: object
     LocationRequestDTO:
@@ -3252,6 +3257,16 @@ components:
           description: Whether the location is active
           example: true
           type: boolean
+        activeBayCount:
+          description: Number of bays owned by the location with status ACTIVE; OUT_OF_SERVICE bays are excluded and an inactive location always reports 0
+          example: 3
+          format: int32
+          type: integer
+        activeMobileUnitCount:
+          description: Number of mobile units based at the location with status ACTIVE; INACTIVE units are excluded and an inactive location always reports 0
+          example: 1
+          format: int32
+          type: integer
         addressLine1:
           description: First line of the street address
           example: 123 Main St
@@ -3277,6 +3292,10 @@ components:
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
+        hasRepairCapability:
+          description: Whether the location can perform repairs, true when it has at least one ACTIVE bay or at least one ACTIVE mobile unit based there; always false for an inactive location
+          example: true
+          type: boolean
         id:
           description: Unique identifier of the location
           example: 01960003-0000-7000-8000-000000000001
@@ -3311,6 +3330,9 @@ components:
           $ref: '#/components/schemas/LocationTypeDTO'
       required:
       - active
+      - activeBayCount
+      - activeMobileUnitCount
+      - hasRepairCapability
       - id
       - name
       type: object

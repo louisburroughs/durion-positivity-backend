@@ -1,8 +1,11 @@
 package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.location.internal.dto.LocationRef;
@@ -12,6 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +57,9 @@ class LocationRosterServiceTest {
 
     @Mock
     private LocationRepository locationRepository;
+
+    @Mock
+    private LocationRepairCapabilityProjector repairCapabilityProjector;
 
     @InjectMocks
     private LocationRosterServiceImpl locationRosterService;
@@ -183,6 +190,32 @@ class LocationRosterServiceTest {
         assertThat(ref.getStatus()).isEqualTo("ACTIVE");
         assertThat(ref.getHrLocationId()).isEqualTo("HR-XYZ-001");
         assertThat(ref.getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(ref.isHasRepairCapability()).isFalse();
+    }
+
+    /**
+     * Issue #1657: the roster carries the repair-capability flag, projected once
+     * for the whole page rather than per location, and carries no counts.
+     */
+    @Test
+    @DisplayName("#1657 - getRoster projects hasRepairCapability once for the whole page")
+    void getRoster_projectsRepairCapabilityForWholePage() {
+        Pageable pageable = PageRequest.of(0, 10);
+        UUID capableId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        UUID barrenId = UUID.fromString("00000000-0000-0000-0000-000000000012");
+        Location capable = buildLocation(capableId, "Repair Shop", "RPR-001", "ACTIVE");
+        Location barren = buildLocation(barrenId, "Warehouse", "WHS-001", "ACTIVE");
+        List<Location> content = List.of(capable, barren);
+        when(locationRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(content, pageable, 2));
+        when(repairCapabilityProjector.project(content))
+                .thenReturn(Map.of(capableId, LocationRepairCapability.of(0, 1)));
+
+        Page<LocationRef> result = locationRosterService.getRoster(null, null, pageable);
+
+        assertThat(result.getContent())
+                .extracting(LocationRef::getId, LocationRef::isHasRepairCapability)
+                .containsExactly(tuple(capableId, true), tuple(barrenId, false));
+        verify(repairCapabilityProjector, times(1)).project(content);
     }
 
     // -------------------------------------------------------------------------
