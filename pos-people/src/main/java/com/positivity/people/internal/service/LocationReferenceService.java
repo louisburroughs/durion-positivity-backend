@@ -2,6 +2,7 @@ package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -46,5 +47,22 @@ public class LocationReferenceService {
                         () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown location: " + locationId));
         String name = location.getName();
         return name == null || name.isBlank() ? locationId.toString() : name;
+    }
+
+    /**
+     * Non-throwing display-name lookup for response enrichment (issue #1680). Unlike {@link
+     * #getLocationName(UUID)}, a location missing from the replica (e.g. the event-fed replica
+     * has not caught up yet) or a blank name yields {@link Optional#empty()} instead of a 400, so
+     * a lagging replica never turns a working endpoint into an error.
+     *
+     * @param locationId location identifier
+     * @return the location's display name, or empty when unknown/blank
+     */
+    @NonNull
+    public Optional<String> findLocationName(@NonNull UUID locationId) {
+        return extLocationReplicaRepository
+                .findById(locationId)
+                .map(ExtLocationReplica::getName)
+                .filter(name -> name != null && !name.isBlank());
     }
 }

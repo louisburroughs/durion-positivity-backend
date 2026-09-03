@@ -24,6 +24,14 @@ public class PrimaryLocationResponse {
     private UUID locationId;
 
     @Schema(
+            description = "Denormalized display name of locationId, resolved from the location replica. Null when"
+                    + " the replica has no matching row yet or the name is blank; never falls back to the raw id.",
+            example = "Downtown Store",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            nullable = true)
+    private String locationName;
+
+    @Schema(
             description = "True when the caller has no active primary assignment and locationId carries the"
                     + " platform's top-level default location instead",
             example = "false",

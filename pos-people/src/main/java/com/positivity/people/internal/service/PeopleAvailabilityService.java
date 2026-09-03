@@ -29,12 +29,14 @@ public interface PeopleAvailabilityService {
     PrimaryLocationResolution resolveCurrentUserPrimaryLocation();
 
     /**
-     * Resolve a person's primary location ID from their active staffing assignments.
+     * Resolve a person's primary location from their active staffing assignments.
+     * Never defaulted: {@link PrimaryLocationResolution#defaulted()} is always false.
+     *
      * @param personId person to resolve
-     * @return primary location UUID for the person
+     * @return primary location resolution for the person
      * @throws jakarta.persistence.EntityNotFoundException if no active assignment is
      * flagged primary
      */
     @NonNull
-    UUID resolvePrimaryLocationId(@NonNull UUID personId);
+    PrimaryLocationResolution resolvePrimaryLocationId(@NonNull UUID personId);
 }
