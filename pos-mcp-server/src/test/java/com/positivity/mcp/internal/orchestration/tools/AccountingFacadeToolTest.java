@@ -224,6 +224,59 @@ class AccountingFacadeToolTest {
     }
 
     @Test
+    @DisplayName("getFinancialSummary takes a startDate/endDate window spanning more than one calendar month "
+            + "in a single call, sending every dated leg the range")
+    void getFinancialSummary_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry summary = contract("getFinancialSummary");
+        FacadeContractManifest.Entry incomeStatement = summary.leg("incomeStatement");
+        FacadeContractManifest.Entry balanceSheet = summary.leg("balanceSheet");
+        FacadeContractManifest.Entry trialBalance = summary.leg("trialBalance");
+        mockServer
+                .expect(requestTo(
+                        BASE_URL + incomeStatement.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-08-31"))))
+                .andExpect(method(incomeStatement.httpMethod()))
+                .andRespond(withSuccess("{\"revenue\":1000}", MediaType.APPLICATION_JSON));
+        mockServer
+                .expect(requestTo(BASE_URL + balanceSheet.expand(Map.of("asOfDate", "2026-08-31"))))
+                .andExpect(method(balanceSheet.httpMethod()))
+                .andRespond(withSuccess("{\"assets\":5000}", MediaType.APPLICATION_JSON));
+        mockServer
+                .expect(requestTo(BASE_URL + trialBalance.expand(Map.of("asOf", "2026-08-31"))))
+                .andExpect(method(trialBalance.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        JsonNode envelope = parse(tool.getFinancialSummary(null, "2026-03-01", "2026-08-31"));
+
+        mockServer.verify();
+        assertThat(envelope.get("status").asText()).isEqualTo("ok");
+        assertThat(envelope.get("sources"))
+                .extracting(JsonNode::asText)
+                .containsExactly("incomeStatement", "balanceSheet", "trialBalance");
+    }
+
+    @Test
+    @DisplayName("getFinancialSummary rejects period together with startDate/endDate without issuing a request")
+    void getFinancialSummary_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getFinancialSummary("2026-03", "2026-03-01", "2026-08-31"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getFinancialSummary rejects an unpaired startDate without issuing a request")
+    void getFinancialSummary_rejectsUnpairedStartDate() {
+        assertThatThrownBy(() -> tool.getFinancialSummary(null, "2026-03-01", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
+
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("getAgedReceivables sends GET aged-receivables?asOfDate and returns body")
     void getAgedReceivables_sendsGetWithAsOfDate() {
         FacadeContractManifest.Entry entry = contract("getAgedReceivables");

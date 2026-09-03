@@ -231,6 +231,48 @@ class TaxFacadeToolTest {
     }
 
     @Test
+    @DisplayName("getTaxSummary takes a startDate/endDate window spanning more than one calendar month "
+            + "in a single call")
+    void getTaxSummary_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry entry = contract("getTaxSummary");
+        gatewayMockServer
+                .expect(requestTo(
+                        GATEWAY_BASE_URL + entry.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-08-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"netTax\":4000}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getTaxSummary(null, "2026-03-01", "2026-08-31");
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getTaxSummary rejects period together with startDate/endDate without issuing a request")
+    void getTaxSummary_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getTaxSummary("2026-03", "2026-03-01", "2026-08-31"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getTaxSummary rejects an unpaired startDate without issuing a request")
+    void getTaxSummary_rejectsUnpairedStartDate() {
+        assertThatThrownBy(() -> tool.getTaxSummary(null, "2026-03-01", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
+
+        directMockServer.verify();
+        gatewayMockServer.verify();
+    }
+
+    @Test
     @DisplayName("getTaxRate looks up the location and GETs pos-tax /rates with regionCode and city appended")
     void getTaxRate_appendsRegionCodeAndCityWhenPresent() {
         FacadeContractManifest.Entry rates = contract("getTaxRate").leg("rates");
