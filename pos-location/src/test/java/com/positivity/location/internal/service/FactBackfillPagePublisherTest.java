@@ -46,8 +46,8 @@ class FactBackfillPagePublisherTest {
         List<BayEntity> page = publisher.publishBayPage(null, 500);
 
         assertThat(page).containsExactly(first, second);
-        verify(locationFactPublisher).bayChanged(first);
-        verify(locationFactPublisher).bayChanged(second);
+        verify(locationFactPublisher).bayChangedFromCommittedState(first);
+        verify(locationFactPublisher).bayChangedFromCommittedState(second);
     }
 
     @Test
@@ -99,6 +99,6 @@ class FactBackfillPagePublisherTest {
         List<MobileUnitEntity> page = publisher.publishMobileUnitPage(null, 500);
 
         assertThat(page).containsExactly(unit);
-        verify(locationFactPublisher).mobileUnitChanged(unit);
+        verify(locationFactPublisher).mobileUnitChangedFromCommittedState(unit);
     }
 }

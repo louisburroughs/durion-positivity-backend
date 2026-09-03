@@ -40,10 +40,10 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.location.kafka", name = "enabled", havingValue = "true")
 public class LocationCommandListener {
 
-    /** Canonical dotted name normalized to command-type form: LOCATION_OUTBOX_REPLAY_REQUESTED. */
+    /** Wire name {@code location.outbox.replay-requested}, in normalized command-type form. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "LOCATION_OUTBOX_REPLAY_REQUESTED";
 
-    /** Canonical dotted name normalized to command-type form: location.fact-backfill.requested. */
+    /** Wire name {@code location.fact-backfill.requested}, in normalized command-type form. */
     private static final String COMMAND_FACT_BACKFILL_REQUESTED = "LOCATION_FACT_BACKFILL_REQUESTED";
 
     private static final String AGGREGATE_BAY = "bay";

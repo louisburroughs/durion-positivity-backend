@@ -415,4 +415,39 @@ class LocationFactPublisherTest {
         entity.setVersion(version);
         return entity;
     }
+
+    @Test
+    @DisplayName("#1668 the backfill entry points publish the same fact without flushing")
+    void committedStateEntryPointsDoNotFlush() {
+        UUID bayId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+
+        publisher.bayChangedFromCommittedState(bay(bayId, locationId, "Front Bay 1", "ACTIVE", 3L));
+
+        BayUpdatedV1 fact = capturePayload(BayUpdatedV1.EVENT_TYPE, 3L, BayUpdatedV1.class);
+        assertThat(fact.bayId()).isEqualTo(bayId);
+        assertThat(fact.locationId()).isEqualTo(locationId);
+        // A backfill reads committed rows, so there is no pending @Version increment to apply.
+        // Flushing per row would make a page quadratic in its own size; the page flushes once.
+        verify(entityManager, never()).flush();
+    }
+
+    @Test
+    @DisplayName("#1668 a site-less mobile unit publishes nothing, on the backfill path too")
+    void siteLessMobileUnitPublishesNothing() {
+        MobileUnitEntity noBase = MobileUnitEntity.builder()
+                .id(UUID.randomUUID())
+                .name("Van 1")
+                .status("ACTIVE")
+                .build();
+
+        publisher.mobileUnitChanged(noBase);
+        publisher.mobileUnitChangedFromCommittedState(noBase);
+
+        // A base site is optional on this aggregate, so this is legitimate owner state -- but
+        // pos-workorder rejects a site-less fact onto replica.payload.rejected, the producer
+        // contract-drift metric, and pos-shop-manager would store an unreachable row.
+        verify(writer, never()).publish(any(), any());
+        verify(entityManager, never()).flush();
+    }
 }

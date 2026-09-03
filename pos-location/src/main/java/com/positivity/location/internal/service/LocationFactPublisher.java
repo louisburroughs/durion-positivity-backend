@@ -229,6 +229,30 @@ public class LocationFactPublisher {
             return;
         }
         entityManager.flush();
+        publishBayFact(writer, bay);
+    }
+
+    /**
+     * Emit {@code location.bay.updated} for a bay read from already-committed state, without
+     * flushing (issue #1668).
+     *
+     * <p>For the backfill only. {@link #bayChanged} flushes because its caller has a mutation
+     * pending in the persistence context and the envelope must carry the version the row is about
+     * to commit as. A backfill has no pending mutation — it reads committed rows and republishes
+     * their current version — so the flush has nothing to apply and only costs: a page of 500 rows
+     * would otherwise force 500 flushes over a persistence context that grows by one outbox entity
+     * per row, making a repair operation quadratic in the page size. The page publisher flushes
+     * once, at the end of the page.
+     */
+    void bayChangedFromCommittedState(@NonNull BayEntity bay) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        publishBayFact(writer, bay);
+    }
+
+    private void publishBayFact(@NonNull OutboxEventWriter writer, @NonNull BayEntity bay) {
         BayUpdatedV1 payload =
                 new BayUpdatedV1(bay.getId(), bay.getLocationId(), bay.getName(), bay.getBayType(), bay.getStatus());
         publish(writer, BayUpdatedV1.EVENT_TYPE, BayUpdatedV1.SCHEMA_VERSION, bay.getId(), payload, bay.getVersion());
@@ -303,6 +327,35 @@ public class LocationFactPublisher {
             return;
         }
         entityManager.flush();
+        publishMobileUnitFact(writer, mobileUnit);
+    }
+
+    /**
+     * Emit {@code location.mobile-unit.updated} for a unit read from already-committed state,
+     * without flushing (issue #1668).
+     *
+     * <p>For the backfill only — see {@link #bayChangedFromCommittedState} for why the flush is
+     * both unnecessary and costly there. The site-less rule applies identically: a unit with no
+     * base location publishes nothing, on the backfill path as on the live one, so a repair run
+     * cannot flood pos-workorder's {@code replica.payload.rejected} drift metric with rows that
+     * were never publishable.
+     */
+    void mobileUnitChangedFromCommittedState(@NonNull MobileUnitEntity mobileUnit) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        if (mobileUnit.getBaseLocationId() == null) {
+            log.debug(
+                    "Skipping {} for mobile unit {} with no base location",
+                    MobileUnitUpdatedV1.EVENT_TYPE,
+                    mobileUnit.getId());
+            return;
+        }
+        publishMobileUnitFact(writer, mobileUnit);
+    }
+
+    private void publishMobileUnitFact(@NonNull OutboxEventWriter writer, @NonNull MobileUnitEntity mobileUnit) {
         MobileUnitUpdatedV1 payload = new MobileUnitUpdatedV1(
                 mobileUnit.getId(), mobileUnit.getBaseLocationId(), mobileUnit.getName(), mobileUnit.getStatus());
         publish(

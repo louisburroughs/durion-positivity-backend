@@ -27,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  * page failing should leave the pages already committed published rather than discarding the whole
  * run. Re-running is idempotent, so partial progress is strictly better than none.
  *
+ * <p>Rows are published through the publisher's committed-state entry points, which skip the
+ * per-row {@code flush()} the live mutation paths need: a backfill has no pending mutation to
+ * flush, and flushing once per row over a persistence context that grows by an outbox entity per
+ * row makes the page quadratic in its own size. This class flushes once, at the end of the page.
+ *
  * <p>The page query takes a shared row lock — see {@code BayRepository.findBackfillPage} for why
  * that is required rather than defensive. Keeping each page short is therefore not only a memory
  * concern: it bounds how long a concurrent delete can be made to wait.
@@ -47,7 +52,7 @@ public class FactBackfillPagePublisher {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<BayEntity> publishBayPage(UUID afterId, int pageSize) {
         List<BayEntity> page = bayRepository.findBackfillPage(cursor(afterId), PageRequest.ofSize(pageSize));
-        page.forEach(locationFactPublisher::bayChanged);
+        page.forEach(locationFactPublisher::bayChangedFromCommittedState);
         flushAndClear();
         return page;
     }
@@ -57,7 +62,7 @@ public class FactBackfillPagePublisher {
     public List<MobileUnitEntity> publishMobileUnitPage(UUID afterId, int pageSize) {
         List<MobileUnitEntity> page =
                 mobileUnitRepository.findBackfillPage(cursor(afterId), PageRequest.ofSize(pageSize));
-        page.forEach(locationFactPublisher::mobileUnitChanged);
+        page.forEach(locationFactPublisher::mobileUnitChangedFromCommittedState);
         flushAndClear();
         return page;
     }
