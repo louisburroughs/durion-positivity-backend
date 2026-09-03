@@ -78,13 +78,33 @@ def questions_provenance(path):
     against an edited file is still identified honestly. `uncommitted` records whether that
     content is in git at all: a run against an uncommitted question set is legitimate while
     iterating, but a run record that does not say so is not.
+
+    Both failure modes are refused rather than papered over. A questions file outside the repo has
+    no provenance to record, and a `git` that cannot answer would leave a null sha and an
+    `uncommitted: false` that reads as "clean" when it means "unknown" — a run record asserting
+    provenance it does not have is worse than no run at all, which is the whole point of #1671.
     """
-    rel = path.relative_to(ROOT).as_posix()
+    try:
+        rel = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        sys.exit(
+            f"questions file must live inside the repo so a run can be traced back to it:\n"
+            f"  {path}\nis outside\n  {ROOT}"
+        )
+    blob_sha = git("hash-object", str(path))
+    commit = git("rev-parse", "HEAD")
+    # "" means a clean working tree; None means the command itself failed.
     dirty = git("status", "--porcelain", "--", rel)
+    if blob_sha is None or commit is None or dirty is None:
+        sys.exit(
+            "cannot record question provenance: git is unavailable or this is not a git checkout."
+            " A run whose questions cannot be identified is not reproducible, so it is refused"
+            " rather than recorded with a null sha."
+        )
     return {
         "path": rel,
-        "blob_sha": git("hash-object", str(path)),
-        "commit": git("rev-parse", "HEAD"),
+        "blob_sha": blob_sha,
+        "commit": commit,
         "uncommitted": bool(dirty),
     }
 
@@ -188,6 +208,9 @@ def main():
     if not selected:
         sys.exit("no questions selected")
 
+    # Provenance first: a run that cannot be traced back to its questions is refused, and
+    # refusing before the output directory exists leaves nothing half-written behind.
+    provenance = questions_provenance(questions_path)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -195,7 +218,7 @@ def main():
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "endpoint": args.url,
         "eval_as_of": document.get("eval_as_of"),
-        "questions_file": questions_provenance(questions_path),
+        "questions_file": provenance,
         "results": [],
     }
     if record["questions_file"]["uncommitted"]:
