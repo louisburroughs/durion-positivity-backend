@@ -16,11 +16,24 @@
         config on fixed port 8095. Its OpenAPI spec is the normative provider contract that Phase-2
         vendor adapters translate onto.</description>
 
-    <!-- Deliberately NO jacoco.line.min / jacoco.branch.min floors: plan §10 excludes this
-         contract-test double from coverage aggregation thresholds (it stays in the reactor
-         build so it cannot rot, and in pos-coverage-aggregate so the drift check passes). -->
+    <!-- pos-catalog/docs/service-time-sourcing-plan.md §10 keeps this contract-test double out
+         of any coverage threshold derived from the aggregate report. It still carries its own
+         floors below: the module is over the 50-line threshold at which
+         docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.5 requires one, and the fixtures and vendor
+         error shapes it serves are the normative provider contract — exactly the thing §10 wants
+         kept from rotting. -->
 
     <packaging>jar</packaging>
+    <properties>
+        <!-- Coverage ratchet: measured 87.6% line / 79.2% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see.
+             Regenerate with scripts/update-coverage-floors.sh. -->
+        <jacoco.line.min>0.84</jacoco.line.min>
+        <jacoco.branch.min>0.76</jacoco.branch.min>
+    </properties>
+
     <dependencies>
         <!-- Lombok for boilerplate code reduction -->
         <dependency>
