@@ -20,7 +20,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -94,7 +94,7 @@ public class InvoiceEventsListener {
                 ? null
                 : Counter.builder("replica.persist.failed")
                         .description(
-                                "Replica rows rejected by the database on persist (e.g. constraint violations) after a well-formed payload was parsed")
+                                "Invoice replica writes (ext_invoice or ext_invoice_tax) rejected by the database as a constraint/integrity violation after a well-formed payload was parsed")
                         .tag("owner", OWNER)
                         .tag("entity", "invoice-events")
                         .register(registry);
@@ -136,29 +136,35 @@ public class InvoiceEventsListener {
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
+        } catch (DataIntegrityViolationException e) {
+            // A well-formed payload the database still refused as a constraint/integrity
+            // violation (e.g. a NOT NULL or unique-key rejection) on either invoice replica table
+            // — ext_invoice (applyInvoiceUpdate's saveAndFlush) or ext_invoice_tax
+            // (replaceTaxBreakdown's deleteByInvoiceId/saveAll) — distinct from a malformed
+            // payload: the replica row for a real fact could not be persisted, so it must be
+            // observable (counter + ERROR log) rather than fall into the generic WARN path below
+            // and be swallowed (#1651). Other non-transient DataAccessExceptions (e.g. a
+            // programming error like InvalidDataAccessApiUsageException) are not constraint
+            // rejections and keep the pre-existing generic path below, unchanged. Rethrown, same
+            // as TransientDataAccessException above, so the container error handler retries/DLQs
+            // it (ADR-0044 §4) instead of marking the event processed over a row the replica
+            // never actually got.
+            if (replicaPersistFailedCounter != null) {
+                replicaPersistFailedCounter.increment();
+            }
+            log.error(
+                    "Database rejected invoice replica write (ext_invoice / ext_invoice_tax) invoiceId={} eventId={} type={}: {}",
+                    envelope.path("payload").path("invoiceId").stringValue(null),
+                    eventId,
+                    e.getClass().getSimpleName(),
+                    e.getMessage(),
+                    e);
+            throw e;
         } catch (DatabindException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
             }
             log.error("Rejected malformed invoice event payload eventId={}: {}", eventId, e.getMessage(), e);
-        } catch (DataAccessException e) {
-            // A well-formed payload the database still refused (e.g. a constraint violation) —
-            // distinct from a malformed payload: the replica row for a real fact could not be
-            // persisted, so it must be observable (counter + ERROR log) rather than fall into
-            // the generic WARN path below and be swallowed (#1651). Rethrown, same as
-            // TransientDataAccessException above, so the container error handler retries/DLQs it
-            // (ADR-0044 §4) instead of marking the event processed over a row the replica never
-            // actually got.
-            if (replicaPersistFailedCounter != null) {
-                replicaPersistFailedCounter.increment();
-            }
-            log.error(
-                    "Failed to persist ext_invoice replica row invoiceId={} eventId={}: {}",
-                    envelope.path("payload").path("invoiceId").stringValue(null),
-                    eventId,
-                    e.getMessage(),
-                    e);
-            throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
         }
@@ -194,7 +200,7 @@ public class InvoiceEventsListener {
         // plain save() only enqueues the write — a DB rejection (e.g. a constraint violation)
         // would otherwise surface at transaction commit, outside this method's try/catch, and
         // bypass the persist-failure counter and ERROR log. Flushing here forces the rejection
-        // to happen inside applyInvoiceUpdate, where the caller's catch (DataAccessException)
+        // to happen inside applyInvoiceUpdate, where the caller's catch (DataIntegrityViolationException)
         // can see it.
         extInvoiceRepository.saveAndFlush(ExtInvoice.builder()
                 .invoiceId(invoiceId)

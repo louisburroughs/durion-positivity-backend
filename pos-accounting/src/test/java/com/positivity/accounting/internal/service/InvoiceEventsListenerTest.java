@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -374,6 +375,56 @@ class InvoiceEventsListenerTest {
         assertThat(counter.count()).isEqualTo(1d);
         // Not marked processed — same retry/DLQ path as a transient DB error (ADR-0044 §4): a
         // replica row the DB refuses must not be silently accepted as "handled".
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A non-transient DataAccessException that is not a constraint/integrity violation (e.g. a programming"
+            + " error) is not counted as a replica persist failure and follows the generic path")
+    void nonIntegrityViolationDataAccessExceptionIsNotCountedAsPersistFailure() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+
+        when(processedEvents.existsById("e-programming-error")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(replica.saveAndFlush(any(ExtInvoice.class))).thenThrow(new InvalidDataAccessApiUsageException("boom"));
+
+        // Does not propagate: falls into the generic catch (Exception) path below, same as any
+        // other malformed/unexpected error, and is logged/swallowed rather than rethrown.
+        listenerWithMetrics.onInvoiceEvent(event("e-programming-error", 1));
+
+        var counter = meterRegistry.find("replica.persist.failed").counter();
+        assertThat(counter == null ? 0d : counter.count()).isEqualTo(0d);
+        // Generic path still records the event as processed, same as any other swallowed error.
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("A constraint/integrity violation from the tax replica (ext_invoice_tax) is also counted and rethrown")
+    void taxReplicaIntegrityViolationIsCountedAndRethrown() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+
+        when(processedEvents.existsById("e-tax-persist-fail")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(taxReplica.saveAll(any()))
+                .thenThrow(new DataIntegrityViolationException("value too long for type character varying"));
+
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> listenerWithMetrics.onInvoiceEvent(eventWithBreakdown("e-tax-persist-fail", 1)));
+
+        var counter = meterRegistry.find("replica.persist.failed").counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1d);
+        // Not marked processed — same retry/DLQ path as ext_invoice constraint rejections above.
         verify(processedEvents, never()).save(any());
     }
 }

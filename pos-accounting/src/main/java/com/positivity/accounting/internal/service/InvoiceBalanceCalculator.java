@@ -34,7 +34,8 @@ import org.springframework.stereotype.Component;
  * still read as outstanding and could be paid or credited twice.
  *
  * <p>The {@code appliedDepositCredits} term is the deposit-credit draw-down (issue #1652), decided
- * by ADR-0057 §6 ("Deposit-take invoices are excluded from {@code invoiced}"): the deposit-take
+ * by analogy to ADR-0057 §6's contract-liability ruling ("Deposit-take invoices are excluded from
+ * {@code invoiced}") and the #992 customer-credit treatment: the deposit-take
  * document is a contract-liability event ({@code Dr Cash / Cr Customer Deposit Liability}), and
  * the settlement invoice is the sale, so the deposit portion applied against it relieves that
  * liability rather than A/R — exactly as an applied customer credit (#992) relieves A/R via {@code
