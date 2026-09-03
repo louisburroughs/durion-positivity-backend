@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
@@ -110,7 +111,69 @@ class WorkorderAssignmentServiceTest {
                 .build();
     }
 
+    // -----------------------------------------------------------------------
+    // #1656: resourceType threading and the documented null fallback
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: an event carrying resourceType=MOBILE_UNIT is persisted as a mobile-unit assignment")
+    void whenHandleAssignmentUpdated_withMobileUnitResourceType_thenPersistsType() {
+        Workorder workorder = workorderWithStatus(WorkorderStatus.ASSIGNED);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.MOBILE_UNIT));
+
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+        verify(workorderRepository).save(workorder);
+    }
+
+    @Test
+    @DisplayName("#1656 fallback: an event with no resourceType is applied as BAY, preserving pre-#1656 behaviour")
+    void whenHandleAssignmentUpdated_withoutResourceType_thenDefaultsToBay() {
+        // pos-shop-manager does not publish resourceType yet and cannot be changed from this module.
+        // Every untyped assignment that has ever reached here meant "bay", so that is what an absent
+        // value must keep meaning — explicitly, not by accident.
+        Workorder workorder = workorderWithStatus(WorkorderStatus.DRAFT);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(null));
+
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.BAY);
+    }
+
+    @Test
+    @DisplayName("#1656: reassigning a bay-typed workorder to a mobile unit replaces id and type together")
+    void whenHandleAssignmentUpdated_reassignsAcrossResourceTypes_thenBothFieldsMove() {
+        // A half-applied change — new id, stale type — would file the workorder under the wrong
+        // dispatch panel, so the two fields must move as one.
+        Workorder workorder = workorderWithStatus(WorkorderStatus.ASSIGNED);
+        workorder.setResourceId(UUID.fromString("00000000-0000-0000-0000-0000000000aa"));
+        workorder.setResourceType(ResourceType.BAY);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.MOBILE_UNIT));
+
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+    }
+
+    private AssignmentUpdatedEvent eventWithResourceType(ResourceType resourceType) {
+        return AssignmentUpdatedEvent.builder()
+                .eventId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .timestamp(Instant.now(TEST_CLOCK))
+                .workorderId(WORKORDER_ID)
+                .payload(AssignmentUpdatePayload.builder()
+                        .locationId(LOCATION_ID)
+                        .resourceId(RESOURCE_ID)
+                        .resourceType(resourceType)
+                        .mechanicIds(List.of(MECHANIC_ID_1))
+                        .build())
+                .build();
+    }
+
     private Workorder workorderWithStatus(WorkorderStatus status) {
+
         return Workorder.builder().id(WORKORDER_ID).status(status).build();
     }
 

@@ -22,6 +22,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
@@ -909,11 +910,20 @@ public class WorkorderServiceImpl implements WorkorderService {
                 workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
         String oldResourceId =
                 workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
+        String oldResourceType = workorder.getResourceType() != null
+                ? workorder.getResourceType().name()
+                : null;
         String oldMechanicIds = workorder.getMechanicIds();
 
         AssignmentUpdatePayload payload = event.getPayload();
+        // #1656: the resource type rides the same full-replace as the resource id, so a bay →
+        // mobile-unit reassignment is one atomic change and can never leave the workorder pointing
+        // at a mobile unit while still typed as a bay. resolveResourceType() applies the documented
+        // BAY fallback for the untyped events pos-shop-manager still publishes.
+        ResourceType resourceType = event.resolveResourceType();
         workorder.setLocationId(payload.getLocationId());
         workorder.setResourceId(payload.getResourceId());
+        workorder.setResourceType(payload.getResourceId() != null ? resourceType : null);
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorder.getId());
@@ -921,9 +931,11 @@ public class WorkorderServiceImpl implements WorkorderService {
         String details = buildAuditDetails(
                 oldLocationId,
                 oldResourceId,
+                oldResourceType,
                 oldMechanicIds,
                 payload.getLocationId(),
                 payload.getResourceId(),
+                workorder.getResourceType(),
                 payload.getMechanicIds());
 
         AuditEvent auditEvent = AuditEvent.builder()
@@ -937,10 +949,11 @@ public class WorkorderServiceImpl implements WorkorderService {
         auditEventRepository.save(auditEvent);
 
         log.info(
-                "Assignment context updated for workorder {}: locationId={}, resourceId={}, mechanicCount={}",
+                "Assignment context updated for workorder {}: locationId={}, resourceId={}, resourceType={}, mechanicCount={}",
                 workorder.getId(),
                 payload.getLocationId(),
                 payload.getResourceId(),
+                workorder.getResourceType(),
                 payload.getMechanicIds() != null ? payload.getMechanicIds().size() : 0);
     }
 
@@ -1082,19 +1095,34 @@ public class WorkorderServiceImpl implements WorkorderService {
     private String buildAuditDetails(
             String oldLocationId,
             String oldResourceId,
+            String oldResourceType,
             String oldMechanicIds,
             UUID newLocationId,
             UUID newResourceId,
+            ResourceType newResourceType,
             List<UUID> newMechanicIds) {
-        String oldLocJson = oldLocationId != null ? "\"" + oldLocationId + "\"" : "null";
-        String oldResJson = oldResourceId != null ? "\"" + oldResourceId + "\"" : "null";
+        String oldLocJson = quoteOrNull(oldLocationId);
+        String oldResJson = quoteOrNull(oldResourceId);
+        String oldResTypeJson = quoteOrNull(oldResourceType);
         String oldMechJson = oldMechanicIds != null ? oldMechanicIds : "[]";
-        String newLocJson = newLocationId != null ? "\"" + newLocationId + "\"" : "null";
-        String newResJson = newResourceId != null ? "\"" + newResourceId + "\"" : "null";
+        String newLocJson = quoteOrNull(newLocationId != null ? newLocationId.toString() : null);
+        String newResJson = quoteOrNull(newResourceId != null ? newResourceId.toString() : null);
+        String newResTypeJson = quoteOrNull(newResourceType != null ? newResourceType.name() : null);
         String newMechJson = serializeMechanicIds(newMechanicIds);
         return String.format(
-                "{\"oldLocationId\":%s,\"oldResourceId\":%s,\"oldMechanicIds\":%s,"
-                        + "\"newLocationId\":%s,\"newResourceId\":%s,\"newMechanicIds\":%s}",
-                oldLocJson, oldResJson, oldMechJson, newLocJson, newResJson, newMechJson);
+                "{\"oldLocationId\":%s,\"oldResourceId\":%s,\"oldResourceType\":%s,\"oldMechanicIds\":%s,"
+                        + "\"newLocationId\":%s,\"newResourceId\":%s,\"newResourceType\":%s,\"newMechanicIds\":%s}",
+                oldLocJson,
+                oldResJson,
+                oldResTypeJson,
+                oldMechJson,
+                newLocJson,
+                newResJson,
+                newResTypeJson,
+                newMechJson);
+    }
+
+    private static String quoteOrNull(String value) {
+        return value != null ? "\"" + value + "\"" : "null";
     }
 }

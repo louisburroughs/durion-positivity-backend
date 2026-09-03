@@ -119,11 +119,15 @@ public interface WorkorderService {
     void onEstimateRevised(EstimateRevisedEvent event);
 
     /**
-     * Updates assignment context (locationId, resourceId, mechanicIds) on a
+     * Updates assignment context (locationId, resourceId, resourceType, mechanicIds) on a
      * workorder
      * from an AssignmentUpdated event. Uses full-replace semantics.
      * Only pre-execution states (DRAFT, APPROVED, ASSIGNED) are updatable.
-     * CAP:140 Story #64.
+     * CAP:140 Story #64; resourceType added by #1656.
+     *
+     * <p>An event that omits {@code resourceType} is applied as
+     * {@link com.positivity.workorder.internal.enums.ResourceType#BAY} — see
+     * {@code AssignmentUpdatedEvent#resolveResourceType()} for why.
      *
      * @param event the assignment updated event from shop management service
      */

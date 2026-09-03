@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -115,6 +116,20 @@ public class Workorder {
     // Assignment context fields (CAP:140 Story #64)
     private UUID locationId;
     private UUID resourceId;
+
+    /**
+     * What kind of resource {@link #resourceId} points at (#1656). {@code resourceId} alone is
+     * ambiguous: pos-location owns bays and mobile units as separate aggregates with separate
+     * identity, so without this tag the dispatch board had to assume every assignment was a bay.
+     *
+     * <p>Nullable in the schema only because rows predate the column; V27 backfills every existing
+     * assigned row to {@code BAY}, and inbound events resolve through
+     * {@link com.positivity.workorder.internal.enums.ResourceType#orDefault} so nothing new is
+     * written untyped. Readers must still tolerate null (see the dashboard read path).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resource_type", length = 32)
+    private ResourceType resourceType;
 
     @Column(name = "scheduled_date", nullable = true)
     private LocalDate scheduledDate;

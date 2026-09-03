@@ -18,14 +18,21 @@ import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.workorder.internal.dto.location.BayDeletedV1;
+import com.positivity.workorder.internal.dto.location.BayUpdatedV1;
+import com.positivity.workorder.internal.dto.location.MobileUnitUpdatedV1;
+import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
+import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
+import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -73,6 +80,7 @@ import tools.jackson.databind.ObjectMapper;
 class ReplicaAndManifestListenerContractTest {
 
     private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+    private static final UUID SITE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
     private static final Instant NOW = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_START = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T09:05:00Z");
@@ -99,6 +107,12 @@ class ReplicaAndManifestListenerContractTest {
     private ExtLocationReplicaRepository locationRepository;
 
     @Mock
+    private ExtBayReplicaRepository bayRepository;
+
+    @Mock
+    private ExtMobileUnitReplicaRepository mobileUnitRepository;
+
+    @Mock
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @Mock
@@ -118,6 +132,8 @@ class ReplicaAndManifestListenerContractTest {
         when(userLinkRepository.findById(any())).thenReturn(Optional.empty());
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
         when(customerRepository.findById(any())).thenReturn(Optional.empty());
+        when(bayRepository.findById(any())).thenReturn(Optional.empty());
+        when(mobileUnitRepository.findById(any())).thenReturn(Optional.empty());
         when(locationRepository.findById(any())).thenReturn(Optional.empty());
         peopleListener = new PeopleReplicaEventsListener(
                 clock,
@@ -138,6 +154,8 @@ class ReplicaAndManifestListenerContractTest {
                 objectMapper,
                 processedEventRepository,
                 locationRepository,
+                bayRepository,
+                mobileUnitRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
@@ -307,6 +325,62 @@ class ReplicaAndManifestListenerContractTest {
             locationListener.onLocationEvent(envelope("evt-2", LocationUpdatedV1.EVENT_TYPE, payload));
             // Version 3 against a replica at 5: strictly older, skipped.
             verify(locationRepository, org.mockito.Mockito.times(1)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1656 bay: maps identity, site scope and active flag, and removes the row on deletion")
+        void bayMapping() {
+            locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
+                    {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"GENERAL",
+                     "status":"ACTIVE","active":true}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().getBayId()).isEqualTo(ID);
+            assertThat(captor.getValue().getLocationId()).isEqualTo(SITE_ID);
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+            assertThat(captor.getValue().isActive()).isTrue();
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(3);
+
+            locationListener.onLocationEvent(envelope("evt-2", BayDeletedV1.EVENT_TYPE, """
+                    {"bayId":"%s"}""".formatted(ID)));
+            verify(bayRepository).deleteById(ID);
+        }
+
+        @Test
+        @DisplayName("#1656 mobile unit: maps identity and base site, and honours the stale-version guard")
+        void mobileUnitMapping() {
+            String payload = """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE","active":true}""".formatted(ID, SITE_ID);
+            locationListener.onLocationEvent(envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, payload));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMobileUnitId()).isEqualTo(ID);
+            assertThat(captor.getValue().getBaseLocationId()).isEqualTo(SITE_ID);
+            assertThat(captor.getValue().getName()).isEqualTo("Van 3");
+            assertThat(captor.getValue().isActive()).isTrue();
+
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .aggregateVersion(5)
+                            .build()));
+            locationListener.onLocationEvent(envelope("evt-2", MobileUnitUpdatedV1.EVENT_TYPE, payload));
+            // Version 3 against a replica at 5: strictly older, skipped.
+            verify(mobileUnitRepository, org.mockito.Mockito.times(1)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1656: an unknown location-domain fact is ignored but still recorded for the manifest")
+        void unknownFactTypeIsRecordedNotApplied() {
+            // pos-location does not publish bay/mobile-unit facts yet, and publishes storage-location
+            // facts this module ignores. Neither may break the consumer or skew the manifest window.
+            locationListener.onLocationEvent(envelope("evt-1", "location.storage-location.updated", "{}"));
+
+            verify(bayRepository, never()).save(any());
+            verify(mobileUnitRepository, never()).save(any());
+            assertThat(capturedProcessedEvent().getOwner()).isEqualTo("location");
         }
     }
 

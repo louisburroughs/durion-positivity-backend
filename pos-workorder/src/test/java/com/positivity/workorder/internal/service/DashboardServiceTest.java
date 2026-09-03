@@ -10,8 +10,13 @@ import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.BreakInfo;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PersonAvailability;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PtoBlock;
+import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -56,6 +61,12 @@ class DashboardServiceTest {
     private WorkorderRepository workorderRepository;
 
     @Mock
+    private ExtBayReplicaRepository extBayReplicaRepository;
+
+    @Mock
+    private ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+
+    @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
 
     @Spy
@@ -73,6 +84,27 @@ class DashboardServiceTest {
         org.mockito.Mockito.lenient()
                 .when(estimatedLaborService.estimateForWorkorder(any(UUID.class)))
                 .thenReturn(EstimatedLaborService.EstimatedLabor.none());
+    }
+
+    /**
+     * #1656: the replica tables are empty unless a case populates them. Cases written before mobile
+     * units existed therefore keep exercising exactly the paths they were written for — an empty
+     * active set plus whatever the day's workorders still point at.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void stubEmptyResourceReplicas() {
+        org.mockito.Mockito.lenient()
+                .when(extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAsc(any(UUID.class)))
+                .thenReturn(List.of());
+        org.mockito.Mockito.lenient()
+                .when(extBayReplicaRepository.findById(any(UUID.class)))
+                .thenReturn(java.util.Optional.empty());
+        org.mockito.Mockito.lenient()
+                .when(extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAsc(any(UUID.class)))
+                .thenReturn(List.of());
+        org.mockito.Mockito.lenient()
+                .when(extMobileUnitReplicaRepository.findById(any(UUID.class)))
+                .thenReturn(java.util.Optional.empty());
     }
 
     // -----------------------------------------------------------------------
@@ -931,6 +963,297 @@ class DashboardServiceTest {
         // Assert
         assertThat(response.getWorkorders()).hasSize(1);
         assertThat(response.getWorkorders().get(0).getEstimatedLaborHours()).isNull();
+    }
+
+    // -----------------------------------------------------------------------
+    // #1656: bay vs mobile-unit resolution through the ext_bay / ext_mobile_unit
+    // replicas — identity, idle rows, lock semantics, reassignment, fallbacks.
+    // -----------------------------------------------------------------------
+
+    private static final UUID BAY_ID = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+    private static final UUID UNIT_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+    private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    @Test
+    @DisplayName("#1656: a bay-assigned workorder resolves bay identity — id, name from the replica, OCCUPIED")
+    void getDashboard_bayAssigned_resolvesNameFromReplica() {
+        // Arrange
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        Workorder wo = assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.WORK_IN_PROGRESS);
+        givenWorkorders(wo);
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: bayName is populated for the first time — it was declared-but-always-null before
+        // the replica existed.
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getBayId()).isEqualTo(BAY_ID.toString());
+            assertThat(bay.getBayName()).isEqualTo("Front Bay 1");
+            assertThat(bay.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(bay.isAvailable()).isFalse();
+            assertThat(bay.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+        assertThat(response.getMobileUnits()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#1656: a mobile-unit-assigned workorder resolves unit identity and never lands in bays[]")
+    void getDashboard_mobileUnitAssigned_resolvesUnitIdentity() {
+        // Arrange
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        Workorder wo =
+                assignedWorkorder(WORKORDER_ID, UNIT_ID, ResourceType.MOBILE_UNIT, WorkorderStatus.WORK_IN_PROGRESS);
+        givenWorkorders(wo);
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: mobile work is visible with the same facts a bay gets — the whole point of #1656.
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getUnitId()).isEqualTo(UNIT_ID.toString());
+            assertThat(unit.getUnitName()).isEqualTo("Van 3");
+            assertThat(unit.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(unit.isAvailable()).isFalse();
+            assertThat(unit.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+        // The pre-#1656 code stamped every resourceId as a bay; a mobile assignment must not leak
+        // into the bay panel.
+        assertThat(response.getBays()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#1656: idle bays and idle mobile units are listed with a null assignedWorkorderId")
+    void getDashboard_idleResources_areListedNotOmitted() {
+        // Arrange — replicas hold units; no workorder points at either.
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders();
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: the old panel derived rows from the day's workorders, so an idle unit could not
+        // be represented at all.
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getBayId()).isEqualTo(BAY_ID.toString());
+            assertThat(bay.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(bay.isAvailable()).isTrue();
+            assertThat(bay.getAssignedWorkorderId()).isNull();
+        });
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getUnitId()).isEqualTo(UNIT_ID.toString());
+            assertThat(unit.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(unit.isAvailable()).isTrue();
+            assertThat(unit.getAssignedWorkorderId()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a CANCELLED workorder still carrying an assignment releases both a bay and a unit")
+    void getDashboard_cancelledWorkorder_releasesResource() {
+        // Arrange
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.CANCELLED),
+                assignedWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                        UNIT_ID,
+                        ResourceType.MOBILE_UNIT,
+                        WorkorderStatus.CANCELLED));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(bay.getAssignedWorkorderId()).isNull();
+        });
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(unit.getAssignedWorkorderId()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a COMPLETED, not-reopened workorder releases its bay")
+    void getDashboard_completedNotReopenedWorkorder_releasesResource() {
+        // Arrange
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        Workorder completed = assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.COMPLETED);
+        completed.setIsReopened(false);
+        givenWorkorders(completed);
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(bay.getAssignedWorkorderId()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a reopened COMPLETED workorder still occupies its bay — isLocked() is the authority")
+    void getDashboard_reopenedCompletedWorkorder_stillOccupiesResource() {
+        // Arrange — reopening never changes status (it stays COMPLETED), so a naive
+        // "status in (COMPLETED, CANCELLED)" test would wrongly free a bay somebody is working in.
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        Workorder reopened = assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.COMPLETED);
+        reopened.setIsReopened(true);
+        givenWorkorders(reopened);
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(bay.isAvailable()).isFalse();
+            assertThat(bay.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: mid-day bay to mobile-unit reassignment frees the bay and occupies the unit")
+    void getDashboard_reassignedAcrossResourceTypes_movesOccupancy() {
+        // Arrange — the workorder now points at the mobile unit; the bay it left is still an active
+        // replica row, so it must reappear as idle rather than silently disappearing.
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, UNIT_ID, ResourceType.MOBILE_UNIT, WorkorderStatus.WORK_IN_PROGRESS));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getBayId()).isEqualTo(BAY_ID.toString());
+            assertThat(bay.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(bay.getAssignedWorkorderId()).isNull();
+        });
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getUnitId()).isEqualTo(UNIT_ID.toString());
+            assertThat(unit.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(unit.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a workorder with a null resourceType falls back to BAY, preserving pre-#1656 behaviour")
+    void getDashboard_nullResourceType_readsAsBay() {
+        // Arrange — a row written before the discriminator existed, or replayed from an untyped
+        // upstream event. It must not vanish from the board and must not surface as a mobile unit.
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders(assignedWorkorder(WORKORDER_ID, BAY_ID, null, WorkorderStatus.WORK_IN_PROGRESS));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getBayId()).isEqualTo(BAY_ID.toString());
+            assertThat(bay.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(bay.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(unit.getAssignedWorkorderId()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: replica lag — open work on an unknown unit renders the row with a null name")
+    void getDashboard_replicaLag_rendersRowWithNullName() {
+        // Arrange — the assignment fact overtook the unit's own fact; the replica has no row yet.
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, UNIT_ID, ResourceType.MOBILE_UNIT, WorkorderStatus.WORK_IN_PROGRESS));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert: dropping the row would hide live work; a momentarily nameless row is the lesser evil.
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getUnitId()).isEqualTo(UNIT_ID.toString());
+            assertThat(unit.getUnitName()).isNull();
+            assertThat(unit.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(unit.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a decommissioned unit still holding open work is rendered, with its known name")
+    void getDashboard_inactiveUnitWithOpenWork_isStillRendered() {
+        // Arrange — active set excludes it, but the replica row (active=false) is still there.
+        when(extMobileUnitReplicaRepository.findById(UNIT_ID))
+                .thenReturn(java.util.Optional.of(ExtMobileUnitReplica.builder()
+                        .mobileUnitId(UNIT_ID)
+                        .baseLocationId(LOCATION_UUID)
+                        .name("Van 3 (retired)")
+                        .active(false)
+                        .build()));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, UNIT_ID, ResourceType.MOBILE_UNIT, WorkorderStatus.WORK_IN_PROGRESS));
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getMobileUnits()).singleElement().satisfies(unit -> {
+            assertThat(unit.getUnitId()).isEqualTo(UNIT_ID.toString());
+            assertThat(unit.getUnitName()).isEqualTo("Van 3 (retired)");
+            assertThat(unit.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(unit.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+    }
+
+    private void givenWorkorders(Workorder... workorders) {
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(workorders));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+    }
+
+    private void givenActiveBays(ExtBayReplica... bays) {
+        when(extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAsc(LOCATION_UUID))
+                .thenReturn(List.of(bays));
+    }
+
+    private void givenActiveUnits(ExtMobileUnitReplica... units) {
+        when(extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAsc(LOCATION_UUID))
+                .thenReturn(List.of(units));
+    }
+
+    private ExtBayReplica bayReplica(UUID bayId, String name) {
+        return ExtBayReplica.builder()
+                .bayId(bayId)
+                .locationId(LOCATION_UUID)
+                .name(name)
+                .active(true)
+                .build();
+    }
+
+    private ExtMobileUnitReplica unitReplica(UUID unitId, String name) {
+        return ExtMobileUnitReplica.builder()
+                .mobileUnitId(unitId)
+                .baseLocationId(LOCATION_UUID)
+                .name(name)
+                .active(true)
+                .build();
+    }
+
+    private Workorder assignedWorkorder(UUID id, UUID resourceId, ResourceType resourceType, WorkorderStatus status) {
+        return Workorder.builder()
+                .id(id)
+                .locationId(LOCATION_UUID)
+                .mechanicIds("[]")
+                .resourceId(resourceId)
+                .resourceType(resourceType)
+                .status(status)
+                .build();
     }
 
     private Workorder buildWorkorder(UUID id, String mechanicId, UUID resourceId) {

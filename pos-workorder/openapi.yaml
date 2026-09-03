@@ -339,17 +339,19 @@ paths:
       - workorder:approval_config:edit
   /v1/workexec/dashboard/today:
     get:
-      description: 'Returns the aggregated dispatch board for one location and one date: workorder summaries, mechanic statuses, bay statuses derived from workorder assignments, and detected scheduling conflicts.
+      description: 'Returns the aggregated dispatch board for one location and one date: workorder summaries, mechanic statuses, bay statuses, mobile unit statuses, and detected scheduling conflicts.
+
+        Bays and mobile units are reported in separate arrays because they are separate kinds of resource; each array lists every active unit of its kind at the location, including units with no work today, which report assignedWorkorderId null, and a unit reads as occupied only while its assigned workorder is still open — a cancelled workorder, or a completed one that has not been reopened, releases the unit.
 
         Use this tool when rendering the shop''s daily dispatch board; do not use listWipWorkorders, which returns flat work-in-progress rows without mechanic, bay, or conflict aggregation.
 
-        Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes from local people replicas, and a failed replica lookup sets dataQualityWarning to true instead of failing the call.
+        Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes from local people replicas, and a failed replica lookup sets dataQualityWarning to true instead of failing the call. Bay and mobile unit identity is served from local replicas of the location domain, so a unit whose replica row has not arrived yet is listed by id with a null name rather than being omitted.
 
         Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is optional and defaults to today on the server clock.
 
         Emits a WORKEXEC_DASHBOARD_TODAY_GET audit event; no workorder state changes — this is a read-only aggregation.
 
-        Returns 400 when locationId does not parse as a UUID, and 200 with empty panels when no workorders are scheduled for the date.
+        Returns 400 when locationId does not parse as a UUID, and 200 with empty workorder and conflict panels when no workorders are scheduled for the date.
 
         '
       operationId: getDispatchDashboard
@@ -6577,7 +6579,7 @@ components:
       description: Current status of a service bay
       properties:
         assignedWorkorderId:
-          description: Identifier of the workorder currently assigned to the bay
+          description: Identifier of the workorder currently assigned to the bay, or null when idle
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         available:
@@ -6586,10 +6588,10 @@ components:
           type: boolean
         bayId:
           description: Identifier of the bay
-          example: BAY-01
+          example: 550e8400-e29b-41d4-a716-446655440301
           type: string
         bayName:
-          description: Human-readable bay name
+          description: Human-readable bay name, resolved from the location replica. Null when the bay's own replica row has not arrived yet.
           example: Front Bay 1
           type: string
         status:
@@ -7208,7 +7210,7 @@ components:
       description: Daily Dispatch Board dashboard aggregate response
       properties:
         bays:
-          description: Service bay statuses
+          description: Service bay statuses — every active bay at the location, including idle ones
           example: []
           items:
             $ref: '#/components/schemas/BayStatus'
@@ -7242,6 +7244,12 @@ components:
           example: []
           items:
             $ref: '#/components/schemas/MechanicStatus'
+          type: array
+        mobileUnits:
+          description: 'Mobile service unit statuses — every active mobile unit based at the location, including idle ones. Reported alongside bays, not instead of them: a shop can dispatch to both.'
+          example: []
+          items:
+            $ref: '#/components/schemas/MobileUnitStatus'
           type: array
         workorders:
           description: Workorder summaries for the day
@@ -7835,6 +7843,34 @@ components:
           type: array
       required:
       - personId
+      type: object
+    MobileUnitStatus:
+      description: Current dispatch status of a mobile service unit
+      properties:
+        assignedWorkorderId:
+          description: Identifier of the workorder currently assigned to the unit, or null when idle
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        available:
+          description: Whether the unit is currently available
+          example: false
+          type: boolean
+        status:
+          description: Operational status of the unit
+          example: OCCUPIED
+          type: string
+        unitId:
+          description: Identifier of the mobile unit
+          example: 550e8400-e29b-41d4-a716-446655440401
+          type: string
+        unitName:
+          description: Human-readable mobile unit name, resolved from the location replica. Null when the unit's own replica row has not arrived yet.
+          example: Van 3
+          type: string
+      required:
+      - available
+      - status
+      - unitId
       type: object
     OperationalContextOverrideRequest:
       description: Manager override payload for workorder operational context

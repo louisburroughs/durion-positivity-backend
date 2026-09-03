@@ -6,13 +6,19 @@ import com.positivity.workorder.internal.dto.BayStatus;
 import com.positivity.workorder.internal.dto.ConflictEntry;
 import com.positivity.workorder.internal.dto.DashboardResponse;
 import com.positivity.workorder.internal.dto.MechanicStatus;
+import com.positivity.workorder.internal.dto.MobileUnitStatus;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.BreakInfo;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PersonAvailability;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PtoBlock;
 import com.positivity.workorder.internal.dto.PtoEntry;
 import com.positivity.workorder.internal.dto.WorkorderSummary;
+import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,7 +29,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +41,13 @@ import org.springframework.stereotype.Service;
 /**
  * Implementation of {@link DashboardService} for the Daily Dispatch Board
  * Dashboard.
- * Aggregates workorder, mechanic, and bay data for conflict detection and
+ * Aggregates workorder, mechanic, bay and mobile-unit data for conflict detection and
  * display.
+ *
+ * <p>Resource identity (#1656) is resolved from the {@code ext_bay} and {@code ext_mobile_unit}
+ * replicas fed by {@code location.events.v1} (ADR-0044 §6) — never by a synchronous call into
+ * pos-location and never by reading its tables. That distinction is what the retired shopmgr
+ * bay-status client got wrong; see the note in {@link #getDashboard}.
  */
 @Service
 @Slf4j
@@ -49,6 +62,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final Clock clock;
 
     private final WorkorderRepository workorderRepository;
+    private final ExtBayReplicaRepository extBayReplicaRepository;
+    private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final EstimatedLaborService estimatedLaborService;
     private final ObjectMapper objectMapper;
@@ -66,12 +81,15 @@ public class DashboardServiceImpl implements DashboardService {
         List<PersonAvailability> people =
                 availability != null && availability.getPeople() != null ? availability.getPeople() : List.of();
 
-        // Bay panel is derived from the workorders' own assignments (#898): the shopmgr
-        // bay-status client was retired — its endpoint no longer existed and always yielded an
-        // empty list, so bay open/closed enrichment never reached this dashboard.
+        // Resource panels are built from the location replicas joined to the day's assignments
+        // (#1656). The predecessor here was the shopmgr bay-status client (#898): a synchronous
+        // cross-domain read whose endpoint no longer existed and which always yielded an empty
+        // list, so bay enrichment never reached this dashboard at all. The replacement is the
+        // event-fed replica (ADR-0044 §6), not another client.
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
-        List<BayStatus> bayStatuses = buildBayStatuses(workorders);
+        List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, workorders);
+        List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, workorders);
 
         List<ConflictEntry> conflicts = detectAllConflicts(workorders, people, date);
 
@@ -81,6 +99,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .workorders(workorderSummaries)
                 .mechanics(mechanicStatuses)
                 .bays(bayStatuses)
+                .mobileUnits(mobileUnitStatuses)
                 .conflicts(conflicts)
                 .lastRefreshed(Instant.now(clock))
                 .dataQualityWarning(peopleDegraded)
@@ -149,24 +168,159 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    private List<BayStatus> buildBayStatuses(List<Workorder> workorders) {
-        Map<UUID, BayStatus> bayMap = new LinkedHashMap<>();
+    private List<BayStatus> buildBayStatuses(UUID locationId, List<Workorder> workorders) {
+        Map<UUID, String> namesById = new LinkedHashMap<>();
+        // Not Collectors.toMap: a replica row with no name yet is legitimate, and toMap rejects a
+        // null value outright.
+        for (ExtBayReplica bay : extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAsc(locationId)) {
+            namesById.putIfAbsent(bay.getBayId(), bay.getName());
+        }
+
+        return buildResourcePanel(
+                        ResourceType.BAY,
+                        workorders,
+                        namesById,
+                        id -> extBayReplicaRepository.findById(id).map(ExtBayReplica::getName))
+                .stream()
+                .map(row -> BayStatus.builder()
+                        .bayId(row.resourceId().toString())
+                        .bayName(row.name())
+                        .status(row.status())
+                        .available(row.available())
+                        .assignedWorkorderId(row.assignedWorkorderId())
+                        .build())
+                .toList();
+    }
+
+    private List<MobileUnitStatus> buildMobileUnitStatuses(UUID locationId, List<Workorder> workorders) {
+        Map<UUID, String> namesById = new LinkedHashMap<>();
+        // Not Collectors.toMap — see buildBayStatuses.
+        for (ExtMobileUnitReplica unit :
+                extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAsc(locationId)) {
+            namesById.putIfAbsent(unit.getMobileUnitId(), unit.getName());
+        }
+
+        return buildResourcePanel(
+                        ResourceType.MOBILE_UNIT,
+                        workorders,
+                        namesById,
+                        id -> extMobileUnitReplicaRepository.findById(id).map(ExtMobileUnitReplica::getName))
+                .stream()
+                .map(row -> MobileUnitStatus.builder()
+                        .unitId(row.resourceId().toString())
+                        .unitName(row.name())
+                        .status(row.status())
+                        .available(row.available())
+                        .assignedWorkorderId(row.assignedWorkorderId())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * One row of a resource panel, before it is shaped into the bay- or unit-flavoured DTO. Bays and
+     * mobile units are different aggregates upstream but answer the same dispatch question, so the
+     * resolution rules live here once instead of being written twice and drifting.
+     */
+    private record ResourcePanelRow(
+            UUID resourceId, String name, String status, boolean available, String assignedWorkorderId) {}
+
+    /**
+     * Builds one resource panel: every active resource of {@code resourceType} at the location, plus
+     * any resource the day's open work still points at, each marked occupied or idle.
+     *
+     * <p>Three rules, each of which the pre-#1656 code got wrong or could not express:
+     *
+     * <ul>
+     *   <li><b>Idle resources are rows, not omissions.</b> The panel starts from the replica's active
+     *       set for the location, so a bay or unit with no work today reports
+     *       {@code assignedWorkorderId: null} instead of vanishing. Deriving the list from the day's
+     *       workorders — as {@code buildBayStatuses} used to — can only ever show busy resources.
+     *   <li><b>Locked work does not occupy anything.</b> {@link Workorder#isLocked()} is the single
+     *       authority (CANCELLED, or COMPLETED and not reopened). A naive
+     *       {@code status ∈ {COMPLETED, CANCELLED}} test would re-lock a reopened workorder and show
+     *       its resource as free while someone is still working on it.
+     *   <li><b>A resource still holding open work is always rendered</b>, even when it is not in the
+     *       active set — it was decommissioned mid-job, or its own replica row has not arrived yet.
+     *       Both cases are handled at the one marked spot below.
+     * </ul>
+     *
+     * @param resourceType the panel being built
+     * @param workorders the day's workorders at this location
+     * @param activeNamesById active resources at the location, id → name, in display order
+     * @param nameLookup resolves the name of a resource outside the active set, empty when unknown
+     * @return the panel rows, active resources first in replica order
+     */
+    private List<ResourcePanelRow> buildResourcePanel(
+            ResourceType resourceType,
+            List<Workorder> workorders,
+            Map<UUID, String> activeNamesById,
+            Function<UUID, Optional<String>> nameLookup) {
+
+        // Only open work occupies a resource; a cancelled or completed-not-reopened workorder that
+        // still carries its old assignment is stale and must not hold the resource down.
+        Map<UUID, Workorder> occupantByResourceId = new LinkedHashMap<>();
         for (Workorder workorder : workorders) {
-            if (workorder.getResourceId() != null) {
-                UUID bayUuid = workorder.getResourceId();
-                String assignedId =
-                        workorder.getId() != null ? workorder.getId().toString() : null;
-                bayMap.put(
-                        bayUuid,
-                        BayStatus.builder()
-                                .bayId(bayUuid.toString())
-                                .status("OCCUPIED")
-                                .available(false)
-                                .assignedWorkorderId(assignedId)
-                                .build());
+            if (workorder.getResourceId() == null || workorder.isLocked()) {
+                continue;
+            }
+            if (effectiveResourceType(workorder) != resourceType) {
+                continue;
+            }
+            occupantByResourceId.merge(workorder.getResourceId(), workorder, DashboardServiceImpl::mostRecentlyUpdated);
+        }
+
+        Map<UUID, String> panelNamesById = new LinkedHashMap<>(activeNamesById);
+        // Open work on a resource the active set does not contain. Two causes, one least-surprising
+        // answer: render the row. Either the resource was decommissioned or deleted while a job was
+        // still on it (lifecycle semantics pos-location owns, not this module — open follow-up), or
+        // its replica row simply has not landed yet (the assignment fact overtook the resource fact).
+        // Hiding the row would make live work invisible on the board, which is strictly worse than
+        // showing a row whose name is momentarily null.
+        for (UUID resourceId : occupantByResourceId.keySet()) {
+            // Not computeIfAbsent: a resource whose name resolves to null still needs a row, and
+            // computeIfAbsent drops a null mapping on the floor.
+            if (!panelNamesById.containsKey(resourceId)) {
+                panelNamesById.put(resourceId, nameLookup.apply(resourceId).orElse(null));
             }
         }
-        return new ArrayList<>(bayMap.values());
+
+        List<ResourcePanelRow> rows = new ArrayList<>(panelNamesById.size());
+        for (Map.Entry<UUID, String> entry : panelNamesById.entrySet()) {
+            Workorder occupant = occupantByResourceId.get(entry.getKey());
+            rows.add(new ResourcePanelRow(
+                    entry.getKey(),
+                    entry.getValue(),
+                    occupant != null ? "OCCUPIED" : "AVAILABLE",
+                    occupant == null,
+                    occupant != null && occupant.getId() != null
+                            ? occupant.getId().toString()
+                            : null));
+        }
+        return rows;
+    }
+
+    /**
+     * The resource type to file a workorder's assignment under.
+     *
+     * <p>A row can still carry a null {@code resourceType} with a non-null {@code resourceId}: V27
+     * backfills the rows that existed when the column was added, but a workorder written by a path
+     * that predates the backfill — or replayed from an older event — can arrive untyped. Reading it
+     * as {@link ResourceType#BAY} is the same fallback the write path applies, so a null here means
+     * "bay", exactly as it did before mobile units were representable.
+     */
+    private static ResourceType effectiveResourceType(Workorder workorder) {
+        return ResourceType.orDefault(workorder.getResourceType());
+    }
+
+    /** Later {@code updatedAt} wins; a null timestamp loses, and ties keep the incumbent. */
+    private static Workorder mostRecentlyUpdated(Workorder incumbent, Workorder challenger) {
+        if (challenger.getUpdatedAt() == null) {
+            return incumbent;
+        }
+        if (incumbent.getUpdatedAt() == null) {
+            return challenger;
+        }
+        return challenger.getUpdatedAt().isAfter(incumbent.getUpdatedAt()) ? challenger : incumbent;
     }
 
     private List<ConflictEntry> detectAllConflicts(
