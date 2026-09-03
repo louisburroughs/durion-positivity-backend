@@ -8234,6 +8234,10 @@ components:
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
+        eventReference:
+          description: Short human-readable reference for display in place of the raw event UUID
+          example: AE-202609-42
+          type: string
         eventType:
           description: Event type identifier
           example: INVOICE_RECEIVED
