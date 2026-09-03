@@ -13,7 +13,7 @@ import org.springframework.data.repository.query.Param;
  * {@link MechanicSkill} maps its parent as the {@code mechanic} association; its {@code getMechanicId()}
  * is a convenience getter, not a mapped attribute. A query derived from a {@code ...ByMechanicId} method
  * name is therefore rendered as {@code skill.mechanicId}, which Hibernate rejects at first use (#1679:
- * the mechanic roster page answered 400 for every ACTIVE lookup). Both lookups below walk the
+ * the mechanic roster page answered 400 for every ACTIVE lookup). Both methods below walk the
  * association explicitly instead of relying on name derivation.
  */
 public interface MechanicSkillRepository extends JpaRepository<MechanicSkill, UUID> {
