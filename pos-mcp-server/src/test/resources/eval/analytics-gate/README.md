@@ -56,7 +56,11 @@ itself) can tell the two apart and record the real failure:
   `facade-contract.yaml` by `AnalyticsGateQuestionsTest`) to the minimum number of calls the
   composition needs. For a per-value loop (q05's per-customer `searchWorkorders`) this is the
   floor for one unit (one customer), not the full seed-dependent count, since the seed's past-due
-  customer count can change; `per` states what the loop is over.
+  customer count can change; `per` states what the loop is over. For a `calendar`/`rolling`
+  window, `AnalyticsGateQuestionsTest` also checks feasibility, not just the name: every named
+  tool must declare a `startDate`+`endDate` pair or an `asOfDate` parameter, so a plan naming a
+  period-only tool for a multi-month window (the #1677 defect that made q09/q15's claimed one/two
+  calls unachievable) fails before the gate is ever run.
 - `per` — one sentence naming what the loop or comparison is over, for a human grader reading the
   fixture without the plan document open.
 - `declined_reason` — the verdict note text (`"declined composition"` in every case so far) a
