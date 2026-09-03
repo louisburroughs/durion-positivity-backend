@@ -1,10 +1,13 @@
 package com.positivity.shopmanager.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.positivity.shopmanager.internal.entity.Mechanic;
+import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,9 @@ class MechanicRosterRepositoryTest {
 
     @Autowired
     private MechanicRepository mechanicRepository;
+
+    @Autowired
+    private MechanicSkillRepository mechanicSkillRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -87,6 +93,36 @@ class MechanicRosterRepositoryTest {
                 .containsExactly(ALIGNMENT_PERSON_ID.toString());
     }
 
+    /**
+     * #1679: the roster page loaded fine from findRoster and then blew up resolving skills,
+     * because MechanicSkill maps its parent as the {@code mechanic} association and the
+     * skill lookup must walk that path rather than a non-existent {@code mechanicId} attribute.
+     */
+    @Test
+    void skillLookupByMechanicIdWalksTheMechanicAssociation() {
+        List<MechanicSkill> skills = mechanicSkillRepository.findAllByMechanicIdIn(
+                List.of(mechanicId(ZULU_PERSON_ID), mechanicId(ALIGNMENT_PERSON_ID)));
+
+        assertThat(skills)
+                .extracting(MechanicSkill::getMechanicId, MechanicSkill::getSkillCode)
+                .containsExactlyInAnyOrder(
+                        tuple(mechanicId(ZULU_PERSON_ID), "BRAKES"),
+                        tuple(mechanicId(ALIGNMENT_PERSON_ID), "ALIGNMENT"));
+    }
+
+    @Test
+    void skillDeleteByMechanicIdRemovesOnlyThatMechanicsSkills() {
+        mechanicSkillRepository.deleteAllByMechanicId(mechanicId(ZULU_PERSON_ID));
+
+        List<MechanicSkill> remaining = mechanicSkillRepository.findAllByMechanicIdIn(
+                List.of(mechanicId(ZULU_PERSON_ID), mechanicId(ALPHA_PERSON_ID)));
+        assertThat(remaining).extracting(MechanicSkill::getMechanicId).containsExactly(mechanicId(ALPHA_PERSON_ID));
+    }
+
+    private static UUID mechanicId(UUID personId) {
+        return UUID.nameUUIDFromBytes(personId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private void insertShop(UUID id, String name) {
         jdbcTemplate.update(
                 "INSERT INTO shop (id, name, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
@@ -95,7 +131,7 @@ class MechanicRosterRepositoryTest {
     }
 
     private void insertMechanic(UUID personId, String firstName, String lastName, String status, String skillCode) {
-        UUID mechanicId = UUID.nameUUIDFromBytes(personId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        UUID mechanicId = mechanicId(personId);
         jdbcTemplate.update("""
         INSERT INTO mechanic
             (mechanic_id, person_id, first_name, last_name, status, version,
