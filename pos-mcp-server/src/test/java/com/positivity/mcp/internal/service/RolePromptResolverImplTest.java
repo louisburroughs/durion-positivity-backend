@@ -271,6 +271,41 @@ class RolePromptResolverImplTest {
                 .contains("measure BOTH on the same shape and the same length, offset by one period");
     }
 
+    /**
+     * The rule that settles q15/q17 without touching the question or the ground truth. Its wording
+     * names both shapes at once — "over the last six months" (rolling) paired with "the same six
+     * months last year" (named calendar months) — which the shape rule alone cannot resolve.
+     * Calendar wins, so both periods are Mar–Aug, and `EXPECTED.md`'s +12.00 % stands as written.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer resolves a mixed comparison on the calendar shape")
+    void dateWindowLayer_mixedComparisonResolvesToCalendar() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("PRECEDENCE for a mixed comparison")
+                .contains("resolve BOTH on the CALENDAR shape");
+    }
+
+    /**
+     * Precedence must not swallow independent conditions. "Hasn't bought in the last 90 days but
+     * spent over $10,000 in the prior year" is a rolling filter beside a calendar one, not a
+     * comparison; forcing both to one shape would change the question rather than disambiguate it.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW precedence is scoped to compared windows, not independent conditions")
+    void dateWindowLayer_precedenceDoesNotCollapseIndependentConditions() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("applies only to windows being compared with each other")
+                .contains("not a mixed comparison");
+    }
+
+    /** A 90-day range has no complete-calendar form, so the calendar branch must not claim it. */
+    @Test
+    @DisplayName("DATE_WINDOW layer treats a day-expressed range as always rolling")
+    void dateWindowLayer_dayRangesAreAlwaysRolling() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("A range expressed in days has no calendar form and is always rolling");
+    }
+
     /** The shape is invisible in the figure, so it has to be named alongside the dates. */
     @Test
     @DisplayName("DATE_WINDOW layer requires the answer to name the shape, not only the dates")
