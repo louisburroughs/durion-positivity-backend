@@ -11,6 +11,12 @@ directly against the seeded Postgres. Per plan §2.1 criterion 1, the script *is
 specification of the expected answer — a chat response passes only when its figures match the
 script's output (exact for counts and currency, ±0.5 % for derived ratios).
 
+**Q15/Q17 labeling rule (#1663).** `getVendorSpend`'s `billsIssuedInWindow` and
+`avgIssuedBillAmount` count/average bills *issued* in the window regardless of payment status —
+a different population from `paidAmount` (settled A/P cash). Q15 and Q17 score FAIL if the
+rendered answer labels either bill-side figure as paid — e.g. a column heading "bills paid" —
+even when the underlying numbers are correct, since that mislabels the population.
+
 ## The questions: `QUESTIONS.json` (#1671)
 
 `QUESTIONS.json` is the **only** definition of the text the chat-path gate asks. One entry per

@@ -216,7 +216,7 @@ paths:
 
         Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; limit is optional, defaults to 20, and is hard-capped at 100.
 
-        IMPORTANT: paidAmount (settled A/P cash — APPayment.grossAmount for payments whose paymentDate falls in the window and whose gateway status shows the cash already moved) and billCount/avgBillAmount (VendorBill records whose billDate falls in the window) are DIFFERENT POPULATIONS of the same vendor — a payment can settle bills billed in an earlier or later window, so avgBillAmount * billCount does not reconcile to paidAmount. avgBillAmount is 0, never null, when billCount is 0.
+        IMPORTANT: paidAmount (settled A/P cash — APPayment.grossAmount for payments whose paymentDate falls in the window and whose gateway status shows the cash already moved) and billsIssuedInWindow/avgIssuedBillAmount (VendorBill records whose billDate falls in the window) are DIFFERENT POPULATIONS of the same vendor — a payment can settle bills issued in an earlier or later window, so avgIssuedBillAmount * billsIssuedInWindow does not reconcile to paidAmount. avgIssuedBillAmount is 0, never null, when billsIssuedInWindow is 0.
 
         Emits an ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW audit event; no state changes.
 
@@ -13752,7 +13752,7 @@ components:
       - vendorId
       type: object
     VendorSpendReport:
-      description: Per-vendor spend report for one date window, ordered by paidAmount descending. paidAmount (settled A/P cash) and billCount/avgBillAmount (bill records) are different populations — see VendorSpendRow field descriptions.
+      description: Per-vendor spend report for one date window, ordered by paidAmount descending. paidAmount (settled A/P cash) and billsIssuedInWindow/avgIssuedBillAmount (bill records) are different populations — see VendorSpendRow field descriptions.
       properties:
         endDate:
           description: Window end date (inclusive)
@@ -13791,14 +13791,14 @@ components:
       - truncated
       type: object
     VendorSpendRow:
-      description: One vendor's spend over the report window; see field descriptions for the paidAmount vs billCount/avgBillAmount population split
+      description: One vendor's spend over the report window; see field descriptions for the paidAmount vs billsIssuedInWindow/avgIssuedBillAmount population split
       properties:
-        avgBillAmount:
-          description: Sum of VendorBill.totalAmount for this vendor's bills in the window divided by billCount; 0 (never null) when billCount is 0 — there is nothing to average, and 0 keeps this field a well-defined BigDecimal for every row
+        avgIssuedBillAmount:
+          description: Sum of VendorBill.totalAmount for this vendor's bills in the window divided by billsIssuedInWindow; 0 (never null) when billsIssuedInWindow is 0 — there is nothing to average, and 0 keeps this field a well-defined BigDecimal for every row
           example: 1425.75
           type: number
-        billCount:
-          description: Count of VendorBill records for this vendor whose billDate falls in the window, regardless of status; 0 when none billed in the window. Bill-side figure, a DIFFERENT population from paidAmount above — see class Javadoc.
+        billsIssuedInWindow:
+          description: Count of VendorBill records for this vendor whose billDate falls in the window, regardless of payment status; 0 when none issued in the window. Bill-side figure, a DIFFERENT population from paidAmount above — see class Javadoc.
           example: 4
           format: int32
           type: integer
@@ -13809,7 +13809,7 @@ components:
           - string
           - 'null'
         paidAmount:
-          description: Sum of APPayment.grossAmount for settled payments (status GATEWAY_SUCCEEDED or later) to this vendor whose paymentDate falls in the window; 0 when none settled in the window. This is A/P cash, a DIFFERENT population from billCount/avgBillAmount below — see class Javadoc.
+          description: Sum of APPayment.grossAmount for settled payments (status GATEWAY_SUCCEEDED or later) to this vendor whose paymentDate falls in the window; 0 when none settled in the window. This is A/P cash, a DIFFERENT population from billsIssuedInWindow/avgIssuedBillAmount below — see class Javadoc.
           example: 18250.0
           type: number
         vendorId:
@@ -13818,8 +13818,8 @@ components:
           format: uuid
           type: string
       required:
-      - avgBillAmount
-      - billCount
+      - avgIssuedBillAmount
+      - billsIssuedInWindow
       - paidAmount
       - vendorId
       type: object

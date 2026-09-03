@@ -261,6 +261,9 @@ Measured exactly as designed (no co-tenant A/P activity in either window):
 
 Top vendor by spend in both windows: **V2 Cascade**.
 
+Grading note (#1663): FAIL if the answer labels the `billsIssuedInWindow`/`avgIssuedBillAmount`
+columns (bill count / avg bill amount above) as "paid" — e.g. a column heading "bills paid".
+
 ## Q16 — vendor bills due ≤ 14 days + daily cash need — ABSOLUTE
 
 Measured exactly as designed (the only bills due 2026-09-01..2026-09-15 are the four
@@ -282,6 +285,9 @@ V1 800, V2 2600, V3 400.
 Measured exactly as designed: **V1 Evergreen alone, 1000.00 → 1120.00 = +12.00 %**
 (Mar–Aug 2026 vs Mar–Aug 2025). V2 and V3 flat (0 %). The four Q16 bills (2026-09-01)
 stay out of both windows by design.
+
+Grading note (#1663): FAIL if the answer labels `avgIssuedBillAmount` (the bill amounts
+compared above) as "paid" — e.g. a column heading "bills paid".
 
 ## Q18 — weekly cash in vs out, last quarter (13 wks ending 2026-08-30) — ABSOLUTE
 

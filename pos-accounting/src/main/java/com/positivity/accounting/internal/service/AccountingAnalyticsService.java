@@ -110,13 +110,15 @@ public interface AccountingAnalyticsService {
      * un-does a gateway-confirmed payment). A payment stuck in {@code INITIATED}, {@code
      * GATEWAY_PENDING} or {@code GATEWAY_FAILED} moved no cash and is excluded.
      *
-     * <p><b>billCount</b> and <b>avgBillAmount</b> are a DIFFERENT population: every {@code
-     * VendorBill} for that vendor whose {@code billDate} falls in the same window, regardless of
-     * status. {@code avgBillAmount} is {@code sum(totalAmount) / billCount}, and is {@code 0}
-     * (never {@code null}) when {@code billCount} is {@code 0}.
+     * <p><b>billsIssuedInWindow</b> and <b>avgIssuedBillAmount</b> are a DIFFERENT population:
+     * every {@code VendorBill} for that vendor whose {@code billDate} falls in the same window,
+     * regardless of payment status. {@code avgIssuedBillAmount} is {@code sum(totalAmount) /
+     * billsIssuedInWindow}, and is {@code 0} (never {@code null}) when {@code
+     * billsIssuedInWindow} is {@code 0}.
      *
-     * <p>Callers must not assume {@code avgBillAmount * billCount} reconciles to {@code
-     * paidAmount} — see {@link com.positivity.accounting.internal.dto.VendorSpendRow} Javadoc.
+     * <p>Callers must not assume {@code avgIssuedBillAmount * billsIssuedInWindow} reconciles to
+     * {@code paidAmount} — see {@link com.positivity.accounting.internal.dto.VendorSpendRow}
+     * Javadoc.
      *
      * <p>Vendor {@code name} is resolved server-side from the AP vendor directory, falling back
      * to the vendor-name snapshot recorded on the vendor's own bills/payments when the vendor has

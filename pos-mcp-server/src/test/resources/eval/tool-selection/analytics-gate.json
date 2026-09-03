@@ -306,7 +306,7 @@
         "analytics-gate",
         "wave2"
       ],
-      "notes": "Plan §6 Q17, budget 3. Blocked on W2 E8 (avgBillAmount column) over two windows. PROMOTED (Wave 2): the backing endpoint and facade method now exist."
+      "notes": "Plan §6 Q17, budget 3. Blocked on W2 E8 (avgIssuedBillAmount column) over two windows. PROMOTED (Wave 2): the backing endpoint and facade method now exist."
     }
   ]
 }

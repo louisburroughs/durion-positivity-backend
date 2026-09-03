@@ -14,26 +14,15 @@ import lombok.NoArgsConstructor;
 /**
  * One vendor's spend over the report window (Wave 2 E8, issue #1596).
  *
- * <p><b>IMPORTANT — {@code paidAmount} and {@code billCount}/{@code avgBillAmount} are two
- * different populations, not two views of the same set of bills:</b>
- *
- * <ul>
- *   <li>{@code paidAmount} sums settled A/P cash — {@code APPayment.grossAmount} (the amount
- *       allocated against vendor bills, before any processor fee) for payments whose {@code
- *       paymentDate} falls in the window and whose status shows the gateway already moved the
- *       cash ({@code GATEWAY_SUCCEEDED} or later; a payment stuck in {@code GATEWAY_PENDING},
- *       {@code GATEWAY_FAILED} or still {@code INITIATED} never contributed cash and is
- *       excluded). A payment can allocate across bills billed in an earlier or later window than
- *       this one.
- *   <li>{@code billCount} and {@code avgBillAmount} are bill-side figures — every {@code
- *       VendorBill} whose {@code billDate} falls in the window, regardless of its current status
- *       or whether it has been paid yet.
- * </ul>
- *
- * <p>Because these are different cohorts, a caller must not assume {@code avgBillAmount *
- * billCount} reconciles to {@code paidAmount}, or treat a vendor with high {@code paidAmount}
- * but zero {@code billCount} in this window as an anomaly — it simply means bills billed in an
- * earlier window were paid in this one.
+ * <p>{@code paidAmount} and {@code billsIssuedInWindow}/{@code avgIssuedBillAmount} are two
+ * different populations, not two views of the same set of bills: {@code paidAmount} sums settled
+ * A/P cash ({@code APPayment.grossAmount} for payments whose {@code paymentDate} falls in the
+ * window and whose status shows the gateway already moved the cash — {@code GATEWAY_SUCCEEDED} or
+ * later; a payment can allocate against bills issued in an earlier or later window than this one).
+ * {@code billsIssuedInWindow} and {@code avgIssuedBillAmount} count and average every {@code
+ * VendorBill} whose {@code billDate} falls in the window, regardless of payment status. A caller
+ * must not assume {@code avgIssuedBillAmount * billsIssuedInWindow} reconciles to {@code
+ * paidAmount}.
  */
 @Data
 @NoArgsConstructor
@@ -41,7 +30,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @Schema(
         description = "One vendor's spend over the report window; see field descriptions for the paidAmount vs"
-                + " billCount/avgBillAmount population split")
+                + " billsIssuedInWindow/avgIssuedBillAmount population split")
 public class VendorSpendRow {
 
     @Schema(
@@ -62,25 +51,25 @@ public class VendorSpendRow {
     @Schema(
             description = "Sum of APPayment.grossAmount for settled payments (status GATEWAY_SUCCEEDED or later)"
                     + " to this vendor whose paymentDate falls in the window; 0 when none settled in the window."
-                    + " This is A/P cash, a DIFFERENT population from billCount/avgBillAmount below — see class"
-                    + " Javadoc.",
+                    + " This is A/P cash, a DIFFERENT population from billsIssuedInWindow/avgIssuedBillAmount"
+                    + " below — see class Javadoc.",
             example = "18250.00",
             requiredMode = REQUIRED)
     private BigDecimal paidAmount;
 
     @Schema(
             description = "Count of VendorBill records for this vendor whose billDate falls in the window,"
-                    + " regardless of status; 0 when none billed in the window. Bill-side figure, a DIFFERENT"
-                    + " population from paidAmount above — see class Javadoc.",
+                    + " regardless of payment status; 0 when none issued in the window. Bill-side figure, a"
+                    + " DIFFERENT population from paidAmount above — see class Javadoc.",
             example = "4",
             requiredMode = REQUIRED)
-    private int billCount;
+    private int billsIssuedInWindow;
 
     @Schema(
             description = "Sum of VendorBill.totalAmount for this vendor's bills in the window divided by"
-                    + " billCount; 0 (never null) when billCount is 0 — there is nothing to average, and 0 keeps"
-                    + " this field a well-defined BigDecimal for every row",
+                    + " billsIssuedInWindow; 0 (never null) when billsIssuedInWindow is 0 — there is nothing to"
+                    + " average, and 0 keeps this field a well-defined BigDecimal for every row",
             example = "1425.75",
             requiredMode = REQUIRED)
-    private BigDecimal avgBillAmount;
+    private BigDecimal avgIssuedBillAmount;
 }

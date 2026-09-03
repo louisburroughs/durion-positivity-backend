@@ -188,18 +188,16 @@ public class AccountingFacadeTool {
                     + "year\" to the concrete YYYY-MM/YYYY yourself and call once per period; do not loop "
                     + "this tool across more than a handful of periods for a multi-period trend. Returns "
                     + "rows — vendorId, name (falls back to a bill/payment name snapshot, null only if "
-                    + "neither source has one), paidAmount, billCount, avgBillAmount — ordered by paidAmount "
-                    + "descending and capped at the top 20 vendors; the response's truncated flag is true "
-                    + "when more vendors had activity in the window than that cap allowed. IMPORTANT: "
-                    + "paidAmount (settled A/P cash — payments whose paymentDate falls in the window and "
-                    + "whose gateway status shows the cash already moved) and billCount/avgBillAmount "
-                    + "(VendorBill records whose billDate falls in the window) are DIFFERENT POPULATIONS of "
-                    + "the same vendor — a payment can settle bills billed in an earlier or later window, so "
-                    + "avgBillAmount * billCount does not reconcile to paidAmount, and a vendor with a high "
-                    + "paidAmount but billCount=0 in this window is not an anomaly. avgBillAmount is 0, "
-                    + "never null, when billCount is 0. This tool does NOT accept a vendorId filter or a "
-                    + "limit override — it always ranks every vendor for one window; use listApBills instead "
-                    + "for individual eligible bills rather than a per-vendor aggregate.")
+                    + "neither source has one), paidAmount, billsIssuedInWindow, avgIssuedBillAmount — "
+                    + "ordered by paidAmount descending and capped at the top 20 vendors; the response's "
+                    + "truncated flag is true when more vendors had activity in the window than that cap "
+                    + "allowed. paidAmount is settled A/P cash for payments made in the window, while "
+                    + "billsIssuedInWindow/avgIssuedBillAmount describe bills issued in the window regardless "
+                    + "of payment status — different populations, so avgIssuedBillAmount * "
+                    + "billsIssuedInWindow does not reconcile to paidAmount; never label the bill-side "
+                    + "figures as paid. This tool does NOT accept a vendorId filter or a limit override — it "
+                    + "always ranks every vendor for one window; use listApBills instead for individual "
+                    + "eligible bills rather than a per-vendor aggregate.")
     public String getVendorSpend(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
         ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
         return restClient

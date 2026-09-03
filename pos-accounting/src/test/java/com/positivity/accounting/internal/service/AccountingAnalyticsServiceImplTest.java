@@ -50,7 +50,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * Unit tests for {@link AccountingAnalyticsServiceImpl}: invoiced-vs-collected cohort separation,
  * the zero-invoiced ratio edge case (E2), the payment-lag boundary / unpaid / partial-payment
- * cohort rules (E3), and the vendor-spend paidAmount/billCount population split (E8).
+ * cohort rules (E3), and the vendor-spend paidAmount/billsIssuedInWindow population split (E8).
  */
 @ExtendWith(MockitoExtension.class)
 class AccountingAnalyticsServiceImplTest {
@@ -1077,7 +1077,8 @@ class AccountingAnalyticsServiceImplTest {
         }
 
         @Test
-        @DisplayName("paidAmount (settled A/P cash) and billCount/avgBillAmount are independent populations")
+        @DisplayName(
+                "paidAmount (settled A/P cash) and billsIssuedInWindow/avgIssuedBillAmount are independent populations")
         void paidAmountAndBillsAreIndependentPopulations() {
             UUID vendorId = UUID.randomUUID();
 
@@ -1096,9 +1097,9 @@ class AccountingAnalyticsServiceImplTest {
             VendorSpendRow row = report.getRows().get(0);
             assertThat(row.getVendorId()).isEqualTo(vendorId);
             assertThat(row.getPaidAmount()).isEqualByComparingTo("1000.00");
-            assertThat(row.getBillCount()).isZero();
-            // 0, never null, when billCount is 0.
-            assertThat(row.getAvgBillAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(row.getBillsIssuedInWindow()).isZero();
+            // 0, never null, when billsIssuedInWindow is 0.
+            assertThat(row.getAvgIssuedBillAmount()).isEqualByComparingTo(BigDecimal.ZERO);
             // No directory entry: falls back to the vendor-name snapshot on the payment.
             assertThat(row.getName()).isEqualTo("Acme Parts Co");
         }
@@ -1118,8 +1119,8 @@ class AccountingAnalyticsServiceImplTest {
 
             assertThat(report.getRows()).hasSize(1);
             assertThat(report.getRows().get(0).getPaidAmount()).isEqualByComparingTo(BigDecimal.ZERO);
-            assertThat(report.getRows().get(0).getBillCount()).isEqualTo(1);
-            assertThat(report.getRows().get(0).getAvgBillAmount()).isEqualByComparingTo("500.00");
+            assertThat(report.getRows().get(0).getBillsIssuedInWindow()).isEqualTo(1);
+            assertThat(report.getRows().get(0).getAvgIssuedBillAmount()).isEqualByComparingTo("500.00");
         }
 
         @Test

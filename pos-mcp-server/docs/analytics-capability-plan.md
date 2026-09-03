@@ -221,7 +221,7 @@ Wave 3's `groupBy`.
 | E5 | pos-workorder | `GET /workorders/analytics/technician-labor` | startDate, endDate | technicianId, name, completedWoCount, billedHours, laborRevenue | Q1, Q2, Q19 |
 | E6 | pos-workorder | `GET /workorders/analytics/reopened` | startDate, endDate, withinDays | technicianId, woId, completedAt, reopenedAt | Q3 |
 | E7 | pos-workorder | `GET /workorders/status-transitions` | woId or (from,to,startDate,endDate) | woId, fromStatus, toStatus, at, actorId | Q3 backing projection — **table already exists**, see D4 |
-| E8 | **pos-accounting** | `GET /accounting/analytics/vendor-spend` | startDate, endDate | vendorId, name, paidAmount, billCount, avgBillAmount | Q15, Q17, Q18 (A/P side) |
+| E8 | **pos-accounting** | `GET /accounting/analytics/vendor-spend` | startDate, endDate | vendorId, name, paidAmount, billsIssuedInWindow, avgIssuedBillAmount | Q15, Q17, Q18 (A/P side) |
 | E9 | pos-accounting | `GET /accounting/vendor-bills` | dueFrom, dueTo, status, pageable | billId, vendorId, dueDate, amount, status | Q16, Q17 (today: only `/{billId}` exists — no list route at all) |
 | E10 | **pos-accounting** | `GET /accounting/payment-applications` | appliedFrom, appliedTo, pageable | applicationId, paymentId, invoiceId, appliedAt, amount | Q9 (days-to-pay), Q11 audit — module set by D3 |
 | E11 | pos-invoice | invoice search: add `status`, `issuedFrom`, `issuedTo`, `customerId` params | — | existing `Page<InvoiceSearchResult>` | retires most of G3 |
@@ -478,7 +478,7 @@ selection, not answers — it is not the question list.
 | 14 | A/R balance + DSO at each month-end, 12 mo | 3 (partial W1) | 3 | aging batch + income statements; DSO in model |
 | 15 | Top vendors 6 mo vs same 6 mo last year | 2 | 3 | 2 × E8 windows |
 | 16 | Vendor bills due ≤ 14 days, daily cash need | 2 | 2 | E9 by due window; model buckets by day |
-| 17 | Vendors with avg bill +10 % YoY | 2 | 3 | 2 × E8 (`avgBillAmount`); model compares |
+| 17 | Vendors with avg bill +10 % YoY | 2 | 3 | 2 × E8 (`avgIssuedBillAmount`); model compares |
 | 18 | Weekly cash in vs out, last quarter, negative weeks | 2→3 | 27→3 | W2 loops are over budget → formally a Wave 3 gate (E2 + A/P weekly groupBy) |
 | 19 | Revenue vs technician hours by customer, revenue/hour | 3 | 2 | `customerEfficiency` composition |
 | 20 | 12-month business summary, 7 metrics, trend flags | 3 | 2 | `businessSummary` composition; trends in prose |

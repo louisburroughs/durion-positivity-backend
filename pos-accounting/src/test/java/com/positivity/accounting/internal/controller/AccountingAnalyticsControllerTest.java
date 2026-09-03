@@ -217,8 +217,8 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
                         .vendorId(UUID.fromString("018f0000-0000-7000-8000-0000000000aa"))
                         .name("Acme Parts Co")
                         .paidAmount(new BigDecimal("1000.00"))
-                        .billCount(2)
-                        .avgBillAmount(new BigDecimal("250.00"))
+                        .billsIssuedInWindow(2)
+                        .avgIssuedBillAmount(new BigDecimal("250.00"))
                         .build()))
                 .build();
     }
@@ -235,8 +235,8 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rows.length()").value(1))
                 .andExpect(jsonPath("$.rows[0].paidAmount").value(1000.00))
-                .andExpect(jsonPath("$.rows[0].billCount").value(2))
-                .andExpect(jsonPath("$.rows[0].avgBillAmount").value(250.00))
+                .andExpect(jsonPath("$.rows[0].billsIssuedInWindow").value(2))
+                .andExpect(jsonPath("$.rows[0].avgIssuedBillAmount").value(250.00))
                 .andExpect(jsonPath("$.truncated").value(false));
     }
 

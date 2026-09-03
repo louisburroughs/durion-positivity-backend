@@ -10,10 +10,12 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Method;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -299,7 +301,7 @@ class AccountingFacadeToolTest {
                 .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess(
-                        "{\"rows\":[{\"vendorId\":\"v1\",\"paidAmount\":1000.00,\"billCount\":0}]}",
+                        "{\"rows\":[{\"vendorId\":\"v1\",\"paidAmount\":1000.00,\"billsIssuedInWindow\":0}]}",
                         MediaType.APPLICATION_JSON));
 
         String result = tool.getVendorSpend("2026-06");
@@ -332,5 +334,24 @@ class AccountingFacadeToolTest {
                 .hasMessageContaining("YYYY");
 
         mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend description names billsIssuedInWindow/avgIssuedBillAmount and never labels "
+            + "them paid, and no tool description on this class still names the old billCount/avgBillAmount "
+            + "fields")
+    void getVendorSpendDescription_namesNewFieldsAndNeverLabelsThemPaid() throws NoSuchMethodException {
+        Method getVendorSpend = AccountingFacadeTool.class.getMethod("getVendorSpend", String.class);
+        String description = getVendorSpend.getAnnotation(Tool.class).description();
+
+        assertThat(description).contains("billsIssuedInWindow").contains("avgIssuedBillAmount");
+        assertThat(description).doesNotContain("bills paid");
+
+        for (Method method : AccountingFacadeTool.class.getMethods()) {
+            if (method.isAnnotationPresent(Tool.class)) {
+                String toolDescription = method.getAnnotation(Tool.class).description();
+                assertThat(toolDescription).doesNotContain("billCount").doesNotContain("avgBillAmount");
+            }
+        }
     }
 }
