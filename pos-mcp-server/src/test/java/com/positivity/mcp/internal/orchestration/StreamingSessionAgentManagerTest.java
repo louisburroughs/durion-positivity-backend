@@ -166,7 +166,7 @@ class StreamingSessionAgentManagerTest {
                 "http://api-gateway",
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
-        sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         simpleChatFastPath = new SimpleChatFastPath(
                 new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog()),
                 rolePromptResolver,
@@ -385,7 +385,7 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("prebuild merges the full shared fallback tool set")
     void constructor_prebuildRoleAgents_mergesFullSharedFallbackTools() {
-        SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport());
+        SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport(Clock.systemUTC()));
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER"));
 
@@ -428,7 +428,7 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("#1194: configured similarity floors propagate to the dense retrievers")
     void constructor_customRagFloors_propagateToRetrieverFactory() {
-        SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport());
+        SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport(Clock.systemUTC()));
         when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER"));
 

@@ -119,6 +119,12 @@ public class RolePromptResolverImpl implements RolePromptResolver {
         text.append("\n\n").append(SystemPromptDefaults.TOOL_USE_LAYER_TEXT);
         layers.add("TOOL_USE");
 
+        // DATE-WINDOW (#1661) — relative-range resolution, always present. Sits after TOOL-USE
+        // because it narrows that layer's "ask when an argument is missing" rule: a named range
+        // resolves from the supplied date instead of costing the user a round-trip.
+        text.append("\n\n").append(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT);
+        layers.add("DATE_WINDOW");
+
         // WRITE-GATE (Gate 6, #1193) — only when a write-capable tool is in the candidate set.
         if (writeCapableToolsPresent) {
             text.append("\n\n").append(SystemPromptDefaults.WRITE_GATE_LAYER_TEXT);

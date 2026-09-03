@@ -295,7 +295,7 @@ class CachedAgentOpenApiPermissionLeakageTest {
                 embeddingModel,
                 embeddingStore,
                 toolRegistry,
-                new SharedOrchestrationSupport(),
+                new SharedOrchestrationSupport(Clock.systemUTC()),
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 null, // toolExecutionAuditLogger
@@ -304,7 +304,7 @@ class CachedAgentOpenApiPermissionLeakageTest {
                 new SimpleChatFastPath(
                         new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog()),
                         rolePromptResolver,
-                        new SharedOrchestrationSupport()),
+                        new SharedOrchestrationSupport(Clock.systemUTC())),
                 null, // telemetryEmitter
                 openApiToolProvider,
                 null, // answerResolutionLadder

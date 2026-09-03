@@ -170,7 +170,7 @@ class SessionAgentManagerTest {
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
         simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
-        sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         simpleChatFastPath =
                 new SimpleChatFastPath(simpleChatClassifier, rolePromptResolver, sharedOrchestrationSupport);
         QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
