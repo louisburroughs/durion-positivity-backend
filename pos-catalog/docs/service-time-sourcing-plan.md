@@ -735,7 +735,10 @@ One new Maven module, one Spring Boot app, serving **both** tracks' vendor contr
   vehicle-reference sets. Optional chaos knobs (`?delayMs=`, `?failRate=`) for degradation
   testing — the Phase-1 exit criterion "kill the mock, flow never 500s" wants them.
 - Excluded from coverage aggregation thresholds if `pos-coverage-aggregate` would otherwise
-  count it; included in the reactor build so it can't rot.
+  count it; included in the reactor build so it can't rot. It does carry its own
+  `jacoco.line.min` / `jacoco.branch.min` floors: the module is past the 50-line threshold at
+  which `docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md` §6.5 requires a floor, and a per-module floor
+  gates only this module's own tests — it is not an aggregate threshold.
 
 ---
 

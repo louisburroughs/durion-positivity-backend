@@ -329,6 +329,12 @@
 		     bypass, 9.1), CVE-2026-59314 — fixed in Spring Framework 7.0.9 (managed by
 		     Spring Boot 4.1.1; remove once the parent is bumped to it) -->
 		<spring-framework.version>7.0.9</spring-framework.version>
+		<!-- CVE-2026-59270 (9.1): the embedded UnboundID LDAP server registers a
+		     well-known administrative bind DN and listens on every interface, so anyone
+		     who can reach the port can read or modify the in-memory directory. Fixed in
+		     Spring Security 7.1.1 (managed by Spring Boot 4.1.1; remove once the parent
+		     is bumped to it). -->
+		<spring-security.version>7.1.1</spring-security.version>
 		<!-- CVE-2026-42198, CVE-2026-54291 -->
 		<postgresql.version>42.7.13</postgresql.version>
 		<!-- CVE-2026-65182, CVE-2026-65637, CVE-2026-65905, CVE-2026-66299, CVE-2026-68525 et al.
