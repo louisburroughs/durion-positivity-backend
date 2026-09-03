@@ -10,6 +10,7 @@ import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import com.positivity.shopmanager.internal.service.enums.HrEventType;
+import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -57,6 +58,9 @@ class MechanicSyncServiceSkillReplacementTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @BeforeEach
     void setUp() {
@@ -145,6 +149,29 @@ class MechanicSyncServiceSkillReplacementTest {
                 .isGreaterThan(SEEDED_VERSION);
     }
 
+    /** Feed path: an explicit empty skill list clears the set, unlike a null list which preserves it. */
+    @Test
+    void emptySkillListOnExistingMechanicClearsTheWholeSet() {
+        UUID existingMechanicId = mechanicId(EXISTING_PERSON_ID);
+        UUID bystanderMechanicId = mechanicId(BYSTANDER_PERSON_ID);
+        assertThat(rowCount("mechanic_skill", existingMechanicId)).isEqualTo(2);
+
+        mechanicSyncService.processHrEvent(HrMechanicEvent.builder()
+                .eventId(SKILLS_EVENT_ID)
+                .eventType(HrEventType.MECHANIC_SKILLS_UPDATED)
+                .personId(EXISTING_PERSON_ID.toString())
+                .version(SEEDED_VERSION + 1)
+                .occurredAt(OCCURRED_AT)
+                .payload(HrMechanicEvent.Payload.builder().skills(List.of()).build())
+                .build());
+
+        assertThat(mechanicSkillRepository.findAllByMechanicIdIn(List.of(existingMechanicId, bystanderMechanicId)))
+                .extracting(MechanicSkill::getMechanicId, MechanicSkill::getSkillCode)
+                .containsExactly(tuple(bystanderMechanicId, "TIRES"));
+        assertThat(rowCount("mechanic_skill", existingMechanicId)).isZero();
+        assertThat(rowCount("mechanic_skill", bystanderMechanicId)).isEqualTo(1);
+    }
+
     private void assertReplacedWithSingleSkill(UUID targetMechanicId, String skillCode, int proficiency) {
         UUID bystanderMechanicId = mechanicId(BYSTANDER_PERSON_ID);
 
@@ -170,7 +197,13 @@ class MechanicSyncServiceSkillReplacementTest {
         return UUID.nameUUIDFromBytes(personId.toString().getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Counts rows on the transaction-bound connection. Flushes first so the count reflects
+     * everything the service queued, independent of whether a repository query happened to
+     * auto-flush the persistence context earlier in the test.
+     */
     private int rowCount(String table, UUID mechanicId) {
+        entityManager.flush();
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM " + table + " WHERE mechanic_id = ?", Integer.class, mechanicId);
         return count != null ? count : 0;
