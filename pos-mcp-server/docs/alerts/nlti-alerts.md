@@ -88,6 +88,12 @@ populated yet, the rule states the substitute signal it fires on today.
      window is void.
    - Severity: P2
    - Runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+   - **SILENCE THIS while tiering is dormant (#1683).** `mcp.model.tiering-enabled` defaults to
+     `false`, so there is deliberately no `routing.tier` on any telemetry row and both this alert
+     and NltiRoutingMixShift (rule 5) would fire continuously and truthfully — on a condition that
+     is the intended configuration, not an incident. The flag is not visible to LogQL, so the
+     expression cannot self-gate. Unsilence when `MCP_MODEL_SIMPLE` names a real smaller model and
+     `MCP_MODEL_TIERING_ENABLED=true` goes back on (see docs/gate4-tiered-router-design.md).
 
 7. Name: NltiModelFallbackRateHigh
    - Trigger: **Today** — Loki log rule on the tier resolver:

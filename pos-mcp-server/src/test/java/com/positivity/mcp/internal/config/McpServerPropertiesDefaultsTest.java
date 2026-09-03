@@ -77,6 +77,51 @@ class McpServerPropertiesDefaultsTest {
                         .isEqualTo("16"));
     }
 
+    @Test
+    @DisplayName("every profile sends an explicit num_ctx rather than inheriting the Ollama host default")
+    void allProfiles_setAnExplicitContextWindow() {
+        // #1683: the failure mode this guards is silent — Ollama drops the FRONT of the context
+        // (the system prompt) at the host's OLLAMA_CONTEXT_LENGTH, with no error and no log.
+        for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
+            new ApplicationContextRunner()
+                    .withInitializer(loadYaml(profile))
+                    .run(ctx -> assertThat(ctx.getEnvironment().getProperty("spring.ai.ollama.chat.options.num-ctx"))
+                            .as("num-ctx in %s", profile)
+                            .isEqualTo("32768"));
+        }
+    }
+
+    @Test
+    @DisplayName("every profile runs the executor at temperature 0 so gate runs are reproducible")
+    void allProfiles_runTheExecutorDeterministically() {
+        for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
+            new ApplicationContextRunner()
+                    .withInitializer(loadYaml(profile))
+                    .run(ctx -> assertThat(
+                                    ctx.getEnvironment().getProperty("spring.ai.ollama.chat.options.temperature"))
+                            .as("temperature in %s", profile)
+                            .isEqualTo("0.0"));
+        }
+    }
+
+    @Test
+    @DisplayName("tier routing stays dormant while both tier models resolve to the default executor")
+    void tierRouting_isDormantWhileNoTierModelIsConfigured() {
+        // #1683: with mcp.model.simple and mcp.model.complex blank, T2-simple and T2-complex are
+        // the same model, so a classification call per turn buys a decision with one outcome.
+        // Re-enabling tiering is only worth it once mcp.model.simple names a real smaller model.
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml"))
+                .run(ctx -> {
+                    assertThat(ctx.getEnvironment().getProperty("mcp.model.tiering-enabled"))
+                            .isEqualTo("false");
+                    assertThat(ctx.getEnvironment().getProperty("mcp.model.simple"))
+                            .isEmpty();
+                    assertThat(ctx.getEnvironment().getProperty("mcp.model.complex"))
+                            .isEmpty();
+                });
+    }
+
     private static org.springframework.context.ApplicationContextInitializer<
                     org.springframework.context.ConfigurableApplicationContext>
             loadYaml(String... resourcePaths) {

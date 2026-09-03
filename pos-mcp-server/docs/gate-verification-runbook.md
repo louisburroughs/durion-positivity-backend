@@ -91,7 +91,36 @@ grep -A2 'tuning:' pos-mcp-server/src/main/resources/application.yml      # enab
 # single documented default model (yml and README agree)
 grep 'OLLAMA_CHAT_MODEL' pos-mcp-server/src/main/resources/application.yml
 grep 'chat-model.model-name' pos-mcp-server/README.md
+# #1683: num_ctx explicit in every profile, executor deterministic, tiering dormant
+grep -c 'num-ctx' pos-mcp-server/src/main/resources/application{,-dev,-alpha}.yml   # 1 each
+grep 'temperature' pos-mcp-server/src/main/resources/application.yml                # ${OLLAMA_CHAT_TEMPERATURE:0.0}
+grep 'tiering-enabled' pos-mcp-server/src/main/resources/application.yml            # ${MCP_MODEL_TIERING_ENABLED:false}
 ```
+(Also asserted by `McpServerPropertiesDefaultsTest` and `OllamaChatModelConfigurationTest`, so these
+are a fast eyeball rather than the actual guard.)
+
+### Prompt-truncation check (#1683) — run before trusting any prompt-tuning result
+
+Ollama truncates from the **front** of the context, which drops the system prompt first, with no
+error and no log line. Before #1683 the service never sent `num_ctx`, so the window was the host's
+`OLLAMA_CONTEXT_LENGTH` (4096 unless raised) — smaller than one assembled analytics turn. Any gate
+result measured before that fix was measured through a prompt the model may not have fully received.
+
+```bash
+# 1. What the service now asks for (INFO, once per chat-model bean at startup)
+grep 'MCP Ollama chat model configured' <service log>       # ... numCtx=32768 ...
+
+# 2. What the server actually granted, from a real response
+curl -s "$OLLAMA_CHAT_BASE_URL/api/chat" -H "Authorization: Bearer $OLLAMA_API_KEY" \
+  -d '{"model":"'"$OLLAMA_CHAT_MODEL"'","stream":false,"options":{"num_ctx":32768},
+       "messages":[{"role":"user","content":"hi"}]}' | python3 -m json.tool | grep prompt_eval_count
+```
+
+Interpretation: `prompt_eval_count` pinned just under a round number (4096, 8192) on a turn whose
+assembled prompt is demonstrably longer means the request is still being truncated — the host is
+capping `num_ctx` below what we asked for. Raise the host's `OLLAMA_CONTEXT_LENGTH`, or lower
+`OLLAMA_NUM_CTX` to what the host will honour and shrink the prompt to fit. Re-run the analytics
+gate after any change here before drawing conclusions from prompt work (tracked under #1601).
 
 ### Gate 0 fixture-minimum exit gate (currently @Disabled)
 Counts are seed-only (4/4/4 vs required 100/50/30). To check current counts:

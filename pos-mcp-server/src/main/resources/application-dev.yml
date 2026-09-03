@@ -19,7 +19,16 @@ spring:
       chat:
         options:
           model: ${OLLAMA_CHAT_MODEL:gpt-oss:120b}
-          temperature: 0.2
+          # #1683: 0 (not 0.2). The analytics gate is graded at n=1, so sampling only adds
+          # run-to-run variance to the "did that PR help?" comparison. Override per host with
+          # OLLAMA_CHAT_TEMPERATURE if a workload ever needs sampling.
+          temperature: ${OLLAMA_CHAT_TEMPERATURE:0.0}
+          # #1683: always send num_ctx. Left unset, Ollama applies the host's
+          # OLLAMA_CONTEXT_LENGTH (4096 by default) and truncates the FRONT of the context —
+          # the system prompt — once the assembled prompt exceeds it. One analytics turn
+          # (layered prompt + tool schemas + RAG snippets + memory + tool results) is well past
+          # 4096. Raise/lower per host with OLLAMA_NUM_CTX; do not rely on the server default.
+          num-ctx: ${OLLAMA_NUM_CTX:32768}
         timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
         streaming-timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
       embedding:

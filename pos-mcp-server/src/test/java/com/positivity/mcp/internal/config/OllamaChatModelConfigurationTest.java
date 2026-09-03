@@ -21,6 +21,11 @@ import org.springframework.ai.chat.prompt.Prompt;
  * a RestClient for blocking calls and a separate WebClient for streaming, so the API key must reach
  * both clients — a header on only one of them makes the other path 401 against the live backend.
  * These tests drive each path against a local HTTP server and assert the relayed header.
+ *
+ * <p>They also assert the options actually put on the wire (#1683): {@code num_ctx} must always be
+ * sent — inheriting the Ollama host's {@code OLLAMA_CONTEXT_LENGTH} silently truncates the front of
+ * the context, i.e. the system prompt — and {@code temperature} must be whatever was configured,
+ * with 0 the deterministic default for the graded analytics workload.
  */
 class OllamaChatModelConfigurationTest {
 
@@ -33,6 +38,7 @@ class OllamaChatModelConfigurationTest {
 
     private final OllamaChatModelConfiguration configuration = new OllamaChatModelConfiguration();
     private final ConcurrentLinkedQueue<String> authorizationHeaders = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<String> requestBodies = new ConcurrentLinkedQueue<>();
     private HttpServer server;
     private String baseUrl;
 
@@ -43,6 +49,7 @@ class OllamaChatModelConfigurationTest {
             String header = exchange.getRequestHeaders().getFirst("Authorization");
             authorizationHeaders.add(header == null ? NO_HEADER : header);
             String request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            requestBodies.add(request);
             boolean streaming = request.contains("\"stream\":true");
             byte[] body = CHAT_RESPONSE.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", streaming ? "application/x-ndjson" : "application/json");
@@ -62,8 +69,8 @@ class OllamaChatModelConfigurationTest {
 
     @Test
     void streamingChatModel_relaysApiKeyAsBearerHeader() {
-        StreamingChatModel model =
-                configuration.streamingChatModel(baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "");
+        StreamingChatModel model = configuration.streamingChatModel(
+                baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768);
 
         model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
 
@@ -72,7 +79,8 @@ class OllamaChatModelConfigurationTest {
 
     @Test
     void chatModel_relaysApiKeyAsBearerHeader() {
-        ChatModel model = configuration.chatModel(baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "");
+        ChatModel model =
+                configuration.chatModel(baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768);
 
         model.call(new Prompt("hi"));
 
@@ -82,10 +90,51 @@ class OllamaChatModelConfigurationTest {
     @Test
     void blankApiKey_sendsNoAuthorizationHeader() {
         StreamingChatModel model =
-                configuration.streamingChatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "");
+                configuration.streamingChatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768);
 
         model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
 
         assertThat(authorizationHeaders).containsExactly(NO_HEADER);
+    }
+
+    @Test
+    void chatModel_sendsConfiguredNumCtxAndTemperature() {
+        ChatModel model = configuration.chatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768);
+
+        model.call(new Prompt("hi"));
+
+        assertThat(requestBodies).singleElement().satisfies(body -> {
+            assertThat(body).contains("\"num_ctx\":32768");
+            assertThat(body).contains("\"temperature\":0.0");
+        });
+    }
+
+    @Test
+    void streamingChatModel_sendsConfiguredNumCtxAndTemperature() {
+        StreamingChatModel model =
+                configuration.streamingChatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768);
+
+        model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
+
+        assertThat(requestBodies).singleElement().satisfies(body -> {
+            assertThat(body).contains("\"num_ctx\":32768");
+            assertThat(body).contains("\"temperature\":0.0");
+        });
+    }
+
+    /**
+     * num_ctx is never omitted, whatever the value: an unset option is what hands the context
+     * window back to the host default this change exists to stop relying on.
+     */
+    @Test
+    void nonDefaultNumCtxAndTemperature_areSentAsConfigured() {
+        ChatModel model = configuration.chatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.7d, 8192);
+
+        model.call(new Prompt("hi"));
+
+        assertThat(requestBodies).singleElement().satisfies(body -> {
+            assertThat(body).contains("\"num_ctx\":8192");
+            assertThat(body).contains("\"temperature\":0.7");
+        });
     }
 }

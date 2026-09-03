@@ -6,6 +6,27 @@
 > shared T0 fast path for blocking + streaming, router/tier telemetry; 14 tiering tests.
 > Live verification (routing %, latency, quality) still open — see runbook §B.7 and the Gate 4
 > sign-off in `implementation_checklist.md`. Design retained below as the implementation record.
+>
+> **DORMANT since 2026-09-03 (#1683).** `mcp.model.tiering-enabled` now defaults to `false`.
+> Nothing here was wrong; it was simply never wired to distinct models outside a one-off gate run.
+> `mcp.model.simple` and `mcp.model.complex` both default to blank, and no `.env` or compose file
+> set them, so `TieredChatModelResolver` returned the default executor for both — **T2-simple and
+> T2-complex were the same `gpt-oss:120b` with the same options**. Every non-simple-chat turn was
+> still paying a full `qwen3:4b` T1 classification (`NltiRouter.classify`, from
+> `SessionAgentManager.routeTier`) to pick between two identical destinations. Decision B in
+> `gate-closeout-plan-1212-1219.md` had resolved this to `MCP_MODEL_SIMPLE=gpt-oss:20b`, and the
+> 2026-08-19 live run validated it, but that value never landed in repo config.
+>
+> Of the two ways out (wire a real T2-simple model, or stop paying for the no-op) this records the
+> second, on purpose: the analytics gate (#1601) is being graded at n=1 right now, and most gate
+> questions are single-domain reads that `TierSelector` routes to T2-simple. Introducing a second
+> executor model mid-measurement would add a confound to every subsequent comparison — the same
+> reason #1683 also took the executor to temperature 0.
+>
+> **To revive:** set `MCP_MODEL_SIMPLE` to a genuinely smaller pulled model *first*, then
+> `MCP_MODEL_TIERING_ENABLED=true`. Enabling the flag on its own only restores the wasted call.
+> While dormant, keep `NltiModelTierStarved` and `NltiRoutingMixShift` silenced — they assume
+> tiering is on and the flag is not visible to LogQL (`docs/alerts/nlti-alerts.md`).
 > Route each request to the cheapest model tier that preserves quality + safety.
 
 ## Why
