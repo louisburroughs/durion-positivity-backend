@@ -124,11 +124,9 @@ public class ShopDashboardServiceImpl implements ShopDashboardService {
         Shop shop = shopRepository.findById(locationId).orElseThrow(() -> new LocationNotFoundException(locationId));
         LocalDate asOf = date != null ? date : localToday(shop);
 
-        List<ExtBayReplica> bays =
-                extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAscBayIdAsc(locationId);
+        List<ExtBayReplica> bays = extBayReplicaRepository.findActiveByLocationOrdered(locationId);
         List<ExtMobileUnitReplica> mobileUnits =
-                extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAscMobileUnitIdAsc(
-                        locationId);
+                extMobileUnitReplicaRepository.findActiveByBaseLocationOrdered(locationId);
 
         // One row over the cap: if the extra row came back, there is more work than we will show.
         List<ExtWorkorderReplica> openRows = extWorkorderReplicaRepository.findOpenAtLocation(

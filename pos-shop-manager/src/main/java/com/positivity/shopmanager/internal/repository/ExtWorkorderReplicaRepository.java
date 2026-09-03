@@ -26,7 +26,14 @@ public interface ExtWorkorderReplicaRepository extends JpaRepository<ExtWorkorde
      *   <li>then by status band: blocked (waiting on parts or approval) → queued (not started) →
      *       active (being worked) → ready (finished, vehicle not collected);
      *   <li>then {@code promisedAt} ascending with nulls last — soonest promise first;
-     *   <li>then {@code workorderNumber}, so the order is total and the page is stable.
+     *   <li>then {@code workorderNumber} with nulls last, so a replica row whose number has not
+     *       arrived yet sorts after the numbered ones instead of wherever the database puts nulls
+     *       (PostgreSQL sorts them last on ASC, H2 first);
+     *   <li>finally {@code workorderId} — the primary key — which is what actually makes the order
+     *       total. {@code workorderNumber} is nullable on a replica row and carries no uniqueness
+     *       constraint, so without this last tier two rows can tie completely; under the row cap a
+     *       tie does not merely reorder the page, it changes <em>which</em> rows the page contains
+     *       from one refresh to the next.
      * </ol>
      *
      * <p>Openness is expressed as "not terminal", mirroring how pos-workorder itself derives
@@ -53,7 +60,9 @@ public interface ExtWorkorderReplicaRepository extends JpaRepository<ExtWorkorde
               end,
               case when w.promisedAt is null then 1 else 0 end,
               w.promisedAt asc,
-              w.workorderNumber asc
+              case when w.workorderNumber is null then 1 else 0 end,
+              w.workorderNumber asc,
+              w.workorderId asc
             """)
     @NonNull
     List<ExtWorkorderReplica> findOpenAtLocation(

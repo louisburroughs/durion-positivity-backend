@@ -1400,7 +1400,7 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(504)).isEqualTo("PERM_catalog:labor_standard:import");
         assertThat(GatewayPermissionCatalog.authorityForBit(505)).isEqualTo("PERM_catalog:labor_time:resolve");
         // catalog v73 (#1658): shop manager dashboard aggregate read in pos-shop-manager (bit 506)
-        assertThat(GatewayPermissionCatalog.authorityForBit(506)).isEqualTo("PERM_shopmgmt:dashboard:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(506)).isEqualTo("PERM_shop:dashboard:view");
         // beyond array must return null
         assertThat(GatewayPermissionCatalog.authorityForBit(507)).isNull();
     }

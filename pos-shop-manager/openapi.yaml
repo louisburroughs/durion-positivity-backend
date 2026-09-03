@@ -625,7 +625,7 @@ paths:
 
         Emits a SHOPMGR_SHOP_DASHBOARD_VIEW audit event; no state changes occur, openWorkorders is capped at 200 rows with openWorkordersTruncated set when the cap is hit, and a unit holding no work is returned with a null assignment rather than omitted.
 
-        Returns 400 when locationId or date is malformed, 403 when the caller lacks shopmgmt:dashboard:view, and 404 when no shop exists for the location id.
+        Returns 400 when locationId or date is malformed, 403 when the caller lacks shop:dashboard:view, and 404 when no shop exists for the location id.
 
         '
       operationId: getShopDashboard
@@ -673,12 +673,12 @@ paths:
           description: Shop location not found.
       security:
       - bearerAuth:
-        - shopmgmt:dashboard:view
+        - shop:dashboard:view
       summary: Get the shop dashboard for a location
       tags:
       - Shop Dashboard API
       x-required-permissions:
-      - shopmgmt:dashboard:view
+      - shop:dashboard:view
   /v1/shop-manager/mechanics:
     get:
       description: 'Returns the eventually consistent mechanic read model synchronized from People/HR, one page at a time.

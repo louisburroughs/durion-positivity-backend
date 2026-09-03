@@ -96,13 +96,13 @@ class DashboardServiceTest {
     @org.junit.jupiter.api.BeforeEach
     void stubEmptyResourceReplicas() {
         org.mockito.Mockito.lenient()
-                .when(extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAsc(any(UUID.class)))
+                .when(extBayReplicaRepository.findActiveByLocationOrdered(any(UUID.class)))
                 .thenReturn(List.of());
         org.mockito.Mockito.lenient()
                 .when(extBayReplicaRepository.findById(any(UUID.class)))
                 .thenReturn(java.util.Optional.empty());
         org.mockito.Mockito.lenient()
-                .when(extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAsc(any(UUID.class)))
+                .when(extMobileUnitReplicaRepository.findActiveByBaseLocationOrdered(any(UUID.class)))
                 .thenReturn(List.of());
         org.mockito.Mockito.lenient()
                 .when(extMobileUnitReplicaRepository.findById(any(UUID.class)))
@@ -1406,12 +1406,11 @@ class DashboardServiceTest {
     }
 
     private void givenActiveBays(ExtBayReplica... bays) {
-        when(extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAsc(LOCATION_UUID))
-                .thenReturn(List.of(bays));
+        when(extBayReplicaRepository.findActiveByLocationOrdered(LOCATION_UUID)).thenReturn(List.of(bays));
     }
 
     private void givenActiveUnits(ExtMobileUnitReplica... units) {
-        when(extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAsc(LOCATION_UUID))
+        when(extMobileUnitReplicaRepository.findActiveByBaseLocationOrdered(LOCATION_UUID))
                 .thenReturn(List.of(units));
     }
 

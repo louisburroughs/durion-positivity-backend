@@ -664,7 +664,7 @@ public final class DownstreamPermissionCatalog {
         "PERM_catalog:labor_time:resolve", // 505
 
         // ── New batch (bits 506–506) ──────────────────────────────────────────
-        "PERM_shopmgmt:dashboard:view" // 506
+        "PERM_shop:dashboard:view" // 506
     };
 
     public static String authorityForBit(int bitIndex) {

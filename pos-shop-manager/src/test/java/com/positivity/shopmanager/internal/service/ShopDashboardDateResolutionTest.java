@@ -81,9 +81,8 @@ class ShopDashboardDateResolutionTest {
                 extVehicleReplicaRepository,
                 extPersonReplicaRepository,
                 mechanicRepository);
-        when(extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAscBayIdAsc(any()))
-                .thenReturn(List.of());
-        when(extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAscMobileUnitIdAsc(any()))
+        when(extBayReplicaRepository.findActiveByLocationOrdered(any())).thenReturn(List.of());
+        when(extMobileUnitReplicaRepository.findActiveByBaseLocationOrdered(any()))
                 .thenReturn(List.of());
         when(extWorkorderReplicaRepository.findOpenAtLocation(any(), any(), any()))
                 .thenReturn(List.of());

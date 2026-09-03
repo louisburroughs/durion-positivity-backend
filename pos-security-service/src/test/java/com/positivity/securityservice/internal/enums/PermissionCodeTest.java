@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 507 / 73: catalog v73 added shopmgmt:dashboard:view (the shop manager dashboard
+    // 507 / 73: catalog v73 added shop:dashboard:view (the shop manager dashboard
     // aggregate read in pos-shop-manager, #1658) at bit 506.
     // Both numbers move together by design: the version bump is what tells a running gateway
     // its cached catalog is stale.

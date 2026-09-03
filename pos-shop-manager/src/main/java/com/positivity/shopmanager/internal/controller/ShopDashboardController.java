@@ -48,7 +48,7 @@ public class ShopDashboardController {
                     capped at 200 rows with openWorkordersTruncated set when the cap is hit, and a unit holding no \
                     work is returned with a null assignment rather than omitted.
                     Returns 400 when locationId or date is malformed, 403 when the caller lacks \
-                    shopmgmt:dashboard:view, and 404 when no shop exists for the location id.
+                    shop:dashboard:view, and 404 when no shop exists for the location id.
                     """)
     @ApiResponse(responseCode = "200", description = "Shop dashboard returned.")
     @ApiResponse(

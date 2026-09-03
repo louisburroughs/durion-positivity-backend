@@ -54,7 +54,7 @@ the `search` latency preset.
 ## Shop dashboard (`GET /v1/shop-dashboard`)
 
 One call returns everything a shop manager board shows for a location, requiring
-`shopmgmt:dashboard:view`:
+`shop:dashboard:view`:
 
 - `units[]` — every bay and mobile unit at the location as a discriminated union tagged
   `unitType: BAY | MOBILE_UNIT`, each carrying the workorder on it or an explicit `null`. A unit

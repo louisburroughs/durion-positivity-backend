@@ -937,8 +937,8 @@ public enum PermissionCode {
     // ── Catalog (new) ──────────────────────────────────────────────────────────
     CATALOG__LABOR_STANDARD__IMPORT(504, "catalog:labor_standard:import"),
     CATALOG__LABOR_TIME__RESOLVE(505, "catalog:labor_time:resolve"),
-    // ── Shopmgmt (new) ─────────────────────────────────────────────────────────
-    SHOPMGMT__DASHBOARD__VIEW(506, "shopmgmt:dashboard:view");
+    // ── Shop (new) ─────────────────────────────────────────────────────────────
+    SHOP__DASHBOARD__VIEW(506, "shop:dashboard:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new

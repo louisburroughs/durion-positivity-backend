@@ -32,7 +32,7 @@ permissions:
     supersededBy: "location:bay:manage"
   - name: "shop:bay:assign"
     description: "Assign work to bays"
-  - name: "shopmgmt:dashboard:view"
+  - name: "shop:dashboard:view"
     description: "View the aggregate shop manager dashboard for a location"
   - name: "shop:technician:view"
     description: "View technician identity details"

@@ -81,7 +81,7 @@ class ShopDashboardControllerTest {
     private ShopDashboardService shopDashboardService;
 
     @Test
-    @WithMockUser(authorities = "shopmgmt:dashboard:view")
+    @WithMockUser(authorities = "shop:dashboard:view")
     @DisplayName("#1658 AC1 - renders units, their assignments and openWorkorders in one payload")
     void returnsTheWholeBoard() throws Exception {
         ShopDashboardWorkorder assigned = new ShopDashboardWorkorder(
@@ -119,7 +119,7 @@ class ShopDashboardControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = "shopmgmt:dashboard:view")
+    @WithMockUser(authorities = "shop:dashboard:view")
     @DisplayName("#1658 AC2 - an omitted date reaches the service as null so it resolves the location's today")
     void omittedDateIsPassedThroughAsNull() throws Exception {
         when(shopDashboardService.getDashboard(eq(LOCATION_ID), isNull()))
@@ -133,7 +133,7 @@ class ShopDashboardControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = "shopmgmt:dashboard:view")
+    @WithMockUser(authorities = "shop:dashboard:view")
     @DisplayName("#1658 AC12 - a malformed locationId is a 400 in the ApiError envelope")
     void malformedLocationIdIsBadRequest() throws Exception {
         mockMvc.perform(get("/v1/shop-dashboard").param("locationId", "not-a-uuid"))
@@ -142,7 +142,7 @@ class ShopDashboardControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = "shopmgmt:dashboard:view")
+    @WithMockUser(authorities = "shop:dashboard:view")
     @DisplayName("#1658 AC12 - a malformed date is a 400 in the ApiError envelope")
     void malformedDateIsBadRequest() throws Exception {
         mockMvc.perform(get("/v1/shop-dashboard")
@@ -153,7 +153,7 @@ class ShopDashboardControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = "shopmgmt:dashboard:view")
+    @WithMockUser(authorities = "shop:dashboard:view")
     @DisplayName("#1658 AC12 - an unknown location is a 404 in the ApiError envelope")
     void unknownLocationIsNotFound() throws Exception {
         when(shopDashboardService.getDashboard(eq(LOCATION_ID), isNull()))

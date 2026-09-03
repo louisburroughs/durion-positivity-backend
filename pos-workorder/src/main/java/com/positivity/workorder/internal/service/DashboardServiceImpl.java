@@ -183,7 +183,7 @@ public class DashboardServiceImpl implements DashboardService {
         Map<UUID, String> namesById = new LinkedHashMap<>();
         // Not Collectors.toMap: a replica row with no name yet is legitimate, and toMap rejects a
         // null value outright.
-        for (ExtBayReplica bay : extBayReplicaRepository.findByLocationIdAndActiveTrueOrderByNameAsc(locationId)) {
+        for (ExtBayReplica bay : extBayReplicaRepository.findActiveByLocationOrdered(locationId)) {
             namesById.putIfAbsent(bay.getBayId(), bay.getName());
         }
 
@@ -206,8 +206,7 @@ public class DashboardServiceImpl implements DashboardService {
     private List<MobileUnitStatus> buildMobileUnitStatuses(UUID locationId, List<Workorder> resourceHolders) {
         Map<UUID, String> namesById = new LinkedHashMap<>();
         // Not Collectors.toMap — see buildBayStatuses.
-        for (ExtMobileUnitReplica unit :
-                extMobileUnitReplicaRepository.findByBaseLocationIdAndActiveTrueOrderByNameAsc(locationId)) {
+        for (ExtMobileUnitReplica unit : extMobileUnitReplicaRepository.findActiveByBaseLocationOrdered(locationId)) {
             namesById.putIfAbsent(unit.getMobileUnitId(), unit.getName());
         }
 
