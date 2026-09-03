@@ -146,7 +146,7 @@ class SessionAgentManagerTieringTest {
         lenient()
                 .when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
                 .thenReturn(scopedRetriever);
-        sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         simpleChatFastPath = new SimpleChatFastPath(
                 new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog()),
                 rolePromptResolver,
