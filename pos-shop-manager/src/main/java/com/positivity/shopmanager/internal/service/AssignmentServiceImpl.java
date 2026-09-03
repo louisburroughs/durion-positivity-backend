@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentRepository;
@@ -60,14 +61,14 @@ public class AssignmentServiceImpl implements AssignmentService {
             }
             if (request.getOverrideReason() == null
                     || request.getOverrideReason().isBlank()) {
-                throw new IllegalArgumentException("overrideReason must not be blank when override=true");
+                throw new ShopManagerValidationException("overrideReason must not be blank when override=true");
             }
         }
 
         var appointment = appointmentRepository
                 .findById(request.getAppointmentId())
-                .orElseThrow(
-                        () -> new IllegalArgumentException("Appointment not found: " + request.getAppointmentId()));
+                .orElseThrow(() ->
+                        new ShopManagerValidationException("Appointment not found: " + request.getAppointmentId()));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
             throw new IllegalStateException("Appointment must be SCHEDULED to create an assignment, current status: "
@@ -90,7 +91,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         for (MechanicAssignmentItem item : mechanics) {
             var mechanic = mechanicRepository
                     .findByPersonId(item.getMechanicPersonId())
-                    .orElseThrow(() -> new IllegalArgumentException(
+                    .orElseThrow(() -> new ShopManagerValidationException(
                             "Mechanic not found for personId: " + item.getMechanicPersonId()));
             resolvedMechanics.add(mechanic);
         }
@@ -146,17 +147,17 @@ public class AssignmentServiceImpl implements AssignmentService {
     /** F-09: Enforce exactly one LEAD mechanic for multi-mechanic assignments. */
     private static void validateLeadConstraint(List<MechanicAssignmentItem> mechanics) {
         if (mechanics.size() > 1 && mechanics.stream().anyMatch(m -> m.getRole() == null)) {
-            throw new IllegalArgumentException(
+            throw new ShopManagerValidationException(
                     "All mechanics in a multi-mechanic assignment must have an explicit role");
         }
 
         long leadCount =
                 mechanics.stream().filter(m -> m.getRole() == MechanicRole.LEAD).count();
         if (leadCount == 0) {
-            throw new IllegalArgumentException("Assignment must include exactly one mechanic with role LEAD");
+            throw new ShopManagerValidationException("Assignment must include exactly one mechanic with role LEAD");
         }
         if (mechanics.size() > 1 && leadCount > 1) {
-            throw new IllegalArgumentException(
+            throw new ShopManagerValidationException(
                     "Multi-mechanic assignment must have exactly one LEAD; found " + leadCount);
         }
     }

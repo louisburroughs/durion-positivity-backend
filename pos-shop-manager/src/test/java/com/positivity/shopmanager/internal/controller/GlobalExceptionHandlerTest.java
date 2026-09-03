@@ -11,6 +11,7 @@ import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import java.time.Clock;
@@ -203,11 +204,17 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void mapsAnIllegalArgumentToBadRequest() {
-        assertEnvelope(
-                handler.handleIllegalArgument(new IllegalArgumentException("bad id"), request()),
-                HttpStatus.BAD_REQUEST,
-                "INVALID_REQUEST");
+    void mapsAShopManagerValidationFailureToBadRequest() {
+        // #1686: this module's own validation exception keeps the wire contract genuine client
+        // errors got before the bare-IllegalArgumentException handler was removed — 400
+        // INVALID_REQUEST, echoing the message. An unexpected bare IllegalArgumentException (as
+        // Hibernate/JPA and UUID.fromString throw, #1679) no longer has a handler here at all and
+        // falls through to pos-web-common's generic 500 fallback instead.
+        ResponseEntity<ApiError> response =
+                handler.handleShopManagerValidation(new ShopManagerValidationException("bad id"), request());
+
+        assertEnvelope(response, HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
+        assertThat(response.getBody().message()).isEqualTo("bad id");
     }
 
     @Test

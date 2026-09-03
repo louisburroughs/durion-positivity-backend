@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.OverrideRecord;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.OverrideRecordRepository;
 import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
@@ -120,16 +121,16 @@ class ConflictOverrideServiceTest {
 
     /**
      * AC3: When the override reason is blank, the service throws
-     * IllegalArgumentException before touching any repository.
+     * ShopManagerValidationException before touching any repository.
      */
     @Test
-    void ac3_blankReason_throwsIllegalArgument() {
+    void ac3_blankReason_throwsValidationException() {
         ConflictOverrideRequest request = ConflictOverrideRequest.builder()
                 .appointmentId(APPT_ID)
                 .overrideReason("   ")
                 .build();
 
-        assertThatThrownBy(() -> service.execute(request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.execute(request)).isInstanceOf(ShopManagerValidationException.class);
 
         verify(appointmentRepository, never()).findById(any());
         verify(overrideRecordRepository, never()).save(any());
@@ -140,13 +141,13 @@ class ConflictOverrideServiceTest {
      * touched.
      */
     @Test
-    void ac3_emptyReason_throwsIllegalArgument() {
+    void ac3_emptyReason_throwsValidationException() {
         ConflictOverrideRequest request = ConflictOverrideRequest.builder()
                 .appointmentId(APPT_ID)
                 .overrideReason("")
                 .build();
 
-        assertThatThrownBy(() -> service.execute(request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.execute(request)).isInstanceOf(ShopManagerValidationException.class);
 
         verify(appointmentRepository, never()).findById(any());
         verify(overrideRecordRepository, never()).save(any());
@@ -158,10 +159,10 @@ class ConflictOverrideServiceTest {
 
     /**
      * When the referenced appointment does not exist, the service throws
-     * IllegalArgumentException without persisting any record.
+     * ShopManagerValidationException without persisting any record.
      */
     @Test
-    void appointmentNotFound_throwsIllegalArgument() {
+    void appointmentNotFound_throwsValidationException() {
         when(appointmentRepository.findById(APPT_ID)).thenReturn(Optional.empty());
 
         ConflictOverrideRequest request = ConflictOverrideRequest.builder()
@@ -170,7 +171,7 @@ class ConflictOverrideServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.execute(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining(APPT_ID.toString());
 
         verify(overrideRecordRepository, never()).save(any());

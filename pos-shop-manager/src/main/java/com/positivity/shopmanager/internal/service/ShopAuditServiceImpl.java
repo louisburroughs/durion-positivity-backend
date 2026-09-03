@@ -5,6 +5,7 @@ import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
 import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.ShopAuditRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -105,7 +106,7 @@ public class ShopAuditServiceImpl implements ShopAuditService {
     @Override
     public @NonNull List<ShopAuditEntryResponse> search(@NonNull ShopAuditFilter filter) {
         if (!filter.hasAtLeastOneFilter()) {
-            throw new IllegalArgumentException("At least one filter criterion is required for audit search");
+            throw new ShopManagerValidationException("At least one filter criterion is required for audit search");
         }
         Instant now = Instant.now(clock);
         Instant from = filter.getFromDateTime() != null ? filter.getFromDateTime() : now.minus(90, ChronoUnit.DAYS);

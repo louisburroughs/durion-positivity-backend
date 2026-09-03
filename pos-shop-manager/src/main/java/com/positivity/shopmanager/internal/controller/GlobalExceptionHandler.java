@@ -10,6 +10,7 @@ import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -170,9 +171,20 @@ public class GlobalExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(
-            IllegalArgumentException exception, HttpServletRequest request) {
+    /**
+     * Genuine client input-validation failures raised by this module's own services/controllers
+     * (see {@link ShopManagerValidationException}). This class deliberately does NOT map bare
+     * {@code IllegalArgumentException} (issue #1686): that type is not exclusive to this
+     * module's validation — Hibernate/JPA throw it for an invalid query and {@code
+     * UUID.fromString} throws it on malformed data, and catching it here previously turned a
+     * server-side persistence defect (issue #1679) into a client-facing 400 that also leaked
+     * internal class names and JPQL. An unexpected {@code IllegalArgumentException} now falls
+     * through to {@code pos-web-common}'s platform-wide {@code GlobalApiExceptionHandler}
+     * fallback, which answers a generic, correlated 500 instead of echoing the exception text.
+     */
+    @ExceptionHandler(ShopManagerValidationException.class)
+    public ResponseEntity<ApiError> handleShopManagerValidation(
+            ShopManagerValidationException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(error("INVALID_REQUEST", exception.getMessage(), correlationId));

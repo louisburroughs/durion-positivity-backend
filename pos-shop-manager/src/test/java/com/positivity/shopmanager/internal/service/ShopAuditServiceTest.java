@@ -13,6 +13,7 @@ import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
 import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.ShopAuditRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -383,11 +384,11 @@ class ShopAuditServiceTest {
 
     /**
      * AC (RQ5): At least one filter criterion must be provided. An empty filter
-     * must be rejected with {@link IllegalArgumentException} to prevent full-table
+     * must be rejected with {@link ShopManagerValidationException} to prevent full-table
      * scans.
      */
     @Test
-    void search_withEmptyFilter_throwsIllegalArgumentException() {
+    void search_withEmptyFilter_throwsShopManagerValidationException() {
         ShopAuditFilter emptyFilter = ShopAuditFilter.builder().build(); // all fields null
 
         // Precondition: helper correctly identifies the filter as empty
@@ -395,9 +396,9 @@ class ShopAuditServiceTest {
 
         // The service must reject empty filters (not allow unbounded scans)
         assertThatThrownBy(() -> service.search(emptyFilter))
-                .as("search with empty filter must throw IllegalArgumentException "
+                .as("search with empty filter must throw ShopManagerValidationException "
                         + "to prevent unbounded full-table scans (RQ5)")
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("filter");
     }
 

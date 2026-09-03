@@ -14,6 +14,7 @@ import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentRepository;
@@ -81,7 +82,7 @@ class AssignmentServiceTest {
     // --- AC-4: role validation ---
 
     @Test
-    void ac4_multipleWithNoLead_throwsIllegalArgument() {
+    void ac4_multipleWithNoLead_throwsValidationException() {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(
@@ -96,7 +97,7 @@ class AssignmentServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("LEAD");
 
         verify(appointmentRepository, never()).findById(any());
@@ -106,7 +107,7 @@ class AssignmentServiceTest {
     // --- C2-F-02: multi-mechanic with null role throws ---
 
     @Test
-    void c2_f02_multiMechanicWithNullRole_throwsIllegalArgument() {
+    void c2_f02_multiMechanicWithNullRole_throwsValidationException() {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(
@@ -121,7 +122,7 @@ class AssignmentServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("explicit role");
 
         verify(appointmentRepository, never()).findById(any());
@@ -131,14 +132,14 @@ class AssignmentServiceTest {
     // --- appointment must exist (hard block) ---
 
     @Test
-    void appointmentNotFound_throwsIllegalArgument() {
+    void appointmentNotFound_throwsValidationException() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var request = buildSingleLeadRequest(appointmentId, "P-001");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("Appointment");
 
         verify(assignmentRepository, never()).save(any());
@@ -185,7 +186,7 @@ class AssignmentServiceTest {
     // --- AC-1: happy-path single LEAD mechanic ---
 
     @Test
-    void ac7_mechanicNotFound_throwsIllegalArgument() {
+    void ac7_mechanicNotFound_throwsValidationException() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         var request = buildSingleLeadRequest(appointmentId, "P-UNKNOWN");
@@ -194,7 +195,7 @@ class AssignmentServiceTest {
         when(mechanicRepository.findByPersonId("P-UNKNOWN")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("personId");
 
         verify(assignmentRepository, never()).save(any());
@@ -426,7 +427,7 @@ class AssignmentServiceTest {
     // --- F-09: multiple mechanics with more than one LEAD throws ---
 
     @Test
-    void ac4_multipleWithMultipleLeads_throwsIllegalArgument() {
+    void ac4_multipleWithMultipleLeads_throwsValidationException() {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(
@@ -441,7 +442,7 @@ class AssignmentServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("exactly one LEAD");
 
         verify(appointmentRepository, never()).findById(any());
@@ -470,7 +471,7 @@ class AssignmentServiceTest {
     }
 
     @Test
-    void ac10_overrideWithPermissionAndBlankReason_throwsIllegalArgument() {
+    void ac10_overrideWithPermissionAndBlankReason_throwsValidationException() {
         var auth = new UsernamePasswordAuthenticationToken(
                 "manager", null, List.of(new SimpleGrantedAuthority("shop:schedule:edit")));
         SecurityContextHolder.getContext().setAuthentication(auth);
@@ -486,7 +487,7 @@ class AssignmentServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("overrideReason");
 
         verify(appointmentRepository, never()).findById(any());

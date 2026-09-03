@@ -12,6 +12,7 @@ import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
@@ -275,7 +276,7 @@ class MechanicSyncServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> mechanicSyncService.processHrEvent(event))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ShopManagerValidationException.class);
 
         // Assert – no DB writes of any kind
         verify(mechanicRepository, never()).save(any());
@@ -299,7 +300,7 @@ class MechanicSyncServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> mechanicSyncService.processHrEvent(event))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ShopManagerValidationException.class);
 
         verify(mechanicRepository, never()).save(any());
         verify(hrIntegrationLogRepository, never()).save(any());
@@ -307,7 +308,7 @@ class MechanicSyncServiceTest {
 
     /**
      * AC5: An event with a null eventId is also malformed. The service must throw
-     * IllegalArgumentException before any DB write.
+     * ShopManagerValidationException before any DB write.
      */
     @Test
     void ac5_malformedEvent_nullEventId_throwsExceptionAndNoDbWrite() {
@@ -322,7 +323,7 @@ class MechanicSyncServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> mechanicSyncService.processHrEvent(event))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ShopManagerValidationException.class);
 
         verify(mechanicRepository, never()).save(any());
         verify(hrIntegrationLogRepository, never()).save(any());
@@ -618,16 +619,16 @@ class MechanicSyncServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // F-07 – Null eventType before switch → throws IllegalArgumentException
+    // F-07 – Null eventType before switch → throws ShopManagerValidationException
     // -------------------------------------------------------------------------
 
     /**
      * F-07: An event with a null eventType (that is otherwise valid: personId,
-     * version, eventId all present) must throw IllegalArgumentException so
+     * version, eventId all present) must throw ShopManagerValidationException so
      * the caller can route to a DLQ. No mechanic-level write must occur.
      */
     @Test
-    void f07_nullEventType_throwsIllegalArgument() {
+    void f07_nullEventType_throwsValidationException() {
         // Arrange – valid identification fields, but eventType is null
         String personId = "HR-F07-001";
         UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -644,7 +645,7 @@ class MechanicSyncServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> mechanicSyncService.processHrEvent(event))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining("eventType");
 
         // No mechanic-level save on null eventType path

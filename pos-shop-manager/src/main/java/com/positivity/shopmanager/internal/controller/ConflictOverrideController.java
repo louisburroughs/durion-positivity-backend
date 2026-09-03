@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.ConflictOverrideService;
 import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
@@ -99,7 +100,7 @@ public class ConflictOverrideController {
         // Validate that path appointmentId is consistent with request body
         // appointmentId
         if (!appointmentId.equals(request.getAppointmentId())) {
-            throw new IllegalArgumentException("Path appointmentId does not match request body appointmentId");
+            throw new ShopManagerValidationException("Path appointmentId does not match request body appointmentId");
         }
         return conflictOverrideService.execute(request);
     }
