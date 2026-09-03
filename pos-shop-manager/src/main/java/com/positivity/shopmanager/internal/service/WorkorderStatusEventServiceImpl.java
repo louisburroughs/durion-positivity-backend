@@ -53,11 +53,11 @@ public class WorkorderStatusEventServiceImpl implements WorkorderStatusEventServ
             return;
         }
 
-        var mappingOpt = mappingRepository.findByWorkOrderId(event.workOrderId());
+        var mappingOpt = mappingRepository.findByWorkOrderId(event.workorderId());
         if (mappingOpt.isEmpty()) {
             log.warn(
                     "Orphaned Work Order: no appointment mapping found for workOrderId={}, eventId={}",
-                    event.workOrderId(),
+                    event.workorderId(),
                     event.eventId());
             return;
         }

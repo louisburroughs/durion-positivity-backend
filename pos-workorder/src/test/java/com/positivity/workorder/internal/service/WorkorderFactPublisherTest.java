@@ -15,12 +15,14 @@ import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -115,6 +117,73 @@ class WorkorderFactPublisherTest {
         assertThat(fact.status()).isEqualTo("WORK_IN_PROGRESS");
         assertThat(fact.parts()).hasSize(1);
         assertThat(fact.parts().get(0).workorderLineId()).isEqualTo(part.getId());
+    }
+
+    /**
+     * The assignment block (#1658) is what lets pos-shop-manager render a shop dashboard from a
+     * replica instead of calling back into this module. {@code mechanicIds} is stored here as a
+     * JSON array string and published as typed ids, so the parse is the part worth pinning: a
+     * scalar or a silently-dropped second technician would leave a job looking unstaffed on the
+     * board.
+     */
+    @Test
+    @DisplayName("#1658 - the fact carries the assignment block, with mechanic ids parsed to a list")
+    void publishesAssignmentContext() {
+        UUID workorderId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        UUID firstMechanic = UUID.randomUUID();
+        UUID secondMechanic = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-1002")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .locationId(locationId)
+                .resourceId(resourceId)
+                .resourceType(ResourceType.MOBILE_UNIT)
+                .mechanicIds("[\"" + firstMechanic + "\",\"" + secondMechanic + "\"]")
+                .scheduledDate(LocalDate.of(2026, 9, 3))
+                .version(4L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
+        assertThat(fact.locationId()).isEqualTo(locationId);
+        assertThat(fact.resourceId()).isEqualTo(resourceId);
+        assertThat(fact.resourceType()).isEqualTo("MOBILE_UNIT");
+        assertThat(fact.mechanicIds()).containsExactly(firstMechanic, secondMechanic);
+        assertThat(fact.scheduledDate()).isEqualTo(LocalDate.of(2026, 9, 3));
+        // The owner has no promise-time field yet; the contract slot is declared but never filled.
+        assertThat(fact.promisedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("#1658 - an unreadable mechanic_ids snapshot degrades to no technicians, not a failed commit")
+    void malformedMechanicIdsDoNotBreakTheCommit() {
+        UUID workorderId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-1003")
+                .status(WorkorderStatus.DRAFT)
+                .mechanicIds("{not-json")
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).mechanicIds())
+                .isEmpty();
     }
 
     @Test

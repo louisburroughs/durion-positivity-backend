@@ -2,6 +2,7 @@ package com.positivity.domainevents.workorder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -27,12 +28,34 @@ import org.jspecify.annotations.Nullable;
  * @param services current service/labor lines (full replacement set on every fact)
  * @param createdAt owner row creation timestamp
  * @param updatedAt owner row last-update timestamp
+ * @param locationId the site the work is performed at — {@code shopId} names the owning shop,
+ *     this names the physical location whose bays and mobile units the work occupies
+ * @param resourceId the bay or mobile unit the workorder currently occupies (null when unassigned)
+ * @param resourceType what {@code resourceId} points at, {@code BAY} or {@code MOBILE_UNIT};
+ *     carried as the owner's enum name so a consumer never has to infer the kind from the id
+ * @param mechanicIds every technician assigned to the workorder — a list, because a job may carry
+ *     more than one, and the first element is not privileged
+ * @param promisedAt the time the vehicle is promised back to the customer
+ * @param scheduledDate the day the work is scheduled for (owner's {@code scheduled_date})
  *
  * <p>{@code vehicleId} and the {@code services} list plus the extended {@code PartLine} fields
  * (description, unitPrice, lineTotal, photoEvidenceUrl) are additive within schema v1
  * (ADR-0044 §3, #924): they let pos-warranty's candidate-line search read an {@code ext_workorder}
  * replica in place of the retired synchronous {@code WorkorderClient} detail call. Consumers that
  * only need the pre-existing fields (pos-inventory, pos-invoice) ignore them.
+ *
+ * <p>The assignment block — {@code locationId}, {@code resourceId}, {@code resourceType},
+ * {@code mechanicIds}, {@code promisedAt}, {@code scheduledDate} — is additive within schema v1
+ * (ADR-0044 §3, #1658). It exists so pos-shop-manager's shop dashboard can answer "what is on
+ * every bay and mobile unit at this location, and who is working it" from a local replica instead
+ * of a synchronous call into pos-workorder, which ADR-0044 R1 forbids. {@code mechanicIds} is a
+ * list on purpose: the owner stores a JSON array and a job may carry more than one technician, so
+ * a scalar would silently drop assignments.
+ *
+ * <p><strong>{@code promisedAt} is null in every fact published today.</strong> The owner's
+ * {@code Workorder} aggregate has no promise-time field, so there is nothing to snapshot. The
+ * field is declared here because it is part of the contract consumers sort on; it starts carrying
+ * a value the day pos-workorder grows the column, with no consumer change.
  */
 public record WorkorderUpdatedV1(
         @NonNull UUID workorderId,
@@ -45,7 +68,13 @@ public record WorkorderUpdatedV1(
         @Nullable List<PartLine> parts,
         @Nullable List<ServiceLine> services,
         @Nullable Instant createdAt,
-        @Nullable Instant updatedAt) {
+        @Nullable Instant updatedAt,
+        @Nullable UUID locationId,
+        @Nullable UUID resourceId,
+        @Nullable String resourceType,
+        @Nullable List<UUID> mechanicIds,
+        @Nullable Instant promisedAt,
+        @Nullable LocalDate scheduledDate) {
 
     public static final String EVENT_TYPE = "workorder.workorder.updated";
     public static final int SCHEMA_VERSION = 1;
@@ -164,5 +193,38 @@ public record WorkorderUpdatedV1(
                 null,
                 createdAt,
                 updatedAt);
+    }
+
+    /** Pre-#1658 arity (no assignment block). */
+    public WorkorderUpdatedV1(
+            @NonNull UUID workorderId,
+            @Nullable String workorderNumber,
+            @Nullable String status,
+            @Nullable UUID shopId,
+            @Nullable UUID customerId,
+            @Nullable UUID vehicleId,
+            @Nullable UUID invoiceId,
+            @Nullable List<PartLine> parts,
+            @Nullable List<ServiceLine> services,
+            @Nullable Instant createdAt,
+            @Nullable Instant updatedAt) {
+        this(
+                workorderId,
+                workorderNumber,
+                status,
+                shopId,
+                customerId,
+                vehicleId,
+                invoiceId,
+                parts,
+                services,
+                createdAt,
+                updatedAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

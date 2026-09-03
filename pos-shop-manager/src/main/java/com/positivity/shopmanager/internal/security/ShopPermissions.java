@@ -20,6 +20,15 @@ public final class ShopPermissions {
     /** Assign work to bays. */
     public static final String BAY_ASSIGN = "shop:bay:assign";
 
+    /**
+     * View the aggregate shop manager dashboard (#1658).
+     *
+     * <p>Read-only, and deliberately not a replacement for any of the deprecated {@code shop:*}
+     * permissions: those cover mutations that moved to the location domain, this covers a view
+     * that did not exist before. Nothing is marked {@code supersededBy} it.
+     */
+    public static final String DASHBOARD_VIEW = "shopmgmt:dashboard:view";
+
     /** Edit shop schedules. */
     public static final String SCHEDULE_EDIT = "shop:schedule:edit";
 

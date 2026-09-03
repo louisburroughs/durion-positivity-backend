@@ -199,6 +199,30 @@ Upstream dependency: pos-location does not publish bay or mobile-unit facts yet,
 start empty and the listener branches are never taken in production until it does. The consumer
 tolerates that by design.
 
+## Published workorder fact: assignment block (#1658)
+
+`workorder.workorder.updated` on `workorder.events.v1` (payload `WorkorderUpdatedV1` in
+`pos-domain-events`, emitted by `WorkorderFactPublisher`) now carries an assignment block alongside
+the existing snapshot: `locationId`, `resourceId`, `resourceType`, `mechanicIds`, `promisedAt` and
+`scheduledDate`. It is **additive within schema v1** (ADR-0044 §3) — a pre-#1658 arity constructor
+is retained, and consumers that only read the older fields are unaffected.
+
+The block exists so pos-shop-manager's shop dashboard can render every bay and mobile unit at a
+location from a local `ext_workorder` replica. Without it a consumer learns that a workorder changed
+but not what it occupies or who is on it, and would have to call back into this module
+synchronously — which ADR-0044 R1 forbids.
+
+Two details worth knowing:
+
+- `mechanicIds` is a **list**. The owner stores a JSON array and a job may carry more than one
+  technician, so a scalar would silently drop assignments. A malformed or non-UUID entry is dropped
+  with a warning rather than failing the commit: the fact is assembled at `beforeCommit`, so
+  throwing there would roll back the business transaction that produced it.
+- `promisedAt` is **null in every fact published today**. `Workorder` has no promise-time field; the
+  slot is declared so the contract does not have to change when it grows one.
+
+No endpoint, status semantics or transition changed — this is payload only.
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |
