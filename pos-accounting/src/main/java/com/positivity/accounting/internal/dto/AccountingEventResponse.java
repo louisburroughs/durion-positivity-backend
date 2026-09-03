@@ -98,7 +98,8 @@ public class AccountingEventResponse {
     @Schema(
             description = "Short human-readable reference for display in place of the raw event UUID",
             example = "AE-202609-42",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String eventReference;
 
     // ========== Suspense Queue Fields (CAP:055) ==========

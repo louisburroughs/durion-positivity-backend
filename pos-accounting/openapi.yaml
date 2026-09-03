@@ -8237,7 +8237,9 @@ components:
         eventReference:
           description: Short human-readable reference for display in place of the raw event UUID
           example: AE-202609-42
-          type: string
+          type:
+          - string
+          - 'null'
         eventType:
           description: Event type identifier
           example: INVOICE_RECEIVED
