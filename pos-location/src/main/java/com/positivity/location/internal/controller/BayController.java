@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.BayService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -162,8 +163,11 @@ public class BayController {
                     taken at that location.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:bay:manage.")
     @ApiResponse(responseCode = "404", description = "Location or bay not found.")
-    @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Bay name already taken at this location, or a concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
@@ -202,7 +206,9 @@ public class BayController {
                     Returns 204 on success and 404 when the location or bay does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:bay:manage.")
     @ApiResponse(responseCode = "404", description = "Location or bay not found.")
+    @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_BAY_DELETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
@@ -215,10 +221,15 @@ public class BayController {
             @Parameter(description = "ID of the bay to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890cd")
                     @PathVariable
                     String bayId) {
-        boolean deleted = bayService.deleteBay(parseUuid(locationId), parseUuid(bayId));
-        return deleted
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        // Thrown rather than returned as a bare ResponseEntity.notFound(): every non-2xx response
+        // must carry the ApiError envelope (docs/ERROR_ENVELOPE.md), and an empty body has no code,
+        // message or correlationId. It also keeps one 404 contract for this operation -- a missing
+        // *location* already surfaces through validateLocationExists as an enveloped 404, so
+        // returning a bare body for a missing *bay* would give one endpoint two different 404s.
+        if (!bayService.deleteBay(parseUuid(locationId), parseUuid(bayId))) {
+            throw new ResourceNotFoundException("Bay not found");
+        }
+        return ResponseEntity.noContent().build();
     }
 
     private UUID parseUuid(String value) {

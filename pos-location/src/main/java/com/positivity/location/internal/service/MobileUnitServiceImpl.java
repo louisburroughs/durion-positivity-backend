@@ -33,11 +33,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Public API for mobile unit management and eligibility evaluation.
@@ -186,6 +189,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
         try {
             return mobileUnitRepository.save(entity);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toMobileUnitOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toMobileUnitConflictException(exception);
         }
@@ -299,17 +304,23 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         }
         entity.setUpdatedAt(Instant.now(clock));
 
-        MobileUnitEntity saved = entity;
+        MobileUnitEntity saved;
         try {
             saved = mobileUnitRepository.save(entity);
+            // Only reached when the row existed: the early return above synthesizes a response
+            // without persisting anything, and publishing a fact for a unit that was never written
+            // would create a replica row the owner has no record of (issue #1668). Status
+            // transitions (ACTIVE <-> INACTIVE) travel on this fact and keep the replica row.
+            //
+            // Inside the try because the publisher flushes: since #1668 gave this aggregate a
+            // @Version, that flush is where a concurrent patch loses the race, and the failure must
+            // reach the caller as 409 rather than an unmapped 500.
+            locationFactPublisher.mobileUnitChanged(saved);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toMobileUnitOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toMobileUnitConflictException(exception);
         }
-        // Only reached when the row existed: the early return above synthesizes a response without
-        // persisting anything, and publishing a fact for a unit that was never written would create
-        // a replica row the owner has no record of (issue #1668). Status transitions
-        // (ACTIVE <-> INACTIVE) travel on this fact and keep the replica row.
-        locationFactPublisher.mobileUnitChanged(saved);
         return toMobileUnitResponse(saved);
     }
 
@@ -337,9 +348,13 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (existing == null) {
             return false;
         }
-        coverageRuleRepository.deleteByMobileUnit_Id(id);
-        mobileUnitRepository.delete(existing);
-        locationFactPublisher.mobileUnitDeleted(existing);
+        try {
+            coverageRuleRepository.deleteByMobileUnit_Id(id);
+            mobileUnitRepository.delete(existing);
+            locationFactPublisher.mobileUnitDeleted(existing);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toMobileUnitOptimisticLockException(exception);
+        }
         return true;
     }
 
@@ -684,6 +699,20 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * Translates an optimistic-lock failure into 409, the platform's contract for a version
+     * mismatch (ADR-0017 §2), matching {@code LocationServiceImpl.saveLocationInternal}.
+     *
+     * <p>Reachable only since mobile units gained a JPA {@code @Version} for the
+     * {@code location.mobile-unit.*} facts (#1668): before that, concurrent patches were
+     * last-write-wins. Without this translation the loser would surface as an unmapped 500, since
+     * neither this module's handler nor pos-web-common's maps
+     * {@code ObjectOptimisticLockingFailureException}.
+     */
+    private ResponseStatusException toMobileUnitOptimisticLockException(OptimisticLockingFailureException exception) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_FAILED", exception);
     }
 
     private DuplicateResourceException toMobileUnitConflictException(DataIntegrityViolationException exception) {

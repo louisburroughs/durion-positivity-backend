@@ -1,5 +1,8 @@
 package com.positivity.location.internal.config;
 
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+
 /**
  * Regenerates bay and mobile-unit facts from current owner state (ADR-0044 §6, issue #1668).
  *
@@ -16,21 +19,38 @@ package com.positivity.location.internal.config;
  * only a strictly-greater one, so re-running a backfill over rows a consumer already holds is a
  * no-op, while a replica holding a version but wrong or missing data is repaired.
  *
- * <p>Facts are written through the transactional outbox like any other, so backfill and live
- * traffic share one ordering domain per aggregate and a backfilled fact can never overtake a
- * concurrent live mutation: both carry the aggregate's {@code @Version} at write time.
+ * <p>Each run is <strong>bounded</strong> and resumable. It executes on the Kafka command-listener
+ * thread, which is shared with {@code location.outbox.replay-requested}: an unbounded walk of every
+ * row would risk exceeding {@code max.poll.interval.ms}, and an evicted consumer never commits its
+ * offset, so the same command is redelivered after rebalance and the whole backfill restarts —
+ * an unbounded loop that re-floods the outbox each cycle while drift-repair replay requests from
+ * other modules queue behind it. A run therefore stops after a configured number of rows and
+ * reports the cursor to resume from.
  */
 public interface FactBackfillService {
 
     /**
-     * Emit a current-state {@code location.bay.updated} fact for every bay. Returns the count
-     * published.
+     * Outcome of one bounded backfill run.
+     *
+     * @param published number of facts queued to the outbox
+     * @param lastId highest aggregate id processed, or null when nothing was processed; pass it
+     *     back as the next run's {@code afterId} to continue
+     * @param more true when the bound was reached and rows remain
      */
-    int backfillBays();
+    record BackfillResult(int published, @Nullable UUID lastId, boolean more) {}
 
     /**
-     * Emit a current-state {@code location.mobile-unit.updated} fact for every mobile unit. Returns
-     * the count published.
+     * Emit current-state {@code location.bay.updated} facts, starting after {@code afterId}.
+     *
+     * @param afterId exclusive cursor; null starts from the beginning
      */
-    int backfillMobileUnits();
+    BackfillResult backfillBays(@Nullable UUID afterId);
+
+    /**
+     * Emit current-state {@code location.mobile-unit.updated} facts, starting after
+     * {@code afterId}.
+     *
+     * @param afterId exclusive cursor; null starts from the beginning
+     */
+    BackfillResult backfillMobileUnits(@Nullable UUID afterId);
 }

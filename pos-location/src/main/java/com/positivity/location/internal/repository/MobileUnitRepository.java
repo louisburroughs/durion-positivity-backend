@@ -1,11 +1,15 @@
 package com.positivity.location.internal.repository;
 
 import com.positivity.location.internal.entity.MobileUnitEntity;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for mobile units.
@@ -47,4 +51,15 @@ public interface MobileUnitRepository extends JpaRepository<MobileUnitEntity, UU
             GROUP BY m.baseLocation.id
             """)
     List<LocationCapabilityCount> countByBaseLocationIdInAndStatus(Collection<UUID> locationIds, String status);
+
+    /**
+     * One keyset page of mobile units for the fact backfill (issue #1668), ordered by id and locked.
+     *
+     * <p>See {@code BayRepository.findBackfillPage} for why this is keyset rather than offset, and
+     * why the shared lock is required to stop a concurrent delete from leaving a resurrected replica
+     * row behind.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT m FROM MobileUnitEntity m WHERE m.id > :afterId ORDER BY m.id ASC")
+    List<MobileUnitEntity> findBackfillPage(@Param("afterId") UUID afterId, Pageable pageable);
 }

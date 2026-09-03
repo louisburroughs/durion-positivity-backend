@@ -19,10 +19,13 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Public API service for bay operations.
@@ -95,6 +98,8 @@ public class BayServiceImpl implements BayService {
             // transaction, so it emits a fact per created row for free (issue #1668).
             locationFactPublisher.bayChanged(saved);
             return toResponse(saved);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toBayOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toBayConflictException(exception);
         }
@@ -180,6 +185,8 @@ public class BayServiceImpl implements BayService {
             // out of service keeps its replica row and flips inactive (issue #1668).
             locationFactPublisher.bayChanged(saved);
             return toResponse(saved);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toBayOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toBayConflictException(exception);
         }
@@ -205,9 +212,28 @@ public class BayServiceImpl implements BayService {
         if (existing == null) {
             return false;
         }
-        bayRepository.delete(existing);
-        locationFactPublisher.bayDeleted(existing);
+        try {
+            bayRepository.delete(existing);
+            locationFactPublisher.bayDeleted(existing);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toBayOptimisticLockException(exception);
+        }
         return true;
+    }
+
+    /**
+     * Translates an optimistic-lock failure into 409, the platform's contract for a version
+     * mismatch (ADR-0017 §2), matching {@code LocationServiceImpl.saveLocationInternal}.
+     *
+     * <p>Reachable only since bays gained a JPA {@code @Version} for the {@code location.bay.*}
+     * facts (#1668). Before that, two concurrent patches were last-write-wins and both returned
+     * 200; without this translation the loser would now surface as an unmapped 500, because
+     * neither this module's handler nor pos-web-common's maps
+     * {@code ObjectOptimisticLockingFailureException}. The publisher's flush pulls the failure
+     * inside the surrounding try block, which is what makes the omission easy to miss.
+     */
+    private ResponseStatusException toBayOptimisticLockException(OptimisticLockingFailureException exception) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_FAILED", exception);
     }
 
     private void validateLocationExists(UUID locationId) {

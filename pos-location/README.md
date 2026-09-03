@@ -118,6 +118,14 @@ Consumers derive activeness themselves with an allow-list on `ACTIVE`, so an unr
 reads as inactive rather than as an error. Taking a unit out of service is a status change on the
 `updated` fact — the replica keeps the row and flips it inactive; only a `deleted` fact removes it.
 
+A mobile unit with **no base location** publishes nothing. A base site is optional on that
+aggregate, so a unit without one is a legitimate owner-side state rather than malformed data — but
+pos-workorder rejects a site-less fact and counts it on `replica.payload.rejected`, the metric that
+exists to detect producer contract drift, and pos-shop-manager would store a row its roster query
+can never return. Such a unit cannot be dispatched from anywhere, so withholding the fact loses
+nothing; assigning a base site publishes an ordinary update. A bay cannot hit this case —
+`bays.location_id` is `NOT NULL`.
+
 Deletion is a hard delete for a unit created in error, not the way to retire a real one: use PATCH
 with `OUT_OF_SERVICE` / `INACTIVE` for that. Deleting a mobile unit also removes its coverage rules
 (`mobile_unit_coverage_rules` holds a plain FK with no cascade, so they are cleared first) and its
@@ -158,6 +166,23 @@ tables (`pos.location.fact-backfill.page-size`, default 500), one transaction pe
 idempotent — a replica applies an equal version and skips only a strictly-greater one, so re-running
 repairs a stale replica without duplicating rows.
 
+A run is **bounded** at `pos.location.fact-backfill.max-rows-per-run` (default 20000) and resumable.
+It executes on the Kafka command-listener thread shared with `location.outbox.replay-requested`, so
+an unbounded walk risks exceeding `max.poll.interval.ms`; an evicted consumer never commits its
+offset, so the command would be redelivered and the whole backfill would restart in a loop. When a
+run hits the bound it logs a WARN naming the cursor to resume from — re-send the command with
+`payload.afterId` set to that value. Because a long backfill delays other modules' replay requests
+on the same consumer group, prefer running it off-peak.
+
+Paging is **keyset** (`id > afterId`), not offset: deleting any row below an offset shifts every
+later row back one position, so an offset page would skip a surviving unit — precisely the
+invisibility the backfill exists to repair. Each page takes a shared row lock, which is what keeps a
+concurrent delete from resurrecting a replica row: outbox rows are drained in id order across
+*committed* rows, so without the lock a backfill row inserted early but committed late could be
+published after a tombstone that committed first, and the consumer — which deletes unconditionally
+and so retains no version to guard with — would re-apply the older update and recreate the row
+permanently.
+
 ## Configuration
 
 | Property                | Default  | Description                  |
@@ -165,6 +190,7 @@ repairs a stale replica without duplicating rows.
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 | `pos.location.fact-backfill.page-size` | `500` | Rows per transaction when backfilling bay/mobile-unit facts |
+| `pos.location.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |
 
 ## Dependencies
 

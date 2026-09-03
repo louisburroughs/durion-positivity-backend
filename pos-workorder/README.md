@@ -195,9 +195,16 @@ Two edge behaviours are deliberate and live in `DashboardServiceImpl.buildResour
 - **Replica lag** — when an assignment fact overtakes the resource's own fact, the row appears with
   its id and a null name rather than being dropped.
 
-Upstream dependency: pos-location does not publish bay or mobile-unit facts yet, so the replicas
-start empty and the listener branches are never taken in production until it does. The consumer
-tolerates that by design.
+Upstream dependency: pos-location publishes bay and mobile-unit facts as of #1668 —
+`location.bay.updated` / `location.bay.deleted` and `location.mobile-unit.updated` /
+`location.mobile-unit.deleted` on `location.events.v1`, with the canonical records in
+`pos-domain-events` (`com.positivity.domainevents.location`). The replicas still start empty and
+stay that way for any bay or mobile unit created before #1668 that has not been touched since: the
+facts are forward-only, and outbox replay cannot reach those rows because they have no outbox
+history. pos-location's `location.fact-backfill.requested` command regenerates them from current
+state (see `pos-location/README.md` and `docs/OPERATIONS_RUNBOOK.md`). The consumer tolerates an
+empty or partial replica by design — the panels render what the replica holds and converge as
+facts arrive.
 
 ## Published workorder fact: assignment block (#1658)
 

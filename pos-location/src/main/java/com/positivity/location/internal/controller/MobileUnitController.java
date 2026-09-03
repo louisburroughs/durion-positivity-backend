@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -165,7 +166,11 @@ public class MobileUnitController {
                     collides with another unit at the same base location.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
-    @ApiResponse(responseCode = "409", description = "Mobile unit name already taken at the base location.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:mobile-unit:manage.")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "Mobile unit name already taken at the base location, or a concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -206,7 +211,9 @@ public class MobileUnitController {
                     Returns 204 on success and 404 when the mobile unit does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Mobile unit deleted successfully.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:mobile-unit:manage.")
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
+    @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_DELETE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -219,10 +226,13 @@ public class MobileUnitController {
                             example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
                     @PathVariable
                     UUID id) {
-        boolean deleted = mobileUnitService.deleteMobileUnit(id);
-        return deleted
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        // Thrown rather than returned as a bare ResponseEntity.notFound(): every non-2xx response
+        // must carry the ApiError envelope (docs/ERROR_ENVELOPE.md), and an empty body has no code,
+        // message or correlationId for the caller or the logs to key on.
+        if (!mobileUnitService.deleteMobileUnit(id)) {
+            throw new ResourceNotFoundException("Mobile unit not found");
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(

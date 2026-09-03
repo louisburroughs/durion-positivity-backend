@@ -1,9 +1,11 @@
 package com.positivity.location.internal.config;
 
+import com.positivity.location.internal.config.FactBackfillService.BackfillResult;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -28,7 +30,8 @@ import tools.jackson.databind.ObjectMapper;
  * mobile-unit replicas (issue #1668). Distinct from outbox replay, which can only re-send facts
  * that were published at least once: bays and mobile units that existed before #1668 have no
  * outbox history, so replay cannot reach them. {@code payload.aggregate} selects
- * {@code bay}, {@code mobile-unit}, or {@code all} (the default).</li>
+ * {@code bay}, {@code mobile-unit}, or {@code all} (the default); optional
+ * {@code payload.afterId} resumes a bounded run from the cursor the previous run logged.</li>
  * </ul>
  */
 @Slf4j
@@ -148,19 +151,57 @@ public class LocationCommandListener {
             return;
         }
 
-        int bays = 0;
-        int mobileUnits = 0;
+        UUID afterId = parseUuid(payloadNode);
+        BackfillResult bays = null;
+        BackfillResult mobileUnits = null;
         if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_BAY.equals(aggregate)) {
-            bays = factBackfillService.backfillBays();
+            bays = factBackfillService.backfillBays(afterId);
         }
         if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_MOBILE_UNIT.equals(aggregate)) {
-            mobileUnits = factBackfillService.backfillMobileUnits();
+            mobileUnits = factBackfillService.backfillMobileUnits(afterId);
         }
+        // A run stops at the configured bound so it cannot outlive max.poll.interval.ms and get the
+        // consumer evicted. When rows remain, the operator re-sends the command with afterId set to
+        // the cursor logged here; the run is idempotent, so an overlapping resume is harmless.
         log.info(
-                "Fact backfill command processed aggregate={} bayFacts={} mobileUnitFacts={}",
+                "Fact backfill command processed aggregate={} afterId={} bays={} mobileUnits={}",
                 aggregate,
-                bays,
-                mobileUnits);
+                afterId,
+                describe(bays),
+                describe(mobileUnits));
+        if (hasMore(bays) || hasMore(mobileUnits)) {
+            log.warn(
+                    "Fact backfill hit its per-run bound; re-send location.fact-backfill.requested "
+                            + "with payload.afterId to continue (bays={}, mobileUnits={})",
+                    describe(bays),
+                    describe(mobileUnits));
+        }
+    }
+
+    private static boolean hasMore(@Nullable BackfillResult result) {
+        return result != null && result.more();
+    }
+
+    private static String describe(@Nullable BackfillResult result) {
+        if (result == null) {
+            return "skipped";
+        }
+        return result.published() + " queued, lastId=" + result.lastId() + ", more=" + result.more();
+    }
+
+    private @Nullable UUID parseUuid(@Nullable JsonNode payloadNode) {
+        String value = payloadNode == null ? null : payloadNode.path("afterId").stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException _) {
+            // Resuming from the beginning is safe -- the run is idempotent -- but say so, because
+            // silently restarting a large walk is not what the operator asked for.
+            log.warn("Malformed payload.afterId={} on fact backfill command; starting from the beginning", value);
+            return null;
+        }
     }
 
     private @Nullable Instant parseInstant(@Nullable JsonNode payloadNode, @NonNull String field) {

@@ -276,10 +276,30 @@ public class LocationFactPublisher {
      *
      * <p>{@code status} is published raw ({@code ACTIVE} | {@code INACTIVE}), never a derived
      * boolean.
+     *
+     * <p>A unit with no base location publishes nothing — see the guard below for why that is
+     * deliberate rather than a dropped fact. A bay cannot hit the equivalent case:
+     * {@code bays.location_id} is {@code NOT NULL} in the schema.
      */
     public void mobileUnitChanged(@NonNull MobileUnitEntity mobileUnit) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
+            return;
+        }
+        if (mobileUnit.getBaseLocationId() == null) {
+            // A base location is optional on this aggregate (MobileUnitRequest.baseLocationId is
+            // NOT_REQUIRED, and an unknown id resolves to null), so a unit with no base site is a
+            // legitimate owner-side state -- not malformed data. Publishing it anyway would be
+            // actively harmful: pos-workorder rejects a site-less fact and counts it on
+            // replica.payload.rejected, the metric that exists to detect producer contract drift,
+            // so ordinary data would keep firing a drift alarm; pos-shop-manager has no such guard
+            // and would store a row its roster query can never return. A unit with no base site
+            // cannot be dispatched from anywhere, so withholding the fact loses nothing -- and the
+            // moment one is assigned, the resulting update publishes normally.
+            log.debug(
+                    "Skipping {} for mobile unit {} with no base location",
+                    MobileUnitUpdatedV1.EVENT_TYPE,
+                    mobileUnit.getId());
             return;
         }
         entityManager.flush();

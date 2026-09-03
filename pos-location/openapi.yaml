@@ -945,8 +945,12 @@ paths:
       responses:
         '204':
           description: Bay deleted successfully.
+        '403':
+          description: Caller lacks location:bay:manage.
         '404':
           description: Location or bay not found.
+        '409':
+          description: A concurrent update won the version race.
       security:
       - bearerAuth:
         - location:bay:manage
@@ -1049,6 +1053,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/BayResponse'
           description: Bay updated successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+          description: Caller lacks location:bay:manage.
         '404':
           content:
             application/json:
@@ -1060,7 +1070,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BayResponse'
-          description: Bay name already taken at this location.
+          description: Bay name already taken at this location, or a concurrent update won the version race.
       security:
       - bearerAuth:
         - location:bay:manage
@@ -1943,8 +1953,12 @@ paths:
       responses:
         '204':
           description: Mobile unit deleted successfully.
+        '403':
+          description: Caller lacks location:mobile-unit:manage.
         '404':
           description: Mobile unit not found.
+        '409':
+          description: A concurrent update won the version race.
       security:
       - bearerAuth:
         - location:mobile-unit:manage
@@ -2039,12 +2053,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/MobileUnitResponse'
           description: Mobile units managed successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileUnitResponse'
+          description: Caller lacks location:mobile-unit:manage.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MobileUnitResponse'
-          description: Mobile unit name already taken at the base location.
+          description: Mobile unit name already taken at the base location, or a concurrent update won the version race.
       security:
       - bearerAuth:
         - location:mobile-unit:manage

@@ -5,9 +5,10 @@ import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import jakarta.persistence.EntityManager;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,32 +26,44 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>{@code REQUIRES_NEW} makes each page independent: a backfill is a repair operation, and one
  * page failing should leave the pages already committed published rather than discarding the whole
  * run. Re-running is idempotent, so partial progress is strictly better than none.
+ *
+ * <p>The page query takes a shared row lock — see {@code BayRepository.findBackfillPage} for why
+ * that is required rather than defensive. Keeping each page short is therefore not only a memory
+ * concern: it bounds how long a concurrent delete can be made to wait.
  */
 @Component
 @RequiredArgsConstructor
 public class FactBackfillPagePublisher {
+
+    /** Minimum UUID, so {@code id > MIN} matches every row on the first page of a run. */
+    private static final UUID MIN_UUID = new UUID(0L, 0L);
 
     private final BayRepository bayRepository;
     private final MobileUnitRepository mobileUnitRepository;
     private final LocationFactPublisher locationFactPublisher;
     private final EntityManager entityManager;
 
-    /** Publish one page of bay facts and return the page, so the caller can ask for the next. */
+    /** Publish one page of bay facts and return the rows published, in id order. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Page<BayEntity> publishBayPage(Pageable pageable) {
-        Page<BayEntity> page = bayRepository.findAll(pageable);
+    public List<BayEntity> publishBayPage(UUID afterId, int pageSize) {
+        List<BayEntity> page = bayRepository.findBackfillPage(cursor(afterId), PageRequest.ofSize(pageSize));
         page.forEach(locationFactPublisher::bayChanged);
         flushAndClear();
         return page;
     }
 
-    /** Publish one page of mobile-unit facts and return the page. */
+    /** Publish one page of mobile-unit facts and return the rows published, in id order. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Page<MobileUnitEntity> publishMobileUnitPage(Pageable pageable) {
-        Page<MobileUnitEntity> page = mobileUnitRepository.findAll(pageable);
+    public List<MobileUnitEntity> publishMobileUnitPage(UUID afterId, int pageSize) {
+        List<MobileUnitEntity> page =
+                mobileUnitRepository.findBackfillPage(cursor(afterId), PageRequest.ofSize(pageSize));
         page.forEach(locationFactPublisher::mobileUnitChanged);
         flushAndClear();
         return page;
+    }
+
+    private static UUID cursor(UUID afterId) {
+        return afterId == null ? MIN_UUID : afterId;
     }
 
     /**
