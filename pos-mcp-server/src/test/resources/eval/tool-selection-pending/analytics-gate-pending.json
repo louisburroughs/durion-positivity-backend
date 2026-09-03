@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "suite_notes": "THIS SUITE SCORES TOOL SELECTION, NOT ANSWERS \u2014 and is not scored at all today; see ../tool-selection/analytics-gate.json's suite_notes for the full distinction. These are the plan \u00a76 questions whose backing endpoint is unbuilt, held out of the scored directory so an unshipped Wave 2/3 endpoint does not read as a hit@5 regression. The answer-gate question text lives in ../analytics-gate/QUESTIONS.json, which also records which questions are in the twelve-question chat-path gate and why the rest are excluded.",
   "fixtures": [
     {
       "fixture_id": "q02-technician-performance-three-month-comparison",

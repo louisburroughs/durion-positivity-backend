@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": { "const": 1 },
+    "suite_notes": { "type": "string" },
     "fixtures": {
       "type": "array",
       "items": { "$ref": "#/$defs/fixture" }

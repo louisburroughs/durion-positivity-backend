@@ -236,8 +236,8 @@ class RolePromptResolverImplTest {
     @DisplayName("DATE_WINDOW layer drops the partial period for calendar ranges and requires disclosure")
     void dateWindowLayer_calendarRangeDropsThePartialPeriodAndDisclosesTheWindow() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("whole calendar periods ending with the last COMPLETE one")
-                .contains("exclude the current, partial period")
+                .contains("ENDING WITH THE MOST RECENT COMPLETE ONE")
+                .contains("Exclude the current partial period ONLY from a CALENDAR SPAN")
                 .contains("State the window you used in the answer itself");
     }
 
@@ -252,10 +252,10 @@ class RolePromptResolverImplTest {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("ROLLING")
                 .contains("CALENDAR")
-                .contains("\"over the last six months\" is rolling, \"in the last six months\" is calendar");
-        // A rolling window ends today and drops nothing; only the calendar shape trims a period.
+                .contains("\"over the last six months\" is rolling");
+        // A rolling window ends today and drops nothing; only the whole-period shapes trim.
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("A ROLLING range always ends on the current date and excludes nothing");
+                .contains("a ROLLING range ends on the current date and excludes nothing");
     }
 
     /**
@@ -304,6 +304,91 @@ class RolePromptResolverImplTest {
     void dateWindowLayer_dayRangesAreAlwaysRolling() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("A range expressed in days has no calendar form and is always rolling");
+    }
+
+    /**
+     * Live-run regression (2026-09-03 gate). "…reopened within 7 days of completion this quarter?"
+     * was answered on the last COMPLETE quarter (Apr-Jun) and returned no rows, where the ground
+     * truth measures the current quarter to date. "This X" and "last X" are both fixed periods but
+     * they are not the same period, and the earlier text collapsed them.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer reads this-X as the current period to date, never the previous one")
+    void dateWindowLayer_thisPeriodIsCurrentToDate() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("CURRENT-TO-DATE")
+                .contains("NEVER the previous complete period")
+                .contains("is 2026-07-01 to 2026-09-03, not April-June");
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("are BOTH fixed, and they are NOT the same period");
+    }
+
+    /**
+     * Live-run regression: "invoices issued during the last six months" was answered on a rolling
+     * window because the calendar trigger list named only "in the last N".
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer treats during/for the last N as a calendar span")
+    void dateWindowLayer_duringAndForAreCalendarSpans() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("during the last N months")
+                .contains("for the last N months")
+                .contains("are a calendar span");
+    }
+
+    /**
+     * Live-run regression: a six-month calendar span resolved to 2026-01-01..2026-06-30 — six whole
+     * months, but anchored to the start of the year instead of ending with the last complete one.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer anchors a multi-period span to the most recent complete period")
+    void dateWindowLayer_spanEndsAtTheMostRecentCompletePeriod() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("ENDING WITH THE MOST RECENT COMPLETE ONE")
+                .contains("it ends in August, not in June")
+                .contains("count back N periods from the last complete one");
+    }
+
+    /**
+     * Live-run regression: "compared with last year" measured a complete 2025 against a partial
+     * 2026 — the same-length rule broken by the comparison clause itself.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer forbids a complete prior year against a partial current one")
+    void dateWindowLayer_comparedWithLastYearMatchesTheSpan() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("never a complete prior year against an incomplete current one");
+    }
+
+    /** Only spans meant to be whole drop the partial period. */
+    @Test
+    @DisplayName("DATE_WINDOW layer scopes partial-period exclusion away from current-to-date ranges")
+    void dateWindowLayer_partialExclusionDoesNotApplyToCurrentToDate() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("Exclude the current partial period ONLY from a CALENDAR SPAN or a PRIOR COMPLETE period")
+                .contains("must keep the current period");
+    }
+
+    /**
+     * Raised on review of #1672: "over the past N" was listed under ROLLING and again under
+     * CALENDAR SPAN, so the text classified one phrase as two shapes. A contract that contradicts
+     * itself cannot be followed consistently, and the mixed-comparison precedence rule already
+     * covers the case the second listing was reaching for.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer classifies each phrase under exactly one shape")
+    void dateWindowLayer_doesNotClassifyOnePhraseAsTwoShapes() {
+        String[] lines = SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT.split("\n");
+        long rolling = java.util.Arrays.stream(lines)
+                .filter(l -> l.contains("ROLLING —"))
+                .filter(l -> l.contains("over the past N"))
+                .count();
+        long span = java.util.Arrays.stream(lines)
+                .filter(l -> l.contains("CALENDAR SPAN —"))
+                .filter(l -> l.contains("over the past N"))
+                .count();
+        assertThat(rolling).isEqualTo(1);
+        assertThat(span).isZero();
     }
 
     /** The shape is invisible in the figure, so it has to be named alongside the dates. */
@@ -366,9 +451,11 @@ class RolePromptResolverImplTest {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("Never emit a range whose start date is after its end date")
                 .contains("use the partial period up to the current date instead");
-        // The year rule must stay inside its own year, or January reproduces the inversion.
+        // "This year" is now CURRENT-TO-DATE, which cannot invert at all; the guard therefore
+        // belongs to the span shape, where too few complete periods is the remaining risk.
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("the end of the last complete month of that same year");
+                .contains("asked when fewer than six complete months exist")
+                .contains("say in the answer that the period is incomplete");
     }
 
     private double fallbackCount(String reason, String requested) {
