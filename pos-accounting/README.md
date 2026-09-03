@@ -221,6 +221,7 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`:
 - `V19__create_ext_invoice_tax.sql` — read-only replica of pos-invoice's per-line × per-jurisdiction tax breakdown (story T5c)
 - `V20__create_credit_memo_tax.sql` — per-jurisdiction attribution of a credit memo's reversed tax, frozen at creation (issue #996)
 - `V21__customer_credit_lifecycle.sql` — customer-credit consumption model: status + applied/refunded totals + `customer_credit_transaction` draw-downs (issue #992)
+- `V32__ext_invoice_workorder_id_nullable.sql` — drops `ext_invoice.workorder_id NOT NULL`: order-fronted/counter-sale/standalone-billing invoices carry no originating workorder and must still replicate into A/R aging and collections (issue #1651)
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA
 
 ## Development

@@ -43,4 +43,18 @@ public interface ExtInvoiceDepositCreditApplicationRepository
      * @return true if an application row already exists for this pair
      */
     boolean existsByDepositCreditIdAndInvoiceId(@NonNull UUID depositCreditId, @NonNull UUID invoiceId);
+
+    /**
+     * Sum of deposit-credit draw-down amounts applied to the given invoice, used by {@code
+     * InvoiceBalanceCalculator#balanceDue} to relieve A/R for the deposit-settled portion of the
+     * invoice (issue #1652), mirroring {@code
+     * CustomerCreditTransactionRepository#sumAmountByInvoiceIdAndType}.
+     *
+     * @param invoiceId invoice identifier
+     * @return total amount applied against this invoice; zero when there are none
+     */
+    @NonNull
+    @Query("SELECT COALESCE(SUM(a.amountApplied), 0) FROM ExtInvoiceDepositCreditApplication a"
+            + " WHERE a.invoiceId = :invoiceId")
+    BigDecimal sumAmountAppliedByInvoiceId(@Param("invoiceId") @NonNull UUID invoiceId);
 }

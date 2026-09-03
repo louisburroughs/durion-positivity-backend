@@ -75,6 +75,7 @@ ar_invoices AS (
 
 -- InvoiceBalanceCalculator.balanceDue:
 --   total - applied + reversed - credited(POSTED) - customer credit APPLICATIONs
+--   - deposit credit applications (#1652)
 open_balances AS (
     SELECT
         a.invoice_id,
@@ -98,6 +99,10 @@ open_balances AS (
                         FROM customer_credit_transaction t
                         WHERE t.invoice_id = a.invoice_id
                           AND t.transaction_type = 'APPLICATION'), 0)
+            -- Deposit-credit draw-downs (#1652) — mirrors InvoiceBalanceCalculator.balanceDue.
+            - COALESCE((SELECT SUM(d.amount_applied)
+                        FROM ext_invoice_deposit_credit_application d
+                        WHERE d.invoice_id = a.invoice_id), 0)
             AS open_balance
     FROM ar_invoices a
 ),

@@ -26,9 +26,8 @@
 --   The final answer joins the two sections on customer id (in the model's context, not SQL —
 --   no cross-database join exists).
 --
--- DIVERGENCE (inherited): C2's outstanding balance includes the settlement invoice at
---   1000.00 open although economically 500.00 (deposit draw-downs invisible to
---   InvoiceBalanceCalculator — DATASET.md deposit-pair section).
+-- Fixed by #1652: InvoiceBalanceCalculator.balanceDue now subtracts deposit-credit draw-downs,
+--   so C2's settlement invoice contributes its true 500.00 economic balance, not 1000.00.
 --
 -- Usage: run via run_ground_truth.sh.
 -- DB: pos_invoice_db
@@ -78,7 +77,10 @@ open_balances AS (   -- InvoiceBalanceCalculator.balanceDue per AR-eligible invo
                          WHERE cm.original_invoice_id = i.invoice_id AND cm.status = 'POSTED'), 0)
              - COALESCE((SELECT SUM(t.amount) FROM customer_credit_transaction t
                          WHERE t.invoice_id = i.invoice_id
-                           AND t.transaction_type = 'APPLICATION'), 0) AS open_balance
+                           AND t.transaction_type = 'APPLICATION'), 0)
+             -- Deposit-credit draw-downs (#1652) — mirrors InvoiceBalanceCalculator.balanceDue.
+             - COALESCE((SELECT SUM(d.amount_applied) FROM ext_invoice_deposit_credit_application d
+                         WHERE d.invoice_id = i.invoice_id), 0) AS open_balance
     FROM ext_invoice i
     WHERE i.status IN ('FINALIZED', 'POSTED')
 ),

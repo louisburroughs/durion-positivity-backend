@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -25,12 +26,27 @@ import org.springframework.stereotype.Component;
  * happens to the receivable afterwards — payment applications, reversals, credit memos — so the
  * balance due is computed here, never fetched from another service:
  *
- * <pre>balanceDue = total − (applied − reversed) − postedCreditMemos − appliedCustomerCredits</pre>
+ * <pre>balanceDue = total − (applied − reversed) − postedCreditMemos − appliedCustomerCredits − appliedDepositCredits</pre>
  *
- * <p>The last term is the customer-credit draw-down (issue #992): applying an open credit posts
- * {@code Dr Customer Credit Liability / Cr AR}, so the receivable really is settled and the
- * balance must reflect it — otherwise a credit-settled invoice would still read as outstanding
- * and could be paid or credited twice.
+ * <p>The {@code appliedCustomerCredits} term is the customer-credit draw-down (issue #992):
+ * applying an open credit posts {@code Dr Customer Credit Liability / Cr AR}, so the receivable
+ * really is settled and the balance must reflect it — otherwise a credit-settled invoice would
+ * still read as outstanding and could be paid or credited twice.
+ *
+ * <p>The {@code appliedDepositCredits} term is the deposit-credit draw-down (issue #1652), decided
+ * by analogy to ADR-0057 §6's contract-liability ruling ("Deposit-take invoices are excluded from
+ * {@code invoiced}") and the #992 customer-credit treatment: the deposit-take
+ * document is a contract-liability event ({@code Dr Cash / Cr Customer Deposit Liability}), and
+ * the settlement invoice is the sale, so the deposit portion applied against it relieves that
+ * liability rather than A/R — exactly as an applied customer credit (#992) relieves A/R via {@code
+ * Dr Customer Credit Liability / Cr AR} rather than cash. A deposit-settled portion of a
+ * settlement invoice is therefore never an outstanding receivable, and the balance must reflect
+ * it or the deposit-settled amount would read as still collectible and be paid or credited twice.
+ * The {@code ext_invoice_deposit_credit_application} replica carries only applied facts —
+ * pos-invoice's {@code applyAvailableCredits()} applies a given deposit credit to a given invoice
+ * at most once and publishes no reversal/void fact — so there is no reversal term today; if a
+ * {@code payment.deposit-credit.reversed} fact is ever added, this calculator must subtract it
+ * symmetrically to {@code reversed} above.
  */
 @Component
 @RequiredArgsConstructor
@@ -44,6 +60,7 @@ public class InvoiceBalanceCalculator {
     private final PaymentApplicationReversalRepository reversalRepository;
     private final CreditMemoRepository creditMemoRepository;
     private final CustomerCreditTransactionRepository creditTransactionRepository;
+    private final ExtInvoiceDepositCreditApplicationRepository depositCreditApplicationRepository;
 
     public Optional<ExtInvoice> findInvoice(@NonNull UUID invoiceId) {
         return extInvoiceRepository.findById(invoiceId);
@@ -65,7 +82,12 @@ public class InvoiceBalanceCalculator {
                 creditMemoRepository.sumCreditedAmountByInvoiceIdAndStatus(invoiceId, CreditMemoStatus.POSTED);
         BigDecimal creditApplied = creditTransactionRepository.sumAmountByInvoiceIdAndType(
                 invoiceId, CustomerCreditTransactionType.APPLICATION);
-        return total.subtract(applied).add(reversed).subtract(credited).subtract(creditApplied);
+        BigDecimal depositApplied = depositCreditApplicationRepository.sumAmountAppliedByInvoiceId(invoiceId);
+        return total.subtract(applied)
+                .add(reversed)
+                .subtract(credited)
+                .subtract(creditApplied)
+                .subtract(depositApplied);
     }
 
     /**

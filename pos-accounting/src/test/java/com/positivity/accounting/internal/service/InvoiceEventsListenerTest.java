@@ -13,6 +13,8 @@ import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -25,6 +27,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -84,7 +88,7 @@ class InvoiceEventsListenerTest {
         listener.onInvoiceEvent(event("e-1", 5));
 
         ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
-        verify(replica).save(saved.capture());
+        verify(replica).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getInvoiceId()).isEqualTo(INVOICE_ID);
         assertThat(saved.getValue().getWorkorderId()).isEqualTo(WORKORDER_ID);
         assertThat(saved.getValue().getStatus()).isEqualTo("FINALIZED");
@@ -122,7 +126,7 @@ class InvoiceEventsListenerTest {
         listener.onInvoiceEvent(withDueDate);
 
         ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
-        verify(replica).save(saved.capture());
+        verify(replica).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getDueDate()).isEqualTo(java.time.LocalDate.parse("2026-08-19"));
 
         // Pre-#993 events carry no dueDate: the replica column stays null (fallback ordering).
@@ -130,7 +134,7 @@ class InvoiceEventsListenerTest {
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
         listener.onInvoiceEvent(event("e-nodue", 7));
         ArgumentCaptor<ExtInvoice> savedLegacy = ArgumentCaptor.forClass(ExtInvoice.class);
-        verify(replica, org.mockito.Mockito.times(2)).save(savedLegacy.capture());
+        verify(replica, org.mockito.Mockito.times(2)).saveAndFlush(savedLegacy.capture());
         assertThat(savedLegacy.getAllValues().get(1).getDueDate()).isNull();
     }
 
@@ -150,7 +154,7 @@ class InvoiceEventsListenerTest {
         listener.onInvoiceEvent(depositTake);
 
         ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
-        verify(replica).save(saved.capture());
+        verify(replica).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getDepositSourceType()).isEqualTo("WORKORDER");
 
         // Pre-#1623 events carry no marker: the replica column stays null (ordinary invoice).
@@ -158,7 +162,7 @@ class InvoiceEventsListenerTest {
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
         listener.onInvoiceEvent(event("e-nodep", 5));
         ArgumentCaptor<ExtInvoice> savedLegacy = ArgumentCaptor.forClass(ExtInvoice.class);
-        verify(replica, org.mockito.Mockito.times(2)).save(savedLegacy.capture());
+        verify(replica, org.mockito.Mockito.times(2)).saveAndFlush(savedLegacy.capture());
         assertThat(savedLegacy.getAllValues().get(1).getDepositSourceType()).isNull();
     }
 
@@ -223,7 +227,7 @@ class InvoiceEventsListenerTest {
 
         listener.onInvoiceEvent(event("e-dup", 5));
 
-        verify(replica, never()).save(any());
+        verify(replica, never()).saveAndFlush(any());
         verify(processedEvents, never()).save(any());
     }
 
@@ -242,7 +246,7 @@ class InvoiceEventsListenerTest {
 
         listener.onInvoiceEvent(event("e-old", 5));
 
-        verify(replica, never()).save(any());
+        verify(replica, never()).saveAndFlush(any());
         // Still recorded as processed so redelivery does not reprocess it.
         verify(processedEvents).save(any());
     }
@@ -268,7 +272,7 @@ class InvoiceEventsListenerTest {
         listener.onInvoiceEvent(event("e-eq", 9));
 
         ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
-        verify(replica).save(saved.capture());
+        verify(replica).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getAggregateVersion()).isEqualTo(9L);
     }
 
@@ -287,7 +291,7 @@ class InvoiceEventsListenerTest {
 
         listener.onInvoiceEvent(event("e-zero", 0));
 
-        verify(replica, never()).save(any());
+        verify(replica, never()).saveAndFlush(any());
         verify(processedEvents).save(any());
     }
 
@@ -304,7 +308,7 @@ class InvoiceEventsListenerTest {
                 {"eventId":"e-2","eventType":"invoice.something.else","payload":{}}
                 """);
 
-        verify(replica, never()).save(any());
+        verify(replica, never()).saveAndFlush(any());
         ArgumentCaptor<com.positivity.accounting.internal.entity.ProcessedEvent> saved =
                 ArgumentCaptor.forClass(com.positivity.accounting.internal.entity.ProcessedEvent.class);
         verify(processedEvents).save(saved.capture());
@@ -321,6 +325,106 @@ class InvoiceEventsListenerTest {
         assertThatExceptionOfType(QueryTimeoutException.class)
                 .isThrownBy(() -> listener.onInvoiceEvent(event("e-3", 1)));
 
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName(
+            "Materializes an invoice with no originating workorder (#1651) into the replica with a null workorderId")
+    void materializesNullWorkorderId() {
+        when(processedEvents.existsById("e-noworkorder")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        String noWorkorder = """
+                {"eventId":"e-noworkorder","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"invoiceId":"%s","workorderId":null,"status":"FINALIZED",
+                            "invoiceNumber":"INV-2026-000200","total":150.00,"subtotal":140.00,"tax":10.00}}
+                """.formatted(INVOICE_ID, INVOICE_ID);
+
+        listener.onInvoiceEvent(noWorkorder);
+
+        ArgumentCaptor<ExtInvoice> saved = ArgumentCaptor.forClass(ExtInvoice.class);
+        verify(replica).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getInvoiceId()).isEqualTo(INVOICE_ID);
+        assertThat(saved.getValue().getWorkorderId()).isNull();
+        assertThat(saved.getValue().getStatus()).isEqualTo("FINALIZED");
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName(
+            "A replica persist failure (e.g. a DB constraint violation) is counted and rethrown for container retry/DLQ")
+    void replicaPersistFailureIsCountedAndRethrown() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+
+        when(processedEvents.existsById("e-persist-fail")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(replica.saveAndFlush(any(ExtInvoice.class)))
+                .thenThrow(new DataIntegrityViolationException("null value in column \"party_id\""));
+
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> listenerWithMetrics.onInvoiceEvent(event("e-persist-fail", 1)));
+
+        var counter = meterRegistry.find("replica.persist.failed").counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1d);
+        // Not marked processed — same retry/DLQ path as a transient DB error (ADR-0044 §4): a
+        // replica row the DB refuses must not be silently accepted as "handled".
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A non-transient DataAccessException that is not a constraint/integrity violation (e.g. a programming"
+            + " error) is not counted as a replica persist failure and follows the generic path")
+    void nonIntegrityViolationDataAccessExceptionIsNotCountedAsPersistFailure() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+
+        when(processedEvents.existsById("e-programming-error")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(replica.saveAndFlush(any(ExtInvoice.class))).thenThrow(new InvalidDataAccessApiUsageException("boom"));
+
+        // Does not propagate: falls into the generic catch (Exception) path below, same as any
+        // other malformed/unexpected error, and is logged/swallowed rather than rethrown.
+        listenerWithMetrics.onInvoiceEvent(event("e-programming-error", 1));
+
+        var counter = meterRegistry.find("replica.persist.failed").counter();
+        assertThat(counter == null ? 0d : counter.count()).isEqualTo(0d);
+        // Generic path still records the event as processed, same as any other swallowed error.
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("A constraint/integrity violation from the tax replica (ext_invoice_tax) is also counted and rethrown")
+    void taxReplicaIntegrityViolationIsCountedAndRethrown() {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        when(provider.getIfAvailable()).thenReturn(meterRegistry);
+        InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+
+        when(processedEvents.existsById("e-tax-persist-fail")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        when(taxReplica.saveAll(any()))
+                .thenThrow(new DataIntegrityViolationException("value too long for type character varying"));
+
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> listenerWithMetrics.onInvoiceEvent(eventWithBreakdown("e-tax-persist-fail", 1)));
+
+        var counter = meterRegistry.find("replica.persist.failed").counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(1d);
+        // Not marked processed — same retry/DLQ path as ext_invoice constraint rejections above.
         verify(processedEvents, never()).save(any());
     }
 }

@@ -84,7 +84,7 @@ the excluded-count column itself is environment-dependent.
 ## Q5 — open WOs for customers > 60 days past due — ABSOLUTE (answer)
 
 Section 1 measured clean: exactly two 60+ customers — **C1** (2000.00 in 90+, total
-4500.00) and **C2** (1500.00 in 61–90, total 2500.00). Section 2 measured 137 open
+4500.00) and **C2** (1500.00 in 61–90, total 2000.00). Section 2 measured 137 open
 workorders (4 TRACKB + **133 co-tenant**, none belonging to C1/C2), so the composed answer
 is unchanged and absolute:
 
@@ -95,8 +95,9 @@ is unchanged and absolute:
 | TRACKB-WO-OPEN-C2-PARTS | C2 | AWAITING_PARTS | 2026-08-20 |
 
 TRACKB-WO-OPEN-C3-APPROVED (C3) remains the designed decoy; the 133 co-tenant open WOs are
-additional noise the model's customer filter must also drop. DIVERGENCE (inherited): C2's
-1000.00 "current" is the settlement invoice (economically 500.00).
+additional noise the model's customer filter must also drop. Fixed by #1652 (no longer a
+divergence): C2's "current" now reads 500.00, the settlement invoice's true economic
+balance (was 1000.00 before InvoiceBalanceCalculator subtracted deposit-credit draw-downs).
 
 ## Q6 — revenue / parts / labor / margin by customer — **BLOCKED** (unchanged)
 
@@ -140,7 +141,7 @@ Measured top-20 by 12-month revenue = the six designed customers (ranks 1–6, e
 | Customer | revenue | count | avg value | outstanding | avg days-to-pay |
 |---|---|---|---|---|---|
 | C1 | 16500.00 | 14 | 1178.5714 | 4500.00 | 20.02 |
-| C2 | 10300.00 | 13 | 792.3077 | 2500.00 | 22.10 |
+| C2 | 10300.00 | 13 | 792.3077 | 2000.00 | 22.10 |
 | C4 | 8100.00 | 9 | 900.0000 | 900.00 | 15.02 |
 | C3 | 6000.00 | 13 | 461.5385 | 1200.00 | 10.02 |
 | C5 | 3900.00 | 12 | 325.0000 | 600.00 | 40.02 |
@@ -149,8 +150,9 @@ Measured top-20 by 12-month revenue = the six designed customers (ranks 1–6, e
 Co-tenant ranks 7–20: revenue 286.17, 1 invoice, outstanding 286.17 (all unpaid), no
 days-to-pay (never reached zero balance). Days-to-pay stays the specified E10-derived
 figure (first zero-balance application − finalized_at; the 0.02 is the designed
-14:30→15:00 clock offset; ±0.5 %). DIVERGENCE: C2's outstanding carries the settlement
-invoice at 1000.00 open though economically 500.00.
+14:30→15:00 clock offset; ±0.5 %). Fixed by #1652: C2's outstanding now carries the
+settlement invoice at its true 500.00 open (was 1000.00 before the deposit-credit
+subtraction), dropping C2's outstanding column from 2500.00 to 2000.00.
 
 ## Q10 — rising sales AND rising past-due, 3 months — CO-TENANT-RELATIVE (answer C2); trend half BLOCKED
 
@@ -214,28 +216,35 @@ document (D8 not extended to E3 — script DIVERGENCE note).
 
 ## Q13 — A/R Pareto + past-due share, as of 2026-09-01 — CO-TENANT-RELATIVE
 
-Measured book: **43 customers, grand total 20588.29** = designed 10000.00 + 37 co-tenant
-open invoices × 286.17. The six designed customers hold ranks 1–6 with their designed
-buckets exactly; every co-tenant row is 286.17, current-only, 1.39 % share:
+Measured book: **43 customers, grand total 20088.29** = designed 9500.00 + 37 co-tenant
+open invoices × 286.17. (Fixed by #1652: the designed total was 10000.00 before
+InvoiceBalanceCalculator subtracted deposit-credit draw-downs; C2's settlement invoice
+drops 500.00 from "current".) The six designed customers hold ranks 1–6 with their
+designed buckets exactly; every co-tenant row is 286.17, current-only, 1.42 % share:
 
 | # | Customer | total | current | 31–60 | 61–90 | 90+ | past-due % of cust. | share | cum. |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | C1 | 4500.00 | 2500.00 | 0 | 0 | 2000.00 | 44.44 | 21.86 | 21.86 |
-| 2 | C2 | 2500.00 | 1000.00 | 0 | 1500.00 | 0 | 60.00 | 12.14 | 34.00 |
-| 3 | C3 | 1200.00 | 1200.00 | 0 | 0 | 0 | 0.00 | 5.83 | 39.83 |
-| 4 | C4 | 900.00 | 0 | 900.00 | 0 | 0 | 100.00 | 4.37 | 44.20 |
-| 5 | C5 | 600.00 | 600.00 | 0 | 0 | 0 | 0.00 | 2.91 | 47.11 |
-| 6 | C6 | 300.00 | 300.00 | 0 | 0 | 0 | 0.00 | 1.46 | 48.57 |
-| 7–43 | co-tenant (×37) | 286.17 each | 286.17 | 0 | 0 | 0 | 0.00 | 1.39 each | +1.39/row |
+| 1 | C1 | 4500.00 | 2500.00 | 0 | 0 | 2000.00 | 44.44 | 22.40 | 22.40 |
+| 2 | C2 | 2000.00 | 500.00 | 0 | 1500.00 | 0 | 75.00 | 9.96 | 32.36 |
+| 3 | C3 | 1200.00 | 1200.00 | 0 | 0 | 0 | 0.00 | 5.97 | 38.33 |
+| 4 | C4 | 900.00 | 0 | 900.00 | 0 | 0 | 100.00 | 4.48 | 42.81 |
+| 5 | C5 | 600.00 | 600.00 | 0 | 0 | 0 | 0.00 | 2.99 | 45.80 |
+| 6 | C6 | 300.00 | 300.00 | 0 | 0 | 0 | 0.00 | 1.49 | 47.29 |
+| 7–43 | co-tenant (×37) | 286.17 each | 286.17 | 0 | 0 | 0 | 0.00 | 1.42 each | +1.42/row |
 
 **Pareto-80 set = ranks 1–29** (measured `in_pareto_80` = t through rank 29, cumulative
-80.54 %; rank 30 = f at 81.93 %): the six designed customers + 23 co-tenant rows.
+80.06 %; rank 30 = f at 81.48 %): the six designed customers + 23 co-tenant rows — the
+boundary rank is unchanged by #1652 even though the percentages shifted (recomputed by
+hand: cumulative through rank 28 is 78.63 % of the new 20088.29 grand total, still short
+of 80 %; rank 29 adds the 23rd co-tenant row to reach 80.06 %).
 Seed-relative invariants that still hold: C1 contributes 4500.00 with 2000.00 in 90+;
-exactly two customers are 60+ past due (C1, C2); per-customer past-due shares (44.44 %,
-60.00 %, 100.00 % for C4) are co-tenant-independent. The designed "C1 = 45 % of A/R,
-boundary at row 3" shape is broken by the co-tenant book (C1 = 21.86 %). C5's 600 is not
-yet due (due 2026-09-05, in current per #1604). DIVERGENCE: C2's 1000.00 current is the
-settlement invoice (economically 500.00).
+exactly two customers are 60+ past due (C1, C2); C1's and C4's past-due shares (44.44 %,
+100.00 % for C4) are co-tenant-independent. C2's past-due share is now **75.00 %** (was
+60.00 % before #1652 — same 1500.00 past-due amount over a smaller 2000.00 total). The
+designed "C1 = 45 % of A/R, boundary at row 3" shape is broken by the co-tenant book
+(C1 = 22.40 %). C5's 600 is not yet due (due 2026-09-05, in current per #1604). Fixed by
+#1652 (no longer a divergence): C2's current is now 500.00, the settlement invoice's true
+economic balance.
 
 ## Q14 — A/R balance + DSO at each month-end, 12 mo — PARTIAL: BLOCKED halves unchanged; endpoint series CO-TENANT-RELATIVE (last point)
 
@@ -244,10 +253,13 @@ balances; income-statement revenue reads GL journals, not seeded).
 The aging-ENDPOINT month-end series measured (current-balance residue — the documented
 known limitation, NOT history): 2025-09-30 .. 2026-03-31: 0.00 each · 2026-04-30: 2000.00
 · 2026-05-31: 4400.00 · 2026-06-30: 4400.00 · 2026-07-31: 6900.00 ·
-2026-08-31: **20588.29** (designed 10000.00 + co-tenant 10588.29; co-tenant document
-dates 2026-08-23/24 enter only this last point). Only the last point equals a real
-balance. Presenting the series as a balance trend without the caveat fails criterion 4
-regardless of numeric match.
+2026-08-31: **20088.29** (designed 9500.00 + co-tenant 10588.29; co-tenant document
+dates 2026-08-23/24 enter only this last point). Fixed by #1652: the designed
+contribution was 10000.00 (endpoint total 20588.29) before InvoiceBalanceCalculator
+subtracted deposit-credit draw-downs — the settlement invoice first enters this series at
+2026-08-31, so only the last point moves. Only the last point equals a real balance.
+Presenting the series as a balance trend without the caveat fails criterion 4 regardless
+of numeric match.
 
 ## Q15 — top vendors, 6 mo vs same 6 mo last year — ABSOLUTE
 
@@ -345,19 +357,34 @@ payments — one measure in this seed). All rows except 2026-08 are ABSOLUTE:
 | 2026-05 | 4800.00 | 7 | 16.50 | 3500.00 | 3520.00 | 4400.00 |
 | 2026-06 | 2700.00 | **6** | 11.00 | 2700.00 | 3520.00 | 4400.00 |
 | 2026-07 | 5200.00 | 5 | 14.00 | 2900.00 | 3520.00 | 6900.00 |
-| 2026-08 | **16588.29** | **45** | **22.20** | 3900.00 | 3520.00 | **20588.29** |
+| 2026-08 | **16588.29** | **45** | **22.20** | 3900.00 | 3520.00 | **20088.29** |
 
 Seed contributions inside the moved cells: 2026-06 completions 5 designed + 1 co-tenant
 (its actor resolves to no technician, so E5 attribution in Q2 still shows 5); 2026-08
 revenue 6000.00 + 10588.29 co-tenant (invoice count 6 + 37), completions 6 + 39
-co-tenant, hours 13.00 + 9.20 co-tenant, A/R 10000.00 + 10588.29 co-tenant. `collected`
-and `vendor paid` are clean in every month. The A/R column is the ENDPOINT's
-current-balance figure (q14 caveat applies to every row but the last). Trend flags are
-prose, judged for consistency with these series (the 2026-08 co-tenant spike in
-revenue/completions/hours is now itself a real feature of the data an answer may flag).
+co-tenant, hours 13.00 + 9.20 co-tenant, A/R 9500.00 + 10588.29 co-tenant (fixed by
+#1652 — the A/R designed contribution was 10000.00, endpoint total 20588.29, before
+InvoiceBalanceCalculator subtracted deposit-credit draw-downs; `revenue` is unaffected
+since E1 sums invoice totals, not balanceDue). `collected` and `vendor paid` are clean in
+every month. The A/R column is the ENDPOINT's current-balance figure (q14 caveat applies
+to every row but the last). Trend flags are prose, judged for consistency with these
+series (the 2026-08 co-tenant spike in revenue/completions/hours is now itself a real
+feature of the data an answer may flag).
 
 ## Verification record
 
+- **2026-09-03 (#1652, NOT re-measured live):** `InvoiceBalanceCalculator.balanceDue` now
+  subtracts deposit-credit draw-downs (`ext_invoice_deposit_credit_application`), so the
+  TRACKB settlement invoice's open balance drops from 1000.00 to 500.00. Every figure this
+  moves (Q5, Q9, Q13, Q14, Q20 A/R totals and Q13's Pareto shares/cumulative percentages)
+  was recomputed **by hand** from this file's own stated components (see the 2026-09-02 run
+  transcript below for the pre-#1652 baseline) — re-running `run_ground_truth.sh` against
+  alpha to re-measure live is **out of scope for this environment** (no alpha access here)
+  and should be done before the next live gate run to confirm no other drift compounded.
+  Q10's past-due trend and Q11/Q12/Q18's cash-movement figures are unaffected — they never
+  depended on `balanceDue`. The `ground-truth/*.sql` scripts and `seed/DATASET.md` were
+  updated in lockstep; `runs/2026-09-02-alpha-run.txt` is left as-is (a historical
+  transcript, not re-generated).
 - 2026-09-02: full suite executed on **alpha** via `run_ground_truth.sh` (exit 0, all 26
   sections, zero SQL errors) after the TRACKB seed applied cleanly (2,257 inserts; the
   live-schema reconciliation touched only pos_customer_db party column lists — numbers

@@ -100,6 +100,30 @@ class InvoiceEventsListenerTest {
     }
 
     @Test
+    @DisplayName("An invoice with no originating workorder (#1651) is replicated without attempting to link")
+    void skipsLinkingWhenInvoiceHasNoWorkorder() {
+        when(processedEvents.existsById("e-noworkorder")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        String noWorkorder = """
+                {"eventId":"e-noworkorder","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"invoiceId":"%s","workorderId":null,"status":"DRAFT",
+                            "total":150.00,"subtotal":140.00,"tax":10.00}}
+                """.formatted(INVOICE_ID, INVOICE_ID);
+
+        listener.onInvoiceEvent(noWorkorder);
+
+        ArgumentCaptor<ExtInvoiceReplica> saved = ArgumentCaptor.forClass(ExtInvoiceReplica.class);
+        verify(replica).save(saved.capture());
+        assertThat(saved.getValue().getWorkorderId()).isNull();
+        // No workorderId to look up — must not call findById(null).
+        verify(workorders, never()).findById(any());
+        verify(workorders, never()).save(any());
+        verify(factPublisher, never()).markChanged(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
     @DisplayName("Already-linked workorder is left untouched")
     void doesNotRelinkWorkorder() {
         UUID otherInvoiceId = UUID.fromString("00000000-0000-0000-0000-00000000000f");

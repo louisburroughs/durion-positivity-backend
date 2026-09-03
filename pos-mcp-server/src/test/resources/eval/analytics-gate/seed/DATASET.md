@@ -110,11 +110,12 @@ Both invoices share one workorder (completed by Nadia 2026-08-12, 3.00h):
   due 2026-08-27. Cash 1500 on 2026-08-20 (balance_after 1000) + deposit draw-down 500
   (`deposit_credit_application` in pos-invoice, `ext_invoice_deposit_credit_application`
   replica in accounting, applied_at 2026-08-12).
-- **Deliberate real-system artifact**: `InvoiceBalanceCalculator` does NOT subtract
-  deposit draw-downs, so accounting reports S with a **1000.00 open balance**
-  (economically 500 is outstanding). That 1000 is C2's designed "current" A/R bucket —
-  the fixture exercises the documented gap rather than hiding it. Any future fix to
-  the balance calculator will move C2's buckets and must update this spec.
+- **Fixed by #1652**: `InvoiceBalanceCalculator` now subtracts deposit draw-downs
+  (`ext_invoice_deposit_credit_application`), so accounting reports S with its true
+  **500.00 open balance** (was 1000.00 before the fix). That 500 is C2's "current" A/R
+  bucket. Before #1652 this fixture deliberately exercised the documented gap rather than
+  hiding it; the gap is now closed and every downstream figure (Q5, Q9, Q13, Q14, Q20 —
+  see EXPECTED.md and the `ground-truth/*.sql` scripts) has been updated in lockstep.
 - E4 protection: the shared workorder's `ext_workorder.workorder_created_at`
   (pos-invoice replica) is **NULL**, so D and S are excluded from the invoicing-lag
   average (#1592 null-anchor rule) and every monthly average stays exact.
@@ -123,19 +124,25 @@ Both invoices share one workorder (completed by Nadia 2026-08-12, 3.00h):
 
 ### A/R aging at 2026-09-01 (Q13 Pareto, Q5) — ages by DUE DATE (#1604)
 
+Seed-only design (no co-tenant contribution; grand total **9500**, down from 10000 —
+fixed by #1652: C2's current dropped from 1000 to 500 when `InvoiceBalanceCalculator`
+started subtracting deposit-credit draw-downs). See `ground-truth/EXPECTED.md` for the
+live co-tenant-inclusive figures actually served by the gate.
+
 | Rank | Customer | current | 31–60 | 61–90 | 90+ | total | share | cumulative |
 |---|---|---|---|---|---|---|---|---|
-| 1 | C1 Bluerock | 2500 | 0 | 0 | 2000 | **4500** | 45% | 45% |
-| 2 | C2 Harbor | 1000 | 0 | 1500 | 0 | **2500** | 25% | 70% |
-| 3 | C3 Prescott | 1200 | 0 | 0 | 0 | **1200** | 12% | **82%** ← Pareto-80 boundary row |
-| 4 | C4 Webb | 0 | 900 | 0 | 0 | **900** | 9% | 91% |
-| 5 | C5 Whitfield | 600 | 0 | 0 | 0 | **600** | 6% | 97% |
-| 6 | C6 Okafor | 300 | 0 | 0 | 0 | **300** | 3% | 100% |
+| 1 | C1 Bluerock | 2500 | 0 | 0 | 2000 | **4500** | 47.4% | 47.4% |
+| 2 | C2 Harbor | 500 | 0 | 1500 | 0 | **2000** | 21.1% | 68.4% |
+| 3 | C3 Prescott | 1200 | 0 | 0 | 0 | **1200** | 12.6% | **81.1%** ← Pareto-80 boundary row |
+| 4 | C4 Webb | 0 | 900 | 0 | 0 | **900** | 9.5% | 90.5% |
+| 5 | C5 Whitfield | 600 | 0 | 0 | 0 | **600** | 6.3% | 96.8% |
+| 6 | C6 Okafor | 300 | 0 | 0 | 0 | **300** | 3.2% | 100% |
 
-Grand total **10000.00**. Exactly **2 customers 60+ days past due by due date**: C1
-(90+) and C2 (61–90). C4 is past due but only 49 days. The Pareto-80 cutoff lands
-after customer 3 of 6 (C1+C2+C3). C5's 600 is **not yet due** (due 2026-09-05) and
-appears in `current` under the post-#1604 rule.
+Grand total **9500.00** (fixed by #1652; was 10000.00 before `InvoiceBalanceCalculator`
+subtracted deposit-credit draw-downs). Exactly **2 customers 60+ days past due by due
+date**: C1 (90+) and C2 (61–90). C4 is past due but only 49 days. The Pareto-80 cutoff
+lands after customer 3 of 6 (C1+C2+C3) — unchanged by the fix. C5's 600 is **not yet
+due** (due 2026-09-05) and appears in `current` under the post-#1604 rule.
 
 ### Q5 open workorders for the 60+ customers
 
@@ -256,14 +263,21 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
 
 ## Deviations from plan §2.3, and why
 
-1. **~148 workorders instead of ~120.** Accounting's `ext_invoice.workorder_id` is
-   `NOT NULL` (V5), so a workorder-less (order-fronted) invoice cannot be replicated
-   coherently — every one of the 145 invoices therefore carries a workorder (144
-   distinct + the shared deposit-pair WO) plus 4 open WOs. The "~30 invoices without
-   workorders" implied by 120/150 is unreachable against the real schema.
-2. **The settlement invoice's accounting balance is 1000, not 500.** Real-system
-   artifact (deposit draw-downs invisible to `InvoiceBalanceCalculator`), embraced and
-   folded into C2's designed buckets — see the deposit-pair section.
+1. **~148 workorders instead of ~120.** Accounting's `ext_invoice.workorder_id` was
+   `NOT NULL` (V5) when this fixture was seeded, so a workorder-less (order-fronted)
+   invoice could not be replicated coherently — every one of the 145 invoices
+   therefore carries a workorder (144 distinct + the shared deposit-pair WO) plus 4
+   open WOs. **#1651 lifted this constraint** (V32 drops the `NOT NULL`; `ext_invoice`
+   now legitimately holds order-fronted/counter-sale/standalone-billing invoices with
+   a null `workorder_id`, and they appear in A/R aging and collections like any other
+   invoice) — the "~30 invoices without workorders" implied by 120/150 is reachable
+   against the schema now. This fixture's every-invoice-has-a-workorder shape is a
+   fixture choice, not a schema limitation; the seed is not regenerated here.
+2. **The settlement invoice's accounting balance was 1000, not 500 — fixed by #1652.**
+   Was a real-system artifact (deposit draw-downs invisible to `InvoiceBalanceCalculator`),
+   embraced and folded into C2's designed buckets. `InvoiceBalanceCalculator` now
+   subtracts deposit-credit draw-downs, so the balance is the economically correct 500 —
+   see the deposit-pair section and EXPECTED.md.
 3. **Q16 bills are dated 2026-09-01**, not late August, so Q17's +12% average is not
    diluted (E8 buckets bills by `bill_date` regardless of status).
 4. **C4 sits in the 31–60 bucket** (49 days past due). §2.3 wants exactly two 60+
