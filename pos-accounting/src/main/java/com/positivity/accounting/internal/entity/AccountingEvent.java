@@ -126,6 +126,24 @@ public class AccountingEvent {
     @Column(name = "sequence_number")
     private Long sequenceNumber;
 
+    /**
+     * Short human-readable reference (e.g. {@code AE-202609-42}), distinct
+     * from {@link #sequenceNumber} (declared but never assigned) and from
+     * {@link #eventId} (ADR-0027: the UUID stays the canonical identifier;
+     * this is an additional display field for the accounting-events and CRM
+     * integration-events UI pages, issue #1680).
+     *
+     * <p>Assigned in {@code EventIngestionServiceImpl.submitEvent} from the
+     * per-month {@code accounting_sequence} counter (scope {@code
+     * AE-{YYYYMM}}, reusing the story A2 numbering machinery), scoped to
+     * this row's {@link #receivedAt} month. Nullable: pre-migration rows are
+     * backfilled by {@code V33__accounting_event_reference.sql} rather than
+     * left null, but the column itself stays nullable since assignment is a
+     * service-layer concern, not a database invariant.
+     */
+    @Column(name = "event_reference", length = 20)
+    private String eventReference;
+
     // ========== Suspense Queue Fields (CAP:055) ==========
 
     /**

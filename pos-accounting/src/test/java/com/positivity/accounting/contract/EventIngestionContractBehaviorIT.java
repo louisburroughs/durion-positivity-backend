@@ -98,7 +98,10 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.organizationId").value(testOrganizationId.toString()))
                 .andExpect(jsonPath("$.eventType").value("SALE"))
                 .andExpect(jsonPath("$.status").exists())
-                .andExpect(jsonPath("$.receivedAt").exists());
+                .andExpect(jsonPath("$.receivedAt").exists())
+                // issue #1680: short display reference alongside the raw eventId UUID.
+                .andExpect(jsonPath("$.eventReference").exists())
+                .andExpect(jsonPath("$.eventReference").isNotEmpty());
     }
 
     @Test
@@ -120,7 +123,12 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.content.length()").value(3))
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(3))
-                .andExpect(jsonPath("$.totalElements").value(5));
+                .andExpect(jsonPath("$.totalElements").value(5))
+                // issue #1680: every listed event carries a non-null display reference.
+                .andExpect(jsonPath("$.content[0].eventReference").exists())
+                .andExpect(jsonPath("$.content[0].eventReference").isNotEmpty())
+                .andExpect(jsonPath("$.content[1].eventReference").exists())
+                .andExpect(jsonPath("$.content[2].eventReference").exists());
     }
 
     @Test
@@ -157,7 +165,10 @@ class EventIngestionContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventId").value(eventId.toString()))
                 .andExpect(jsonPath("$.eventType").value("SALE"))
-                .andExpect(jsonPath("$.status").exists());
+                .andExpect(jsonPath("$.status").exists())
+                // issue #1680: get-by-id also carries the display reference.
+                .andExpect(jsonPath("$.eventReference").exists())
+                .andExpect(jsonPath("$.eventReference").isNotEmpty());
     }
 
     @Test

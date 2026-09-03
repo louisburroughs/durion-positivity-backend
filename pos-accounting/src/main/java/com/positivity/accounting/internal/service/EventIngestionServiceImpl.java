@@ -12,16 +12,21 @@ import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryMapper;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -31,6 +36,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -86,6 +92,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final com.positivity.accounting.internal.audit.repository.AuditTrailEntryRepository
             auditTrailEntryRepository;
     private final PostingEngineOrchestrator postingEngineOrchestrator;
+    private final AccountingSequenceRepository sequenceRepository;
+    private final AccountingSequenceProvisioner sequenceProvisioner;
+
+    /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
+    private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
 
     /**
      * Submits a business event for accounting processing.
@@ -172,6 +183,17 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         accountingEvent = accountingEventRepository.save(accountingEvent);
         log.info("Persisted accounting event {} with status RECEIVED", accountingEvent.getEventId());
+
+        // Assign the display reference now that receivedAt is known: AccountingEvent#onPrePersist
+        // sets receivedAt synchronously during the persist() call above (JPA @PrePersist fires at
+        // persist time, not at flush), so the saved instance already carries it. Deriving the scope
+        // month from this field (rather than setting both before save) guarantees the reference
+        // month can never disagree with the receivedAt actually persisted. The reference is set on
+        // the still-managed entity and picked up by dirty checking; no second explicit save is
+        // needed because this method runs inside the class-level @Transactional and flushes on
+        // commit. Placed after the idempotency-check/persist above, so a duplicate or a validation
+        // failure (both of which throw earlier) never reaches here and never consumes a number.
+        assignEventReference(accountingEvent);
 
         // Register idempotency key for 24-hour deduplication window with the persisted
         // event ID
@@ -595,6 +617,64 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
 
         return errors;
+    }
+
+    // ===== EVENT REFERENCE ASSIGNMENT (issue #1680) =====
+
+    /**
+     * Assigns the display reference {@code AE-{YYYYMM}-{seq}} from the
+     * per-month {@code accounting_sequence} counter, reusing the same
+     * {@code accounting_sequence} table and {@link AccountingSequenceProvisioner}
+     * bootstrap machinery as {@code JournalEntryServiceImpl.assignEntryNumber}
+     * (story A2, issue #942).
+     *
+     * <p>Scope key is {@code AE-{YYYYMM}} derived from the event's {@code
+     * receivedAt}, so the reference always matches the received month shown
+     * in the UI. The counter row is read under {@code FOR UPDATE} and
+     * incremented inside the caller's transaction (this method is only ever
+     * called from {@link #submitEvent}, which is itself transactional), so a
+     * rollback of the submission rolls the increment back with it and the
+     * number is never consumed.
+     *
+     * @param accountingEvent the just-persisted event; its {@code
+     *                        eventReference} is set as a side effect
+     */
+    private void assignEventReference(AccountingEvent accountingEvent) {
+        String scopeKey = eventReferenceScopeKey(accountingEvent.getReceivedAt());
+        AccountingSequence sequence =
+                sequenceRepository.findByScopeKey(scopeKey).orElseGet(() -> provisionAndRelockEventReference(scopeKey));
+        long assigned = sequence.getNextValue();
+        sequence.setNextValue(assigned + 1);
+        accountingEvent.setEventReference(scopeKey + "-" + assigned);
+    }
+
+    /**
+     * First use of a month scope: bootstrap the counter row in an isolated
+     * transaction ({@link AccountingSequenceProvisioner}), then lock it in
+     * the current transaction. A concurrent bootstrapper losing the
+     * unique-key race falls through to the locked re-read of the winner's
+     * committed row.
+     */
+    private AccountingSequence provisionAndRelockEventReference(String scopeKey) {
+        try {
+            sequenceProvisioner.provision(scopeKey);
+        } catch (DataIntegrityViolationException raceLost) {
+            log.debug("Lost accounting_sequence bootstrap race for scope {}; re-reading winner's row", scopeKey);
+        }
+        return sequenceRepository
+                .findByScopeKey(scopeKey)
+                .orElseThrow(() ->
+                        new IllegalStateException("accounting_sequence row missing after bootstrap: " + scopeKey));
+    }
+
+    /**
+     * Sequence scope key {@code AE-{YYYYMM}} for a received-at instant,
+     * interpreted in UTC (this module's house convention for Instant &lt;-&gt;
+     * calendar conversions; see e.g. {@code FinancialReportingServiceImpl}).
+     */
+    private static String eventReferenceScopeKey(Instant receivedAt) {
+        ZonedDateTime received = receivedAt.atZone(ZoneOffset.UTC);
+        return String.format("%s%04d%02d", EVENT_REFERENCE_SCOPE_PREFIX, received.getYear(), received.getMonthValue());
     }
 
     /**
