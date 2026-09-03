@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -163,6 +164,36 @@ class OperationalContextControllerTest {
                 ArgumentCaptor.forClass(OperationalContextOverrideRequest.class);
         verify(workorderService).overrideOperationalContext(eq(WORKORDER_ID), captor.capture());
         assertThat(captor.getValue().getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+    }
+
+    @Test
+    @DisplayName("#1656: an unrecognised resourceType on the override body is a 400, not a 200 typed BAY")
+    void whenOverrideOperationalContext_withUnknownResourceType_thenReturns400() throws Exception {
+        // The enum used to carry a global @JsonCreator so the Kafka listener could tolerate an
+        // upstream producer's garbage. Being global, it also governed this synchronous endpoint:
+        // "MOBILE-UNIT" (a hyphen, an entirely plausible typo) bound to "absent", fell through to
+        // the BAY default and returned 200 having pointed the workorder at a van while typing it as
+        // a bay — the half-applied state the write path exists to prevent. A synchronous caller can
+        // be told it sent garbage, so the body binds strictly (ADR-0017).
+        mockMvc.perform(post(OVERRIDE_URL, WORKORDER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"locationId\":\"" + LOCATION_ID + "\",\"resourceType\":\"MOBILE-UNIT\","
+                                + "\"assignedResources\":[\"00000000-0000-0000-0000-0000000000c1\"]}"))
+                .andExpect(status().isBadRequest());
+
+        // Nothing reached the write path, so no workorder was left half-updated.
+        verify(workorderService, never()).overrideOperationalContext(any(), any());
+    }
+
+    @Test
+    @DisplayName("#1656: a lower-case resourceType is a 400 too — leniency belongs to the event path only")
+    void whenOverrideOperationalContext_withMisCasedResourceType_thenReturns400() throws Exception {
+        mockMvc.perform(post(OVERRIDE_URL, WORKORDER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"locationId\":\"" + LOCATION_ID + "\",\"resourceType\":\"mobile_unit\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(workorderService, never()).overrideOperationalContext(any(), any());
     }
 
     // -----------------------------------------------------------------------

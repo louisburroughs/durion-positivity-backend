@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.UUID;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -238,8 +239,6 @@ class LocationRepairCapabilityTest {
     @Test
     @DisplayName("#1657 - listing locations costs a fixed number of queries regardless of list size")
     void getAllLocationsDto_usesBoundedQueryCount() {
-        long preExistingLocations = countLocations();
-
         Location first = persistLocation("Budget 1", true);
         persistBay(first, "Bay 1", BAY_STATUS_ACTIVE);
         persistMobileUnit(first, "Van 1", UNIT_STATUS_ACTIVE);
@@ -262,9 +261,23 @@ class LocationRepairCapabilityTest {
         assertThat(queriesForFiveLocations)
                 .as("adding four more locations must not add any query")
                 .isEqualTo(queriesForOneLocation);
+        // An absolute bound, not one that grows with the seed data: the old
+        // `3 + preExistingLocations` form read like a budget while being satisfied by any
+        // implementation whose cost scaled with the number of rows already in the schema, which is
+        // precisely the failure it was meant to catch (#1657).
         assertThat(queriesForOneLocation)
                 .as("one SELECT for the locations plus one aggregate over bays and one over mobile units")
-                .isLessThanOrEqualTo(3 + preExistingLocations);
+                .isLessThanOrEqualTo(3);
+    }
+
+    /**
+     * {@code Statistics} lives on the {@code SessionFactory}, which is shared by every test in this
+     * Spring context. Leaving it enabled would silently instrument — and slow — every test that runs
+     * after this class, so the switch is returned to its default off state (#1657).
+     */
+    @AfterEach
+    void disableHibernateStatistics() {
+        entityManagerFactory.unwrap(SessionFactory.class).getStatistics().setStatisticsEnabled(false);
     }
 
     // -------------------------------------------------------------------------
@@ -277,10 +290,6 @@ class LocationRepairCapabilityTest {
         List<LocationResponseDTO> locations = locationService.getAllLocationsDto();
         assertThat(locations).isNotEmpty();
         return statistics.getPrepareStatementCount();
-    }
-
-    private long countLocations() {
-        return em.createQuery("SELECT COUNT(l) FROM Location l", Long.class).getSingleResult();
     }
 
     private LocationResponseDTO listAndFind(UUID locationId) {

@@ -151,6 +151,9 @@ class ReplicaAndManifestListenerContractTest {
                 processedEventRepository,
                 customerRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class));
+        // The real registry, not a null provider: the rejection counter is the only signal that a
+        // bay or mobile-unit fact arrived in a shape this module cannot use (#1668), so it has to be
+        // assertable here.
         locationListener = new LocationEventsListener(
                 clock,
                 objectMapper,
@@ -158,7 +161,7 @@ class ReplicaAndManifestListenerContractTest {
                 locationRepository,
                 bayRepository,
                 mobileUnitRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                meterRegistryProvider);
     }
 
     private static String envelope(String eventId, String eventType, String payload) {
@@ -422,6 +425,55 @@ class ReplicaAndManifestListenerContractTest {
             verify(bayRepository, never()).save(any());
             verify(mobileUnitRepository, never()).save(any());
             assertThat(capturedProcessedEvent().getOwner()).isEqualTo("location");
+        }
+
+        @Test
+        @DisplayName("#1668: a plausible-but-wrong bay payload shape is rejected loudly, not written half-populated")
+        void wrongBayPayloadShapeIsRejectedNotHalfWritten() {
+            // BayUpdatedV1 is the consumer's guess at a contract pos-location does not publish yet
+            // (issue #1668), so the likeliest failure is that the real producer names its fields
+            // differently. Both ways it can differ have to be distinguishable from the expected
+            // "no events yet" silence, or the board stays empty and nothing anywhere says why.
+
+            // (a) the identifier under another name: the compact constructor throws, Jackson reports
+            // a DatabindException, nothing is written.
+            locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
+                    {"id":"%s","locationId":"%s","name":"Front Bay 1","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            // (b) the site scope under another name. This is the silent one: the record binds, the
+            // row saves with location_id null, and the roster query — which scopes by location_id —
+            // can never return it. An empty panel, no exception, no log, indistinguishable from the
+            // producer simply not having shipped yet.
+            locationListener.onLocationEvent(envelope("evt-2", BayUpdatedV1.EVENT_TYPE, """
+                    {"bayId":"%s","siteId":"%s","name":"Front Bay 1","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            verify(bayRepository, never()).save(any());
+            assertThat(meterRegistry
+                            .get("replica.payload.rejected")
+                            .tag("owner", "location")
+                            .counter()
+                            .count())
+                    .as("both shape mismatches are counted, so a wrong guess is visible")
+                    .isEqualTo(2.0);
+            // Still recorded for the manifest: a rejected fact is a processed fact, or the owner's
+            // window reads as permanent drift and triggers useless replays.
+            verify(processedEventRepository, org.mockito.Mockito.times(2)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1668: a mobile-unit payload with no base site is rejected rather than made invisible")
+        void mobileUnitWithoutBaseLocationIsRejected() {
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","siteId":"%s","name":"Van 3","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            verify(mobileUnitRepository, never()).save(any());
+            assertThat(meterRegistry
+                            .get("replica.payload.rejected")
+                            .tag("owner", "location")
+                            .counter()
+                            .count())
+                    .isEqualTo(1.0);
         }
     }
 

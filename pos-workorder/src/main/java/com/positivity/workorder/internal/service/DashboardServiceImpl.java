@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -29,7 +30,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -91,7 +91,9 @@ public class DashboardServiceImpl implements DashboardService {
         // Once a panel positively asserts AVAILABLE it is making a claim, and the day's rows cannot
         // support that claim: a work-in-progress job scheduled two days ago is still in its bay
         // today and would never appear in findByScheduledDateAndLocationId for today. One extra
-        // query per render covers both panels — never one per unit.
+        // query per render covers both panels — never one per unit. The panels themselves cost one
+        // roster query each, plus at most one batched findAllById each for resources the roster does
+        // not list; nothing in this method scales with the number of bays or units.
         List<Workorder> resourceHolders = workorderRepository.findOpenResourceHoldersAtLocation(locationUuid, date);
 
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
@@ -99,7 +101,13 @@ public class DashboardServiceImpl implements DashboardService {
         List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, resourceHolders);
         List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, resourceHolders);
 
-        List<ConflictEntry> conflicts = detectAllConflicts(workorders, people, date);
+        // Conflicts are computed off the same resourceHolders set the panels use (#1656):
+        // resource double-booking is an occupancy question, and answering it from the
+        // day's rows while the panels answered it from the holders let the two disagree in the one
+        // case that matters — a bay claimed by a job that started yesterday and a job scheduled for
+        // today. Mechanic, status, location and skill conflicts stay on the day's rows: those are
+        // questions about today's schedule, not about who is physically in the bay.
+        List<ConflictEntry> conflicts = detectAllConflicts(workorders, resourceHolders, people, date);
 
         return DashboardResponse.builder()
                 .date(date)
@@ -191,7 +199,10 @@ public class DashboardServiceImpl implements DashboardService {
                         ResourceType.BAY,
                         resourceHolders,
                         namesById,
-                        id -> extBayReplicaRepository.findById(id).map(ExtBayReplica::getName))
+                        ids -> namesOf(
+                                extBayReplicaRepository.findAllById(ids),
+                                ExtBayReplica::getBayId,
+                                ExtBayReplica::getName))
                 .stream()
                 .map(row -> BayStatus.builder()
                         .bayId(row.resourceId().toString())
@@ -214,7 +225,10 @@ public class DashboardServiceImpl implements DashboardService {
                         ResourceType.MOBILE_UNIT,
                         resourceHolders,
                         namesById,
-                        id -> extMobileUnitReplicaRepository.findById(id).map(ExtMobileUnitReplica::getName))
+                        ids -> namesOf(
+                                extMobileUnitReplicaRepository.findAllById(ids),
+                                ExtMobileUnitReplica::getMobileUnitId,
+                                ExtMobileUnitReplica::getName))
                 .stream()
                 .map(row -> MobileUnitStatus.builder()
                         .unitId(row.resourceId().toString())
@@ -260,14 +274,19 @@ public class DashboardServiceImpl implements DashboardService {
      *     {@code WorkorderRepository#findOpenResourceHoldersAtLocation}); not restricted to the
      *     dashboard date, so a multi-day job started earlier still holds its unit
      * @param activeNamesById active resources at the location, id → name, in display order
-     * @param nameLookup resolves the name of a resource outside the active set, empty when unknown
+     * @param nameLookup resolves the names of resources outside the active set in one batch; ids it
+     *     cannot resolve are simply absent from the returned map. It is called at most once per
+     *     panel, and not at all when the active set already covers every occupied resource —
+     *     {@code ext_bay} and {@code ext_mobile_unit} are empty until pos-location publishes those
+     *     facts (#1668), so today every occupied resource takes this branch and a per-id lookup
+     *     would be a fan-out on every render (#1657)
      * @return the panel rows, active resources first in replica order
      */
     private List<ResourcePanelRow> buildResourcePanel(
             ResourceType resourceType,
             List<Workorder> resourceHolders,
             Map<UUID, String> activeNamesById,
-            Function<UUID, Optional<String>> nameLookup) {
+            Function<List<UUID>, Map<UUID, String>> nameLookup) {
 
         // Only open work occupies a resource; a cancelled or completed-not-reopened workorder that
         // still carries its old assignment is stale and must not hold the resource down.
@@ -279,7 +298,7 @@ public class DashboardServiceImpl implements DashboardService {
             if (effectiveResourceType(workorder) != resourceType) {
                 continue;
             }
-            occupantByResourceId.merge(workorder.getResourceId(), workorder, DashboardServiceImpl::mostRecentlyUpdated);
+            occupantByResourceId.merge(workorder.getResourceId(), workorder, DashboardServiceImpl::preferredOccupant);
         }
 
         Map<UUID, String> panelNamesById = new LinkedHashMap<>(activeNamesById);
@@ -289,11 +308,19 @@ public class DashboardServiceImpl implements DashboardService {
         // its replica row simply has not landed yet (the assignment fact overtook the resource fact).
         // Hiding the row would make live work invisible on the board, which is strictly worse than
         // showing a row whose name is momentarily null.
-        for (UUID resourceId : occupantByResourceId.keySet()) {
-            // Not computeIfAbsent: a resource whose name resolves to null still needs a row, and
-            // computeIfAbsent drops a null mapping on the floor.
-            if (!panelNamesById.containsKey(resourceId)) {
-                panelNamesById.put(resourceId, nameLookup.apply(resourceId).orElse(null));
+        List<UUID> unresolved = occupantByResourceId.keySet().stream()
+                .filter(resourceId -> !panelNamesById.containsKey(resourceId))
+                .toList();
+        if (!unresolved.isEmpty()) {
+            // One batched lookup, not one per resource. The active set is empty in production until
+            // pos-location starts publishing bay and mobile-unit facts (#1668), so this branch is
+            // taken by *every* occupied resource today — a findById per id here would be exactly the
+            // per-unit fan-out the occupancy query was written to remove.
+            Map<UUID, String> resolved = nameLookup.apply(unresolved);
+            for (UUID resourceId : unresolved) {
+                // Not computeIfAbsent: a resource whose name resolves to null still needs a row, and
+                // computeIfAbsent drops a null mapping on the floor.
+                panelNamesById.put(resourceId, resolved.get(resourceId));
             }
         }
 
@@ -325,21 +352,106 @@ public class DashboardServiceImpl implements DashboardService {
         return ResourceType.orDefault(workorder.getResourceType());
     }
 
-    /** Later {@code updatedAt} wins; a null timestamp loses, and ties keep the incumbent. */
-    private static Workorder mostRecentlyUpdated(Workorder incumbent, Workorder challenger) {
-        if (challenger.getUpdatedAt() == null) {
-            return incumbent;
+    /**
+     * Collects a batch of replica rows into an id → name map.
+     *
+     * <p>{@code Collectors.toMap} is not usable here for the same reason it is not usable in
+     * {@link #buildBayStatuses}: a replica row whose name has not arrived yet is legitimate, and
+     * {@code toMap} throws on a null value.
+     *
+     * @param rows the replica rows returned by a batched {@code findAllById}
+     * @param idOf the row's identifier accessor
+     * @param nameOf the row's display-name accessor
+     * @param <T> the replica entity type
+     * @return id → name, names possibly null, ids not present in {@code rows} simply absent
+     */
+    private static <T> Map<UUID, String> namesOf(Iterable<T> rows, Function<T, UUID> idOf, Function<T, String> nameOf) {
+        Map<UUID, String> namesById = new LinkedHashMap<>();
+        for (T row : rows) {
+            namesById.putIfAbsent(idOf.apply(row), nameOf.apply(row));
         }
-        if (incumbent.getUpdatedAt() == null) {
-            return challenger;
+        return namesById;
+    }
+
+    /**
+     * Picks which of two open workorders claiming the same resource the panel names as its occupant
+     * (#1656).
+     *
+     * <p>This used to be "whichever row was written to most recently", and that was wrong in a way
+     * that showed on the board: {@code updatedAt} is a database fact about when a row was touched,
+     * not evidence that a vehicle is in a bay. A job scheduled for today and merely ASSIGNED this
+     * morning has a newer {@code updatedAt} than the job that has been physically in that bay since
+     * yesterday, so the panel named the job that has not started as the occupant.
+     *
+     * <p>The order is therefore, in strict precedence:
+     *
+     * <ol>
+     *   <li><b>A started job beats a merely-scheduled one.</b> Among workorders that are still open
+     *       — locked ones are filtered out before this point — DRAFT, APPROVED and ASSIGNED mean
+     *       "booked but not begun"; every other status means work has started and the resource is
+     *       genuinely in use. See {@link #hasStarted(Workorder)}.
+     *   <li><b>Then the earlier {@code scheduledDate}</b>, the job that was due on the resource
+     *       first. Unscheduled work (a null date) loses to dated work; it is holding the resource
+     *       but says nothing about when it claimed it.
+     *   <li><b>Then the lower workorder id.</b> Nothing about a resource distinguishes the two at
+     *       this point, so the tiebreak's only job is to be total and stable: the same two rows
+     *       always produce the same occupant regardless of query order or row-touch times. Ids are
+     *       UUIDv7, so in practice this usually reads as "the older workorder".
+     * </ol>
+     *
+     * <p>Two workorders reaching rule 2 or 3 are a genuine double-booking, which
+     * {@link #detectResourceDoubleBooking} reports as BLOCKING off this very same set — the panel
+     * names one of them deterministically rather than picking arbitrarily and silently.
+     *
+     * @param incumbent the occupant chosen so far
+     * @param challenger the next claim on the same resource
+     * @return the workorder the panel reports as occupying the resource
+     */
+    private static Workorder preferredOccupant(Workorder incumbent, Workorder challenger) {
+        if (hasStarted(challenger) != hasStarted(incumbent)) {
+            return hasStarted(challenger) ? challenger : incumbent;
         }
-        return challenger.getUpdatedAt().isAfter(incumbent.getUpdatedAt()) ? challenger : incumbent;
+        int byScheduledDate = compareNullsLast(incumbent.getScheduledDate(), challenger.getScheduledDate());
+        if (byScheduledDate != 0) {
+            return byScheduledDate < 0 ? incumbent : challenger;
+        }
+        return compareNullsLast(incumbent.getId(), challenger.getId()) <= 0 ? incumbent : challenger;
+    }
+
+    /**
+     * Whether an open workorder has actually started, and so is physically occupying its resource.
+     *
+     * <p>Expressed as the complement of the not-yet-begun statuses rather than as a list of started
+     * ones, so a status added later is treated as "started" — the conservative answer for a panel
+     * whose other option is to advertise an occupied bay as free. A null status is read as not
+     * started, matching the DRAFT the entity's builder defaults to.
+     *
+     * @param workorder an open, resource-holding workorder
+     * @return true when the job is under way rather than merely booked
+     */
+    private static boolean hasStarted(Workorder workorder) {
+        WorkorderStatus status = workorder.getStatus();
+        return status != null
+                && status != WorkorderStatus.DRAFT
+                && status != WorkorderStatus.APPROVED
+                && status != WorkorderStatus.ASSIGNED;
+    }
+
+    /** Natural order with nulls sorted last, so an absent value never wins a tiebreak. */
+    private static <T extends Comparable<T>> int compareNullsLast(T left, T right) {
+        if (left == null) {
+            return right == null ? 0 : 1;
+        }
+        return right == null ? -1 : left.compareTo(right);
     }
 
     private List<ConflictEntry> detectAllConflicts(
-            List<Workorder> workorders, List<PersonAvailability> people, LocalDate date) {
+            List<Workorder> workorders,
+            List<Workorder> resourceHolders,
+            List<PersonAvailability> people,
+            LocalDate date) {
         List<ConflictEntry> conflicts = new ArrayList<>();
-        detectResourceDoubleBooking(workorders, conflicts);
+        detectResourceDoubleBooking(resourceHolders, conflicts);
         detectMechanicDoubleBookingFromWorkorders(workorders, conflicts);
         detectMechanicStatusConflicts(workorders, people, date, conflicts);
         detectLocationMismatch(workorders, people, conflicts);
@@ -382,18 +494,29 @@ public class DashboardServiceImpl implements DashboardService {
     private record ResourceKey(UUID resourceId, ResourceType resourceType) {}
 
     /**
-     * Flags a resource that more than one still-open workorder claims on the dashboard date (#1656).
+     * Flags a resource that more than one still-open workorder is claiming (#1656).
      *
-     * <p>Two things the bay-only predecessor got wrong. It grouped on {@code resourceId} alone, so a
-     * double-booked <em>van</em> was reported as {@code BAY_DOUBLE_BOOKED} with a "Bay &lt;uuid&gt;"
-     * message naming a bay that does not exist. And it counted every workorder carrying the id,
-     * including cancelled and completed ones, so a stale assignment produced a BLOCKING conflict
-     * against a unit the panels in the very same response reported as AVAILABLE — a response that
-     * contradicted itself. {@link Workorder#isLocked()} is the same authority the panels use, so the
-     * two now agree by construction.
+     * <p>Three things the bay-only predecessor got wrong. It grouped on {@code resourceId} alone, so
+     * a double-booked <em>van</em> was reported as {@code BAY_DOUBLE_BOOKED} with a "Bay
+     * &lt;uuid&gt;" message naming a bay that does not exist. It counted every workorder carrying
+     * the id, including cancelled and completed ones, so a stale assignment produced a BLOCKING
+     * conflict against a unit the panels in the very same response reported as AVAILABLE. And it
+     * read the <em>day's</em> rows while the panels read the open resource holders, so the two
+     * disagreed exactly where it mattered: a bay held since yesterday by a running job and claimed
+     * again by a job scheduled for today appears once in the day's rows and twice in the holders,
+     * and the genuine double-booking went unreported (#1656).
+     *
+     * <p>This method is therefore given the same {@code resourceHolders} list the panels are built
+     * from, and applies the same {@link Workorder#isLocked()} authority to it. Panels and conflicts
+     * agree because they are two readings of one set, not because two filters were written to
+     * match.
+     *
+     * @param resourceHolders open, resource-holding workorders at the location — the panels' own
+     *     input, not the dashboard date's rows
+     * @param conflicts the accumulating conflict list
      */
-    private void detectResourceDoubleBooking(List<Workorder> workorders, List<ConflictEntry> conflicts) {
-        Map<ResourceKey, Long> claimCounts = workorders.stream()
+    private void detectResourceDoubleBooking(List<Workorder> resourceHolders, List<ConflictEntry> conflicts) {
+        Map<ResourceKey, Long> claimCounts = resourceHolders.stream()
                 .filter(wo -> wo.getResourceId() != null && !wo.isLocked())
                 .collect(Collectors.groupingBy(
                         wo -> new ResourceKey(wo.getResourceId(), effectiveResourceType(wo)),

@@ -95,6 +95,22 @@ class WorkorderOpenResourceHolderQueryTest {
         assertThat(findHolders()).isEmpty();
     }
 
+    @Test
+    @DisplayName("#1656: a row with no status is open here, exactly as Workorder.isLocked() reads it")
+    void nullStatusIsTreatedAsOpen() {
+        // workorder.status is a nullable column, and SQL three-valued logic made the old
+        // `status <> CANCELLED` predicate evaluate to NULL — i.e. excluded, i.e. locked — for such a
+        // row, while isLocked() reads it as open. The consequence was one-directional and invisible:
+        // a resource-holding workorder with no status vanished from this query and its bay was
+        // advertised as AVAILABLE while the entity still considered the job live.
+        UUID id = seed(null, TODAY, false);
+
+        assertThat(findHolders()).extracting(Workorder::getId).containsExactly(id);
+        assertThat(workorderRepository.findById(id).orElseThrow().isLocked())
+                .as("the query and the entity must agree about this row")
+                .isFalse();
+    }
+
     private List<Workorder> findHolders() {
         return workorderRepository.findOpenResourceHoldersAtLocation(LOCATION, TODAY);
     }

@@ -40,8 +40,9 @@ import org.springframework.web.client.RestClient;
  * Unit tests for CAP-140 Story #64: Propagate Assignment Context to Workorder.
  *
  * Validates that handleAssignmentUpdated correctly updates workorder location,
- * resource, and mechanic fields for mutable statuses (AC1/AC3), silently skips
- * locked/in-progress statuses without saving (AC2), throws
+ * resource, and mechanic fields for every unlocked status (AC1/AC3; widened from
+ * the original pre-execution-only set by #1656 so a mid-day reassignment is not
+ * silently dropped), silently skips locked ones without saving (AC2), throws
  * WorkorderNotFoundException
  * for unknown workorder IDs (AC4), throws IllegalArgumentException for null
  * events
@@ -238,37 +239,72 @@ class WorkorderAssignmentServiceTest {
         verify(workorderRepository).save(workorder);
     }
 
-    // Issue CAP-140: AC2 — locked/in-progress statuses are silently skipped
+    // Issue CAP-140 / #1656: locked statuses are skipped; running work is reassignable
 
     /**
-     * AC2: A workorder in WORK_IN_PROGRESS status must not be updated or saved;
-     * the call must complete without throwing an exception.
+     * #1656: a running job is exactly the one that gets reassigned mid-day, so the event must be
+     * applied rather than dropped.
+     *
+     * <p>This assertion is inverted from the CAP-140 original, which required WORK_IN_PROGRESS to
+     * be skipped. That guard made #1656's mid-day-reassignment acceptance criterion unreachable: a
+     * job moved from a bay to a mobile unit at 11am is WORK_IN_PROGRESS by definition, so the event
+     * was logged and discarded, the old bay stayed OCCUPIED and the new unit stayed AVAILABLE on the
+     * dispatch board with nothing anywhere for a dispatcher to see. The guard is now
+     * {@link Workorder#isLocked()} — see the COMPLETED and CANCELLED cases below, which are
+     * unchanged.
      */
     @Test
-    void whenHandleAssignmentUpdated_withWorkInProgressWorkorder_thenSkipsUpdateAndDoesNotSave() {
+    @DisplayName("#1656: a WORK_IN_PROGRESS workorder accepts a mid-day reassignment")
+    void whenHandleAssignmentUpdated_withWorkInProgressWorkorder_thenUpdatesFieldsAndSaves() {
         Workorder workorder = workorderWithStatus(WorkorderStatus.WORK_IN_PROGRESS);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
+        workorderService.handleAssignmentUpdated(validEvent());
 
-        verify(workorderRepository, never()).save(any());
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        verify(workorderRepository).save(workorder);
+    }
+
+    @Test
+    @DisplayName("#1656: a mid-day BAY → MOBILE_UNIT reassignment frees the bay and holds the unit, typed")
+    void whenHandleAssignmentUpdated_withRunningWorkorderMovedToMobileUnit_thenBothFieldsMove() {
+        // #1656 AC: the same workorder moves from a bay to a mobile unit while the job is running.
+        // The write path has to move id and type together — leaving the old bay id behind would keep
+        // the bay OCCUPIED on the board, and leaving the old BAY type behind would file the van
+        // under bays[] and go on advertising it as free.
+        UUID oldBayId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        Workorder workorder = workorderWithStatus(WorkorderStatus.WORK_IN_PROGRESS);
+        workorder.setResourceId(oldBayId);
+        workorder.setResourceType(ResourceType.BAY);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.MOBILE_UNIT));
+
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID).isNotEqualTo(oldBayId);
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+        verify(workorderRepository).save(workorder);
     }
 
     /**
-     * AC2: A workorder in AWAITING_PARTS status must not be updated or saved.
+     * #1656: a job waiting on parts is still sitting in its bay and is just as reassignable — the
+     * widened guard is "not locked", not "not yet started", so this is not a special case.
      */
     @Test
-    void whenHandleAssignmentUpdated_withAwaitingPartsWorkorder_thenSkipsUpdateAndDoesNotSave() {
+    void whenHandleAssignmentUpdated_withAwaitingPartsWorkorder_thenUpdatesFieldsAndSaves() {
         Workorder workorder = workorderWithStatus(WorkorderStatus.AWAITING_PARTS);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
+        workorderService.handleAssignmentUpdated(validEvent());
 
-        verify(workorderRepository, never()).save(any());
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        verify(workorderRepository).save(workorder);
     }
 
     /**
-     * AC2: A workorder in COMPLETED status must not be updated or saved.
+     * AC2 / #1656: a COMPLETED workorder that was never reopened is locked and must not be updated
+     * or saved. This is the half of the old guard that survives the widening — a finished job must
+     * not accept a reassignment.
      */
     @Test
     void whenHandleAssignmentUpdated_withCompletedWorkorder_thenSkipsUpdateAndDoesNotSave() {
@@ -281,52 +317,76 @@ class WorkorderAssignmentServiceTest {
     }
 
     /**
-     * AC2: A workorder in CANCELLED status must not be updated or saved.
+     * AC2 / #1656: a CANCELLED workorder is locked and must not be updated or saved, and must not
+     * hold a resource by accepting one either.
      */
     @Test
     void whenHandleAssignmentUpdated_withCancelledWorkorder_thenSkipsUpdateAndDoesNotSave() {
+        UUID oldBayId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
         Workorder workorder = workorderWithStatus(WorkorderStatus.CANCELLED);
+        workorder.setResourceId(oldBayId);
+        workorder.setResourceType(ResourceType.BAY);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        assertThatNoException().isThrownBy(() -> workorderService.handleAssignmentUpdated(validEvent()));
+        assertThatNoException()
+                .isThrownBy(() ->
+                        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.MOBILE_UNIT)));
 
+        assertThat(workorder.getResourceId()).isEqualTo(oldBayId);
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.BAY);
         verify(workorderRepository, never()).save(any());
+        verify(auditEventRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("AC2: AWAITING_APPROVAL workorder skips update and does not save")
-    void whenHandleAssignmentUpdated_withAwaitingApprovalWorkorder_thenSkipsUpdateAndDoesNotSave() {
-        // Given
+    @DisplayName("#1656: AWAITING_APPROVAL workorder accepts the assignment update")
+    void whenHandleAssignmentUpdated_withAwaitingApprovalWorkorder_thenUpdatesFieldsAndSaves() {
         Workorder workorder = Workorder.builder()
                 .id(WORKORDER_ID)
                 .status(WorkorderStatus.AWAITING_APPROVAL)
                 .build();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        // When
         workorderService.handleAssignmentUpdated(validEvent());
 
-        // Then
-        verify(workorderRepository, never()).save(any(Workorder.class));
-        verify(auditEventRepository, never()).save(any());
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        verify(workorderRepository).save(any(Workorder.class));
+        verify(auditEventRepository).save(any());
     }
 
     @Test
-    @DisplayName("AC2: READY_FOR_PICKUP workorder skips update and does not save")
-    void whenHandleAssignmentUpdated_withReadyForPickupWorkorder_thenSkipsUpdateAndDoesNotSave() {
-        // Given
+    @DisplayName("#1656: READY_FOR_PICKUP workorder accepts the assignment update")
+    void whenHandleAssignmentUpdated_withReadyForPickupWorkorder_thenUpdatesFieldsAndSaves() {
         Workorder workorder = Workorder.builder()
                 .id(WORKORDER_ID)
                 .status(WorkorderStatus.READY_FOR_PICKUP)
                 .build();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
 
-        // When
         workorderService.handleAssignmentUpdated(validEvent());
 
-        // Then
-        verify(workorderRepository, never()).save(any(Workorder.class));
-        verify(auditEventRepository, never()).save(any());
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        verify(workorderRepository).save(any(Workorder.class));
+        verify(auditEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("#1656: a reopened COMPLETED workorder is not locked, so it accepts the reassignment")
+    void whenHandleAssignmentUpdated_withReopenedCompletedWorkorder_thenUpdatesFieldsAndSaves() {
+        // isLocked() is the single authority, and it deliberately treats a reopened workorder as
+        // live — reopening never changes the status, so a plain COMPLETED test would refuse an
+        // assignment for a job somebody is actively redoing.
+        Workorder workorder = Workorder.builder()
+                .id(WORKORDER_ID)
+                .status(WorkorderStatus.COMPLETED)
+                .isReopened(true)
+                .build();
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+
+        workorderService.handleAssignmentUpdated(validEvent());
+
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        verify(workorderRepository).save(workorder);
     }
 
     // Issue CAP-140: AC3 — full replace semantics (prior value is discarded)

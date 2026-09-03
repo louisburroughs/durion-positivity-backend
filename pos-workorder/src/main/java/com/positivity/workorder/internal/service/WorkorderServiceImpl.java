@@ -895,14 +895,19 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(event.getWorkorderId())
                 .orElseThrow(() -> new WorkorderNotFoundException(event.getWorkorderId()));
 
-        WorkorderStatus status = workorder.getStatus();
-        if (status != WorkorderStatus.DRAFT
-                && status != WorkorderStatus.APPROVED
-                && status != WorkorderStatus.ASSIGNED) {
+        // #1656: the guard is "not locked", not "not yet started". It used to be
+        // status ∈ {DRAFT, APPROVED, ASSIGNED}, which made the mid-day reassignment this story
+        // exists for unreachable: a job moved from a bay to a mobile unit at 11am is by definition
+        // WORK_IN_PROGRESS, so the event was dropped with a warning — the old bay stayed OCCUPIED
+        // and the new unit stayed AVAILABLE on the dispatch board indefinitely, with no error
+        // anywhere a dispatcher would see. Locked work (CANCELLED, or COMPLETED and not reopened)
+        // is still refused: a finished or cancelled job must not accept a new resource, and
+        // isLocked() is the same authority the dashboard panels and the occupancy query use.
+        if (workorder.isLocked()) {
             log.warn(
-                    "Skipping assignment context update for workorder {} in non-updatable status {}",
+                    "Skipping assignment context update for workorder {} in locked status {}",
                     event.getWorkorderId(),
-                    status);
+                    workorder.getStatus());
             return;
         }
 

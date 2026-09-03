@@ -18,8 +18,15 @@ import lombok.NoArgsConstructor;
  *
  * <p>pos-location owns the bay aggregate; nothing in this module may write the table except the
  * event consumer. Same shape and rules as {@link ExtLocationReplica}: the owner's monotonic
- * {@code aggregateVersion} guards against applying a stale fact, and {@code active=false} rows are
- * retained as tombstones so an assignment to a decommissioned bay can still be rendered.
+ * {@code aggregateVersion} guards against applying a stale fact, and a <em>deactivated</em> bay
+ * (status {@code OUT_OF_SERVICE}) is retained as an {@code active=false} row, so an assignment to a
+ * decommissioned bay can still be named on the board.
+ *
+ * <p>A <em>deleted</em> bay is a different fact and does remove the row: {@code location.bay.deleted}
+ * says the owner's aggregate no longer exists, and this replica mirrors the owner rather than
+ * outliving it — exactly as {@link ExtLocationReplica} does for {@code location.location.deleted}.
+ * That is not a hole in the board: the dispatch panel renders a row for any resource open work still
+ * points at, with a null name, whether or not a replica row survives for it.
  *
  * <p>This replica is why the dispatch board can finally show a bay <em>name</em>: before it
  * existed, {@code BayStatus.bayName} was declared and never populated, because bay identity lives

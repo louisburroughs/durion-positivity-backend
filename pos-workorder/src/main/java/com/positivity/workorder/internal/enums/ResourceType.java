@@ -1,6 +1,5 @@
 package com.positivity.workorder.internal.enums;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +26,8 @@ public enum ResourceType {
     private static final Logger log = LoggerFactory.getLogger(ResourceType.class);
 
     /**
-     * Lenient JSON binding for the inbound assignment chain (#1656).
+     * Lenient resolution of a raw {@code resourceType} token from the inbound Kafka assignment
+     * chain (#1656).
      *
      * <p>The only producer of this field is upstream and outside this module's control, and the
      * value arrives inside a payload that also carries the location, the resource id and the
@@ -37,6 +37,16 @@ public enum ResourceType {
      * and downgrading an unrecognised token to "absent" keeps the rest of the update intact, and
      * the token is named in a warning so a real contract drift is still visible in the logs.
      *
+     * <p>This is deliberately <em>not</em> a {@code @JsonCreator} (#1656). A
+     * creator on the enum is global to the type, so it also governed
+     * {@code POST /v1/workorders/{id}/operationalContext/override}, where a hand-typed
+     * {@code "MOBILE-UNIT"} bound to "absent", fell through to the {@link #BAY} default and returned
+     * {@code 200} with the workorder pointing at a van while typed as a bay — the exact
+     * half-applied state the write path was written to prevent. A synchronous caller can be told it
+     * sent garbage, so the REST body binds strictly and an unknown token is a 400 (ADR-0017); the
+     * leniency is applied only where it was justified, by
+     * {@code KafkaCommandListener#normalizeResourceType} on the event path.
+     *
      * <p>Returning {@code null} rather than {@link #BAY} directly is deliberate: an unknown value
      * is treated exactly like an omitted one, so the fallback stays in the single place that owns
      * it, {@link #orDefault(ResourceType)}.
@@ -44,7 +54,6 @@ public enum ResourceType {
      * @param value the raw JSON token, possibly {@code null}, blank, mis-cased or unknown
      * @return the matching constant, or {@code null} when absent or unrecognised
      */
-    @JsonCreator
     public static ResourceType fromJson(String value) {
         if (value == null || value.isBlank()) {
             return null;

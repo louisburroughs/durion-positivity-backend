@@ -102,14 +102,25 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * {@code scheduledDate} is unscheduled work that is nonetheless holding the resource now, so it
      * is included.
      *
+     * <p>The status predicates are written as explicit {@code <> ... OR IS NULL} pairs rather than
+     * as bare inequalities because {@code workorder.status} is a nullable column and SQL three-valued
+     * logic makes {@code status <> CANCELLED} evaluate to NULL — i.e. excluded, i.e. <em>locked</em>
+     * — for a row with no status, while {@link Workorder#isLocked()} reads exactly the same row as
+     * open. That disagreement had one visible consequence: a resource-holding workorder with a null
+     * status would be dropped from this query and its bay reported AVAILABLE while the entity still
+     * considered the job live (#1656). Null now means open on both sides, matching
+     * {@code isLocked()}, which is the single authority the panels and conflict detection also use.
+     *
      * @param locationId the site whose panels are being rendered
      * @param onOrBefore the dashboard date; rows scheduled after it are excluded
      * @return open, resource-holding workorders at the location
      */
     @Query("SELECT w FROM Workorder w WHERE w.locationId = :locationId AND w.resourceId IS NOT NULL "
             + "AND (w.scheduledDate IS NULL OR w.scheduledDate <= :onOrBefore) "
-            + "AND w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.CANCELLED "
-            + "AND (w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.COMPLETED "
+            + "AND (w.status IS NULL "
+            + "OR w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.CANCELLED) "
+            + "AND (w.status IS NULL "
+            + "OR w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.COMPLETED "
             + "OR w.isReopened = TRUE)")
     @NonNull
     List<Workorder> findOpenResourceHoldersAtLocation(

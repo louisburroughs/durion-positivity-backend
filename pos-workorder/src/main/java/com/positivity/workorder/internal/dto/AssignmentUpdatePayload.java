@@ -42,12 +42,18 @@ public class AssignmentUpdatePayload {
      * where every assignment was assumed to be a bay. Once shopmgmt publishes the field, that
      * fallback stops being reached; the contract follow-up is tracked with this story.
      *
-     * <p>Binding is deliberately lenient ({@link ResourceType#fromJson(String)}): the value comes
-     * from a producer this module does not control, and it arrives inside the same payload as the
-     * location, the resource id and the mechanics. Strict enum binding would let one mis-cased or
-     * unknown token throw out of the Kafka listener's {@code treeToValue} and discard the whole
-     * assignment update silently, so an unrecognised token is warned about and then treated as
-     * absent instead.
+     * <p>Binding on the event path is deliberately lenient: the value comes from a producer this
+     * module does not control, and it arrives inside the same payload as the location, the resource
+     * id and the mechanics. Strict enum binding would let one mis-cased or unknown token throw out
+     * of the Kafka listener's {@code treeToValue} and discard the whole assignment update silently,
+     * so an unrecognised token is warned about and then treated as absent instead.
+     *
+     * <p>That leniency is applied by {@code KafkaCommandListener#normalizeResourceType}, which
+     * rewrites the raw token through {@link ResourceType#fromJson(String)} before binding — not by
+     * a {@code @JsonCreator} on the enum. A creator would be global to {@link ResourceType} and so
+     * would extend the same tolerance to the synchronous {@code operationalContext/override} REST
+     * body, where a caller's typo must be a 400 rather than a silently defaulted {@code BAY}
+     * (#1656).
      */
     @Schema(
             description = "Kind of resource the assignment points at. Optional and case-insensitive: an "

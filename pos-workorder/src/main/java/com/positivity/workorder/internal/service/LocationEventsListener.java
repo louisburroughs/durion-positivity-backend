@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
@@ -51,6 +52,14 @@ import tools.jackson.databind.ObjectMapper;
  * simply never taken today. That is deliberate and must stay non-fatal: an unknown or absent event
  * type falls through to the {@code processed_events} insert like any other ignored fact, and the
  * dashboard renders an empty replica as "no units configured" rather than failing.
+ *
+ * <p>Because those two contracts are the consumer's provisional guess at a shape pos-location has
+ * not published yet (issue #1668), a payload that arrives in the wrong shape must be
+ * <em>distinguishable</em> from that expected silence rather than merging into it. Both failure
+ * modes are therefore loud and neither writes a row: a missing identifier throws out of the
+ * record's compact constructor as a {@link DatabindException}, and a payload that binds but carries
+ * no site scope is refused by {@link #requireSiteScope}. Both are counted on
+ * {@code replica.payload.rejected} and logged at ERROR.
  */
 @Slf4j
 @Component
@@ -128,7 +137,7 @@ public class LocationEventsListener {
             }
         } catch (TransientDataAccessException e) {
             throw e;
-        } catch (DatabindException e) {
+        } catch (DatabindException | MalformedFactException e) {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
             }
@@ -175,6 +184,7 @@ public class LocationEventsListener {
 
     private void applyBayUpdated(JsonNode envelope) {
         BayUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayUpdatedV1.class);
+        requireSiteScope(payload.locationId(), BayUpdatedV1.EVENT_TYPE, "locationId");
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtBayReplica existing =
                 extBayReplicaRepository.findById(payload.bayId()).orElse(null);
@@ -200,6 +210,7 @@ public class LocationEventsListener {
 
     private void applyMobileUnitUpdated(JsonNode envelope) {
         MobileUnitUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitUpdatedV1.class);
+        requireSiteScope(payload.baseLocationId(), MobileUnitUpdatedV1.EVENT_TYPE, "baseLocationId");
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtMobileUnitReplica existing =
                 extMobileUnitReplicaRepository.findById(payload.mobileUnitId()).orElse(null);
@@ -221,6 +232,49 @@ public class LocationEventsListener {
         MobileUnitDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitDeletedV1.class);
         extMobileUnitReplicaRepository.deleteById(payload.mobileUnitId());
         log.info("Deleted ext_mobile_unit mobileUnitId={}", payload.mobileUnitId());
+    }
+
+    /**
+     * Refuses a bay or mobile-unit fact that carries no site scope (#1657).
+     *
+     * <p>The bay and mobile-unit contracts in {@link com.positivity.workorder.internal.dto.location}
+     * are the consumer's provisional statement of a contract pos-location does not publish yet
+     * (issue #1668). If the real producer names the field {@code siteId} rather than
+     * {@code locationId}, the record binds a null site and — without this guard — a perfectly
+     * well-formed-looking row lands in {@code ext_bay} that the roster query, which scopes by
+     * {@code location_id}, can never return. The dispatch panel would then be empty with no error
+     * anywhere: indistinguishable from "pos-location has not started publishing", which is the
+     * expected state today, and therefore invisible for as long as it takes someone to notice.
+     *
+     * <p>A wrong {@code bayId}/{@code mobileUnitId} field name is already loud — the record's
+     * compact constructor throws and Jackson reports it as a {@link DatabindException}. This makes
+     * the site-scope field equally loud, so a mis-shaped payload is always counted on
+     * {@code replica.payload.rejected} and logged at ERROR rather than half-written. A resource
+     * with no site cannot be dispatched from anywhere, so nothing of value is being rejected.
+     *
+     * @param siteId the site scope the payload bound
+     * @param eventType the fact type, for the log line
+     * @param field the field the owner is expected to publish the site scope in
+     * @throws MalformedFactException when the site scope is absent
+     */
+    private static void requireSiteScope(UUID siteId, String eventType, String field) {
+        if (siteId == null) {
+            throw new MalformedFactException(eventType + " payload has no " + field
+                    + "; the replica row would be invisible to the dispatch board. The bay and mobile-unit "
+                    + "fact contracts are provisional until pos-location publishes them (issue #1668) — "
+                    + "check the producer's field names against BayUpdatedV1/MobileUnitUpdatedV1.");
+        }
+    }
+
+    /**
+     * A fact whose payload bound without error but does not carry what the replica needs to be
+     * usable (#1657). Handled exactly like a Jackson databind failure: counted on
+     * {@code replica.payload.rejected}, logged at ERROR, and never written.
+     */
+    static final class MalformedFactException extends RuntimeException {
+        MalformedFactException(String message) {
+            super(message);
+        }
     }
 
     /**

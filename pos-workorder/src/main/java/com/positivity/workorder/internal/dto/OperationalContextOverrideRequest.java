@@ -35,6 +35,13 @@ public class OperationalContextOverrideRequest {
      * advertises the van as free. The same full-replace rule the assignment-event path follows
      * applies here, and an absent value resolves through
      * {@link com.positivity.workorder.internal.enums.ResourceType#orDefault} to {@code BAY}.
+     *
+     * <p>Unlike the Kafka assignment path, this field binds <em>strictly</em>: a token that is not
+     * {@code BAY} or {@code MOBILE_UNIT} is rejected as a 400 {@code ApiError} (ADR-0017) rather
+     * than being downgraded to "absent". A synchronous caller can be told it sent garbage, and the
+     * alternative was worse — {@code "MOBILE-UNIT"} used to return 200 having written the van's id
+     * under the {@code BAY} type, which is precisely the half-applied state the surrounding code
+     * exists to prevent (#1656).
      */
     @Schema(
             description = "Kind of resource the first assignedResources entry points at. Optional: an "

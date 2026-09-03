@@ -11,8 +11,15 @@
 -- including ones holding no work today — a set that cannot be derived from the day's workorders.
 --
 -- aggregate_version carries the fact envelope's monotonic version for the stale-event guard, per
--- the ext_* replica convention. active=false rows are kept, not deleted: a decommissioned unit may
--- still be referenced by open work, and dropping the row would make that work invisible.
+-- the ext_* replica convention.
+--
+-- Row lifecycle, stated as implemented: a *deactivation* keeps the row. An OUT_OF_SERVICE bay or an
+-- INACTIVE unit arrives as location.<entity>.updated, so the consumer rewrites the row with
+-- active=false and open work assigned to it can still be named on the board. A *deletion* removes
+-- the row: location.<entity>.deleted says the owner's aggregate is gone, and this replica mirrors
+-- the owner rather than outliving it — the same rule ext_location follows for location.deleted (V8).
+-- Losing the row does not hide the work: the dispatch board renders a panel row for any resource
+-- open work still points at, name null, whether or not a replica row exists for it.
 --
 -- Note: pos-location does not publish these two fact families yet. The tables are created empty and
 -- the consumer tolerates that; the upstream publisher is tracked as a cross-repo follow-up.

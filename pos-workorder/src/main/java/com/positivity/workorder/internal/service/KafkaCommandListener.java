@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
+import com.positivity.workorder.internal.enums.ResourceType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,6 +19,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Kafka command listener for inbound workorder commands/events.
@@ -46,6 +48,8 @@ import tools.jackson.databind.ObjectMapper;
 public class KafkaCommandListener {
 
     private static final String PAYLOAD = "payload";
+
+    private static final String RESOURCE_TYPE = "resourceType";
     private static final String COMMAND_ASSIGNMENT_UPDATED = "ASSIGNMENT_UPDATED";
     /**
      * Canonical dotted name normalized to command-type form:
@@ -116,6 +120,7 @@ public class KafkaCommandListener {
             JsonNode payloadNode =
                     hasCommandType && root.has(PAYLOAD) && !root.get(PAYLOAD).isNull() ? root.get(PAYLOAD) : root;
 
+            normalizeResourceType(payloadNode);
             AssignmentUpdatedEvent event = objectMapper.treeToValue(payloadNode, AssignmentUpdatedEvent.class);
             if (event.getWorkorderId() == null || event.getPayload() == null) {
                 log.warn("Ignoring ASSIGNMENT_UPDATED command with missing workorderId/payload: {}", message);
@@ -133,6 +138,42 @@ public class KafkaCommandListener {
             log.info("Published AssignmentUpdatedEvent from Kafka for workorderId={}", event.getWorkorderId());
         } catch (Exception e) {
             log.error("Failed to process Kafka command message: {}", message, e);
+        }
+    }
+
+    /**
+     * Applies the lenient {@code resourceType} rule to an inbound assignment command, in the one
+     * place it is justified (#1656).
+     *
+     * <p>The rule itself is unchanged: the token is matched case-insensitively, and one that
+     * matches nothing is warned about and removed so it is treated exactly like an omitted value —
+     * {@link AssignmentUpdatedEvent#resolveResourceType()} then applies the documented {@code BAY}
+     * fallback and the location, resource id and mechanics in the same payload still land. Strict
+     * binding here would throw out of {@code treeToValue} into this method's log-and-swallow catch
+     * and discard the entire assignment update silently.
+     *
+     * <p>It lives here, on the event path, rather than on {@link ResourceType} as a
+     * {@code @JsonCreator}: a creator is global to the enum, so the same leniency also governed the
+     * synchronous {@code operationalContext/override} REST body, where it turned a caller's typo
+     * into a {@code 200} that pointed the workorder at a van while typing it as a bay. A
+     * synchronous caller can be told it sent garbage; a Kafka producer cannot.
+     *
+     * @param eventNode the {@code AssignmentUpdatedEvent} node about to be bound; left untouched
+     *     unless it carries an assignment payload with a {@code resourceType} field
+     */
+    private static void normalizeResourceType(@NonNull JsonNode eventNode) {
+        if (!(eventNode.get(PAYLOAD) instanceof ObjectNode assignment)) {
+            return;
+        }
+        JsonNode rawType = assignment.get(RESOURCE_TYPE);
+        if (rawType == null || rawType.isNull()) {
+            return;
+        }
+        ResourceType resolved = ResourceType.fromJson(rawType.stringValue(null));
+        if (resolved == null) {
+            assignment.remove(RESOURCE_TYPE);
+        } else {
+            assignment.put(RESOURCE_TYPE, resolved.name());
         }
     }
 
