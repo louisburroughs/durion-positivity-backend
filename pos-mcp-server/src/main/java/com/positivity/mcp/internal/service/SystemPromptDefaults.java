@@ -68,14 +68,24 @@ public final class SystemPromptDefaults {
             """;
 
     /**
-     * DATE-WINDOW layer (#1661): how a relative date range resolves to concrete dates.
+     * DATE-WINDOW layer (#1661, narrowed to classification-plus-protocol by #1675): how a relative
+     * date range's SHAPE is classified from the wording, and the protocol for turning that
+     * classification into concrete dates.
      *
-     * <p>Four of the twelve Wave 2 gate questions failed on this alone. The model, never told the
-     * current date, invented one and measured a rolling window from it, while the ground truth used
-     * whole calendar periods. Both were then internally consistent and disagreed anyway — q17 read
-     * V1 Evergreen as +7.43 % against an expected +12.00 % purely because a not-yet-due bill sat in
-     * the rolling window's tail, and nowhere in either answer was the window visible enough to spot
-     * the divergence.
+     * <p>Three rounds of prompt-only arithmetic (#1661, #1664, #1670, #1672) left this layer doing
+     * two jobs at once — classify the shape from the wording, then compute its concrete dates — and
+     * the model was reliable at the first and not the second: single-period questions worked (q01
+     * "last month", q03 "this quarter") but multi-period calendar spans did not. q09 "in the last
+     * twelve months" resolved rolling (2025-09-04..2026-09-03) instead of calendar
+     * (2025-09-01..2026-08-31); q12 "in the last six months" and the calendar side of q15's mixed
+     * comparison failed the same way. The window for a question and a "today" is a pure function,
+     * so #1675 moved it to {@link
+     * com.positivity.mcp.internal.orchestration.tools.DateWindowResolver}: this layer now states
+     * only the classification rules (which wording names which shape) and the protocol for calling
+     * the {@code resolveDateWindow} tool that resolver backs — every bullet that performed
+     * arithmetic or walked through a worked date (the illustration, the count-back rule, the
+     * January-inversion floor) moved with it, since the resolver now gets that arithmetic right by
+     * construction rather than by a model computing it under a prose rule.
      *
      * <p>The convention resolves rather than asks. Asking is right for a missing identifier, where
      * no default can be correct and a guess fabricates data; that case stays with the tool-use
@@ -86,51 +96,43 @@ public final class SystemPromptDefaults {
      * six months" is rolling, "in the last six months" is calendar. Treating every relative range as
      * calendar — as the first version of this layer did — is wrong for the rolling half, and the two
      * shapes are indistinguishable from the returned number alone, which is why the answer has to
-     * name the shape as well as the dates.
+     * quote the resolver's own statement of the window it used.
      *
      * <p>The paired-comparison rule is what q15/q17 actually needed. "Over the last six months
      * compared with the same six months last year" is only meaningful if both windows have the same
      * shape and length; measuring one rolling and one calendar makes the year-on-year difference an
      * artefact of the windows.
      *
-     * <p>Three details this text has to get exactly right, each a way the contract could defeat
-     * itself (raised on review of #1664):
+     * <p>Two details this text still has to get right (raised on review of #1664, still true after
+     * #1675 narrowed the layer):
      *
      * <ul>
      *   <li>The current date is supplied by the caller-context block, which both assistants append
      *       <em>after</em> the assembled layers ({@code SpringAiPosAssistant.buildSystemPrompt}), so
      *       this layer must not describe it as being "above". It names the block instead of a
      *       direction, which stays true wherever the block is placed.
-     *   <li>The worked example is labelled as an illustration. An unlabelled concrete date is an
-     *       anchor the model can carry into its answer, which would reintroduce exactly the invented
-     *       "today" this layer exists to remove.
-     *   <li>Requiring whole periods can invert a range on its own: a six-month CALENDAR SPAN asked
-     *       when fewer than six complete months exist resolves to a start after its end. The
-     *       analytics endpoints reject {@code endDate} before {@code startDate} with a 400, so the
-     *       rule carries an explicit floor rather than relying on the model to notice. This no
-     *       longer applies to "this year", which is CURRENT-TO-DATE and ends on the current date,
-     *       so it cannot invert.
+     *   <li>{@code SharedOrchestrationSupport.formatUserContext} keeps injecting today's date, and
+     *       {@code DateWindowFacadeTool} resolves off the same shared {@code Clock} bean — the two
+     *       cannot disagree, which is what let the worked illustration be removed instead of merely
+     *       relabelled: there is no longer a model-carried "today" for it to anchor.
      * </ul>
      */
     static final String DATE_WINDOW_LAYER_TEXT = """
             Date-window contract:
             - Resolve every relative date range from the current date stated in the authenticated user context block. Never use a date you assume, recall, or infer from the conversation.
-            - The wording decides the SHAPE of the window, and the shapes give different answers:
+            - The wording decides the SHAPE of the window:
             -   ROLLING — "over the last N days/weeks/months/years", "over the past N": the N units ending on the current date, that date included.
-            -   CURRENT-TO-DATE — "this week/month/quarter/year", "week/month/quarter/year to date": from the FIRST day of the period that contains the current date, up to the current date. NEVER the previous complete period. "This quarter" on 2026-09-03 is 2026-07-01 to 2026-09-03, not April-June.
-            -   PRIOR COMPLETE — "last week/month/quarter/year", "the previous month": exactly one whole period, the most recent one that has ended. "Last month" on 2026-09-03 is 2026-08-01 to 2026-08-31.
-            -   CALENDAR SPAN — "in the last N weeks/months", "during the last N months", "for the last N months": the N whole periods ENDING WITH THE MOST RECENT COMPLETE ONE. On 2026-09-03 "the last six months" is 2026-03-01 to 2026-08-31 — it ends in August, not in June, and not in the current partial month.
+            -   CURRENT-TO-DATE — "this week/month/quarter/year", "week/month/quarter/year to date": from the FIRST day of the period that contains the current date, up to the current date. NEVER the previous complete period.
+            -   PRIOR COMPLETE — "last week/month/quarter/year", "the previous month": exactly one whole period, the most recent one that has ended.
+            -   CALENDAR SPAN — "in the last N weeks/months", "during the last N months", "for the last N months": the N whole periods ENDING WITH THE MOST RECENT COMPLETE ONE.
             - Read the wording carefully: "over the last six months" is rolling; "in the last six months", "during the last six months" and "for the last six months" are a calendar span. They are different questions and must not be answered alike.
             - "This X" and "last X" are BOTH fixed, and they are NOT the same period. "This X" includes the current date and is deliberately partial; "last X" is the whole period before it. Answering "this quarter" with the previous complete quarter reports a period the user did not ask about, and can return nothing at all when the data lies in the current one.
-            - Illustration only, not today's dates: were the current date 2026-09-03, "over the last six months" would be 2026-03-04 to 2026-09-03; "in the last six months" 2026-03-01 to 2026-08-31; "this quarter" 2026-07-01 to 2026-09-03; "last month" 2026-08-01 to 2026-08-31. Always recompute from the current date you were actually given.
-            - Exclude the current partial period ONLY from a CALENDAR SPAN or a PRIOR COMPLETE period. A CURRENT-TO-DATE range is partial by definition and must keep the current period; a ROLLING range ends on the current date and excludes nothing.
-            - A multi-period span always ends with the most recent COMPLETE period. Do not anchor it to the start of the year, to a quarter boundary, or to any other convenient edge: count back N periods from the last complete one.
-            - Never emit a range whose start date is after its end date. Where excluding the partial period would leave an inverted or empty range — "in the last six months" asked when fewer than six complete months exist — use the partial period up to the current date instead, and say in the answer that the period is incomplete.
             - A range expressed in days has no calendar form and is always rolling; only weeks, months, quarters and years have complete calendar periods.
-            - When a question pairs a range with a comparison period — "compared with the same six months last year", "versus the prior quarter", "compared with last year" — measure BOTH on the same shape and the same length, offset by one period. "Compared with last year" against a partial current year means the SAME partial span one year earlier, never a complete prior year against an incomplete current one. Comparing a rolling window against a calendar one, or a longer period against a shorter, makes the difference an artefact of the windows rather than of the business.
+            - When a question pairs a range with a comparison period — "compared with the same six months last year", "versus the prior quarter", "compared with last year" — classify BOTH windows on the same shape and the same length, offset by one period. "Compared with last year" against a partial current year means the SAME partial span one year earlier, never a complete prior year against an incomplete current one. Comparing a rolling window against a calendar one, or a longer period against a shorter, makes the difference an artefact of the windows rather than of the business.
             - PRECEDENCE for a mixed comparison: where the two phrasings disagree in shape — "over the last six months" (rolling) paired with "the same six months last year" (named calendar months) — resolve BOTH on the CALENDAR shape. The fixed phrase wins because it names a specific period; taking the rolling side instead would silently redefine the period the question explicitly named.
             - This precedence applies only to windows being compared with each other. Independent conditions in one question keep their own shapes: "hasn't bought in the last 90 days but spent over $10,000 in the prior year" is a rolling filter and a calendar filter, not a mixed comparison, and forcing them to one shape would change what was asked.
-            - State the window you used in the answer itself, with explicit start and end dates and whether it is rolling or calendar — not only in the tool arguments. A figure whose window is invisible cannot be checked, and the two shapes are indistinguishable from the number alone.
+            - Before calling any tool that takes a date or a date range, call `resolveDateWindow` with the shape, unit, count and comparison you classified from the wording; copy its `startDate`/`endDate` into the tool arguments verbatim. Never compute a date yourself.
+            - State the window you used in the answer itself, with explicit start and end dates and whether it is rolling or calendar — not only in the tool arguments. Quote `resolveDateWindow`'s `statement` for this; a figure whose window is invisible cannot be checked, and the two shapes are indistinguishable from the number alone.
             - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
             - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
             - These rules take precedence over any role persona or domain guidance above them.

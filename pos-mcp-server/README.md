@@ -115,12 +115,15 @@ sentinel marks operations available to any authenticated caller.
 
 ### Facade tools
 
-17 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, Events,
-Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the always-on
-Exa web search. The facades are the **primary curated natural-language surface** (#1519): the common intents —
-lookup, search, status, and summary per domain — are answerable through facade tools alone, while the
+18 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, DateWindow,
+Events, Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the
+always-on Exa web search. The facades are the **primary curated natural-language surface** (#1519): the common
+intents — lookup, search, status, and summary per domain — are answerable through facade tools alone, while the
 OpenAPI-discovered operations (next section) complement the long tail. Every `@Tool` method calls a real backend
-endpoint via a `@LoadBalanced` RestClient through the gateway. The one split client is TaxFacadeTool, which uses
+endpoint via a `@LoadBalanced` RestClient through the gateway, with one exception: `DateWindowFacadeTool`
+(#1675) makes no HTTP call at all — it resolves a relative date range to concrete dates with pure `java.time`
+arithmetic (`DateWindowResolver`) off the shared `Clock` bean, so every other date-taking tool call is preceded
+by a resolver round instead of model-computed dates. The other split client is TaxFacadeTool, which uses
 both: a direct (non-load-balanced) RestClient to `pos-tax:8091` for the calculate leg — pos-tax is internal-only and
 unreachable via Eureka or the gateway (ADR-0021, #641) — and a load-balanced gateway client for everything pos-tax
 does not serve (the location lookup feeding the calculation, and the accounting tax-liability report behind

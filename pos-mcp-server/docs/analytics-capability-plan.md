@@ -478,6 +478,16 @@ selection, not answers — it is not the question list.
 | 19 | Revenue vs technician hours by customer, revenue/hour | 3 | 2 | `customerEfficiency` composition |
 | 20 | 12-month business summary, 7 metrics, trend flags | 3 | 2 | `businessSummary` composition; trends in prose |
 
+**`resolveDateWindow` and the budgets above (#1675).** Every dated question in this table now
+opens with one `resolveDateWindow` call (`DateWindowFacadeTool`, `docs/gate-closeout-plan-1660-1676.md`
+A1) before its first downstream tool call, so the model classifies the window's shape instead of
+computing its dates. That round makes no HTTP call — it is in-process `DateWindowResolver`
+arithmetic — so it is **counted as zero** against every Budget figure above; the decision was
+recorded in the close-out plan rather than raising `MAX_TOOL_TURNS` (the alternative the plan
+weighed was an 8→10 cap raise, decided against since the resolver round is not a downstream call).
+Q4's 7-call budget, the tightest in the table, becomes 8 rounds issued (7 downstream + 1
+resolver) and still reads as "7" for gate-budget purposes.
+
 ## 7. Risks
 
 - **Selection misses (G4 residue).** New discovered ops may lose embedding slots to old

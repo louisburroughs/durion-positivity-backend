@@ -229,15 +229,17 @@ class RolePromptResolverImplTest {
     }
 
     /**
-     * A calendar range drops the current partial period, and the answer has to disclose the window
-     * it used — the number alone cannot show which window produced it.
+     * A calendar span is defined as ending with the last complete period, and the answer has to
+     * disclose the window it used — the number alone cannot show which window produced it. Which
+     * dates that period actually is (and dropping the current partial one) is #1675 resolver
+     * arithmetic now, not a prompt rule.
      */
     @Test
-    @DisplayName("DATE_WINDOW layer drops the partial period for calendar ranges and requires disclosure")
-    void dateWindowLayer_calendarRangeDropsThePartialPeriodAndDisclosesTheWindow() {
+    @DisplayName(
+            "DATE_WINDOW layer defines calendar spans as ending with the last complete period and requires disclosure")
+    void dateWindowLayer_calendarSpanEndsAtTheLastCompletePeriodAndDisclosesTheWindow() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("ENDING WITH THE MOST RECENT COMPLETE ONE")
-                .contains("Exclude the current partial period ONLY from a CALENDAR SPAN")
                 .contains("State the window you used in the answer itself");
     }
 
@@ -253,9 +255,9 @@ class RolePromptResolverImplTest {
                 .contains("ROLLING")
                 .contains("CALENDAR")
                 .contains("\"over the last six months\" is rolling");
-        // A rolling window ends today and drops nothing; only the whole-period shapes trim.
+        // ROLLING ends on the current date, that date included — no separate exclusion rule needed.
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("a ROLLING range ends on the current date and excludes nothing");
+                .contains("the N units ending on the current date, that date included");
     }
 
     /**
@@ -268,7 +270,7 @@ class RolePromptResolverImplTest {
     @DisplayName("DATE_WINDOW layer requires a comparison period to match the shape it is compared against")
     void dateWindowLayer_requiresPairedPeriodsToMatch() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("measure BOTH on the same shape and the same length, offset by one period");
+                .contains("classify BOTH windows on the same shape and the same length, offset by one period");
     }
 
     /**
@@ -317,8 +319,7 @@ class RolePromptResolverImplTest {
     void dateWindowLayer_thisPeriodIsCurrentToDate() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("CURRENT-TO-DATE")
-                .contains("NEVER the previous complete period")
-                .contains("is 2026-07-01 to 2026-09-03, not April-June");
+                .contains("NEVER the previous complete period");
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("are BOTH fixed, and they are NOT the same period");
     }
@@ -339,14 +340,18 @@ class RolePromptResolverImplTest {
     /**
      * Live-run regression: a six-month calendar span resolved to 2026-01-01..2026-06-30 — six whole
      * months, but anchored to the start of the year instead of ending with the last complete one.
+     * #1675: the counting-back arithmetic this bullet used to spell out now lives in
+     * DateWindowResolver; the layer states only the shape's definition and routes the arithmetic
+     * through the resolver tool.
      */
     @Test
-    @DisplayName("DATE_WINDOW layer anchors a multi-period span to the most recent complete period")
+    @DisplayName(
+            "DATE_WINDOW layer anchors a calendar span to the most recent complete period, by definition not by counting")
     void dateWindowLayer_spanEndsAtTheMostRecentCompletePeriod() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("ENDING WITH THE MOST RECENT COMPLETE ONE")
-                .contains("it ends in August, not in June")
-                .contains("count back N periods from the last complete one");
+                .contains("call `resolveDateWindow`")
+                .contains("Never compute a date yourself.");
     }
 
     /**
@@ -360,13 +365,19 @@ class RolePromptResolverImplTest {
                 .contains("never a complete prior year against an incomplete current one");
     }
 
-    /** Only spans meant to be whole drop the partial period. */
+    /**
+     * Only spans meant to be whole drop the partial period; CURRENT-TO-DATE stays partial by
+     * definition. #1675 moved the separate "exclude the partial period" rule this test used to pin
+     * into DateWindowResolver's construction (CURRENT-TO-DATE's own definition already runs up to
+     * today, never past it), so the layer states it once, in the shape's own definition, rather
+     * than as a second rule that could drift from it.
+     */
     @Test
-    @DisplayName("DATE_WINDOW layer scopes partial-period exclusion away from current-to-date ranges")
-    void dateWindowLayer_partialExclusionDoesNotApplyToCurrentToDate() {
+    @DisplayName("DATE_WINDOW layer keeps CURRENT-TO-DATE partial by definition, with no separate exclusion rule")
+    void dateWindowLayer_currentToDateStaysPartialByDefinition() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("Exclude the current partial period ONLY from a CALENDAR SPAN or a PRIOR COMPLETE period")
-                .contains("must keep the current period");
+                .contains("up to the current date")
+                .doesNotContain("Exclude the current partial period ONLY from");
     }
 
     /**
@@ -424,38 +435,33 @@ class RolePromptResolverImplTest {
     }
 
     /**
-     * An unlabelled concrete date in the prompt is an anchor the model can carry into its answer,
-     * which would reintroduce the invented "today" this layer removes.
+     * #1675: the worked illustration used to embed a concrete "today" the model could carry into
+     * its answer, reintroducing exactly the invented date this layer exists to remove. Now that the
+     * arithmetic lives in DateWindowResolver, the layer needs no worked example at all — asserting
+     * that it carries no concrete calendar date is the regression guard the old illustration test
+     * pinned the opposite way (that the illustration existed and was labelled).
      */
     @Test
-    @DisplayName("DATE_WINDOW layer marks its worked dates as an illustration, not as today")
-    void dateWindowLayer_labelsTheWorkedExampleAsIllustrative() {
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("Illustration only, not today's dates")
-                .contains("Always recompute from the current date you were actually given");
-        // The worked example must show both shapes, since it is the only place their difference is
-        // made concrete.
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("2026-03-04 to 2026-09-03")
-                .contains("2026-03-01 to 2026-08-31");
+    @DisplayName("DATE_WINDOW layer carries no concrete calendar date of its own")
+    void dateWindowLayer_carriesNoConcreteCalendarDateOfItsOwn() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT).doesNotContainPattern("[0-9]{4}-[0-9]{2}-[0-9]{2}");
     }
 
     /**
-     * Excluding the partial period can invert a range by itself: "this year" asked in January would
-     * otherwise resolve to 1 January through the previous 31 December, which the analytics
-     * endpoints reject with a 400.
+     * #1675: the January-inversion floor this test used to pin — "exclude the partial period would
+     * invert a range, so fall back to the partial period instead" — performed arithmetic the model
+     * was not reliable at. DateWindowResolver's CALENDAR_SPAN construction (subtract whole periods
+     * from the current period's start) cannot invert by construction, so the floor moved there
+     * rather than staying here as a rule to apply. The layer's remaining job is to route every date
+     * computation through the resolver tool, never to compute or guard one itself.
      */
     @Test
-    @DisplayName("DATE_WINDOW layer floors the complete-period rule so it cannot invert a range")
-    void dateWindowLayer_guardsAgainstAnInvertedRange() {
+    @DisplayName("DATE_WINDOW layer names resolveDateWindow and routes every date computation through it")
+    void dateWindowLayer_routesEveryDateComputationThroughResolveDateWindow() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("Never emit a range whose start date is after its end date")
-                .contains("use the partial period up to the current date instead");
-        // "This year" is now CURRENT-TO-DATE, which cannot invert at all; the guard therefore
-        // belongs to the span shape, where too few complete periods is the remaining risk.
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("asked when fewer than six complete months exist")
-                .contains("say in the answer that the period is incomplete");
+                .contains("call `resolveDateWindow`")
+                .contains("copy its `startDate`/`endDate`")
+                .contains("Never compute a date yourself.");
     }
 
     private double fallbackCount(String reason, String requested) {
