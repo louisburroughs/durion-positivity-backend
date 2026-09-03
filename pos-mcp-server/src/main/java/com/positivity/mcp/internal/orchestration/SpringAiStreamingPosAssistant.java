@@ -4,6 +4,7 @@ import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
+import io.micrometer.observation.ObservationRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,14 +59,15 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable ToolInvocationRecorder invocationRecorder,
-            @Nullable RequestScopedUserContext requestScopedUserContext) {
+            @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable ObservationRegistry observationRegistry) {
         this.streamingChatModel = streamingChatModel;
         if (!(streamingChatModel instanceof ChatModel chatModel)) {
             throw new IllegalArgumentException(
                     "Streaming chat model %s must also implement ChatModel: tool execution runs through ChatClient and would otherwise be silently unavailable"
                             .formatted(streamingChatModel.getClass().getName()));
         }
-        this.chatClient = SpringAiPosAssistant.buildToolCallingChatClient(chatModel);
+        this.chatClient = SpringAiPosAssistant.buildToolCallingChatClient(chatModel, observationRegistry);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;

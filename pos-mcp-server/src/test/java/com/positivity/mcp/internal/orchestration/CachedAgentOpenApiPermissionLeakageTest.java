@@ -309,6 +309,7 @@ class CachedAgentOpenApiPermissionLeakageTest {
                 openApiToolProvider,
                 null, // answerResolutionLadder
                 contextOrNull,
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,

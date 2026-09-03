@@ -32,6 +32,7 @@ import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -95,6 +96,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable AnswerResolutionLadder answerResolutionLadder;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
+
+    /** #1655: passed to the tool-calling ChatClient so advisor observations are emitted. */
+    private final @Nullable ObservationRegistry observationRegistry;
+
     private final @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient;
     private final @Nullable ToolInvocationRecorder toolInvocationRecorder;
     private final NltiWorkflowStateService workflowStateService;
@@ -125,6 +130,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable AnswerResolutionLadder answerResolutionLadder,
             @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable ObservationRegistry observationRegistry,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @Nullable ToolInvocationRecorder toolInvocationRecorder,
             @NonNull NltiWorkflowStateService workflowStateService,
@@ -153,6 +159,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.openApiToolProvider = openApiToolProvider;
         this.answerResolutionLadder = answerResolutionLadder;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.observationRegistry = observationRegistry;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.toolInvocationRecorder = toolInvocationRecorder;
         this.workflowStateService = workflowStateService;
@@ -403,7 +410,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 openApiToolProvider,
                 answerResolutionLadder,
                 toolInvocationRecorder,
-                requestScopedUserContext);
+                requestScopedUserContext,
+                observationRegistry);
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,
