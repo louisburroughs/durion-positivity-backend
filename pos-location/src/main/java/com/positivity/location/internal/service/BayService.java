@@ -16,4 +16,11 @@ public interface BayService {
     BayResponse getBay(UUID locationId, UUID bayId);
 
     BayResponse patchBay(UUID locationId, UUID bayId, BayPatchRequest patch);
+
+    /**
+     * Hard-delete a bay and publish the {@code location.bay.deleted} tombstone (issue #1668).
+     *
+     * @return {@code true} when a bay was deleted, {@code false} when none matched
+     */
+    boolean deleteBay(UUID locationId, UUID bayId);
 }

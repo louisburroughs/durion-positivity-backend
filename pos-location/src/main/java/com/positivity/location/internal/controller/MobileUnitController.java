@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -164,7 +166,11 @@ public class MobileUnitController {
                     collides with another unit at the same base location.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
-    @ApiResponse(responseCode = "409", description = "Mobile unit name already taken at the base location.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:mobile-unit:manage.")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "Mobile unit name already taken at the base location, or a concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
@@ -188,6 +194,45 @@ public class MobileUnitController {
                     @RequestBody
                     Map<String, Object> patch) {
         return ResponseEntity.ok(mobileUnitService.patch(id, patch));
+    }
+
+    @Operation(operationId = "deleteMobileUnit", summary = "Delete a Mobile Unit", description = """
+                    Deletes a mobile unit permanently by id, removing its coverage rules and capability \
+                    assignments, and publishes a deletion fact so replica consumers drop the row from their \
+                    dispatch and roster views.
+                    Use this tool only when a unit was created in error; use patchMobileUnit with status \
+                    INACTIVE instead to stand down a real unit, which keeps it visible as inactive rather \
+                    than removing it.
+                    Preconditions: the unit must exist; there is no usage check, so callers must confirm the \
+                    unit is not referenced by scheduled work first.
+                    Required inputs: id (UUID) as a path parameter; there is no request body.
+                    Emits a LOCATION_MOBILE_UNIT_DELETE event; the row is hard-deleted, not soft-deleted, and \
+                    its coverage rules are deleted with it.
+                    Returns 204 on success and 404 when the mobile unit does not exist.
+                    """)
+    @ApiResponse(responseCode = "204", description = "Mobile unit deleted successfully.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:mobile-unit:manage.")
+    @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
+    @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
+    @EmitEvent(id = "LOCATION_MOBILE_UNIT_DELETE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:mobile-unit:manage"})
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteMobileUnit(
+            @Parameter(
+                            description = "ID of the mobile unit to delete",
+                            example = "018e1c9f-6b5a-7890-abcd-1234567890ab")
+                    @PathVariable
+                    UUID id) {
+        // Thrown rather than returned as a bare ResponseEntity.notFound(): every non-2xx response
+        // must carry the ApiError envelope (docs/ERROR_ENVELOPE.md), and an empty body has no code,
+        // message or correlationId for the caller or the logs to key on.
+        if (!mobileUnitService.deleteMobileUnit(id)) {
+            throw new ResourceNotFoundException("Mobile unit not found");
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(

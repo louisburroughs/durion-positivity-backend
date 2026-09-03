@@ -276,9 +276,10 @@ public class DashboardServiceImpl implements DashboardService {
      * @param activeNamesById active resources at the location, id → name, in display order
      * @param nameLookup resolves the names of resources outside the active set in one batch; ids it
      *     cannot resolve are simply absent from the returned map. It is called at most once per
-     *     panel, and not at all when the active set already covers every occupied resource —
-     *     {@code ext_bay} and {@code ext_mobile_unit} are empty until pos-location publishes those
-     *     facts (#1668), so today every occupied resource takes this branch and a per-id lookup
+     *     panel, and not at all when the active set already covers every occupied resource. It
+     *     still matters once pos-location's facts (#1668) populate {@code ext_bay} /
+     *     {@code ext_mobile_unit}: a resource occupied but not active — out of service, or not yet
+     *     reached by the owner's backfill — is absent from the active set, and a per-id lookup
      *     would be a fan-out on every render (#1657)
      * @return the panel rows, active resources first in replica order
      */
@@ -312,10 +313,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .filter(resourceId -> !panelNamesById.containsKey(resourceId))
                 .toList();
         if (!unresolved.isEmpty()) {
-            // One batched lookup, not one per resource. The active set is empty in production until
-            // pos-location starts publishing bay and mobile-unit facts (#1668), so this branch is
-            // taken by *every* occupied resource today — a findById per id here would be exactly the
-            // per-unit fan-out the occupancy query was written to remove.
+            // One batched lookup, not one per resource. This branch covers every occupied resource
+            // whose id the active set does not name — everything, until pos-location's facts
+            // (#1668) reach this replica, and afterwards any resource that is occupied but not
+            // active. A findById per id here would be exactly the per-unit fan-out the occupancy
+            // query was written to remove.
             Map<UUID, String> resolved = nameLookup.apply(unresolved);
             for (UUID resourceId : unresolved) {
                 // Not computeIfAbsent: a resource whose name resolves to null still needs a row, and

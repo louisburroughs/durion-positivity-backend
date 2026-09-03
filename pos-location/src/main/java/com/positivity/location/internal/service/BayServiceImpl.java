@@ -19,10 +19,13 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Public API service for bay operations.
@@ -42,14 +45,17 @@ public class BayServiceImpl implements BayService {
     private final BayRepository bayRepository;
     private final LocationRepository locationRepository;
     private final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    private final LocationFactPublisher locationFactPublisher;
 
     public BayServiceImpl(
             BayRepository bayRepository,
             LocationRepository locationRepository,
-            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository) {
+            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
+            LocationFactPublisher locationFactPublisher) {
         this.bayRepository = bayRepository;
         this.locationRepository = locationRepository;
         this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
+        this.locationFactPublisher = locationFactPublisher;
     }
 
     public BayResponse createBay(UUID locationId, BayRequest request) {
@@ -87,7 +93,13 @@ public class BayServiceImpl implements BayService {
                 .build();
 
         try {
-            return toResponse(bayRepository.save(entity));
+            BayEntity saved = bayRepository.save(entity);
+            // Bulk ingest creates one bay per row through this same method, each in its own
+            // transaction, so it emits a fact per created row for free (issue #1668).
+            locationFactPublisher.bayChanged(saved);
+            return toResponse(saved);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toBayOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toBayConflictException(exception);
         }
@@ -168,10 +180,60 @@ public class BayServiceImpl implements BayService {
         }
 
         try {
-            return toResponse(bayRepository.save(existing));
+            BayEntity saved = bayRepository.save(existing);
+            // Status transitions (ACTIVE <-> OUT_OF_SERVICE) travel on this same fact; a bay taken
+            // out of service keeps its replica row and flips inactive (issue #1668).
+            locationFactPublisher.bayChanged(saved);
+            return toResponse(saved);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toBayOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toBayConflictException(exception);
         }
+    }
+
+    /**
+     * Hard-deletes a bay and emits the {@code location.bay.deleted} tombstone (issue #1668).
+     *
+     * <p>Loads the row before deleting it so the fact can be versioned from its final
+     * {@code @Version}, the same load-before-delete shape {@code LocationServiceImpl.deleteLocation}
+     * uses: the tombstone publisher needs the entity, not just the id. A bay id that resolves to
+     * nothing has no state to version and no delete to announce, so it is a silent no-op rather
+     * than an unconditional publish — a caller retrying a delete for an id that never existed must
+     * not produce a tombstone every time.
+     *
+     * <p>Taking a bay out of service is a status change via {@link #patchBay}, not a delete;
+     * consumers remove the replica row unconditionally here.
+     */
+    public boolean deleteBay(UUID locationId, UUID bayId) {
+        validateLocationExists(locationId);
+        BayEntity existing =
+                bayRepository.findByIdAndLocationId(bayId, locationId).orElse(null);
+        if (existing == null) {
+            return false;
+        }
+        try {
+            bayRepository.delete(existing);
+            locationFactPublisher.bayDeleted(existing);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toBayOptimisticLockException(exception);
+        }
+        return true;
+    }
+
+    /**
+     * Translates an optimistic-lock failure into 409, the platform's contract for a version
+     * mismatch (ADR-0017 §2), matching {@code LocationServiceImpl.saveLocationInternal}.
+     *
+     * <p>Reachable only since bays gained a JPA {@code @Version} for the {@code location.bay.*}
+     * facts (#1668). Before that, two concurrent patches were last-write-wins and both returned
+     * 200; without this translation the loser would now surface as an unmapped 500, because
+     * neither this module's handler nor pos-web-common's maps
+     * {@code ObjectOptimisticLockingFailureException}. The publisher's flush pulls the failure
+     * inside the surrounding try block, which is what makes the omission easy to miss.
+     */
+    private ResponseStatusException toBayOptimisticLockException(OptimisticLockingFailureException exception) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_FAILED", exception);
     }
 
     private void validateLocationExists(UUID locationId) {

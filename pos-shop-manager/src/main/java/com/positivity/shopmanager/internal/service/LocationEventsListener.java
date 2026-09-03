@@ -1,9 +1,9 @@
 package com.positivity.shopmanager.internal.service;
 
-import com.positivity.shopmanager.internal.dto.location.BayDeletedV1;
-import com.positivity.shopmanager.internal.dto.location.BayUpdatedV1;
-import com.positivity.shopmanager.internal.dto.location.MobileUnitDeletedV1;
-import com.positivity.shopmanager.internal.dto.location.MobileUnitUpdatedV1;
+import com.positivity.domainevents.location.BayDeletedV1;
+import com.positivity.domainevents.location.BayUpdatedV1;
+import com.positivity.domainevents.location.MobileUnitDeletedV1;
+import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtMobileUnitReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;

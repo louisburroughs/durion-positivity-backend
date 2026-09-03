@@ -1,6 +1,7 @@
 package com.positivity.location.internal.repository;
 
 import com.positivity.location.internal.entity.BayEntity;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -8,7 +9,9 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for bay persistence operations.
@@ -77,4 +80,24 @@ public interface BayRepository extends JpaRepository<BayEntity, UUID> {
             GROUP BY b.location.id
             """)
     List<LocationCapabilityCount> countByLocationIdInAndStatus(Collection<UUID> locationIds, String status);
+
+    /**
+     * One keyset page of bays for the fact backfill (issue #1668), ordered by id and locked.
+     *
+     * <p>Keyset, not offset: a backfill runs while the module keeps taking writes, and deleting any
+     * row below an offset shifts every later row back one position, so the next offset page skips a
+     * surviving bay — a unit that stays invisible, which is the exact failure the backfill exists to
+     * fix. Paging on {@code id > :afterId} is stable under concurrent deletes.
+     *
+     * <p>{@code PESSIMISTIC_READ} (a shared lock) is what makes the backfill safe against a
+     * concurrent delete. Outbox rows are drained in id order across rows that have <em>committed</em>,
+     * so a backfill row inserted early but committed late can be published after a tombstone that
+     * committed first — the consumer would delete the replica row and then re-apply the older
+     * update, and because a delete leaves no version behind, its stale guard cannot reject it. The
+     * row would be resurrected permanently. Holding a shared lock blocks a delete of these rows
+     * until the page's outbox rows commit, so the tombstone is always written, and drained, after.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT b FROM BayEntity b WHERE b.id > :afterId ORDER BY b.id ASC")
+    List<BayEntity> findBackfillPage(@Param("afterId") UUID afterId, Pageable pageable);
 }

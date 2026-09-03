@@ -33,11 +33,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Public API for mobile unit management and eligibility evaluation.
@@ -63,6 +66,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     protected final TravelBufferPolicyRepository travelBufferPolicyRepository;
     protected final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
     protected final LocationRepository locationRepository;
+    protected final LocationFactPublisher locationFactPublisher;
 
     public MobileUnitServiceImpl(
             MobileUnitRepository mobileUnitRepository,
@@ -71,6 +75,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             TravelBufferPolicyRepository travelBufferPolicyRepository,
             ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
             LocationRepository locationRepository,
+            LocationFactPublisher locationFactPublisher,
             Clock clock) {
         this.clock = clock;
         this.mobileUnitRepository = mobileUnitRepository;
@@ -79,6 +84,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         this.travelBufferPolicyRepository = travelBufferPolicyRepository;
         this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
         this.locationRepository = locationRepository;
+        this.locationFactPublisher = locationFactPublisher;
     }
 
     /**
@@ -120,6 +126,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (!coverageRules.isEmpty()) {
             replaceCoverageRulesInternal(persisted.getId(), coverageRules);
         }
+        // Published once, after the coverage rules land, so a create-with-rules emits a single
+        // fact rather than one per write. Coverage rules are not part of the published payload —
+        // replacing them alone therefore emits nothing (issue #1668). Bulk ingest reaches this
+        // method one row per transaction, so it is covered here too.
+        locationFactPublisher.mobileUnitChanged(persisted);
         return toMobileUnitResponse(persisted);
     }
 
@@ -178,6 +189,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
         try {
             return mobileUnitRepository.save(entity);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toMobileUnitOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toMobileUnitConflictException(exception);
         }
@@ -291,13 +304,58 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         }
         entity.setUpdatedAt(Instant.now(clock));
 
-        MobileUnitEntity saved = entity;
+        MobileUnitEntity saved;
         try {
             saved = mobileUnitRepository.save(entity);
+            // Only reached when the row existed: the early return above synthesizes a response
+            // without persisting anything, and publishing a fact for a unit that was never written
+            // would create a replica row the owner has no record of (issue #1668). Status
+            // transitions (ACTIVE <-> INACTIVE) travel on this fact and keep the replica row.
+            //
+            // Inside the try because the publisher flushes: since #1668 gave this aggregate a
+            // @Version, that flush is where a concurrent patch loses the race, and the failure must
+            // reach the caller as 409 rather than an unmapped 500.
+            locationFactPublisher.mobileUnitChanged(saved);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toMobileUnitOptimisticLockException(exception);
         } catch (DataIntegrityViolationException exception) {
             throw toMobileUnitConflictException(exception);
         }
         return toMobileUnitResponse(saved);
+    }
+
+    /**
+     * Hard-deletes a mobile unit and emits the {@code location.mobile-unit.deleted} tombstone
+     * (issue #1668).
+     *
+     * <p>Loads the row before deleting it so the fact can be versioned from its final
+     * {@code @Version} — the load-before-delete shape {@code LocationServiceImpl.deleteLocation}
+     * uses. An id that resolves to nothing is a silent no-op: there is no state to version and no
+     * delete to announce, and a retried delete for an id that never existed must not publish a
+     * tombstone every time.
+     *
+     * <p>Coverage rules are removed first because {@code mobile_unit_coverage_rules} carries a
+     * plain foreign key to {@code mobile_units} with no cascade, so deleting the unit while rules
+     * still reference it fails on the constraint. The {@code capabilityIds} element collection is
+     * owned by the entity, so Hibernate clears {@code mobile_unit_capabilities} itself.
+     *
+     * <p>Standing a unit down is a status change via {@link #patch}, not a delete; consumers remove
+     * the replica row unconditionally here.
+     */
+    @Transactional
+    public boolean deleteMobileUnit(UUID id) {
+        MobileUnitEntity existing = mobileUnitRepository.findById(id).orElse(null);
+        if (existing == null) {
+            return false;
+        }
+        try {
+            coverageRuleRepository.deleteByMobileUnit_Id(id);
+            mobileUnitRepository.delete(existing);
+            locationFactPublisher.mobileUnitDeleted(existing);
+        } catch (OptimisticLockingFailureException exception) {
+            throw toMobileUnitOptimisticLockException(exception);
+        }
+        return true;
     }
 
     /**
@@ -641,6 +699,20 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * Translates an optimistic-lock failure into 409, the platform's contract for a version
+     * mismatch (ADR-0017 §2), matching {@code LocationServiceImpl.saveLocationInternal}.
+     *
+     * <p>Reachable only since mobile units gained a JPA {@code @Version} for the
+     * {@code location.mobile-unit.*} facts (#1668): before that, concurrent patches were
+     * last-write-wins. Without this translation the loser would surface as an unmapped 500, since
+     * neither this module's handler nor pos-web-common's maps
+     * {@code ObjectOptimisticLockingFailureException}.
+     */
+    private ResponseStatusException toMobileUnitOptimisticLockException(OptimisticLockingFailureException exception) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "OPTIMISTIC_LOCK_FAILED", exception);
     }
 
     private DuplicateResourceException toMobileUnitConflictException(DataIntegrityViolationException exception) {

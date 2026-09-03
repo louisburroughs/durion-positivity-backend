@@ -14,6 +14,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,6 +87,17 @@ public class BayEntity {
     @Convert(converter = StringListJsonConverter.class)
     @Column(name = "skill_requirement_ids", columnDefinition = "TEXT")
     private List<String> skillRequirementIds = new ArrayList<>();
+
+    /**
+     * Aggregate version backing the {@code location.bay.*} facts' {@code aggregateVersion}
+     * (issue #1668, contract established in #1486). Strictly increments on every committed
+     * mutation, so two bay changes landing in the same millisecond can never tie and a consumer's
+     * stale guard stays sound. {@code LocationFactPublisher} flushes before reading it so the
+     * emitted fact carries the version the row is about to commit as. Seeded to 0 by migration V9.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false)

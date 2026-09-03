@@ -724,6 +724,63 @@ rollout — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_confi
 first time and would flip matching SKUs off `DEFAULT` costing at their next ledger posting. It is a
 financial change and gets its own procedure, below.
 
+#### Issue #1668: seeding the bay and mobile-unit replicas
+
+pos-location began publishing `location.bay.updated` / `location.bay.deleted` and
+`location.mobile-unit.updated` / `location.mobile-unit.deleted` on `location.events.v1` in #1668.
+pos-workorder's dispatch board and pos-shop-manager's unit roster read those facts from `ext_bay`
+and `ext_mobile_unit`. Both replicas are empty on arrival and stay empty for every bay and mobile
+unit that existed before #1668 and has not been mutated since — the stream is forward-only, so an
+untouched row emits nothing and the unit is invisible on both boards.
+
+**The generic outbox replay does NOT work here.** `location.outbox.replay-requested` re-queues rows
+that are already in `event_outbox`; pre-#1668 bays and mobile units have **no outbox history at
+all**, so there is nothing for replay to re-send. Use the regenerate-from-state command instead —
+it rebuilds each fact from the live entity:
+
+```bash
+# location.commands.v1 — aggregate: bay | mobile-unit | all (default all)
+docker exec -i kafka-positivity /opt/kafka/bin/kafka-console-producer.sh \
+  --bootstrap-server localhost:9092 --topic location.commands.v1 <<'EOF'
+{"commandType":"location.fact-backfill.requested","payload":{"aggregate":"all","afterId":"<optional uuid>"}}
+EOF
+```
+
+`payload.aggregate` selects which tables are walked; omitting it means `all`. An **unrecognised**
+value backfills **nothing** rather than everything — a typo cannot trigger a full-estate walk, and
+the listener logs a WARN naming the rejected value. `payload.afterId` is optional and is only used
+to resume (below).
+
+**A run is bounded and resumable.** It stops after `pos.location.fact-backfill.max-rows-per-run`
+rows (default 20000), committing `pos.location.fact-backfill.page-size` rows (default 500) per
+transaction. The bound exists because the walk executes on the Kafka command-listener thread: an
+unbounded pass can exceed `max.poll.interval.ms`, and an evicted consumer never commits its offset,
+so the command is redelivered and the whole backfill restarts in a loop. When a run hits the bound
+it logs a WARN naming the resume cursor; re-send the same command with `payload.afterId` set to that
+cursor, and repeat until no WARN appears.
+
+**It is idempotent, so an overlapping resume is safe.** Consumers apply a fact whose version equals
+the replica's and skip only a strictly-greater one, so re-running the backfill — in whole or over
+a range already covered — repairs stale rows without duplicating them.
+
+**It shares a consumer group with `location.outbox.replay-requested`.** A long backfill therefore
+delays replay requests other modules publish (including the automatic drift-repair commands under
+"Reconciliation manifests and drift detection"). Prefer off-peak runs, and use `aggregate` to scope
+the walk to the aggregate that actually needs repair.
+
+Verify on the consumer side, not the producer:
+
+```sql
+-- pos-workorder and pos-shop-manager. Both should match pos-location's own counts once the
+-- backfill has drained; a persistent shortfall means the run stopped at its bound (check for the
+-- resume WARN) or the consumer is lagging.
+SELECT count(*) FROM ext_bay;
+SELECT count(*) FROM ext_mobile_unit;
+```
+
+A mobile unit with no base location is withheld by the producer by design and will never appear in
+either replica; see `pos-location/README.md` ("Published facts: bays and mobile units").
+
 ### SKU_CATEGORY costing and sourcing cut-over (#1535)
 
 Enabling `pos.inventory.sku-category.resolve-from-replica` is not a configuration tweak. It makes an

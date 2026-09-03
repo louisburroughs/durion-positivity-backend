@@ -1,11 +1,17 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.location.BayDeletedV1;
+import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.domainevents.location.MobileUnitDeletedV1;
+import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.domainevents.location.StorageLocationUpdatedV1;
 import com.positivity.location.internal.config.OutboxEventWriter;
+import com.positivity.location.internal.entity.BayEntity;
 import com.positivity.location.internal.entity.Location;
+import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.StorageLocationEntity;
 import com.positivity.location.internal.enums.AllowNewProductPolicy;
 import com.positivity.location.internal.enums.StorageCategory;
@@ -25,9 +31,18 @@ import org.springframework.stereotype.Component;
  * (ADR-0044 §6, issue #890 Phase 4.2).
  *
  * <p>Every location/storage-location mutation site calls {@link #locationChanged},
- * {@link #locationDeleted} or {@link #storageLocationChanged} inside its business transaction.
+ * {@link #locationDeleted} or {@link #storageLocationChanged} inside its business transaction;
+ * bay and mobile-unit sites call {@link #bayChanged}, {@link #bayDeleted},
+ * {@link #mobileUnitChanged} or {@link #mobileUnitDeleted} the same way (issue #1668).
  * When Kafka publishing is disabled ({@code pos.location.kafka.enabled=false}) the outbox writer
  * bean is absent and every method is a no-op, so callers never need their own guard.
+ *
+ * <p>Bay and mobile-unit lifecycle facts (issue #1668) close the gap that left pos-workorder's and
+ * pos-shop-manager's {@code ext_bay}/{@code ext_mobile_unit} replicas empty: both consumers were
+ * built against these event names before any producer existed. {@code BayEntity} and
+ * {@code MobileUnitEntity} gained their own {@code @Version} counters in migration V9 for exactly
+ * the reason described below — a consumer may not version-guard a fact whose publisher has not
+ * adopted the flush-then-read pattern.
  *
  * <p>{@code Location} and {@code StorageLocationEntity} each carry a JPA {@code @Version}, and the
  * envelope's {@code aggregateVersion} is that counter (#1486): it strictly increments on every
@@ -189,6 +204,190 @@ public class LocationFactPublisher {
                 storageLocation.getId(),
                 payload,
                 storageLocation.getVersion());
+    }
+
+    /**
+     * Emit {@code location.bay.updated} for a just-saved bay (issue #1668).
+     *
+     * <p>Flushed before reading {@code aggregateVersion}, the same way {@link #locationChanged} is:
+     * the pending {@code @Version} increment is applied by the flush, so the envelope carries the
+     * version the row is about to commit as (#1486).
+     *
+     * <p>{@code locationId} is read through {@code BayEntity.getLocationId()}, which dereferences
+     * the lazy {@code location} association. The owning site travels on every emission, never only
+     * on the mutation that changed it: consumers rebuild the entire replica row from this payload,
+     * so omitting it would blank the column their roster query filters on. pos-workorder rejects
+     * such a fact outright and pos-shop-manager would keep an unreachable row.
+     *
+     * <p>{@code status} is published raw. {@code BayEntity} has no active column, and a derived
+     * boolean here would strand consumers that already resolve activeness with their own allow-list
+     * on {@code ACTIVE}.
+     */
+    public void bayChanged(@NonNull BayEntity bay) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        entityManager.flush();
+        publishBayFact(writer, bay);
+    }
+
+    /**
+     * Emit {@code location.bay.updated} for a bay read from already-committed state, without
+     * flushing (issue #1668).
+     *
+     * <p>For the backfill only. {@link #bayChanged} flushes because its caller has a mutation
+     * pending in the persistence context and the envelope must carry the version the row is about
+     * to commit as. A backfill has no pending mutation — it reads committed rows and republishes
+     * their current version — so the flush has nothing to apply and only costs: a page of 500 rows
+     * would otherwise force 500 flushes over a persistence context that grows by one outbox entity
+     * per row, making a repair operation quadratic in the page size. The page publisher flushes
+     * once, at the end of the page.
+     */
+    void bayChangedFromCommittedState(@NonNull BayEntity bay) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        publishBayFact(writer, bay);
+    }
+
+    private void publishBayFact(@NonNull OutboxEventWriter writer, @NonNull BayEntity bay) {
+        BayUpdatedV1 payload =
+                new BayUpdatedV1(bay.getId(), bay.getLocationId(), bay.getName(), bay.getBayType(), bay.getStatus());
+        publish(writer, BayUpdatedV1.EVENT_TYPE, BayUpdatedV1.SCHEMA_VERSION, bay.getId(), payload, bay.getVersion());
+    }
+
+    /**
+     * Emit {@code location.bay.deleted} for a bay removed in the current transaction (issue #1668).
+     *
+     * <p>Takes the deleted {@link BayEntity}, not just its id, so the fact can be versioned
+     * deterministically as {@code version + 1} (#1486) — one past every fact this aggregate has
+     * ever published — the same tombstone pattern {@link #locationDeleted} follows. Consumers
+     * delete the replica row unconditionally, consulting no version, so a tombstone that did not
+     * outrank every update could lose a race against one still in flight.
+     *
+     * <p>The caller must have loaded the entity before deleting it; a delete of an id nothing was
+     * found for has nothing to version and must not call this method at all.
+     */
+    public void bayDeleted(@NonNull BayEntity bay) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        publish(
+                writer,
+                BayDeletedV1.EVENT_TYPE,
+                BayDeletedV1.SCHEMA_VERSION,
+                bay.getId(),
+                new BayDeletedV1(bay.getId()),
+                bay.getVersion() + 1);
+    }
+
+    /**
+     * Emit {@code location.mobile-unit.updated} for a just-saved mobile unit (issue #1668).
+     *
+     * <p>Flushed before reading {@code aggregateVersion} for the same reason
+     * {@link #locationChanged} is (#1486).
+     *
+     * <p>Carries {@code baseLocationId} on every emission, which is what makes a re-base
+     * replicable: a unit moved from site A to site B publishes an ordinary update naming B, and
+     * because consumers rebuild the row from the payload and scope their rosters by that column,
+     * the unit leaves A's roster and joins B's on the next read. A re-base is deliberately not
+     * expressed as a delete followed by an update — {@link #mobileUnitDeleted} is an unguarded
+     * delete on the consumer side, so the pair could resurrect or drop the row if it arrived out of
+     * order.
+     *
+     * <p>{@code status} is published raw ({@code ACTIVE} | {@code INACTIVE}), never a derived
+     * boolean.
+     *
+     * <p>A unit with no base location publishes nothing — see the guard below for why that is
+     * deliberate rather than a dropped fact. A bay cannot hit the equivalent case:
+     * {@code bays.location_id} is {@code NOT NULL} in the schema.
+     */
+    public void mobileUnitChanged(@NonNull MobileUnitEntity mobileUnit) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        if (mobileUnit.getBaseLocationId() == null) {
+            // A base location is optional on this aggregate (MobileUnitRequest.baseLocationId is
+            // NOT_REQUIRED, and an unknown id resolves to null), so a unit with no base site is a
+            // legitimate owner-side state -- not malformed data. Publishing it anyway would be
+            // actively harmful: pos-workorder rejects a site-less fact and counts it on
+            // replica.payload.rejected, the metric that exists to detect producer contract drift,
+            // so ordinary data would keep firing a drift alarm; pos-shop-manager has no such guard
+            // and would store a row its roster query can never return. A unit with no base site
+            // cannot be dispatched from anywhere, so withholding the fact loses nothing -- and the
+            // moment one is assigned, the resulting update publishes normally.
+            log.debug(
+                    "Skipping {} for mobile unit {} with no base location",
+                    MobileUnitUpdatedV1.EVENT_TYPE,
+                    mobileUnit.getId());
+            return;
+        }
+        entityManager.flush();
+        publishMobileUnitFact(writer, mobileUnit);
+    }
+
+    /**
+     * Emit {@code location.mobile-unit.updated} for a unit read from already-committed state,
+     * without flushing (issue #1668).
+     *
+     * <p>For the backfill only — see {@link #bayChangedFromCommittedState} for why the flush is
+     * both unnecessary and costly there. The site-less rule applies identically: a unit with no
+     * base location publishes nothing, on the backfill path as on the live one, so a repair run
+     * cannot flood pos-workorder's {@code replica.payload.rejected} drift metric with rows that
+     * were never publishable.
+     */
+    void mobileUnitChangedFromCommittedState(@NonNull MobileUnitEntity mobileUnit) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        if (mobileUnit.getBaseLocationId() == null) {
+            log.debug(
+                    "Skipping {} for mobile unit {} with no base location",
+                    MobileUnitUpdatedV1.EVENT_TYPE,
+                    mobileUnit.getId());
+            return;
+        }
+        publishMobileUnitFact(writer, mobileUnit);
+    }
+
+    private void publishMobileUnitFact(@NonNull OutboxEventWriter writer, @NonNull MobileUnitEntity mobileUnit) {
+        MobileUnitUpdatedV1 payload = new MobileUnitUpdatedV1(
+                mobileUnit.getId(), mobileUnit.getBaseLocationId(), mobileUnit.getName(), mobileUnit.getStatus());
+        publish(
+                writer,
+                MobileUnitUpdatedV1.EVENT_TYPE,
+                MobileUnitUpdatedV1.SCHEMA_VERSION,
+                mobileUnit.getId(),
+                payload,
+                mobileUnit.getVersion());
+    }
+
+    /**
+     * Emit {@code location.mobile-unit.deleted} for a mobile unit removed in the current
+     * transaction (issue #1668).
+     *
+     * <p>Versioned {@code version + 1} for the same reason {@link #bayDeleted} is: consumers delete
+     * the replica row without consulting a version, so the tombstone must outrank every update the
+     * aggregate has published. Standing a unit down is a {@code status} change on
+     * {@link #mobileUnitChanged}, not a tombstone.
+     */
+    public void mobileUnitDeleted(@NonNull MobileUnitEntity mobileUnit) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        publish(
+                writer,
+                MobileUnitDeletedV1.EVENT_TYPE,
+                MobileUnitDeletedV1.SCHEMA_VERSION,
+                mobileUnit.getId(),
+                new MobileUnitDeletedV1(mobileUnit.getId()),
+                mobileUnit.getVersion() + 1);
     }
 
     private List<LocationUpdatedV1.ParentRef> parentRefs(@NonNull UUID locationId) {

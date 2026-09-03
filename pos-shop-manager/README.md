@@ -112,11 +112,19 @@ pos-location would work today but is a domain→domain call that ADR-0044 R1 for
 grant covers it — it would require a new recorded ADR-0044 exception on the pos-warranty precedent
 (#786). pos-workorder made the same call the other way in #1656.
 
-**Consequence, stated plainly:** pos-location does not publish bay or mobile-unit facts yet (its
-`LocationFactPublisher` emits `location.location.*` and `location.storage-location.updated` only),
-so `ext_bay` and `ext_mobile_unit` start empty and the dashboard's `units[]` is empty in production
-until that publisher lands. `openWorkorders[]` is unaffected. The fact contracts this module needs
-are declared in `internal/dto/location` in the shape they should take in `pos-domain-events`.
+**Consequence, stated plainly:** pos-location publishes bay and mobile-unit facts as of #1668 —
+`location.bay.updated` / `location.bay.deleted` and `location.mobile-unit.updated` /
+`location.mobile-unit.deleted` on `location.events.v1`, alongside the `location.location.*` and
+`location.storage-location.updated` facts its `LocationFactPublisher` already emitted. The fact
+contracts this module consumes are the canonical records in `pos-domain-events`
+(`com.positivity.domainevents.location`); this module declares no mirror of them.
+
+`ext_bay` and `ext_mobile_unit` nonetheless **start empty**, and the dashboard's `units[]` with
+them, until the owner backfills: the facts are forward-only, so a bay or mobile unit that existed
+before #1668 and has not been touched since emits nothing. Outbox replay cannot reach those rows
+either — they have no outbox history. pos-location repairs this with the
+`location.fact-backfill.requested` command (see `pos-location/README.md`, "Backfilling existing bays
+and mobile units", and `docs/OPERATIONS_RUNBOOK.md`). `openWorkorders[]` is unaffected either way.
 
 A unit's `active` flag is **derived** from the owner's `status`, allow-listing `ACTIVE` in any
 casing: pos-location's `BayEntity` and `MobileUnitEntity` carry no boolean active field, and a

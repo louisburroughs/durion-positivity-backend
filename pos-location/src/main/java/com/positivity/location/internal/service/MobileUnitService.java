@@ -28,6 +28,14 @@ public interface MobileUnitService {
 
     MobileUnitResponse patch(UUID id, Map<String, Object> patch);
 
+    /**
+     * Hard-delete a mobile unit and publish the {@code location.mobile-unit.deleted} tombstone
+     * (issue #1668).
+     *
+     * @return {@code true} when a unit was deleted, {@code false} when none matched
+     */
+    boolean deleteMobileUnit(UUID id);
+
     List<CoverageRuleResponse> replaceCoverageRules(UUID id, List<CoverageRuleRequest> rules);
 
     List<CoverageRuleResponse> replaceCoverageRules(String id, List<Map<String, Object>> rulePayload);

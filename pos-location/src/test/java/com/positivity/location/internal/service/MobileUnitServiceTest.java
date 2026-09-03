@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +40,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -76,6 +78,10 @@ class MobileUnitServiceTest {
 
     @Mock
     private LocationRepository locationRepository;
+
+    /** Mobile unit mutations publish location.mobile-unit.updated (issue #1668). */
+    @Mock
+    private LocationFactPublisher locationFactPublisher;
 
     @InjectMocks
     private MobileUnitServiceImpl service;
@@ -357,6 +363,8 @@ class MobileUnitServiceTest {
         assertThat(patched.getName()).isEqualTo("New");
         assertThat(patched.getStatus()).isEqualTo("ACTIVE");
         assertThat(patched.getNotes()).isEqualTo("updated");
+        // The status transition must reach consumers as a fact (issue #1668).
+        verify(locationFactPublisher).mobileUnitChanged(existing);
     }
 
     @Test
@@ -370,6 +378,9 @@ class MobileUnitServiceTest {
         assertThat(patched.getId()).isEqualTo(id);
         assertThat(patched.getName()).isEqualTo("Ghost");
         verify(mobileUnitRepository, never()).save(any(MobileUnitEntity.class));
+        // The synthesized response persists nothing, so publishing here would create a replica row
+        // for a unit the owner has no record of (issue #1668).
+        verify(locationFactPublisher, never()).mobileUnitChanged(any());
     }
 
     @Test
@@ -498,5 +509,36 @@ class MobileUnitServiceTest {
         assertThat(eligible).hasSize(1);
         assertThat(eligible.get(0).getId()).isEqualTo(activeId);
         assertThat(eligible.get(0).getPriority()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a mobile unit clears coverage rules then publishes the tombstone")
+    void deleteMobileUnitPublishesTombstone() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing =
+                MobileUnitEntity.builder().id(id).name("Van 1").status("ACTIVE").build();
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+
+        assertThat(service.deleteMobileUnit(id)).isTrue();
+
+        // mobile_unit_coverage_rules holds a plain FK with no cascade, so the rules must go first
+        // or the unit delete fails on the constraint.
+        InOrder inOrder = inOrder(coverageRuleRepository, mobileUnitRepository);
+        inOrder.verify(coverageRuleRepository).deleteByMobileUnit_Id(id);
+        inOrder.verify(mobileUnitRepository).delete(existing);
+        verify(locationFactPublisher).mobileUnitDeleted(existing);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a mobile unit that does not exist publishes no tombstone")
+    void deleteMissingMobileUnitPublishesNothing() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.empty());
+
+        assertThat(service.deleteMobileUnit(id)).isFalse();
+
+        verify(coverageRuleRepository, never()).deleteByMobileUnit_Id(any());
+        verify(mobileUnitRepository, never()).delete(any(MobileUnitEntity.class));
+        verify(locationFactPublisher, never()).mobileUnitDeleted(any());
     }
 }

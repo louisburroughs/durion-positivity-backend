@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
+import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.BayService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -161,8 +163,11 @@ public class BayController {
                     taken at that location.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:bay:manage.")
     @ApiResponse(responseCode = "404", description = "Location or bay not found.")
-    @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Bay name already taken at this location, or a concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
@@ -186,6 +191,45 @@ public class BayController {
                     @RequestBody
                     BayPatchRequest patchRequest) {
         return ResponseEntity.ok(bayService.patchBay(parseUuid(locationId), parseUuid(bayId), patchRequest));
+    }
+
+    @Operation(operationId = "deleteBay", summary = "Delete a Service Bay", description = """
+                    Deletes a bay permanently by id and publishes a deletion fact so replica consumers drop \
+                    the row from their dispatch and roster views.
+                    Use this tool only when a bay was created in error; use patchBay with status \
+                    OUT_OF_SERVICE instead to take a real bay out of service, which keeps it visible as \
+                    inactive rather than removing it.
+                    Preconditions: the location must exist and the bay must belong to it; there is no \
+                    usage check, so callers must confirm the bay is not referenced by scheduled work first.
+                    Required inputs: locationId and bayId (UUIDs) as path parameters; there is no request body.
+                    Emits a LOCATION_BAY_DELETE event; the row is hard-deleted, not soft-deleted.
+                    Returns 204 on success and 404 when the location or bay does not exist.
+                    """)
+    @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
+    @ApiResponse(responseCode = "403", description = "Caller lacks location:bay:manage.")
+    @ApiResponse(responseCode = "404", description = "Location or bay not found.")
+    @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
+    @EmitEvent(id = "LOCATION_BAY_DELETE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:bay:manage"})
+    @DeleteMapping("/{bayId}")
+    public ResponseEntity<Void> deleteBay(
+            @Parameter(description = "Location ID", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable
+                    String locationId,
+            @Parameter(description = "ID of the bay to delete", example = "018e1c9f-6b5a-7890-abcd-1234567890cd")
+                    @PathVariable
+                    String bayId) {
+        // Thrown rather than returned as a bare ResponseEntity.notFound(): every non-2xx response
+        // must carry the ApiError envelope (docs/ERROR_ENVELOPE.md), and an empty body has no code,
+        // message or correlationId. It also keeps one 404 contract for this operation -- a missing
+        // *location* already surfaces through validateLocationExists as an enveloped 404, so
+        // returning a bare body for a missing *bay* would give one endpoint two different 404s.
+        if (!bayService.deleteBay(parseUuid(locationId), parseUuid(bayId))) {
+            throw new ResourceNotFoundException("Bay not found");
+        }
+        return ResponseEntity.noContent().build();
     }
 
     private UUID parseUuid(String value) {

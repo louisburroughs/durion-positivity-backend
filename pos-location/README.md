@@ -33,6 +33,8 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `GET /v1/locations/{id}/coverage-rules` — service area coverage rules
 - `GET /v1/bays/{bayId}` — retrieve a bay
 - `POST /v1/locations/{locationId}/bays` — add a bay to a location
+- `DELETE /v1/locations/{locationId}/bays/{bayId}` — hard-delete a bay (#1668)
+- `DELETE /v1/mobile-units/{id}` — hard-delete a mobile unit and its coverage rules (#1668)
 - `GET /v1/locations/{storageLocationId}` — retrieve a storage location
 - `POST /v1/locations/{siteId}/storage-locations` — create a storage location
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
@@ -94,12 +96,101 @@ re-queues already-serialized outbox rows, so it cannot carry a field those rows 
 the capability with a PATCH is what publishes a fresh fact. See `docs/OPERATIONS_RUNBOOK.md` →
 "Issue #1514: rehydrating the putaway replica columns".
 
+## Published facts: bays and mobile units
+
+pos-location is the system of record for bays and mobile units, and publishes their lifecycle on the
+existing `location.events.v1` topic (issue #1668, ADR-0044 §6):
+
+| Event type                     | Payload                                             | When |
+| ------------------------------ | --------------------------------------------------- | ---- |
+| `location.bay.updated`         | `bayId`, `locationId`, `name`, `bayType`, `status`  | bay created or changed, including a status change |
+| `location.bay.deleted`         | `bayId`                                             | bay hard-deleted via `DELETE /v1/locations/{locationId}/bays/{bayId}` |
+| `location.mobile-unit.updated` | `mobileUnitId`, `baseLocationId`, `name`, `status`  | unit created or changed, including a re-base |
+| `location.mobile-unit.deleted` | `mobileUnitId`                                      | unit hard-deleted via `DELETE /v1/mobile-units/{id}` |
+
+Records live in `pos-domain-events` (`com.positivity.domainevents.location`). Consumers —
+pos-workorder's dispatch board and pos-shop-manager's unit roster — hold `ext_bay` /
+`ext_mobile_unit` replicas fed only by these facts.
+
+**`status` is the raw lifecycle string, never a derived `active` boolean.** `BayEntity.status` is
+`ACTIVE` | `OUT_OF_SERVICE`; `MobileUnitEntity.status` is written only as `ACTIVE` | `INACTIVE`.
+Consumers derive activeness themselves with an allow-list on `ACTIVE`, so an unrecognised status
+reads as inactive rather than as an error. Taking a unit out of service is a status change on the
+`updated` fact — the replica keeps the row and flips it inactive; only a `deleted` fact removes it.
+
+A mobile unit with **no base location** publishes nothing. A base site is optional on that
+aggregate, so a unit without one is a legitimate owner-side state rather than malformed data — but
+pos-workorder rejects a site-less fact and counts it on `replica.payload.rejected`, the metric that
+exists to detect producer contract drift, and pos-shop-manager would store a row its roster query
+can never return. Such a unit cannot be dispatched from anywhere, so withholding the fact loses
+nothing; assigning a base site publishes an ordinary update. A bay cannot hit this case —
+`bays.location_id` is `NOT NULL`.
+
+Deletion is a hard delete for a unit created in error, not the way to retire a real one: use PATCH
+with `OUT_OF_SERVICE` / `INACTIVE` for that. Deleting a mobile unit also removes its coverage rules
+(`mobile_unit_coverage_rules` holds a plain FK with no cascade, so they are cleared first) and its
+capability assignments. Neither delete performs a usage check, so callers must confirm the resource
+is not referenced by scheduled work first.
+
+**The site scope rides every `updated` emission**, not only the mutation that changed it, because
+consumers rebuild the whole replica row from the payload. Note the deliberate asymmetry: a bay names
+`locationId`, a mobile unit names `baseLocationId` (mirroring the owner's own columns), and neither
+is `siteId` — the name the sibling `StorageLocationUpdatedV1` fact uses. pos-workorder rejects a
+payload with no site scope rather than writing a row its roster query could never return.
+
+A **re-based** mobile unit travels on an ordinary `updated` fact naming the new site; because
+consumers scope rosters by that column, the unit leaves the old site's roster and joins the new one.
+A re-base is never expressed as `deleted` + `updated`: the tombstone path is an unguarded delete, so
+an out-of-order pair could drop or resurrect the row.
+
+`bays` and `mobile_units` each gained a `version` column in **V9**, seeded to 0. It backs the
+envelope's `aggregateVersion`, which strictly advances per committed mutation so a consumer's stale
+guard is sound (#1486). Tombstones publish at `version + 1` — one past every fact the aggregate has
+published — because consumers delete without consulting a version.
+
+### Backfilling existing bays and mobile units
+
+`location.outbox.replay-requested` **cannot** seed these replicas: it re-queues rows already in
+`event_outbox`, and every bay and mobile unit that existed before #1668 has no outbox history. A
+forward-only stream would leave those units permanently invisible.
+
+Use the regenerate-from-state command on `location.commands.v1` instead:
+
+```json
+{"commandType": "location.fact-backfill.requested", "payload": {"aggregate": "all"}}
+```
+
+`payload.aggregate` accepts `bay`, `mobile-unit`, or `all` (the default when omitted); an
+unrecognised value backfills nothing rather than everything. The run pages through the owner's
+tables (`pos.location.fact-backfill.page-size`, default 500), one transaction per page, and is
+idempotent — a replica applies an equal version and skips only a strictly-greater one, so re-running
+repairs a stale replica without duplicating rows.
+
+A run is **bounded** at `pos.location.fact-backfill.max-rows-per-run` (default 20000) and resumable.
+It executes on the Kafka command-listener thread shared with `location.outbox.replay-requested`, so
+an unbounded walk risks exceeding `max.poll.interval.ms`; an evicted consumer never commits its
+offset, so the command would be redelivered and the whole backfill would restart in a loop. When a
+run hits the bound it logs a WARN naming the cursor to resume from — re-send the command with
+`payload.afterId` set to that value. Because a long backfill delays other modules' replay requests
+on the same consumer group, prefer running it off-peak.
+
+Paging is **keyset** (`id > afterId`), not offset: deleting any row below an offset shifts every
+later row back one position, so an offset page would skip a surviving unit — precisely the
+invisibility the backfill exists to repair. Each page takes a shared row lock, which is what keeps a
+concurrent delete from resurrecting a replica row: outbox rows are drained in id order across
+*committed* rows, so without the lock a backfill row inserted early but committed late could be
+published after a tombstone that committed first, and the consumer — which deletes unconditionally
+and so retains no version to guard with — would re-apply the older update and recreate the row
+permanently.
+
 ## Configuration
 
 | Property                | Default  | Description                  |
 | ----------------------- | -------- | ---------------------------- |
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| `pos.location.fact-backfill.page-size` | `500` | Rows per transaction when backfilling bay/mobile-unit facts |
+| `pos.location.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |
 
 ## Dependencies
 

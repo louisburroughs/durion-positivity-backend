@@ -13,14 +13,14 @@ import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.domainevents.location.BayDeletedV1;
+import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
-import com.positivity.workorder.internal.dto.location.BayDeletedV1;
-import com.positivity.workorder.internal.dto.location.BayUpdatedV1;
-import com.positivity.workorder.internal.dto.location.MobileUnitUpdatedV1;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
@@ -418,8 +418,8 @@ class ReplicaAndManifestListenerContractTest {
         @Test
         @DisplayName("#1656: an unknown location-domain fact is ignored but still recorded for the manifest")
         void unknownFactTypeIsRecordedNotApplied() {
-            // pos-location does not publish bay/mobile-unit facts yet, and publishes storage-location
-            // facts this module ignores. Neither may break the consumer or skew the manifest window.
+            // pos-location publishes storage-location facts this module ignores. An ignored fact may
+            // neither break the consumer nor skew the manifest window.
             locationListener.onLocationEvent(envelope("evt-1", "location.storage-location.updated", "{}"));
 
             verify(bayRepository, never()).save(any());
@@ -430,10 +430,9 @@ class ReplicaAndManifestListenerContractTest {
         @Test
         @DisplayName("#1668: a plausible-but-wrong bay payload shape is rejected loudly, not written half-populated")
         void wrongBayPayloadShapeIsRejectedNotHalfWritten() {
-            // BayUpdatedV1 is the consumer's guess at a contract pos-location does not publish yet
-            // (issue #1668), so the likeliest failure is that the real producer names its fields
-            // differently. Both ways it can differ have to be distinguishable from the expected
-            // "no events yet" silence, or the board stays empty and nothing anywhere says why.
+            // pos-location owns BayUpdatedV1 and publishes it as of issue #1668. This locks the
+            // field names against a future producer change: both ways the shape can drift have to
+            // fail loudly, or the board goes quietly empty and nothing anywhere says why.
 
             // (a) the identifier under another name: the compact constructor throws, Jackson reports
             // a DatabindException, nothing is written.

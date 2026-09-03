@@ -72,6 +72,10 @@ class BayServiceTest {
     @Mock
     ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
 
+    /** Bay mutations publish location.bay.updated (issue #1668). */
+    @Mock
+    LocationFactPublisher locationFactPublisher;
+
     @InjectMocks
     BayServiceImpl bayService;
 
@@ -795,5 +799,67 @@ class BayServiceTest {
         assertThatCode(() -> Class.forName(className))
                 .as("Missing bay contract artifact for %s", purpose)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("#1668 - taking a bay out of service publishes the status change as a fact")
+    void patchBayStatusPublishesFact() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        BayEntity existing = BayEntity.builder()
+                .id(bayId)
+                .name("Front Bay 1")
+                .bayType("SERVICE")
+                .status("ACTIVE")
+                .maxConcurrentVehicles(1)
+                .build();
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+        when(bayRepository.save(existing)).thenReturn(existing);
+
+        BayPatchRequest patch =
+                BayPatchRequest.builder().status("OUT_OF_SERVICE").build();
+        bayService.patchBay(locationId, bayId, patch);
+
+        // A bay taken out of service keeps its replica row and flips inactive; consumers derive
+        // that from the raw status, so the fact must be published (issue #1668).
+        verify(locationFactPublisher).bayChanged(existing);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a bay publishes the tombstone from the row's final version")
+    void deleteBayPublishesTombstone() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        BayEntity existing = BayEntity.builder()
+                .id(bayId)
+                .name("Front Bay 1")
+                .bayType("SERVICE")
+                .status("ACTIVE")
+                .maxConcurrentVehicles(1)
+                .build();
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+
+        assertThat(bayService.deleteBay(locationId, bayId)).isTrue();
+
+        // Loaded before the delete so the tombstone can be versioned from its final @Version.
+        verify(bayRepository).delete(existing);
+        verify(locationFactPublisher).bayDeleted(existing);
+    }
+
+    @Test
+    @DisplayName("#1668 - deleting a bay that does not exist publishes no tombstone")
+    void deleteMissingBayPublishesNothing() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.empty());
+
+        // A retried delete for an id that never existed must not emit a tombstone every time.
+        assertThat(bayService.deleteBay(locationId, bayId)).isFalse();
+
+        verify(bayRepository, never()).delete(any(BayEntity.class));
+        verify(locationFactPublisher, never()).bayDeleted(any());
     }
 }

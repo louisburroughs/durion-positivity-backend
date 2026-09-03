@@ -1,11 +1,11 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.location.BayDeletedV1;
+import com.positivity.domainevents.location.BayUpdatedV1;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
-import com.positivity.workorder.internal.dto.location.BayDeletedV1;
-import com.positivity.workorder.internal.dto.location.BayUpdatedV1;
-import com.positivity.workorder.internal.dto.location.MobileUnitDeletedV1;
-import com.positivity.workorder.internal.dto.location.MobileUnitUpdatedV1;
+import com.positivity.domainevents.location.MobileUnitDeletedV1;
+import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
@@ -46,16 +46,15 @@ import tools.jackson.databind.ObjectMapper;
  * drift and trigger useless replays.
  *
  * <p>Bay and mobile-unit facts (#1656) feed {@code ext_bay} / {@code ext_mobile_unit}, which give
- * the dispatch board resource identity it previously had no lawful way to obtain. pos-location does
- * not publish those two fact families yet — see
- * {@link com.positivity.workorder.internal.dto.location} — so in production these branches are
- * simply never taken today. That is deliberate and must stay non-fatal: an unknown or absent event
- * type falls through to the {@code processed_events} insert like any other ignored fact, and the
- * dashboard renders an empty replica as "no units configured" rather than failing.
+ * the dispatch board resource identity it previously had no lawful way to obtain. pos-location
+ * publishes both families as of issue #1668 — see {@link com.positivity.domainevents.location}.
+ * Handling stays non-fatal regardless: an unknown or absent event type falls through to the
+ * {@code processed_events} insert like any other ignored fact, and the dashboard renders an empty
+ * replica as "no units configured" rather than failing, which is what a consumer sees before the
+ * owner's backfill reaches it.
  *
- * <p>Because those two contracts are the consumer's provisional guess at a shape pos-location has
- * not published yet (issue #1668), a payload that arrives in the wrong shape must be
- * <em>distinguishable</em> from that expected silence rather than merging into it. Both failure
+ * <p>Because a wrong-shaped payload would otherwise be indistinguishable from that silence, it
+ * must fail <em>loudly</em> rather than merging into it. Both failure
  * modes are therefore loud and neither writes a row: a missing identifier throws out of the
  * record's compact constructor as a {@link DatabindException}, and a payload that binds but carries
  * no site scope is refused by {@link #requireSiteScope}. Both are counted on
@@ -237,14 +236,15 @@ public class LocationEventsListener {
     /**
      * Refuses a bay or mobile-unit fact that carries no site scope (#1657).
      *
-     * <p>The bay and mobile-unit contracts in {@link com.positivity.workorder.internal.dto.location}
-     * are the consumer's provisional statement of a contract pos-location does not publish yet
-     * (issue #1668). If the real producer names the field {@code siteId} rather than
-     * {@code locationId}, the record binds a null site and — without this guard — a perfectly
-     * well-formed-looking row lands in {@code ext_bay} that the roster query, which scopes by
-     * {@code location_id}, can never return. The dispatch panel would then be empty with no error
-     * anywhere: indistinguishable from "pos-location has not started publishing", which is the
-     * expected state today, and therefore invisible for as long as it takes someone to notice.
+     * <p>pos-location owns the bay and mobile-unit contracts in
+     * {@link com.positivity.domainevents.location} and publishes them as of issue #1668. The guard
+     * remains because the failure it catches is silent: if a future producer change named the field
+     * {@code siteId} rather than {@code locationId} — the name the sibling
+     * {@code StorageLocationUpdatedV1} fact uses — the record would bind a null site and, without
+     * this guard, a perfectly well-formed-looking row would land in {@code ext_bay} that the roster
+     * query, which scopes by {@code location_id}, can never return. The dispatch panel would go
+     * quietly empty with no error anywhere, and stay that way for as long as it took someone to
+     * notice.
      *
      * <p>A wrong {@code bayId}/{@code mobileUnitId} field name is already loud — the record's
      * compact constructor throws and Jackson reports it as a {@link DatabindException}. This makes
@@ -260,9 +260,8 @@ public class LocationEventsListener {
     private static void requireSiteScope(UUID siteId, String eventType, String field) {
         if (siteId == null) {
             throw new MalformedFactException(eventType + " payload has no " + field
-                    + "; the replica row would be invisible to the dispatch board. The bay and mobile-unit "
-                    + "fact contracts are provisional until pos-location publishes them (issue #1668) — "
-                    + "check the producer's field names against BayUpdatedV1/MobileUnitUpdatedV1.");
+                    + "; the replica row would be invisible to the dispatch board. Check the producer's "
+                    + "field names against BayUpdatedV1/MobileUnitUpdatedV1 in pos-domain-events.");
         }
     }
 
