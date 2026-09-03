@@ -67,7 +67,7 @@ class PersonaPrecedenceLayerTest {
 
         AssembledPrompt prompt = resolver.assemble("ROLE_SERVICE_ADVISOR", "master", true);
 
-        assertThat(prompt.layers()).containsSequence("ROLE", "TOOL_USE", "WRITE_GATE");
+        assertThat(prompt.layers()).containsSequence("ROLE", "TOOL_USE", "DATE_WINDOW", "WRITE_GATE");
         assertThat(prompt.text().indexOf(PRECEDENCE_MARKER))
                 .isGreaterThan(prompt.text().indexOf("Role persona: you are assisting a service advisor."));
     }

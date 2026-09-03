@@ -68,6 +68,55 @@ public final class SystemPromptDefaults {
             """;
 
     /**
+     * DATE-WINDOW layer (#1661): how a relative date range resolves to concrete dates.
+     *
+     * <p>Four of the twelve Wave 2 gate questions failed on this alone. The model, never told the
+     * current date, invented one and measured a rolling window from it, while the ground truth used
+     * whole calendar periods. Both were then internally consistent and disagreed anyway — q17 read
+     * V1 Evergreen as +7.43 % against an expected +12.00 % purely because a not-yet-due bill sat in
+     * the rolling window's tail, and nowhere in either answer was the window visible enough to spot
+     * the divergence.
+     *
+     * <p>The convention resolves rather than asks. Asking is right for a missing identifier, where
+     * no default can be correct and a guess fabricates data; that case stays with the tool-use
+     * layer. A named range is different: it has a conventional reading, and a round-trip costs the
+     * user more than an answer whose basis is stated and correctable.
+     *
+     * <p>Whole complete periods, not a rolling window, is also the sounder business default —
+     * a window ending mid-period compares a part-period against whole ones, which is precisely how
+     * q17's comparison was corrupted.
+     *
+     * <p>Three details this text has to get exactly right, each a way the contract could defeat
+     * itself (raised on review of #1664):
+     *
+     * <ul>
+     *   <li>The current date is supplied by the caller-context block, which both assistants append
+     *       <em>after</em> the assembled layers ({@code SpringAiPosAssistant.buildSystemPrompt}), so
+     *       this layer must not describe it as being "above". It names the block instead of a
+     *       direction, which stays true wherever the block is placed.
+     *   <li>The worked example is labelled as an illustration. An unlabelled concrete date is an
+     *       anchor the model can carry into its answer, which would reintroduce exactly the invented
+     *       "today" this layer exists to remove.
+     *   <li>Excluding the partial period can invert a range on its own: "this year" in January would
+     *       otherwise resolve to 1 January through the previous 31 December. The analytics endpoints
+     *       reject {@code endDate} before {@code startDate} with a 400, so the rule carries an
+     *       explicit floor rather than relying on the model to notice.
+     * </ul>
+     */
+    static final String DATE_WINDOW_LAYER_TEXT = """
+            Date-window contract:
+            - Resolve every relative date range from the current date stated in the authenticated user context block. Never use a date you assume, recall, or infer from the conversation.
+            - A relative range means whole calendar periods ending with the last COMPLETE period — never a rolling window ending today. Illustration only, not today's dates: were the current date 2026-09-03, "the last six months" would be 2026-03-01 to 2026-08-31, not 2026-03-04 to 2026-09-03. Always recompute from the current date you were actually given.
+            - Exclude the current, partial period. Including it compares a part-period against whole ones and overstates or understates every trend built on it.
+            - "This year" and "year to date" mean 1 January of the current year through the end of the last complete month of that same year.
+            - Never emit a range whose start date is after its end date. Where excluding the partial period would leave an inverted or empty range — "this year" asked during January, a quarter to date in the quarter's first month — use the partial period up to the current date instead, and say in the answer that the period is incomplete.
+            - State the window you used, with explicit start and end dates, in the answer itself — not only in the tool arguments. A figure whose window is invisible cannot be checked.
+            - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
+            - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
+            - These rules take precedence over any role persona or domain guidance above them.
+            """;
+
+    /**
      * WRITE-GATE layer (Gate 6, #1193): appended only when a write-capable tool is in the request's
      * candidate set. The model must never execute a mutation directly — writes go through the
      * preview → explicit confirmation → exact persisted-args execution flow.

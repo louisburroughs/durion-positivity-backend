@@ -13,6 +13,7 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -57,7 +58,7 @@ class ToolSelectionEngineTest {
                 "http://api-gateway",
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
-        sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         when(toolRegistry.resolveMasterTools()).thenReturn(List.of(exaWebSearchTool));
         toolSelectionEngine = new ToolSelectionEngine(
                 toolRegistry,
