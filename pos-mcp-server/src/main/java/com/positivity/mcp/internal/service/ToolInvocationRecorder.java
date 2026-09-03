@@ -40,6 +40,15 @@ public class ToolInvocationRecorder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolInvocationRecorder.class);
 
+    /**
+     * Width of {@code mcp_tool_invocation_log.error_type} (V6). Overflowing it would fail the audit
+     * insert, so a long cause message is truncated rather than allowed to break the write.
+     */
+    private static final int MAX_ERROR_TYPE_LENGTH = 200;
+
+    /** Guards the cause walk against a self-referential or cyclic chain. */
+    private static final int MAX_CAUSE_DEPTH = 20;
+
     private final ToolAuditService auditService;
     private final ToolMetadataRepository toolMetadataRepository;
     private final RequestScopedUserContext userContext;
@@ -98,6 +107,33 @@ public class ToolInvocationRecorder {
         return resolved.orElse(null);
     }
 
+    /**
+     * The {@code error_type} value for a failed invocation (#1660).
+     *
+     * <p>Previously this was {@code exception.getClass().getSimpleName()}, which recorded
+     * {@code IllegalStateException} for every reflective tool failure —
+     * {@code ReflectiveToolCallback} wraps each one in that same type, so the stored value
+     * identified nothing and gate q04's failure could not be diagnosed from the table at all. The
+     * root cause is the part that differs between one failure and the next, so that is what is
+     * kept, with its message, bounded to the column width.
+     */
+    static @NonNull String describeFailure(@NonNull Throwable thrown) {
+        Throwable rootCause = thrown;
+        for (int depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+            Throwable next = rootCause.getCause();
+            if (next == null || next == rootCause) {
+                break;
+            }
+            rootCause = next;
+        }
+        String type = rootCause.getClass().getSimpleName();
+        String message = rootCause.getMessage();
+        String described = message == null || message.isBlank() ? type : type + ": " + message;
+        return described.length() <= MAX_ERROR_TYPE_LENGTH
+                ? described
+                : described.substring(0, MAX_ERROR_TYPE_LENGTH - 3) + "...";
+    }
+
     private @NonNull String currentUsername() {
         return userContext.current().map(CurrentUserContext::username).orElse("unknown");
     }
@@ -130,11 +166,17 @@ public class ToolInvocationRecorder {
                 record(toolLookupName, true, elapsedMs(startNanos), null);
                 return result;
             } catch (RuntimeException exception) {
-                record(
+                int elapsedMs = elapsedMs(startNanos);
+                record(toolLookupName, false, elapsedMs, describeFailure(exception));
+                // The row alone cannot hold a stack, and nothing else on this path logged the
+                // failure at all, so the throwable is emitted here with its whole cause chain.
+                // The tool input is deliberately not logged: arguments carry customer identifiers.
+                LOGGER.warn(
+                        "MCP tool invocation failed tool={} caller={} elapsedMs={}",
                         toolLookupName,
-                        false,
-                        elapsedMs(startNanos),
-                        exception.getClass().getSimpleName());
+                        currentUsername(),
+                        elapsedMs,
+                        exception);
                 throw exception;
             }
         }

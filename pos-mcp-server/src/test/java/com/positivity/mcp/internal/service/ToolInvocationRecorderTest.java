@@ -67,7 +67,7 @@ class ToolInvocationRecorderTest {
     }
 
     @Test
-    @DisplayName("failing call logs success=false with the exception type and rethrows")
+    @DisplayName("failing call logs success=false with the failure description and rethrows")
     void wrap_failure_logsErrorTypeAndRethrows() {
         when(repository.findToolIdByName("OrderFacadeTool")).thenReturn(Optional.of(TOOL_ID));
         ToolCallback wrapped = recorder.wrap(throwingCallback(new IllegalStateException("boom")), "OrderFacadeTool");
@@ -76,7 +76,80 @@ class ToolInvocationRecorderTest {
 
         verify(auditService)
                 .logToolExecution(
-                        eq(TOOL_ID), eq("diana.rowe"), eq(false), eq(false), anyInt(), eq("IllegalStateException"));
+                        eq(TOOL_ID),
+                        eq("diana.rowe"),
+                        eq(false),
+                        eq(false),
+                        anyInt(),
+                        eq("IllegalStateException: boom"));
+    }
+
+    // ─── describeFailure (#1660) ────────────────────────────────────────────
+
+    /**
+     * The defect this closes. {@code ReflectiveToolCallback} wraps every tool failure in the same
+     * {@code IllegalStateException("Tool method failed: <name>")}, so recording the thrown type
+     * stored {@code IllegalStateException} for every failure alike and gate q04's could not be
+     * diagnosed from the table. The cause is the part that differs.
+     */
+    @Test
+    @DisplayName("a wrapped tool failure records the root cause, not the uniform wrapper type")
+    void wrap_failure_recordsRootCauseRatherThanWrapper() {
+        when(repository.findToolIdByName("InvoiceFacadeTool")).thenReturn(Optional.of(TOOL_ID));
+        RuntimeException wrapper = new IllegalStateException(
+                "Tool method failed: searchInvoices", new java.net.SocketTimeoutException("Read timed out"));
+        ToolCallback wrapped = recorder.wrap(throwingCallback(wrapper), "InvoiceFacadeTool");
+
+        assertThatThrownBy(() -> wrapped.call("{}")).isSameAs(wrapper);
+
+        verify(auditService)
+                .logToolExecution(
+                        eq(TOOL_ID),
+                        eq("diana.rowe"),
+                        eq(false),
+                        eq(false),
+                        anyInt(),
+                        eq("SocketTimeoutException: Read timed out"));
+    }
+
+    @Test
+    @DisplayName("describeFailure walks to the deepest cause")
+    void describeFailure_walksToDeepestCause() {
+        Throwable deepest = new IllegalArgumentException("bad window");
+        Throwable middle = new RuntimeException("adapter failed", deepest);
+        Throwable top = new IllegalStateException("Tool method failed: x", middle);
+
+        assertThat(ToolInvocationRecorder.describeFailure(top)).isEqualTo("IllegalArgumentException: bad window");
+    }
+
+    @Test
+    @DisplayName("describeFailure falls back to the type when the cause carries no message")
+    void describeFailure_withoutMessage_usesTypeAlone() {
+        assertThat(ToolInvocationRecorder.describeFailure(new IllegalStateException("top", new NullPointerException())))
+                .isEqualTo("NullPointerException");
+    }
+
+    /**
+     * {@code error_type} is {@code VARCHAR(200)} (V6). An overflowing value would fail the audit
+     * insert, turning a diagnostic improvement into a new failure on the tool path.
+     */
+    @Test
+    @DisplayName("describeFailure truncates to the error_type column width")
+    void describeFailure_truncatesToColumnWidth() {
+        String described = ToolInvocationRecorder.describeFailure(new IllegalStateException("x".repeat(500)));
+
+        assertThat(described).hasSize(200).endsWith("...");
+    }
+
+    /** A self-referential chain must terminate rather than spin. */
+    @Test
+    @DisplayName("describeFailure terminates on a cyclic cause chain")
+    void describeFailure_onCyclicChain_terminates() {
+        Throwable first = new IllegalStateException("first");
+        Throwable second = new IllegalStateException("second", first);
+        first.initCause(second);
+
+        assertThat(ToolInvocationRecorder.describeFailure(first)).isNotBlank();
     }
 
     @Test
