@@ -229,17 +229,88 @@ class RolePromptResolverImplTest {
     }
 
     /**
-     * The contract that fixes q15/q17: a rolling window ending today pulled a not-yet-due bill into
-     * the current period and left the prior-year period without one, turning a real +12 % move into
-     * a reported +7.43 %. Pinning whole complete periods is what makes the two comparable.
+     * A calendar range drops the current partial period, and the answer has to disclose the window
+     * it used — the number alone cannot show which window produced it.
      */
     @Test
-    @DisplayName("DATE_WINDOW layer pins whole complete periods and requires the window be stated")
-    void dateWindowLayer_pinsCompletePeriodsAndRequiresDisclosure() {
+    @DisplayName("DATE_WINDOW layer drops the partial period for calendar ranges and requires disclosure")
+    void dateWindowLayer_calendarRangeDropsThePartialPeriodAndDisclosesTheWindow() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("never a rolling window ending today")
-                .contains("Exclude the current, partial period")
-                .contains("State the window you used");
+                .contains("whole calendar periods ending with the last COMPLETE one")
+                .contains("exclude the current, partial period")
+                .contains("State the window you used in the answer itself");
+    }
+
+    /**
+     * The distinction the first version of this layer got wrong by treating every relative range as
+     * calendar. The preposition is the whole discriminator, and the gate corpus contains both forms:
+     * "over the last twelve months" (Q9) and "in the last six months" (Q12).
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer separates rolling from calendar on the preposition")
+    void dateWindowLayer_separatesRollingFromCalendar() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("ROLLING")
+                .contains("CALENDAR")
+                .contains("\"over the last six months\" is rolling, \"in the last six months\" is calendar");
+        // A rolling window ends today and drops nothing; only the calendar shape trims a period.
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("A ROLLING range always ends on the current date and excludes nothing");
+    }
+
+    /**
+     * What q15/q17 actually needed. "Over the last six months compared with the same six months last
+     * year" only means anything if both windows share a shape and a length; measuring one rolling
+     * and one calendar makes the year-on-year move an artefact of the windows rather than the
+     * business.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer requires a comparison period to match the shape it is compared against")
+    void dateWindowLayer_requiresPairedPeriodsToMatch() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("measure BOTH on the same shape and the same length, offset by one period");
+    }
+
+    /**
+     * The rule that settles q15/q17 without touching the question or the ground truth. Its wording
+     * names both shapes at once — "over the last six months" (rolling) paired with "the same six
+     * months last year" (named calendar months) — which the shape rule alone cannot resolve.
+     * Calendar wins, so both periods are Mar–Aug, and `EXPECTED.md`'s +12.00 % stands as written.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer resolves a mixed comparison on the calendar shape")
+    void dateWindowLayer_mixedComparisonResolvesToCalendar() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("PRECEDENCE for a mixed comparison")
+                .contains("resolve BOTH on the CALENDAR shape");
+    }
+
+    /**
+     * Precedence must not swallow independent conditions. "Hasn't bought in the last 90 days but
+     * spent over $10,000 in the prior year" is a rolling filter beside a calendar one, not a
+     * comparison; forcing both to one shape would change the question rather than disambiguate it.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW precedence is scoped to compared windows, not independent conditions")
+    void dateWindowLayer_precedenceDoesNotCollapseIndependentConditions() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("applies only to windows being compared with each other")
+                .contains("not a mixed comparison");
+    }
+
+    /** A 90-day range has no complete-calendar form, so the calendar branch must not claim it. */
+    @Test
+    @DisplayName("DATE_WINDOW layer treats a day-expressed range as always rolling")
+    void dateWindowLayer_dayRangesAreAlwaysRolling() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("A range expressed in days has no calendar form and is always rolling");
+    }
+
+    /** The shape is invisible in the figure, so it has to be named alongside the dates. */
+    @Test
+    @DisplayName("DATE_WINDOW layer requires the answer to name the shape, not only the dates")
+    void dateWindowLayer_requiresTheShapeToBeNamed() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT).contains("whether it is rolling or calendar");
     }
 
     /**
@@ -277,6 +348,11 @@ class RolePromptResolverImplTest {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("Illustration only, not today's dates")
                 .contains("Always recompute from the current date you were actually given");
+        // The worked example must show both shapes, since it is the only place their difference is
+        // made concrete.
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("2026-03-04 to 2026-09-03")
+                .contains("2026-03-01 to 2026-08-31");
     }
 
     /**

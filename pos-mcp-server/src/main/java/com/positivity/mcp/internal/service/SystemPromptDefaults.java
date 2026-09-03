@@ -82,9 +82,16 @@ public final class SystemPromptDefaults {
      * layer. A named range is different: it has a conventional reading, and a round-trip costs the
      * user more than an answer whose basis is stated and correctable.
      *
-     * <p>Whole complete periods, not a rolling window, is also the sounder business default —
-     * a window ending mid-period compares a part-period against whole ones, which is precisely how
-     * q17's comparison was corrupted.
+     * <p>Shape follows the wording, and the preposition is the whole discriminator: "over the last
+     * six months" is rolling, "in the last six months" is calendar. Treating every relative range as
+     * calendar — as the first version of this layer did — is wrong for the rolling half, and the two
+     * shapes are indistinguishable from the returned number alone, which is why the answer has to
+     * name the shape as well as the dates.
+     *
+     * <p>The paired-comparison rule is what q15/q17 actually needed. "Over the last six months
+     * compared with the same six months last year" is only meaningful if both windows have the same
+     * shape and length; measuring one rolling and one calendar makes the year-on-year difference an
+     * artefact of the windows.
      *
      * <p>Three details this text has to get exactly right, each a way the contract could defeat
      * itself (raised on review of #1664):
@@ -106,11 +113,19 @@ public final class SystemPromptDefaults {
     static final String DATE_WINDOW_LAYER_TEXT = """
             Date-window contract:
             - Resolve every relative date range from the current date stated in the authenticated user context block. Never use a date you assume, recall, or infer from the conversation.
-            - A relative range means whole calendar periods ending with the last COMPLETE period — never a rolling window ending today. Illustration only, not today's dates: were the current date 2026-09-03, "the last six months" would be 2026-03-01 to 2026-08-31, not 2026-03-04 to 2026-09-03. Always recompute from the current date you were actually given.
-            - Exclude the current, partial period. Including it compares a part-period against whole ones and overstates or understates every trend built on it.
+            - The wording decides the SHAPE of the window, and the two shapes give different answers:
+            -   ROLLING — "over the last N days/weeks/months/years", "over the past N": the N units ending on the current date, that date included.
+            -   CALENDAR — "this week/month/quarter/year", "last week/month/quarter/year", "in the last N weeks/months": whole calendar periods ending with the last COMPLETE one.
+            - Read the preposition carefully: "over the last six months" is rolling, "in the last six months" is calendar. They are different questions and must not be answered alike.
+            - Illustration only, not today's dates: were the current date 2026-09-03, "over the last six months" would be 2026-03-04 to 2026-09-03, while "in the last six months" would be 2026-03-01 to 2026-08-31. Always recompute from the current date you were actually given.
+            - For a CALENDAR range, exclude the current, partial period. Including it compares a part-period against whole ones and overstates or understates every trend built on it. A ROLLING range always ends on the current date and excludes nothing.
             - "This year" and "year to date" mean 1 January of the current year through the end of the last complete month of that same year.
             - Never emit a range whose start date is after its end date. Where excluding the partial period would leave an inverted or empty range — "this year" asked during January, a quarter to date in the quarter's first month — use the partial period up to the current date instead, and say in the answer that the period is incomplete.
-            - State the window you used, with explicit start and end dates, in the answer itself — not only in the tool arguments. A figure whose window is invisible cannot be checked.
+            - A range expressed in days has no calendar form and is always rolling; only weeks, months, quarters and years have complete calendar periods.
+            - When a question pairs a range with a comparison period — "compared with the same six months last year", "versus the prior quarter" — measure BOTH on the same shape and the same length, offset by one period. Comparing a rolling window against a calendar one, or a longer period against a shorter, makes the difference an artefact of the windows rather than of the business.
+            - PRECEDENCE for a mixed comparison: where the two phrasings disagree in shape — "over the last six months" (rolling) paired with "the same six months last year" (named calendar months) — resolve BOTH on the CALENDAR shape. The fixed phrase wins because it names a specific period; taking the rolling side instead would silently redefine the period the question explicitly named.
+            - This precedence applies only to windows being compared with each other. Independent conditions in one question keep their own shapes: "hasn't bought in the last 90 days but spent over $10,000 in the prior year" is a rolling filter and a calendar filter, not a mixed comparison, and forcing them to one shape would change what was asked.
+            - State the window you used in the answer itself, with explicit start and end dates and whether it is rolling or calendar — not only in the tool arguments. A figure whose window is invisible cannot be checked, and the two shapes are indistinguishable from the number alone.
             - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
             - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
             - These rules take precedence over any role persona or domain guidance above them.
