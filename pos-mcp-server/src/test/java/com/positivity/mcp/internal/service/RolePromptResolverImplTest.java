@@ -369,6 +369,28 @@ class RolePromptResolverImplTest {
                 .contains("must keep the current period");
     }
 
+    /**
+     * Raised on review of #1672: "over the past N" was listed under ROLLING and again under
+     * CALENDAR SPAN, so the text classified one phrase as two shapes. A contract that contradicts
+     * itself cannot be followed consistently, and the mixed-comparison precedence rule already
+     * covers the case the second listing was reaching for.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer classifies each phrase under exactly one shape")
+    void dateWindowLayer_doesNotClassifyOnePhraseAsTwoShapes() {
+        String[] lines = SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT.split("\n");
+        long rolling = java.util.Arrays.stream(lines)
+                .filter(l -> l.contains("ROLLING —"))
+                .filter(l -> l.contains("over the past N"))
+                .count();
+        long span = java.util.Arrays.stream(lines)
+                .filter(l -> l.contains("CALENDAR SPAN —"))
+                .filter(l -> l.contains("over the past N"))
+                .count();
+        assertThat(rolling).isEqualTo(1);
+        assertThat(span).isZero();
+    }
+
     /** The shape is invisible in the figure, so it has to be named alongside the dates. */
     @Test
     @DisplayName("DATE_WINDOW layer requires the answer to name the shape, not only the dates")

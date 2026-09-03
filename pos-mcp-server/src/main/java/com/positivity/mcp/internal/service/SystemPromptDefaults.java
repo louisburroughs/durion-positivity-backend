@@ -104,10 +104,12 @@ public final class SystemPromptDefaults {
      *   <li>The worked example is labelled as an illustration. An unlabelled concrete date is an
      *       anchor the model can carry into its answer, which would reintroduce exactly the invented
      *       "today" this layer exists to remove.
-     *   <li>Excluding the partial period can invert a range on its own: "this year" in January would
-     *       otherwise resolve to 1 January through the previous 31 December. The analytics endpoints
-     *       reject {@code endDate} before {@code startDate} with a 400, so the rule carries an
-     *       explicit floor rather than relying on the model to notice.
+     *   <li>Requiring whole periods can invert a range on its own: a six-month CALENDAR SPAN asked
+     *       when fewer than six complete months exist resolves to a start after its end. The
+     *       analytics endpoints reject {@code endDate} before {@code startDate} with a 400, so the
+     *       rule carries an explicit floor rather than relying on the model to notice. This no
+     *       longer applies to "this year", which is CURRENT-TO-DATE and ends on the current date,
+     *       so it cannot invert.
      * </ul>
      */
     static final String DATE_WINDOW_LAYER_TEXT = """
@@ -117,7 +119,7 @@ public final class SystemPromptDefaults {
             -   ROLLING — "over the last N days/weeks/months/years", "over the past N": the N units ending on the current date, that date included.
             -   CURRENT-TO-DATE — "this week/month/quarter/year", "week/month/quarter/year to date": from the FIRST day of the period that contains the current date, up to the current date. NEVER the previous complete period. "This quarter" on 2026-09-03 is 2026-07-01 to 2026-09-03, not April-June.
             -   PRIOR COMPLETE — "last week/month/quarter/year", "the previous month": exactly one whole period, the most recent one that has ended. "Last month" on 2026-09-03 is 2026-08-01 to 2026-08-31.
-            -   CALENDAR SPAN — "in the last N weeks/months", "during the last N months", "for the last N months", "over the past N months" when paired with a named calendar comparison: the N whole periods ENDING WITH THE MOST RECENT COMPLETE ONE. On 2026-09-03 "the last six months" is 2026-03-01 to 2026-08-31 — it ends in August, not in June, and not in the current partial month.
+            -   CALENDAR SPAN — "in the last N weeks/months", "during the last N months", "for the last N months": the N whole periods ENDING WITH THE MOST RECENT COMPLETE ONE. On 2026-09-03 "the last six months" is 2026-03-01 to 2026-08-31 — it ends in August, not in June, and not in the current partial month.
             - Read the wording carefully: "over the last six months" is rolling; "in the last six months", "during the last six months" and "for the last six months" are a calendar span. They are different questions and must not be answered alike.
             - "This X" and "last X" are BOTH fixed, and they are NOT the same period. "This X" includes the current date and is deliberately partial; "last X" is the whole period before it. Answering "this quarter" with the previous complete quarter reports a period the user did not ask about, and can return nothing at all when the data lies in the current one.
             - Illustration only, not today's dates: were the current date 2026-09-03, "over the last six months" would be 2026-03-04 to 2026-09-03; "in the last six months" 2026-03-01 to 2026-08-31; "this quarter" 2026-07-01 to 2026-09-03; "last month" 2026-08-01 to 2026-08-31. Always recompute from the current date you were actually given.
