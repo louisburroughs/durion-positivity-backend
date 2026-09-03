@@ -5,11 +5,55 @@ Serves `pos-mcp-server/docs/analytics-capability-plan.md` §2 (test-gate methodo
 
 The tool-selection half of the gate lives in `../tool-selection/analytics-gate.json` and
 `../tool-selection-pending/analytics-gate-pending.json` and needs no database. **This**
-directory is the *answer* half: the seeded business dataset a question is asked against, and one
-ground-truth SQL script per question that computes the expected answer directly against the
-seeded Postgres. Per plan §2.1 criterion 1, the script *is* the specification of the expected
-answer — a chat response passes only when its figures match the script's output (exact for
-counts and currency, ±0.5 % for derived ratios).
+directory is the *answer* half: the questions themselves, the seeded business dataset they are
+asked against, and one ground-truth SQL script per question that computes the expected answer
+directly against the seeded Postgres. Per plan §2.1 criterion 1, the script *is* the
+specification of the expected answer — a chat response passes only when its figures match the
+script's output (exact for counts and currency, ±0.5 % for derived ratios).
+
+## The questions: `QUESTIONS.json` (#1671)
+
+`QUESTIONS.json` is the **only** definition of the text the chat-path gate asks. One entry per
+`## QN` section of `ground-truth/EXPECTED.md`, in bijection with it, so a question and the ground
+truth that scores it are diffable together. Each entry carries:
+
+| Field | What it pins |
+|---|---|
+| `fixture_id` / `expected_section` | the `qNN` ↔ `## QN` pairing |
+| `utterance` | the verbatim text sent to `POST /v1/mcp/chat` |
+| `ground_truth_sql` | the script that is the answer specification |
+| `in_chat_path_gate` / `excluded_reason` | which twelve of the twenty run, and why the other eight do not |
+| `window` | the shape (`calendar` / `rolling` / `point-in-time` / `mixed`), the range the ground truth measures, and whether the question's own text resolves to it |
+| `tool_selection_fixture_id` | the counterpart in the tool-selection corpus |
+
+Run it with `scripts/analytics_gate_run.py`, which reads this file and records its git blob sha in
+the run record. **Do not ask a gate question from anywhere else.** Before #1671 the twelve
+utterances lived only in an operator's `/tmp` file: a re-run could ask something different and move
+the score with no code change, a regression could not be told apart from a reworded question, and
+nothing recorded which twelve of the twenty were being asked. That is how gate q09 came to be asked
+with a calendar-year window against a ground truth measuring twelve calendar months and scored
+UNSCORABLE — a defect invisible until someone opened the fixture file by hand.
+
+`AnalyticsGateQuestionsTest` enforces the invariants in ordinary CI: twenty questions in order, the
+bijection with `EXPECTED.md`, an existing ground-truth script per entry, a resolvable window on
+every question, a stated reason on every exclusion, and a `tool_selection_fixture_id` that names a
+fixture that exists.
+
+**`../tool-selection/analytics-gate.json` is not this file.** It scores which *tools* are selected,
+carries an actor with `permission_codes`, and includes control fixtures that are not analytics
+questions at all (`q13-admin-user-account-active` — "Is this user account still active?"). Its ids
+share the `qNN` numbering, which reads like the question list and is not; that overlap caused a
+misreading during #1661. Both files now say so in their own `suite_notes`.
+
+### Windows
+
+Every entry states the window shape its ground truth measures and whether the question's text
+resolves there under the #1661/#1670 rules in `SystemPromptDefaults` (rolling vs calendar by
+preposition, calendar precedence on a mixed comparison). Where the two disagree, `window.notes`
+says so — an unstated window is allowed but never silent, and the test fails a question that has
+one without an explanation. Open today: **q17** names no window at all and inherits q15's
+six-month windows because both are served by the same E8 call. q02, q07, q10, q18 and q19 carry
+recorded gaps that are inert while those questions sit outside the gate.
 
 ## Status (2026-09-02)
 
