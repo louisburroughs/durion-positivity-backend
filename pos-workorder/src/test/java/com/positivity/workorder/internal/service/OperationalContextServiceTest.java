@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
@@ -97,6 +98,7 @@ class OperationalContextServiceTest {
                 .operationalContextVersion("ctx-v1")
                 .locationId(LOCATION_ID)
                 .resourceId(RESOURCE_ID)
+                .resourceType(ResourceType.MOBILE_UNIT)
                 .mechanicIds("[\"" + MECHANIC_ID + "\"]")
                 .workStartedAt(null)
                 .build();
@@ -106,7 +108,10 @@ class OperationalContextServiceTest {
 
         assertThat(result.getVersion()).isEqualTo("ctx-v1");
         assertThat(result.getLocationId()).isEqualTo(LOCATION_ID);
-        assertThat(result.getBayId()).isEqualTo(RESOURCE_ID.toString());
+        // #1656: the id is reported type-neutrally with its type beside it — the retired bayId key
+        // labelled every assignment a bay, including this mobile-unit one.
+        assertThat(result.getResourceId()).isEqualTo(RESOURCE_ID.toString());
+        assertThat(result.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
         assertThat(result.getAssignedMechanics()).containsExactly(MECHANIC_ID);
         assertThat(result.getAssignedResources()).containsExactly(RESOURCE_ID);
         assertThat(result.isLocked()).isFalse();
@@ -216,7 +221,6 @@ class OperationalContextServiceTest {
                 .build();
         var overrideRequest = OperationalContextOverrideRequest.builder()
                 .locationId(LOCATION_ID)
-                .bayId("BAY-01")
                 .assignedMechanics(List.of(MECHANIC_ID))
                 .assignedResources(List.of(RESOURCE_ID))
                 .constraints(List.of("LIFT_REQUIRED"))
@@ -230,11 +234,77 @@ class OperationalContextServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.getVersion()).isEqualTo("ctx-v1");
         assertThat(response.getLocationId()).isEqualTo(LOCATION_ID);
-        assertThat(response.getBayId()).isEqualTo("BAY-01");
+        assertThat(response.getResourceId()).isEqualTo(RESOURCE_ID.toString());
+        // No resourceType on the request: the one documented fallback applies, as on the event path.
+        assertThat(response.getResourceType()).isEqualTo(ResourceType.BAY);
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.BAY);
         assertThat(response.getAssignedMechanics()).containsExactly(MECHANIC_ID);
         assertThat(response.getAssignedResources()).containsExactly(RESOURCE_ID);
         assertThat(response.getConstraints()).containsExactly("LIFT_REQUIRED");
         assertThat(response.isLocked()).isFalse();
         verify(workorderRepository).save(any(Workorder.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // #1656 review finding 1: the override writes resource id and type together
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: overriding a bay assignment onto a mobile unit moves the type with the id")
+    void whenOverrideOperationalContext_toMobileUnit_thenTypeMovesWithId() {
+        // Writing the id alone left the workorder pointing at a van while still typed BAY: the
+        // dispatch board would then file it under bays[] and, in the same response, keep reporting
+        // the van as available. Exactly the half-applied state the assignment-event path prevents.
+        UUID unitId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        var workorder = Workorder.builder()
+                .id(WORKORDER_ID)
+                .status(WorkorderStatus.ASSIGNED)
+                .operationalContextVersion("ctx-v1")
+                .resourceId(RESOURCE_ID)
+                .resourceType(ResourceType.BAY)
+                .workStartedAt(null)
+                .build();
+        var overrideRequest = OperationalContextOverrideRequest.builder()
+                .locationId(LOCATION_ID)
+                .resourceType(ResourceType.MOBILE_UNIT)
+                .assignedResources(List.of(unitId))
+                .build();
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OperationalContextResponse response =
+                workorderService.overrideOperationalContext(WORKORDER_ID, overrideRequest);
+
+        assertThat(workorder.getResourceId()).isEqualTo(unitId);
+        assertThat(workorder.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+        assertThat(response.getResourceId()).isEqualTo(unitId.toString());
+        assertThat(response.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+    }
+
+    @Test
+    @DisplayName("#1656: an override that clears the resource clears the type with it")
+    void whenOverrideOperationalContext_withNoResources_thenTypeIsCleared() {
+        var workorder = Workorder.builder()
+                .id(WORKORDER_ID)
+                .status(WorkorderStatus.ASSIGNED)
+                .resourceId(RESOURCE_ID)
+                .resourceType(ResourceType.MOBILE_UNIT)
+                .workStartedAt(null)
+                .build();
+        var overrideRequest = OperationalContextOverrideRequest.builder()
+                .locationId(LOCATION_ID)
+                .assignedResources(List.of())
+                .build();
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OperationalContextResponse response =
+                workorderService.overrideOperationalContext(WORKORDER_ID, overrideRequest);
+
+        // A type with no id would be a dangling discriminator; the pair is always written together.
+        assertThat(workorder.getResourceId()).isNull();
+        assertThat(workorder.getResourceType()).isNull();
+        assertThat(response.getResourceId()).isNull();
+        assertThat(response.getResourceType()).isNull();
     }
 }

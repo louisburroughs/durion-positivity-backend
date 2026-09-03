@@ -34,19 +34,25 @@ public class DashboardController {
     @EmitEvent(id = "WORKEXEC_DASHBOARD_TODAY_GET", apiVersion = "1")
     @Operation(operationId = "getDispatchDashboard", summary = "Get Daily Dispatch Board Dashboard", description = """
                     Returns the aggregated dispatch board for one location and one date: workorder summaries, \
-                    mechanic statuses, bay statuses derived from workorder assignments, and detected scheduling \
-                    conflicts.
+                    mechanic statuses, bay statuses, mobile unit statuses, and detected scheduling conflicts.
+                    Bays and mobile units are reported in separate arrays because they are separate kinds of \
+                    resource; each array lists every active unit of its kind at the location, including units \
+                    with no work today, which report assignedWorkorderId null, and a unit reads as occupied \
+                    while any still-open workorder holds it, including a multi-day job scheduled on an earlier \
+                    date — a cancelled workorder, or a completed one that has not been reopened, releases it.
                     Use this tool when rendering the shop's daily dispatch board; do not use listWipWorkorders, \
                     which returns flat work-in-progress rows without mechanic, bay, or conflict aggregation.
                     Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes \
                     from local people replicas, and a failed replica lookup sets dataQualityWarning to true \
-                    instead of failing the call.
+                    instead of failing the call. Bay and mobile unit identity is served from local replicas of \
+                    the location domain, so a unit whose replica row has not arrived yet is listed by id with a \
+                    null name rather than being omitted.
                     Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is \
                     optional and defaults to today on the server clock.
                     Emits a WORKEXEC_DASHBOARD_TODAY_GET audit event; no workorder state changes — this is a \
                     read-only aggregation.
-                    Returns 400 when locationId does not parse as a UUID, and 200 with empty panels when no \
-                    workorders are scheduled for the date.
+                    Returns 400 when locationId does not parse as a UUID, and 200 with empty workorder and \
+                    conflict panels when no workorders are scheduled for the date.
                     """)
     public ResponseEntity<DashboardResponse> getDashboard(
             @RequestParam String locationId,

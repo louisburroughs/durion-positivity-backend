@@ -47,6 +47,9 @@ class LocationDescendantsServiceTest {
     @Mock
     private LocationTypeRepository locationTypeRepository;
 
+    @Mock
+    private LocationRepairCapabilityProjector repairCapabilityProjector;
+
     @InjectMocks
     private LocationServiceImpl locationService;
 

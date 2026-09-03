@@ -10,6 +10,8 @@ servers:
 - description: Generated server url
   url: http://localhost:8086
 tags:
+- description: Aggregate read model for the shop manager dashboard
+  name: Shop Dashboard API
 - description: Operations for creating and loading appointments in shop management
   name: Appointments API
 - description: Bulk set mechanics' skill sets
@@ -611,6 +613,72 @@ paths:
       - Schedule API
       x-required-permissions:
       - shop:schedule:view
+  /v1/shop-dashboard:
+    get:
+      description: 'Returns every bay and mobile unit at one shop location together with the workorder occupying each, and every open workorder at that location, in a single read.
+
+        Use this tool to render or refresh a shop manager dashboard; use listLocationTechnicians instead when only the staffing roster is needed, and do not call it once per unit or per workorder, because one call already returns the whole board.
+
+        Preconditions: the location must exist as a shop, and the bay, mobile-unit, workorder, vehicle and person facts are replicated from their owning domains over Kafka, so an assignment made moments ago can be a few seconds behind.
+
+        Required inputs: locationId (UUID) as a query parameter; date (yyyy-MM-dd) is optional and defaults to the location''s local today, and it scopes only the unit roster, never openWorkorders.
+
+        Emits a SHOPMGR_SHOP_DASHBOARD_VIEW audit event; no state changes occur, openWorkorders is capped at 200 rows with openWorkordersTruncated set when the cap is hit, and a unit holding no work is returned with a null assignment rather than omitted.
+
+        Returns 400 when locationId or date is malformed, 403 when the caller lacks shop:dashboard:view, and 404 when no shop exists for the location id.
+
+        '
+      operationId: getShopDashboard
+      parameters:
+      - description: Shop location identifier in UUID format. Must be an existing shop.
+        in: query
+        name: locationId
+        required: true
+        schema:
+          example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+          format: uuid
+          type: string
+      - description: Day the unit roster is rendered as of, as a date-only yyyy-MM-dd string (ADR-0038). Defaults to the location's local today and never scopes openWorkorders.
+        in: query
+        name: date
+        required: false
+        schema:
+          example: 2026-09-03
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopDashboardResponse'
+          description: Shop dashboard returned.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId or date is not a valid value.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the shop dashboard view permission.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Shop location not found.
+      security:
+      - bearerAuth:
+        - shop:dashboard:view
+      summary: Get the shop dashboard for a location
+      tags:
+      - Shop Dashboard API
+      x-required-permissions:
+      - shop:dashboard:view
   /v1/shop-manager/mechanics:
     get:
       description: 'Returns the eventually consistent mechanic read model synchronized from People/HR, one page at a time.
@@ -2045,6 +2113,130 @@ components:
       - id
       - recordedAt
       - retentionYears
+      type: object
+    ShopDashboardResponse:
+      description: Bays, mobile units and open workorders for one shop location in a single read.
+      properties:
+        date:
+          description: The day the unit roster is rendered as of, in the location's local calendar.
+          example: 2026-09-03
+          format: date
+          type: string
+        locationId:
+          description: The location this dashboard describes.
+          example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+          format: uuid
+          type: string
+        openWorkorders:
+          description: Every open workorder at the location, assigned or not. Not date-scoped.
+          items:
+            $ref: '#/components/schemas/ShopDashboardWorkorder'
+          type: array
+        openWorkordersTruncated:
+          description: True when openWorkorders was cut at the 200-row cap and more rows exist.
+          example: false
+          type: boolean
+        units:
+          description: Every bay and mobile unit at the location, idle ones included.
+          items:
+            $ref: '#/components/schemas/ShopDashboardUnit'
+          type: array
+      type: object
+    ShopDashboardUnit:
+      description: A bay or mobile unit at the location, with the workorder on it or an explicit null.
+      properties:
+        assignment:
+          $ref: '#/components/schemas/ShopDashboardWorkorder'
+        unitId:
+          description: Bay or mobile-unit identifier, from the owning location domain.
+          example: 01960005-0000-7000-8000-0000000000b1
+          format: uuid
+          type: string
+        unitName:
+          description: Display name from the location replica; null until the fact arrives.
+          type: string
+        unitType:
+          description: Which kind of repair unit this row describes.
+          enum:
+          - BAY
+          - MOBILE_UNIT
+          example: BAY
+          type: string
+      type: object
+    ShopDashboardVehicle:
+      description: Vehicle identity for a dashboard row, from the local vehicle replica.
+      properties:
+        make:
+          description: Vehicle make.
+          example: Ford
+          type: string
+        model:
+          description: Vehicle model.
+          example: F-150
+          type: string
+        vehicleId:
+          description: Vehicle registry identifier.
+          example: 01960004-0000-7000-8000-0000000000a1
+          format: uuid
+          type: string
+        vin:
+          description: Vehicle identification number.
+          example: 1HGCM82633A004352
+          type: string
+        year:
+          description: Model year.
+          example: 2024
+          format: int32
+          type: integer
+      type: object
+    ShopDashboardWorkorder:
+      description: An open workorder at the location, with its unit assignment when it has one.
+      properties:
+        mechanicName:
+          description: 'Display name of the first assigned mechanic. Null when that person has not replicated into this module yet, which is a normal consequence of the People replica lagging the workorder feed. It is never a different technician''s name: an unresolved lead mechanic yields null rather than falling through to whichever assigned mechanic happens to resolve, because naming the wrong technician is worse than naming none. Do not treat null as "unassigned" — read mechanicNames for who is actually on the job.'
+          example: Ada Lovelace
+          type: string
+        mechanicNames:
+          description: Display names of every assigned mechanic, in assignment order. Technicians whose person replica has not arrived yet are omitted, so this list can be shorter than the workorder's assignment and its first entry is not necessarily mechanicName.
+          items:
+            type: string
+          type: array
+        promisedAt:
+          description: Time the vehicle is promised back; always null until pos-workorder owns a promise time.
+          example: 2026-09-03 17:00:00+00:00
+          format: date-time
+          type: string
+        status:
+          description: Owner's workorder status name.
+          example: WORK_IN_PROGRESS
+          type: string
+        unitId:
+          description: Bay or mobile unit the workorder occupies; null when unassigned.
+          example: 01960005-0000-7000-8000-0000000000b1
+          format: uuid
+          type: string
+        unitName:
+          description: Display name of the occupied unit; null when unassigned.
+          example: Front Bay 1
+          type: string
+        unitType:
+          description: Kind of unit occupied; null when unassigned.
+          enum:
+          - BAY
+          - MOBILE_UNIT
+          example: BAY
+          type: string
+        vehicle:
+          $ref: '#/components/schemas/ShopDashboardVehicle'
+        workorderId:
+          description: Workorder identifier.
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        workorderNumber:
+          description: Human-readable workorder number.
+          example: WO-2026-1001
+          type: string
       type: object
     SkillInput:
       properties:

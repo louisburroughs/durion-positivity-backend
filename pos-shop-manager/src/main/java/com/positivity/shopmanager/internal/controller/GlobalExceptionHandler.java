@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @ControllerAdvice
 @RequiredArgsConstructor
@@ -150,6 +151,23 @@ public class GlobalExceptionHandler {
         UUID correlationId = resolveCorrelationId(request);
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                 .body(error("NOT_IMPLEMENTED", exception.getMessage(), correlationId));
+    }
+
+    /**
+     * A path or query parameter that will not convert — a malformed UUID, a date that is not
+     * {@code yyyy-MM-dd} (ADR-0017, ADR-0038). Spring's own handling answers 400 with an empty
+     * body; this maps it onto the same {@link ApiError} envelope every other error in this module
+     * uses, so a caller never has to parse two shapes.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(error(
+                        "INVALID_REQUEST",
+                        "Parameter '" + exception.getName() + "' is not a valid value",
+                        correlationId));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

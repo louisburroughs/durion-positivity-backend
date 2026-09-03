@@ -24,7 +24,7 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `WorkorderPartUsageService` — part consumption recording and adjustments
 - `WorkorderInvoiceService` — invokes `pos-invoice` to generate an invoice at close
 - `TechnicianAssignmentService` — assign and reassign technicians
-- `DashboardService` — aggregated shop dashboard data
+- `DashboardService` — aggregated shop dashboard data (bays and mobile units, see below)
 - `TaxClient` — outbound client for `pos-tax`; forwards `X-User: pos-workorder` and `X-Authorities: tax:calculate` on the tax-calculate call so the request satisfies `tax:calculate` enforcement (matching `pos-invoice`'s `TaxServiceClient`)
 
 ## API Endpoints
@@ -128,6 +128,101 @@ receiving and return lines already use via `DocumentQuantityConverter`.
 line's own `uomCode` verbatim (null means the product's base unit) — no conversion, no catalog
 lookup, just the same value the line was keyed in.
 
+## Dispatch board: bays and mobile units (#1656)
+
+`GET /v1/workexec/dashboard/today` returns `bays[]` **and** `mobileUnits[]`. They are separate
+arrays because pos-location owns bays and mobile units as separate aggregates with separate
+identity and lifecycle; `MobileUnitStatus` mirrors `BayStatus` field-for-field
+(`unitId`/`unitName` in place of `bayId`/`bayName`) so the board renders both panels the same way.
+
+`Workorder.resource_type` (`BAY` | `MOBILE_UNIT`, added by V27) is what tells the two apart. It
+rides the assignment chain `AssignmentUpdatePayload` → `AssignmentUpdatedEvent` → `Workorder`.
+The field is **optional inbound**: pos-shop-manager does not publish it yet, and an assignment that
+arrives without it is applied as `BAY` — the meaning every assignment had before mobile units were
+representable. V27 backfills existing assigned rows the same way. `AssignmentUpdatedEvent`
+`resolveResourceType()` is the single place that fallback happens.
+
+Inbound binding of `resourceType` is **lenient** (`ResourceType.fromJson`): any casing is accepted,
+and an unrecognised token is logged by name and then treated as absent, so it lands on the same
+`BAY` fallback. The producer is upstream and the value shares a payload with the location, the
+resource id and the mechanics; strict enum binding would let one bad token throw out of
+`KafkaCommandListener`'s log-and-swallow catch and discard the entire assignment update silently.
+
+The same id+type pair is written together by **both** write paths — the assignment event and
+`POST /v1/workorders/{id}/operationalContext/override` — so a bay-to-mobile-unit move can never
+half-apply. The override request therefore carries `resourceType` (optional, `BAY` when absent) in
+place of the former free-text `bayId`, which was echoed back but never persisted.
+
+The read models name the resource type-neutrally: `WorkorderSummary.assignedResourceId` +
+`resourceType` (was `assignedBayId`) and `OperationalContextResponse.resourceId` + `resourceType`
+(was `bayId`). The bay-named keys are gone rather than deprecated — they carried mobile-unit ids
+that joined to nothing in `bays[]`.
+
+Resource identity comes from the `ext_bay` and `ext_mobile_unit` replicas (V28), fed by
+`location.bay.*` / `location.mobile-unit.*` facts on `location.events.v1` per ADR-0044 §6 — no
+synchronous call into pos-location and no cross-schema read. This is why `BayStatus.bayName` is
+populated at all: it was declared-but-always-null until a replica existed to resolve it from.
+
+A replica row's `active` flag is **derived from the owner's `status`**, allow-listing `ACTIVE`
+(any casing); anything else, including an absent or unseen value, is not active. pos-location's
+`BayEntity` and `MobileUnitEntity` have no boolean active field at all — a bay's status is
+`ACTIVE` | `OUT_OF_SERVICE` and a mobile unit's is a free-text column whose in-use values are
+`ACTIVE` | `INACTIVE` — so a deny-list would put an undispatchable unit on the board, and a
+consumer-invented `active` boolean would deserialize to `false` on every real event and leave both
+panels permanently empty.
+
+Both panels list **every active unit at the location** (bays by `location_id`, units by
+`base_location_id`), including units holding no work, which report `assignedWorkorderId: null`.
+A unit reads as occupied while **any** still-open workorder holds it, which is why occupancy comes
+from `WorkorderRepository.findOpenResourceHoldersAtLocation` rather than from the day's rows: a
+multi-day job scheduled on an earlier date is still in its bay today, and a panel that positively
+asserts `AVAILABLE` cannot answer that from one date's rows. Work scheduled *after* the requested
+date is excluded — it is booked, not occupying. `Workorder.isLocked()` is the sole open/closed
+authority (`CANCELLED`, or `COMPLETED` and not reopened), so a reopened completed workorder keeps
+its resource rather than being wrongly released.
+
+Conflict detection uses the same two rules, so the panels and `conflicts[]` cannot contradict each
+other: double-booking is grouped by resource id **and** type, locked workorders are excluded, and
+the conflict is reported as `BAY_DOUBLE_BOOKED` or `MOBILE_UNIT_DOUBLE_BOOKED` with a message
+naming the right kind of unit.
+
+Two edge behaviours are deliberate and live in `DashboardServiceImpl.buildResourcePanel`:
+
+- **Unknown or inactive resource still holding open work** — the row is rendered anyway (name from
+  the replica if the row exists, otherwise null). Hiding it would make live work invisible on the
+  board. The lifecycle question "may a decommissioned unit hold open work at all?" belongs to
+  pos-location and is an open follow-up.
+- **Replica lag** — when an assignment fact overtakes the resource's own fact, the row appears with
+  its id and a null name rather than being dropped.
+
+Upstream dependency: pos-location does not publish bay or mobile-unit facts yet, so the replicas
+start empty and the listener branches are never taken in production until it does. The consumer
+tolerates that by design.
+
+## Published workorder fact: assignment block (#1658)
+
+`workorder.workorder.updated` on `workorder.events.v1` (payload `WorkorderUpdatedV1` in
+`pos-domain-events`, emitted by `WorkorderFactPublisher`) now carries an assignment block alongside
+the existing snapshot: `locationId`, `resourceId`, `resourceType`, `mechanicIds`, `promisedAt` and
+`scheduledDate`. It is **additive within schema v1** (ADR-0044 §3) — a pre-#1658 arity constructor
+is retained, and consumers that only read the older fields are unaffected.
+
+The block exists so pos-shop-manager's shop dashboard can render every bay and mobile unit at a
+location from a local `ext_workorder` replica. Without it a consumer learns that a workorder changed
+but not what it occupies or who is on it, and would have to call back into this module
+synchronously — which ADR-0044 R1 forbids.
+
+Two details worth knowing:
+
+- `mechanicIds` is a **list**. The owner stores a JSON array and a job may carry more than one
+  technician, so a scalar would silently drop assignments. A malformed or non-UUID entry is dropped
+  with a warning rather than failing the commit: the fact is assembled at `beforeCommit`, so
+  throwing there would roll back the business transaction that produced it.
+- `promisedAt` is **null in every fact published today**. `Workorder` has no promise-time field; the
+  slot is declared so the contract does not have to change when it grows one.
+
+No endpoint, status semantics or transition changed — this is payload only.
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |
@@ -142,6 +237,8 @@ lookup, just the same value the line was keyed in.
 | `workorder.kafka.events-topic` | `workorder.events.v1`      | Kafka topic for workorder events |
 | `workorder.kafka.catalog-events-topic` | `catalog.events.v1` | Catalog fact topic feeding the `ext_product_uom` replica |
 | `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |
+| `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay` and `ext_mobile_unit` replicas |
+| `workorder.kafka.location-events-consumer-group` | `pos-workorder-location-events` | Consumer group for the location fact topic |
 
 ## Dependencies
 

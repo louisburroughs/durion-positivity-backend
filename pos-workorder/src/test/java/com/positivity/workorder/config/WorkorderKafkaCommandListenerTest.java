@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
 import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.service.KafkaCommandListener;
 import com.positivity.workorder.internal.service.OutboxReplayService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
@@ -88,6 +89,73 @@ class WorkorderKafkaCommandListenerTest {
         listener.onCommand(objectMapper.writeValueAsString(direct));
 
         verify(eventPublisher).publishEvent(any(AssignmentUpdatedEvent.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // #1656 review finding 4: resourceType must never cost the whole update
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: a garbage resourceType still lands the whole assignment, typed BAY")
+    void garbageResourceTypeStillAppliesTheAssignment() {
+        // The producer is upstream and unversioned here. Strict enum binding made treeToValue throw
+        // into onCommand's log-and-swallow catch, silently discarding the location, the resource and
+        // the mechanics along with the unreadable type.
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID resourceId = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+
+        listener.onCommand("""
+                {
+                  "commandType":"ASSIGNMENT_UPDATED",
+                  "payload":{
+                    "workorderId":"%s",
+                    "payload":{
+                      "locationId":"%s",
+                      "resourceId":"%s",
+                      "resourceType":"SPACE_SHUTTLE",
+                      "mechanicIds":["%s"]
+                    }
+                  }
+                }
+                """.formatted(workorderId, locationId, resourceId, mechanicId));
+
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        AssignmentUpdatedEvent event = (AssignmentUpdatedEvent) captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(event.getPayload().getLocationId())
+                .isEqualTo(locationId);
+        org.assertj.core.api.Assertions.assertThat(event.getPayload().getResourceId())
+                .isEqualTo(resourceId);
+        org.assertj.core.api.Assertions.assertThat(event.getPayload().getMechanicIds())
+                .containsExactly(mechanicId);
+        // Unrecognised is treated exactly like absent, so it lands on the one documented fallback.
+        org.assertj.core.api.Assertions.assertThat(event.getPayload().getResourceType())
+                .isNull();
+        org.assertj.core.api.Assertions.assertThat(event.resolveResourceType()).isEqualTo(ResourceType.BAY);
+    }
+
+    @Test
+    @DisplayName("#1656: resourceType binds case-insensitively rather than being discarded")
+    void lowerCaseResourceTypeBinds() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        listener.onCommand("""
+                {
+                  "commandType":"ASSIGNMENT_UPDATED",
+                  "payload":{
+                    "workorderId":"%s",
+                    "payload":{"locationId":"%s","resourceId":"%s","resourceType":"mobile_unit","mechanicIds":[]}
+                  }
+                }
+                """.formatted(id, id, id));
+
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(((AssignmentUpdatedEvent) captor.getValue()).resolveResourceType())
+                .isEqualTo(ResourceType.MOBILE_UNIT);
     }
 
     @Test

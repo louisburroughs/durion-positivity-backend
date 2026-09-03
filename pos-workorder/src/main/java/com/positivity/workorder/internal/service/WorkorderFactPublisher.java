@@ -1,5 +1,8 @@
 package com.positivity.workorder.internal.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
@@ -9,6 +12,7 @@ import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import jakarta.persistence.EntityManager;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,6 +35,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * publishing is disabled the outbox writer bean is absent and every call is a no-op, so callers
  * never need their own guard.
  *
+ * <p>The fact also carries the assignment block — location, resource id and type, mechanic ids,
+ * promise time and scheduled date (#1658) — so pos-shop-manager's shop dashboard can render every
+ * bay and mobile unit at a location from a local {@code ext_workorder} replica. Without it a
+ * consumer knows a workorder changed but not what it occupies or who is on it, and would have to
+ * call back into this module synchronously, which ADR-0044 R1 forbids.
+ *
  * <p>{@code Workorder} carries a JPA {@code @Version}, and the envelope's {@code aggregateVersion}
  * is that counter (#1486): it strictly increments on every committed mutation, so — unlike the
  * retired {@code Instant.now(clock)}-stamped emission timestamp — two mutations landing in the same
@@ -48,6 +58,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class WorkorderFactPublisher {
 
     private static final Object TX_RESOURCE_KEY = WorkorderFactPublisher.class;
+
+    /**
+     * Reads the owner's {@code mechanic_ids} JSON array column. Declared static so widening the
+     * fact (#1658) did not change this component's constructor, which several tests build by hand.
+     */
+    private static final ObjectMapper MECHANIC_IDS_MAPPER = JsonMapper.builder().build();
 
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final WorkorderRepository workorderRepository;
@@ -119,7 +135,17 @@ public class WorkorderFactPublisher {
                     parts,
                     services,
                     workorder.getCreatedAt(),
-                    workorder.getUpdatedAt());
+                    workorder.getUpdatedAt(),
+                    workorder.getLocationId(),
+                    workorder.getResourceId(),
+                    workorder.getResourceType() != null
+                            ? workorder.getResourceType().name()
+                            : null,
+                    parseMechanicIds(workorder.getMechanicIds()),
+                    // The owner has no promise-time field yet (#1658); the contract carries the
+                    // slot so consumers can sort on it the day the column exists.
+                    null,
+                    workorder.getScheduledDate());
             writer.publish(
                     WorkorderUpdatedV1.EVENT_TYPE,
                     WorkorderUpdatedV1.SCHEMA_VERSION,
@@ -127,6 +153,36 @@ public class WorkorderFactPublisher {
                     workorder.getVersion(),
                     payload);
         }
+    }
+
+    /**
+     * Parses the owner's {@code mechanic_ids} JSON array into typed ids (#1658). A malformed or
+     * non-UUID entry is dropped rather than failing the commit: this runs at {@code beforeCommit},
+     * so throwing here would roll back the business transaction that produced the fact.
+     */
+    private static List<UUID> parseMechanicIds(String mechanicIdsJson) {
+        if (mechanicIdsJson == null || mechanicIdsJson.isBlank()) {
+            return List.of();
+        }
+        List<String> raw;
+        try {
+            raw = MECHANIC_IDS_MAPPER.readValue(mechanicIdsJson, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            log.warn("Unreadable mechanic_ids JSON on workorder fact: {}", mechanicIdsJson, e);
+            return List.of();
+        }
+        List<UUID> ids = new ArrayList<>(raw.size());
+        for (String candidate : raw) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            try {
+                ids.add(UUID.fromString(candidate.trim()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Skipping non-UUID mechanic id '{}' on workorder fact", candidate);
+            }
+        }
+        return List.copyOf(ids);
     }
 
     private static WorkorderUpdatedV1.PartLine toPartLine(@NonNull WorkorderPart part) {

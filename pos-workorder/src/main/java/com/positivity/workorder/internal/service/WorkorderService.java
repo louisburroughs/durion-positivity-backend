@@ -119,11 +119,22 @@ public interface WorkorderService {
     void onEstimateRevised(EstimateRevisedEvent event);
 
     /**
-     * Updates assignment context (locationId, resourceId, mechanicIds) on a
+     * Updates assignment context (locationId, resourceId, resourceType, mechanicIds) on a
      * workorder
      * from an AssignmentUpdated event. Uses full-replace semantics.
-     * Only pre-execution states (DRAFT, APPROVED, ASSIGNED) are updatable.
-     * CAP:140 Story #64.
+     * Every workorder that is not locked is updatable — {@link Workorder#isLocked()}, i.e. CANCELLED
+     * or COMPLETED-and-not-reopened, is the only refusal. CAP:140 Story #64; resourceType and the
+     * widened guard added by #1656.
+     *
+     * <p>The guard used to be {@code status ∈ {DRAFT, APPROVED, ASSIGNED}}, which silently dropped
+     * the mid-day reassignment #1656 requires: a job moved between resources while it is running is
+     * WORK_IN_PROGRESS by definition, so the old resource was never released and the new one was
+     * never held. A locked workorder is still refused — a cancelled or completed job must not accept
+     * a reassignment.
+     *
+     * <p>An event that omits {@code resourceType} is applied as
+     * {@link com.positivity.workorder.internal.enums.ResourceType#BAY} — see
+     * {@code AssignmentUpdatedEvent#resolveResourceType()} for why.
      *
      * @param event the assignment updated event from shop management service
      */
@@ -143,6 +154,10 @@ public interface WorkorderService {
      * Manager override: replaces the operational context for a workorder.
      * Not allowed after workStartedAt is set.
      * CAP:140 Story #59.
+     *
+     * <p>The override replaces resource id and {@code resourceType} together (#1656), the same
+     * full-replace the assignment-event path performs, so a bay-to-mobile-unit re-slot can never
+     * leave the workorder pointing at one kind of resource while typed as the other.
      */
     @NonNull
     OperationalContextResponse overrideOperationalContext(

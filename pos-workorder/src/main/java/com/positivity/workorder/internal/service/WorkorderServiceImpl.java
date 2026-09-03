@@ -22,6 +22,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
@@ -894,14 +895,19 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(event.getWorkorderId())
                 .orElseThrow(() -> new WorkorderNotFoundException(event.getWorkorderId()));
 
-        WorkorderStatus status = workorder.getStatus();
-        if (status != WorkorderStatus.DRAFT
-                && status != WorkorderStatus.APPROVED
-                && status != WorkorderStatus.ASSIGNED) {
+        // #1656: the guard is "not locked", not "not yet started". It used to be
+        // status ∈ {DRAFT, APPROVED, ASSIGNED}, which made the mid-day reassignment this story
+        // exists for unreachable: a job moved from a bay to a mobile unit at 11am is by definition
+        // WORK_IN_PROGRESS, so the event was dropped with a warning — the old bay stayed OCCUPIED
+        // and the new unit stayed AVAILABLE on the dispatch board indefinitely, with no error
+        // anywhere a dispatcher would see. Locked work (CANCELLED, or COMPLETED and not reopened)
+        // is still refused: a finished or cancelled job must not accept a new resource, and
+        // isLocked() is the same authority the dashboard panels and the occupancy query use.
+        if (workorder.isLocked()) {
             log.warn(
-                    "Skipping assignment context update for workorder {} in non-updatable status {}",
+                    "Skipping assignment context update for workorder {} in locked status {}",
                     event.getWorkorderId(),
-                    status);
+                    workorder.getStatus());
             return;
         }
 
@@ -909,11 +915,20 @@ public class WorkorderServiceImpl implements WorkorderService {
                 workorder.getLocationId() != null ? workorder.getLocationId().toString() : null;
         String oldResourceId =
                 workorder.getResourceId() != null ? workorder.getResourceId().toString() : null;
+        String oldResourceType = workorder.getResourceType() != null
+                ? workorder.getResourceType().name()
+                : null;
         String oldMechanicIds = workorder.getMechanicIds();
 
         AssignmentUpdatePayload payload = event.getPayload();
+        // #1656: the resource type rides the same full-replace as the resource id, so a bay →
+        // mobile-unit reassignment is one atomic change and can never leave the workorder pointing
+        // at a mobile unit while still typed as a bay. resolveResourceType() applies the documented
+        // BAY fallback for the untyped events pos-shop-manager still publishes.
+        ResourceType resourceType = event.resolveResourceType();
         workorder.setLocationId(payload.getLocationId());
         workorder.setResourceId(payload.getResourceId());
+        workorder.setResourceType(payload.getResourceId() != null ? resourceType : null);
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorder.getId());
@@ -921,9 +936,11 @@ public class WorkorderServiceImpl implements WorkorderService {
         String details = buildAuditDetails(
                 oldLocationId,
                 oldResourceId,
+                oldResourceType,
                 oldMechanicIds,
                 payload.getLocationId(),
                 payload.getResourceId(),
+                workorder.getResourceType(),
                 payload.getMechanicIds());
 
         AuditEvent auditEvent = AuditEvent.builder()
@@ -937,10 +954,11 @@ public class WorkorderServiceImpl implements WorkorderService {
         auditEventRepository.save(auditEvent);
 
         log.info(
-                "Assignment context updated for workorder {}: locationId={}, resourceId={}, mechanicCount={}",
+                "Assignment context updated for workorder {}: locationId={}, resourceId={}, resourceType={}, mechanicCount={}",
                 workorder.getId(),
                 payload.getLocationId(),
                 payload.getResourceId(),
+                workorder.getResourceType(),
                 payload.getMechanicIds() != null ? payload.getMechanicIds().size() : 0);
     }
 
@@ -956,10 +974,14 @@ public class WorkorderServiceImpl implements WorkorderService {
         return OperationalContextResponse.builder()
                 .version(workorder.getOperationalContextVersion())
                 .locationId(workorder.getLocationId())
-                .bayId(
+                // #1656: the id is reported type-neutrally, with the type beside it. The retired
+                // bayId key said "bay" about every assignment, including mobile-unit ones.
+                .resourceId(
                         workorder.getResourceId() != null
                                 ? workorder.getResourceId().toString()
                                 : null)
+                .resourceType(
+                        workorder.getResourceId() != null ? ResourceType.orDefault(workorder.getResourceType()) : null)
                 .assignedMechanics(parseMechanicIds(workorder.getMechanicIds()))
                 .assignedResources(
                         workorder.getResourceId() == null
@@ -983,8 +1005,13 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         workorder.setLocationId(override.getLocationId());
         List<UUID> assignedResources = override.getAssignedResources();
-        workorder.setResourceId(
-                assignedResources != null && !assignedResources.isEmpty() ? assignedResources.get(0) : null);
+        UUID resourceId = assignedResources != null && !assignedResources.isEmpty() ? assignedResources.get(0) : null;
+        // #1656: type and id are written together, exactly as handleAssignmentUpdated does. Setting
+        // the id alone would let a bay → mobile-unit override land half-applied: the workorder would
+        // point at a van while still typed BAY, so the dispatch board would file it under bays[] and
+        // go on advertising the van as available in the very same response.
+        workorder.setResourceId(resourceId);
+        workorder.setResourceType(resourceId != null ? ResourceType.orDefault(override.getResourceType()) : null);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
         Workorder saved = workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(saved.getId());
@@ -992,7 +1019,9 @@ public class WorkorderServiceImpl implements WorkorderService {
         return OperationalContextResponse.builder()
                 .version(saved.getOperationalContextVersion())
                 .locationId(saved.getLocationId())
-                .bayId(override.getBayId())
+                .resourceId(
+                        saved.getResourceId() != null ? saved.getResourceId().toString() : null)
+                .resourceType(saved.getResourceType())
                 .assignedMechanics(parseMechanicIds(saved.getMechanicIds()))
                 .assignedResources(
                         saved.getResourceId() == null ? Collections.emptyList() : List.of(saved.getResourceId()))
@@ -1082,19 +1111,34 @@ public class WorkorderServiceImpl implements WorkorderService {
     private String buildAuditDetails(
             String oldLocationId,
             String oldResourceId,
+            String oldResourceType,
             String oldMechanicIds,
             UUID newLocationId,
             UUID newResourceId,
+            ResourceType newResourceType,
             List<UUID> newMechanicIds) {
-        String oldLocJson = oldLocationId != null ? "\"" + oldLocationId + "\"" : "null";
-        String oldResJson = oldResourceId != null ? "\"" + oldResourceId + "\"" : "null";
+        String oldLocJson = quoteOrNull(oldLocationId);
+        String oldResJson = quoteOrNull(oldResourceId);
+        String oldResTypeJson = quoteOrNull(oldResourceType);
         String oldMechJson = oldMechanicIds != null ? oldMechanicIds : "[]";
-        String newLocJson = newLocationId != null ? "\"" + newLocationId + "\"" : "null";
-        String newResJson = newResourceId != null ? "\"" + newResourceId + "\"" : "null";
+        String newLocJson = quoteOrNull(newLocationId != null ? newLocationId.toString() : null);
+        String newResJson = quoteOrNull(newResourceId != null ? newResourceId.toString() : null);
+        String newResTypeJson = quoteOrNull(newResourceType != null ? newResourceType.name() : null);
         String newMechJson = serializeMechanicIds(newMechanicIds);
         return String.format(
-                "{\"oldLocationId\":%s,\"oldResourceId\":%s,\"oldMechanicIds\":%s,"
-                        + "\"newLocationId\":%s,\"newResourceId\":%s,\"newMechanicIds\":%s}",
-                oldLocJson, oldResJson, oldMechJson, newLocJson, newResJson, newMechJson);
+                "{\"oldLocationId\":%s,\"oldResourceId\":%s,\"oldResourceType\":%s,\"oldMechanicIds\":%s,"
+                        + "\"newLocationId\":%s,\"newResourceId\":%s,\"newResourceType\":%s,\"newMechanicIds\":%s}",
+                oldLocJson,
+                oldResJson,
+                oldResTypeJson,
+                oldMechJson,
+                newLocJson,
+                newResJson,
+                newResTypeJson,
+                newMechJson);
+    }
+
+    private static String quoteOrNull(String value) {
+        return value != null ? "\"" + value + "\"" : "null";
     }
 }

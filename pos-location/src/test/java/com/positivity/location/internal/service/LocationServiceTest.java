@@ -2,9 +2,11 @@ package com.positivity.location.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +32,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -75,6 +78,9 @@ class LocationServiceTest {
 
     @Mock
     private ExtPersonReplicaRepository extPersonReplicaRepository;
+
+    @Mock
+    private LocationRepairCapabilityProjector repairCapabilityProjector;
 
     @InjectMocks
     private LocationServiceImpl locationService;
@@ -664,6 +670,51 @@ class LocationServiceTest {
         assertThat(results).hasSize(1);
         assertThat(results.getFirst().getName()).isEqualTo("List Shop");
         assertThat(results.getFirst().getType()).isNotNull();
+    }
+
+    /**
+     * Issue #1657: the list endpoint projects repair capability onto every row
+     * from one batch lookup, and copies both counts plus the derived flag.
+     */
+    @Test
+    void getAllLocationsDto_copiesRepairCapabilityProjectionOntoEachDto() {
+        UUID capableId = UUID.fromString("00000000-0000-0000-0000-000000000101");
+        UUID barrenId = UUID.fromString("00000000-0000-0000-0000-000000000102");
+        Location capable = savedLocation(capableId, validRequest("Repair Shop", "RPR-001"), null);
+        Location barren = savedLocation(barrenId, validRequest("Warehouse", "WHS-001"), null);
+        when(locationRepository.findAll()).thenReturn(List.of(capable, barren));
+        when(repairCapabilityProjector.project(List.of(capable, barren)))
+                .thenReturn(Map.of(
+                        capableId, LocationRepairCapability.of(2, 1), barrenId, LocationRepairCapability.of(0, 0)));
+
+        List<LocationResponseDTO> results = locationService.getAllLocationsDto();
+
+        assertThat(results)
+                .extracting(
+                        LocationResponseDTO::getId,
+                        LocationResponseDTO::isHasRepairCapability,
+                        LocationResponseDTO::getActiveBayCount,
+                        LocationResponseDTO::getActiveMobileUnitCount)
+                .containsExactly(tuple(capableId, true, 2, 1), tuple(barrenId, false, 0, 0));
+        verify(repairCapabilityProjector, times(1)).project(List.of(capable, barren));
+    }
+
+    /**
+     * Issue #1657: a location the projector left out (an inactive one, for
+     * instance) falls back to not repair-capable with zero counts.
+     */
+    @Test
+    void getAllLocationsDto_locationMissingFromProjection_reportsNoRepairCapability() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000103");
+        Location location = savedLocation(locationId, validRequest("Closed Shop", "CLS-001"), null);
+        when(locationRepository.findAll()).thenReturn(List.of(location));
+        when(repairCapabilityProjector.project(List.of(location))).thenReturn(Map.of());
+
+        List<LocationResponseDTO> results = locationService.getAllLocationsDto();
+
+        assertThat(results.getFirst().isHasRepairCapability()).isFalse();
+        assertThat(results.getFirst().getActiveBayCount()).isZero();
+        assertThat(results.getFirst().getActiveMobileUnitCount()).isZero();
     }
 
     @Test

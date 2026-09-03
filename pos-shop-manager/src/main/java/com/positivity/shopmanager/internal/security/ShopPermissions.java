@@ -20,6 +20,20 @@ public final class ShopPermissions {
     /** Assign work to bays. */
     public static final String BAY_ASSIGN = "shop:bay:assign";
 
+    /**
+     * View the aggregate shop manager dashboard (#1658).
+     *
+     * <p>Read-only, and deliberately not a replacement for any of the deprecated {@code shop:*}
+     * permissions: those cover mutations that moved to the location domain, this covers a view
+     * that did not exist before. Nothing is marked {@code supersededBy} it.
+     *
+     * <p>The prefix is {@code shop:}, not {@code shopmgmt:}, because that is what this module's
+     * {@code permissions.yaml} declares as its domain and what its other live codes use
+     * ({@code shop:bay:assign}, {@code shop:schedule:*}, {@code shop:technician:view}). A
+     * {@code shopmgmt:} prefix would read as a second, cross-domain owner to the RBAC tooling.
+     */
+    public static final String DASHBOARD_VIEW = "shop:dashboard:view";
+
     /** Edit shop schedules. */
     public static final String SCHEDULE_EDIT = "shop:schedule:edit";
 

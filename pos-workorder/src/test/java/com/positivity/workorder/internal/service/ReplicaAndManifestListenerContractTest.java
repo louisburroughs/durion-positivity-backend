@@ -18,14 +18,21 @@ import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.workorder.internal.dto.location.BayDeletedV1;
+import com.positivity.workorder.internal.dto.location.BayUpdatedV1;
+import com.positivity.workorder.internal.dto.location.MobileUnitUpdatedV1;
+import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
+import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
+import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -73,6 +80,9 @@ import tools.jackson.databind.ObjectMapper;
 class ReplicaAndManifestListenerContractTest {
 
     private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+    private static final UUID SITE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+    private static final UUID OTHER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e3");
+    private static final UUID THIRD_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
     private static final Instant NOW = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_START = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T09:05:00Z");
@@ -99,6 +109,12 @@ class ReplicaAndManifestListenerContractTest {
     private ExtLocationReplicaRepository locationRepository;
 
     @Mock
+    private ExtBayReplicaRepository bayRepository;
+
+    @Mock
+    private ExtMobileUnitReplicaRepository mobileUnitRepository;
+
+    @Mock
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @Mock
@@ -118,6 +134,8 @@ class ReplicaAndManifestListenerContractTest {
         when(userLinkRepository.findById(any())).thenReturn(Optional.empty());
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
         when(customerRepository.findById(any())).thenReturn(Optional.empty());
+        when(bayRepository.findById(any())).thenReturn(Optional.empty());
+        when(mobileUnitRepository.findById(any())).thenReturn(Optional.empty());
         when(locationRepository.findById(any())).thenReturn(Optional.empty());
         peopleListener = new PeopleReplicaEventsListener(
                 clock,
@@ -133,12 +151,17 @@ class ReplicaAndManifestListenerContractTest {
                 processedEventRepository,
                 customerRepository,
                 org.mockito.Mockito.mock(ObjectProvider.class));
+        // The real registry, not a null provider: the rejection counter is the only signal that a
+        // bay or mobile-unit fact arrived in a shape this module cannot use (#1668), so it has to be
+        // assertable here.
         locationListener = new LocationEventsListener(
                 clock,
                 objectMapper,
                 processedEventRepository,
                 locationRepository,
-                org.mockito.Mockito.mock(ObjectProvider.class));
+                bayRepository,
+                mobileUnitRepository,
+                meterRegistryProvider);
     }
 
     private static String envelope(String eventId, String eventType, String payload) {
@@ -307,6 +330,150 @@ class ReplicaAndManifestListenerContractTest {
             locationListener.onLocationEvent(envelope("evt-2", LocationUpdatedV1.EVENT_TYPE, payload));
             // Version 3 against a replica at 5: strictly older, skipped.
             verify(locationRepository, org.mockito.Mockito.times(1)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1656 bay: maps identity, site scope and active flag, and removes the row on deletion")
+        void bayMapping() {
+            locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
+                    {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"GENERAL",
+                     "status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().getBayId()).isEqualTo(ID);
+            assertThat(captor.getValue().getLocationId()).isEqualTo(SITE_ID);
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+            assertThat(captor.getValue().isActive()).isTrue();
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(3);
+
+            locationListener.onLocationEvent(envelope("evt-2", BayDeletedV1.EVENT_TYPE, """
+                    {"bayId":"%s"}""".formatted(ID)));
+            verify(bayRepository).deleteById(ID);
+        }
+
+        @Test
+        @DisplayName("#1656 mobile unit: maps identity and base site, and honours the stale-version guard")
+        void mobileUnitMapping() {
+            String payload = """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE"}""".formatted(ID, SITE_ID);
+            locationListener.onLocationEvent(envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, payload));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository).save(captor.capture());
+            assertThat(captor.getValue().getMobileUnitId()).isEqualTo(ID);
+            assertThat(captor.getValue().getBaseLocationId()).isEqualTo(SITE_ID);
+            assertThat(captor.getValue().getName()).isEqualTo("Van 3");
+            assertThat(captor.getValue().isActive()).isTrue();
+
+            when(mobileUnitRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(ID)
+                            .aggregateVersion(5)
+                            .build()));
+            locationListener.onLocationEvent(envelope("evt-2", MobileUnitUpdatedV1.EVENT_TYPE, payload));
+            // Version 3 against a replica at 5: strictly older, skipped.
+            verify(mobileUnitRepository, org.mockito.Mockito.times(1)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1656: a bay status the consumer has never seen before is not active")
+        void unknownBayStatusIsNotActive() {
+            // The owner publishes status, never a boolean active flag, and its vocabulary is not this
+            // module's to fix. Allow-listing ACTIVE means a value nobody here has seen keeps the unit
+            // off the dispatch board instead of advertising a bay that may be out of service.
+            locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
+                    {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"GENERAL",
+                     "status":"AWAITING_INSPECTION"}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+            // The row is still replicated — only its activeness is withheld.
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+        }
+
+        @Test
+        @DisplayName("#1656: an unknown or absent mobile-unit status is not active; ACTIVE binds in any casing")
+        void mobileUnitStatusAllowList() {
+            // MobileUnitEntity.status is a free-text column upstream, so a deny-list of the values
+            // known today would let a typo put an undispatchable van on the board as available.
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"IN_TRANSIT"}""".formatted(ID, SITE_ID)));
+            locationListener.onLocationEvent(
+                    envelope("evt-2", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 4"}""".formatted(OTHER_ID, SITE_ID)));
+            locationListener.onLocationEvent(
+                    envelope("evt-3", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 5","status":"active"}""".formatted(THIRD_ID, SITE_ID)));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .extracting(ExtMobileUnitReplica::isActive)
+                    .containsExactly(false, false, true);
+        }
+
+        @Test
+        @DisplayName("#1656: an unknown location-domain fact is ignored but still recorded for the manifest")
+        void unknownFactTypeIsRecordedNotApplied() {
+            // pos-location does not publish bay/mobile-unit facts yet, and publishes storage-location
+            // facts this module ignores. Neither may break the consumer or skew the manifest window.
+            locationListener.onLocationEvent(envelope("evt-1", "location.storage-location.updated", "{}"));
+
+            verify(bayRepository, never()).save(any());
+            verify(mobileUnitRepository, never()).save(any());
+            assertThat(capturedProcessedEvent().getOwner()).isEqualTo("location");
+        }
+
+        @Test
+        @DisplayName("#1668: a plausible-but-wrong bay payload shape is rejected loudly, not written half-populated")
+        void wrongBayPayloadShapeIsRejectedNotHalfWritten() {
+            // BayUpdatedV1 is the consumer's guess at a contract pos-location does not publish yet
+            // (issue #1668), so the likeliest failure is that the real producer names its fields
+            // differently. Both ways it can differ have to be distinguishable from the expected
+            // "no events yet" silence, or the board stays empty and nothing anywhere says why.
+
+            // (a) the identifier under another name: the compact constructor throws, Jackson reports
+            // a DatabindException, nothing is written.
+            locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
+                    {"id":"%s","locationId":"%s","name":"Front Bay 1","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            // (b) the site scope under another name. This is the silent one: the record binds, the
+            // row saves with location_id null, and the roster query — which scopes by location_id —
+            // can never return it. An empty panel, no exception, no log, indistinguishable from the
+            // producer simply not having shipped yet.
+            locationListener.onLocationEvent(envelope("evt-2", BayUpdatedV1.EVENT_TYPE, """
+                    {"bayId":"%s","siteId":"%s","name":"Front Bay 1","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            verify(bayRepository, never()).save(any());
+            assertThat(meterRegistry
+                            .get("replica.payload.rejected")
+                            .tag("owner", "location")
+                            .counter()
+                            .count())
+                    .as("both shape mismatches are counted, so a wrong guess is visible")
+                    .isEqualTo(2.0);
+            // Still recorded for the manifest: a rejected fact is a processed fact, or the owner's
+            // window reads as permanent drift and triggers useless replays.
+            verify(processedEventRepository, org.mockito.Mockito.times(2)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1668: a mobile-unit payload with no base site is rejected rather than made invisible")
+        void mobileUnitWithoutBaseLocationIsRejected() {
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","siteId":"%s","name":"Van 3","status":"ACTIVE"}""".formatted(ID, SITE_ID)));
+
+            verify(mobileUnitRepository, never()).save(any());
+            assertThat(meterRegistry
+                            .get("replica.payload.rejected")
+                            .tag("owner", "location")
+                            .counter()
+                            .count())
+                    .isEqualTo(1.0);
         }
     }
 

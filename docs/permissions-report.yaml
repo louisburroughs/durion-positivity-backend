@@ -1,9 +1,9 @@
-generatedAt: "2026-09-02T15:23:55.519586+00:00"
+generatedAt: "2026-09-03T02:28:17.060097+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 470
-  uniquePermissionCount: 470
+  permissionCount: 471
+  uniquePermissionCount: 471
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -161,13 +161,13 @@ manifests:
       - name: "catalog:item_cost:update"
         description: "Update item cost"
       - name: "catalog:labor_standard:import"
-        description: "Import labor standard"
+        description: "Trigger a labor-guide feed import from a STORE-licensed source"
       - name: "catalog:labor_standard:manage"
         description: "Author or supersede DURION-source labor standards for a service"
       - name: "catalog:labor_standard:view"
         description: "View a service's vehicle-keyed labor standards and their provenance"
       - name: "catalog:labor_time:resolve"
-        description: "Resolve labor time"
+        description: "Resolve the applicable labor time for a service operation and vehicle (service-to-service edge)"
       - name: "catalog:location_price_override:read"
         description: "View a location's effective price for a product"
       - name: "catalog:location_price_override:write"
@@ -826,7 +826,7 @@ manifests:
     domain: "shop"
     serviceName: "pos-shop-manager"
     version: "1.0"
-    permissionCount: 15
+    permissionCount: 16
     permissions:
       - name: "shop:location:view"
         description: "View shop/location details"
@@ -844,6 +844,8 @@ manifests:
         description: "Edit service bays"
       - name: "shop:bay:assign"
         description: "Assign work to bays"
+      - name: "shop:dashboard:view"
+        description: "View the aggregate shop manager dashboard for a location"
       - name: "shop:technician:view"
         description: "View technician identity details"
       - name: "shop:schedule:view"
@@ -1524,7 +1526,7 @@ permissions:
     module: "pos-catalog"
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:labor_standard:import"
-    description: "Import labor standard"
+    description: "Trigger a labor-guide feed import from a STORE-licensed source"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"
@@ -1542,7 +1544,7 @@ permissions:
     module: "pos-catalog"
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:labor_time:resolve"
-    description: "Resolve labor time"
+    description: "Resolve the applicable labor time for a service operation and vehicle (service-to-service edge)"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"
@@ -3259,6 +3261,12 @@ permissions:
     source: "pos-shop-manager/src/main/resources/permissions.yaml"
   - name: "shop:bay:view"
     description: "View service bays"
+    domain: "shop"
+    serviceName: "pos-shop-manager"
+    module: "pos-shop-manager"
+    source: "pos-shop-manager/src/main/resources/permissions.yaml"
+  - name: "shop:dashboard:view"
+    description: "View the aggregate shop manager dashboard for a location"
     domain: "shop"
     serviceName: "pos-shop-manager"
     module: "pos-shop-manager"

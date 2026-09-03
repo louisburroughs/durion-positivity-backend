@@ -1,5 +1,7 @@
 package com.positivity.shopmanager.internal.events;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 import com.positivity.shopmanager.internal.config.WorkorderStatusChangedEventListener;
@@ -20,9 +22,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * Unit tests for WorkorderStatusChangedEventListener — CAP-140 Story #63.
  *
  * <p>
- * Verifies that the @EventListener method delegates to
+ * Verifies that the listener method delegates to
  * {@link WorkorderStatusEventService#handleWorkorderStatusChanged(WorkorderStatusChangedEvent)}
- * exactly once with the unmodified event payload (AC8).
+ * exactly once with the unmodified event payload (AC8), and that a failure in that downstream sync
+ * is contained here rather than thrown back at the caller (#1658 review) — the caller is a
+ * transaction commit callback, and an exception escaping it takes the committing transaction, and
+ * with it the replica write and its idempotency row, down with it.
  *
  * Issue: #63
  */
@@ -58,5 +63,20 @@ class WorkorderStatusChangedEventListenerTest {
 
         // Assert — listener must forward the exact event instance to the service
         verify(service).handleWorkorderStatusChanged(event);
+    }
+
+    @Test
+    void onWorkorderStatusChanged_containsADownstreamFailureInsteadOfPropagatingIt() {
+        WorkorderStatusChangedEvent event = new WorkorderStatusChangedEvent(
+                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                "WORK_IN_PROGRESS",
+                Instant.now(TEST_CLOCK),
+                null);
+        doThrow(new IllegalStateException("appointment sync unavailable"))
+                .when(service)
+                .handleWorkorderStatusChanged(event);
+
+        assertThatCode(() -> listener.onWorkorderStatusChanged(event)).doesNotThrowAnyException();
     }
 }

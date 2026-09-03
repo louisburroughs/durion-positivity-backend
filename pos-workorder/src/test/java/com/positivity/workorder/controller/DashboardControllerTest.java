@@ -1,5 +1,6 @@
 package com.positivity.workorder.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -12,7 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.internal.controller.DashboardController;
+import com.positivity.workorder.internal.dto.BayStatus;
 import com.positivity.workorder.internal.dto.DashboardResponse;
+import com.positivity.workorder.internal.dto.MobileUnitStatus;
 import com.positivity.workorder.internal.service.DashboardService;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,6 +53,8 @@ class DashboardControllerTest {
 
     private static final String DASHBOARD_URL = "/v1/workexec/dashboard/today";
 
+    private static final String LOCATION_ID = "00000000-0000-0000-0000-000000000001";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -84,6 +89,7 @@ class DashboardControllerTest {
                 .workorders(List.of())
                 .mechanics(List.of())
                 .bays(List.of())
+                .mobileUnits(List.of())
                 .conflicts(List.of())
                 .lastRefreshed(Instant.now(TEST_CLOCK))
                 .build();
@@ -94,6 +100,49 @@ class DashboardControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.locationId").value("LOC-123"))
                 .andExpect(jsonPath("$.lastRefreshed").exists());
+    }
+
+    // -----------------------------------------------------------------------
+    // #1656: mobileUnits[] is serialised alongside bays[], with the same shape
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: response carries both bays[] and mobileUnits[] with matching field shapes")
+    void getDashboard_serialisesBaysAndMobileUnits() throws Exception {
+        // Arrange
+        DashboardResponse response = DashboardResponse.builder()
+                .locationId(LOCATION_ID)
+                .date(LocalDate.now(TEST_CLOCK))
+                .workorders(List.of())
+                .mechanics(List.of())
+                .bays(List.of(BayStatus.builder()
+                        .bayId("00000000-0000-0000-0000-0000000000b1")
+                        .bayName("Front Bay 1")
+                        .status("OCCUPIED")
+                        .available(false)
+                        .assignedWorkorderId("00000000-0000-0000-0000-000000000001")
+                        .build()))
+                .mobileUnits(List.of(MobileUnitStatus.builder()
+                        .unitId("00000000-0000-0000-0000-0000000000c1")
+                        .unitName("Van 3")
+                        .status("AVAILABLE")
+                        .available(true)
+                        .build()))
+                .conflicts(List.of())
+                .lastRefreshed(Instant.now(TEST_CLOCK))
+                .build();
+        when(dashboardService.getDashboard(eq(LOCATION_ID), any(LocalDate.class)))
+                .thenReturn(response);
+
+        // Act + Assert: mobile units are an addition, not a replacement — bays[] must survive.
+        mockMvc.perform(get(DASHBOARD_URL).param("locationId", LOCATION_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bays[0].bayName").value("Front Bay 1"))
+                .andExpect(jsonPath("$.mobileUnits[0].unitId").value("00000000-0000-0000-0000-0000000000c1"))
+                .andExpect(jsonPath("$.mobileUnits[0].unitName").value("Van 3"))
+                .andExpect(jsonPath("$.mobileUnits[0].status").value("AVAILABLE"))
+                .andExpect(jsonPath("$.mobileUnits[0].available").value(true))
+                .andExpect(jsonPath("$.mobileUnits[0].assignedWorkorderId").value(nullValue()));
     }
 
     // -----------------------------------------------------------------------
@@ -122,6 +171,7 @@ class DashboardControllerTest {
                 .workorders(List.of())
                 .mechanics(List.of())
                 .bays(List.of())
+                .mobileUnits(List.of())
                 .conflicts(List.of())
                 .lastRefreshed(Instant.now(TEST_CLOCK))
                 .build();
@@ -151,6 +201,7 @@ class DashboardControllerTest {
                 .workorders(List.of())
                 .mechanics(List.of())
                 .bays(List.of())
+                .mobileUnits(List.of())
                 .conflicts(List.of())
                 .lastRefreshed(Instant.now(TEST_CLOCK))
                 .build();

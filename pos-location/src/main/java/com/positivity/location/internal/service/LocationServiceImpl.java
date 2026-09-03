@@ -34,6 +34,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -72,11 +73,22 @@ public class LocationServiceImpl implements LocationService {
     private final LocationTypeRepository locationTypeRepository;
     private final LocationFactPublisher locationFactPublisher;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final LocationRepairCapabilityProjector repairCapabilityProjector;
 
+    /**
+     * Returns every location with its query-time repair-capability projection.
+     *
+     * <p>Issue #1657: the projection costs two aggregate queries for the whole
+     * list — one over bays, one over mobile units — never one per location.
+     *
+     * @return all locations as response DTOs
+     */
     @Transactional(readOnly = true)
     public List<LocationResponseDTO> getAllLocationsDto() {
-        return locationRepository.findAll().stream()
-                .map(this::toLocationResponse)
+        List<Location> locations = locationRepository.findAll();
+        Map<UUID, LocationRepairCapability> repairCapability = repairCapabilityProjector.project(locations);
+        return locations.stream()
+                .map(location -> toLocationResponse(location, repairCapability))
                 .toList();
     }
 
@@ -111,7 +123,10 @@ public class LocationServiceImpl implements LocationService {
     @Transactional(readOnly = true)
     public Page<LocationResponseDTO> listLocations(String status, Pageable pageable) {
         String statusFilter = normalizeStatus(status);
-        return locationRepository.findByStatus(statusFilter, pageable).map(this::toLocationResponse);
+        Page<Location> locations = locationRepository.findByStatus(statusFilter, pageable);
+        Map<UUID, LocationRepairCapability> repairCapability =
+                repairCapabilityProjector.project(locations.getContent());
+        return locations.map(location -> toLocationResponse(location, repairCapability));
     }
 
     @Transactional(readOnly = true)
@@ -240,8 +255,10 @@ public class LocationServiceImpl implements LocationService {
         if (parentTypeValue != null && !parentTypeValue.isBlank()) {
             parentType = toParentType(parentTypeValue);
         }
-        return findChildren(parentId, parentType).stream()
-                .map(this::toLocationResponse)
+        List<Location> children = findChildren(parentId, parentType);
+        Map<UUID, LocationRepairCapability> repairCapability = repairCapabilityProjector.project(children);
+        return children.stream()
+                .map(location -> toLocationResponse(location, repairCapability))
                 .toList();
     }
 
@@ -649,6 +666,13 @@ public class LocationServiceImpl implements LocationService {
     }
 
     private LocationResponseDTO toLocationResponse(Location location) {
+        return toLocationResponse(location, repairCapabilityProjector.project(List.of(location)));
+    }
+
+    private LocationResponseDTO toLocationResponse(
+            Location location, Map<UUID, LocationRepairCapability> repairCapability) {
+        LocationRepairCapability capability =
+                LocationRepairCapabilityProjector.capabilityFor(repairCapability, location.getId());
         return LocationResponseDTO.builder()
                 .id(location.getId())
                 .name(location.getName())
@@ -665,6 +689,9 @@ public class LocationServiceImpl implements LocationService {
                 .active(location.isActive())
                 .responsiblePersonId(location.getResponsiblePersonId())
                 .type(toLocationTypeDto(location.getType()))
+                .hasRepairCapability(capability.hasRepairCapability())
+                .activeBayCount(capability.activeBayCount())
+                .activeMobileUnitCount(capability.activeMobileUnitCount())
                 .build();
     }
 

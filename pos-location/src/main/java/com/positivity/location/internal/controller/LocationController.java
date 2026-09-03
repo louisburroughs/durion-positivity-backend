@@ -72,14 +72,23 @@ public class LocationController {
 
     @Operation(operationId = "listLocations", summary = "List All Locations Without Pagination", description = """
                     Lists every location in the system as a flat, unpaginated collection with address, status and \
-                    type details.
-                    Use this tool when a complete location inventory is needed at once; use getLocationRoster \
-                    instead for a paginated sync feed with status and updated-since filtering, and do not use it \
-                    to fetch a single known id, which is getLocationById.
+                    type details, plus a query-time repair-capability projection: hasRepairCapability, \
+                    activeBayCount and activeMobileUnitCount.
+                    Use this tool when a complete location inventory is needed at once, including when deciding \
+                    which locations can perform repairs; use getLocationRoster instead for a paginated sync feed \
+                    with status and updated-since filtering, do not use it to fetch a single known id, which is \
+                    getLocationById, and do not fan out over listBays or listMobileUnits per location to derive \
+                    repair capability.
                     Preconditions: none beyond the location:read authority; an empty system returns an empty list.
-                    Required inputs: none; there are no parameters and no request body.
-                    No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with the full list; there are no business error conditions for this operation.
+                    Required inputs: none; there are no parameters and no request body, and there is no \
+                    capability filter parameter, so narrow on hasRepairCapability after the call.
+                    No events are emitted and no state changes; this is a read-only projection recomputed on \
+                    every request, so a bay or mobile unit that was just created, restatused or re-based is \
+                    reflected immediately.
+                    Returns 200 with the full list; there are no business error conditions for this operation. \
+                    activeBayCount counts only bays with status ACTIVE, activeMobileUnitCount only mobile units \
+                    with status ACTIVE, hasRepairCapability is true when either count is above zero, and an \
+                    inactive location always reports false with zero counts.
                     """)
     @ApiResponse(responseCode = "200", description = "List of locations returned successfully.")
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
@@ -99,16 +108,20 @@ public class LocationController {
      */
     @Operation(operationId = "getLocationRoster", summary = "Get Paginated Location Roster for Sync", description = """
                     Returns a paginated roster of lightweight location references (id, name, code, status, \
-                    hrLocationId, timezone, updatedAt) for sync consumers.
+                    hrLocationId, timezone, updatedAt, hasRepairCapability) for sync consumers.
                     Use this tool when incrementally synchronising locations into another system; do not use \
-                    listLocations, which returns full unpaginated location payloads.
+                    listLocations, which returns full unpaginated location payloads, unless the activeBayCount \
+                    and activeMobileUnitCount behind hasRepairCapability are also needed, because the roster \
+                    projection intentionally carries only the flag.
                     Preconditions: none beyond the location:read authority.
                     Required inputs: none are mandatory; status filters exactly on the stored status value such \
                     as ACTIVE, sinceUpdatedAt is an ISO-8601 instant returning only rows updated after it, and \
                     standard page, size and sort parameters control paging.
                     Emits a LOCATION_ROSTER_GET event; no location state changes.
                     Returns 200 with a page of location refs; an unknown status value yields an empty page rather \
-                    than an error.
+                    than an error. hasRepairCapability is computed at query time and is true when the location \
+                    has at least one ACTIVE bay or at least one ACTIVE mobile unit based there; an inactive \
+                    location always reports false.
                     """)
     @ApiResponse(responseCode = "200", description = "Location roster returned successfully.")
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")

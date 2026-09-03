@@ -16,14 +16,23 @@ import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
+import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
+import com.positivity.shopmanager.internal.dto.location.BayUpdatedV1;
+import com.positivity.shopmanager.internal.dto.location.MobileUnitUpdatedV1;
+import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.shopmanager.internal.entity.ExtMobileUnitReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.ExtVehicleReplica;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
+import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtVehicleReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -77,6 +86,8 @@ import tools.jackson.databind.ObjectMapper;
 class ReplicaAndManifestListenerContractTest {
 
     private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+    private static final UUID OTHER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f2");
+    private static final UUID THIRD_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f3");
     private static final Instant NOW = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_START = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T09:05:00Z");
@@ -100,6 +111,18 @@ class ReplicaAndManifestListenerContractTest {
     private ExtPersonReplicaRepository personRepository;
 
     @Mock
+    private ExtWorkorderReplicaRepository workorderRepository;
+
+    @Mock
+    private ExtBayReplicaRepository bayRepository;
+
+    @Mock
+    private ExtMobileUnitReplicaRepository mobileUnitRepository;
+
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+
+    @Mock
     private com.positivity.shopmanager.internal.service.MechanicSyncService mechanicSyncService;
 
     @Mock
@@ -119,11 +142,15 @@ class ReplicaAndManifestListenerContractTest {
         when(vehicleRepository.findById(any())).thenReturn(Optional.empty());
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
         when(personRepository.findById(any())).thenReturn(Optional.empty());
+        when(workorderRepository.findById(any())).thenReturn(Optional.empty());
+        when(bayRepository.findById(any())).thenReturn(Optional.empty());
+        when(mobileUnitRepository.findById(any())).thenReturn(Optional.empty());
     }
 
     // ---------- replica listeners ----------
 
-    static final List<String> REPLICAS = List.of("customer", "vehicle", "people", "people-contact");
+    static final List<String> REPLICAS =
+            List.of("customer", "vehicle", "people", "people-contact", "workorder", "location");
 
     private record Replica(
             String owner,
@@ -203,8 +230,57 @@ class ReplicaAndManifestListenerContractTest {
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(personRepository)
                                 .findById(any()));
+            case "workorder" ->
+                new Replica(
+                        WorkorderEventsListener.OWNER,
+                        WorkorderUpdatedV1.EVENT_TYPE,
+                        id -> """
+                            {"workorderId":"%s","workorderNumber":"WO-1","status":"WORK_IN_PROGRESS",
+                             "shopId":"%s","customerId":null,"vehicleId":null,"invoiceId":null,
+                             "parts":[],"services":[],"createdAt":null,"updatedAt":null,
+                             "locationId":"%s","resourceId":null,"resourceType":null,
+                             "mechanicIds":[],"promisedAt":null,"scheduledDate":null}""".formatted(id, ID, ID),
+                        new WorkorderEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                workorderRepository,
+                                applicationEventPublisher,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onWorkorderEvent,
+                        () -> doThrow(new QueryTimeoutException("lock wait"))
+                                .when(workorderRepository)
+                                .findById(any()));
+            case "location" ->
+                new Replica(
+                        LocationEventsListener.OWNER,
+                        BayUpdatedV1.EVENT_TYPE,
+                        id -> """
+                            {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"LIFT",
+                             "status":"ACTIVE"}""".formatted(id, ID),
+                        new LocationEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                bayRepository,
+                                mobileUnitRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent,
+                        () -> doThrow(new QueryTimeoutException("lock wait"))
+                                .when(bayRepository)
+                                .findById(any()));
             default -> throw new IllegalArgumentException("Unknown replica owner in test fixture: " + owner);
         };
+    }
+
+    /** A fresh location listener over the same mocks the parameterized fixture uses. */
+    @SuppressWarnings("unchecked")
+    private Consumer<String> locationListener() {
+        return new LocationEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                bayRepository,
+                mobileUnitRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent;
     }
 
     private String envelope(Replica replica, String eventId, String idValue) {
@@ -323,6 +399,79 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(captor.getValue().getAssignmentId()).isEqualTo(ID);
             assertThat(captor.getValue().getRole()).isEqualTo("TECHNICIAN");
             assertThat(captor.getValue().isPrimary()).isTrue();
+        }
+
+        @Test
+        @DisplayName("workorder: maps the assignment context the shop dashboard reads")
+        void workorderMapping() {
+            Replica replica = replica("workorder");
+
+            replica.dispatch().accept(envelope(replica, "00000000-0000-0000-0000-0000000000e1", ID.toString()));
+
+            ArgumentCaptor<ExtWorkorderReplica> captor = ArgumentCaptor.forClass(ExtWorkorderReplica.class);
+            verify(workorderRepository).save(captor.capture());
+            ExtWorkorderReplica saved = captor.getValue();
+            assertThat(saved.getWorkorderId()).isEqualTo(ID);
+            assertThat(saved.getWorkorderNumber()).isEqualTo("WO-1");
+            assertThat(saved.getStatus()).isEqualTo("WORK_IN_PROGRESS");
+            assertThat(saved.getLocationId()).isEqualTo(ID);
+            assertThat(saved.getAggregateVersion()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("location: maps the bay identity the unit roster names")
+        void bayMapping() {
+            Replica replica = replica("location");
+
+            replica.dispatch().accept(envelope(replica, "evt-1", ID.toString()));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().getBayId()).isEqualTo(ID);
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+            assertThat(captor.getValue().getLocationId()).isEqualTo(ID);
+            assertThat(captor.getValue().isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("#1658: a bay status the consumer has never seen before is not active")
+        void unknownBayStatusIsNotActive() {
+            // pos-location publishes status and never a boolean active flag, and its vocabulary is
+            // not this module's to fix. Allow-listing ACTIVE means a value nobody here has seen
+            // keeps the unit off the roster instead of advertising a bay that may be out of service.
+            locationListener().accept("""
+                            {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,"payload":{
+                              "bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"LIFT",
+                              "status":"AWAITING_INSPECTION"}}""".formatted(BayUpdatedV1.EVENT_TYPE, ID, ID));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+            // The row is still replicated — only its activeness is withheld.
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+        }
+
+        @Test
+        @DisplayName("#1658: an unknown or absent mobile-unit status is not active; ACTIVE binds in any casing")
+        void mobileUnitStatusAllowList() {
+            // MobileUnitEntity.status is a free-text column upstream, so a deny-list of the values
+            // known today would let a typo put an undispatchable van on the roster as available.
+            Consumer<String> listener = locationListener();
+            listener.accept("""
+                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,"payload":{
+                      "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"IN_TRANSIT"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, ID, ID));
+            listener.accept("""
+                    {"eventId":"evt-2","eventType":"%s","aggregateVersion":3,"payload":{
+                      "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 4"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, OTHER_ID, ID));
+            listener.accept("""
+                    {"eventId":"evt-3","eventType":"%s","aggregateVersion":3,"payload":{
+                      "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 5","status":"active"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, THIRD_ID, ID));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .extracting(ExtMobileUnitReplica::isActive)
+                    .containsExactly(false, false, true);
         }
 
         @Test

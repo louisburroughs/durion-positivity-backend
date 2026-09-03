@@ -11,17 +11,24 @@ import lombok.Value;
 @Builder
 @Schema(description = "Current status of a service bay")
 public class BayStatus {
-    @Schema(description = "Identifier of the bay", example = "BAY-01", requiredMode = REQUIRED)
+    @Schema(
+            description = "Identifier of the bay",
+            example = "550e8400-e29b-41d4-a716-446655440301",
+            requiredMode = REQUIRED)
     String bayId;
 
-    @Schema(description = "Human-readable bay name", example = "Front Bay 1", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Human-readable bay name, resolved from the location replica. Null when the bay's own "
+                    + "replica row has not arrived yet.",
+            example = "Front Bay 1",
+            requiredMode = NOT_REQUIRED)
     String bayName;
 
     @Schema(description = "Operational status of the bay", example = "OCCUPIED", requiredMode = REQUIRED)
     String status;
 
     @Schema(
-            description = "Identifier of the workorder currently assigned to the bay",
+            description = "Identifier of the workorder currently assigned to the bay, or null when idle",
             example = "550e8400-e29b-41d4-a716-446655440000",
             requiredMode = NOT_REQUIRED)
     String assignedWorkorderId;

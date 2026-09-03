@@ -34,8 +34,19 @@ public class DashboardResponse {
     @Schema(description = "Mechanic statuses", example = "[]", requiredMode = NOT_REQUIRED)
     List<MechanicStatus> mechanics;
 
-    @Schema(description = "Service bay statuses", example = "[]", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Service bay statuses — every active bay at the location, including idle ones",
+            example = "[]",
+            requiredMode = NOT_REQUIRED)
     List<BayStatus> bays;
+
+    @Schema(
+            description = "Mobile service unit statuses — every active mobile unit based at the location, "
+                    + "including idle ones. Reported alongside bays, not instead of them: a shop can dispatch "
+                    + "to both.",
+            example = "[]",
+            requiredMode = NOT_REQUIRED)
+    List<MobileUnitStatus> mobileUnits;
 
     @Schema(description = "Detected conflicts", example = "[]", requiredMode = NOT_REQUIRED)
     List<ConflictEntry> conflicts;
