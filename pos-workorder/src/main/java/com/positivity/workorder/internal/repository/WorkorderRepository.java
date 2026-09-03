@@ -137,8 +137,17 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * @param idQuery      the query parsed as a UUID, or {@code null} if not a UUID
      * @param customerId   exact customer filter, or {@code null} for no restriction
      * @param vehicleId    exact vehicle filter, or {@code null} for no restriction
-     * @param status       exact status filter, or {@code null} for no restriction (mirrors
-     *                     InvoiceRepository#searchByQuery's single-status filter, #1599/E11)
+     * @param statusFilterEnabled whether {@code statuses} restricts the result; {@code false} means
+     *                     no status restriction at all. A plain {@code IN} clause cannot be handed an
+     *                     empty collection (JPQL rejects it), and the status domain is a small closed
+     *                     enum with no id-space to carve out a "never matches" sentinel the way
+     *                     {@code customerIds} does — so the "no restriction" case is carried by this
+     *                     explicit flag instead, with {@code statuses} holding a harmless non-empty
+     *                     placeholder value that is never evaluated once the flag is {@code false}
+     *                     (#1676, replacing the prior single-{@code WorkorderStatus} filter mirrored
+     *                     from {@code InvoiceRepository#searchByQuery}, #1599/E11).
+     * @param statuses     status values to match when {@code statusFilterEnabled} is {@code true};
+     *                     must be non-empty regardless (see {@code statusFilterEnabled})
      * @param createdFrom  inclusive lower bound on {@code createdAt}; a null caller-supplied bound is
      *                     widened to a sentinel far in the past by the service layer rather than passed
      *                     as {@code null} here — an untyped {@code null} bound against a temporal
@@ -158,7 +167,7 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             + "OR (:idQuery IS NOT NULL AND w.id = :idQuery)) "
             + "AND (:customerId IS NULL OR w.customerId = :customerId) "
             + "AND (:vehicleId IS NULL OR w.vehicleId = :vehicleId) "
-            + "AND (:status IS NULL OR w.status = :status) "
+            + "AND (:statusFilterEnabled = FALSE OR w.status IN :statuses) "
             + "AND w.createdAt >= :createdFrom "
             + "AND w.createdAt < :createdTo "
             + "AND (:technicianId IS NULL OR EXISTS ("
@@ -174,7 +183,8 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             @Param("idQuery") @Nullable UUID idQuery,
             @Param("customerId") @Nullable UUID customerId,
             @Param("vehicleId") @Nullable UUID vehicleId,
-            @Param("status") @Nullable WorkorderStatus status,
+            @Param("statusFilterEnabled") boolean statusFilterEnabled,
+            @Param("statuses") Collection<WorkorderStatus> statuses,
             @Param("createdFrom") Instant createdFrom,
             @Param("createdTo") Instant createdTo,
             @Param("technicianId") @Nullable UUID technicianId,

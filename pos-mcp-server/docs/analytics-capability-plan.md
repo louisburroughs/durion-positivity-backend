@@ -221,12 +221,17 @@ Wave 3's `groupBy`.
 | E5 | pos-workorder | `GET /workorders/analytics/technician-labor` | startDate, endDate | technicianId, name, completedWoCount, billedHours, laborRevenue | Q1, Q2, Q19 |
 | E6 | pos-workorder | `GET /workorders/analytics/reopened` | startDate, endDate, withinDays | technicianId, woId, completedAt, reopenedAt | Q3 |
 | E7 | pos-workorder | `GET /workorders/status-transitions` | woId or (from,to,startDate,endDate) | woId, fromStatus, toStatus, at, actorId | Q3 backing projection — **table already exists**, see D4 |
-| E8 | **pos-accounting** | `GET /accounting/analytics/vendor-spend` | startDate, endDate | vendorId, name, paidAmount, billCount, avgBillAmount | Q15, Q17, Q18 (A/P side) |
+| E8 | **pos-accounting** | `GET /accounting/analytics/vendor-spend` | startDate, endDate | vendorId, name, paidAmount, billsIssuedInWindow, avgIssuedBillAmount | Q15, Q17, Q18 (A/P side) |
 | E9 | pos-accounting | `GET /accounting/vendor-bills` | dueFrom, dueTo, status, pageable | billId, vendorId, dueDate, amount, status | Q16, Q17 (today: only `/{billId}` exists — no list route at all) |
 | E10 | **pos-accounting** | `GET /accounting/payment-applications` | appliedFrom, appliedTo, pageable | applicationId, paymentId, invoiceId, appliedAt, amount | Q9 (days-to-pay), Q11 audit — module set by D3 |
 | E11 | pos-invoice | invoice search: add `status`, `issuedFrom`, `issuedTo`, `customerId` params | — | existing `Page<InvoiceSearchResult>` | retires most of G3 |
 | E12 | pos-workorder | WO search: add `status`, `createdFrom`, `createdTo`, `technicianId` params | — | existing `Page<WorkorderSearchResult>` | Q5 full, retires G3 remainder |
 | E13 | *deferred to Wave 3* | `…/analytics/customer-margin` | startDate, endDate | customerId, revenue, partsCost, laborCost, grossMargin | Q6 — **moved out of Wave 2 by D2** (5-domain problem: true parts cost lives in pos-inventory) |
+
+**E4 promoted to a facade (#1660, V44).** W2.3 originally promoted only E1/E5/E8, leaving E4
+discovery-only; with no facade to reach, Q4 fell into `searchInvoices` (a free-text lookup with no
+work-order-creation timestamp) and could not answer the question at all. `InvoiceFacadeTool` now
+carries `getInvoicingLag(startDate, endDate)` alongside `getRevenueByCustomer`.
 
 ### W2.2 Cross-cutting requirements (every endpoint)
 
@@ -473,10 +478,20 @@ selection, not answers — it is not the question list.
 | 14 | A/R balance + DSO at each month-end, 12 mo | 3 (partial W1) | 3 | aging batch + income statements; DSO in model |
 | 15 | Top vendors 6 mo vs same 6 mo last year | 2 | 3 | 2 × E8 windows |
 | 16 | Vendor bills due ≤ 14 days, daily cash need | 2 | 2 | E9 by due window; model buckets by day |
-| 17 | Vendors with avg bill +10 % YoY | 2 | 3 | 2 × E8 (`avgBillAmount`); model compares |
+| 17 | Vendors with avg bill +10 % YoY | 2 | 3 | 2 × E8 (`avgIssuedBillAmount`); model compares |
 | 18 | Weekly cash in vs out, last quarter, negative weeks | 2→3 | 27→3 | W2 loops are over budget → formally a Wave 3 gate (E2 + A/P weekly groupBy) |
 | 19 | Revenue vs technician hours by customer, revenue/hour | 3 | 2 | `customerEfficiency` composition |
 | 20 | 12-month business summary, 7 metrics, trend flags | 3 | 2 | `businessSummary` composition; trends in prose |
+
+**`resolveDateWindow` and the budgets above (#1675).** Every dated question in this table now
+opens with one `resolveDateWindow` call (`DateWindowFacadeTool`, `docs/gate-closeout-plan-1660-1676.md`
+A1) before its first downstream tool call, so the model classifies the window's shape instead of
+computing its dates. That round makes no HTTP call — it is in-process `DateWindowResolver`
+arithmetic — so it is **counted as zero** against every Budget figure above; the decision was
+recorded in the close-out plan rather than raising `MAX_TOOL_TURNS` (the alternative the plan
+weighed was an 8→10 cap raise, decided against since the resolver round is not a downstream call).
+Q4's 7-call budget, the tightest in the table, becomes 8 rounds issued (7 downstream + 1
+resolver) and still reads as "7" for gate-budget purposes.
 
 ## 7. Risks
 

@@ -1,8 +1,11 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -27,6 +30,7 @@ public class InvoiceFacadeTool {
     private final String invoiceSearchUriTemplate;
     private final String customerInvoicesUriTemplate;
     private final String revenueByCustomerUriTemplate;
+    private final String invoicingLagUriTemplate;
     private final int customerInvoiceLineCap;
 
     public InvoiceFacadeTool(
@@ -36,6 +40,7 @@ public class InvoiceFacadeTool {
             @Value("${pos.invoice.search-uri-template}") @NonNull String invoiceSearchUriTemplate,
             @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate,
             @Value("${pos.invoice.revenue-by-customer-uri-template}") @NonNull String revenueByCustomerUriTemplate,
+            @Value("${pos.invoice.invoicing-lag-uri-template}") @NonNull String invoicingLagUriTemplate,
             @Value("${pos.invoice.customer-invoice-line-cap:" + CUSTOMER_INVOICE_LINE_CAP + "}")
                     int customerInvoiceLineCap) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
@@ -43,6 +48,7 @@ public class InvoiceFacadeTool {
         this.invoiceSearchUriTemplate = invoiceSearchUriTemplate;
         this.customerInvoicesUriTemplate = customerInvoicesUriTemplate;
         this.revenueByCustomerUriTemplate = revenueByCustomerUriTemplate;
+        this.invoicingLagUriTemplate = invoicingLagUriTemplate;
         this.customerInvoiceLineCap = customerInvoiceLineCap;
     }
 
@@ -132,29 +138,90 @@ public class InvoiceFacadeTool {
     }
 
     @Tool(
-            description = "Get per-customer revenue for a reporting period (Wave 2 E1). period must be a "
-                    + "calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. "
-                    + "2026) — resolve a relative phrase like \"last month\" or \"last quarter\" to the "
-                    + "concrete YYYY-MM/YYYY yourself before calling; a quarter or a run of months is not a "
-                    + "single period here, so loop this call once per month (or once for the enclosing year) "
-                    + "rather than guess at a wider window. Returns rows — customerId, name (null until the "
-                    + "customer-party replica has caught up), revenue, invoiceCount, avgInvoiceValue "
-                    + "(revenue / invoiceCount, server-computed), lastInvoiceDate — ordered by revenue "
-                    + "descending and capped at the top 20 customers; the response's truncated flag is true "
-                    + "when more customers had revenue in the window than that cap allowed. Only "
+            description = "Get per-customer revenue for a date window (Wave 2 E1). Get the window from "
+                    + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
+                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
+                    + "or year; pass either period or startDate+endDate, never both. Returns rows — customerId, "
+                    + "name (null until the customer-party replica has caught up), revenue, invoiceCount, "
+                    + "avgInvoiceValue (revenue / invoiceCount, server-computed), lastInvoiceDate — ordered by "
+                    + "revenue descending and capped at the top 20 customers; the response's truncated flag is "
+                    + "true when more customers had revenue in the window than that cap allowed. Only "
                     + "revenue-recognized invoices (status FINALIZED or POSTED) count — a DRAFT invoice has "
                     + "not been billed yet and a CANCELLED/ERROR one never will be, so neither contributes. "
                     + "This tool does NOT accept a customerId filter, a limit override, or a groupBy — it "
                     + "always ranks every customer in the business for one window; for a single customer's "
-                    + "invoices use getInvoicesByCustomer instead, and do not loop this tool across more than "
-                    + "a handful of periods for a multi-period trend.")
+                    + "invoices use getInvoicesByCustomer instead.")
     public String getRevenueByCustomer(
-            @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
-        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+            @ToolParam(
+                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
+                                    + "(YYYY); omit when passing startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String period,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String startDate,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String endDate) {
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
         return restClient
                 .get()
                 .uri(revenueByCustomerUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
                 .retrieve()
                 .body(String.class);
+    }
+
+    @Tool(
+            description = "Get the average number of days from workorder creation to invoice creation for one "
+                    + "date window (W2 E4, #1660). startDate and endDate are ISO dates in YYYY-MM-DD form, "
+                    + "inclusive on both ends — get them from resolveDateWindow rather than computing them "
+                    + "manually. Returns a SINGLE aggregate for the whole window: avgDaysWoCreationToInvoice "
+                    + "(null when count is 0 — an average of nothing is undefined, not zero) and count (the "
+                    + "number of qualifying invoices the average is computed over, so a thin window reads as "
+                    + "thin rather than as a trend swing). There is no groupBy here — a by-month answer is not "
+                    + "a single call; loop this tool once per month (or once per period) and assemble the "
+                    + "series across the calls, the same pattern as getRevenueByCustomer and getVendorSpend. An invoice "
+                    + "with no linked workorder, or whose linked workorder's creation timestamp has not "
+                    + "replicated yet, is excluded from both the average and the count, never counted as zero "
+                    + "lag. Use this for workorder-to-invoice throughput/timing questions; use "
+                    + "getRevenueByCustomer instead for revenue amounts.")
+    public String getInvoicingLag(
+            @ToolParam(description = "Window start date, YYYY-MM-DD, inclusive") @NonNull String startDate,
+            @ToolParam(description = "Window end date, YYYY-MM-DD, inclusive") @NonNull String endDate) {
+        return restClient
+                .get()
+                .uri(
+                        invoicingLagUriTemplate,
+                        Map.of(
+                                "startDate",
+                                validatedDate("startDate", startDate),
+                                "endDate",
+                                validatedDate("endDate", endDate)))
+                .retrieve()
+                .body(String.class);
+    }
+
+    /**
+     * Validates an LLM-supplied date argument is a real ISO date before any request is built;
+     * anything else is rejected with a message stating the accepted form so the model can
+     * self-correct (mirrors {@code AccountingFacadeTool#validatedAsOfDate}).
+     */
+    private static @NonNull String validatedDate(@NonNull String paramName, @NonNull String value) {
+        String trimmed = value.trim();
+        try {
+            LocalDate.parse(trimmed);
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form (e.g. 2026-06-30)",
+                    exception);
+        }
+        return trimmed;
     }
 }

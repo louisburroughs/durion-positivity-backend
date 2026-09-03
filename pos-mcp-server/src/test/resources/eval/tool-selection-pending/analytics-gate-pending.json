@@ -51,30 +51,6 @@
       "notes": "Plan §6 Q3, budget 2. Blocked on W2 E6 (/workorders/analytics/reopened) plus E7 status-transition projection (design decision D4)."
     },
     {
-      "fixture_id": "q04-avg-workorder-to-invoice-lag-by-month",
-      "utterance": "What was the average time from work order creation to invoice, by month, for the last six months?",
-      "actor": {
-        "role": "ROLE_LOCATION_MANAGER",
-        "permission_codes": [
-          "invoice:manage",
-          "workorder:workorder:view"
-        ],
-        "workflow_state": "IDLE"
-      },
-      "expected": {
-        "tool_ids": [
-          "InvoiceFacadeTool"
-        ],
-        "k": 5
-      },
-      "tags": [
-        "analytics-gate",
-        "pending",
-        "wave2"
-      ],
-      "notes": "Plan §6 Q4, budget 7 (6 × E4 in Wave 2, 1 call in Wave 3 via groupBy). Blocked on W2 E4 (/invoices/analytics/invoicing-lag)."
-    },
-    {
       "fixture_id": "q06-customer-revenue-parts-labor-margin",
       "utterance": "Show me revenue, parts cost, labor cost and gross margin by customer for last month.",
       "actor": {

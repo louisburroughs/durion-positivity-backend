@@ -10,10 +10,12 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Method;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -131,7 +133,7 @@ class AccountingFacadeToolTest {
                 .andExpect(method(trialBalance.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getFinancialSummary("2026-03"));
+        JsonNode envelope = parse(tool.getFinancialSummary("2026-03", null, null));
 
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("financialSummary");
@@ -173,7 +175,7 @@ class AccountingFacadeToolTest {
                 .expect(requestTo(BASE_URL + summary.leg("trialBalance").expand(Map.of("asOf", "2026-03-31"))))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String rendered = tool.getFinancialSummary("2026-03");
+        String rendered = tool.getFinancialSummary("2026-03", null, null);
 
         mockServer.verify();
         assertThat(rendered).doesNotContain("FORBIDDEN-PAYLOAD");
@@ -202,7 +204,7 @@ class AccountingFacadeToolTest {
                 .expect(requestTo(BASE_URL + summary.leg("trialBalance").expand(Map.of("asOf", "2026-12-31"))))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getFinancialSummary("2026"));
+        JsonNode envelope = parse(tool.getFinancialSummary("2026", null, null));
 
         mockServer.verify();
         assertThat(envelope.get("status").asText()).isEqualTo("degraded");
@@ -213,10 +215,63 @@ class AccountingFacadeToolTest {
     @Test
     @DisplayName("getFinancialSummary rejects an unsupported period form without issuing a request")
     void getFinancialSummary_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getFinancialSummary("2025-Q1"))
+        assertThatThrownBy(() -> tool.getFinancialSummary("2025-Q1", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getFinancialSummary takes a startDate/endDate window spanning more than one calendar month "
+            + "in a single call, sending every dated leg the range")
+    void getFinancialSummary_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry summary = contract("getFinancialSummary");
+        FacadeContractManifest.Entry incomeStatement = summary.leg("incomeStatement");
+        FacadeContractManifest.Entry balanceSheet = summary.leg("balanceSheet");
+        FacadeContractManifest.Entry trialBalance = summary.leg("trialBalance");
+        mockServer
+                .expect(requestTo(
+                        BASE_URL + incomeStatement.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-08-31"))))
+                .andExpect(method(incomeStatement.httpMethod()))
+                .andRespond(withSuccess("{\"revenue\":1000}", MediaType.APPLICATION_JSON));
+        mockServer
+                .expect(requestTo(BASE_URL + balanceSheet.expand(Map.of("asOfDate", "2026-08-31"))))
+                .andExpect(method(balanceSheet.httpMethod()))
+                .andRespond(withSuccess("{\"assets\":5000}", MediaType.APPLICATION_JSON));
+        mockServer
+                .expect(requestTo(BASE_URL + trialBalance.expand(Map.of("asOf", "2026-08-31"))))
+                .andExpect(method(trialBalance.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        JsonNode envelope = parse(tool.getFinancialSummary(null, "2026-03-01", "2026-08-31"));
+
+        mockServer.verify();
+        assertThat(envelope.get("status").asText()).isEqualTo("ok");
+        assertThat(envelope.get("sources"))
+                .extracting(JsonNode::asText)
+                .containsExactly("incomeStatement", "balanceSheet", "trialBalance");
+    }
+
+    @Test
+    @DisplayName("getFinancialSummary rejects period together with startDate/endDate without issuing a request")
+    void getFinancialSummary_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getFinancialSummary("2026-03", "2026-03-01", "2026-08-31"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getFinancialSummary rejects an unpaired startDate without issuing a request")
+    void getFinancialSummary_rejectsUnpairedStartDate() {
+        assertThatThrownBy(() -> tool.getFinancialSummary(null, "2026-03-01", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
 
         mockServer.verify();
     }
@@ -299,10 +354,10 @@ class AccountingFacadeToolTest {
                 .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess(
-                        "{\"rows\":[{\"vendorId\":\"v1\",\"paidAmount\":1000.00,\"billCount\":0}]}",
+                        "{\"rows\":[{\"vendorId\":\"v1\",\"paidAmount\":1000.00,\"billsIssuedInWindow\":0}]}",
                         MediaType.APPLICATION_JSON));
 
-        String result = tool.getVendorSpend("2026-06");
+        String result = tool.getVendorSpend("2026-06", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty().contains("paidAmount");
@@ -317,7 +372,7 @@ class AccountingFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getVendorSpend("2026");
+        String result = tool.getVendorSpend("2026", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -326,10 +381,78 @@ class AccountingFacadeToolTest {
     @Test
     @DisplayName("getVendorSpend rejects an unsupported period form without issuing a request")
     void getVendorSpend_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getVendorSpend("2025-Q1"))
+        assertThatThrownBy(() -> tool.getVendorSpend("2025-Q1", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend description names billsIssuedInWindow/avgIssuedBillAmount and never labels "
+            + "them paid, and no tool description on this class still names the old billCount/avgBillAmount "
+            + "fields")
+    void getVendorSpendDescription_namesNewFieldsAndNeverLabelsThemPaid() throws NoSuchMethodException {
+        Method getVendorSpend =
+                AccountingFacadeTool.class.getMethod("getVendorSpend", String.class, String.class, String.class);
+        String description = getVendorSpend.getAnnotation(Tool.class).description();
+
+        assertThat(description).contains("billsIssuedInWindow").contains("avgIssuedBillAmount");
+        assertThat(description).doesNotContain("bills paid");
+
+        for (Method method : AccountingFacadeTool.class.getMethods()) {
+            if (method.isAnnotationPresent(Tool.class)) {
+                String toolDescription = method.getAnnotation(Tool.class).description();
+                assertThat(toolDescription).doesNotContain("billCount").doesNotContain("avgBillAmount");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("getVendorSpend takes a startDate/endDate window spanning more than one calendar month "
+            + "in a single call")
+    void getVendorSpend_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry entry = contract("getVendorSpend");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2025-07-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getVendorSpend(null, "2025-07-01", "2026-06-30");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend rejects period together with startDate/endDate without issuing a request")
+    void getVendorSpend_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getVendorSpend("2026-06", "2025-07-01", "2026-06-30"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend rejects an unpaired startDate without issuing a request")
+    void getVendorSpend_rejectsUnpairedStartDate() {
+        assertThatThrownBy(() -> tool.getVendorSpend(null, "2025-07-01", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getVendorSpend rejects when neither period nor a date range is given")
+    void getVendorSpend_rejectsWhenNeitherFormGiven() {
+        assertThatThrownBy(() -> tool.getVendorSpend(null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period");
 
         mockServer.verify();
     }

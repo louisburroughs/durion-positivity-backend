@@ -166,6 +166,29 @@
       "notes": "Plan §6 Q1, budget 2. Blocked on W2 E5 GET /workorders/analytics/technician-labor promoted to WorkorderFacadeTool (W2.3). Not scored today. PROMOTED (Wave 2): the backing endpoint and facade method now exist."
     },
     {
+      "fixture_id": "q04-avg-workorder-to-invoice-lag-by-month",
+      "utterance": "What was the average time from work order creation to invoice, by month, for the last six months?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "invoice:manage",
+          "workorder:workorder:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InvoiceFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "wave2"
+      ],
+      "notes": "Plan §6 Q4, budget 7 (6 × E4 in Wave 2, 1 call in Wave 3 via groupBy). PROMOTED (#1660, V44): E4 (/invoices/analytics/invoicing-lag) is now InvoiceFacadeTool.getInvoicingLag, so q04 has a facade to reach instead of falling into searchInvoices, which cannot answer it (no work-order-creation timestamp in its rows). Moved out of tool-selection-pending/analytics-gate-pending.json."
+    },
+    {
       "fixture_id": "q07-top-customers-year-over-year",
       "utterance": "Who were our top customers by revenue over the last twelve months compared with the twelve months before that?",
       "actor": {
@@ -283,7 +306,7 @@
         "analytics-gate",
         "wave2"
       ],
-      "notes": "Plan §6 Q17, budget 3. Blocked on W2 E8 (avgBillAmount column) over two windows. PROMOTED (Wave 2): the backing endpoint and facade method now exist."
+      "notes": "Plan §6 Q17, budget 3. Blocked on W2 E8 (avgIssuedBillAmount column) over two windows. PROMOTED (Wave 2): the backing endpoint and facade method now exist."
     }
   ]
 }

@@ -244,10 +244,11 @@ public class AccountingAnalyticsController {
                     limit is optional, defaults to 20, and is hard-capped at 100.
                     IMPORTANT: paidAmount (settled A/P cash — APPayment.grossAmount for payments whose \
                     paymentDate falls in the window and whose gateway status shows the cash already moved) \
-                    and billCount/avgBillAmount (VendorBill records whose billDate falls in the window) are \
-                    DIFFERENT POPULATIONS of the same vendor — a payment can settle bills billed in an \
-                    earlier or later window, so avgBillAmount * billCount does not reconcile to paidAmount. \
-                    avgBillAmount is 0, never null, when billCount is 0.
+                    and billsIssuedInWindow/avgIssuedBillAmount (VendorBill records whose billDate falls in \
+                    the window) are DIFFERENT POPULATIONS of the same vendor — a payment can settle bills \
+                    issued in an earlier or later window, so avgIssuedBillAmount * billsIssuedInWindow does \
+                    not reconcile to paidAmount. avgIssuedBillAmount is 0, never null, when \
+                    billsIssuedInWindow is 0.
                     Emits an ACCOUNTING_ANALYTICS_VENDOR_SPEND_VIEW audit event; no state changes.
                     Returns 400 when endDate is before startDate, or limit is not a positive integer.
                     """,

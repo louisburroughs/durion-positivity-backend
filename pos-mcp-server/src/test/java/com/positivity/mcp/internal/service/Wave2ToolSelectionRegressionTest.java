@@ -220,6 +220,29 @@ class Wave2ToolSelectionRegressionTest {
     }
 
     @Test
+    @DisplayName("E4 (#1660): an invoicing-lag-by-month question offers InvoiceFacadeTool as a candidate")
+    void invoicingLagQuestion_offersInvoiceFacadeTool() {
+        ToolSelectionContext context = new ToolSelectionContext(
+                "What was the average time from work order creation to invoice, by month, for the last six "
+                        + "months?",
+                "ROLE_LOCATION_MANAGER",
+                "IDLE",
+                INVOICE_ANALYTICS_PERMISSIONS);
+        float[] vector = new float[] {0.5f, 0.2f};
+
+        when(repository.findEnabledByPermissionsAndWorkflow(INVOICE_ANALYTICS_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(INVOICE_FACADE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(vector);
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(INVOICE_ANALYTICS_PERMISSIONS), eq("IDLE")))
+                .thenReturn(List.of(INVOICE_FACADE_TOOL));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
+
+        assertThat(result).extracting(ToolMetadata::name).contains("InvoiceFacadeTool");
+    }
+
+    @Test
     @DisplayName("E9: a vendor-bills-due question offers the discovered listVendorBills operation")
     void vendorBillsDueQuestion_offersDiscoveredListVendorBills() {
         ToolSelectionContext context = new ToolSelectionContext(

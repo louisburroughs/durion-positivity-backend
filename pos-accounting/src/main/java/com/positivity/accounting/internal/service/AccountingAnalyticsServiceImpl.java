@@ -346,8 +346,8 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
                     .vendorId(vendorId)
                     .name(name)
                     .paidAmount(paidAmount)
-                    .billCount(billCount)
-                    .avgBillAmount(avgBillAmount)
+                    .billsIssuedInWindow(billCount)
+                    .avgIssuedBillAmount(avgBillAmount)
                     .build());
         }
 

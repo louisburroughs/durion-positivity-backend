@@ -31,7 +31,11 @@ import org.junit.jupiter.api.Test;
  * → {@code V40} (per-method AND-groups, #1606 finding 1) → {@code V41} (re-derives InvoiceFacadeTool
  * and AdminFacadeTool after #1612 moved two endpoint guards) → {@code V42} (Wave 2 W2.3 facade
  * promotion, #1601: adds one analytics method each to InvoiceFacadeTool, WorkorderFacadeTool, and
- * AccountingFacadeTool).
+ * AccountingFacadeTool) → {@code V43} (#1675: registers the new DateWindowFacadeTool, AUTHENTICATED-
+ * gated like EventsFacadeTool — the resolver it fronts makes no downstream call and enforces no
+ * permission of its own) → {@code V44} (#1660: promotes E4 to InvoiceFacadeTool.getInvoicingLag,
+ * gated {@code invoice:analytics:view} — the group V42 already derived for getRevenueByCustomer on
+ * the same class).
  *
  * <p><b>V40 changed the unit of the assertion.</b> Rows now carry a {@code permission_group} and a
  * tool is offered iff the caller holds ALL codes of AT LEAST ONE group, so a flat union no longer
@@ -103,6 +107,9 @@ class FacadeToolPermissionSeedTest {
                             "getAgedReceivables", Set.of(REPORTING),
                             "getAgedPayables", Set.of(REPORTING),
                             "getVendorSpend", Set.of(ACCOUNTING_ANALYTICS_VIEW))),
+            // #1675 (V43): resolveDateWindow makes no downstream call and enforces no permission of
+            // its own — every authenticated caller may resolve a date, the same R4 shape as Events.
+            Map.entry("DateWindowFacadeTool", Map.of(AUTHENTICATED, Set.of(AUTHENTICATED))),
             Map.entry(
                     "ReportingFacadeTool",
                     Map.of(
@@ -141,7 +148,10 @@ class FacadeToolPermissionSeedTest {
                             "getInvoice", Set.of(INVOICE_VIEW),
                             "searchInvoices", Set.of(INVOICE_VIEW),
                             "getInvoicesByCustomer", Set.of(INVOICE_VIEW),
-                            "getRevenueByCustomer", Set.of(INVOICE_ANALYTICS_VIEW))),
+                            "getRevenueByCustomer", Set.of(INVOICE_ANALYTICS_VIEW),
+                            // #1660 (V44): E4 promoted to a facade, gated on the same permission V42 already
+                            // derived for getRevenueByCustomer.
+                            "getInvoicingLag", Set.of(INVOICE_ANALYTICS_VIEW))),
             Map.entry(
                     "LocationFacadeTool",
                     Map.of(
@@ -276,15 +286,17 @@ class FacadeToolPermissionSeedTest {
     }
 
     @Test
-    @DisplayName("assistant entrypoints alone qualify only the deliberately open Events facade")
+    @DisplayName("assistant entrypoints alone qualify only the deliberately open Events and DateWindow facades")
     void assistantOnlyCallerQualifiesOnlyEventsFacade() throws IOException {
+        Set<String> authenticatedOnlyFacades = Set.of("EventsFacadeTool", "DateWindowFacadeTool");
         netGroupGrants()
                 .forEach((tool, groups) -> assertThat(qualifies(groups, ASSISTANT_ENTRYPOINTS))
                         .as(
                                 "%s must not be reachable on the assistant-entrypoint baseline alone "
-                                        + "(only EventsFacadeTool is AUTHENTICATED-gated by design)",
+                                        + "(only EventsFacadeTool and DateWindowFacadeTool are AUTHENTICATED-gated "
+                                        + "by design)",
                                 tool)
-                        .isEqualTo("EventsFacadeTool".equals(tool)));
+                        .isEqualTo(authenticatedOnlyFacades.contains(tool)));
     }
 
     @Test
@@ -440,7 +452,9 @@ class FacadeToolPermissionSeedTest {
         for (String migration : List.of(
                 "V40__mcp_tool_permission_groups.sql",
                 "V41__facade_permission_rederivation_1612.sql",
-                "V42__wave2_facade_promotion.sql")) {
+                "V42__wave2_facade_promotion.sql",
+                "V43__date_window_facade_tool.sql",
+                "V44__invoicing_lag_facade_tool.sql")) {
             String sql = read(migration);
             parseFullDeletes(sql).forEach(groups::remove);
             parseGroupSeed(sql).forEach((tool, seeded) -> {

@@ -65,7 +65,7 @@ class ReportingFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"revenue\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getSalesReport("2026-02");
+        String result = tool.getSalesReport("2026-02", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -80,7 +80,7 @@ class ReportingFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"revenue\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getSalesReport("2026");
+        String result = tool.getSalesReport("2026", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -89,10 +89,48 @@ class ReportingFacadeToolTest {
     @Test
     @DisplayName("getSalesReport rejects an unsupported period form without issuing a request")
     void getSalesReport_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getSalesReport("Q1-2026"))
+        assertThatThrownBy(() -> tool.getSalesReport("Q1-2026", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getSalesReport takes a startDate/endDate window spanning more than one calendar month "
+            + "in a single call")
+    void getSalesReport_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry entry = contract("getSalesReport");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-08-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"revenue\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getSalesReport(null, "2026-03-01", "2026-08-31");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getSalesReport rejects period together with startDate/endDate without issuing a request")
+    void getSalesReport_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getSalesReport("2026-03", "2026-03-01", "2026-08-31"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getSalesReport rejects an unpaired startDate without issuing a request")
+    void getSalesReport_rejectsUnpairedStartDate() {
+        assertThatThrownBy(() -> tool.getSalesReport(null, "2026-03-01", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
 
         mockServer.verify();
     }
@@ -128,7 +166,7 @@ class ReportingFacadeToolTest {
                 .andExpect(method(agedReceivables.httpMethod()))
                 .andRespond(withSuccess("{\"buckets\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getRevenueReport("2026-05"));
+        JsonNode envelope = parse(tool.getRevenueReport("2026-05", null, null));
 
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("revenueReport");
@@ -163,7 +201,7 @@ class ReportingFacadeToolTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("{\"secret\":\"FORBIDDEN-PAYLOAD\"}"));
 
-        String rendered = tool.getRevenueReport("2026");
+        String rendered = tool.getRevenueReport("2026", null, null);
 
         mockServer.verify();
         assertThat(rendered).doesNotContain("FORBIDDEN-PAYLOAD");
@@ -177,10 +215,58 @@ class ReportingFacadeToolTest {
     @Test
     @DisplayName("getRevenueReport rejects an unsupported period form without issuing a request")
     void getRevenueReport_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getRevenueReport("2025-Q1"))
+        assertThatThrownBy(() -> tool.getRevenueReport("2025-Q1", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getRevenueReport takes a startDate/endDate window spanning more than one calendar month "
+            + "in a single call, sending every dated leg the range")
+    void getRevenueReport_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry revenue = contract("getRevenueReport");
+        FacadeContractManifest.Entry incomeStatement = revenue.leg("incomeStatement");
+        FacadeContractManifest.Entry agedReceivables = revenue.leg("agedReceivables");
+        mockServer
+                .expect(requestTo(
+                        BASE_URL + incomeStatement.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-08-31"))))
+                .andExpect(method(incomeStatement.httpMethod()))
+                .andRespond(withSuccess("{\"revenue\":[{\"line\":\"Sales\"}]}", MediaType.APPLICATION_JSON));
+        mockServer
+                .expect(requestTo(BASE_URL + agedReceivables.expand(Map.of("asOfDate", "2026-08-31"))))
+                .andExpect(method(agedReceivables.httpMethod()))
+                .andRespond(withSuccess("{\"buckets\":[]}", MediaType.APPLICATION_JSON));
+
+        JsonNode envelope = parse(tool.getRevenueReport(null, "2026-03-01", "2026-08-31"));
+
+        mockServer.verify();
+        assertThat(envelope.get("status").asText()).isEqualTo("ok");
+        assertThat(envelope.get("sources"))
+                .extracting(JsonNode::asText)
+                .containsExactly("incomeStatement", "agedReceivables");
+    }
+
+    @Test
+    @DisplayName("getRevenueReport rejects period together with startDate/endDate without issuing a request")
+    void getRevenueReport_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getRevenueReport("2026-03", "2026-03-01", "2026-08-31"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getRevenueReport rejects an unpaired startDate without issuing a request")
+    void getRevenueReport_rejectsUnpairedStartDate() {
+        assertThatThrownBy(() -> tool.getRevenueReport(null, "2026-03-01", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
 
         mockServer.verify();
     }

@@ -16,6 +16,7 @@ import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -25,7 +26,8 @@ import org.springframework.web.reactive.function.client.WebClient;
     LlmApiProperties.class,
     HybridRetrievalProperties.class,
     CompoundRerankProperties.class,
-    SiteMapProperties.class
+    SiteMapProperties.class,
+    ToolHttpProperties.class
 })
 public class McpServerConfiguration {
 
@@ -38,10 +40,18 @@ public class McpServerConfiguration {
     // MCP tools route through pos-api-gateway because they relay end-user bearer tokens
     // which require JWT->X-Authorities conversion at the gateway layer.
     // See docs/service-discovery-migration/client-policy-matrix.md: gateway-exception.
+    //
+    // Bounded connect/read timeouts (#1660, ToolHttpProperties): a stalled downstream previously
+    // held the whole chat turn until something else gave up (mirrors OllamaChatModelConfiguration's
+    // SimpleClientHttpRequestFactory pattern).
     @Bean
     @LoadBalanced
-    public RestClient.Builder loadBalancedRestClientBuilder(@NonNull BearerTokenRelayInterceptor interceptor) {
-        return RestClient.builder().requestInterceptors(list -> list.add(interceptor));
+    public RestClient.Builder loadBalancedRestClientBuilder(
+            @NonNull BearerTokenRelayInterceptor interceptor, @NonNull ToolHttpProperties toolHttpProperties) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(toolHttpProperties.connectTimeout());
+        requestFactory.setReadTimeout(toolHttpProperties.readTimeout());
+        return RestClient.builder().requestFactory(requestFactory).requestInterceptors(list -> list.add(interceptor));
     }
 
     @Bean

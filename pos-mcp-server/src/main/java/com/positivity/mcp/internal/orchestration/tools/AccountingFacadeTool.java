@@ -5,6 +5,7 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -81,17 +82,36 @@ public class AccountingFacadeTool {
     }
 
     @Tool(
-            description = "Get a composed financial summary for an accounting period. period must be a "
-                    + "calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. "
-                    + "2026). Returns a JSON envelope with three sections: incomeStatement (revenue and "
-                    + "expense activity over the period), balanceSheet (assets, liabilities and equity as of "
-                    + "the period's end date), and trialBalance (per-account debit/credit proof as of the "
-                    + "period's end date). A section the caller is not authorized for, or that fails, is "
-                    + "reported in that section's status without failing the whole summary; the top-level "
-                    + "status is degraded when the income statement is unavailable.")
+            description = "Get a composed financial summary for a date window. Get the window from "
+                    + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
+                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
+                    + "or year; pass either period or startDate+endDate, never both. Returns a JSON envelope "
+                    + "with three sections: incomeStatement (revenue and expense activity over the window), "
+                    + "balanceSheet (assets, liabilities and equity as of the window's end date), and "
+                    + "trialBalance (per-account debit/credit proof as of the window's end date). A section "
+                    + "the caller is not authorized for, or that fails, is reported in that section's status "
+                    + "without failing the whole summary; the top-level status is degraded when the income "
+                    + "statement is unavailable.")
     public String getFinancialSummary(
-            @ToolParam(description = "Accounting period: YYYY-MM or YYYY") @NonNull String period) {
-        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+            @ToolParam(
+                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
+                                    + "(YYYY); omit when passing startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String period,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String startDate,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String endDate) {
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
         return ToolComposition.named("financialSummary")
                 .call(
                         "incomeStatement",
@@ -182,26 +202,41 @@ public class AccountingFacadeTool {
     }
 
     @Tool(
-            description = "Get per-vendor spend for a reporting period (Wave 2 E8). period must be a "
-                    + "calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. "
-                    + "2026) — resolve a relative phrase like \"last month\" or \"the same six months last "
-                    + "year\" to the concrete YYYY-MM/YYYY yourself and call once per period; do not loop "
-                    + "this tool across more than a handful of periods for a multi-period trend. Returns "
+            description = "Get per-vendor spend for a date window (Wave 2 E8). Get the window from "
+                    + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
+                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
+                    + "or year; pass either period or startDate+endDate, never both. Returns "
                     + "rows — vendorId, name (falls back to a bill/payment name snapshot, null only if "
-                    + "neither source has one), paidAmount, billCount, avgBillAmount — ordered by paidAmount "
-                    + "descending and capped at the top 20 vendors; the response's truncated flag is true "
-                    + "when more vendors had activity in the window than that cap allowed. IMPORTANT: "
-                    + "paidAmount (settled A/P cash — payments whose paymentDate falls in the window and "
-                    + "whose gateway status shows the cash already moved) and billCount/avgBillAmount "
-                    + "(VendorBill records whose billDate falls in the window) are DIFFERENT POPULATIONS of "
-                    + "the same vendor — a payment can settle bills billed in an earlier or later window, so "
-                    + "avgBillAmount * billCount does not reconcile to paidAmount, and a vendor with a high "
-                    + "paidAmount but billCount=0 in this window is not an anomaly. avgBillAmount is 0, "
-                    + "never null, when billCount is 0. This tool does NOT accept a vendorId filter or a "
-                    + "limit override — it always ranks every vendor for one window; use listApBills instead "
-                    + "for individual eligible bills rather than a per-vendor aggregate.")
-    public String getVendorSpend(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
-        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+                    + "neither source has one), paidAmount, billsIssuedInWindow, avgIssuedBillAmount — "
+                    + "ordered by paidAmount descending and capped at the top 20 vendors; the response's "
+                    + "truncated flag is true when more vendors had activity in the window than that cap "
+                    + "allowed. paidAmount is settled A/P cash for payments made in the window, while "
+                    + "billsIssuedInWindow/avgIssuedBillAmount describe bills issued in the window regardless "
+                    + "of payment status — different populations, so avgIssuedBillAmount * "
+                    + "billsIssuedInWindow does not reconcile to paidAmount; never label the bill-side "
+                    + "figures as paid. This tool does NOT accept a vendorId filter or a limit override — it "
+                    + "always ranks every vendor for one window; use listApBills instead for individual "
+                    + "eligible bills rather than a per-vendor aggregate.")
+    public String getVendorSpend(
+            @ToolParam(
+                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
+                                    + "(YYYY); omit when passing startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String period,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String startDate,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String endDate) {
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
         return restClient
                 .get()
                 .uri(vendorSpendUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))

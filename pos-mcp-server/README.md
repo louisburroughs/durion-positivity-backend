@@ -115,12 +115,15 @@ sentinel marks operations available to any authenticated caller.
 
 ### Facade tools
 
-17 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, Events,
-Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the always-on
-Exa web search. The facades are the **primary curated natural-language surface** (#1519): the common intents —
-lookup, search, status, and summary per domain — are answerable through facade tools alone, while the
+18 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, DateWindow,
+Events, Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the
+always-on Exa web search. The facades are the **primary curated natural-language surface** (#1519): the common
+intents — lookup, search, status, and summary per domain — are answerable through facade tools alone, while the
 OpenAPI-discovered operations (next section) complement the long tail. Every `@Tool` method calls a real backend
-endpoint via a `@LoadBalanced` RestClient through the gateway. The one split client is TaxFacadeTool, which uses
+endpoint via a `@LoadBalanced` RestClient through the gateway, with one exception: `DateWindowFacadeTool`
+(#1675) makes no HTTP call at all — it resolves a relative date range to concrete dates with pure `java.time`
+arithmetic (`DateWindowResolver`) off the shared `Clock` bean, so every other date-taking tool call is preceded
+by a resolver round instead of model-computed dates. The other split client is TaxFacadeTool, which uses
 both: a direct (non-load-balanced) RestClient to `pos-tax:8091` for the calculate leg — pos-tax is internal-only and
 unreachable via Eureka or the gateway (ADR-0021, #641) — and a load-balanced gateway client for everything pos-tax
 does not serve (the location lookup feeding the calculation, and the accounting tax-liability report behind
@@ -282,6 +285,8 @@ or similarity floors.
 | `mcp.tuning.cron`                          | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                             |
 | `mcp.model.fallback.enabled`               | `MCP_MODEL_FALLBACK_ENABLED`                | Primary → secondary model fallback                                                        |
 | `mcp.discovery.aggregate-spec-url`         | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                             |
+| `pos.tools.http.connect-timeout`           | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)             |
+| `pos.tools.http.read-timeout`              | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660) |
 | Exa web search                             | `EXA_API_KEY`                               | External web-search API key                                                               |
 | DB connection                              | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD`       | PostgreSQL + pgvector                                                                     |
 

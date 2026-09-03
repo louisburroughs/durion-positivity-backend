@@ -5,7 +5,7 @@
 --
 -- Serving endpoint: E8 — GET /v1/accounting/analytics/vendor-spend?startDate=&endDate=&limit=
 --   (pos-accounting), one call per window. Budget (§6): 3. Tolerance (§2.1): exact currency;
---   avgBillAmount is scale-2 HALF_UP. Windows against EVAL_AS_OF 2026-09-01:
+--   avgIssuedBillAmount is scale-2 HALF_UP. Windows against EVAL_AS_OF 2026-09-01:
 --   2026-03-01..2026-08-31 vs 2025-03-01..2025-08-31 (the DATASET.md E8 windows).
 --
 -- SEMANTICS — mirrors AccountingAnalyticsServiceImpl.getVendorSpend exactly:
@@ -13,14 +13,15 @@
 --     set (GATEWAY_SUCCEEDED, GL_POST_PENDING, GL_POSTED, GL_POST_FAILED — GL posting state
 --     does not change whether cash moved), with payment_date (a NAIVE LocalDateTime column)
 --     in [start 00:00, end 23:59:59.999999].
---   * billCount / avgBillAmount: vendor_bill rows bucketed by bill_date (same naive-window
---     rule) REGARDLESS of bill status; avg = billTotal/billCount, scale 2 HALF_UP.
+--   * billsIssuedInWindow / avgIssuedBillAmount: vendor_bill rows bucketed by bill_date (same
+--     naive-window rule) REGARDLESS of payment status; avg = billTotal/billsIssuedInWindow,
+--     scale 2 HALF_UP.
 --   * Vendors ranked by paidAmount DESC; the union of payment-vendors and bill-vendors is
 --     reported (a vendor can have bills but no settled payments in the window).
 --
 -- DIVERGENCE: paidAmount sums payment gross_amount by payment DATE with no allocation join —
 --   a payment is attributed whole to its window even if allocated across bills from other
---   periods; and billCount counts bills by bill_date even when unpaid. In this seed every
+--   periods; and billsIssuedInWindow counts bills by bill_date even when unpaid. In this seed every
 --   payment fully allocates its same-month bill, so the two views coincide.
 --
 -- Usage: psql -f q15-... <pos_accounting_db>
@@ -40,7 +41,7 @@ paid AS (
     GROUP BY w.window_label, p.vendor_id
 ),
 bills AS (
-    SELECT w.window_label, b.vendor_id, COUNT(*) AS bill_count, SUM(b.total_amount) AS bill_total
+    SELECT w.window_label, b.vendor_id, COUNT(*) AS bills_issued_in_window, SUM(b.total_amount) AS bill_total
     FROM windows w
     JOIN vendor_bill b
       ON b.bill_date >= w.win_start::timestamp
@@ -51,13 +52,13 @@ merged AS (
     SELECT COALESCE(p.window_label, b.window_label) AS window_label,
            COALESCE(p.vendor_id, b.vendor_id)       AS vendor_id,
            COALESCE(p.paid_amount, 0)               AS paid_amount,
-           COALESCE(b.bill_count, 0)                AS bill_count,
-           CASE WHEN COALESCE(b.bill_count, 0) = 0 THEN 0
-                ELSE ROUND(b.bill_total / b.bill_count, 2) END AS avg_bill_amount
+           COALESCE(b.bills_issued_in_window, 0)     AS bills_issued_in_window,
+           CASE WHEN COALESCE(b.bills_issued_in_window, 0) = 0 THEN 0
+                ELSE ROUND(b.bill_total / b.bills_issued_in_window, 2) END AS avg_issued_bill_amount
     FROM paid p
     FULL OUTER JOIN bills b ON (b.window_label, b.vendor_id) = (p.window_label, p.vendor_id)
 )
-SELECT m.window_label, m.vendor_id, v.name, m.paid_amount, m.bill_count, m.avg_bill_amount
+SELECT m.window_label, m.vendor_id, v.name, m.paid_amount, m.bills_issued_in_window, m.avg_issued_bill_amount
 FROM merged m
 LEFT JOIN ap_vendor v ON v.vendor_id = m.vendor_id
 ORDER BY m.window_label, m.paid_amount DESC, m.vendor_id;

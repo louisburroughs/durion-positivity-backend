@@ -32,6 +32,7 @@ class FacadeContractManifestTest {
             AdminFacadeTool.class,
             CatalogFacadeTool.class,
             CustomerFacadeTool.class,
+            DateWindowFacadeTool.class,
             EventsFacadeTool.class,
             HrFacadeTool.class,
             InventoryFacadeTool.class,

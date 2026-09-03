@@ -215,6 +215,12 @@ CustomerFacadeTool.getCustomerHistory:
       route: workorder
       downstreamPath: "/v1/workorders/search?customerId={}"
 
+DateWindowFacadeTool.resolveDateWindow:
+  verb: NONE
+  route: NONE
+  downstreamPath: ""
+  # #1675: DateWindowResolver arithmetic, in-process; no HTTP call.
+
 EventsFacadeTool.getEventTypes:
   verb: GET
   baseUrlProperty: pos.event-receiver.base-url
@@ -325,6 +331,15 @@ InvoiceFacadeTool.getRevenueByCustomer:
   downstreamPath: "/v1/invoices/analytics/revenue-by-customer?startDate={}&endDate={}"
   # W2.3 facade promotion (#1601, E1). The tool maps its period argument (YYYY-MM or YYYY) onto
   # the date range via ReportingPeriods.
+
+InvoiceFacadeTool.getInvoicingLag:
+  verb: GET
+  baseUrlProperty: pos.invoice.base-url
+  templateProperty: pos.invoice.invoicing-lag-uri-template
+  template: "/invoice/v1/invoices/analytics/invoicing-lag?startDate={startDate}&endDate={endDate}"
+  route: invoice
+  downstreamPath: "/v1/invoices/analytics/invoicing-lag?startDate={}&endDate={}"
+  # W2 E4 facade promotion (#1660). startDate/endDate are ISO dates passed straight through.
 
 LocationFacadeTool.getLocation:
   verb: GET

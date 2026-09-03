@@ -91,7 +91,8 @@ class WorkorderRepositorySearchFiltersTest {
                 null,
                 CUSTOMER_A,
                 null,
-                WorkorderStatus.APPROVED,
+                true,
+                List.of(WorkorderStatus.APPROVED),
                 UNBOUNDED_FROM,
                 UNBOUNDED_TO,
                 null,
@@ -101,7 +102,28 @@ class WorkorderRepositorySearchFiltersTest {
     }
 
     @Test
-    @DisplayName("Omitting status applies no restriction (every status matches)")
+    @DisplayName("#1676: two statuses in one call match either status server-side")
+    void twoStatuses_matchesEitherStatusInOneCall() {
+        Page<Workorder> page = workorderRepository.searchByQuery(
+                "",
+                sentinelCustomerIds(),
+                null,
+                null,
+                null,
+                true,
+                List.of(WorkorderStatus.APPROVED, WorkorderStatus.WORK_IN_PROGRESS),
+                UNBOUNDED_FROM,
+                UNBOUNDED_TO,
+                null,
+                PageRequest.of(0, 25));
+
+        assertThat(page.getContent())
+                .extracting(Workorder::getId)
+                .containsExactlyInAnyOrder(openWorkorderForCustomerA, openWorkorderForCustomerB);
+    }
+
+    @Test
+    @DisplayName("statusFilterEnabled=false applies no restriction regardless of statuses (every status matches)")
     void noStatusFilter_matchesEveryStatus() {
         Page<Workorder> page = workorderRepository.searchByQuery(
                 "",
@@ -109,7 +131,8 @@ class WorkorderRepositorySearchFiltersTest {
                 null,
                 CUSTOMER_A,
                 null,
-                null,
+                false,
+                List.of(WorkorderStatus.CANCELLED),
                 UNBOUNDED_FROM,
                 UNBOUNDED_TO,
                 null,
@@ -129,7 +152,8 @@ class WorkorderRepositorySearchFiltersTest {
                 null,
                 null,
                 null,
-                null,
+                false,
+                sentinelStatuses(),
                 Instant.parse("2026-06-14T00:00:00Z"),
                 Instant.parse("2026-06-21T00:00:00Z"),
                 null,
@@ -149,7 +173,8 @@ class WorkorderRepositorySearchFiltersTest {
                 null,
                 null,
                 null,
-                null,
+                false,
+                sentinelStatuses(),
                 UNBOUNDED_FROM,
                 UNBOUNDED_TO,
                 TECHNICIAN_B,
@@ -167,7 +192,8 @@ class WorkorderRepositorySearchFiltersTest {
                 null,
                 null,
                 null,
-                null,
+                false,
+                sentinelStatuses(),
                 UNBOUNDED_FROM,
                 UNBOUNDED_TO,
                 UUID.fromString("cccccccc-0000-0000-0000-0000000000ff"),
@@ -180,6 +206,12 @@ class WorkorderRepositorySearchFiltersTest {
         // Mirrors the service layer's convention: JPQL IN requires a non-empty collection, and a
         // sentinel that cannot match a real id keeps the q='' branch's customerId IN clause inert.
         return List.of(new UUID(0, 0));
+    }
+
+    private static List<WorkorderStatus> sentinelStatuses() {
+        // JPQL IN also requires a non-empty collection for statuses; statusFilterEnabled=false
+        // bypasses evaluating it, so the value here is never actually read (#1676).
+        return List.of(WorkorderStatus.DRAFT);
     }
 
     private UUID seedWorkorder(UUID customerId, WorkorderStatus status, Instant createdAt) {

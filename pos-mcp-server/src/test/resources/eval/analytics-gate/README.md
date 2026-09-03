@@ -11,6 +11,12 @@ directly against the seeded Postgres. Per plan §2.1 criterion 1, the script *is
 specification of the expected answer — a chat response passes only when its figures match the
 script's output (exact for counts and currency, ±0.5 % for derived ratios).
 
+**Q15/Q17 labeling rule (#1663).** `getVendorSpend`'s `billsIssuedInWindow` and
+`avgIssuedBillAmount` count/average bills *issued* in the window regardless of payment status —
+a different population from `paidAmount` (settled A/P cash). Q15 and Q17 score FAIL if the
+rendered answer labels either bill-side figure as paid — e.g. a column heading "bills paid" —
+even when the underlying numbers are correct, since that mislabels the population.
+
 ## The questions: `QUESTIONS.json` (#1671)
 
 `QUESTIONS.json` is the **only** definition of the text the chat-path gate asks. One entry per
@@ -25,6 +31,57 @@ truth that scores it are diffable together. Each entry carries:
 | `in_chat_path_gate` / `excluded_reason` | which twelve of the twenty run, and why the other eight do not |
 | `window` | the shape (`calendar` / `rolling` / `point-in-time` / `mixed`), the range the ground truth measures, and whether the question's own text resolves to it |
 | `tool_selection_fixture_id` | the counterpart in the tool-selection corpus |
+| `expected_plan` (optional) | for a composition question, the minimum tool calls the correct answer needs — see below |
+
+### `expected_plan` and the "declined composition" verdict (#1676)
+
+A composition question needs more than one facade call combined by the model — q05's aged
+receivables followed by one `searchWorkorders` call per past-due customer is the motivating case.
+That plan can fail by silent truncation: the model runs the first call, sees the shape of the rest
+of the plan, and offers the user a menu of partial answers instead of just running it. Scored by
+hand against `EXPECTED.md` alone, that reads as an ordinary wrong or incomplete answer — nothing
+distinguishes "the model computed something wrong" from "the model declined to finish the plan it
+correctly diagnosed." `expected_plan` names the plan so a grader (or, once observable, the runner
+itself) can tell the two apart and record the real failure:
+
+```json
+"expected_plan": {
+  "min_tool_calls": { "getAgedReceivables": 1, "searchWorkorders": 1 },
+  "per": "one searchWorkorders call per past-due customer (#1676 status=OPEN, one call per customer id)",
+  "declined_reason": "declined composition"
+}
+```
+
+- `min_tool_calls` — a map of real facade `@Tool` method names (validated against
+  `facade-contract.yaml` by `AnalyticsGateQuestionsTest`) to the minimum number of calls the
+  composition needs. For a per-value loop (q05's per-customer `searchWorkorders`) this is the
+  floor for one unit (one customer), not the full seed-dependent count, since the seed's past-due
+  customer count can change; `per` states what the loop is over. For a `calendar`/`rolling`
+  window, `AnalyticsGateQuestionsTest` also checks feasibility, not just the name: every named
+  tool must declare a `startDate`+`endDate` pair or an `asOfDate` parameter, so a plan naming a
+  period-only tool for a multi-month window (the #1677 defect that made q09/q15's claimed one/two
+  calls unachievable) fails before the gate is ever run.
+- `per` — one sentence naming what the loop or comparison is over, for a human grader reading the
+  fixture without the plan document open.
+- `declined_reason` — the verdict note text (`"declined composition"` in every case so far) a
+  below-minimum observed count produces.
+
+A question with nothing to compose (a single-call answer, or a fixed two-window comparison with no
+per-value loop) simply omits the field; `AnalyticsGateQuestionsTest` does not require one.
+
+**The verdict is not automated today.** `scripts/analytics_gate_run.py` would apply
+`expected_plan` against the observed tool-call sequence per turn, but neither `POST /mcp/chat`
+(`McpChatController.ChatResponse` carries only the answer text) nor any admin/observability
+endpoint exposes `mcp_tool_invocation_log` over HTTP — there is no controller anywhere that reads
+`ToolAuditRepository`/`ToolAuditService`, and building one is out of scope here. The run document's
+"Tool calls" column therefore always reads `n/a (not exposed by the endpoint)`, and a question
+carrying `expected_plan` gets a `plan_check` note explaining that the check did not run, instead of
+a computed verdict. A human grader still applies `expected_plan` by hand when reading the answer:
+if a composition question's answer covers fewer past-due customers (or windows, or months) than
+`min_tool_calls` implies, record the verdict as **FAIL — declined composition**, not a bare FAIL,
+so the failure class is visible on the run document without re-deriving it from the transcript.
+The comparison logic already exists in the script (`check_expected_plan`) so that wiring in a real
+tool-call source later is additive, not a rewrite.
 
 Run it with `scripts/analytics_gate_run.py`, which reads this file and records its git blob sha in
 the run record. **Do not ask a gate question from anywhere else.** Before #1671 the twelve

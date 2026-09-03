@@ -43,6 +43,7 @@ class InvoiceFacadeToolTest {
                 contract("searchInvoices").template(),
                 contract("getInvoicesByCustomer").template(),
                 contract("getRevenueByCustomer").template(),
+                contract("getInvoicingLag").template(),
                 InvoiceFacadeTool.CUSTOMER_INVOICE_LINE_CAP);
     }
 
@@ -247,7 +248,7 @@ class InvoiceFacadeToolTest {
                         "{\"startDate\":\"2026-06-01\",\"endDate\":\"2026-06-30\",\"rows\":[]}",
                         MediaType.APPLICATION_JSON));
 
-        String result = tool.getRevenueByCustomer("2026-06");
+        String result = tool.getRevenueByCustomer("2026-06", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty().contains("2026-06-01").contains("2026-06-30");
@@ -262,7 +263,7 @@ class InvoiceFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getRevenueByCustomer("2026");
+        String result = tool.getRevenueByCustomer("2026", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -271,10 +272,77 @@ class InvoiceFacadeToolTest {
     @Test
     @DisplayName("getRevenueByCustomer rejects an unsupported period form without issuing a request")
     void getRevenueByCustomer_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getRevenueByCustomer("2025-Q1"))
+        assertThatThrownBy(() -> tool.getRevenueByCustomer("2025-Q1", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getRevenueByCustomer takes a startDate/endDate window spanning more than one calendar "
+            + "month in a single call")
+    void getRevenueByCustomer_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry entry = contract("getRevenueByCustomer");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2025-07-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getRevenueByCustomer(null, "2025-07-01", "2026-06-30");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("getRevenueByCustomer rejects period together with startDate/endDate without issuing a request")
+    void getRevenueByCustomer_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getRevenueByCustomer("2026-06", "2025-07-01", "2026-06-30"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getRevenueByCustomer rejects an unpaired endDate without issuing a request")
+    void getRevenueByCustomer_rejectsUnpairedEndDate() {
+        assertThatThrownBy(() -> tool.getRevenueByCustomer(null, null, "2026-06-30"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getInvoicingLag sends GET invoicing-lag?startDate&endDate and returns body")
+    void getInvoicingLag_sendsGetToInvoicingLagEndpoint() {
+        FacadeContractManifest.Entry entry = contract("getInvoicingLag");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-03-01", "endDate", "2026-03-31"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess(
+                        "{\"startDate\":\"2026-03-01\",\"endDate\":\"2026-03-31\","
+                                + "\"rows\":[{\"avgDaysWoCreationToInvoice\":3.42,\"count\":47}]}",
+                        MediaType.APPLICATION_JSON));
+
+        String result = tool.getInvoicingLag("2026-03-01", "2026-03-31");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty().contains("avgDaysWoCreationToInvoice").contains("47");
+    }
+
+    @Test
+    @DisplayName("getInvoicingLag rejects a malformed date without issuing a request")
+    void getInvoicingLag_rejectsMalformedDate() {
+        assertThatThrownBy(() -> tool.getInvoicingLag("2026-03-01", "not-a-date"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("endDate")
+                .hasMessageContaining("YYYY-MM-DD");
 
         mockServer.verify();
     }

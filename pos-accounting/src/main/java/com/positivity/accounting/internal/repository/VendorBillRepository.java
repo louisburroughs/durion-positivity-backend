@@ -145,9 +145,9 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
 
     /**
      * Find bills whose billDate falls in the inclusive range, regardless of status. Used by the
-     * vendor-spend analytics endpoint (Wave 2 E8, issue #1596) for the bill-side (billCount /
-     * avgBillAmount) population, which is deliberately independent of the payment-side
-     * (paidAmount) population — see {@code VendorSpendRow} Javadoc.
+     * vendor-spend analytics endpoint (Wave 2 E8, issue #1596) for the bill-side
+     * (billsIssuedInWindow / avgIssuedBillAmount) population, which is deliberately independent
+     * of the payment-side (paidAmount) population — see {@code VendorSpendRow} Javadoc.
      *
      * @param startDate inclusive lower bound
      * @param endDate   inclusive upper bound

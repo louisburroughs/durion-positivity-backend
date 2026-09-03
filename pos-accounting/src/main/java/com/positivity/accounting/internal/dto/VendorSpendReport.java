@@ -29,8 +29,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @Schema(
         description = "Per-vendor spend report for one date window, ordered by paidAmount descending. paidAmount"
-                + " (settled A/P cash) and billCount/avgBillAmount (bill records) are different populations"
-                + " — see VendorSpendRow field descriptions.")
+                + " (settled A/P cash) and billsIssuedInWindow/avgIssuedBillAmount (bill records) are different"
+                + " populations — see VendorSpendRow field descriptions.")
 public class VendorSpendReport {
 
     @Schema(description = "Window start date (inclusive)", example = "2026-06-01", requiredMode = REQUIRED)

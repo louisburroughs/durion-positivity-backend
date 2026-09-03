@@ -23,8 +23,9 @@ SEMANTICS (V40, #1606 finding 1)
 A role reaches a facade iff it holds EVERY code of AT LEAST ONE of that facade's groups —
 AND within a group, OR across groups. A group is one @Tool method's required codes.
 
-EventsFacadeTool is excluded from scoring: it is gated on the AUTHENTICATED sentinel, which
-is not a role_permissions row but is held by every authenticated caller at runtime.
+EventsFacadeTool and DateWindowFacadeTool are excluded from scoring: both are gated on the
+AUTHENTICATED sentinel, which is not a role_permissions row but is held by every authenticated
+caller at runtime.
 
 USAGE
   python3 scripts/mcp-facade-reachability.py                 # print the matrix
@@ -47,7 +48,7 @@ MIGRATION_DIR = ROOT / "pos-mcp-server/src/main/resources/db/migration"
 GRANTS = ROOT / "scripts/fixtures/seed/alpha/security/role-permissions.csv"
 BASELINE = ROOT / "scripts/mcp-facade-reachability-baseline.json"
 
-EXCLUDED_TOOLS = {"EventsFacadeTool"}
+EXCLUDED_TOOLS = {"EventsFacadeTool", "DateWindowFacadeTool"}
 
 # A per-tool group re-derivation: VALUES ('group', 'code'), ... WHERE mcp_tool.name = 'Tool'
 GROUP_BLOCK = re.compile(

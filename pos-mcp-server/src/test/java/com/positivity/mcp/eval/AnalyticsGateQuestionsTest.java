@@ -1,24 +1,51 @@
 package com.positivity.mcp.eval;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.orchestration.tools.AccountingFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.AdminFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.CatalogFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.CustomerFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.EventsFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.HrFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.InvoiceFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.LocationFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.PricingFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.ReportingFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.ShopManagerFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.TaxFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.VehicleFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.WorkorderFacadeTool;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.tool.annotation.Tool;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * Structural gate for the versioned analytics-gate question set (#1671).
@@ -46,11 +73,43 @@ class AnalyticsGateQuestionsTest {
             Paths.get(System.getProperty("user.dir"), "src/test/resources/eval/tool-selection");
     private static final Path TOOL_SELECTION_PENDING =
             Paths.get(System.getProperty("user.dir"), "src/test/resources/eval/tool-selection-pending");
+    private static final Path FACADE_CONTRACT =
+            Paths.get(System.getProperty("user.dir"), "src/test/resources/facade-contract.yaml");
 
     /** Plan §6 is a twenty-question matrix; the file carries all twenty, gated or not. */
     private static final int PLAN_QUESTION_COUNT = 20;
 
     private static final Set<String> WINDOW_SHAPES = Set.of("calendar", "rolling", "point-in-time", "mixed");
+
+    /**
+     * Window shapes that carry an actual range (as opposed to {@code point-in-time}, which is a
+     * single as-of instant with nothing to pass in more than one call, or {@code mixed}, which no
+     * {@code expected_plan} question uses today). Only these shapes are checked by {@link
+     * #expectedPlanToolsCanReceiveTheWindowInOneCall()}.
+     */
+    private static final Set<String> WINDOW_SHAPES_WITH_A_RANGE = Set.of("calendar", "rolling");
+
+    private static final Pattern TEMPLATE_PLACEHOLDER = Pattern.compile("\\{([A-Za-z0-9]+)}");
+
+    /** Every {@code *FacadeTool} class under test, mirroring {@code FacadeContractManifestTest}. */
+    private static final List<Class<?>> FACADE_TOOL_CLASSES = List.of(
+            AccountingFacadeTool.class,
+            AdminFacadeTool.class,
+            CatalogFacadeTool.class,
+            CustomerFacadeTool.class,
+            DateWindowFacadeTool.class,
+            EventsFacadeTool.class,
+            HrFacadeTool.class,
+            InventoryFacadeTool.class,
+            InvoiceFacadeTool.class,
+            LocationFacadeTool.class,
+            OrderFacadeTool.class,
+            PricingFacadeTool.class,
+            ReportingFacadeTool.class,
+            ShopManagerFacadeTool.class,
+            TaxFacadeTool.class,
+            VehicleFacadeTool.class,
+            WorkorderFacadeTool.class);
 
     @Test
     @DisplayName("every plan §6 question is versioned exactly once, in order")
@@ -190,7 +249,232 @@ class AnalyticsGateQuestionsTest {
         }
     }
 
+    /**
+     * #1676: a composition question (q05's "aged receivables, then one searchWorkorders call per
+     * past-due customer" being the motivating case) may carry an optional {@code expected_plan}
+     * naming the minimum tool calls the composition needs. This pins the field to reality on both
+     * sides: every key in {@code min_tool_calls} must be a real facade {@code @Tool} method name
+     * (derived from {@code facade-contract.yaml}, never restated as a literal set here, so a facade
+     * rename shows up as a test failure rather than a silently stale fixture) and every minimum must
+     * be a positive count. A question with no composition to name simply omits the field — this test
+     * does not require one.
+     */
+    @Test
+    @DisplayName("expected_plan, when present, names only real facade tools with positive minimums")
+    void expectedPlanNamesRealFacadeToolsWithPositiveMinimums() throws IOException {
+        Set<String> facadeToolNames = facadeToolMethodNames();
+        assertThat(facadeToolNames).as("facade-contract.yaml must not be empty").isNotEmpty();
+
+        for (JsonNode q : questions().get("questions")) {
+            String id = q.path("fixture_id").asText();
+            JsonNode plan = q.get("expected_plan");
+            if (plan == null || plan.isNull()) {
+                continue;
+            }
+            JsonNode minCalls = plan.get("min_tool_calls");
+            assertThat(minCalls)
+                    .as("%s: expected_plan.min_tool_calls required when expected_plan is present", id)
+                    .isNotNull();
+            assertThat(minCalls.isObject())
+                    .as("%s: expected_plan.min_tool_calls must be an object", id)
+                    .isTrue();
+            assertThat(minCalls.size())
+                    .as("%s: expected_plan.min_tool_calls must name at least one tool", id)
+                    .isPositive();
+
+            Iterator<Map.Entry<String, JsonNode>> fields = minCalls.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                assertThat(facadeToolNames)
+                        .as(
+                                "%s: expected_plan.min_tool_calls names '%s', which is not a real facade "
+                                        + "@Tool method (see facade-contract.yaml)",
+                                id, entry.getKey())
+                        .contains(entry.getKey());
+                assertThat(entry.getValue().isInt())
+                        .as("%s: expected_plan.min_tool_calls.%s must be an integer", id, entry.getKey())
+                        .isTrue();
+                assertThat(entry.getValue().asInt())
+                        .as("%s: expected_plan.min_tool_calls.%s must be positive", id, entry.getKey())
+                        .isPositive();
+            }
+
+            assertThat(plan.path("per").asText())
+                    .as("%s: expected_plan.per must explain the per-unit composition", id)
+                    .isNotBlank();
+        }
+    }
+
+    /**
+     * #1677 F4: {@link #expectedPlanNamesRealFacadeToolsWithPositiveMinimums} only checks that a
+     * {@code min_tool_calls} name is a real facade {@code @Tool} method with a positive minimum —
+     * it never checked that the tool could actually carry the question's window. Before the
+     * #1677/#1675 fix, {@code getRevenueByCustomer} (q09, a twelve-month window) and {@code
+     * getVendorSpend} (q15/q17, six-month windows) only accepted a single {@code YYYY-MM}/{@code
+     * YYYY} {@code period}, so the plans' claimed one/two calls were unachievable and this gap
+     * would have let that regress silently.
+     *
+     * <p>For every question whose {@code window.shape} is {@code calendar} or {@code rolling} (a
+     * {@code point-in-time} window is a single as-of instant with nothing to range over, so it
+     * keeps only the name check above), every tool named in {@code min_tool_calls} must be able to
+     * receive that window in one call: it must declare a {@code startDate} *and* {@code endDate}
+     * parameter pair, or an {@code asOfDate} parameter (the point-in-time companion leg, e.g. q09's
+     * aged-receivables balance sitting alongside its revenue window).
+     *
+     * <p>Parameter names are read via {@link Parameter#getName()}, which only returns the real
+     * source name when the module is compiled with {@code -parameters}. This reactor's parent,
+     * {@code spring-boot-starter-parent}, turns that on by default for every module (verified below
+     * before the names are trusted, rather than assumed). If that default is ever overridden and
+     * names stop being retained, this falls back to {@code facade-contract.yaml}'s configured URI
+     * template placeholders ({@code {startDate}}, {@code {endDate}}, {@code {asOfDate}}) — the
+     * same names each tool's own downstream request is built from — since {@link
+     * org.springframework.ai.tool.annotation.ToolParam} carries no name attribute of its own (only
+     * {@code description}/{@code required}) to fall back to instead.
+     */
+    @Test
+    @DisplayName("expected_plan tools can take a calendar/rolling question's window in one call")
+    void expectedPlanToolsCanReceiveTheWindowInOneCall() throws IOException {
+        Map<String, Method> toolMethodsByName = facadeToolMethodsByName();
+        assertThat(toolMethodsByName)
+                .as("at least one @Tool method must be found by reflection")
+                .isNotEmpty();
+
+        boolean parameterNamesRetained = toolMethodsByName.values().stream()
+                        .flatMap(method -> Arrays.stream(method.getParameters()))
+                        .findAny()
+                        .isPresent()
+                && toolMethodsByName.values().stream()
+                        .flatMap(method -> Arrays.stream(method.getParameters()))
+                        .allMatch(Parameter::isNamePresent);
+        Map<String, Set<String>> fallbackParamNamesByTool =
+                parameterNamesRetained ? Map.of() : facadeTemplateVariablesByToolName();
+
+        for (JsonNode q : questions().get("questions")) {
+            String id = q.path("fixture_id").asText();
+            JsonNode plan = q.get("expected_plan");
+            if (plan == null || plan.isNull()) {
+                continue;
+            }
+            String shape = q.path("window").path("shape").asText();
+            if (!WINDOW_SHAPES_WITH_A_RANGE.contains(shape)) {
+                continue;
+            }
+
+            Iterator<String> toolNames = plan.get("min_tool_calls").fieldNames();
+            while (toolNames.hasNext()) {
+                String tool = toolNames.next();
+                Set<String> paramNames = parameterNamesRetained
+                        ? nameSet(toolMethodsByName.get(tool))
+                        : fallbackParamNamesByTool.getOrDefault(tool, Set.of());
+
+                boolean hasStart = paramNames.contains("startDate");
+                boolean hasEnd = paramNames.contains("endDate");
+                boolean hasAsOf = paramNames.contains("asOfDate");
+                if ((hasStart && hasEnd) || hasAsOf) {
+                    continue;
+                }
+
+                String missing;
+                if (!hasStart && !hasEnd) {
+                    missing = "startDate and endDate";
+                } else if (!hasStart) {
+                    missing = "startDate";
+                } else {
+                    missing = "endDate";
+                }
+                fail(
+                        "%s: expected_plan tool '%s' cannot take a %s window in one call — missing %s "
+                                + "(and no asOfDate); declared params were %s",
+                        id, tool, shape, missing, paramNames);
+            }
+        }
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Bare {@code @Tool} method names (the part after the last {@code .}) declared in {@code
+     * facade-contract.yaml} — e.g. {@code "WorkorderFacadeTool.searchWorkorders"} contributes
+     * {@code "searchWorkorders"}. Composition entries (nested under a top-level key's own dotted
+     * name) are covered the same way since the manifest keys every entry, leg or not, at the top
+     * level.
+     */
+    @SuppressWarnings("unchecked")
+    private static Set<String> facadeToolMethodNames() throws IOException {
+        assertThat(Files.isRegularFile(FACADE_CONTRACT))
+                .as("facade-contract.yaml must exist: %s", FACADE_CONTRACT)
+                .isTrue();
+        Set<String> names = new LinkedHashSet<>();
+        try (InputStream stream = Files.newInputStream(FACADE_CONTRACT)) {
+            Map<String, Object> raw = new Yaml().load(stream);
+            for (String key : raw.keySet()) {
+                int dot = key.lastIndexOf('.');
+                names.add(dot >= 0 ? key.substring(dot + 1) : key);
+            }
+        }
+        return names;
+    }
+
+    /** Every {@code @Tool} method of every {@link #FACADE_TOOL_CLASSES}, keyed by its bare name. */
+    private static Map<String, Method> facadeToolMethodsByName() {
+        Map<String, Method> methods = new LinkedHashMap<>();
+        for (Class<?> facade : FACADE_TOOL_CLASSES) {
+            for (Method method : facade.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(Tool.class)) {
+                    methods.put(method.getName(), method);
+                }
+            }
+        }
+        return methods;
+    }
+
+    private static Set<String> nameSet(Method method) {
+        assertThat(method).as("facade @Tool method resolved by reflection").isNotNull();
+        Set<String> names = new LinkedHashSet<>();
+        for (Parameter parameter : method.getParameters()) {
+            names.add(parameter.getName());
+        }
+        return names;
+    }
+
+    /**
+     * Fallback source of parameter names when {@code -parameters} is not in effect: the query
+     * placeholders ({@code {startDate}}, etc.) in each {@code facade-contract.yaml} entry's own
+     * {@code template}, unioned with its composition {@code legs}' templates when it has no
+     * top-level template of its own (a {@code COMPOSITE} entry).
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Set<String>> facadeTemplateVariablesByToolName() throws IOException {
+        Map<String, Set<String>> variables = new LinkedHashMap<>();
+        try (InputStream stream = Files.newInputStream(FACADE_CONTRACT)) {
+            Map<String, Map<String, Object>> raw = new Yaml().load(stream);
+            raw.forEach((key, fields) -> {
+                int dot = key.lastIndexOf('.');
+                String bareName = dot >= 0 ? key.substring(dot + 1) : key;
+                variables.put(bareName, templateVariables(fields));
+            });
+        }
+        return variables;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<String> templateVariables(Map<String, Object> fields) {
+        Set<String> vars = new LinkedHashSet<>();
+        Object template = fields.get("template");
+        if (template instanceof String templateString) {
+            Matcher matcher = TEMPLATE_PLACEHOLDER.matcher(templateString);
+            while (matcher.find()) {
+                vars.add(matcher.group(1));
+            }
+        }
+        Object legs = fields.get("legs");
+        if (legs instanceof Map<?, ?> legMap) {
+            for (Object legFields : legMap.values()) {
+                vars.addAll(templateVariables((Map<String, Object>) legFields));
+            }
+        }
+        return vars;
+    }
 
     private static JsonNode questions() throws IOException {
         assertThat(Files.isRegularFile(QUESTIONS))

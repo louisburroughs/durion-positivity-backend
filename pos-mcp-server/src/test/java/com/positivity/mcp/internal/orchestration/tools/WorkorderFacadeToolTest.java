@@ -133,6 +133,88 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
+    @DisplayName("searchWorkorders omits a blank status filter from the request URI")
+    void searchWorkorders_omitsBlankStatus() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "brakes"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("brakes", null, null, "   ", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders expands the OPEN alias to the six non-terminal statuses in one call (#1676)")
+    void searchWorkorders_expandsOpenAliasToSixStatuses() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", ""))
+                        + "&customerId=" + CUSTOMER_ID
+                        + "&status=APPROVED%2CASSIGNED%2CWORK_IN_PROGRESS%2CAWAITING_PARTS%2CAWAITING_APPROVAL%2C"
+                        + "READY_FOR_PICKUP"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", CUSTOMER_ID, null, "OPEN", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders expands a lowercase \"open\" alias the same as \"OPEN\"")
+    void searchWorkorders_expandsLowercaseOpenAlias() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", ""))
+                        + "&status=APPROVED%2CASSIGNED%2CWORK_IN_PROGRESS%2CAWAITING_PARTS%2CAWAITING_APPROVAL%2C"
+                        + "READY_FOR_PICKUP"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", null, null, "open", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders passes an explicit comma-separated status list through unchanged")
+    void searchWorkorders_passesExplicitStatusListThrough() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "")) + "&status=APPROVED%2CWORK_IN_PROGRESS"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", null, null, "APPROVED,WORK_IN_PROGRESS", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders leaves a single status unchanged (not the OPEN alias)")
+    void searchWorkorders_leavesSingleStatusUnchanged() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "")) + "&status=COMPLETED"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", null, null, "COMPLETED", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
     @DisplayName("searchWorkorders starts the query string with '?' when the configured template has none")
     void searchWorkorders_usesQuestionMarkOnQuerylessTemplate() {
         RestClient.Builder builder = RestClient.builder();
@@ -198,7 +280,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[],\"truncated\":false,\"limit\":100}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getTechnicianLaborAnalytics("2026-06");
+        String result = tool.getTechnicianLaborAnalytics("2026-06", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty().contains("\"truncated\":false");
@@ -213,7 +295,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getTechnicianLaborAnalytics("2026");
+        String result = tool.getTechnicianLaborAnalytics("2026", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -222,10 +304,49 @@ class WorkorderFacadeToolTest {
     @Test
     @DisplayName("getTechnicianLaborAnalytics rejects an unsupported period form without issuing a request")
     void getTechnicianLaborAnalytics_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("Q2-2026"))
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("Q2-2026", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics takes a startDate/endDate window spanning more than one "
+            + "calendar month in a single call")
+    void getTechnicianLaborAnalytics_takesExplicitDateRangeSpanningMultipleMonths() {
+        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2025-07-01", "endDate", "2026-06-30"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getTechnicianLaborAnalytics(null, "2025-07-01", "2026-06-30");
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "getTechnicianLaborAnalytics rejects period together with startDate/endDate without issuing " + "a request")
+    void getTechnicianLaborAnalytics_rejectsPeriodTogetherWithDateRange() {
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("2026-06", "2025-07-01", "2026-06-30"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("period")
+                .hasMessageContaining("startDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getTechnicianLaborAnalytics rejects an inverted startDate/endDate without issuing a request")
+    void getTechnicianLaborAnalytics_rejectsInvertedDateRange() {
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics(null, "2026-06-30", "2026-06-01"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("startDate")
+                .hasMessageContaining("endDate");
 
         mockServer.verify();
     }

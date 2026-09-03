@@ -219,7 +219,7 @@ Monthly bills, bill day 10, paid in full day 25 the same month (`ap_payment`
 GL_POSTED + one `ap_payment_allocation`; bill status PAID):
 
 - **V1 Evergreen**: 1000.00/mo through 2026-02, **1120.00/mo from 2026-03** →
-  avgBillAmount Mar–Aug 2026 = 1120 vs Mar–Aug 2025 = 1000 = **+12.0% YoY (Q17)**.
+  avgIssuedBillAmount Mar–Aug 2026 = 1120 vs Mar–Aug 2025 = 1000 = **+12.0% YoY (Q17)**.
 - **V2 Cascade**: 2000.00/mo — top vendor by paid spend in every window (Q15).
 - **V3 Summit**: 400.00/mo.
 
