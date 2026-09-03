@@ -332,6 +332,15 @@ InvoiceFacadeTool.getRevenueByCustomer:
   # W2.3 facade promotion (#1601, E1). The tool maps its period argument (YYYY-MM or YYYY) onto
   # the date range via ReportingPeriods.
 
+InvoiceFacadeTool.getInvoicingLag:
+  verb: GET
+  baseUrlProperty: pos.invoice.base-url
+  templateProperty: pos.invoice.invoicing-lag-uri-template
+  template: "/invoice/v1/invoices/analytics/invoicing-lag?startDate={startDate}&endDate={endDate}"
+  route: invoice
+  downstreamPath: "/v1/invoices/analytics/invoicing-lag?startDate={}&endDate={}"
+  # W2 E4 facade promotion (#1660). startDate/endDate are ISO dates passed straight through.
+
 LocationFacadeTool.getLocation:
   verb: GET
   baseUrlProperty: pos.location.base-url

@@ -285,6 +285,8 @@ or similarity floors.
 | `mcp.tuning.cron`                          | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                             |
 | `mcp.model.fallback.enabled`               | `MCP_MODEL_FALLBACK_ENABLED`                | Primary → secondary model fallback                                                        |
 | `mcp.discovery.aggregate-spec-url`         | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                             |
+| `pos.tools.http.connect-timeout`           | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)             |
+| `pos.tools.http.read-timeout`              | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660) |
 | Exa web search                             | `EXA_API_KEY`                               | External web-search API key                                                               |
 | DB connection                              | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD`       | PostgreSQL + pgvector                                                                     |
 

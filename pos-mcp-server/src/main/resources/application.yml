@@ -424,6 +424,8 @@ pos:
     customer-invoices-uri-template: ${POS_INVOICE_CUSTOMER_INVOICES_URI_TEMPLATE:/invoice/v1/invoices/items/search?partyId={customerId}}
     # W2.3 facade promotion (#1601, E1): per-customer revenue for one date window.
     revenue-by-customer-uri-template: ${POS_INVOICE_REVENUE_BY_CUSTOMER_URI_TEMPLATE:/invoice/v1/invoices/analytics/revenue-by-customer?startDate={startDate}&endDate={endDate}}
+    # W2 E4 (#1660): workorder-creation-to-invoice lag for one date window.
+    invoicing-lag-uri-template: ${POS_INVOICE_INVOICING_LAG_URI_TEMPLATE:/invoice/v1/invoices/analytics/invoicing-lag?startDate={startDate}&endDate={endDate}}
   nlti:
     session:
       ttl-hours: 24
@@ -525,6 +527,13 @@ pos:
     status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
     # W2.3 facade promotion (#1601, E5): per-technician labor/revenue for one date window.
     technician-labor-uri-template: ${POS_WORKORDER_TECHNICIAN_LABOR_URI_TEMPLATE:/workorder/v1/workorders/analytics/technician-labor?startDate={startDate}&endDate={endDate}}
+  tools:
+    http:
+      # #1660: the facade RestClient (loadBalancedRestClientBuilder) previously carried no
+      # connect/read timeout, so a stalled downstream held the whole chat turn until something
+      # else gave up. 30s sits well above the 6.6-13.5s whole-turn times the gate measured.
+      connect-timeout: ${POS_TOOLS_HTTP_CONNECT_TIMEOUT:2s}
+      read-timeout: ${POS_TOOLS_HTTP_READ_TIMEOUT:30s}
   show-actuator: true
 
 logging:

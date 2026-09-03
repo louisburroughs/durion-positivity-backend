@@ -5,10 +5,15 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.time.Duration;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -57,6 +62,44 @@ class McpServerConfigurationTest {
                     .toBodilessEntity();
 
             server.verify();
+        });
+    }
+
+    @Test
+    @DisplayName("loadBalancedRestClientBuilder carries a request factory bound to ToolHttpProperties (#1660)")
+    void loadBalancedRestClientBuilder_appliesConfiguredConnectAndReadTimeouts() {
+        contextRunner
+                .withPropertyValues("pos.tools.http.connect-timeout=1500ms", "pos.tools.http.read-timeout=20s")
+                .run(context -> {
+                    RestClient.Builder loadBalancedBuilder =
+                            context.getBean("loadBalancedRestClientBuilder", RestClient.Builder.class);
+
+                    ClientHttpRequestFactory requestFactory = (ClientHttpRequestFactory)
+                            ReflectionTestUtils.getField(loadBalancedBuilder, "requestFactory");
+
+                    assertThat(requestFactory).isInstanceOf(SimpleClientHttpRequestFactory.class);
+                    assertThat((Integer) ReflectionTestUtils.getField(requestFactory, "connectTimeout"))
+                            .isEqualTo((int) Duration.ofMillis(1500).toMillis());
+                    assertThat((Integer) ReflectionTestUtils.getField(requestFactory, "readTimeout"))
+                            .isEqualTo((int) Duration.ofSeconds(20).toMillis());
+                });
+    }
+
+    @Test
+    @DisplayName("loadBalancedRestClientBuilder defaults to 2s connect / 30s read when unconfigured (#1660)")
+    void loadBalancedRestClientBuilder_defaultsToTwoAndThirtySeconds() {
+        contextRunner.run(context -> {
+            RestClient.Builder loadBalancedBuilder =
+                    context.getBean("loadBalancedRestClientBuilder", RestClient.Builder.class);
+
+            ClientHttpRequestFactory requestFactory =
+                    (ClientHttpRequestFactory) ReflectionTestUtils.getField(loadBalancedBuilder, "requestFactory");
+
+            assertThat(requestFactory).isInstanceOf(SimpleClientHttpRequestFactory.class);
+            assertThat((Integer) ReflectionTestUtils.getField(requestFactory, "connectTimeout"))
+                    .isEqualTo((int) Duration.ofSeconds(2).toMillis());
+            assertThat((Integer) ReflectionTestUtils.getField(requestFactory, "readTimeout"))
+                    .isEqualTo((int) Duration.ofSeconds(30).toMillis());
         });
     }
 }

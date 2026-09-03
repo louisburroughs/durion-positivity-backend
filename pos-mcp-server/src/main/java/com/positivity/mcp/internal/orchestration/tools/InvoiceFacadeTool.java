@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
@@ -27,6 +29,7 @@ public class InvoiceFacadeTool {
     private final String invoiceSearchUriTemplate;
     private final String customerInvoicesUriTemplate;
     private final String revenueByCustomerUriTemplate;
+    private final String invoicingLagUriTemplate;
     private final int customerInvoiceLineCap;
 
     public InvoiceFacadeTool(
@@ -36,6 +39,7 @@ public class InvoiceFacadeTool {
             @Value("${pos.invoice.search-uri-template}") @NonNull String invoiceSearchUriTemplate,
             @Value("${pos.invoice.customer-invoices-uri-template}") @NonNull String customerInvoicesUriTemplate,
             @Value("${pos.invoice.revenue-by-customer-uri-template}") @NonNull String revenueByCustomerUriTemplate,
+            @Value("${pos.invoice.invoicing-lag-uri-template}") @NonNull String invoicingLagUriTemplate,
             @Value("${pos.invoice.customer-invoice-line-cap:" + CUSTOMER_INVOICE_LINE_CAP + "}")
                     int customerInvoiceLineCap) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
@@ -43,6 +47,7 @@ public class InvoiceFacadeTool {
         this.invoiceSearchUriTemplate = invoiceSearchUriTemplate;
         this.customerInvoicesUriTemplate = customerInvoicesUriTemplate;
         this.revenueByCustomerUriTemplate = revenueByCustomerUriTemplate;
+        this.invoicingLagUriTemplate = invoicingLagUriTemplate;
         this.customerInvoiceLineCap = customerInvoiceLineCap;
     }
 
@@ -156,5 +161,52 @@ public class InvoiceFacadeTool {
                 .uri(revenueByCustomerUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
                 .retrieve()
                 .body(String.class);
+    }
+
+    @Tool(
+            description = "Get the average number of days from workorder creation to invoice creation for one "
+                    + "date window (W2 E4, #1660). startDate and endDate are ISO dates in YYYY-MM-DD form, "
+                    + "inclusive on both ends — get them from resolveDateWindow rather than computing them "
+                    + "yourself. Returns a SINGLE aggregate for the whole window: avgDaysWoCreationToInvoice "
+                    + "(null when count is 0 — an average of nothing is undefined, not zero) and count (the "
+                    + "number of qualifying invoices the average is computed over, so a thin window reads as "
+                    + "thin rather than as a trend swing). There is no groupBy here — a by-month answer is not "
+                    + "a single call; loop this tool once per month (or once per period) and assemble the "
+                    + "series yourself, the same pattern as getRevenueByCustomer and getVendorSpend. An invoice "
+                    + "with no linked workorder, or whose linked workorder's creation timestamp has not "
+                    + "replicated yet, is excluded from both the average and the count, never counted as zero "
+                    + "lag. Use this for workorder-to-invoice throughput/timing questions; use "
+                    + "getRevenueByCustomer instead for revenue amounts.")
+    public String getInvoicingLag(
+            @ToolParam(description = "Window start date, YYYY-MM-DD, inclusive") @NonNull String startDate,
+            @ToolParam(description = "Window end date, YYYY-MM-DD, inclusive") @NonNull String endDate) {
+        return restClient
+                .get()
+                .uri(
+                        invoicingLagUriTemplate,
+                        Map.of(
+                                "startDate",
+                                validatedDate("startDate", startDate),
+                                "endDate",
+                                validatedDate("endDate", endDate)))
+                .retrieve()
+                .body(String.class);
+    }
+
+    /**
+     * Validates an LLM-supplied date argument is a real ISO date before any request is built;
+     * anything else is rejected with a message stating the accepted form so the model can
+     * self-correct (mirrors {@code AccountingFacadeTool#validatedAsOfDate}).
+     */
+    private static @NonNull String validatedDate(@NonNull String paramName, @NonNull String value) {
+        String trimmed = value.trim();
+        try {
+            LocalDate.parse(trimmed);
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form (e.g. 2026-06-30)",
+                    exception);
+        }
+        return trimmed;
     }
 }

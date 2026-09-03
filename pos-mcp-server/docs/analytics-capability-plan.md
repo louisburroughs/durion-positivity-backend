@@ -228,6 +228,11 @@ Wave 3's `groupBy`.
 | E12 | pos-workorder | WO search: add `status`, `createdFrom`, `createdTo`, `technicianId` params | — | existing `Page<WorkorderSearchResult>` | Q5 full, retires G3 remainder |
 | E13 | *deferred to Wave 3* | `…/analytics/customer-margin` | startDate, endDate | customerId, revenue, partsCost, laborCost, grossMargin | Q6 — **moved out of Wave 2 by D2** (5-domain problem: true parts cost lives in pos-inventory) |
 
+**E4 promoted to a facade (#1660, V44).** W2.3 originally promoted only E1/E5/E8, leaving E4
+discovery-only; with no facade to reach, Q4 fell into `searchInvoices` (a free-text lookup with no
+work-order-creation timestamp) and could not answer the question at all. `InvoiceFacadeTool` now
+carries `getInvoicingLag(startDate, endDate)` alongside `getRevenueByCustomer`.
+
 ### W2.2 Cross-cutting requirements (every endpoint)
 
 - `@EmitEvent` with a new event id per endpoint, registered in the module's `{Module}EventTypes`
