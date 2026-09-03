@@ -194,6 +194,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -400,6 +401,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -442,6 +444,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -509,6 +512,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -562,6 +566,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -631,6 +636,7 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 openApiToolProvider,
                 requestContext,
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,

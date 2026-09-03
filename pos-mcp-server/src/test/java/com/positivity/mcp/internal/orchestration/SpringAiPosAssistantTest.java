@@ -13,6 +13,10 @@ import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.LadderResult;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.Rung;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,6 +60,7 @@ class SpringAiPosAssistantTest {
                 ragRetriever,
                 ignored -> chatMemory,
                 openApiToolProvider,
+                null,
                 null,
                 null,
                 null);
@@ -128,6 +133,7 @@ class SpringAiPosAssistantTest {
                 openApiToolProvider,
                 null,
                 null,
+                null,
                 null);
 
         assistant.chat("user-1::ROLE_TECH", "PO number format", "ctx:role=TECH");
@@ -191,6 +197,7 @@ class SpringAiPosAssistantTest {
                 null,
                 ladder,
                 null,
+                null,
                 null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
@@ -223,6 +230,7 @@ class SpringAiPosAssistantTest {
                 ignored -> chatMemory,
                 null,
                 ladder,
+                null,
                 null,
                 null);
 
@@ -268,6 +276,7 @@ class SpringAiPosAssistantTest {
                 ignored -> chatMemory,
                 null,
                 ladder,
+                null,
                 null,
                 null);
 
@@ -356,10 +365,93 @@ class SpringAiPosAssistantTest {
                 null,
                 ladder,
                 null,
+                null,
                 null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "show open invoices", "ctx");
 
         assertThat(response).isEqualTo("View them here — Invoices: /invoices");
+    }
+
+    // ─── ChatClient observability (#1655) ───────────────────────────────────
+
+    /** Collects observation names so a NOOP registry is distinguishable from a live one. */
+    private static ObservationRegistry recordingRegistry(List<String> sink) {
+        ObservationRegistry registry = ObservationRegistry.create();
+        registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            @Override
+            public boolean supportsContext(Observation.Context context) {
+                return true;
+            }
+
+            @Override
+            public void onStart(Observation.Context context) {
+                sink.add(context.getName());
+            }
+        });
+        return registry;
+    }
+
+    /**
+     * The defect: {@code ChatClient.builder(chatModel)} hardcodes {@code ObservationRegistry.NOOP},
+     * so the chat-client and per-advisor observations were silently dropped. Model-level metrics
+     * survived it — the Ollama bean carries its own registry — which is why the gap was invisible
+     * from the metrics that did appear.
+     */
+    @Test
+    void chat_emitsChatClientObservationsIntoTheSuppliedRegistry() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("m").build());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("answer"));
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        List<String> observed = new ArrayList<>();
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                recordingRegistry(observed));
+
+        assistant.chat("user-1::ROLE_ADMIN", "hello", "ctx");
+
+        assertThat(observed).isNotEmpty();
+        assertThat(observed).contains("spring.ai.chat.client");
+    }
+
+    /** A null registry must degrade to NOOP rather than fail the chat path. */
+    @Test
+    void chat_withoutARegistry_stillAnswers() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("m").build());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("answer"));
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        assertThat(assistant.chat("user-1::ROLE_ADMIN", "hello", "ctx")).isEqualTo("answer");
     }
 }

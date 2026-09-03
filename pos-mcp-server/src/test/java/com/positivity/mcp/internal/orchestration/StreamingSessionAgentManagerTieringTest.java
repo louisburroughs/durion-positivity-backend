@@ -193,6 +193,7 @@ class StreamingSessionAgentManagerTieringTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,

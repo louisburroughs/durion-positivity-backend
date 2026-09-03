@@ -29,6 +29,7 @@ import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -95,6 +96,9 @@ public class StreamingSessionAgentManager
     @Nullable
     private final RequestScopedUserContext requestScopedUserContext;
 
+    /** #1655: passed to the tool-calling ChatClient so advisor observations are emitted. */
+    private final @Nullable ObservationRegistry observationRegistry;
+
     @Nullable
     private final RoleDefaultPermissionsClient roleDefaultPermissionsClient;
 
@@ -130,6 +134,7 @@ public class StreamingSessionAgentManager
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable ObservationRegistry observationRegistry,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @Nullable ToolInvocationRecorder toolInvocationRecorder,
             @NonNull NltiWorkflowStateService workflowStateService,
@@ -154,6 +159,7 @@ public class StreamingSessionAgentManager
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.observationRegistry = observationRegistry;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.toolInvocationRecorder = toolInvocationRecorder;
         this.workflowStateService = workflowStateService;
@@ -513,7 +519,8 @@ public class StreamingSessionAgentManager
                 this::chatMemoryFor,
                 openApiToolProvider,
                 toolInvocationRecorder,
-                requestScopedUserContext);
+                requestScopedUserContext,
+                observationRegistry);
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,
