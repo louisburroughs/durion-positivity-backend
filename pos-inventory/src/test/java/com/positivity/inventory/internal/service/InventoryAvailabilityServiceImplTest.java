@@ -10,11 +10,14 @@ import static org.mockito.Mockito.when;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
+import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +51,9 @@ class InventoryAvailabilityServiceImplTest {
     private com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository
             storageLocationReplicaRepository;
 
+    @Mock
+    private LocationRefRepository locationRefRepository;
+
     private InventoryAvailabilityServiceImpl service;
 
     @BeforeEach
@@ -61,6 +67,11 @@ class InventoryAvailabilityServiceImplTest {
         Mockito.lenient()
                 .when(storageLocationReplicaRepository.findById(Mockito.any()))
                 .thenReturn(java.util.Optional.empty());
+        // Default: no location_ref rows seeded; tests that assert on locationName stub this
+        // explicitly. Empty is the "unknown location / replica lag" case (issue #1680).
+        Mockito.lenient()
+                .when(locationRefRepository.findByLocationIdIn(Mockito.any()))
+                .thenReturn(List.of());
         service = new InventoryAvailabilityServiceImpl(
                 stockSummaryRepository,
                 inventoryLedgerEntryRepository,
@@ -69,6 +80,7 @@ class InventoryAvailabilityServiceImplTest {
                 new com.positivity.inventory.internal.service.ForecastSiteResolver(storageLocationReplicaRepository),
                 new com.positivity.inventory.internal.service.QuantityScaleGuard(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                locationRefRepository,
                 java.time.Clock.systemUTC());
     }
 
@@ -314,6 +326,99 @@ class InventoryAvailabilityServiceImplTest {
         // Existing field semantics unchanged.
         assertThat(result.getOnHandQuantity()).isEqualByComparingTo("10");
         assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("8");
+    }
+
+    // ─── locationName resolution (issue #1680) ─────────────────────────────────
+
+    private LocationRefEntity locationRef(UUID locationId, String name) {
+        return LocationRefEntity.builder().locationId(locationId).name(name).build();
+    }
+
+    @Test
+    void getAvailabilityByProduct_resolvesLocationNameFromReplica() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(summary(productId.toString(), LOC_1, 5, 0, 0)));
+        when(locationRefRepository.findByLocationIdIn(List.of(LOC_1)))
+                .thenReturn(List.of(locationRef(LOC_1, "Main Warehouse")));
+
+        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getLocationName()).isEqualTo("Main Warehouse");
+        assertThat(result.getFirst().getLocationName()).isNotEqualTo(LOC_1.toString());
+    }
+
+    @Test
+    void getAvailabilityByProduct_leavesLocationNameNullWhenReplicaHasNoRow() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(summary(productId.toString(), LOC_1, 5, 0, 0)));
+        // locationRefRepository default stub returns an empty list: replica lag / unknown location.
+
+        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getLocationName()).isNull();
+    }
+
+    @Test
+    void getAvailabilityByProduct_resolvesLocationNamesWithOneBatchLookup() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(stockSummaryRepository.findByStockItemId(productId.toString()))
+                .thenReturn(List.of(
+                        summary(productId.toString(), LOC_1, 10, 0, 0),
+                        summary(productId.toString(), LOC_2, 20, 0, 0)));
+        when(locationRefRepository.findByLocationIdIn(any()))
+                .thenReturn(List.of(locationRef(LOC_1, "Warehouse A"), locationRef(LOC_2, "Warehouse B")));
+
+        List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getLocationName()).isEqualTo("Warehouse A");
+        assertThat(result.get(1).getLocationName()).isEqualTo("Warehouse B");
+        verify(locationRefRepository, Mockito.times(1)).findByLocationIdIn(any());
+        verify(locationRefRepository, Mockito.never()).findByLocationId(any());
+    }
+
+    @Test
+    void getAvailabilityByProductAsOf_resolvesLocationNameFromReplica() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Instant asOf = Instant.parse("2026-01-01T00:00:00Z");
+        InventoryLedgerEntryRepository.LocationQuantity row =
+                Mockito.mock(InventoryLedgerEntryRepository.LocationQuantity.class);
+        when(row.getLocationId()).thenReturn(LOC_1);
+        when(row.getQuantity()).thenReturn(new BigDecimal("7"));
+        when(inventoryLedgerEntryRepository.sumQuantityByLocationForStockItemAsOf(
+                        eq(productId.toString()), any(), eq(asOf)))
+                .thenReturn(List.of(row));
+        when(locationRefRepository.findByLocationIdIn(List.of(LOC_1)))
+                .thenReturn(List.of(locationRef(LOC_1, "Main Warehouse")));
+
+        List<LocationAvailabilityDto> result = service.getAvailabilityByProductAsOf(productId, asOf);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getLocationName()).isEqualTo("Main Warehouse");
+        assertThat(result.getFirst().getLocationName()).isNotEqualTo(LOC_1.toString());
+    }
+
+    @Test
+    void getAvailabilityByProductAsOf_leavesLocationNameNullWhenReplicaHasNoRow() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Instant asOf = Instant.parse("2026-01-01T00:00:00Z");
+        InventoryLedgerEntryRepository.LocationQuantity row =
+                Mockito.mock(InventoryLedgerEntryRepository.LocationQuantity.class);
+        when(row.getLocationId()).thenReturn(LOC_1);
+        when(row.getQuantity()).thenReturn(new BigDecimal("7"));
+        when(inventoryLedgerEntryRepository.sumQuantityByLocationForStockItemAsOf(
+                        eq(productId.toString()), any(), eq(asOf)))
+                .thenReturn(List.of(row));
+        // locationRefRepository default stub returns an empty list: replica lag / unknown location.
+
+        List<LocationAvailabilityDto> result = service.getAvailabilityByProductAsOf(productId, asOf);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getLocationName()).isNull();
     }
 
     private InventoryStockSummary summary(

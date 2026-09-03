@@ -36,6 +36,13 @@ public class CycleCountPlanResponse {
     private UUID locationId;
 
     @Schema(
+            description = "Human-readable name of the location the plan applies to; null when the "
+                    + "location replica has no matching row (e.g. replica lag or unknown location)",
+            example = "Main Warehouse",
+            requiredMode = NOT_REQUIRED)
+    private String locationName;
+
+    @Schema(
             description = "Identifiers of the zones within the location covered by the plan",
             example = "[\"01960003-0000-7000-8000-000000000003\"]",
             requiredMode = NOT_REQUIRED)
