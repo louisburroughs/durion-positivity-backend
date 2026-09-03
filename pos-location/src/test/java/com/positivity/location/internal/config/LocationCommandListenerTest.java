@@ -29,12 +29,13 @@ class LocationCommandListenerTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-07-13T12:00:00Z"), ZoneOffset.UTC);
 
     private final OutboxReplayService replayService = mock(OutboxReplayService.class);
+    private final FactBackfillService factBackfillService = mock(FactBackfillService.class);
 
     private LocationCommandListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new LocationCommandListener(TEST_CLOCK, new ObjectMapper(), replayService);
+        listener = new LocationCommandListener(TEST_CLOCK, new ObjectMapper(), replayService, factBackfillService);
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 
@@ -92,5 +93,62 @@ class LocationCommandListenerTest {
 
         assertThatExceptionOfType(QueryTimeoutException.class)
                 .isThrownBy(() -> listener.onCommand(replayCommand("2026-07-13T10:00:00Z", "2026-07-13T11:00:00Z")));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Fact backfill command (issue #1668)
+    // ---------------------------------------------------------------------------------------
+
+    private String backfillCommand(String aggregate) {
+        return aggregate == null ? "{\"commandType\":\"location.fact-backfill.requested\"}" : """
+                {"commandType":"location.fact-backfill.requested",
+                 "payload":{"aggregate":"%s"}}
+                """.formatted(aggregate);
+    }
+
+    @Test
+    @DisplayName("#1668 backfill command with no aggregate selector seeds both replicas")
+    void backfillDefaultsToAll() {
+        listener.onCommand(backfillCommand(null));
+
+        verify(factBackfillService).backfillBays();
+        verify(factBackfillService).backfillMobileUnits();
+    }
+
+    @Test
+    @DisplayName("#1668 backfill command scoped to one aggregate leaves the other alone")
+    void backfillScopedToOneAggregate() {
+        listener.onCommand(backfillCommand("bay"));
+
+        verify(factBackfillService).backfillBays();
+        verify(factBackfillService, never()).backfillMobileUnits();
+    }
+
+    @Test
+    @DisplayName("#1668 backfill command accepts the mobile-unit selector by its dotted contract name")
+    void backfillMobileUnitOnly() {
+        listener.onCommand(backfillCommand("mobile-unit"));
+
+        verify(factBackfillService).backfillMobileUnits();
+        verify(factBackfillService, never()).backfillBays();
+    }
+
+    @Test
+    @DisplayName("#1668 an unsupported aggregate selector backfills nothing rather than everything")
+    void backfillRejectsUnknownAggregate() {
+        // A typo must not silently re-emit every fact the module owns.
+        listener.onCommand(backfillCommand("bays"));
+
+        verify(factBackfillService, never()).backfillBays();
+        verify(factBackfillService, never()).backfillMobileUnits();
+    }
+
+    @Test
+    @DisplayName("#1668 backfill is not triggered by an unrelated command type")
+    void backfillIgnoresOtherCommands() {
+        listener.onCommand(replayCommand("2026-07-13T00:00:00Z", "2026-07-13T06:00:00Z"));
+
+        verify(factBackfillService, never()).backfillBays();
+        verify(factBackfillService, never()).backfillMobileUnits();
     }
 }

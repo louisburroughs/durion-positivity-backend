@@ -77,6 +77,10 @@ class MobileUnitServiceTest {
     @Mock
     private LocationRepository locationRepository;
 
+    /** Mobile unit mutations publish location.mobile-unit.updated (issue #1668). */
+    @Mock
+    private LocationFactPublisher locationFactPublisher;
+
     @InjectMocks
     private MobileUnitServiceImpl service;
 
@@ -357,6 +361,8 @@ class MobileUnitServiceTest {
         assertThat(patched.getName()).isEqualTo("New");
         assertThat(patched.getStatus()).isEqualTo("ACTIVE");
         assertThat(patched.getNotes()).isEqualTo("updated");
+        // The status transition must reach consumers as a fact (issue #1668).
+        verify(locationFactPublisher).mobileUnitChanged(existing);
     }
 
     @Test
@@ -370,6 +376,9 @@ class MobileUnitServiceTest {
         assertThat(patched.getId()).isEqualTo(id);
         assertThat(patched.getName()).isEqualTo("Ghost");
         verify(mobileUnitRepository, never()).save(any(MobileUnitEntity.class));
+        // The synthesized response persists nothing, so publishing here would create a replica row
+        // for a unit the owner has no record of (issue #1668).
+        verify(locationFactPublisher, never()).mobileUnitChanged(any());
     }
 
     @Test

@@ -72,6 +72,10 @@ class BayServiceTest {
     @Mock
     ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
 
+    /** Bay mutations publish location.bay.updated (issue #1668). */
+    @Mock
+    LocationFactPublisher locationFactPublisher;
+
     @InjectMocks
     BayServiceImpl bayService;
 
@@ -795,5 +799,30 @@ class BayServiceTest {
         assertThatCode(() -> Class.forName(className))
                 .as("Missing bay contract artifact for %s", purpose)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("#1668 - taking a bay out of service publishes the status change as a fact")
+    void patchBayStatusPublishesFact() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+        BayEntity existing = BayEntity.builder()
+                .id(bayId)
+                .name("Front Bay 1")
+                .bayType("SERVICE")
+                .status("ACTIVE")
+                .maxConcurrentVehicles(1)
+                .build();
+        when(locationRepository.existsById(locationId)).thenReturn(true);
+        when(bayRepository.findByIdAndLocationId(bayId, locationId)).thenReturn(Optional.of(existing));
+        when(bayRepository.save(existing)).thenReturn(existing);
+
+        BayPatchRequest patch =
+                BayPatchRequest.builder().status("OUT_OF_SERVICE").build();
+        bayService.patchBay(locationId, bayId, patch);
+
+        // A bay taken out of service keeps its replica row and flips inactive; consumers derive
+        // that from the raw status, so the fact must be published (issue #1668).
+        verify(locationFactPublisher).bayChanged(existing);
     }
 }

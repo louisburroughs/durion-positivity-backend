@@ -63,6 +63,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     protected final TravelBufferPolicyRepository travelBufferPolicyRepository;
     protected final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
     protected final LocationRepository locationRepository;
+    protected final LocationFactPublisher locationFactPublisher;
 
     public MobileUnitServiceImpl(
             MobileUnitRepository mobileUnitRepository,
@@ -71,6 +72,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             TravelBufferPolicyRepository travelBufferPolicyRepository,
             ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
             LocationRepository locationRepository,
+            LocationFactPublisher locationFactPublisher,
             Clock clock) {
         this.clock = clock;
         this.mobileUnitRepository = mobileUnitRepository;
@@ -79,6 +81,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         this.travelBufferPolicyRepository = travelBufferPolicyRepository;
         this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
         this.locationRepository = locationRepository;
+        this.locationFactPublisher = locationFactPublisher;
     }
 
     /**
@@ -120,6 +123,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (!coverageRules.isEmpty()) {
             replaceCoverageRulesInternal(persisted.getId(), coverageRules);
         }
+        // Published once, after the coverage rules land, so a create-with-rules emits a single
+        // fact rather than one per write. Coverage rules are not part of the published payload —
+        // replacing them alone therefore emits nothing (issue #1668). Bulk ingest reaches this
+        // method one row per transaction, so it is covered here too.
+        locationFactPublisher.mobileUnitChanged(persisted);
         return toMobileUnitResponse(persisted);
     }
 
@@ -297,6 +305,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         } catch (DataIntegrityViolationException exception) {
             throw toMobileUnitConflictException(exception);
         }
+        // Only reached when the row existed: the early return above synthesizes a response without
+        // persisting anything, and publishing a fact for a unit that was never written would create
+        // a replica row the owner has no record of (issue #1668). Status transitions
+        // (ACTIVE <-> INACTIVE) travel on this fact and keep the replica row.
+        locationFactPublisher.mobileUnitChanged(saved);
         return toMobileUnitResponse(saved);
     }
 

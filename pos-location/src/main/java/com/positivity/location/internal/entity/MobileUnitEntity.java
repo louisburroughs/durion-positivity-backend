@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
@@ -75,6 +76,18 @@ public class MobileUnitEntity {
     @CollectionTable(name = "mobile_unit_capabilities", joinColumns = @JoinColumn(name = "mobile_unit_id"))
     @Column(name = "service_capability_id", columnDefinition = "UUID")
     private Set<UUID> capabilityIds = new HashSet<>();
+
+    /**
+     * Aggregate version backing the {@code location.mobile-unit.*} facts'
+     * {@code aggregateVersion} (issue #1668, contract established in #1486). Strictly increments
+     * on every committed mutation, so two changes landing in the same millisecond can never tie
+     * and a consumer's stale guard stays sound. {@code LocationFactPublisher} flushes before
+     * reading it so the emitted fact carries the version the row is about to commit as. Seeded to
+     * 0 by migration V9.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     @CreatedDate
     @Column(name = "created_at")

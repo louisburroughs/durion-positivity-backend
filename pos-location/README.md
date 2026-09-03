@@ -94,12 +94,69 @@ re-queues already-serialized outbox rows, so it cannot carry a field those rows 
 the capability with a PATCH is what publishes a fresh fact. See `docs/OPERATIONS_RUNBOOK.md` →
 "Issue #1514: rehydrating the putaway replica columns".
 
+## Published facts: bays and mobile units
+
+pos-location is the system of record for bays and mobile units, and publishes their lifecycle on the
+existing `location.events.v1` topic (issue #1668, ADR-0044 §6):
+
+| Event type                     | Payload                                             | When |
+| ------------------------------ | --------------------------------------------------- | ---- |
+| `location.bay.updated`         | `bayId`, `locationId`, `name`, `bayType`, `status`  | bay created or changed, including a status change |
+| `location.bay.deleted`         | `bayId`                                             | bay hard-deleted |
+| `location.mobile-unit.updated` | `mobileUnitId`, `baseLocationId`, `name`, `status`  | unit created or changed, including a re-base |
+| `location.mobile-unit.deleted` | `mobileUnitId`                                      | unit hard-deleted |
+
+Records live in `pos-domain-events` (`com.positivity.domainevents.location`). Consumers —
+pos-workorder's dispatch board and pos-shop-manager's unit roster — hold `ext_bay` /
+`ext_mobile_unit` replicas fed only by these facts.
+
+**`status` is the raw lifecycle string, never a derived `active` boolean.** `BayEntity.status` is
+`ACTIVE` | `OUT_OF_SERVICE`; `MobileUnitEntity.status` is written only as `ACTIVE` | `INACTIVE`.
+Consumers derive activeness themselves with an allow-list on `ACTIVE`, so an unrecognised status
+reads as inactive rather than as an error. Taking a unit out of service is a status change on the
+`updated` fact — the replica keeps the row and flips it inactive; only a `deleted` fact removes it.
+
+**The site scope rides every `updated` emission**, not only the mutation that changed it, because
+consumers rebuild the whole replica row from the payload. Note the deliberate asymmetry: a bay names
+`locationId`, a mobile unit names `baseLocationId` (mirroring the owner's own columns), and neither
+is `siteId` — the name the sibling `StorageLocationUpdatedV1` fact uses. pos-workorder rejects a
+payload with no site scope rather than writing a row its roster query could never return.
+
+A **re-based** mobile unit travels on an ordinary `updated` fact naming the new site; because
+consumers scope rosters by that column, the unit leaves the old site's roster and joins the new one.
+A re-base is never expressed as `deleted` + `updated`: the tombstone path is an unguarded delete, so
+an out-of-order pair could drop or resurrect the row.
+
+`bays` and `mobile_units` each gained a `version` column in **V9**, seeded to 0. It backs the
+envelope's `aggregateVersion`, which strictly advances per committed mutation so a consumer's stale
+guard is sound (#1486). Tombstones publish at `version + 1` — one past every fact the aggregate has
+published — because consumers delete without consulting a version.
+
+### Backfilling existing bays and mobile units
+
+`location.outbox.replay-requested` **cannot** seed these replicas: it re-queues rows already in
+`event_outbox`, and every bay and mobile unit that existed before #1668 has no outbox history. A
+forward-only stream would leave those units permanently invisible.
+
+Use the regenerate-from-state command on `location.commands.v1` instead:
+
+```json
+{"commandType": "location.fact-backfill.requested", "payload": {"aggregate": "all"}}
+```
+
+`payload.aggregate` accepts `bay`, `mobile-unit`, or `all` (the default when omitted); an
+unrecognised value backfills nothing rather than everything. The run pages through the owner's
+tables (`pos.location.fact-backfill.page-size`, default 500), one transaction per page, and is
+idempotent — a replica applies an equal version and skips only a strictly-greater one, so re-running
+repairs a stale replica without duplicating rows.
+
 ## Configuration
 
 | Property                | Default  | Description                  |
 | ----------------------- | -------- | ---------------------------- |
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| `pos.location.fact-backfill.page-size` | `500` | Rows per transaction when backfilling bay/mobile-unit facts |
 
 ## Dependencies
 

@@ -42,14 +42,17 @@ public class BayServiceImpl implements BayService {
     private final BayRepository bayRepository;
     private final LocationRepository locationRepository;
     private final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    private final LocationFactPublisher locationFactPublisher;
 
     public BayServiceImpl(
             BayRepository bayRepository,
             LocationRepository locationRepository,
-            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository) {
+            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
+            LocationFactPublisher locationFactPublisher) {
         this.bayRepository = bayRepository;
         this.locationRepository = locationRepository;
         this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
+        this.locationFactPublisher = locationFactPublisher;
     }
 
     public BayResponse createBay(UUID locationId, BayRequest request) {
@@ -87,7 +90,11 @@ public class BayServiceImpl implements BayService {
                 .build();
 
         try {
-            return toResponse(bayRepository.save(entity));
+            BayEntity saved = bayRepository.save(entity);
+            // Bulk ingest creates one bay per row through this same method, each in its own
+            // transaction, so it emits a fact per created row for free (issue #1668).
+            locationFactPublisher.bayChanged(saved);
+            return toResponse(saved);
         } catch (DataIntegrityViolationException exception) {
             throw toBayConflictException(exception);
         }
@@ -168,7 +175,11 @@ public class BayServiceImpl implements BayService {
         }
 
         try {
-            return toResponse(bayRepository.save(existing));
+            BayEntity saved = bayRepository.save(existing);
+            // Status transitions (ACTIVE <-> OUT_OF_SERVICE) travel on this same fact; a bay taken
+            // out of service keeps its replica row and flips inactive (issue #1668).
+            locationFactPublisher.bayChanged(saved);
+            return toResponse(saved);
         } catch (DataIntegrityViolationException exception) {
             throw toBayConflictException(exception);
         }

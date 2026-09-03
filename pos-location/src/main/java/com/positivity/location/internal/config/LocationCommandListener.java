@@ -24,6 +24,11 @@ import tools.jackson.databind.ObjectMapper;
  * <li>{@code location.outbox.replay-requested} — consumer-initiated drift repair and replica
  * bootstrap: re-queues published outbox events created in the requested window for
  * re-publication; consumers dedupe by eventId so replay is idempotent.</li>
+ * <li>{@code location.fact-backfill.requested} — regenerate-from-state seeding for bay and
+ * mobile-unit replicas (issue #1668). Distinct from outbox replay, which can only re-send facts
+ * that were published at least once: bays and mobile units that existed before #1668 have no
+ * outbox history, so replay cannot reach them. {@code payload.aggregate} selects
+ * {@code bay}, {@code mobile-unit}, or {@code all} (the default).</li>
  * </ul>
  */
 @Slf4j
@@ -35,6 +40,13 @@ public class LocationCommandListener {
     /** Canonical dotted name normalized to command-type form: LOCATION_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "LOCATION_OUTBOX_REPLAY_REQUESTED";
 
+    /** Canonical dotted name normalized to command-type form: location.fact-backfill.requested. */
+    private static final String COMMAND_FACT_BACKFILL_REQUESTED = "LOCATION_FACT_BACKFILL_REQUESTED";
+
+    private static final String AGGREGATE_BAY = "bay";
+    private static final String AGGREGATE_MOBILE_UNIT = "mobile-unit";
+    private static final String AGGREGATE_ALL = "all";
+
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
@@ -45,6 +57,7 @@ public class LocationCommandListener {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final OutboxReplayService outboxReplayService;
+    private final FactBackfillService factBackfillService;
 
     @KafkaListener(
             topics = "${pos.location.kafka.commands-topic:location.commands.v1}",
@@ -63,6 +76,10 @@ public class LocationCommandListener {
 
             if (COMMAND_OUTBOX_REPLAY_REQUESTED.equals(commandType)) {
                 handleOutboxReplayRequested(root);
+                return;
+            }
+            if (COMMAND_FACT_BACKFILL_REQUESTED.equals(commandType)) {
+                handleFactBackfillRequested(root);
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
@@ -104,6 +121,46 @@ public class LocationCommandListener {
             queued = outboxReplayService.replaySince(since.minus(REPLAY_WINDOW_SLACK));
         }
         log.info("Outbox replay command processed since={} until={} eventsQueued={}", since, until, queued);
+    }
+
+    /**
+     * Re-emit current-state facts so a consumer starting from an empty replica converges.
+     *
+     * <p>Unbounded by design, unlike outbox replay's {@code max-lookback} guard: the whole point is
+     * to reach rows that predate the producer, so there is no time window that could contain them.
+     * The cost is bounded by the number of bays and mobile units the module owns, which is
+     * operationally small, and the operation is idempotent — a replica applies an equal version and
+     * skips a strictly-greater one, so re-running repairs without duplicating.
+     */
+    private void handleFactBackfillRequested(@NonNull JsonNode root) {
+        JsonNode payloadNode = root.get("payload");
+        String rawAggregate =
+                payloadNode == null ? null : payloadNode.path("aggregate").stringValue(null);
+        String aggregate = rawAggregate == null || rawAggregate.isBlank()
+                ? AGGREGATE_ALL
+                : rawAggregate.trim().toLowerCase(Locale.ROOT);
+
+        if (!AGGREGATE_ALL.equals(aggregate)
+                && !AGGREGATE_BAY.equals(aggregate)
+                && !AGGREGATE_MOBILE_UNIT.equals(aggregate)) {
+            // Unknown selector: a typo must not silently backfill everything.
+            log.warn("Ignoring fact backfill command with unsupported payload.aggregate={}", rawAggregate);
+            return;
+        }
+
+        int bays = 0;
+        int mobileUnits = 0;
+        if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_BAY.equals(aggregate)) {
+            bays = factBackfillService.backfillBays();
+        }
+        if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_MOBILE_UNIT.equals(aggregate)) {
+            mobileUnits = factBackfillService.backfillMobileUnits();
+        }
+        log.info(
+                "Fact backfill command processed aggregate={} bayFacts={} mobileUnitFacts={}",
+                aggregate,
+                bays,
+                mobileUnits);
     }
 
     private @Nullable Instant parseInstant(@Nullable JsonNode payloadNode, @NonNull String field) {
