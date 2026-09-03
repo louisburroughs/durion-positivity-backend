@@ -30,6 +30,15 @@
 -- concern, not a database invariant, and rows can predate this migration
 -- transiently while it runs.
 --
+-- received_at is timestamptz and to_char() would otherwise format it in the
+-- session's TimeZone GUC, which on an incremental deploy comes from server /
+-- role defaults (V1's `SET TIME ZONE 'UTC'` only bound V1's own session). The
+-- explicit `AT TIME ZONE 'UTC'` pins the month bucket to UTC so it matches
+-- EventIngestionServiceImpl.eventReferenceScopeKey's receivedAt.atZone(UTC);
+-- without it, an event received at e.g. 2026-10-01T00:30Z backfills as
+-- AE-202609 under a US session timezone while a same-instant event ingested
+-- after deploy would be numbered AE-202610.
+--
 -- PostgreSQL-only syntax (window functions, regex substring, ON CONFLICT):
 -- this module's test suite runs Flyway-generated schema only through
 -- Testcontainers PostgreSQL migration ITs (see AccountingPeriodBackfillIT);
@@ -44,9 +53,9 @@ ALTER TABLE accounting_event
 WITH numbered AS (
     SELECT
         event_id,
-        'AE-' || to_char(received_at, 'YYYYMM') || '-'
+        'AE-' || to_char(received_at AT TIME ZONE 'UTC', 'YYYYMM') || '-'
             || row_number() OVER (
-                PARTITION BY to_char(received_at, 'YYYYMM')
+                PARTITION BY to_char(received_at AT TIME ZONE 'UTC', 'YYYYMM')
                 ORDER BY received_at ASC, event_id ASC
             ) AS reference
     FROM accounting_event
