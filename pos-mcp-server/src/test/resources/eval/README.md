@@ -8,6 +8,7 @@ eval/
   schema/        JSON Schema for each suite (authoring reference)
   tool-selection/*.json   hit@5 / MRR fixtures (scored)
   tool-selection-pending/*.json  same schema, NOT scored — questions whose backing endpoint is unbuilt
+  analytics-gate/QUESTIONS.json  the versioned ANSWER-gate questions (#1671) — not tool selection
   rag-retrieval/*.json    recall@k fixtures
   rag-lexical/*.json      dense-vs-hybrid lexical fixtures (#784/#1178) — separate from the dense gate
   write-safety/*.json     write-gate invariant fixtures
@@ -191,6 +192,20 @@ actor deliberately holds `security:user:view` — without it `AdminFacadeTool` i
 fast path cannot fire, so the fixture would not reproduce the incident. These fixtures fail against
 a selector that still carries the un-narrowed keyword list; that is the point.
 
-Ground-truth SQL and the fixture dataset for the *answer* half of the gate live under
+**These fixtures are not the answer-gate question list (#1671).** They score which *tools* get
+selected; nothing in either file says what a correct answer contains, and `analytics-gate.json`
+also carries `q13-admin-user-account-active`, an identity question that is not an analytics
+question at all. The versioned questions the chat-path gate actually asks live in
+`analytics-gate/QUESTIONS.json`, one entry per `## QN` section of
+`analytics-gate/ground-truth/EXPECTED.md`, with the twelve-question chat-path set and its
+exclusions recorded there. The two corpora share the plan §6 `qNN` numbering and are not
+interchangeable — reading one for the other cost a round of window-semantics design in #1661 — so
+each analytics question names its selection counterpart in `tool_selection_fixture_id`, and both
+suites carry a `suite_notes` saying which half they are.
+
+The questions, ground-truth SQL and fixture dataset for the *answer* half of the gate live under
 `analytics-gate/` (see its README) — plan §7 treats a fixture change without a matching
-ground-truth change as a review blocker.
+ground-truth change as a review blocker. `AnalyticsGateQuestionsTest` validates the question set
+structurally in ordinary CI, the same way `EvalFixtureValidationTest` validates these suites; the
+gate runner is `scripts/analytics_gate_run.py`, which records the question file's git blob sha in
+every run record.

@@ -60,8 +60,15 @@ named in the matrix (e.g. Q10 "past-due trend only").
 - Caller: a `ROLE_SHOP_MANAGER`-equivalent principal whose perm_bits grant all read permissions
   the questions touch. A second run with a deliberately under-permissioned caller must show the
   relevant tools gated out and the answer degrading honestly (no cross-permission leakage).
-- Each gate run is recorded: question id, pass/fail per criterion, tool trace, token cost.
-  Results table checked in under `docs/gate-runs/` per wave.
+- **Questions come from the versioned set, never from an ad-hoc list (#1671).** The verbatim text
+  is `pos-mcp-server/src/test/resources/eval/analytics-gate/QUESTIONS.json`, one entry per `## QN`
+  section of `analytics-gate/ground-truth/EXPECTED.md`; `scripts/analytics_gate_run.py` reads it
+  and no other source. A question whose window the text does not resolve is a harness defect, not
+  a model defect — it makes the answer unscorable however well the model performs.
+- Each gate run is recorded: question id, pass/fail per criterion, tool trace, token cost, **and
+  the git blob sha of the questions file the run used**. Without that sha a re-run can silently ask
+  something different and move the score with no code change, and a regression cannot be told apart
+  from a reworded question. Results table checked in under `docs/gate-runs/` per wave.
 
 ### 2.3 Fixture dataset
 
@@ -442,7 +449,11 @@ of this plan.
 
 ## 6. Gate matrix — the twenty questions
 
-Budget = max tool calls for criterion 3. GT = ground-truth SQL script id.
+Budget = max tool calls for criterion 3. GT = ground-truth SQL script id. The wording below is
+**abbreviated**; the verbatim text asked, the window each question fixes, and which twelve are in
+the chat-path gate live in `pos-mcp-server/src/test/resources/eval/analytics-gate/QUESTIONS.json`
+(#1671). `eval/tool-selection/analytics-gate.json` shares this `qNN` numbering but scores tool
+selection, not answers — it is not the question list.
 
 | Q | Question (abbrev.) | Wave | Budget | Pass sketch |
 |---|---|---|---|---|

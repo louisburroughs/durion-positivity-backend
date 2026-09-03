@@ -5,13 +5,21 @@ Issue: #1601 (W2.3, Wave 2 exit gate) · analytics-capability-plan.md §4 "Wave 
 ## Status: not run in this sandbox
 
 This directory is a placeholder. The Wave 2 exit gate requires running the Q-gate protocol
-(Q1, Q3, Q4, Q5, Q7, Q8, Q9, Q12, Q15, Q16, Q17 — analytics-capability-plan.md §2/§6) plus the
-under-permissioned-caller check against a live stack:
+(Q1, Q3, Q4, Q5, Q7, Q8, Q9, Q12, Q15, Q16, Q17 — analytics-capability-plan.md §2/§6; Wave 1's Q13
+runs with them, making the twelve-question chat-path set) plus the under-permissioned-caller check
+against a live stack:
 
 - an alpha host or a docker-profile stack with Postgres/pgvector, Eureka, the gateway, and every
   Wave 2 backend module running with fixture data loaded, and
 - the `durion-eval` harness (`eval_live.py` / `BaselineCaptureIT`, `-Dmcp.eval.live=true`) driving
   real chat turns against a running embedding model.
+
+The question text is **not** improvised per run (#1671): it lives in
+`pos-mcp-server/src/test/resources/eval/analytics-gate/QUESTIONS.json`, which also records which
+twelve of the twenty are in the chat-path set and why the other eight are excluded. Drive it with
+`scripts/analytics_gate_run.py`, which reads that file and writes the questions' git blob sha into
+the run record; a run document that does not carry that sha cannot be reproduced and should not be
+scored.
 
 None of that infrastructure is reachable from this sandbox (no live alpha/docker stack, no
 running model). **No gate-run results — pass or fail — have been produced or recorded here.**
