@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,11 +31,30 @@ public class ReportingFacadeTool {
     }
 
     @Tool(
-            description = "Get the sales report (income statement) for a period. period must be a calendar "
-                    + "month in YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. 2026); it is "
-                    + "mapped onto the report's start/end date range.")
-    public String getSalesReport(@ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
-        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+            description = "Get the sales report (income statement) for a date window. Get the window from "
+                    + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
+                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
+                    + "or year; pass either period or startDate+endDate, never both.")
+    public String getSalesReport(
+            @ToolParam(
+                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
+                                    + "(YYYY); omit when passing startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String period,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String startDate,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String endDate) {
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
         return restClient
                 .get()
                 .uri(salesReportUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
@@ -55,21 +75,40 @@ public class ReportingFacadeTool {
     }
 
     @Tool(
-            description = "Get a composed revenue report for a period. period must be a calendar month in "
-                    + "YYYY-MM form (e.g. 2026-05) or a calendar year in YYYY form (e.g. 2026). Returns a "
-                    + "JSON envelope with two sections: incomeStatement (the period's income statement — its "
+            description = "Get a composed revenue report for a date window. Get the window from "
+                    + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
+                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
+                    + "or year; pass either period or startDate+endDate, never both. Returns a "
+                    + "JSON envelope with two sections: incomeStatement (the window's income statement — its "
                     + "revenue lines are the earned revenue) and agedReceivables (per-customer open invoice "
-                    + "balances bucketed against the period's end date). A failed or unauthorized "
+                    + "balances bucketed against the window's end date). A failed or unauthorized "
                     + "aged-receivables section degrades only itself; the top-level status is degraded when "
-                    + "the income statement is unavailable. IMPORTANT — for any PAST period the "
-                    + "agedReceivables section is not that period's uncollected revenue: the balances are "
+                    + "the income statement is unavailable. IMPORTANT — for any PAST window the "
+                    + "agedReceivables section is not that window's uncollected revenue: the balances are "
                     + "each invoice's CURRENT open balance, and only the aging buckets are keyed to the "
-                    + "period end. Report it as today's outstanding balance on invoices raised up to that "
+                    + "window's end. Report it as today's outstanding balance on invoices raised up to that "
                     + "date, never as historical exposure. The incomeStatement section is genuinely "
-                    + "period-scoped and carries no such caveat.")
+                    + "window-scoped and carries no such caveat.")
     public String getRevenueReport(
-            @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
-        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+            @ToolParam(
+                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
+                                    + "(YYYY); omit when passing startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String period,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String startDate,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String endDate) {
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
         return ToolComposition.named("revenueReport")
                 .call(
                         "incomeStatement",

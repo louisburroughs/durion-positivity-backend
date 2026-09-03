@@ -211,7 +211,7 @@ class TaxFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"netTax\":4000}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getTaxSummary("2026-03");
+        String result = tool.getTaxSummary("2026-03", null, null);
 
         directMockServer.verify();
         gatewayMockServer.verify();
@@ -221,7 +221,7 @@ class TaxFacadeToolTest {
     @Test
     @DisplayName("getTaxSummary rejects an unsupported period form without issuing a request")
     void getTaxSummary_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getTaxSummary("2025-Q1"))
+        assertThatThrownBy(() -> tool.getTaxSummary("2025-Q1", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");

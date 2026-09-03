@@ -56,7 +56,8 @@ public class WorkorderSearchController {
 
     @Operation(operationId = "searchWorkorders", summary = "Search Workorders With Filters", description = """
                     Searches workorders by free-text query against customer display names or a literal workorder \
-                    id, optionally narrowed by exact customerId and vehicleId filters, an exact status, a \
+                    id, optionally narrowed by exact customerId and vehicleId filters, one or more exact \
+                    status values (repeated status=A&status=B or comma-separated status=A,B), a \
                     createdAt date window (createdFrom/createdTo), and/or a technicianId, returning a page of \
                     rows enriched with customer name, vehicle label, and VIN. All filters are combinable with \
                     each other and with q.
@@ -105,9 +106,9 @@ public class WorkorderSearchController {
                     @Nullable
                     UUID vehicleId,
             @Parameter(
-                            description = "Exact status filter (optional). One or more real WorkorderStatus "
-                                    + "values; an unrecognized value returns 400. Several values may be passed, "
-                                    + "repeated or comma-separated, e.g. every open status in one call.")
+                            description = "One or more exact status values (optional), repeated "
+                                    + "(status=A&status=B) or comma-separated (status=A,B). Each must be a real "
+                                    + "WorkorderStatus value; an unrecognized value returns 400.")
                     @RequestParam(required = false)
                     @Nullable
                     List<WorkorderStatus> status,

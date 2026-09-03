@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -155,11 +156,11 @@ public class WorkorderFacadeTool {
     }
 
     @Tool(
-            description = "Get per-technician labor and revenue summary for a reporting period (Wave 2 E5). "
-                    + "period must be a calendar month in YYYY-MM form (e.g. 2026-05) or a calendar year in "
-                    + "YYYY form (e.g. 2026) — resolve a relative phrase like \"last month\" yourself before "
-                    + "calling; do not loop this tool across more than a handful of periods for a "
-                    + "multi-period trend. Returns rows — technicianId, name (null when the person replica "
+            description = "Get per-technician labor and revenue summary for a date window (Wave 2 E5). Get the "
+                    + "window from resolveDateWindow and pass its startDate/endDate verbatim — a six- or "
+                    + "twelve-month span is one call, not a loop. period is only a shortcut for exactly one "
+                    + "whole calendar month or year; pass either period or startDate+endDate, never both. "
+                    + "Returns rows — technicianId, name (null when the person replica "
                     + "has no record), completedWoCount, billedHours, laborRevenue — ordered by billedHours "
                     + "descending and capped at 100 technicians; the response's truncated flag is true when "
                     + "more technicians had activity in the window than that cap allowed. The three columns "
@@ -172,8 +173,25 @@ public class WorkorderFacadeTool {
                     + "labor total is unknown. This tool does NOT accept a technicianId filter, a limit "
                     + "override, or a groupBy — it always ranks every technician for one window.")
     public String getTechnicianLaborAnalytics(
-            @ToolParam(description = "Reporting period: YYYY-MM or YYYY") @NonNull String period) {
-        ReportingPeriods.DateRange range = ReportingPeriods.toDateRange(period);
+            @ToolParam(
+                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
+                                    + "(YYYY); omit when passing startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String period,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String startDate,
+            @ToolParam(
+                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
+                                    + "startDate/endDate",
+                            required = false)
+                    @Nullable
+                    String endDate) {
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
         return restClient
                 .get()
                 .uri(technicianLaborUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))

@@ -118,8 +118,16 @@ documented fallback.
   count-back rule, the inversion rule) — those now live in the resolver.
   `SharedOrchestrationSupport.formatUserContext` keeps injecting today's date; the resolver uses
   the same `Clock`, so the two cannot disagree.
-- `ReportingPeriods` stays as-is for `period`-taking tools (`YYYY-MM` / `YYYY`); the resolver's
-  `statement` tells the model which `period` to pass when a tool takes one.
+- `ReportingPeriods` gained a `resolve(period, startDate, endDate)` form (#1677 review): the seven
+  `period`-taking facade tools (`getFinancialSummary`, `getVendorSpend`, `getRevenueByCustomer`,
+  `getSalesReport`, `getRevenueReport`, `getTaxSummary`, `getTechnicianLaborAnalytics`) now also
+  accept `startDate`/`endDate` directly, so a multi-month `resolveDateWindow` span is one call
+  instead of a loop over `YYYY-MM` periods. `period` (`YYYY-MM` / `YYYY`, via the unchanged
+  `toDateRange`) remains as a shortcut for exactly one whole calendar month or year; passing
+  `period` together with `startDate`/`endDate`, only one of `startDate`/`endDate`, or neither form
+  is rejected with a self-correcting message. Each tool's description now points at
+  `resolveDateWindow`'s `startDate`/`endDate` rather than telling the model to derive a `period`
+  itself.
 
 **Tests.**
 

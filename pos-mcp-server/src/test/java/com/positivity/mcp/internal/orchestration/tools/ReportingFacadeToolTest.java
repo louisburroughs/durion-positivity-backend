@@ -65,7 +65,7 @@ class ReportingFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"revenue\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getSalesReport("2026-02");
+        String result = tool.getSalesReport("2026-02", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -80,7 +80,7 @@ class ReportingFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"revenue\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getSalesReport("2026");
+        String result = tool.getSalesReport("2026", null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -89,7 +89,7 @@ class ReportingFacadeToolTest {
     @Test
     @DisplayName("getSalesReport rejects an unsupported period form without issuing a request")
     void getSalesReport_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getSalesReport("Q1-2026"))
+        assertThatThrownBy(() -> tool.getSalesReport("Q1-2026", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");
@@ -128,7 +128,7 @@ class ReportingFacadeToolTest {
                 .andExpect(method(agedReceivables.httpMethod()))
                 .andRespond(withSuccess("{\"buckets\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getRevenueReport("2026-05"));
+        JsonNode envelope = parse(tool.getRevenueReport("2026-05", null, null));
 
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("revenueReport");
@@ -163,7 +163,7 @@ class ReportingFacadeToolTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("{\"secret\":\"FORBIDDEN-PAYLOAD\"}"));
 
-        String rendered = tool.getRevenueReport("2026");
+        String rendered = tool.getRevenueReport("2026", null, null);
 
         mockServer.verify();
         assertThat(rendered).doesNotContain("FORBIDDEN-PAYLOAD");
@@ -177,7 +177,7 @@ class ReportingFacadeToolTest {
     @Test
     @DisplayName("getRevenueReport rejects an unsupported period form without issuing a request")
     void getRevenueReport_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getRevenueReport("2025-Q1"))
+        assertThatThrownBy(() -> tool.getRevenueReport("2025-Q1", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("YYYY-MM")
                 .hasMessageContaining("YYYY");

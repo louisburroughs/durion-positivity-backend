@@ -21,7 +21,8 @@ public interface WorkorderSearchService {
     /**
      * Search workorders by query string matching the customer name (resolved to
      * customer ids) or the workorder id directly, optionally restricted to an exact
-     * customer and/or vehicle, an exact status, a creation-date window, and/or a technician.
+     * customer and/or vehicle, one or more exact status values, a creation-date window, and/or a
+     * technician.
      * Resulting rows are enriched with the resolved customer display name.
      *
      * @param q            free-text query (customer name or workorder id)
