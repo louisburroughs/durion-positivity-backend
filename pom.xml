@@ -338,6 +338,12 @@
 		     Spring Security 7.1.1 (managed by Spring Boot 4.1.1; remove once the parent
 		     is bumped to it). -->
 		<spring-security.version>7.1.1</spring-security.version>
+		<!-- CVE-2026-59324 (8.2, cross-message reply-header leakage: fluxTransform's shared
+		     RequestMessageHolder copies headers from whichever message was consumed last when the
+		     fluxFunction reorders) and CVE-2026-59307 (8.0, deserialization RCE in
+		     JdbcMessageStore) — fixed in Spring Integration 7.1.1 (managed by Spring Boot 4.1.1;
+		     remove once the parent is bumped to it). Reaches the build transitively. -->
+		<spring-integration.version>7.1.1</spring-integration.version>
 		<!-- CVE-2026-42198, CVE-2026-54291 -->
 		<postgresql.version>42.7.13</postgresql.version>
 		<!-- CVE-2026-65182, CVE-2026-65637, CVE-2026-65905, CVE-2026-66299, CVE-2026-68525 et al.
