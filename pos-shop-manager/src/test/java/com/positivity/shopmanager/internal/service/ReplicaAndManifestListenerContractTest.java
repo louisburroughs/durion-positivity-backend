@@ -18,8 +18,10 @@ import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.shopmanager.internal.dto.location.BayUpdatedV1;
+import com.positivity.shopmanager.internal.dto.location.MobileUnitUpdatedV1;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.shopmanager.internal.entity.ExtMobileUnitReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.ExtVehicleReplica;
 import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
@@ -84,6 +86,8 @@ import tools.jackson.databind.ObjectMapper;
 class ReplicaAndManifestListenerContractTest {
 
     private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
+    private static final UUID OTHER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f2");
+    private static final UUID THIRD_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f3");
     private static final Instant NOW = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_START = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T09:05:00Z");
@@ -252,7 +256,7 @@ class ReplicaAndManifestListenerContractTest {
                         BayUpdatedV1.EVENT_TYPE,
                         id -> """
                             {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"LIFT",
-                             "status":"ACTIVE","active":true}""".formatted(id, ID),
+                             "status":"ACTIVE"}""".formatted(id, ID),
                         new LocationEventsListener(
                                 clock,
                                 objectMapper,
@@ -265,6 +269,18 @@ class ReplicaAndManifestListenerContractTest {
                                 .findById(any()));
             default -> throw new IllegalArgumentException("Unknown replica owner in test fixture: " + owner);
         };
+    }
+
+    /** A fresh location listener over the same mocks the parameterized fixture uses. */
+    @SuppressWarnings("unchecked")
+    private Consumer<String> locationListener() {
+        return new LocationEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                bayRepository,
+                mobileUnitRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent;
     }
 
     private String envelope(Replica replica, String eventId, String idValue) {
@@ -415,6 +431,47 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
             assertThat(captor.getValue().getLocationId()).isEqualTo(ID);
             assertThat(captor.getValue().isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("#1658: a bay status the consumer has never seen before is not active")
+        void unknownBayStatusIsNotActive() {
+            // pos-location publishes status and never a boolean active flag, and its vocabulary is
+            // not this module's to fix. Allow-listing ACTIVE means a value nobody here has seen
+            // keeps the unit off the roster instead of advertising a bay that may be out of service.
+            locationListener().accept("""
+                            {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,"payload":{
+                              "bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"LIFT",
+                              "status":"AWAITING_INSPECTION"}}""".formatted(BayUpdatedV1.EVENT_TYPE, ID, ID));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+            // The row is still replicated — only its activeness is withheld.
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+        }
+
+        @Test
+        @DisplayName("#1658: an unknown or absent mobile-unit status is not active; ACTIVE binds in any casing")
+        void mobileUnitStatusAllowList() {
+            // MobileUnitEntity.status is a free-text column upstream, so a deny-list of the values
+            // known today would let a typo put an undispatchable van on the roster as available.
+            Consumer<String> listener = locationListener();
+            listener.accept("""
+                    {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,"payload":{
+                      "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"IN_TRANSIT"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, ID, ID));
+            listener.accept("""
+                    {"eventId":"evt-2","eventType":"%s","aggregateVersion":3,"payload":{
+                      "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 4"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, OTHER_ID, ID));
+            listener.accept("""
+                    {"eventId":"evt-3","eventType":"%s","aggregateVersion":3,"payload":{
+                      "mobileUnitId":"%s","baseLocationId":"%s","name":"Van 5","status":"active"}}""".formatted(MobileUnitUpdatedV1.EVENT_TYPE, THIRD_ID, ID));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .extracting(ExtMobileUnitReplica::isActive)
+                    .containsExactly(false, false, true);
         }
 
         @Test

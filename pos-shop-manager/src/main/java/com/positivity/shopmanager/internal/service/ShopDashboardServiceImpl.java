@@ -211,8 +211,16 @@ public class ShopDashboardServiceImpl implements ShopDashboardService {
      * Which workorder occupies each unit as of {@code asOf}, keyed by unit id.
      *
      * <p>A row occupies its unit when it carries no scheduled date — work that is simply happening
-     * — or is scheduled for the requested day. That is the entire meaning of the {@code date}
-     * parameter.
+     * — or is scheduled <em>on or before</em> the requested day. That is the entire meaning of the
+     * {@code date} parameter.
+     *
+     * <p>The bound is an upper bound, not an equality, and both halves of that are deliberate
+     * (#1658 review, mirroring pos-workorder's {@code findOpenResourceHoldersAtLocation} in #1656).
+     * An equality check reported a still-open multi-day job scheduled yesterday as having freed its
+     * bay today, while the same response's {@code openWorkorders} went on naming that bay as its
+     * unit — one payload contradicting itself. Leaving the bound off entirely would trade that
+     * false-free for a false-occupied: tomorrow's booking would black out a bay that is empty all
+     * of today. Work scheduled for a future day is booked, not occupying the unit now.
      *
      * <p>Nothing here consults a "free/occupied" flag, because none exists and none should: the
      * candidate set is the open-workorder set, so a COMPLETED or CANCELLED job has already been
@@ -235,7 +243,7 @@ public class ShopDashboardServiceImpl implements ShopDashboardService {
             if (resourceId == null) {
                 continue;
             }
-            if (row.getScheduledDate() != null && !row.getScheduledDate().equals(asOf)) {
+            if (row.getScheduledDate() != null && row.getScheduledDate().isAfter(asOf)) {
                 continue;
             }
             occupancy.merge(resourceId, row, (a, b) -> byUrgency.compare(a, b) <= 0 ? a : b);
@@ -330,6 +338,13 @@ public class ShopDashboardServiceImpl implements ShopDashboardService {
                 .map(id -> mechanicNames.getOrDefault(id, null))
                 .filter(Objects::nonNull)
                 .toList();
+        // mechanicName is the name of the FIRST assigned technician, resolved by id — never the
+        // first name that happens to resolve (#1658 review). names above has the unresolvable
+        // technicians squeezed out of it, so names.get(0) would silently attribute the job to
+        // whoever came next whenever the lead technician's person replica is lagging. A wrong
+        // technician on the board is worse than a blank one, so a missing replica row yields null
+        // and the assignment keeps its identity in the workorder's own mechanic ids.
+        String leadMechanicName = mechanicIds.isEmpty() ? null : mechanicNames.get(mechanicIds.get(0));
         UUID resourceId = row.getResourceId();
         return new ShopDashboardWorkorder(
                 row.getWorkorderId(),
@@ -339,7 +354,7 @@ public class ShopDashboardServiceImpl implements ShopDashboardService {
                 resourceId == null ? null : unitNames.get(resourceId),
                 resourceId == null ? null : parseUnitType(row.getResourceType()),
                 row.getVehicleId() == null ? null : vehicles.get(row.getVehicleId()),
-                names.isEmpty() ? null : names.get(0),
+                leadMechanicName,
                 names,
                 row.getPromisedAt());
     }

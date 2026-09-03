@@ -9,12 +9,15 @@
  * {@code location.storage-location.updated} and nothing else.
  *
  * <p>They are therefore the <em>consumer's</em> statement of the contract it needs — a strict
- * subset of the owner's aggregates (identity, name, site scope, active flag), named and shaped to
- * the established {@code location.<entity>.<verb>} convention, and byte-identical to the mirror
- * pos-workorder declared for the same facts in #1656 so both modules move to the shared contract
- * in one step. When pos-location starts publishing, these records move to
- * {@code pos-domain-events} unchanged and the listener switches to importing them; until then the
- * listener simply never sees these event types, which is why it tolerates their absence rather
- * than treating an empty replica as an error.
+ * subset of the owner's aggregates (identity, name, site scope, lifecycle status), named and
+ * shaped to the established {@code location.<entity>.<verb>} convention, and byte-identical to
+ * the mirror pos-workorder declared for the same facts in #1656 so both modules move to the
+ * shared contract in one step. Neither mirror carries a boolean {@code active}: the owner
+ * publishes only {@code status}, and both consumers derive activeness from it the same way.
+ *
+ * <p>When pos-location starts publishing, these records move to {@code pos-domain-events}
+ * unchanged and the listener switches to importing them; until then the listener simply never
+ * sees these event types, which is why it tolerates their absence rather than treating an empty
+ * replica as an error.
  */
 package com.positivity.shopmanager.internal.dto.location;

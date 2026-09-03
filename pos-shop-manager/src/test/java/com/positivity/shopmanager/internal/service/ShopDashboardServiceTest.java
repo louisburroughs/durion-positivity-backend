@@ -176,6 +176,35 @@ class ShopDashboardServiceTest {
         assertThat(assignment.mechanicName()).isEqualTo("Katherine Johnson");
     }
 
+    /**
+     * mechanicName names the <em>first assigned</em> technician, not the first one this module can
+     * put a name to. The People replica lags the workorder feed routinely, and silently promoting
+     * the second technician's name onto a job the first one leads is a quietly wrong answer — worse
+     * than a blank, because nothing on the board says it is wrong.
+     */
+    @Test
+    @DisplayName("#1658 - an unresolvable lead mechanic yields a null name, never the next mechanic's")
+    void unresolvedLeadMechanicDoesNotBorrowAnotherName() {
+        UUID bayId = persistBay("Bay 1", locationId);
+        UUID unreplicatedLead = UUIDv7Generator.generate();
+        UUID second = persistPerson("Grace", "Hopper");
+        persistWorkorder(w -> {
+            w.setWorkorderNumber("WO-1");
+            w.setStatus("ASSIGNED");
+            w.setLocationId(locationId);
+            w.setResourceId(bayId);
+            w.setResourceType("BAY");
+            w.setMechanicIds("[\"" + unreplicatedLead + "\",\"" + second + "\"]");
+        });
+        flushAndClear();
+
+        ShopDashboardWorkorder assignment = findUnit(shopDashboardService.getDashboard(locationId, today), bayId)
+                .assignment();
+
+        assertThat(assignment.mechanicName()).isNull();
+        assertThat(assignment.mechanicNames()).containsExactly("Grace Hopper");
+    }
+
     // -------------------------------------------------------------------------
     // AC3 — openWorkorders is a superset of the unit list
     // -------------------------------------------------------------------------
@@ -441,6 +470,38 @@ class ShopDashboardServiceTest {
         ShopDashboardResponse forTomorrow = shopDashboardService.getDashboard(locationId, today.plusDays(1));
         assertThat(findUnit(forTomorrow, bayId).assignment()).isNotNull();
         assertThat(forTomorrow.openWorkorders()).hasSize(1);
+    }
+
+    /**
+     * The equality check this replaces made the response contradict itself: a WORK_IN_PROGRESS job
+     * scheduled yesterday and still open read as having freed its bay today, while the same
+     * payload's {@code openWorkorders} entry went on naming that bay as its unit. Multi-day jobs
+     * are ordinary, so the bay would have been advertised as available to a dispatcher standing in
+     * front of a car on the lift.
+     */
+    @Test
+    @DisplayName("#1658 AC2 - an open job scheduled on an earlier day still occupies its unit today")
+    void workScheduledBeforeTheRequestedDayStillOccupiesItsUnit() {
+        UUID bayId = persistBay("Bay 1", locationId);
+        persistWorkorder(w -> {
+            w.setWorkorderNumber("WO-YESTERDAY");
+            w.setStatus("WORK_IN_PROGRESS");
+            w.setLocationId(locationId);
+            w.setResourceId(bayId);
+            w.setResourceType("BAY");
+            w.setScheduledDate(today.minusDays(1));
+        });
+        flushAndClear();
+
+        ShopDashboardResponse response = shopDashboardService.getDashboard(locationId, today);
+
+        ShopDashboardWorkorder assignment = findUnit(response, bayId).assignment();
+        assertThat(assignment).isNotNull();
+        assertThat(assignment.workorderNumber()).isEqualTo("WO-YESTERDAY");
+        // The two halves of the response agree about who holds the bay.
+        assertThat(response.openWorkorders())
+                .singleElement()
+                .satisfies(row -> assertThat(row.unitId()).isEqualTo(bayId));
     }
 
     @Test

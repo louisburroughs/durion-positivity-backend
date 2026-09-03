@@ -14,6 +14,9 @@ import org.jspecify.annotations.Nullable;
  * <p>{@code unitId} / {@code unitName} / {@code unitType} are populated when the workorder is
  * assigned to a bay or mobile unit and are {@code null} when it is not — a DRAFT job that nobody
  * has dispatched yet is open-but-unassigned, which is a normal state and not a data defect.
+ *
+ * <p>{@code mechanicName} is keyed to the <em>first assigned</em> technician specifically, so a
+ * lagging person replica leaves it null instead of attributing the job to another mechanic.
  */
 @Schema(description = "An open workorder at the location, with its unit assignment when it has one.")
 public record ShopDashboardWorkorder(
@@ -47,11 +50,21 @@ public record ShopDashboardWorkorder(
         @Schema(description = "Serviced vehicle; null when the replica has no row for it yet.") @Nullable
         ShopDashboardVehicle vehicle,
 
-        @Schema(description = "Display name of the first assigned mechanic.", example = "Ada Lovelace") @Nullable
+        @Schema(description = """
+                        Display name of the first assigned mechanic. Null when that person has not \
+                        replicated into this module yet, which is a normal consequence of the \
+                        People replica lagging the workorder feed. It is never a different \
+                        technician's name: an unresolved lead mechanic yields null rather than \
+                        falling through to whichever assigned mechanic happens to resolve, because \
+                        naming the wrong technician is worse than naming none. Do not treat null \
+                        as "unassigned" — read mechanicNames for who is actually on the job.""", example = "Ada Lovelace") @Nullable
         String mechanicName,
 
-        @Schema(description = "Display names of every assigned mechanic, in assignment order.") @NonNull
-        List<String> mechanicNames,
+        @Schema(description = """
+                        Display names of every assigned mechanic, in assignment order. Technicians \
+                        whose person replica has not arrived yet are omitted, so this list can be \
+                        shorter than the workorder's assignment and its first entry is not \
+                        necessarily mechanicName.""") @NonNull List<String> mechanicNames,
 
         @Schema(
                 description =

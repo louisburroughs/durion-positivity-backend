@@ -68,7 +68,16 @@ One call returns everything a shop manager board shows for a location, requiring
 
 `date` is optional, defaults to the location's local today (ADR-0038 date-only string, resolved
 through the shop's timezone and falling back to UTC), and scopes **only** the unit roster — never
-`openWorkorders`.
+`openWorkorders`. The scope is an **upper** bound, not an equality: an open workorder scheduled on
+or before `date` (or with no scheduled date at all) still occupies its unit, because multi-day jobs
+are ordinary and a car on the lift since yesterday has not freed the bay. Work scheduled for a
+later day is booked, not occupying — bounding it this way avoids trading a false-free unit for a
+false-occupied one.
+
+`mechanicName` names the **first assigned** technician specifically. If that person has not
+replicated into this module yet it is `null` — never the next technician who happens to resolve,
+because naming the wrong technician is worse than naming none. `mechanicNames` lists the
+technicians that did resolve, so it can be shorter than the workorder's assignment.
 
 `openWorkorders` is server-sorted: unassigned first, then by status band (blocked → queued →
 active → ready), then `promisedAt` ascending with nulls last, then `workorderNumber`. The sort runs
@@ -108,6 +117,19 @@ grant covers it — it would require a new recorded ADR-0044 exception on the po
 so `ext_bay` and `ext_mobile_unit` start empty and the dashboard's `units[]` is empty in production
 until that publisher lands. `openWorkorders[]` is unaffected. The fact contracts this module needs
 are declared in `internal/dto/location` in the shape they should take in `pos-domain-events`.
+
+A unit's `active` flag is **derived** from the owner's `status`, allow-listing `ACTIVE` in any
+casing: pos-location's `BayEntity` and `MobileUnitEntity` carry no boolean active field, and a
+mobile unit's status is a free-text column, so an absent, blank or unrecognised status means not
+active. pos-workorder derives the same fact the same way (#1656); the two consumers mirror one
+upstream aggregate and must not disagree about which units are in service.
+
+`WorkorderEventsListener` raises an in-process `WorkorderStatusChangedEvent` that keeps the linked
+appointment's status in step. It is consumed `AFTER_COMMIT`, in its own transaction, and a failure
+in it is logged and swallowed: the appointment timeline is a downstream projection, so losing one
+entry is recoverable, whereas letting it roll back the replica write and its `processed_events` row
+would lose the update *and* redeliver the record forever. Kafka's bounded retry and dead-lettering
+still cover everything that fails before commit.
 
 The dashboard is a read model over an at-least-once feed with retry and backoff: it is not expected
 to reflect an assignment change with zero latency, and its OpenAPI description says so.

@@ -47,6 +47,12 @@ import tools.jackson.databind.ObjectMapper;
  * existing {@link WorkorderStatusEventService} appointment sync safe to feed from this firehose,
  * rather than standing up a second, parallel consumption path for it.
  *
+ * <p>That notification is delivered <em>after</em> this transaction commits — see
+ * {@link com.positivity.shopmanager.internal.config.WorkorderStatusChangedEventListener} — so a
+ * failure in the appointment sync can neither roll back the replica write nor prevent the
+ * {@code processed_events} row from landing. Handling it inline would have done both at once, and
+ * a failed dedup insert means the same record is redelivered indefinitely.
+ *
  * <p>Staleness is expected and fail-open by design: the dashboard is a read model over an
  * at-least-once feed with retry and backoff, so an assignment made a moment ago may not be visible
  * yet. The endpoint's OpenAPI description says so.

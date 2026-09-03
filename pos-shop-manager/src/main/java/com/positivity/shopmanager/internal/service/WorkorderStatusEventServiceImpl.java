@@ -12,6 +12,7 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -41,8 +42,17 @@ public class WorkorderStatusEventServiceImpl implements WorkorderStatusEventServ
         this.appointmentRepository = appointmentRepository;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code REQUIRES_NEW} is load-bearing, not decorative: the caller is a
+     * {@code TransactionPhase.AFTER_COMMIT} listener, and a {@code REQUIRED} transaction joined
+     * from an after-commit callback participates in a transaction that has already committed, so
+     * the appointment write would never be flushed. A separate transaction also keeps a failure
+     * here from touching the replica write that produced the event (#1658 review).
+     */
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleWorkorderStatusChanged(@NonNull WorkorderStatusChangedEvent event) {
         AppointmentStatus mappedStatus = STATUS_MAPPING.get(event.newStatus());
         if (mappedStatus == null) {
