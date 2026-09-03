@@ -234,7 +234,7 @@ class RolePromptResolverImplTest {
      */
     @Test
     @DisplayName("DATE_WINDOW layer drops the partial period for calendar ranges and requires disclosure")
-    void dateWindowLayer_pinsCompletePeriodsAndRequiresDisclosure() {
+    void dateWindowLayer_calendarRangeDropsThePartialPeriodAndDisclosesTheWindow() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("whole calendar periods ending with the last COMPLETE one")
                 .contains("exclude the current, partial period")
