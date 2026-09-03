@@ -44,6 +44,15 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
 
     private static final Instant UNBOUNDED_CREATED_TO = Instant.parse("9999-12-31T23:59:59Z");
 
+    /**
+     * Non-empty placeholder passed to the repository's {@code IN} clause when no status filter is
+     * requested. JPQL rejects an empty {@code IN} collection outright, and (unlike {@code
+     * customerIds}) there is no "never matches a real row" sentinel available in a small closed enum
+     * — so the repository query gates evaluation with a separate {@code statusFilterEnabled} flag and
+     * this value is never actually evaluated when that flag is {@code false}.
+     */
+    private static final List<WorkorderStatus> NO_STATUS_FILTER_PLACEHOLDER = List.of(WorkorderStatus.DRAFT);
+
     private final WorkorderRepository workorderRepository;
     private final CustomerReferenceService customerReferenceService;
     private final VehicleReferenceService vehicleReferenceService;
@@ -53,7 +62,7 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
             @NonNull String q,
             @Nullable UUID customerId,
             @Nullable UUID vehicleId,
-            @Nullable WorkorderStatus status,
+            @Nullable Collection<WorkorderStatus> statuses,
             @Nullable LocalDate createdFrom,
             @Nullable LocalDate createdTo,
             @Nullable UUID technicianId,
@@ -78,13 +87,17 @@ public class WorkorderSearchServiceImpl implements WorkorderSearchService {
         Instant createdFromInstant = createdFrom == null ? UNBOUNDED_CREATED_FROM : rangeStart(createdFrom);
         Instant createdToInstant = createdTo == null ? UNBOUNDED_CREATED_TO : rangeEndExclusive(createdTo);
 
+        boolean statusFilterEnabled = statuses != null && !statuses.isEmpty();
+        Collection<WorkorderStatus> statusesForQuery = statusFilterEnabled ? statuses : NO_STATUS_FILTER_PLACEHOLDER;
+
         Page<Workorder> page = workorderRepository.searchByQuery(
                 q,
                 customerIds,
                 idQuery,
                 customerId,
                 vehicleId,
-                status,
+                statusFilterEnabled,
+                statusesForQuery,
                 createdFromInstant,
                 createdToInstant,
                 technicianId,

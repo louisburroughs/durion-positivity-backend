@@ -133,6 +133,88 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
+    @DisplayName("searchWorkorders omits a blank status filter from the request URI")
+    void searchWorkorders_omitsBlankStatus() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "brakes"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("brakes", null, null, "   ", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders expands the OPEN alias to the six non-terminal statuses in one call (#1676)")
+    void searchWorkorders_expandsOpenAliasToSixStatuses() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", ""))
+                        + "&customerId=" + CUSTOMER_ID
+                        + "&status=APPROVED%2CASSIGNED%2CWORK_IN_PROGRESS%2CAWAITING_PARTS%2CAWAITING_APPROVAL%2C"
+                        + "READY_FOR_PICKUP"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", CUSTOMER_ID, null, "OPEN", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders expands a lowercase \"open\" alias the same as \"OPEN\"")
+    void searchWorkorders_expandsLowercaseOpenAlias() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL
+                        + entry.expand(Map.of("query", ""))
+                        + "&status=APPROVED%2CASSIGNED%2CWORK_IN_PROGRESS%2CAWAITING_PARTS%2CAWAITING_APPROVAL%2C"
+                        + "READY_FOR_PICKUP"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", null, null, "open", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders passes an explicit comma-separated status list through unchanged")
+    void searchWorkorders_passesExplicitStatusListThrough() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "")) + "&status=APPROVED%2CWORK_IN_PROGRESS"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", null, null, "APPROVED,WORK_IN_PROGRESS", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders leaves a single status unchanged (not the OPEN alias)")
+    void searchWorkorders_leavesSingleStatusUnchanged() {
+        FacadeContractManifest.Entry entry = contract("searchWorkorders");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("query", "")) + "&status=COMPLETED"))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
+
+        String result = tool.searchWorkorders("", null, null, "COMPLETED", null, null, null);
+
+        mockServer.verify();
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
     @DisplayName("searchWorkorders starts the query string with '?' when the configured template has none")
     void searchWorkorders_usesQuestionMarkOnQuerylessTemplate() {
         RestClient.Builder builder = RestClient.builder();

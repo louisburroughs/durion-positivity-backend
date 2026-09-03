@@ -27,12 +27,14 @@ public interface WorkorderSearchService {
      * @param q            free-text query (customer name or workorder id)
      * @param customerId   exact customer filter combinable with {@code q}, or {@code null}
      * @param vehicleId    exact vehicle filter combinable with {@code q}, or {@code null}
-     * @param status       exact status filter; {@code null} means no restriction. Must be a real
-     *                     {@link WorkorderStatus} — validated at the controller boundary (Spring's
-     *                     enum bind failure on an unrecognized value) before this is called.
-     *                     Mirrors {@code InvoiceSearchService}'s single-status filter (#1599/E11);
-     *                     an "open work orders" query loops this call once per open status, the
-     *                     same way callers loop a date window over several periods.
+     * @param statuses     status values to restrict to; {@code null} or empty means no restriction
+     *                     (every status matches). Each element must be a real {@link WorkorderStatus}
+     *                     — validated at the controller boundary (Spring's enum bind failure on an
+     *                     unrecognized value) before this is called. Several values may be supplied
+     *                     in one call — repeated {@code status} query params or one comma-separated
+     *                     value — so an "open work orders" query is one call, not one call per open
+     *                     status (#1676; previously mirrored {@code InvoiceSearchService}'s
+     *                     single-status filter, #1599/E11, and required a loop).
      * @param createdFrom  inclusive lower bound on the workorder's creation date, or {@code null}
      *                     for no lower bound
      * @param createdTo    inclusive upper bound on the workorder's creation date, or {@code null}
@@ -50,7 +52,7 @@ public interface WorkorderSearchService {
             @NonNull String q,
             @Nullable UUID customerId,
             @Nullable UUID vehicleId,
-            @Nullable WorkorderStatus status,
+            @Nullable Collection<WorkorderStatus> statuses,
             @Nullable LocalDate createdFrom,
             @Nullable LocalDate createdTo,
             @Nullable UUID technicianId,

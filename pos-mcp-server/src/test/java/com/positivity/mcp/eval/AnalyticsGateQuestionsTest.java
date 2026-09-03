@@ -5,20 +5,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.yaml.snakeyaml.Yaml;
 
 /**
  * Structural gate for the versioned analytics-gate question set (#1671).
@@ -46,6 +50,8 @@ class AnalyticsGateQuestionsTest {
             Paths.get(System.getProperty("user.dir"), "src/test/resources/eval/tool-selection");
     private static final Path TOOL_SELECTION_PENDING =
             Paths.get(System.getProperty("user.dir"), "src/test/resources/eval/tool-selection-pending");
+    private static final Path FACADE_CONTRACT =
+            Paths.get(System.getProperty("user.dir"), "src/test/resources/facade-contract.yaml");
 
     /** Plan §6 is a twenty-question matrix; the file carries all twenty, gated or not. */
     private static final int PLAN_QUESTION_COUNT = 20;
@@ -190,7 +196,86 @@ class AnalyticsGateQuestionsTest {
         }
     }
 
+    /**
+     * #1676: a composition question (q05's "aged receivables, then one searchWorkorders call per
+     * past-due customer" being the motivating case) may carry an optional {@code expected_plan}
+     * naming the minimum tool calls the composition needs. This pins the field to reality on both
+     * sides: every key in {@code min_tool_calls} must be a real facade {@code @Tool} method name
+     * (derived from {@code facade-contract.yaml}, never restated as a literal set here, so a facade
+     * rename shows up as a test failure rather than a silently stale fixture) and every minimum must
+     * be a positive count. A question with no composition to name simply omits the field — this test
+     * does not require one.
+     */
+    @Test
+    @DisplayName("expected_plan, when present, names only real facade tools with positive minimums")
+    void expectedPlanNamesRealFacadeToolsWithPositiveMinimums() throws IOException {
+        Set<String> facadeToolNames = facadeToolMethodNames();
+        assertThat(facadeToolNames).as("facade-contract.yaml must not be empty").isNotEmpty();
+
+        for (JsonNode q : questions().get("questions")) {
+            String id = q.path("fixture_id").asText();
+            JsonNode plan = q.get("expected_plan");
+            if (plan == null || plan.isNull()) {
+                continue;
+            }
+            JsonNode minCalls = plan.get("min_tool_calls");
+            assertThat(minCalls)
+                    .as("%s: expected_plan.min_tool_calls required when expected_plan is present", id)
+                    .isNotNull();
+            assertThat(minCalls.isObject())
+                    .as("%s: expected_plan.min_tool_calls must be an object", id)
+                    .isTrue();
+            assertThat(minCalls.size())
+                    .as("%s: expected_plan.min_tool_calls must name at least one tool", id)
+                    .isPositive();
+
+            Iterator<Map.Entry<String, JsonNode>> fields = minCalls.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                assertThat(facadeToolNames)
+                        .as(
+                                "%s: expected_plan.min_tool_calls names '%s', which is not a real facade "
+                                        + "@Tool method (see facade-contract.yaml)",
+                                id, entry.getKey())
+                        .contains(entry.getKey());
+                assertThat(entry.getValue().isInt())
+                        .as("%s: expected_plan.min_tool_calls.%s must be an integer", id, entry.getKey())
+                        .isTrue();
+                assertThat(entry.getValue().asInt())
+                        .as("%s: expected_plan.min_tool_calls.%s must be positive", id, entry.getKey())
+                        .isPositive();
+            }
+
+            assertThat(plan.path("per").asText())
+                    .as("%s: expected_plan.per must explain the per-unit composition", id)
+                    .isNotBlank();
+        }
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Bare {@code @Tool} method names (the part after the last {@code .}) declared in {@code
+     * facade-contract.yaml} — e.g. {@code "WorkorderFacadeTool.searchWorkorders"} contributes
+     * {@code "searchWorkorders"}. Composition entries (nested under a top-level key's own dotted
+     * name) are covered the same way since the manifest keys every entry, leg or not, at the top
+     * level.
+     */
+    @SuppressWarnings("unchecked")
+    private static Set<String> facadeToolMethodNames() throws IOException {
+        assertThat(Files.isRegularFile(FACADE_CONTRACT))
+                .as("facade-contract.yaml must exist: %s", FACADE_CONTRACT)
+                .isTrue();
+        Set<String> names = new LinkedHashSet<>();
+        try (InputStream stream = Files.newInputStream(FACADE_CONTRACT)) {
+            Map<String, Object> raw = new Yaml().load(stream);
+            for (String key : raw.keySet()) {
+                int dot = key.lastIndexOf('.');
+                names.add(dot >= 0 ? key.substring(dot + 1) : key);
+            }
+        }
+        return names;
+    }
 
     private static JsonNode questions() throws IOException {
         assertThat(Files.isRegularFile(QUESTIONS))

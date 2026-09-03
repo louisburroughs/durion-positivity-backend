@@ -70,7 +70,7 @@ class WorkorderSearchControllerTest {
                         eq(""),
                         eq(CUSTOMER_ID),
                         isNull(),
-                        eq(WorkorderStatus.APPROVED),
+                        eq(List.of(WorkorderStatus.APPROVED)),
                         isNull(),
                         isNull(),
                         isNull(),
@@ -87,7 +87,7 @@ class WorkorderSearchControllerTest {
                         eq(""),
                         eq(CUSTOMER_ID),
                         isNull(),
-                        eq(WorkorderStatus.APPROVED),
+                        eq(List.of(WorkorderStatus.APPROVED)),
                         isNull(),
                         isNull(),
                         isNull(),
@@ -99,6 +99,117 @@ class WorkorderSearchControllerTest {
     void search_unknownStatusValue_returns400() throws Exception {
         mockMvc.perform(get("/v1/workorders/search").param("status", "NOT_A_REAL_STATUS"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET /search?status=A&status=B binds the repeated form to a two-element status list (#1676)")
+    void search_repeatedStatusParams_bindsToStatusList() throws Exception {
+        when(workorderSearchService.search(
+                        eq(""),
+                        isNull(),
+                        isNull(),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.ASSIGNED)),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any(Pageable.class)))
+                .thenReturn(new PageImpl<WorkorderSearchResult>(List.of()));
+
+        mockMvc.perform(get("/v1/workorders/search").param("status", "APPROVED").param("status", "ASSIGNED"))
+                .andExpect(status().isOk());
+
+        verify(workorderSearchService)
+                .search(
+                        eq(""),
+                        isNull(),
+                        isNull(),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.ASSIGNED)),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("GET /search?status=A,B binds the comma-separated form to the same status list (#1676)")
+    void search_commaSeparatedStatusParam_bindsToStatusList() throws Exception {
+        when(workorderSearchService.search(
+                        eq(""),
+                        isNull(),
+                        isNull(),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.ASSIGNED)),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any(Pageable.class)))
+                .thenReturn(new PageImpl<WorkorderSearchResult>(List.of()));
+
+        mockMvc.perform(get("/v1/workorders/search").param("status", "APPROVED,ASSIGNED"))
+                .andExpect(status().isOk());
+
+        verify(workorderSearchService)
+                .search(
+                        eq(""),
+                        isNull(),
+                        isNull(),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.ASSIGNED)),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("GET /search?status=A%2CB (percent-encoded comma) still binds to the same status list")
+    void search_percentEncodedCommaSeparatedStatusParam_bindsToStatusList() throws Exception {
+        when(workorderSearchService.search(
+                        eq(""),
+                        isNull(),
+                        isNull(),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.ASSIGNED)),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any(Pageable.class)))
+                .thenReturn(new PageImpl<WorkorderSearchResult>(List.of()));
+
+        // get(String) with a literal query string does not URL-decode it (a MockMvc
+        // construction detail, not a container behavior) — get(URI) decodes the way a real
+        // servlet container decodes an incoming request, which is what this case needs to prove.
+        mockMvc.perform(get(java.net.URI.create("/v1/workorders/search?status=APPROVED%2CASSIGNED")))
+                .andExpect(status().isOk());
+
+        verify(workorderSearchService)
+                .search(
+                        eq(""),
+                        isNull(),
+                        isNull(),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.ASSIGNED)),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("GET /search?status=A,NOT_A_REAL_STATUS returns 400 (an unknown value in a multi-status list "
+            + "is still rejected)")
+    void search_unknownValueInStatusList_returns400() throws Exception {
+        mockMvc.perform(get("/v1/workorders/search").param("status", "APPROVED,NOT_A_REAL_STATUS"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET /search with no status param delegates with a null status list (no restriction)")
+    void search_noStatusParam_delegatesWithNullStatusList() throws Exception {
+        when(workorderSearchService.search(
+                        eq(""), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<WorkorderSearchResult>(List.of()));
+
+        mockMvc.perform(get("/v1/workorders/search")).andExpect(status().isOk());
+
+        verify(workorderSearchService)
+                .search(eq(""), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test

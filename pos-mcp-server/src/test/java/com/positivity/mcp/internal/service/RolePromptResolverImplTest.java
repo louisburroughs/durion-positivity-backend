@@ -190,6 +190,31 @@ class RolePromptResolverImplTest {
                 .isZero();
     }
 
+    // ─── TOOL-USE layer (#1676 composition-execution rule) ──────────────────
+
+    /**
+     * q05 ("which customers are more than 60 days past due, and what open work orders do we
+     * currently have for them?") needs an aged-receivables call followed by one {@code
+     * searchWorkorders} call per past-due customer — a plan that fits the round cap once status
+     * filtering is one call, not six. Without this bullet the model correctly saw that two-step plan
+     * and then offered the user a menu of partial answers instead of just running it. Pinned as a
+     * literal substring, matching the WRITE_GATE layer's pin style (see
+     * {@code WriteGatePromptLayerTest}), so a future edit that quietly drops the rule fails a test.
+     */
+    @Test
+    @DisplayName("assemble includes the TOOL_USE per-value-loop composition rule (#1676)")
+    void assemble_includesToolUseCompositionRule() {
+        when(systemPromptRepository.findByName(MASTER_NAME))
+                .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
+
+        var assembled = resolver.assemble("ROLE_TECHNICIAN", "master", false);
+
+        assertThat(assembled.layers()).contains("TOOL_USE");
+        assertThat(assembled.text())
+                .contains("call the tool once per value and combine the results")
+                .contains("not offered to the user as a menu of partial answers");
+    }
+
     // ─── DATE-WINDOW layer (#1661) ──────────────────────────────────────────
 
     /**

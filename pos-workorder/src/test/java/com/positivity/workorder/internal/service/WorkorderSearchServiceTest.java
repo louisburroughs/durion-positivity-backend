@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -36,12 +37,18 @@ import org.springframework.data.domain.Pageable;
  * Unit tests for the free-text workorder search service. Covers the
  * customer-name match (with enrichment), the UUID-query path, the optional
  * exact customer/vehicle filters, and the E12 (#1600) structured filters
- * (status, createdFrom/createdTo, technicianId).
+ * (statuses, createdFrom/createdTo, technicianId).
  *
  * <p>{@code createdFrom}/{@code createdTo} are always forwarded to the repository as non-null
  * {@code Instant}s: a {@code null} caller-supplied bound is widened by the service to a sentinel
  * (far past/future) rather than passed through as {@code null}, so those positions use {@code
  * any()} rather than {@code isNull()} in the verifications below.
+ *
+ * <p>{@code statuses} was a single {@code WorkorderStatus} until #1676, which widened it to a
+ * {@code Collection<WorkorderStatus>} so an "open work orders" query is one call server-side
+ * instead of one call per open status. The repository call now also carries a
+ * {@code statusFilterEnabled} boolean ahead of {@code statuses}, verified with {@code anyBoolean()}
+ * where the test does not care which flag value was passed and {@code eq(...)} where it does.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -75,7 +82,7 @@ class WorkorderSearchServiceTest {
 
     private void stubPassthroughEnrichment(UUID customerId, Workorder workorder, Pageable pageable) {
         when(workorderRepository.searchByQuery(
-                        any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(pageable)))
+                        any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(workorder)));
         when(customerReferenceService.resolveAll(any()))
                 .thenReturn(Map.of(customerId, new CustomerReferenceService.CustomerContact("Acme Auto", null)));
@@ -122,7 +129,8 @@ class WorkorderSearchServiceTest {
                         idQueryCaptor.capture(),
                         isNull(),
                         isNull(),
-                        isNull(),
+                        anyBoolean(),
+                        any(),
                         any(),
                         any(),
                         isNull(),
@@ -152,7 +160,8 @@ class WorkorderSearchServiceTest {
                         isNull(),
                         eq(CUSTOMER_A),
                         eq(VEHICLE_B),
-                        isNull(),
+                        anyBoolean(),
+                        any(),
                         any(),
                         any(),
                         isNull(),
@@ -177,7 +186,8 @@ class WorkorderSearchServiceTest {
                         isNull(),
                         isNull(),
                         eq(VEHICLE_B),
-                        isNull(),
+                        anyBoolean(),
+                        any(),
                         any(),
                         any(),
                         isNull(),
@@ -185,7 +195,7 @@ class WorkorderSearchServiceTest {
     }
 
     @Test
-    void search_withStatusFilter_passesExactStatusToRepository() {
+    void search_withSingleStatusFilter_passesEnabledFlagAndSingletonStatusesToRepository() {
         Pageable pageable = PageRequest.of(0, 25);
         Workorder workorder = buildWorkorder(WORKORDER_ID, CUSTOMER_A, WorkorderStatus.APPROVED);
 
@@ -193,9 +203,10 @@ class WorkorderSearchServiceTest {
         stubPassthroughEnrichment(CUSTOMER_A, workorder, pageable);
 
         // Q5 gate scenario (issue #1600 / analytics-capability-plan.md E12): "open work orders for
-        // customers more than 60 days past due" — one open status combined with customerId in a
-        // single server-side call.
-        workorderSearchService.search("", CUSTOMER_A, null, WorkorderStatus.APPROVED, null, null, null, pageable);
+        // customers more than 60 days past due" — one status combined with customerId in a single
+        // server-side call.
+        workorderSearchService.search(
+                "", CUSTOMER_A, null, List.of(WorkorderStatus.APPROVED), null, null, null, pageable);
 
         verify(workorderRepository)
                 .searchByQuery(
@@ -204,7 +215,8 @@ class WorkorderSearchServiceTest {
                         isNull(),
                         eq(CUSTOMER_A),
                         isNull(),
-                        eq(WorkorderStatus.APPROVED),
+                        eq(true),
+                        eq(List.of(WorkorderStatus.APPROVED)),
                         any(),
                         any(),
                         isNull(),
@@ -212,7 +224,42 @@ class WorkorderSearchServiceTest {
     }
 
     @Test
-    void search_withoutStatusFilter_passesNullToRepository() {
+    void search_withTwoStatusFilter_passesBothStatusesToRepositoryInOneCall() {
+        Pageable pageable = PageRequest.of(0, 25);
+        Workorder workorder = buildWorkorder(WORKORDER_ID, CUSTOMER_A, WorkorderStatus.APPROVED);
+
+        when(customerReferenceService.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
+        stubPassthroughEnrichment(CUSTOMER_A, workorder, pageable);
+
+        // #1676: several statuses in one server-side call — the composition an "open work orders"
+        // question needs instead of one searchWorkorders call per open status.
+        workorderSearchService.search(
+                "",
+                CUSTOMER_A,
+                null,
+                List.of(WorkorderStatus.APPROVED, WorkorderStatus.WORK_IN_PROGRESS),
+                null,
+                null,
+                null,
+                pageable);
+
+        verify(workorderRepository)
+                .searchByQuery(
+                        eq(""),
+                        any(),
+                        isNull(),
+                        eq(CUSTOMER_A),
+                        isNull(),
+                        eq(true),
+                        eq(List.of(WorkorderStatus.APPROVED, WorkorderStatus.WORK_IN_PROGRESS)),
+                        any(),
+                        any(),
+                        isNull(),
+                        eq(pageable));
+    }
+
+    @Test
+    void search_withNullStatuses_disablesTheStatusFilter() {
         Pageable pageable = PageRequest.of(0, 25);
         Workorder workorder = buildWorkorder(WORKORDER_ID, CUSTOMER_A, WorkorderStatus.APPROVED);
 
@@ -223,7 +270,42 @@ class WorkorderSearchServiceTest {
 
         verify(workorderRepository)
                 .searchByQuery(
-                        eq(""), any(), isNull(), isNull(), isNull(), isNull(), any(), any(), isNull(), eq(pageable));
+                        eq(""),
+                        any(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        eq(false),
+                        any(),
+                        any(),
+                        any(),
+                        isNull(),
+                        eq(pageable));
+    }
+
+    @Test
+    void search_withEmptyStatuses_disablesTheStatusFilterTheSameAsNull() {
+        Pageable pageable = PageRequest.of(0, 25);
+        Workorder workorder = buildWorkorder(WORKORDER_ID, CUSTOMER_A, WorkorderStatus.APPROVED);
+
+        when(customerReferenceService.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
+        stubPassthroughEnrichment(CUSTOMER_A, workorder, pageable);
+
+        workorderSearchService.search("", null, null, List.of(), null, null, null, pageable);
+
+        verify(workorderRepository)
+                .searchByQuery(
+                        eq(""),
+                        any(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        eq(false),
+                        any(),
+                        any(),
+                        any(),
+                        isNull(),
+                        eq(pageable));
     }
 
     @Test
@@ -244,7 +326,8 @@ class WorkorderSearchServiceTest {
                         isNull(),
                         isNull(),
                         isNull(),
-                        isNull(),
+                        anyBoolean(),
+                        any(),
                         eq(Instant.parse("2026-06-01T00:00:00Z")),
                         eq(Instant.parse("2026-07-01T00:00:00Z")),
                         isNull(),
@@ -271,7 +354,8 @@ class WorkorderSearchServiceTest {
                         isNull(),
                         isNull(),
                         isNull(),
-                        isNull(),
+                        anyBoolean(),
+                        any(),
                         eq(Instant.parse("0001-01-01T00:00:00Z")),
                         eq(Instant.parse("9999-12-31T23:59:59Z")),
                         isNull(),
@@ -295,7 +379,8 @@ class WorkorderSearchServiceTest {
                         isNull(),
                         isNull(),
                         isNull(),
-                        isNull(),
+                        anyBoolean(),
+                        any(),
                         any(),
                         any(),
                         eq(TECHNICIAN_ID),

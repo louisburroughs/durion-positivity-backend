@@ -60,13 +60,12 @@ public class WorkorderSearchController {
                     createdAt date window (createdFrom/createdTo), and/or a technicianId, returning a page of \
                     rows enriched with customer name, vehicle label, and VIN. All filters are combinable with \
                     each other and with q.
-                    status must be an exact WorkorderStatus value (DRAFT, APPROVED, ASSIGNED, WORK_IN_PROGRESS, \
-                    AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, CANCELLED); an unrecognized \
-                    value is rejected with 400 rather than silently matching nothing. There is no "open" alias — \
-                    an "open work orders" query loops this call once per open status (APPROVED, ASSIGNED, \
-                    WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP), each call still fully \
-                    server-side and combinable with customerId etc., the same way a caller loops a date window \
-                    over several periods for other endpoints in this API.
+                    status must be one or more exact WorkorderStatus values (DRAFT, APPROVED, ASSIGNED, \
+                    WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, \
+                    CANCELLED); an unrecognized value is rejected with 400 rather than silently matching \
+                    nothing. Several values may be passed, repeated (status=A&status=B) or comma-separated \
+                    (status=A,B), e.g. every open status in one call, and are combined with an OR; each is \
+                    still fully server-side and combinable with customerId etc.
                     technicianId matches any technician who has logged a labor entry \
                     (WorkorderLaborEntry.technicianId) on the workorder — the same attribution basis as \
                     getTechnicianLaborAnalytics's billedHours column — not the workorder's currently assigned \
@@ -106,12 +105,12 @@ public class WorkorderSearchController {
                     @Nullable
                     UUID vehicleId,
             @Parameter(
-                            description = "Exact status filter (optional). Must be a real WorkorderStatus value; "
-                                    + "an unrecognized value returns 400. No \"open\" alias — loop this call once "
-                                    + "per open status to find open work orders.")
+                            description = "Exact status filter (optional). One or more real WorkorderStatus "
+                                    + "values; an unrecognized value returns 400. Several values may be passed, "
+                                    + "repeated or comma-separated, e.g. every open status in one call.")
                     @RequestParam(required = false)
                     @Nullable
-                    WorkorderStatus status,
+                    List<WorkorderStatus> status,
             @Parameter(description = "Inclusive lower bound (YYYY-MM-DD, UTC) on the workorder's createdAt (optional)")
                     @RequestParam(required = false)
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)

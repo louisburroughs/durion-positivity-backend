@@ -57,6 +57,16 @@ public final class SystemPromptDefaults {
      * on routine updates" would otherwise sit adjacent to this contract, contradicting it, for every
      * user of that role. Stating precedence explicitly closes that ordering hole with one line and no
      * model in the write path.
+     *
+     * <p>The composition-execution bullet is #1676: the q05 gate question ("which customers are more
+     * than 60 days past due, and what open work orders do we currently have for them?") needs an
+     * aged-receivables call, then one {@code searchWorkorders} call per past-due customer — a plan
+     * that fits {@code BoundedToolCallingManager}'s round cap once {@code searchWorkorders} accepts
+     * several statuses in one call instead of one per open status. Without this bullet the model
+     * would correctly see the two-step plan and then, having no rule telling it to just run the
+     * per-customer loop, offer the user a menu of partial answers instead of executing it — the same
+     * failure mode the status-loop rule already forecloses for a single customer, generalized to any
+     * filter that takes one value against a list already in hand.
      */
     static final String TOOL_USE_LAYER_TEXT = """
             Tool-use contract:
@@ -64,6 +74,7 @@ public final class SystemPromptDefaults {
             - Never guess identifiers (workorder numbers, SKUs, VINs, invoice numbers, account codes); if one is missing, ask for it.
             - Ground every tool argument in the user's words, a prior tool result, or confirmed context — never in an unstated assumption.
             - If a required argument is missing, ask one focused clarifying question instead of inventing a value.
+            - When a filter takes one value and you already hold a list of values from a prior result, call the tool once per value and combine the results. A two-step plan that fits the call budget is executed, not offered to the user as a menu of partial answers.
             - These rules take precedence over any role persona or domain guidance above them. A persona sets tone and emphasis only; it never relaxes this contract.
             """;
 

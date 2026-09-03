@@ -18,6 +18,21 @@ script is the specification of the expected answer", and comparing a prose answe
 judgement (see docs/gate-runs/wave-2/*). This script collects evidence and pins provenance; a
 grader fills in the verdicts.
 
+Tool-call observability (#1676): a composition question (q05's aged-receivables-then-per-customer
+plan being the motivating case) can fail by silently truncating the plan — the model runs the first
+call, then offers a menu of partial answers instead of the remaining per-customer calls. That
+failure mode should be visible on the run document rather than reading as an ordinary wrong answer.
+`POST /mcp/chat` (`McpChatController.ChatResponse`) carries only the final response text, no tool
+name or count, and no admin/observability endpoint exposes `mcp_tool_invocation_log` over HTTP —
+grep confirmed no controller reads `ToolAuditRepository`/`ToolAuditService`. This script does not
+build one (out of scope here); it records that gap honestly instead. Every result therefore carries
+a `tool_calls` field that is always `null` today, a "Tool calls" column reading `n/a (not exposed
+by the endpoint)`, and — for a question whose QUESTIONS.json entry carries `expected_plan` — a
+`plan_check` field explaining why no automatic verdict was possible. The comparison logic
+(`check_expected_plan`) is written to activate the moment `tool_calls` becomes observable (a future
+admin endpoint, or a `--admin-url` this script would then grow), so wiring in real data later is a
+one-line change here, not a rewrite.
+
 Usage:
     scripts/alpha-itest-tunnel.sh                      # SSM port-forward, if running against alpha
     python3 scripts/analytics_gate_run.py --out /tmp/gaterun3
@@ -146,6 +161,40 @@ def ask(url, token, api_version, message, timeout):
                 "elapsed_s": round(time.monotonic() - started, 1)}
 
 
+def check_expected_plan(expected_plan, tool_calls):
+    """Compare an observed tool-call count against QUESTIONS.json's `expected_plan`, if any.
+
+    Returns a note string when the check ran (pass or fail), or None when there was nothing to
+    check — no `expected_plan` on the question, or `tool_calls` not observable (#1676: true for
+    every run today, since neither the chat response nor an admin endpoint exposes it). A non-None,
+    non-"OK" note only ever happens once `tool_calls` stops being None, which nothing in this script
+    currently does — see the module docstring.
+    """
+    if not expected_plan:
+        return None
+    if tool_calls is None:
+        return "not checked: tool calls are not observable on this endpoint (see script docstring)"
+    shortfalls = []
+    for tool, minimum in expected_plan.get("min_tool_calls", {}).items():
+        observed = tool_calls.get(tool, 0)
+        if observed < minimum:
+            shortfalls.append(f"{tool}×{observed} < required {minimum}")
+    if shortfalls:
+        reason = expected_plan.get("declined_reason", "declined composition")
+        return f"FAIL — {reason} ({'; '.join(shortfalls)})"
+    return "OK — met " + ", ".join(
+        f"{tool}×{minimum}" for tool, minimum in expected_plan.get("min_tool_calls", {}).items()
+    )
+
+
+def format_tool_calls(tool_calls):
+    if tool_calls is None:
+        return "n/a (not exposed by the endpoint)"
+    if not tool_calls:
+        return "(none)"
+    return ", ".join(f"{tool}×{count}" for tool, count in sorted(tool_calls.items()))
+
+
 def write_markdown(out_dir, record):
     """Emit the run-document skeleton a grader fills in, with provenance already recorded."""
     provenance = record["questions_file"]
@@ -160,16 +209,18 @@ def write_markdown(out_dir, record):
         f"Endpoint: `{record['endpoint']}` · questions asked: {len(record['results'])}",
         "",
         "Verdicts are graded by hand against the ground truth (plan §2.1 criterion 1); this file is"
-        " generated with the Verdict column empty.",
+        " generated with the Verdict column empty. Tool calls are not observable on this endpoint"
+        " today (#1676 — see script docstring), so that column always reads n/a and a question"
+        " with an expected_plan gets a plan_check note instead of an automatic verdict.",
         "",
-        "| Q | Verdict | Window the question fixes | Elapsed |",
-        "|---|---|---|---|",
+        "| Q | Verdict | Window the question fixes | Elapsed | Tool calls |",
+        "|---|---|---|---|---|",
     ]
     for result in record["results"]:
         window = result["window"]
         lines.append(
             f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']} |"
-            f" {result['elapsed_s']}s |"
+            f" {result['elapsed_s']}s | {format_tool_calls(result['tool_calls'])} |"
         )
     lines.append("")
     for result in record["results"]:
@@ -177,6 +228,9 @@ def write_markdown(out_dir, record):
         lines.append("")
         lines.append(f"> {result['utterance']}")
         lines.append("")
+        if result["plan_check"]:
+            lines.append(f"**Composition check ({result['fixture_id']}):** {result['plan_check']}")
+            lines.append("")
         lines.append("```")
         lines.append(result["error"] or result["answer"] or "(empty response)")
         lines.append("```")
@@ -229,16 +283,26 @@ def main():
     for question in selected:
         print(f"{question['fixture_id']} …", flush=True)
         outcome = ask(args.url, token, api_version, question["utterance"], args.timeout)
+        # tool_calls is always None today — see the module docstring's #1676 note on why nothing
+        # observable exists yet; check_expected_plan degrades to a "not checked" note in that case.
+        tool_calls = None
+        expected_plan = question.get("expected_plan")
+        plan_check = check_expected_plan(expected_plan, tool_calls)
         record["results"].append({
             "fixture_id": question["fixture_id"],
             "expected_section": question["expected_section"],
             "ground_truth_sql": question["ground_truth_sql"],
             "utterance": question["utterance"],
             "window": question["window"],
+            "expected_plan": expected_plan,
+            "tool_calls": tool_calls,
+            "plan_check": plan_check,
             **outcome,
         })
         print(f"  {outcome['elapsed_s']}s"
-              + (f" — {outcome['error']}" if outcome["error"] else ""), flush=True)
+              + (f" — {outcome['error']}" if outcome["error"] else "")
+              + (f" — {plan_check}" if plan_check and plan_check.startswith("FAIL") else ""),
+              flush=True)
 
     (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     write_markdown(out_dir, record)

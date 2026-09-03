@@ -83,6 +83,11 @@
         "resolved_range": "2026-03-01..2026-08-31, bucketed by month",
         "stated_in_question": true,
         "notes": null
+      },
+      "expected_plan": {
+        "min_tool_calls": { "getInvoicingLag": 6 },
+        "per": "one getInvoicingLag call per month, single-window E4 has no groupBy (plan §6 row 4)",
+        "declined_reason": "declined composition"
       }
     },
     {
@@ -100,6 +105,11 @@
         "resolved_range": "as of 2026-09-01",
         "stated_in_question": true,
         "notes": "`past due` and `currently` are both measured at the as-of date; aging is by due date since #1604."
+      },
+      "expected_plan": {
+        "min_tool_calls": { "getAgedReceivables": 1, "searchWorkorders": 1 },
+        "per": "one searchWorkorders call per past-due customer (#1676 status=OPEN, one call per customer id)",
+        "declined_reason": "declined composition"
       }
     },
     {
@@ -168,6 +178,11 @@
         "resolved_range": "revenue, count, average and days-to-pay over 2025-09-01..2026-08-31; outstanding balance as of 2026-09-01",
         "stated_in_question": true,
         "notes": "#1671 fix. The previous wording carried NO window, while EXPECTED.md Q9 and the ground-truth SQL both measure the twelve calendar months ending 2026-08-31 — which is what made the 2026-09-03 answer UNSCORABLE. `in the last twelve months` resolves to exactly that range under the #1670 calendar rule. The outstanding balance stays a point-in-time figure at the as-of date, as the ground truth computes it."
+      },
+      "expected_plan": {
+        "min_tool_calls": { "getRevenueByCustomer": 1, "getAgedReceivables": 1 },
+        "per": "E1 revenue-by-customer ranking plus one aging call for outstanding balance/days-to-pay (plan §6 row 9)",
+        "declined_reason": "declined composition"
       }
     },
     {
@@ -270,6 +285,11 @@
         "resolved_range": "2026-03-01..2026-08-31 vs 2025-03-01..2025-08-31",
         "stated_in_question": true,
         "notes": "Resolved by the #1670 mixed-comparison precedence: `over the last six months` alone reads rolling, but it is paired with `the same six months last year`, which names a specific period, so BOTH windows take the calendar shape — matching the ground truth."
+      },
+      "expected_plan": {
+        "min_tool_calls": { "getVendorSpend": 2 },
+        "per": "two getVendorSpend windows, current and same-period-last-year (plan §6 row 15)",
+        "declined_reason": "declined composition"
       }
     },
     {
@@ -304,6 +324,11 @@
         "resolved_range": "2026-03-01..2026-08-31 vs 2025-03-01..2025-08-31",
         "stated_in_question": false,
         "notes": "OPEN QUESTION/GROUND-TRUTH GAP — the same defect class #1671 fixed on q09, left open deliberately. The question names no window at all; `year over year` says only that two equal periods are compared. The ground truth inherits q15's six-month windows because both are served by the same E8 call, which is an implementation accident, not something the question says. Any score on q17 is therefore conditional on the grader accepting those windows. Fixing it means either restating the question with an explicit period or restating EXPECTED.md Q17 against a twelve-month year-over-year comparison; that choice interacts with the q15/q17 reading corrected by #1670 and is tracked separately."
+      },
+      "expected_plan": {
+        "min_tool_calls": { "getVendorSpend": 2 },
+        "per": "two getVendorSpend windows, current and same-period-last-year, compared on avgIssuedBillAmount (plan §6 row 17)",
+        "declined_reason": "declined composition"
       }
     },
     {
