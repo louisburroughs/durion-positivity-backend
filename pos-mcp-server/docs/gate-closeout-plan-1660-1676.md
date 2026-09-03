@@ -9,6 +9,20 @@
 > **Created:** 2026-09-03. **Tracks:** #1660 (ask 3), #1663, #1675, #1676. **Closed while
 > planning:** #1661 (everything it asked for landed in #1664/#1670/#1672/#1673).
 
+## Execution status (2026-09-03)
+
+| Wave | Status | Record |
+|---|---|---|
+| A1 #1675 | **DONE** | `0b61d73b` — `DateWindowResolver` + `DateWindowFacadeTool.resolveDateWindow` (V43), `DATE_WINDOW` layer cut to classification + protocol; resolver counted as zero in §6 |
+| A2 #1660 | **DONE (code)** | `ff702f54` — `InvoiceFacadeTool.getInvoicingLag` (E4, V44), `pos.tools.http.*` connect/read timeouts on the facade `RestClient`, q04 fixture promoted. Reading the recorded q04 cause needs the alpha run (Wave C) |
+| A3 #1663 | **DONE** | `d420f0cc` — `billsIssuedInWindow` / `avgIssuedBillAmount` renamed at the source, `pos-accounting/openapi.yaml` regenerated, grader rule on q15/q17 |
+| B #1676 | **DONE (code)** | `e698c1ff` — multi-status `status` on `GET /v1/workorders/search` (`openapi.yaml` regenerated), facade `status=OPEN` alias, per-value loop rule in `TOOL_USE`, `expected_plan` on q04/q05/q09/q15/q17. Tool-call observability is a documented gap: neither the chat response nor any admin endpoint exposes `mcp_tool_invocation_log`, so the runner's plan check is wired but reports n/a until a source exists |
+| C | **PENDING** | one alpha gate re-run against the Track B seed with the four items deployed; read the q04 cause row; close #1660/#1675/#1676 on the run document |
+
+Follow-ups outside this repository: regenerate the Angular SDK (`durion-positivity-sdk-angular`)
+from the updated `pos-accounting` and `pos-workorder` specs; the durion workexec contract guide row
+for `searchWorkorders` is updated on the same branch name in `durion`.
+
 ## Disposition
 
 | Issue | Verdict | Priority | Why |
