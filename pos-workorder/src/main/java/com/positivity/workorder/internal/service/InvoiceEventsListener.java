@@ -182,14 +182,20 @@ public class InvoiceEventsListener {
                 .updatedAt(Instant.now(clock))
                 .build());
 
-        // Resolve the async generation pending state: first fact for a workorder links it.
-        Workorder workorder =
-                workorderRepository.findById(payload.workorderId()).orElse(null);
-        if (workorder != null && workorder.getInvoiceId() == null) {
-            workorder.setInvoiceId(payload.invoiceId());
-            workorderRepository.save(workorder);
-            workorderFactPublisher.markChanged(workorder.getId());
-            log.info("Linked invoice {} to workorder {}", payload.invoiceId(), payload.workorderId());
+        // Resolve the async generation pending state: first fact for a workorder links it. An
+        // order-fronted/counter-sale/standalone-billing invoice carries no workorderId (#1651) —
+        // there is no workorder to link, and Spring Data's findById rejects a null id outright.
+        if (payload.workorderId() == null) {
+            log.debug("Invoice {} carries no workorder; nothing to link", payload.invoiceId());
+        } else {
+            Workorder workorder =
+                    workorderRepository.findById(payload.workorderId()).orElse(null);
+            if (workorder != null && workorder.getInvoiceId() == null) {
+                workorder.setInvoiceId(payload.invoiceId());
+                workorderRepository.save(workorder);
+                workorderFactPublisher.markChanged(workorder.getId());
+                log.info("Linked invoice {} to workorder {}", payload.invoiceId(), payload.workorderId());
+            }
         }
         log.info("Updated ext_invoice invoiceId={} version={}", payload.invoiceId(), aggregateVersion);
     }

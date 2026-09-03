@@ -50,11 +50,17 @@ import org.jspecify.annotations.Nullable;
  * both double-counts the deposit. Additive within schema v1; {@code null} on ordinary invoices
  * and on events from producers predating the enrichment. Values mirror pos-invoice's
  * {@code DepositSourceType} ({@code ESTIMATE}/{@code WORKORDER}/{@code ORDER}).
+ *
+ * <p>{@code workorderId} is {@code null} for invoices with no originating workorder (#1651) —
+ * order-fronted/counter sales, standalone billing, deposit-settlement documents. It is not a
+ * schema-version marker (unlike the other nullable fields above): every producer projects this
+ * field, and {@code null} is a genuine, permanent fact about the invoice, not an artifact of an
+ * older event. Consumers must not assume a non-null value.
  */
 public record InvoiceUpdatedV1(
         @NonNull UUID invoiceId,
         @Nullable String invoiceNumber,
-        @NonNull UUID workorderId,
+        @Nullable UUID workorderId,
         @Nullable UUID estimateId,
         @Nullable UUID locationId,
         @Nullable String partyId,
@@ -95,7 +101,7 @@ public record InvoiceUpdatedV1(
     public InvoiceUpdatedV1(
             @NonNull UUID invoiceId,
             @Nullable String invoiceNumber,
-            @NonNull UUID workorderId,
+            @Nullable UUID workorderId,
             @Nullable UUID estimateId,
             @Nullable UUID locationId,
             @Nullable String partyId,
@@ -136,7 +142,7 @@ public record InvoiceUpdatedV1(
     public InvoiceUpdatedV1(
             @NonNull UUID invoiceId,
             @Nullable String invoiceNumber,
-            @NonNull UUID workorderId,
+            @Nullable UUID workorderId,
             @Nullable UUID estimateId,
             @Nullable UUID locationId,
             @Nullable String partyId,
@@ -175,7 +181,7 @@ public record InvoiceUpdatedV1(
     public InvoiceUpdatedV1(
             @NonNull UUID invoiceId,
             @Nullable String invoiceNumber,
-            @NonNull UUID workorderId,
+            @Nullable UUID workorderId,
             @Nullable UUID estimateId,
             @Nullable UUID locationId,
             @Nullable String partyId,

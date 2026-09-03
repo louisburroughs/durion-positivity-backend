@@ -124,6 +124,13 @@ class AccountingAnalyticsServiceImplTest {
         return invoice;
     }
 
+    /** Order-fronted/counter-sale invoice carrying no originating workorder (#1651). */
+    private static ExtInvoice invoiceWithNoWorkorder(UUID id, Instant finalizedAt, String total) {
+        ExtInvoice invoice = invoice(id, finalizedAt, total);
+        invoice.setWorkorderId(null);
+        return invoice;
+    }
+
     private static PaymentApplication application(
             UUID invoiceId, Instant timestamp, String appliedAmount, String balanceAfter) {
         PaymentApplication app = new PaymentApplication();
@@ -201,6 +208,23 @@ class AccountingAnalyticsServiceImplTest {
             assertThat(report.getApplicationReversals()).isEqualByComparingTo(BigDecimal.ZERO);
             assertThat(report.getCollectionRatePct()).isEqualByComparingTo("80.00");
             assertThat(report.getGeneratedAt()).isEqualTo(TEST_CLOCK.instant());
+        }
+
+        @Test
+        @DisplayName("Counts an invoice with no originating workorder toward invoiced (#1651)")
+        void countsInvoiceWithNoWorkorderTowardInvoiced() {
+            when(extInvoiceRepository.findByFinalizedAtBetween(any(), any()))
+                    .thenReturn(List.of(invoiceWithNoWorkorder(
+                            UUID.randomUUID(), Instant.parse("2026-06-05T00:00:00Z"), "750.00")));
+            when(paymentApplicationRepository.findByApplicationTimestampBetween(any(), any()))
+                    .thenReturn(List.of());
+            when(paymentApplicationReversalRepository.sumAmountByReversedAtBetween(any(), any()))
+                    .thenReturn(BigDecimal.ZERO);
+
+            CollectionsAnalyticsReport report =
+                    service.getCollectionsAnalytics(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+
+            assertThat(report.getInvoiced()).isEqualByComparingTo("750.00");
         }
 
         @Test

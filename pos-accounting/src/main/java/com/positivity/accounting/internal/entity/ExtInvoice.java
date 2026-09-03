@@ -40,7 +40,13 @@ public class ExtInvoice {
     @Column(name = "invoice_number", length = 64)
     private String invoiceNumber;
 
-    @Column(name = "workorder_id", columnDefinition = "UUID", nullable = false)
+    /**
+     * Originating workorder (nullable, #1651): null for invoices with no originating workorder —
+     * order-fronted/counter sales, standalone billing, deposit-settlement documents. Such an
+     * invoice still belongs in A/R aging, collections, and payment-lag analytics; callers must
+     * not assume a non-null value.
+     */
+    @Column(name = "workorder_id", columnDefinition = "UUID")
     private UUID workorderId;
 
     @Column(name = "estimate_id", columnDefinition = "UUID")

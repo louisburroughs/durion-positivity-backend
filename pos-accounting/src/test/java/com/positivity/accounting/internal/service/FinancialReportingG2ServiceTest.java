@@ -377,6 +377,33 @@ class FinancialReportingG2ServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "Aged AR: an invoice with no originating workorder (#1651) is included with the expected bucket/balance")
+    void agedReceivablesIncludesInvoiceWithNoWorkorder() {
+        // Order-fronted/counter-sale invoices legitimately carry no workorderId (#1651); such an
+        // invoice must still be reported like any other FINALIZED/POSTED receivable.
+        ExtInvoice noWorkorder = ExtInvoice.builder()
+                .invoiceId(UUID.randomUUID())
+                .workorderId(null)
+                .partyId(UUID.randomUUID().toString())
+                .status("FINALIZED")
+                .total(new BigDecimal("275.00"))
+                .invoiceCreatedAt(AS_OF.minusDays(75).atStartOfDay().toInstant(ZoneOffset.UTC))
+                .dueDate(AS_OF.minusDays(45))
+                .build();
+        when(extInvoiceRepository.findByStatusIn(any())).thenReturn(List.of(noWorkorder));
+        when(invoiceBalanceCalculator.isArEligible(any())).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(noWorkorder)).thenReturn(noWorkorder.getTotal());
+
+        AgedReceivablesReport report = service.generateAgedReceivables(AS_OF);
+
+        assertThat(report.getRows()).hasSize(1);
+        assertThat(report.getRows().get(0).getDays31To60()).isEqualByComparingTo("275.00");
+        assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("275.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("275.00");
+    }
+
+    @Test
     @DisplayName("Aged AR: totalOutstanding is invariant under any change of due dates (only the bucket split moves)")
     void agedReceivablesTotalIsIndependentOfDueDates() {
         // The A/R inclusion predicate keys on the DOCUMENT date alone: an invoice is in the report

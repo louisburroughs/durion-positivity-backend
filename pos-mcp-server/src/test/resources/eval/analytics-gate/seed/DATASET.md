@@ -256,11 +256,16 @@ included since #1604): V1 800, V2 2600, V3 400; grand total 3800.00.
 
 ## Deviations from plan §2.3, and why
 
-1. **~148 workorders instead of ~120.** Accounting's `ext_invoice.workorder_id` is
-   `NOT NULL` (V5), so a workorder-less (order-fronted) invoice cannot be replicated
-   coherently — every one of the 145 invoices therefore carries a workorder (144
-   distinct + the shared deposit-pair WO) plus 4 open WOs. The "~30 invoices without
-   workorders" implied by 120/150 is unreachable against the real schema.
+1. **~148 workorders instead of ~120.** Accounting's `ext_invoice.workorder_id` was
+   `NOT NULL` (V5) when this fixture was seeded, so a workorder-less (order-fronted)
+   invoice could not be replicated coherently — every one of the 145 invoices
+   therefore carries a workorder (144 distinct + the shared deposit-pair WO) plus 4
+   open WOs. **#1651 lifted this constraint** (V32 drops the `NOT NULL`; `ext_invoice`
+   now legitimately holds order-fronted/counter-sale/standalone-billing invoices with
+   a null `workorder_id`, and they appear in A/R aging and collections like any other
+   invoice) — the "~30 invoices without workorders" implied by 120/150 is reachable
+   against the schema now. This fixture's every-invoice-has-a-workorder shape is a
+   fixture choice, not a schema limitation; the seed is not regenerated here.
 2. **The settlement invoice's accounting balance is 1000, not 500.** Real-system
    artifact (deposit draw-downs invisible to `InvoiceBalanceCalculator`), embraced and
    folded into C2's designed buckets — see the deposit-pair section.

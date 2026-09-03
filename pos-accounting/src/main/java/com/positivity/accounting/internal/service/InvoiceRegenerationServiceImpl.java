@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -83,7 +84,10 @@ public class InvoiceRegenerationServiceImpl implements InvoiceRegenerationServic
                     invoiceRegenerationRequestRepository.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
                 InvoiceRegenerationRequest row = existing.get();
-                if (!row.getWorkorderId().equals(workorderId)) {
+                // Objects.equals, not row.getWorkorderId().equals(...) (#1651 null-safety audit):
+                // workorderId is required on this entity today, but a null value — like any
+                // mismatch — must simply fail to match rather than NPE.
+                if (!Objects.equals(row.getWorkorderId(), workorderId)) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
                             "Idempotency key already used for a different workorder ("
