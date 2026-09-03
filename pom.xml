@@ -319,7 +319,10 @@
 		<java.version>25</java.version>
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
-		<spring-cloud.version>2025.1.2</spring-cloud.version>
+		<!-- CVE-2026-59284 (7.6): the writable /actuator/env endpoint in spring-cloud-commons
+		     lets any property key be written into the running Environment (resource injection).
+		     Fixed in spring-cloud-commons 5.0.3, which this train manages. -->
+		<spring-cloud.version>2025.1.3</spring-cloud.version>
 		<!--
 			CVE mitigations: override Spring Boot 4.1.0 BOM versions of vulnerable dependencies.
 			Remove each override once a Spring Boot 4.1.x patch release manages the fixed version.
