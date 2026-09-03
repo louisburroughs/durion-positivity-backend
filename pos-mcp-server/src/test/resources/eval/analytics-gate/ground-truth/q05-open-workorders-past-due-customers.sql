@@ -23,10 +23,9 @@
 --   seed those are the C1 and C2 rows; the C3 APPROVED row is the designed decoy and MUST
 --   NOT appear in the final answer.
 --
--- DIVERGENCE (inherited, see DATASET.md deposit-pair section): C2's 61-90 bucket is real
---   (1500.00), but C2 also shows 1000.00 "current" on the settlement invoice although only
---   500.00 is economically outstanding — InvoiceBalanceCalculator ignores deposit draw-downs.
---   Does not change the 60+ customer set.
+-- Fixed by #1652: InvoiceBalanceCalculator.balanceDue now subtracts deposit-credit draw-downs
+--   (ext_invoice_deposit_credit_application), so C2's settlement invoice reports its true
+--   500.00 economic balance in "current", not 1000.00. Does not change the 60+ customer set.
 --
 -- Usage: run via run_ground_truth.sh (sections run against different databases).
 -- DB: pos_accounting_db
@@ -63,7 +62,10 @@ open_balances AS (
                          WHERE cm.original_invoice_id = a.invoice_id AND cm.status = 'POSTED'), 0)
              - COALESCE((SELECT SUM(t.amount) FROM customer_credit_transaction t
                          WHERE t.invoice_id = a.invoice_id
-                           AND t.transaction_type = 'APPLICATION'), 0) AS open_balance
+                           AND t.transaction_type = 'APPLICATION'), 0)
+             -- Deposit-credit draw-downs (#1652) — mirrors InvoiceBalanceCalculator.balanceDue.
+             - COALESCE((SELECT SUM(d.amount_applied) FROM ext_invoice_deposit_credit_application d
+                         WHERE d.invoice_id = a.invoice_id), 0) AS open_balance
     FROM ar_invoices a
 ),
 aged AS (

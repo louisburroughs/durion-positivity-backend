@@ -21,8 +21,8 @@
 --   point-in-time balance reconstruction, which no endpoint produces today. Section 2 is the
 --   truth for what the TOOL returns when looped over historical as-of dates — the honest
 --   Wave 2 answer must present it with that caveat; the economically-true trend is BLOCKED
---   (see EXPECTED.md). Also inherited: C2's settlement invoice reports 1000.00 open though
---   economically 500.00 (deposit draw-down invisible to InvoiceBalanceCalculator).
+--   (see EXPECTED.md). Fixed by #1652 (no longer a divergence): C2's settlement invoice now
+--   reports its true 500.00 economic balance, not 1000.00.
 --
 -- Usage: run via run_ground_truth.sh.
 -- DB: pos_invoice_db
@@ -70,7 +70,10 @@ open_balances AS (
                          WHERE cm.original_invoice_id = i.invoice_id AND cm.status = 'POSTED'), 0)
              - COALESCE((SELECT SUM(t.amount) FROM customer_credit_transaction t
                          WHERE t.invoice_id = i.invoice_id
-                           AND t.transaction_type = 'APPLICATION'), 0) AS open_balance
+                           AND t.transaction_type = 'APPLICATION'), 0)
+             -- Deposit-credit draw-downs (#1652) — mirrors InvoiceBalanceCalculator.balanceDue.
+             - COALESCE((SELECT SUM(d.amount_applied) FROM ext_invoice_deposit_credit_application d
+                         WHERE d.invoice_id = i.invoice_id), 0) AS open_balance
     FROM ext_invoice i
     WHERE i.status IN ('FINALIZED', 'POSTED')
       AND i.party_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'

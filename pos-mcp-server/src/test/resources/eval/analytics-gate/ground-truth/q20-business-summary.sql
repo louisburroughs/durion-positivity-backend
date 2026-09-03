@@ -107,7 +107,10 @@ ar AS (   -- aging-batch member: endpoint totalOutstanding at each month-end (CU
                                     WHERE cm.original_invoice_id = i.invoice_id AND cm.status = 'POSTED'), 0)
                         - COALESCE((SELECT SUM(t.amount) FROM customer_credit_transaction t
                                     WHERE t.invoice_id = i.invoice_id
-                                      AND t.transaction_type = 'APPLICATION'), 0) AS open_balance,
+                                      AND t.transaction_type = 'APPLICATION'), 0)
+                        -- Deposit-credit draw-downs (#1652) — mirrors InvoiceBalanceCalculator.balanceDue.
+                        - COALESCE((SELECT SUM(d.amount_applied) FROM ext_invoice_deposit_credit_application d
+                                    WHERE d.invoice_id = i.invoice_id), 0) AS open_balance,
                       CAST(COALESCE(i.invoice_created_at, i.finalized_at, i.updated_at)
                            AT TIME ZONE 'UTC' AS date) AS document_date
                FROM ext_invoice i
