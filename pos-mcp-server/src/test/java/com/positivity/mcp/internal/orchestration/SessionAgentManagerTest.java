@@ -200,6 +200,7 @@ class SessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -418,6 +419,7 @@ class SessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,
@@ -490,6 +492,7 @@ class SessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
+                null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
                 null, // toolInvocationRecorder
                 workflowStateService,

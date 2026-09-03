@@ -60,6 +60,7 @@ class SpringAiStreamingPosAssistantTest {
                 ignored -> chatMemory,
                 openApiToolProvider,
                 null,
+                null,
                 null);
 
         List<String> tokens = assistant
@@ -125,6 +126,7 @@ class SpringAiStreamingPosAssistantTest {
                 ignored -> chatMemory,
                 openApiToolProvider,
                 null,
+                null,
                 null);
 
         assistant
@@ -183,6 +185,7 @@ class SpringAiStreamingPosAssistantTest {
                 ignored -> chatMemory,
                 null,
                 null,
+                null,
                 null);
 
         List<String> tokens = assistant
@@ -208,6 +211,7 @@ class SpringAiStreamingPosAssistantTest {
                         List.of(),
                         mock(QueryDocumentRetriever.class),
                         ignored -> mock(ChatMemory.class),
+                        null,
                         null,
                         null,
                         null))

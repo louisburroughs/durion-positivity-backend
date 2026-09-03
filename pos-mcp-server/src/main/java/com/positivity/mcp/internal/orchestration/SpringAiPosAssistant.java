@@ -5,6 +5,7 @@ import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
+import io.micrometer.observation.ObservationRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
@@ -58,9 +59,10 @@ final class SpringAiPosAssistant implements PosAssistant {
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable AnswerResolutionLadder answerResolutionLadder,
             @Nullable ToolInvocationRecorder invocationRecorder,
-            @Nullable RequestScopedUserContext requestScopedUserContext) {
+            @Nullable RequestScopedUserContext requestScopedUserContext,
+            @Nullable ObservationRegistry observationRegistry) {
         this.chatModel = chatModel;
-        this.chatClient = buildToolCallingChatClient(chatModel);
+        this.chatClient = buildToolCallingChatClient(chatModel, observationRegistry);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
@@ -164,8 +166,19 @@ final class SpringAiPosAssistant implements PosAssistant {
      * airtight — with bean resolution, a model naming a tool the caller is not entitled to could
      * execute it regardless of the gated callback list.
      */
-    static @NonNull ChatClient buildToolCallingChatClient(@NonNull ChatModel chatModel) {
-        return ChatClient.builder(chatModel)
+    static @NonNull ChatClient buildToolCallingChatClient(
+            @NonNull ChatModel chatModel, @Nullable ObservationRegistry observationRegistry) {
+        // #1655: the single-argument ChatClient.builder(chatModel) hardcodes ObservationRegistry.NOOP,
+        // which silently drops the spring.ai.chat.client observation and every per-advisor one. The
+        // model-level gen_ai.client.operation metrics survive it (the Ollama bean carries its own
+        // registry), so the gap is invisible from the metrics that do appear. Now that tools actually
+        // execute (#1653), the advisor observations are the per-tool-call trace #1601 criterion 2 asks
+        // for.
+        return ChatClient.builder(
+                        chatModel,
+                        observationRegistry == null ? ObservationRegistry.NOOP : observationRegistry,
+                        null,
+                        null)
                 .defaultAdvisors(ToolCallingAdvisor.builder()
                         .toolCallingManager(new BoundedToolCallingManager(
                                 ToolCallingManager.builder().build()))
