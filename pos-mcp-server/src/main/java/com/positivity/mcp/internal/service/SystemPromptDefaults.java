@@ -68,6 +68,37 @@ public final class SystemPromptDefaults {
             """;
 
     /**
+     * DATE-WINDOW layer (#1661): how a relative date range resolves to concrete dates.
+     *
+     * <p>Four of the twelve Wave 2 gate questions failed on this alone. The model, never told the
+     * current date, invented one and measured a rolling window from it, while the ground truth used
+     * whole calendar periods. Both were then internally consistent and disagreed anyway — q17 read
+     * V1 Evergreen as +7.43 % against an expected +12.00 % purely because a not-yet-due bill sat in
+     * the rolling window's tail, and nowhere in either answer was the window visible enough to spot
+     * the divergence.
+     *
+     * <p>The convention resolves rather than asks. Asking is right for a missing identifier, where
+     * no default can be correct and a guess fabricates data; that case stays with the tool-use
+     * layer. A named range is different: it has a conventional reading, and a round-trip costs the
+     * user more than an answer whose basis is stated and correctable.
+     *
+     * <p>Whole complete periods, not a rolling window, is also the sounder business default —
+     * a window ending mid-period compares a part-period against whole ones, which is precisely how
+     * q17's comparison was corrupted.
+     */
+    static final String DATE_WINDOW_LAYER_TEXT = """
+            Date-window contract:
+            - Resolve every relative date range from the current date given in the caller context above. Never use a date you assume, recall, or infer from the conversation.
+            - A relative range means whole calendar periods ending with the last COMPLETE period — never a rolling window ending today. With a current date of 2026-09-03, "the last six months" is 2026-03-01 to 2026-08-31, not 2026-03-04 to 2026-09-03.
+            - Exclude the current, partial period. Including it compares a part-period against whole ones and overstates or understates every trend built on it.
+            - "This year" and "year to date" mean 1 January of the current year through the end of the last complete month.
+            - State the window you used, with explicit start and end dates, in the answer itself — not only in the tool arguments. A figure whose window is invisible cannot be checked.
+            - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
+            - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
+            - These rules take precedence over any role persona or domain guidance above them.
+            """;
+
+    /**
      * WRITE-GATE layer (Gate 6, #1193): appended only when a write-capable tool is in the request's
      * candidate set. The model must never execute a mutation directly — writes go through the
      * preview → explicit confirmation → exact persisted-args execution flow.

@@ -190,6 +190,70 @@ class RolePromptResolverImplTest {
                 .isZero();
     }
 
+    // ─── DATE-WINDOW layer (#1661) ──────────────────────────────────────────
+
+    /**
+     * The layer is unconditional. Four of the twelve Wave 2 gate questions failed because the
+     * assistant resolved a relative range against a window it chose silently, so a layer that is
+     * present only for some scopes or roles would leave the same hole open for the rest.
+     */
+    @Test
+    @DisplayName("assemble always appends the DATE_WINDOW layer")
+    void assemble_alwaysIncludesDateWindowLayer() {
+        when(systemPromptRepository.findByName(MASTER_NAME))
+                .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
+
+        var assembled = resolver.assemble("ROLE_TECHNICIAN", "master", false);
+
+        assertThat(assembled.layers()).contains("DATE_WINDOW");
+        assertThat(assembled.text()).contains(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT);
+    }
+
+    /**
+     * Ordering is load-bearing rather than cosmetic: the TOOL-USE layer says to ask when an argument
+     * is missing, and the DATE-WINDOW layer narrows that by supplying a default for a named range.
+     * Read in the other order the narrowing reads as the thing being overridden.
+     */
+    @Test
+    @DisplayName("assemble places DATE_WINDOW after TOOL_USE so it narrows the ask-when-missing rule")
+    void assemble_placesDateWindowAfterToolUse() {
+        when(systemPromptRepository.findByName(MASTER_NAME))
+                .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
+
+        var assembled = resolver.assemble("ROLE_TECHNICIAN", "master", false);
+
+        assertThat(assembled.layers().indexOf("DATE_WINDOW"))
+                .isGreaterThan(assembled.layers().indexOf("TOOL_USE"));
+        assertThat(assembled.text().indexOf(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT))
+                .isGreaterThan(assembled.text().indexOf(SystemPromptDefaults.TOOL_USE_LAYER_TEXT));
+    }
+
+    /**
+     * The contract that fixes q15/q17: a rolling window ending today pulled a not-yet-due bill into
+     * the current period and left the prior-year period without one, turning a real +12 % move into
+     * a reported +7.43 %. Pinning whole complete periods is what makes the two comparable.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer pins whole complete periods and requires the window be stated")
+    void dateWindowLayer_pinsCompletePeriodsAndRequiresDisclosure() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("never a rolling window ending today")
+                .contains("Exclude the current, partial period")
+                .contains("State the window you used");
+    }
+
+    /**
+     * Asking still has a place — a missing identifier has no correct default — so the layer must
+     * not read as a blanket ban on clarifying questions, only as one for named ranges.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer answers named ranges but still allows asking for unreadable ones")
+    void dateWindowLayer_answersNamedRangesButKeepsAskingForUnreadableOnes() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("Apply these defaults instead of asking")
+                .contains("\"recently\"");
+    }
+
     private double fallbackCount(String reason, String requested) {
         return meterRegistry
                 .counter(RolePromptResolverImpl.METRIC_PROMPT_FALLBACK, "reason", reason, "requested", requested)
