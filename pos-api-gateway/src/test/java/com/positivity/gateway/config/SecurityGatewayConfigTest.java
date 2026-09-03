@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 72")
+    @DisplayName("CATALOG_VERSION is 73")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(72);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(73);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 505")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 506")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1399,8 +1399,10 @@ class SecurityGatewayConfigTest {
         // catalog v72 (#1569 Phase 1): labor-guide import + labor-time resolve edge (bits 504-505)
         assertThat(GatewayPermissionCatalog.authorityForBit(504)).isEqualTo("PERM_catalog:labor_standard:import");
         assertThat(GatewayPermissionCatalog.authorityForBit(505)).isEqualTo("PERM_catalog:labor_time:resolve");
+        // catalog v73 (#1658): shop manager dashboard aggregate read in pos-shop-manager (bit 506)
+        assertThat(GatewayPermissionCatalog.authorityForBit(506)).isEqualTo("PERM_shopmgmt:dashboard:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(506)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(507)).isNull();
     }
 
     @Test

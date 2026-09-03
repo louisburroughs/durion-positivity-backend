@@ -936,13 +936,15 @@ public enum PermissionCode {
     SUPPLIER__STOCKSNAPSHOT__READ(503, "supplier:stocksnapshot:read"),
     // ── Catalog (new) ──────────────────────────────────────────────────────────
     CATALOG__LABOR_STANDARD__IMPORT(504, "catalog:labor_standard:import"),
-    CATALOG__LABOR_TIME__RESOLVE(505, "catalog:labor_time:resolve");
+    CATALOG__LABOR_TIME__RESOLVE(505, "catalog:labor_time:resolve"),
+    // ── Shopmgmt (new) ─────────────────────────────────────────────────────────
+    SHOPMGMT__DASHBOARD__VIEW(506, "shopmgmt:dashboard:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 72;
+    public static final int CATALOG_VERSION = 73;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

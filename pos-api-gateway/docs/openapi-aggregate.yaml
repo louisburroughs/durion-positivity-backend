@@ -273,6 +273,14 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1{type}~1{catalogId}
   /v1/catalog/bulk-ingest:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1bulk-ingest
+  /v1/catalog/labor-guide-imports:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports
+  /v1/catalog/labor-guide-imports/incomplete:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports~1incomplete
+  /v1/catalog/labor-guide-imports/unmapped:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports~1unmapped
+  /v1/catalog/labor-times/resolve:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-times~1resolve
   /v1/catalog/supplier-article-codes/replay:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-article-codes~1replay
   /v1/catalog/supplier-prices/history:
@@ -1303,10 +1311,16 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1reschedule
   /v1/schedules/view:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1view
+  /v1/shop-dashboard:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-dashboard
+  /v1/shop-manager/mechanics:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics
   /v1/shop-manager/mechanics/bulk-ingest:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1bulk-ingest
   /v1/shop-manager/mechanics/by-person/{personId}/skills:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1by-person~1{personId}~1skills
+  /v1/shop-manager/{locationId}/technicians:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1{locationId}~1technicians
   /v1/shop-manager/{locationId}/technicians/{personId}/person:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1{locationId}~1technicians~1{personId}~1person
   /v1/shop/audit:
