@@ -969,10 +969,14 @@ public class WorkorderServiceImpl implements WorkorderService {
         return OperationalContextResponse.builder()
                 .version(workorder.getOperationalContextVersion())
                 .locationId(workorder.getLocationId())
-                .bayId(
+                // #1656: the id is reported type-neutrally, with the type beside it. The retired
+                // bayId key said "bay" about every assignment, including mobile-unit ones.
+                .resourceId(
                         workorder.getResourceId() != null
                                 ? workorder.getResourceId().toString()
                                 : null)
+                .resourceType(
+                        workorder.getResourceId() != null ? ResourceType.orDefault(workorder.getResourceType()) : null)
                 .assignedMechanics(parseMechanicIds(workorder.getMechanicIds()))
                 .assignedResources(
                         workorder.getResourceId() == null
@@ -996,8 +1000,13 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         workorder.setLocationId(override.getLocationId());
         List<UUID> assignedResources = override.getAssignedResources();
-        workorder.setResourceId(
-                assignedResources != null && !assignedResources.isEmpty() ? assignedResources.get(0) : null);
+        UUID resourceId = assignedResources != null && !assignedResources.isEmpty() ? assignedResources.get(0) : null;
+        // #1656: type and id are written together, exactly as handleAssignmentUpdated does. Setting
+        // the id alone would let a bay → mobile-unit override land half-applied: the workorder would
+        // point at a van while still typed BAY, so the dispatch board would file it under bays[] and
+        // go on advertising the van as available in the very same response.
+        workorder.setResourceId(resourceId);
+        workorder.setResourceType(resourceId != null ? ResourceType.orDefault(override.getResourceType()) : null);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
         Workorder saved = workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(saved.getId());
@@ -1005,7 +1014,9 @@ public class WorkorderServiceImpl implements WorkorderService {
         return OperationalContextResponse.builder()
                 .version(saved.getOperationalContextVersion())
                 .locationId(saved.getLocationId())
-                .bayId(override.getBayId())
+                .resourceId(
+                        saved.getResourceId() != null ? saved.getResourceId().toString() : null)
+                .resourceType(saved.getResourceType())
                 .assignedMechanics(parseMechanicIds(saved.getMechanicIds()))
                 .assignedResources(
                         saved.getResourceId() == null ? Collections.emptyList() : List.of(saved.getResourceId()))

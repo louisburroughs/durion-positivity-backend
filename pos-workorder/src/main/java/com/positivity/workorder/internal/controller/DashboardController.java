@@ -38,8 +38,8 @@ public class DashboardController {
                     Bays and mobile units are reported in separate arrays because they are separate kinds of \
                     resource; each array lists every active unit of its kind at the location, including units \
                     with no work today, which report assignedWorkorderId null, and a unit reads as occupied \
-                    only while its assigned workorder is still open — a cancelled workorder, or a completed \
-                    one that has not been reopened, releases the unit.
+                    while any still-open workorder holds it, including a multi-day job scheduled on an earlier \
+                    date — a cancelled workorder, or a completed one that has not been reopened, releases it.
                     Use this tool when rendering the shop's daily dispatch board; do not use listWipWorkorders, \
                     which returns flat work-in-progress rows without mechanic, bay, or conflict aggregation.
                     Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes \

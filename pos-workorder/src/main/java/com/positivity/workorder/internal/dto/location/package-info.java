@@ -9,7 +9,7 @@
  * {@code location.storage-location.updated} and nothing else.
  *
  * <p>They are therefore the <em>consumer's</em> statement of the contract it needs — deliberately
- * a strict subset of the owner's aggregates (identity, name, site scope, active flag), named and
+ * a strict subset of the owner's aggregates (identity, name, site scope, lifecycle status), named and
  * shaped to the established {@code location.<entity>.<verb>} convention. When pos-location starts
  * publishing, these records move to {@code pos-domain-events} unchanged and the listener switches
  * to importing them; until then the listener simply never sees these event types, which is why it

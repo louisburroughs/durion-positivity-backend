@@ -85,6 +85,37 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     List<Workorder> findByScheduledDateAndLocationId(@NonNull LocalDate scheduledDate, @NonNull UUID locationId);
 
     /**
+     * Workorders at {@code locationId} that still hold a resource and are still open, on or before
+     * {@code onOrBefore} (#1656).
+     *
+     * <p>The dispatch board's bay and mobile-unit panels now positively assert {@code AVAILABLE}
+     * for every unit they list, so they can no longer derive occupancy from
+     * {@link #findByScheduledDateAndLocationId} alone: a multi-day job scheduled on an earlier date
+     * is still in the bay today, and reading only today's rows would advertise that bay as free.
+     * This query is the occupancy source instead — one query per dashboard render, not one per unit.
+     *
+     * <p>"Open" is {@code Workorder.isLocked()} expressed in JPQL: CANCELLED is locked, and
+     * COMPLETED is locked unless the workorder was reopened (reopening never changes the status, so
+     * a plain {@code status NOT IN (COMPLETED, CANCELLED)} would free a bay somebody is working in).
+     * The upper date bound is what keeps the fix from over-claiming in the other direction: work
+     * scheduled for a future date is booked, not occupying the unit on the requested date. A null
+     * {@code scheduledDate} is unscheduled work that is nonetheless holding the resource now, so it
+     * is included.
+     *
+     * @param locationId the site whose panels are being rendered
+     * @param onOrBefore the dashboard date; rows scheduled after it are excluded
+     * @return open, resource-holding workorders at the location
+     */
+    @Query("SELECT w FROM Workorder w WHERE w.locationId = :locationId AND w.resourceId IS NOT NULL "
+            + "AND (w.scheduledDate IS NULL OR w.scheduledDate <= :onOrBefore) "
+            + "AND w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.CANCELLED "
+            + "AND (w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.COMPLETED "
+            + "OR w.isReopened = TRUE)")
+    @NonNull
+    List<Workorder> findOpenResourceHoldersAtLocation(
+            @Param("locationId") @NonNull UUID locationId, @Param("onOrBefore") @NonNull LocalDate onOrBefore);
+
+    /**
      * Free-text workorder search matching the workorder number (contains), a resolved
      * customer id (from a name search), or the workorder id directly, optionally
      * restricted to an exact customer, vehicle, status, creation-date window, and/or

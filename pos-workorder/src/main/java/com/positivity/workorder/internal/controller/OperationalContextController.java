@@ -35,9 +35,9 @@ public class OperationalContextController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "getOperationalContext", summary = "Get Workorder Operational Context", description = """
-                    Returns the workorder's current operational context — location, bay (derived from the assigned \
-                    resource), assigned mechanics, assigned resources, and a locked flag that is true once work \
-                    has started.
+                    Returns the workorder's current operational context — location, the primary assigned \
+                    resourceId with the resourceType that says whether it is a bay or a mobile unit, assigned \
+                    mechanics, assigned resources, and a locked flag that is true once work has started.
                     Use this tool when checking execution context before dispatch or override; do not use \
                     overrideOperationalContext, which mutates the context rather than reading it.
                     Preconditions: the workorder must exist; the context is served from the workorder's own \
@@ -63,15 +63,15 @@ public class OperationalContextController {
             summary = "Override Workorder Operational Context",
             description = """
                     Applies a manager-authorized override of the workorder's operational context, replacing the \
-                    location, assigned mechanics, and assigned resources (the first assigned resource becomes the \
-                    bay) before work starts.
+                    location, assigned mechanics, and assigned resources (the first assigned resource, typed by \
+                    resourceType, becomes the workorder's resource) before work starts.
                     Use this tool when a manager must re-slot a workorder to a different bay, crew, or location \
                     prior to execution; do not use getOperationalContext, which only reads the current context.
                     Preconditions: the workorder must exist and work must not have started — once workStartedAt \
                     is set the context is locked and overrides are rejected.
                     Required inputs: workorderId (UUID) as a path parameter and a body with locationId (UUID, \
-                    required); bayId, assignedMechanics, assignedResources, and constraints are optional, and \
-                    constraints are echoed back but not persisted.
+                    required); resourceType, assignedMechanics, assignedResources, and constraints are optional, \
+                    an absent resourceType is applied as BAY, and constraints are echoed back but not persisted.
                     Emits a WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE event and marks the workorder fact changed for \
                     downstream replication.
                     Returns 404 when no workorder exists for the id, and 409 when work has already started and \
@@ -84,17 +84,17 @@ public class OperationalContextController {
             @PathVariable UUID workorderId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
-                                    "Replacement operational context values — location, bay, mechanics, and resources.",
+                                    "Replacement operational context values — location, mechanics, resources, and the resource type.",
                             required = true,
                             content =
                                     @io.swagger.v3.oas.annotations.media.Content(
                                             mediaType = "application/json",
                                             examples =
                                                     @io.swagger.v3.oas.annotations.media.ExampleObject(
-                                                            name = "Re-slot to another bay",
+                                                            name = "Re-slot onto a mobile unit",
                                                             value = """
                                                                     {"locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a21",
-                                                                     "bayId":"BAY-3",
+                                                                     "resourceType":"MOBILE_UNIT",
                                                                      "assignedMechanics":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a22"],
                                                                      "assignedResources":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a23"],
                                                                      "constraints":[]}

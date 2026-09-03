@@ -2,6 +2,8 @@ package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -449,6 +451,7 @@ class DashboardServiceTest {
         assertThat(response.getConflicts()).anySatisfy(conflict -> {
             assertThat(conflict.getConflictType()).isEqualTo("BAY_DOUBLE_BOOKED");
             assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+            assertThat(conflict.getMessage()).startsWith("Bay " + sharedBayId);
         });
     }
 
@@ -1212,8 +1215,193 @@ class DashboardServiceTest {
         });
     }
 
+    /**
+     * Stubs both workorder reads the dashboard performs: the day's rows (summaries, mechanics,
+     * conflicts) and the open resource-holders (panel occupancy, #1656 review finding 3). The
+     * production query filters locked rows out; the stub deliberately does not, so the service's own
+     * {@code isLocked()} guard stays under test.
+     */
+    // -----------------------------------------------------------------------
+    // #1656 review finding 3: occupancy is not a function of the dashboard date
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: a multi-day WIP job scheduled yesterday still occupies its bay today")
+    void getDashboard_multiDayWorkScheduledEarlier_stillOccupiesResource() {
+        // The van/bay is physically held all week, but the job only appears in
+        // findByScheduledDateAndLocationId on the day it was scheduled. Before the panel positively
+        // asserted AVAILABLE it merely omitted bays it had not seen, so it never made a false claim;
+        // now silence is a claim, and it has to be answered from the resource holders, not the day.
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        Workorder yesterdaysJob =
+                assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.WORK_IN_PROGRESS);
+        yesterdaysJob.setScheduledDate(TEST_DATE.minusDays(1));
+        givenResourceHoldersOnly(yesterdaysJob);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getBayId()).isEqualTo(BAY_ID.toString());
+            assertThat(bay.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(bay.isAvailable()).isFalse();
+            assertThat(bay.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+        // The job is not on today's schedule, so it is correctly absent from the workorder panel —
+        // occupancy and the day's list are two different questions.
+        assertThat(response.getWorkorders()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#1656: occupancy is queried once for the location, not once per unit")
+    void getDashboard_queriesOccupancyOncePerRender() {
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders();
+
+        dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Both panels share the one result; a per-unit lookup would not survive a real board.
+        verify(workorderRepository, times(1)).findOpenResourceHoldersAtLocation(LOCATION_UUID, TEST_DATE);
+    }
+
+    // -----------------------------------------------------------------------
+    // #1656 review finding 5: the read model names the resource, not "the bay"
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: a workorder summary carries assignedResourceId with the resourceType beside it")
+    void getDashboard_workorderSummary_carriesTypedResource() {
+        // The retired assignedBayId key shipped a mobile unit's id under a bay-named field that no
+        // longer joined to anything in bays[], forcing a consumer to guess the kind from the id.
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, UNIT_ID, ResourceType.MOBILE_UNIT, WorkorderStatus.WORK_IN_PROGRESS));
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getAssignedResourceId()).isEqualTo(UNIT_ID.toString());
+            assertThat(summary.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: an unassigned workorder reports a null resource id and a null resourceType")
+    void getDashboard_unassignedWorkorder_reportsNoResource() {
+        givenWorkorders(assignedWorkorder(WORKORDER_ID, null, null, WorkorderStatus.APPROVED));
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // A type with no id would be a discriminator for nothing.
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getAssignedResourceId()).isNull();
+            assertThat(summary.getResourceType()).isNull();
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // #1656 review finding 6: conflicts agree with the panels they ship beside
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#1656: a double-booked mobile unit is reported as MOBILE_UNIT_DOUBLE_BOOKED, not as a bay")
+    void getDashboard_mobileUnitDoubleBooked_reportsUnitTypedConflict() {
+        givenActiveUnits(unitReplica(UNIT_ID, "Van 3"));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, UNIT_ID, ResourceType.MOBILE_UNIT, WorkorderStatus.WORK_IN_PROGRESS),
+                assignedWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                        UNIT_ID,
+                        ResourceType.MOBILE_UNIT,
+                        WorkorderStatus.ASSIGNED));
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Grouping on the id alone called this a bay and printed "Bay <uuid>" for a van.
+        assertThat(response.getConflicts()).singleElement().satisfies(conflict -> {
+            assertThat(conflict.getConflictType()).isEqualTo("MOBILE_UNIT_DOUBLE_BOOKED");
+            assertThat(conflict.getSeverity()).isEqualTo("BLOCKING");
+            assertThat(conflict.getMessage()).startsWith("Mobile unit " + UNIT_ID);
+            assertThat(conflict.getAffectedResourceId()).isEqualTo(UNIT_ID.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a cancelled workorder yields no double-booking conflict for a unit the panel calls AVAILABLE")
+    void getDashboard_cancelledWorkorder_producesNoDoubleBookingConflict() {
+        // The response used to contradict itself: bays[] reported the bay AVAILABLE (locked work
+        // releases it) while conflicts[] reported it BLOCKING-double-booked off the same rows.
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.CANCELLED),
+                assignedWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                        BAY_ID,
+                        ResourceType.BAY,
+                        WorkorderStatus.CANCELLED));
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getConflicts()).isEmpty();
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(bay.isAvailable()).isTrue();
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: one live and one cancelled claim on a bay is not a double booking")
+    void getDashboard_oneLiveOneCancelledClaim_isNotDoubleBooked() {
+        givenActiveBays(bayReplica(BAY_ID, "Front Bay 1"));
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, BAY_ID, ResourceType.BAY, WorkorderStatus.WORK_IN_PROGRESS),
+                assignedWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                        BAY_ID,
+                        ResourceType.BAY,
+                        WorkorderStatus.CANCELLED));
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Only one workorder actually holds the bay, and that is what the panel says too.
+        assertThat(response.getConflicts()).isEmpty();
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getStatus()).isEqualTo("OCCUPIED");
+            assertThat(bay.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#1656: a bay and a mobile unit that happen to share an id are two resources, not a conflict")
+    void getDashboard_sameIdDifferentTypes_isNotDoubleBooked() {
+        // Bay and mobile-unit ids come from two separate aggregates upstream, so identity alone was
+        // never a safe grouping key.
+        UUID sharedId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        givenWorkorders(
+                assignedWorkorder(WORKORDER_ID, sharedId, ResourceType.BAY, WorkorderStatus.WORK_IN_PROGRESS),
+                assignedWorkorder(
+                        UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                        sharedId,
+                        ResourceType.MOBILE_UNIT,
+                        WorkorderStatus.WORK_IN_PROGRESS));
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getConflicts()).isEmpty();
+    }
+
     private void givenWorkorders(Workorder... workorders) {
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(workorders));
+        when(workorderRepository.findOpenResourceHoldersAtLocation(any(), any()))
+                .thenReturn(List.of(workorders));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+    }
+
+    /** Only the occupancy query returns rows — the day's schedule does not contain them. */
+    private void givenResourceHoldersOnly(Workorder... holders) {
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of());
+        when(workorderRepository.findOpenResourceHoldersAtLocation(any(), any()))
+                .thenReturn(List.of(holders));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
     }
 

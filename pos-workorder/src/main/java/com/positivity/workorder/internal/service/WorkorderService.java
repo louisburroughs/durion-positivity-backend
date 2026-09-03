@@ -147,6 +147,10 @@ public interface WorkorderService {
      * Manager override: replaces the operational context for a workorder.
      * Not allowed after workStartedAt is set.
      * CAP:140 Story #59.
+     *
+     * <p>The override replaces resource id and {@code resourceType} together (#1656), the same
+     * full-replace the assignment-event path performs, so a bay-to-mobile-unit re-slot can never
+     * leave the workorder pointing at one kind of resource while typed as the other.
      */
     @NonNull
     OperationalContextResponse overrideOperationalContext(

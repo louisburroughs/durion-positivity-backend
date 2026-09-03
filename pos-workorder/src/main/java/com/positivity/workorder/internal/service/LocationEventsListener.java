@@ -86,7 +86,7 @@ public class LocationEventsListener {
                 ? null
                 : Counter.builder("replica.payload.rejected")
                         .description(
-                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. a malformed identifier)")
                         .tag("owner", OWNER)
                         .tag("entity", "location-events")
                         .register(registry);
@@ -185,7 +185,7 @@ public class LocationEventsListener {
                 .bayId(payload.bayId())
                 .locationId(payload.locationId())
                 .name(payload.name())
-                .active(payload.active())
+                .active(isActiveStatus(payload.status()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -210,7 +210,7 @@ public class LocationEventsListener {
                 .mobileUnitId(payload.mobileUnitId())
                 .baseLocationId(payload.baseLocationId())
                 .name(payload.name())
-                .active(payload.active())
+                .active(isActiveStatus(payload.status()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -221,5 +221,24 @@ public class LocationEventsListener {
         MobileUnitDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), MobileUnitDeletedV1.class);
         extMobileUnitReplicaRepository.deleteById(payload.mobileUnitId());
         log.info("Deleted ext_mobile_unit mobileUnitId={}", payload.mobileUnitId());
+    }
+
+    /**
+     * Whether an owner-published lifecycle status means "this resource can take work today" (#1656).
+     *
+     * <p>Neither {@code BayEntity} nor {@code MobileUnitEntity} carries a boolean active flag in
+     * pos-location — the lifecycle lives entirely in {@code status}. So the replica's own
+     * {@code active} column has to be <em>derived</em> here, and it is derived by allow-listing the
+     * single value that means in service. A deny-list would be wrong for two different reasons at
+     * once: a bay's status is a closed {@code ACTIVE} | {@code OUT_OF_SERVICE} pair today but is not
+     * guaranteed to stay closed, and a mobile unit's status is a free-text column, so an unseen or
+     * misspelled value would otherwise be read as "available" and put a van the shop cannot dispatch
+     * onto the board. Absent, blank and unknown all mean not active.
+     *
+     * @param status the owner's status string, possibly {@code null}
+     * @return true only for the {@code ACTIVE} token, in any casing
+     */
+    private static boolean isActiveStatus(String status) {
+        return status != null && "ACTIVE".equalsIgnoreCase(status.strip());
     }
 }

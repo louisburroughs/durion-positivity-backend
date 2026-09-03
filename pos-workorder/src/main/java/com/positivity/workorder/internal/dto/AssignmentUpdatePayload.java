@@ -41,11 +41,18 @@ public class AssignmentUpdatePayload {
      * {@code BAY} through {@link ResourceType#orDefault(ResourceType)} — the pre-#1656 behaviour,
      * where every assignment was assumed to be a bay. Once shopmgmt publishes the field, that
      * fallback stops being reached; the contract follow-up is tracked with this story.
+     *
+     * <p>Binding is deliberately lenient ({@link ResourceType#fromJson(String)}): the value comes
+     * from a producer this module does not control, and it arrives inside the same payload as the
+     * location, the resource id and the mechanics. Strict enum binding would let one mis-cased or
+     * unknown token throw out of the Kafka listener's {@code treeToValue} and discard the whole
+     * assignment update silently, so an unrecognised token is warned about and then treated as
+     * absent instead.
      */
     @Schema(
-            description = "Kind of resource the assignment points at. Optional: an absent value is "
-                    + "interpreted as BAY, which is what every assignment meant before mobile units "
-                    + "were representable.",
+            description = "Kind of resource the assignment points at. Optional and case-insensitive: an "
+                    + "absent or unrecognised value is interpreted as BAY, which is what every "
+                    + "assignment meant before mobile units were representable.",
             example = "MOBILE_UNIT",
             requiredMode = NOT_REQUIRED)
     private ResourceType resourceType;

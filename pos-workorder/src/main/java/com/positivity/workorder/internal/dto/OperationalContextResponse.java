@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.workorder.internal.enums.ResourceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -27,8 +28,27 @@ public class OperationalContextResponse {
             requiredMode = NOT_REQUIRED)
     private UUID locationId;
 
-    @Schema(description = "Bay identifier", example = "BAY-12", requiredMode = NOT_REQUIRED)
-    private String bayId;
+    /**
+     * The workorder's primary assigned resource, named type-neutrally (#1656).
+     *
+     * <p>This replaces the former {@code bayId}, which was populated from {@code resourceId}
+     * regardless of what that id actually pointed at — so a mobile-unit assignment shipped a
+     * van's id under a bay-named key that joined to nothing in the dispatch board's
+     * {@code bays[]}. The id travels with {@link #resourceType} so a consumer never has to infer
+     * the kind of resource from the id itself.
+     */
+    @Schema(
+            description = "Identifier of the workorder's primary assigned resource; read together with "
+                    + "resourceType, which says whether it is a bay or a mobile unit",
+            example = "550e8400-e29b-41d4-a716-446655440301",
+            requiredMode = NOT_REQUIRED)
+    private String resourceId;
+
+    @Schema(
+            description = "Kind of resource resourceId points at. Null exactly when resourceId is null",
+            example = "BAY",
+            requiredMode = NOT_REQUIRED)
+    private ResourceType resourceType;
 
     @Schema(description = "Scheduled start time", example = "2026-01-15T09:30:00Z", requiredMode = NOT_REQUIRED)
     private Instant scheduledStartAt;

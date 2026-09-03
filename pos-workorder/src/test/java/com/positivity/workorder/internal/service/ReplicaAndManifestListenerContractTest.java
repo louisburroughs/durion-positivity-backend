@@ -81,6 +81,8 @@ class ReplicaAndManifestListenerContractTest {
 
     private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
     private static final UUID SITE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e2");
+    private static final UUID OTHER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e3");
+    private static final UUID THIRD_ID = UUID.fromString("00000000-0000-0000-0000-0000000000e4");
     private static final Instant NOW = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_START = Instant.parse("2026-08-11T09:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T09:05:00Z");
@@ -332,7 +334,7 @@ class ReplicaAndManifestListenerContractTest {
         void bayMapping() {
             locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
                     {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"GENERAL",
-                     "status":"ACTIVE","active":true}""".formatted(ID, SITE_ID)));
+                     "status":"ACTIVE"}""".formatted(ID, SITE_ID)));
 
             ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
             verify(bayRepository).save(captor.capture());
@@ -351,7 +353,7 @@ class ReplicaAndManifestListenerContractTest {
         @DisplayName("#1656 mobile unit: maps identity and base site, and honours the stale-version guard")
         void mobileUnitMapping() {
             String payload = """
-                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE","active":true}""".formatted(ID, SITE_ID);
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"ACTIVE"}""".formatted(ID, SITE_ID);
             locationListener.onLocationEvent(envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, payload));
 
             ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
@@ -369,6 +371,45 @@ class ReplicaAndManifestListenerContractTest {
             locationListener.onLocationEvent(envelope("evt-2", MobileUnitUpdatedV1.EVENT_TYPE, payload));
             // Version 3 against a replica at 5: strictly older, skipped.
             verify(mobileUnitRepository, org.mockito.Mockito.times(1)).save(any());
+        }
+
+        @Test
+        @DisplayName("#1656: a bay status the consumer has never seen before is not active")
+        void unknownBayStatusIsNotActive() {
+            // The owner publishes status, never a boolean active flag, and its vocabulary is not this
+            // module's to fix. Allow-listing ACTIVE means a value nobody here has seen keeps the unit
+            // off the dispatch board instead of advertising a bay that may be out of service.
+            locationListener.onLocationEvent(envelope("evt-1", BayUpdatedV1.EVENT_TYPE, """
+                    {"bayId":"%s","locationId":"%s","name":"Front Bay 1","bayType":"GENERAL",
+                     "status":"AWAITING_INSPECTION"}""".formatted(ID, SITE_ID)));
+
+            ArgumentCaptor<ExtBayReplica> captor = ArgumentCaptor.forClass(ExtBayReplica.class);
+            verify(bayRepository).save(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+            // The row is still replicated — only its activeness is withheld.
+            assertThat(captor.getValue().getName()).isEqualTo("Front Bay 1");
+        }
+
+        @Test
+        @DisplayName("#1656: an unknown or absent mobile-unit status is not active; ACTIVE binds in any casing")
+        void mobileUnitStatusAllowList() {
+            // MobileUnitEntity.status is a free-text column upstream, so a deny-list of the values
+            // known today would let a typo put an undispatchable van on the board as available.
+            locationListener.onLocationEvent(
+                    envelope("evt-1", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 3","status":"IN_TRANSIT"}""".formatted(ID, SITE_ID)));
+            locationListener.onLocationEvent(
+                    envelope("evt-2", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 4"}""".formatted(OTHER_ID, SITE_ID)));
+            locationListener.onLocationEvent(
+                    envelope("evt-3", MobileUnitUpdatedV1.EVENT_TYPE, """
+                    {"mobileUnitId":"%s","baseLocationId":"%s","name":"Van 5","status":"active"}""".formatted(THIRD_ID, SITE_ID)));
+
+            ArgumentCaptor<ExtMobileUnitReplica> captor = ArgumentCaptor.forClass(ExtMobileUnitReplica.class);
+            verify(mobileUnitRepository, org.mockito.Mockito.times(3)).save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .extracting(ExtMobileUnitReplica::isActive)
+                    .containsExactly(false, false, true);
         }
 
         @Test

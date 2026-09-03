@@ -86,10 +86,18 @@ public class DashboardServiceImpl implements DashboardService {
         // cross-domain read whose endpoint no longer existed and which always yielded an empty
         // list, so bay enrichment never reached this dashboard at all. The replacement is the
         // event-fed replica (ADR-0044 §6), not another client.
+        //
+        // Occupancy comes from its own query, not from the day's rows (#1656 review finding 3).
+        // Once a panel positively asserts AVAILABLE it is making a claim, and the day's rows cannot
+        // support that claim: a work-in-progress job scheduled two days ago is still in its bay
+        // today and would never appear in findByScheduledDateAndLocationId for today. One extra
+        // query per render covers both panels — never one per unit.
+        List<Workorder> resourceHolders = workorderRepository.findOpenResourceHoldersAtLocation(locationUuid, date);
+
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
-        List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, workorders);
-        List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, workorders);
+        List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, resourceHolders);
+        List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, resourceHolders);
 
         List<ConflictEntry> conflicts = detectAllConflicts(workorders, people, date);
 
@@ -121,8 +129,11 @@ public class DashboardServiceImpl implements DashboardService {
                         .status(wo.getStatus() != null ? wo.getStatus().name() : null)
                         .scheduledDate(wo.getScheduledDate())
                         .assignedMechanicId(parseFirstMechanic(wo.getMechanicIds()))
-                        .assignedBayId(
+                        // #1656: id and type ship together. The retired assignedBayId key put a
+                        // mobile unit's id under a bay-named field that joined to nothing in bays[].
+                        .assignedResourceId(
                                 wo.getResourceId() != null ? wo.getResourceId().toString() : null)
+                        .resourceType(wo.getResourceId() != null ? effectiveResourceType(wo) : null)
                         // #1569: the overlap-aware sum of the workorder's agreed labor hours —
                         // the field stops serialising as an unkept promise. One line query per
                         // workorder; dashboard pages are small, and the summation reads
@@ -168,7 +179,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    private List<BayStatus> buildBayStatuses(UUID locationId, List<Workorder> workorders) {
+    private List<BayStatus> buildBayStatuses(UUID locationId, List<Workorder> resourceHolders) {
         Map<UUID, String> namesById = new LinkedHashMap<>();
         // Not Collectors.toMap: a replica row with no name yet is legitimate, and toMap rejects a
         // null value outright.
@@ -178,7 +189,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         return buildResourcePanel(
                         ResourceType.BAY,
-                        workorders,
+                        resourceHolders,
                         namesById,
                         id -> extBayReplicaRepository.findById(id).map(ExtBayReplica::getName))
                 .stream()
@@ -192,7 +203,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    private List<MobileUnitStatus> buildMobileUnitStatuses(UUID locationId, List<Workorder> workorders) {
+    private List<MobileUnitStatus> buildMobileUnitStatuses(UUID locationId, List<Workorder> resourceHolders) {
         Map<UUID, String> namesById = new LinkedHashMap<>();
         // Not Collectors.toMap — see buildBayStatuses.
         for (ExtMobileUnitReplica unit :
@@ -202,7 +213,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         return buildResourcePanel(
                         ResourceType.MOBILE_UNIT,
-                        workorders,
+                        resourceHolders,
                         namesById,
                         id -> extMobileUnitReplicaRepository.findById(id).map(ExtMobileUnitReplica::getName))
                 .stream()
@@ -238,28 +249,31 @@ public class DashboardServiceImpl implements DashboardService {
      *   <li><b>Locked work does not occupy anything.</b> {@link Workorder#isLocked()} is the single
      *       authority (CANCELLED, or COMPLETED and not reopened). A naive
      *       {@code status ∈ {COMPLETED, CANCELLED}} test would re-lock a reopened workorder and show
-     *       its resource as free while someone is still working on it.
+     *       its resource as free while someone is still working on it. The repository query already
+     *       encodes the same rule; it is re-applied here so the invariant survives any caller.
      *   <li><b>A resource still holding open work is always rendered</b>, even when it is not in the
      *       active set — it was decommissioned mid-job, or its own replica row has not arrived yet.
      *       Both cases are handled at the one marked spot below.
      * </ul>
      *
      * @param resourceType the panel being built
-     * @param workorders the day's workorders at this location
+     * @param resourceHolders open, resource-holding workorders at this location (see
+     *     {@code WorkorderRepository#findOpenResourceHoldersAtLocation}); not restricted to the
+     *     dashboard date, so a multi-day job started earlier still holds its unit
      * @param activeNamesById active resources at the location, id → name, in display order
      * @param nameLookup resolves the name of a resource outside the active set, empty when unknown
      * @return the panel rows, active resources first in replica order
      */
     private List<ResourcePanelRow> buildResourcePanel(
             ResourceType resourceType,
-            List<Workorder> workorders,
+            List<Workorder> resourceHolders,
             Map<UUID, String> activeNamesById,
             Function<UUID, Optional<String>> nameLookup) {
 
         // Only open work occupies a resource; a cancelled or completed-not-reopened workorder that
         // still carries its old assignment is stale and must not hold the resource down.
         Map<UUID, Workorder> occupantByResourceId = new LinkedHashMap<>();
-        for (Workorder workorder : workorders) {
+        for (Workorder workorder : resourceHolders) {
             if (workorder.getResourceId() == null || workorder.isLocked()) {
                 continue;
             }
@@ -326,7 +340,7 @@ public class DashboardServiceImpl implements DashboardService {
     private List<ConflictEntry> detectAllConflicts(
             List<Workorder> workorders, List<PersonAvailability> people, LocalDate date) {
         List<ConflictEntry> conflicts = new ArrayList<>();
-        detectBayDoubleBooking(workorders, conflicts);
+        detectResourceDoubleBooking(workorders, conflicts);
         detectMechanicDoubleBookingFromWorkorders(workorders, conflicts);
         detectMechanicStatusConflicts(workorders, people, date, conflicts);
         detectLocationMismatch(workorders, people, conflicts);
@@ -365,20 +379,53 @@ public class DashboardServiceImpl implements DashboardService {
         }
     }
 
-    private void detectBayDoubleBooking(List<Workorder> workorders, List<ConflictEntry> conflicts) {
-        Map<UUID, List<Workorder>> byBay = workorders.stream()
-                .filter(wo -> wo.getResourceId() != null)
-                .collect(Collectors.groupingBy(Workorder::getResourceId));
-        for (Map.Entry<UUID, List<Workorder>> entry : byBay.entrySet()) {
-            if (entry.getValue().size() > 1) {
+    /** The identity a double-booking is judged on: the resource id <em>and</em> what kind it is. */
+    private record ResourceKey(UUID resourceId, ResourceType resourceType) {}
+
+    /**
+     * Flags a resource that more than one still-open workorder claims on the dashboard date (#1656).
+     *
+     * <p>Two things the bay-only predecessor got wrong. It grouped on {@code resourceId} alone, so a
+     * double-booked <em>van</em> was reported as {@code BAY_DOUBLE_BOOKED} with a "Bay &lt;uuid&gt;"
+     * message naming a bay that does not exist. And it counted every workorder carrying the id,
+     * including cancelled and completed ones, so a stale assignment produced a BLOCKING conflict
+     * against a unit the panels in the very same response reported as AVAILABLE — a response that
+     * contradicted itself. {@link Workorder#isLocked()} is the same authority the panels use, so the
+     * two now agree by construction.
+     */
+    private void detectResourceDoubleBooking(List<Workorder> workorders, List<ConflictEntry> conflicts) {
+        Map<ResourceKey, Long> claimCounts = workorders.stream()
+                .filter(wo -> wo.getResourceId() != null && !wo.isLocked())
+                .collect(Collectors.groupingBy(
+                        wo -> new ResourceKey(wo.getResourceId(), effectiveResourceType(wo)),
+                        LinkedHashMap::new,
+                        Collectors.counting()));
+        for (Map.Entry<ResourceKey, Long> entry : claimCounts.entrySet()) {
+            if (entry.getValue() > 1) {
+                ResourceKey key = entry.getKey();
                 conflicts.add(ConflictEntry.builder()
-                        .conflictType("BAY_DOUBLE_BOOKED")
+                        .conflictType(doubleBookedConflictType(key.resourceType()))
                         .severity(BLOCKING)
-                        .message("Bay " + entry.getKey() + " is assigned to multiple workorders")
-                        .affectedResourceId(entry.getKey().toString())
+                        .message(resourceLabel(key.resourceType()) + key.resourceId()
+                                + " is assigned to multiple workorders")
+                        .affectedResourceId(key.resourceId().toString())
                         .build());
             }
         }
+    }
+
+    /**
+     * The conflict type for a double-booked resource of this kind. Bays keep {@code BAY_DOUBLE_BOOKED}
+     * — the meaning is unchanged for them — and mobile units get their own type rather than being
+     * mislabelled as bays.
+     */
+    private static String doubleBookedConflictType(ResourceType resourceType) {
+        return resourceType == ResourceType.MOBILE_UNIT ? "MOBILE_UNIT_DOUBLE_BOOKED" : "BAY_DOUBLE_BOOKED";
+    }
+
+    /** Human label for a resource kind, used to open a conflict message. */
+    private static String resourceLabel(ResourceType resourceType) {
+        return resourceType == ResourceType.MOBILE_UNIT ? "Mobile unit " : "Bay ";
     }
 
     private void detectMechanicDoubleBookingFromWorkorders(List<Workorder> workorders, List<ConflictEntry> conflicts) {

@@ -142,16 +142,49 @@ arrives without it is applied as `BAY` — the meaning every assignment had befo
 representable. V27 backfills existing assigned rows the same way. `AssignmentUpdatedEvent`
 `resolveResourceType()` is the single place that fallback happens.
 
+Inbound binding of `resourceType` is **lenient** (`ResourceType.fromJson`): any casing is accepted,
+and an unrecognised token is logged by name and then treated as absent, so it lands on the same
+`BAY` fallback. The producer is upstream and the value shares a payload with the location, the
+resource id and the mechanics; strict enum binding would let one bad token throw out of
+`KafkaCommandListener`'s log-and-swallow catch and discard the entire assignment update silently.
+
+The same id+type pair is written together by **both** write paths — the assignment event and
+`POST /v1/workorders/{id}/operationalContext/override` — so a bay-to-mobile-unit move can never
+half-apply. The override request therefore carries `resourceType` (optional, `BAY` when absent) in
+place of the former free-text `bayId`, which was echoed back but never persisted.
+
+The read models name the resource type-neutrally: `WorkorderSummary.assignedResourceId` +
+`resourceType` (was `assignedBayId`) and `OperationalContextResponse.resourceId` + `resourceType`
+(was `bayId`). The bay-named keys are gone rather than deprecated — they carried mobile-unit ids
+that joined to nothing in `bays[]`.
+
 Resource identity comes from the `ext_bay` and `ext_mobile_unit` replicas (V28), fed by
 `location.bay.*` / `location.mobile-unit.*` facts on `location.events.v1` per ADR-0044 §6 — no
 synchronous call into pos-location and no cross-schema read. This is why `BayStatus.bayName` is
 populated at all: it was declared-but-always-null until a replica existed to resolve it from.
 
+A replica row's `active` flag is **derived from the owner's `status`**, allow-listing `ACTIVE`
+(any casing); anything else, including an absent or unseen value, is not active. pos-location's
+`BayEntity` and `MobileUnitEntity` have no boolean active field at all — a bay's status is
+`ACTIVE` | `OUT_OF_SERVICE` and a mobile unit's is a free-text column whose in-use values are
+`ACTIVE` | `INACTIVE` — so a deny-list would put an undispatchable unit on the board, and a
+consumer-invented `active` boolean would deserialize to `false` on every real event and leave both
+panels permanently empty.
+
 Both panels list **every active unit at the location** (bays by `location_id`, units by
 `base_location_id`), including units holding no work, which report `assignedWorkorderId: null`.
-A unit reads as occupied only while its assigned workorder is open — `Workorder.isLocked()` is the
-sole authority (`CANCELLED`, or `COMPLETED` and not reopened), so a reopened completed workorder
-keeps its resource rather than being wrongly released.
+A unit reads as occupied while **any** still-open workorder holds it, which is why occupancy comes
+from `WorkorderRepository.findOpenResourceHoldersAtLocation` rather than from the day's rows: a
+multi-day job scheduled on an earlier date is still in its bay today, and a panel that positively
+asserts `AVAILABLE` cannot answer that from one date's rows. Work scheduled *after* the requested
+date is excluded — it is booked, not occupying. `Workorder.isLocked()` is the sole open/closed
+authority (`CANCELLED`, or `COMPLETED` and not reopened), so a reopened completed workorder keeps
+its resource rather than being wrongly released.
+
+Conflict detection uses the same two rules, so the panels and `conflicts[]` cannot contradict each
+other: double-booking is grouped by resource id **and** type, locked workorders are excluded, and
+the conflict is reported as `BAY_DOUBLE_BOOKED` or `MOBILE_UNIT_DOUBLE_BOOKED` with a message
+naming the right kind of unit.
 
 Two edge behaviours are deliberate and live in `DashboardServiceImpl.buildResourcePanel`:
 

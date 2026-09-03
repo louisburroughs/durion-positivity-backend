@@ -12,18 +12,21 @@ import org.jspecify.annotations.Nullable;
  * {@code ext_mobile_unit} replica from it so the dispatch board can resolve unit identity for a
  * mobile assignment and list idle units.
  *
+ * <p>The owner's {@code MobileUnitEntity} has no boolean active flag either — see
+ * {@link BayUpdatedV1}. Its {@code status} is a free-text column whose in-use values are
+ * {@code ACTIVE} and {@code INACTIVE}, which is why the consumer allow-lists {@code ACTIVE} rather
+ * than deny-listing the statuses it happens to know about today.
+ *
  * @param mobileUnitId mobile-unit identifier (also the envelope aggregateId)
  * @param baseLocationId the site the unit is based at and dispatched from
  * @param name display name, e.g. {@code Van 3}
- * @param status the owner's status string, e.g. {@code ACTIVE}
- * @param active convenience flag mirroring the owner's active state
+ * @param status the owner's status string, e.g. {@code ACTIVE} or {@code INACTIVE}
  */
 public record MobileUnitUpdatedV1(
         @NonNull UUID mobileUnitId,
         @Nullable UUID baseLocationId,
         @Nullable String name,
-        @Nullable String status,
-        boolean active) {
+        @Nullable String status) {
 
     public static final String EVENT_TYPE = "location.mobile-unit.updated";
     public static final int SCHEMA_VERSION = 1;

@@ -11,20 +11,24 @@ import org.jspecify.annotations.Nullable;
  * pos-workorder maintains a read-only {@code ext_bay} replica from it so the dispatch board can
  * name the bay a workorder is assigned to and list bays that currently hold no work.
  *
+ * <p>The owner's {@code BayEntity} has no boolean active flag — its lifecycle is carried entirely
+ * by {@code status} ({@code ACTIVE} | {@code OUT_OF_SERVICE}). This record therefore mirrors
+ * {@code status} verbatim and lets the consumer derive activeness from it; inventing an
+ * {@code active} boolean the owner never publishes would deserialize to {@code false} on every
+ * real event and leave the dispatch panel permanently empty.
+ *
  * @param bayId bay identifier (also the envelope aggregateId)
  * @param locationId the site the bay belongs to
  * @param name display name, e.g. {@code Front Bay 1}
  * @param bayType the owner's bay-type string; carried for forward compatibility, unused today
- * @param status the owner's status string, e.g. {@code ACTIVE}
- * @param active convenience flag mirroring the owner's active state
+ * @param status the owner's status string, {@code ACTIVE} or {@code OUT_OF_SERVICE}
  */
 public record BayUpdatedV1(
         @NonNull UUID bayId,
         @Nullable UUID locationId,
         @Nullable String name,
         @Nullable String bayType,
-        @Nullable String status,
-        boolean active) {
+        @Nullable String status) {
 
     public static final String EVENT_TYPE = "location.bay.updated";
     public static final int SCHEMA_VERSION = 1;
