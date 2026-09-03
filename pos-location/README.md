@@ -33,6 +33,8 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `GET /v1/locations/{id}/coverage-rules` — service area coverage rules
 - `GET /v1/bays/{bayId}` — retrieve a bay
 - `POST /v1/locations/{locationId}/bays` — add a bay to a location
+- `DELETE /v1/locations/{locationId}/bays/{bayId}` — hard-delete a bay (#1668)
+- `DELETE /v1/mobile-units/{id}` — hard-delete a mobile unit and its coverage rules (#1668)
 - `GET /v1/locations/{storageLocationId}` — retrieve a storage location
 - `POST /v1/locations/{siteId}/storage-locations` — create a storage location
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
@@ -102,9 +104,9 @@ existing `location.events.v1` topic (issue #1668, ADR-0044 §6):
 | Event type                     | Payload                                             | When |
 | ------------------------------ | --------------------------------------------------- | ---- |
 | `location.bay.updated`         | `bayId`, `locationId`, `name`, `bayType`, `status`  | bay created or changed, including a status change |
-| `location.bay.deleted`         | `bayId`                                             | bay hard-deleted |
+| `location.bay.deleted`         | `bayId`                                             | bay hard-deleted via `DELETE /v1/locations/{locationId}/bays/{bayId}` |
 | `location.mobile-unit.updated` | `mobileUnitId`, `baseLocationId`, `name`, `status`  | unit created or changed, including a re-base |
-| `location.mobile-unit.deleted` | `mobileUnitId`                                      | unit hard-deleted |
+| `location.mobile-unit.deleted` | `mobileUnitId`                                      | unit hard-deleted via `DELETE /v1/mobile-units/{id}` |
 
 Records live in `pos-domain-events` (`com.positivity.domainevents.location`). Consumers —
 pos-workorder's dispatch board and pos-shop-manager's unit roster — hold `ext_bay` /
@@ -115,6 +117,12 @@ pos-workorder's dispatch board and pos-shop-manager's unit roster — hold `ext_
 Consumers derive activeness themselves with an allow-list on `ACTIVE`, so an unrecognised status
 reads as inactive rather than as an error. Taking a unit out of service is a status change on the
 `updated` fact — the replica keeps the row and flips it inactive; only a `deleted` fact removes it.
+
+Deletion is a hard delete for a unit created in error, not the way to retire a real one: use PATCH
+with `OUT_OF_SERVICE` / `INACTIVE` for that. Deleting a mobile unit also removes its coverage rules
+(`mobile_unit_coverage_rules` holds a plain FK with no cascade, so they are cleared first) and its
+capability assignments. Neither delete performs a usage check, so callers must confirm the resource
+is not referenced by scheduled work first.
 
 **The site scope rides every `updated` emission**, not only the mutation that changed it, because
 consumers rebuild the whole replica row from the payload. Note the deliberate asymmetry: a bay names

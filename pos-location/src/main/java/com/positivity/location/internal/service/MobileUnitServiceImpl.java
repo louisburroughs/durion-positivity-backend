@@ -314,6 +314,36 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     }
 
     /**
+     * Hard-deletes a mobile unit and emits the {@code location.mobile-unit.deleted} tombstone
+     * (issue #1668).
+     *
+     * <p>Loads the row before deleting it so the fact can be versioned from its final
+     * {@code @Version} — the load-before-delete shape {@code LocationServiceImpl.deleteLocation}
+     * uses. An id that resolves to nothing is a silent no-op: there is no state to version and no
+     * delete to announce, and a retried delete for an id that never existed must not publish a
+     * tombstone every time.
+     *
+     * <p>Coverage rules are removed first because {@code mobile_unit_coverage_rules} carries a
+     * plain foreign key to {@code mobile_units} with no cascade, so deleting the unit while rules
+     * still reference it fails on the constraint. The {@code capabilityIds} element collection is
+     * owned by the entity, so Hibernate clears {@code mobile_unit_capabilities} itself.
+     *
+     * <p>Standing a unit down is a status change via {@link #patch}, not a delete; consumers remove
+     * the replica row unconditionally here.
+     */
+    @Transactional
+    public boolean deleteMobileUnit(UUID id) {
+        MobileUnitEntity existing = mobileUnitRepository.findById(id).orElse(null);
+        if (existing == null) {
+            return false;
+        }
+        coverageRuleRepository.deleteByMobileUnit_Id(id);
+        mobileUnitRepository.delete(existing);
+        locationFactPublisher.mobileUnitDeleted(existing);
+        return true;
+    }
+
+    /**
      * Replaces all coverage rules for a given mobile unit atomically.
      *
      * @param id    mobile unit ID

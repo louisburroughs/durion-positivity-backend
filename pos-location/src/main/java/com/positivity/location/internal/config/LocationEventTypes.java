@@ -46,6 +46,9 @@ public final class LocationEventTypes {
     public static final EventTypeRegistration LOCATION_BAY_UPDATE =
             EventTypeRegistration.write("LOCATION_BAY_UPDATE", "Update a bay").build();
 
+    public static final EventTypeRegistration LOCATION_BAY_DELETE =
+            EventTypeRegistration.write("LOCATION_BAY_DELETE", "Delete a bay").build();
+
     // Mobile Unit events
     public static final EventTypeRegistration LOCATION_MOBILE_UNIT_CREATE = EventTypeRegistration.write(
                     "LOCATION_MOBILE_UNIT_CREATE", "Create a new mobile unit for a location")
@@ -53,6 +56,10 @@ public final class LocationEventTypes {
 
     public static final EventTypeRegistration LOCATION_MOBILE_UNIT_UPDATE = EventTypeRegistration.write(
                     "LOCATION_MOBILE_UNIT_UPDATE", "Update an existing mobile unit")
+            .build();
+
+    public static final EventTypeRegistration LOCATION_MOBILE_UNIT_DELETE = EventTypeRegistration.write(
+                    "LOCATION_MOBILE_UNIT_DELETE", "Delete an existing mobile unit")
             .build();
 
     public static final EventTypeRegistration LOCATION_MOBILE_UNIT_MANAGE = EventTypeRegistration.write(
@@ -155,9 +162,11 @@ public final class LocationEventTypes {
                 // Bay events
                 LOCATION_BAY_CREATE,
                 LOCATION_BAY_UPDATE,
+                LOCATION_BAY_DELETE,
                 // Mobile Unit events
                 LOCATION_MOBILE_UNIT_CREATE,
                 LOCATION_MOBILE_UNIT_UPDATE,
+                LOCATION_MOBILE_UNIT_DELETE,
                 LOCATION_MOBILE_UNIT_MANAGE,
                 LOCATION_SERVICE_AREA_CREATE,
                 LOCATION_SERVICE_AREA_PATCH,

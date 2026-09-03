@@ -10,10 +10,10 @@ servers:
 - description: API Gateway
   url: http://api-gateway.local/v1/location
 tags:
-- description: Operations for managing storage locations within a site
-  name: Storage Location API
 - description: Operations for managing mobile units within locations
   name: Mobile Unit API
+- description: Operations for managing storage locations within a site
+  name: Storage Location API
 - description: Operations for managing travel buffer policies
   name: Travel Buffer Policy API
 - description: Bulk import locations
@@ -912,6 +912,49 @@ paths:
       x-required-permissions:
       - location:bay:manage
   /v1/locations/{locationId}/bays/{bayId}:
+    delete:
+      description: 'Deletes a bay permanently by id and publishes a deletion fact so replica consumers drop the row from their dispatch and roster views.
+
+        Use this tool only when a bay was created in error; use patchBay with status OUT_OF_SERVICE instead to take a real bay out of service, which keeps it visible as inactive rather than removing it.
+
+        Preconditions: the location must exist and the bay must belong to it; there is no usage check, so callers must confirm the bay is not referenced by scheduled work first.
+
+        Required inputs: locationId and bayId (UUIDs) as path parameters; there is no request body.
+
+        Emits a LOCATION_BAY_DELETE event; the row is hard-deleted, not soft-deleted.
+
+        Returns 204 on success and 404 when the location or bay does not exist.
+
+        '
+      operationId: deleteBay
+      parameters:
+      - description: Location ID
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+        in: path
+        name: locationId
+        required: true
+        schema:
+          type: string
+      - description: ID of the bay to delete
+        example: 018e1c9f-6b5a-7890-abcd-1234567890cd
+        in: path
+        name: bayId
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Bay deleted successfully.
+        '404':
+          description: Location or bay not found.
+      security:
+      - bearerAuth:
+        - location:bay:manage
+      summary: Delete a Service Bay
+      tags:
+      - Bay API
+      x-required-permissions:
+      - location:bay:manage
     get:
       description: 'Returns a single service bay of a location, including its capacity, capability and skill requirement details.
 
@@ -1873,6 +1916,43 @@ paths:
       x-required-permissions:
       - location:mobile-unit:manage
   /v1/mobile-units/{id}:
+    delete:
+      description: 'Deletes a mobile unit permanently by id, removing its coverage rules and capability assignments, and publishes a deletion fact so replica consumers drop the row from their dispatch and roster views.
+
+        Use this tool only when a unit was created in error; use patchMobileUnit with status INACTIVE instead to stand down a real unit, which keeps it visible as inactive rather than removing it.
+
+        Preconditions: the unit must exist; there is no usage check, so callers must confirm the unit is not referenced by scheduled work first.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a LOCATION_MOBILE_UNIT_DELETE event; the row is hard-deleted, not soft-deleted, and its coverage rules are deleted with it.
+
+        Returns 204 on success and 404 when the mobile unit does not exist.
+
+        '
+      operationId: deleteMobileUnit
+      parameters:
+      - description: ID of the mobile unit to delete
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Mobile unit deleted successfully.
+        '404':
+          description: Mobile unit not found.
+      security:
+      - bearerAuth:
+        - location:mobile-unit:manage
+      summary: Delete a Mobile Unit
+      tags:
+      - Mobile Unit API
+      x-required-permissions:
+      - location:mobile-unit:manage
     get:
       description: 'Returns a single mobile unit with its status, base location, capability ids and travel buffer policy reference.
 

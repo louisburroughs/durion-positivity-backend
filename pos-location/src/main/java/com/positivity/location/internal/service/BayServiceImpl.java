@@ -185,6 +185,31 @@ public class BayServiceImpl implements BayService {
         }
     }
 
+    /**
+     * Hard-deletes a bay and emits the {@code location.bay.deleted} tombstone (issue #1668).
+     *
+     * <p>Loads the row before deleting it so the fact can be versioned from its final
+     * {@code @Version}, the same load-before-delete shape {@code LocationServiceImpl.deleteLocation}
+     * uses: the tombstone publisher needs the entity, not just the id. A bay id that resolves to
+     * nothing has no state to version and no delete to announce, so it is a silent no-op rather
+     * than an unconditional publish — a caller retrying a delete for an id that never existed must
+     * not produce a tombstone every time.
+     *
+     * <p>Taking a bay out of service is a status change via {@link #patchBay}, not a delete;
+     * consumers remove the replica row unconditionally here.
+     */
+    public boolean deleteBay(UUID locationId, UUID bayId) {
+        validateLocationExists(locationId);
+        BayEntity existing =
+                bayRepository.findByIdAndLocationId(bayId, locationId).orElse(null);
+        if (existing == null) {
+            return false;
+        }
+        bayRepository.delete(existing);
+        locationFactPublisher.bayDeleted(existing);
+        return true;
+    }
+
     private void validateLocationExists(UUID locationId) {
         if (!locationRepository.existsById(locationId)) {
             throw new ResourceNotFoundException("Location not found");
