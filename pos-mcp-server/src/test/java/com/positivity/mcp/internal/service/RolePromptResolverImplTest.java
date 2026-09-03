@@ -254,6 +254,47 @@ class RolePromptResolverImplTest {
                 .contains("\"recently\"");
     }
 
+    /**
+     * The caller-context block carrying the current date is appended <em>after</em> the assembled
+     * layers, so a layer telling the model to look "above" for it would point away from the one
+     * fact this contract exists to supply — and straight back to an invented date.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer locates the current date by block, never by direction")
+    void dateWindowLayer_doesNotClaimTheCallerContextIsAbove() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("stated in the authenticated user context block")
+                .doesNotContain("caller context above");
+    }
+
+    /**
+     * An unlabelled concrete date in the prompt is an anchor the model can carry into its answer,
+     * which would reintroduce the invented "today" this layer removes.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer marks its worked dates as an illustration, not as today")
+    void dateWindowLayer_labelsTheWorkedExampleAsIllustrative() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("Illustration only, not today's dates")
+                .contains("Always recompute from the current date you were actually given");
+    }
+
+    /**
+     * Excluding the partial period can invert a range by itself: "this year" asked in January would
+     * otherwise resolve to 1 January through the previous 31 December, which the analytics
+     * endpoints reject with a 400.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer floors the complete-period rule so it cannot invert a range")
+    void dateWindowLayer_guardsAgainstAnInvertedRange() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("Never emit a range whose start date is after its end date")
+                .contains("use the partial period up to the current date instead");
+        // The year rule must stay inside its own year, or January reproduces the inversion.
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("the end of the last complete month of that same year");
+    }
+
     private double fallbackCount(String reason, String requested) {
         return meterRegistry
                 .counter(RolePromptResolverImpl.METRIC_PROMPT_FALLBACK, "reason", reason, "requested", requested)

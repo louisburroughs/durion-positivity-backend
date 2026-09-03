@@ -85,13 +85,31 @@ public final class SystemPromptDefaults {
      * <p>Whole complete periods, not a rolling window, is also the sounder business default —
      * a window ending mid-period compares a part-period against whole ones, which is precisely how
      * q17's comparison was corrupted.
+     *
+     * <p>Three details this text has to get exactly right, each a way the contract could defeat
+     * itself (raised on review of #1664):
+     *
+     * <ul>
+     *   <li>The current date is supplied by the caller-context block, which both assistants append
+     *       <em>after</em> the assembled layers ({@code SpringAiPosAssistant.buildSystemPrompt}), so
+     *       this layer must not describe it as being "above". It names the block instead of a
+     *       direction, which stays true wherever the block is placed.
+     *   <li>The worked example is labelled as an illustration. An unlabelled concrete date is an
+     *       anchor the model can carry into its answer, which would reintroduce exactly the invented
+     *       "today" this layer exists to remove.
+     *   <li>Excluding the partial period can invert a range on its own: "this year" in January would
+     *       otherwise resolve to 1 January through the previous 31 December. The analytics endpoints
+     *       reject {@code endDate} before {@code startDate} with a 400, so the rule carries an
+     *       explicit floor rather than relying on the model to notice.
+     * </ul>
      */
     static final String DATE_WINDOW_LAYER_TEXT = """
             Date-window contract:
-            - Resolve every relative date range from the current date given in the caller context above. Never use a date you assume, recall, or infer from the conversation.
-            - A relative range means whole calendar periods ending with the last COMPLETE period — never a rolling window ending today. With a current date of 2026-09-03, "the last six months" is 2026-03-01 to 2026-08-31, not 2026-03-04 to 2026-09-03.
+            - Resolve every relative date range from the current date stated in the authenticated user context block. Never use a date you assume, recall, or infer from the conversation.
+            - A relative range means whole calendar periods ending with the last COMPLETE period — never a rolling window ending today. Illustration only, not today's dates: were the current date 2026-09-03, "the last six months" would be 2026-03-01 to 2026-08-31, not 2026-03-04 to 2026-09-03. Always recompute from the current date you were actually given.
             - Exclude the current, partial period. Including it compares a part-period against whole ones and overstates or understates every trend built on it.
-            - "This year" and "year to date" mean 1 January of the current year through the end of the last complete month.
+            - "This year" and "year to date" mean 1 January of the current year through the end of the last complete month of that same year.
+            - Never emit a range whose start date is after its end date. Where excluding the partial period would leave an inverted or empty range — "this year" asked during January, a quarter to date in the quarter's first month — use the partial period up to the current date instead, and say in the answer that the period is incomplete.
             - State the window you used, with explicit start and end dates, in the answer itself — not only in the tool arguments. A figure whose window is invisible cannot be checked.
             - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
             - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
