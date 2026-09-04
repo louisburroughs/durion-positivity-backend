@@ -79,9 +79,12 @@ public final class SystemPromptDefaults {
             """;
 
     /**
-     * DATE-WINDOW layer (#1661; narrowed to classification-plus-protocol by #1675, reduced to
-     * classification alone by #1684): which wording names which window SHAPE, and the protocol for
-     * turning that classification into concrete dates.
+     * DATE-WINDOW layer (#1661; narrowed to classification-plus-protocol by #1675, reduced to the
+     * classification rules and that protocol alone by #1684): which wording names which window
+     * SHAPE, and the protocol for turning that classification into concrete dates. The protocol
+     * bullet stays — something has to send the model to {@code resolveDateWindow} and tell it to
+     * copy the result verbatim; what #1684 removed is everything that was neither a classification
+     * rule nor that protocol.
      *
      * <p>Three rounds of prompt-only arithmetic (#1661, #1664, #1670, #1672) left this layer doing
      * two jobs at once — classify the shape from the wording, then compute its concrete dates — and

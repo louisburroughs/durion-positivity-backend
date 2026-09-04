@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -138,18 +139,15 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow logs the classified shape alongside the dates it produced")
     void resolveDateWindow_logsTheClassifiedShapeAndResolvedDates() {
-        ListAppender<ILoggingEvent> appender = attachAppender();
-        try {
+        try (LogCapture captured = new LogCapture()) {
             tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 12, "YEAR_EARLIER");
 
-            assertThat(appender.list).hasSize(1);
-            ILoggingEvent logged = appender.list.getFirst();
+            assertThat(captured.events()).hasSize(1);
+            ILoggingEvent logged = captured.events().getFirst();
             assertThat(logged.getLevel()).isEqualTo(Level.INFO);
             assertThat(logged.getFormattedMessage())
                     .isEqualTo("MCP date window resolved shape=CALENDAR_SPAN unit=MONTH count=12 "
                             + "comparison=YEAR_EARLIER startDate=2025-09-01 endDate=2026-08-31");
-        } finally {
-            detachAppender(appender);
         }
     }
 
@@ -160,13 +158,10 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow logs comparison=NONE when no comparison was requested")
     void resolveDateWindow_logsNoneWhenNoComparisonRequested() {
-        ListAppender<ILoggingEvent> appender = attachAppender();
-        try {
+        try (LogCapture captured = new LogCapture()) {
             tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null);
 
-            assertThat(appender.list.getFirst().getFormattedMessage()).contains("comparison=NONE");
-        } finally {
-            detachAppender(appender);
+            assertThat(captured.events().getFirst().getFormattedMessage()).contains("comparison=NONE");
         }
     }
 
@@ -177,31 +172,77 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow logs nothing when the classification is rejected")
     void resolveDateWindow_logsNothingWhenRejected() {
-        ListAppender<ILoggingEvent> appender = attachAppender();
-        try {
+        try (LogCapture captured = new LogCapture()) {
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null));
 
-            assertThat(appender.list).isEmpty();
-        } finally {
-            detachAppender(appender);
+            assertThat(captured.events()).isEmpty();
         }
     }
 
-    private static ListAppender<ILoggingEvent> attachAppender() {
+    /**
+     * Guards the capture helper itself. Every other test here would pass just as well with a helper
+     * that clears the logger's level on the way out instead of restoring it — the damage from that
+     * lands on some unrelated test later in the JVM, which is exactly the kind of failure nobody
+     * traces back to here. Asserting the round trip from a deliberately non-default level is what
+     * makes the isolation a property rather than an intention.
+     */
+    @Test
+    @DisplayName("the log-capture helper leaves the logger's level exactly as it found it")
+    void logCapture_restoresThePreviousLoggerLevel() {
         ch.qos.logback.classic.Logger logger =
                 (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(DateWindowFacadeTool.class);
-        logger.setLevel(Level.INFO);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        return appender;
+        Level original = logger.getLevel();
+        logger.setLevel(Level.WARN);
+        try {
+            try (LogCapture captured = new LogCapture()) {
+                assertThat(logger.getLevel()).isEqualTo(Level.INFO);
+                assertThat(captured.events()).isEmpty();
+            }
+
+            assertThat(logger.getLevel()).isEqualTo(Level.WARN);
+        } finally {
+            logger.setLevel(original);
+        }
     }
 
-    private static void detachAppender(ListAppender<ILoggingEvent> appender) {
-        ch.qos.logback.classic.Logger logger =
-                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(DateWindowFacadeTool.class);
-        logger.detachAppender(appender);
-        logger.setLevel(null);
+    /**
+     * Captures {@link DateWindowFacadeTool}'s log output for the duration of a try-with-resources
+     * block, leaving the logger exactly as it was found.
+     *
+     * <p>The obvious version of this helper — set INFO on the way in, {@code setLevel(null)} on the
+     * way out — does not restore, it resets: {@code null} means "inherit from the parent", which is
+     * only the right answer when the level happened to be unset already. A logger configured
+     * elsewhere (a profile's {@code logging.level.com.positivity.mcp}, a future test that pins DEBUG
+     * to assert something quieter) would be silently cleared by the first test here that ran, and
+     * the damage would show up as an order-dependent failure somewhere else in the JVM. Capturing
+     * the previous level and putting it back costs one field and removes the whole class of
+     * problem. Detaching the appender and stopping it likewise: an appender left attached keeps
+     * collecting events from every later test that logs on this logger.
+     */
+    private static final class LogCapture implements AutoCloseable {
+
+        private final ch.qos.logback.classic.Logger logger;
+        private final Level previousLevel;
+        private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+
+        private LogCapture() {
+            this.logger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(DateWindowFacadeTool.class);
+            this.previousLevel = logger.getLevel();
+            logger.setLevel(Level.INFO);
+            appender.start();
+            logger.addAppender(appender);
+        }
+
+        private List<ILoggingEvent> events() {
+            return appender.list;
+        }
+
+        @Override
+        public void close() {
+            logger.detachAppender(appender);
+            appender.stop();
+            logger.setLevel(previousLevel);
+        }
     }
 }
