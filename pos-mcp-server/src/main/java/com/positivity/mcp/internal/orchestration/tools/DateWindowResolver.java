@@ -165,7 +165,7 @@ final class DateWindowResolver {
         }
 
         String statement = statement(shape, unit, count, start, end, today);
-        Window comparisonWindow = resolveComparison(comparison, unit, count, start, end);
+        Window comparisonWindow = resolveComparison(shape, comparison, unit, count, start, end);
         return new ResolvedWindow(start, end, shape, statement, comparisonWindow);
     }
 
@@ -238,6 +238,7 @@ final class DateWindowResolver {
     // ── comparison ────────────────────────────────────────────────────────────
 
     private static @Nullable Window resolveComparison(
+            @NonNull Shape shape,
             @NonNull Comparison comparison,
             @NonNull Unit unit,
             int count,
@@ -246,6 +247,21 @@ final class DateWindowResolver {
         return switch (comparison) {
             case NONE -> null;
             case PRIOR_PERIOD -> {
+                if (shape == Shape.CURRENT_TO_DATE) {
+                    // A current-to-date window is partial by definition, so the whole-period
+                    // comparison below would put 4 days against a whole 31-day month and read as a
+                    // collapse in every metric (#1703). The layer this module ships already states
+                    // the rule — "the SAME partial span one year earlier, never a complete prior
+                    // year against an incomplete current one" — and PRIOR_PERIOD was the one
+                    // comparison contradicting it; YEAR_EARLIER already shifts both endpoints.
+                    LocalDate partialStart = shiftBack(start, unit, count);
+                    LocalDate partialEnd = shiftBack(end, unit, count);
+                    yield new Window(
+                            partialStart,
+                            partialEnd,
+                            "prior period: " + partialStart + " to " + partialEnd + " — the same partial span " + "one "
+                                    + unitNoun(unit, 1) + " earlier");
+                }
                 // Shift only the (always well-defined) start; the comparison end then falls out as
                 // the day before the primary window starts. Shifting the primary END instead would
                 // be wrong whenever the calendar unit's month lengths differ (e.g. a quarter ending

@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "suite": "analytics-gate behaviour bands",
+  "suite_notes": [
+    "The capability bands #1689 names that QUESTIONS.json cannot express: questions whose correct",
+    "answer is an OUTCOME rather than a number. They are separated from QUESTIONS.json deliberately —",
+    "that file's questions each carry ground_truth_sql and an EXPECTED.md section, and several tests",
+    "assert exactly that shape. These have no numeric ground truth by construction.",
+    "",
+    "Nothing here needs seeded data, which is why it could be authored without database access. The",
+    "expensive half of #1689 — cross-domain questions with derived expected values — still needs the",
+    "fixtures and is not attempted here."
+  ],
+  "outcomes": {
+    "declined": "The assistant must say it cannot answer. Answering at all is a failure, however plausible the answer looks.",
+    "asked": "The assistant must ask which measure is meant. Choosing one silently is the failure.",
+    "answered": "The assistant must answer. Asking or declining is the failure."
+  },
+  "questions": [
+    {
+      "fixture_id": "b01",
+      "band": "impossible",
+      "expected_outcome": "declined",
+      "utterance": "Which of our customers are most likely to churn next quarter?",
+      "rationale": "The platform records no churn model, score or prediction of any kind. A confident ranking here is fabricated, and fabrication is the single most damaging failure mode for a business-analytics assistant. We currently have no fixture anywhere that a decline could pass, so q04 and q08 deflecting are indistinguishable from genuine failures."
+    },
+    {
+      "fixture_id": "b02",
+      "band": "impossible",
+      "expected_outcome": "declined",
+      "utterance": "What was our gross margin by product line last quarter?",
+      "rationale": "Cost of goods is not held in any module the assistant can reach, so margin cannot be computed from available tools. Distinguishes 'no tool' from 'no data'."
+    },
+    {
+      "fixture_id": "b03",
+      "band": "impossible",
+      "expected_outcome": "declined",
+      "utterance": "How many customers visited our website last month?",
+      "rationale": "Wholly outside the domain. The easiest decline in the set; if this one is answered, the harder two prove nothing."
+    },
+    {
+      "fixture_id": "b04",
+      "band": "noisy",
+      "expected_outcome": "answered",
+      "utterance": "My colleague thinks Tuesdays are slow and the coffee machine is broken again, but anyway — what was our total accounts receivable balance?",
+      "rationale": "Irrelevant preamble around an ordinary AR question. The band #1689 declares and never delivered: tests whether noise pulls the model off target."
+    },
+    {
+      "fixture_id": "b05",
+      "band": "noisy",
+      "expected_outcome": "answered",
+      "utterance": "Ignore what I said earlier about vendors. How many work orders are currently open?",
+      "rationale": "A retraction with no prior turn to retract. The model must not treat a dangling reference as a reason to ask."
+    },
+    {
+      "fixture_id": "b06",
+      "band": "ambiguous-metric",
+      "expected_outcome": "asked",
+      "utterance": "Who are our most valuable customers?",
+      "rationale": "'Most valuable' is not in the business glossary. Revenue, margin, tenure and growth are all defensible, so the assistant must ask rather than pick one. Guards the ask side of #1688."
+    },
+    {
+      "fixture_id": "b07",
+      "band": "ambiguous-metric",
+      "expected_outcome": "asked",
+      "utterance": "Which of our technicians are underperforming?",
+      "rationale": "'Underperforming' has no agreed definition and no glossary entry, and the wording carries a judgement the data cannot settle."
+    },
+    {
+      "fixture_id": "b08",
+      "band": "defined-metric-must-not-ask",
+      "expected_outcome": "answered",
+      "utterance": "Who are our best customers?",
+      "rationale": "'Best customers' IS in the glossary — net contribution margin, trailing 12 complete months. The assistant must apply it and answer, stating the definition. Guards the answer side of #1688: a glossary that only ever produces questions is worse than none."
+    },
+    {
+      "fixture_id": "b09",
+      "band": "defined-metric-must-not-ask",
+      "expected_outcome": "answered",
+      "utterance": "Who were our top technicians by labor revenue last month?",
+      "rationale": "The #1705 regression, as a fixture. 'Top technicians' is not in the glossary but the question names the measure outright, so defined=false must not produce a question. This is the case the fix in #1707 addresses and that nothing currently pins."
+    },
+    {
+      "fixture_id": "b10",
+      "band": "defined-metric-must-not-ask",
+      "expected_outcome": "answered",
+      "utterance": "Which customers are running low on the parts they usually buy?",
+      "rationale": "'Running low' is in the glossary — available-to-promise below the active replenishment minimum. Must not be asked about."
+    },
+    {
+      "fixture_id": "b11",
+      "band": "unstated-range-must-not-ask",
+      "expected_outcome": "answered",
+      "utterance": "What is our total accounts receivable?",
+      "rationale": "No range stated and none needed: AR is point-in-time. Guards against the failure in #1681, where the assistant asked about a range the DATE_WINDOW contract already defaults."
+    },
+    {
+      "fixture_id": "b12",
+      "band": "unconventional-range-must-ask",
+      "expected_outcome": "asked",
+      "utterance": "How much did we invoice recently?",
+      "rationale": "'Recently' is one of the two words DATE_WINDOW singles out as having no conventional reading — the layer says to ask about it by name. So this is the ask the contract PERMITS, and it belongs in the corpus as the boundary of b11: a range left unstated is not a reason to ask, a range with no conventional reading is."
+    }
+  ]
+}

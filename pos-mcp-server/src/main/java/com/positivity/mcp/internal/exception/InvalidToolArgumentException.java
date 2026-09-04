@@ -11,18 +11,16 @@ package com.positivity.mcp.internal.exception;
  * do with client input, and a blanket {@code IllegalArgumentException} handler cannot tell the two
  * apart (issue #1694).
  *
- * <p>Note what currently happens to this exception in production, because it is not what the name
- * suggests: nothing maps it to an HTTP status. Every facade tool is invoked through {@code
- * SpringAiToolCallbackResolver.ReflectiveToolCallback#call}, which catches the reflective
- * {@code InvocationTargetException} and rethrows a generic {@code IllegalStateException}, discarding
- * this type; the chat turn that wraps it then swallows any {@code RuntimeException} and degrades to
- * the answer-resolution ladder with a 200. So a malformed tool argument reaches neither an
- * {@code @ExceptionHandler} nor the model as a self-correcting tool result -- it did not before this
- * type existed either, so re-typing changed no behaviour. The type earns its place by keeping these
- * throws out of the way of any future blanket {@code IllegalArgumentException} handler and by naming
- * the intent; making it load-bearing means raising Spring AI's {@code ToolExecutionException} so the
- * framework's tool-error processor can hand the model something to correct, which is a separate
- * change from issue #1694.
+ * <p>This type is load-bearing as of #1711. {@code SpringAiToolCallbackResolver.ReflectiveToolCallback#call}
+ * wraps whatever a tool throws in Spring AI's {@code ToolExecutionException}, which is the only type
+ * {@code DefaultToolCallingManager} catches and converts into a tool result the model can read and
+ * retry from. So a malformed argument now comes back to the model as a correctable error naming what
+ * was wrong, instead of escaping the tool-calling loop and killing the turn.
+ *
+ * <p>Nothing maps this type to an HTTP status, and nothing should: it is raised inside tool dispatch,
+ * not at a controller boundary, and its audience is the calling model rather than an HTTP client.
+ * Keeping it distinct from {@code IllegalArgumentException} is what lets a future blanket handler for
+ * that type stay away from these throws (#1694).
  */
 public class InvalidToolArgumentException extends RuntimeException {
     public InvalidToolArgumentException(String message) {

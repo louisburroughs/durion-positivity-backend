@@ -638,6 +638,24 @@ class WindowGradingTest(unittest.TestCase):
         self.assertEqual(runner.grade_window(question, "as of 2026-09-04 the balance is…", date(2026, 9, 4))[0], "PASS")
         self.assertEqual(runner.grade_window(question, "as of 2026-08-01 the balance is…", date(2026, 9, 4))[0], "FAIL")
 
+    def test_typographic_hyphens_and_spaces_do_not_defeat_grading(self):
+        # Observed live on 2026-09-04: the model renders dates as "2026\u201109\u201104" with U+2011
+        # NON-BREAKING HYPHEN and U+202F NARROW NO-BREAK SPACE. q05 and q13 graded FAIL while their
+        # answers stated the as-of date correctly — two false failures caused by the grader, not the
+        # model.
+        answer = "Customers > 60 days past\u2011due (as of\u202f2026\u201109\u201104) and their open work orders"
+        verdict, _ = runner.grade_window(
+            self._q({"shape": None, "as_of_offset_days": 0}), answer, date(2026, 9, 4)
+        )
+        self.assertEqual(verdict, "PASS")
+
+    def test_typographic_dashes_do_not_defeat_shape_reading(self):
+        answer = "calendar span:\u202f2026\u201103\u201101 to 2026\u201108\u201131 \u2014 6 whole months"
+        verdict, _ = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}), answer, date(2026, 9, 4)
+        )
+        self.assertEqual(verdict, "PASS")
+
     def test_an_answer_quoting_no_statement_is_ungraded_not_a_pass(self):
         verdict, detail = runner.grade_window(
             self._q({"shape": "CALENDAR_SPAN"}), "Here are the numbers.", date(2026, 9, 1)
@@ -710,6 +728,54 @@ class WindowGradingTest(unittest.TestCase):
             self.assertIsNotNone(expected, question["fixture_id"])
             if expected.get("shape") is None and "as_of_offset_days" not in expected:
                 self.assertTrue(expected.get("note"), f"{question['fixture_id']} must say why it is unset")
+
+
+
+class OutcomeClassificationTest(unittest.TestCase):
+    """#1689: an outcome band is only worth anything if the three outcomes are distinguishable."""
+
+    def test_recognises_a_refusal(self):
+        for answer in (
+            "I'm unable to answer that request directly. The platform does not expose a query that…",
+            "I couldn't find a way to answer that from the available tools or screens.",
+        ):
+            self.assertEqual(runner.classify_outcome(answer), "declined", answer[:40])
+
+    def test_recognises_a_clarifying_question(self):
+        answer = (
+            "The phrase \u201ctop technicians\u201d isn\u2019t defined in the business glossary, so I need to "
+            "know which metric you\u2019d like to use to rank them."
+        )
+        self.assertEqual(runner.classify_outcome(answer), "asked")
+
+    def test_a_real_answer_is_not_mistaken_for_a_refusal(self):
+        # The mistake that would make the impossible band worthless: scoring a genuine answer as a
+        # correct decline. A table of numbers is an answer.
+        answer = "**Top technicians by labor revenue for August 2026**\n\n| Rank | Technician | Revenue |\n| 1 | Nadia | $1,500 |"
+        self.assertEqual(runner.classify_outcome(answer), "answered")
+
+    def test_an_answer_mentioning_a_tool_is_still_an_answer(self):
+        answer = "Total accounts receivable is $20,588.29 as of today, from the aged-receivables report."
+        self.assertEqual(runner.classify_outcome(answer), "answered")
+
+    def test_empty_is_its_own_outcome(self):
+        # Distinct from all three: a blank reply is a transport or model failure, not a behaviour.
+        self.assertEqual(runner.classify_outcome(""), "empty")
+        self.assertEqual(runner.classify_outcome(None), "empty")
+
+    def test_typographic_quotes_do_not_defeat_classification(self):
+        answer = "The phrase \u201cbest\u201d \u2014 which measure do you mean?"
+        self.assertEqual(runner.classify_outcome(answer), "asked")
+
+    def test_every_band_fixture_declares_a_classifiable_outcome(self):
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "pos-mcp-server/src/test/resources/eval/analytics-gate/BEHAVIOUR_BANDS.json"
+        )
+        document = json.loads(path.read_text(encoding="utf-8"))
+        allowed = set(document["outcomes"]) | {"empty"}
+        for question in document["questions"]:
+            self.assertIn(question["expected_outcome"], allowed, question["fixture_id"])
 
 
 if __name__ == "__main__":

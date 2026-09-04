@@ -9,10 +9,12 @@ import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.execution.ToolExecutionException;
 
 class SpringAiToolCallbackResolverTest {
 
@@ -103,5 +105,40 @@ class SpringAiToolCallbackResolverTest {
                 boolean includeInactive) {
             return lookupKey + "|" + quantity + "|" + includeInactive;
         }
+    }
+
+    // ── #1711: a tool failure must reach the model as a correctable result ───
+
+    static final class FailingTool {
+        @Tool(description = "rejects its argument")
+        public String rejectsArgument(String period) {
+            throw new IllegalArgumentException("Unsupported period 'Q2-2026': pass YYYY-MM or YYYY");
+        }
+    }
+
+    @Test
+    @DisplayName("a tool that throws surfaces as ToolExecutionException, the type Spring AI can hand back to the model")
+    void call_toolThrows_raisesToolExecutionException() {
+        // Spring AI's DefaultToolCallingManager only converts ToolExecutionException into a result
+        // message the model can read and retry from. An IllegalStateException escapes that hook
+        // entirely, so the turn dies and the model never learns its argument was wrong (#1711).
+        ToolCallback callback = SpringAiToolCallbackResolver.fromObjects(List.of(new FailingTool()), null)
+                .get(0);
+
+        assertThatThrownBy(() -> callback.call("{\"period\":\"Q2-2026\"}"))
+                .isInstanceOf(ToolExecutionException.class)
+                .hasMessageContaining("Unsupported period");
+    }
+
+    @Test
+    @DisplayName("the original failure is preserved as the cause, not flattened to a generic message")
+    void call_toolThrows_keepsTheOriginalCause() {
+        ToolCallback callback = SpringAiToolCallbackResolver.fromObjects(List.of(new FailingTool()), null)
+                .get(0);
+
+        assertThatThrownBy(() -> callback.call("{\"period\":\"Q2-2026\"}"))
+                .cause()
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("pass YYYY-MM or YYYY");
     }
 }

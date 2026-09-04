@@ -474,4 +474,45 @@ class DateWindowResolverTest {
                 .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("resolveNamedPeriod");
     }
+
+    @Test
+    @DisplayName("PRIOR_PERIOD against a CURRENT_TO_DATE window compares the same partial span (#1703)")
+    void resolve_currentToDateWithPriorPeriod_comparesEqualPartialSpans() {
+        // The DATE_WINDOW contract this module ships says: "against a partial current year means the
+        // SAME partial span one year earlier, never a complete prior year against an incomplete
+        // current one." PRIOR_PERIOD did the opposite — "this month to date" on 2026-09-04 compared
+        // 4 days against a whole 31-day August, which reads as a collapse in every metric.
+        DateWindowResolver.ResolvedWindow window = DateWindowResolver.resolve(
+                LocalDate.of(2026, 9, 4),
+                DateWindowResolver.Shape.CURRENT_TO_DATE,
+                DateWindowResolver.Unit.MONTH,
+                1,
+                DateWindowResolver.Comparison.PRIOR_PERIOD);
+
+        assertThat(window.startDate()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(window.endDate()).isEqualTo(LocalDate.of(2026, 9, 4));
+
+        DateWindowResolver.Window comparison = window.comparison();
+        assertThat(comparison).isNotNull();
+        assertThat(comparison.startDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+        assertThat(comparison.endDate()).isEqualTo(LocalDate.of(2026, 8, 4));
+    }
+
+    @Test
+    @DisplayName("PRIOR_PERIOD against a whole-period window still compares whole periods")
+    void resolve_priorCompleteWithPriorPeriod_isUnchanged() {
+        // The fix must not disturb the shapes where a whole prior period IS the right comparison.
+        DateWindowResolver.ResolvedWindow window = DateWindowResolver.resolve(
+                LocalDate.of(2026, 9, 4),
+                DateWindowResolver.Shape.PRIOR_COMPLETE,
+                DateWindowResolver.Unit.MONTH,
+                1,
+                DateWindowResolver.Comparison.PRIOR_PERIOD);
+
+        assertThat(window.startDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+        assertThat(window.endDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+        assertThat(window.comparison()).isNotNull();
+        assertThat(window.comparison().startDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(window.comparison().endDate()).isEqualTo(LocalDate.of(2026, 7, 31));
+    }
 }
