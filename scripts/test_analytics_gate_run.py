@@ -432,6 +432,35 @@ class ActorProvenanceTest(unittest.TestCase):
             runner.actor_provenance(_token({"role": ["ROLE_CONTROLLER"]}))["effective_roles"], ["ROLE_CONTROLLER"]
         )
 
+    def test_undecodable_token_is_reported_as_such_not_as_a_role_mismatch(self):
+        # "carries roles []" would send the reader to check an actor's permissions when the real
+        # problem is that the token never parsed. Different cause, different message.
+        with self.assertRaises(SystemExit) as caught:
+            runner.main(["--out", tempfile.mkdtemp(), "--token", "not-a-jwt", "--only", "q01"])
+
+        message = str(caught.exception)
+        self.assertIn("could not establish the actor", message)
+        self.assertNotIn("carries roles", message)
+        self.assertIn("could not be read", message)
+
+    def test_abort_message_never_contains_the_token(self):
+        secret = "not-a-jwt-but-still-a-credential"
+        with self.assertRaises(SystemExit) as caught:
+            runner.main(["--out", tempfile.mkdtemp(), "--token", secret, "--only", "q01"])
+
+        self.assertNotIn(secret, str(caught.exception))
+
+    def test_wrong_role_names_the_actor_and_the_expected_role(self):
+        token = _token({"sub": "margaret.olsen", "roles": ["ROLE_CONTROLLER", "ROLE_FACTOR_PASSWORD"]})
+        with self.assertRaises(SystemExit) as caught:
+            runner.main(["--out", tempfile.mkdtemp(), "--token", token, "--only", "q01"])
+
+        message = str(caught.exception)
+        self.assertIn("margaret.olsen", message)
+        self.assertIn("ROLE_CONTROLLER", message)
+        self.assertIn("ROLE_ADMIN", message)
+        self.assertNotIn(token, message)
+
     def test_expected_role_default_is_the_documented_gate_actor(self):
         # Pinned deliberately: the corpus README names admin.alpha and explains why no role-scoped
         # actor covers workorder + A/R + A/P. Changing one without the other reopens #1706.

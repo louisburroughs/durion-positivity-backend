@@ -128,9 +128,11 @@ def actor_provenance(token):
     existing "credentials are never printed or written into the run record" guarantee intact — a
     role name is not a credential.
 
-    Returns a dict with `error` set rather than raising: a token this cannot parse is still a
-    token the gate can run with, and a run that records "actor unknown, and why" is strictly
-    better than one that silently records nothing, which is the state this function replaces.
+    Returns a dict with `error` set rather than raising, so the caller decides what an
+    unreadable token means. `main` treats it as a failed preflight and refuses to start: the
+    point of recording the actor is to know who asked, and "could not tell" is not an answer
+    that makes a score comparable. The error is still recorded rather than only printed, so a
+    run aborted this way says why in the same place a completed run says who.
     """
     try:
         payload = token.split(".")[1]
@@ -812,20 +814,30 @@ def main(argv=None):
     role_mismatch = None
     if token and args.expect_role:
         effective = actor.get("effective_roles") or []
-        if args.expect_role not in effective:
+        if actor.get("error"):
+            # Distinct from a role mismatch: the roles list is empty because nothing could be
+            # read, not because the actor holds none. Saying "carries roles []" here would send
+            # the reader to check permissions on an actor whose token never parsed.
+            role_mismatch = f"could not establish the actor: {actor['error']}"
+        elif args.expect_role not in effective:
             role_mismatch = (
                 f"actor {actor.get('subject')!r} carries roles {effective} "
                 f"but this gate expects {args.expect_role!r}"
             )
-            if not args.allow_role_mismatch:
-                sys.exit(
-                    f"refusing to run: {role_mismatch}.\n"
-                    "A caller without the corpus's permission codes is offered a different tool set "
-                    "and answers honestly that the platform cannot do what was asked — twelve well-formed "
-                    "deflections that look like model failures and are not (#1706).\n"
-                    "Use the ITEST_USERNAME/ITEST_PASSWORD pair from the itest credentials file, or pass "
-                    "--expect-role '' to skip this check, or --allow-role-mismatch to run anyway."
-                )
+        if role_mismatch and not args.allow_role_mismatch:
+            why = (
+                "The token's claims could not be read, so there is no way to tell whether this "
+                "actor can reach the tools the corpus needs."
+                if actor.get("error")
+                else "A caller without the corpus's permission codes is offered a different tool set "
+                "and answers honestly that the platform cannot do what was asked — twelve "
+                "well-formed deflections that look like model failures and are not."
+            )
+            sys.exit(
+                f"refusing to run: {role_mismatch}.\n{why} (#1706)\n"
+                "Use the ITEST_USERNAME/ITEST_PASSWORD pair from the itest credentials file, or pass "
+                "--expect-role '' to skip this check, or --allow-role-mismatch to run anyway."
+            )
 
     questions_path = Path(args.questions).resolve()
     document = json.loads(questions_path.read_text(encoding="utf-8"))
