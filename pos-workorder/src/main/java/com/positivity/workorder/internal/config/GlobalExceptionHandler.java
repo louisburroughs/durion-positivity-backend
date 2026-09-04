@@ -12,6 +12,7 @@ import com.positivity.workorder.internal.exception.EstimateItemNotFoundException
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
+import com.positivity.workorder.internal.exception.LaborEntryNotFoundException;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
@@ -363,6 +364,13 @@ public class GlobalExceptionHandler {
             ApprovalConfigurationNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.NOT_FOUND, ApprovalConfigurationNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(LaborEntryNotFoundException.class)
+    public ResponseEntity<ApiError> handleLaborEntryNotFound(
+            LaborEntryNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND, LaborEntryNotFoundException.ERROR_CODE, ex.getMessage(), request);
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.*;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderPartAdjustmentService;
@@ -80,11 +81,15 @@ public class WorkorderPartAdjustmentController {
             responseCode = "201",
             description = "Part substituted successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (substitute part equals original)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request (substitute part equals original)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(
             responseCode = "409",
-            description = "Part already consumed, part belongs to a different workorder, or idempotency conflict")
+            description = "Part already consumed, part belongs to a different workorder, or idempotency conflict",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Original part, replacement part, and the reason for the swap.",
             required = true,
@@ -145,11 +150,15 @@ public class WorkorderPartAdjustmentController {
             responseCode = "201",
             description = "Unused quantity returned successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (quantity not positive)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request (quantity not positive)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(
             responseCode = "409",
-            description = "Return exceeds available quantity, or the part belongs to a different workorder")
+            description = "Return exceeds available quantity, or the part belongs to a different workorder",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line, quantity going back, and the reason for the reasoned return.",
             required = true,
@@ -210,9 +219,15 @@ public class WorkorderPartAdjustmentController {
             responseCode = "201",
             description = "Part quantity corrected successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (newQuantity not positive)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request (newQuantity not positive)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
-    @ApiResponse(responseCode = "409", description = "Part belongs to a different workorder")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Part belongs to a different workorder",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "

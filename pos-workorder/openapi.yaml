@@ -131,6 +131,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApprovalConfigurationResponse'
           description: Configuration created successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: approvalMethod is not one of the accepted values.
       security:
       - bearerAuth:
         - workorder:approval_config:create
@@ -287,7 +293,7 @@ paths:
 
         Emits a WORKORDER_APPROVAL_CONFIG_UPDATE event.
 
-        Returns 404 when the configuration does not exist and also when approvalMethod is not a valid value, because both surface as the same IllegalArgumentException in this operation.
+        Returns 404 when the configuration does not exist, and 400 when approvalMethod is not one of the accepted values.
 
         '
       operationId: updateApprovalConfiguration
@@ -323,6 +329,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApprovalConfigurationResponse'
           description: Configuration updated successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: approvalMethod is not one of the accepted values.
         '404':
           content:
             application/json:
@@ -899,7 +911,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderStatusDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Workorder not found
       security:
       - bearerAuth:
@@ -1949,7 +1961,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ApiError'
           description: Estimate not found
         '409':
           content:
@@ -2018,7 +2030,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Estimate cannot be approved in current state.
         '404':
           content:
@@ -2030,7 +2042,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: 'Customer ID mismatch: estimate belongs to a different customer.'
         '422':
           content:
@@ -3567,7 +3579,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order cannot be approved in current state.
         '404':
           content:
@@ -3579,7 +3591,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: 'Customer ID mismatch: workorder belongs to a different customer.'
       security:
       - bearerAuth:
@@ -4246,7 +4258,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderLaborEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Labor entry not found
       security:
       - bearerAuth:
@@ -4646,7 +4658,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request (quantity not positive)
         '404':
           content:
@@ -4658,7 +4670,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Consumption exceeds issued quantity, or the part belongs to a different workorder
         '422':
           content:
@@ -4728,7 +4740,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request (newQuantity not positive)
         '404':
           content:
@@ -4740,7 +4752,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Part belongs to a different workorder
         '422':
           content:
@@ -4888,7 +4900,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request (quantity not positive)
         '404':
           content:
@@ -4900,7 +4912,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Return exceeds available quantity, or the part belongs to a different workorder
         '422':
           content:
@@ -4970,7 +4982,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request (quantity not positive)
         '404':
           content:
@@ -4982,7 +4994,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Return exceeds available quantity, or the part belongs to a different workorder
       security:
       - bearerAuth:
@@ -5046,7 +5058,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request (substitute part equals original)
         '404':
           content:
@@ -5058,7 +5070,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Part already consumed, part belongs to a different workorder, or idempotency conflict
       security:
       - bearerAuth:

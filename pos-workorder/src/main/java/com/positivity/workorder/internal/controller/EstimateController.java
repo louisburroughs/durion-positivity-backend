@@ -318,7 +318,10 @@ public class EstimateController {
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate status updated")
     @ApiResponse(responseCode = "400", description = "Estimate patch request is invalid")
-    @ApiResponse(responseCode = "404", description = "Estimate not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "409", description = "Estimate transition is not allowed")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -449,9 +452,15 @@ public class EstimateController {
                     purchase order is missing.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
-    @ApiResponse(responseCode = "400", description = "Estimate cannot be approved in current state.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Estimate cannot be approved in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
-    @ApiResponse(responseCode = "409", description = "Customer ID mismatch: estimate belongs to a different customer.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Customer ID mismatch: estimate belongs to a different customer.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).")

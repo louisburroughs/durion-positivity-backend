@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.*;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderPartUsageService;
@@ -132,7 +133,10 @@ public class WorkorderPartsUsageController {
             responseCode = "201",
             description = "Parts consumption recorded successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (quantity not positive)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request (quantity not positive)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(
             responseCode = "422",
@@ -141,7 +145,8 @@ public class WorkorderPartsUsageController {
                     + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
     @ApiResponse(
             responseCode = "409",
-            description = "Consumption exceeds issued quantity, or the part belongs to a different workorder")
+            description = "Consumption exceeds issued quantity, or the part belongs to a different workorder",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line and quantity actually consumed on the job.",
             required = true,
@@ -194,7 +199,10 @@ public class WorkorderPartsUsageController {
             responseCode = "201",
             description = "Parts returned successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (quantity not positive)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request (quantity not positive)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(
             responseCode = "422",
@@ -203,7 +211,8 @@ public class WorkorderPartsUsageController {
                     + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
     @ApiResponse(
             responseCode = "409",
-            description = "Return exceeds available quantity, or the part belongs to a different workorder")
+            description = "Return exceeds available quantity, or the part belongs to a different workorder",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line and unused quantity going back to inventory.",
             required = true,

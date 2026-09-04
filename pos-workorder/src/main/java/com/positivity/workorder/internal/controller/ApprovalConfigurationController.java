@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
@@ -145,7 +146,10 @@ public class ApprovalConfigurationController {
                     accepted values.
                     """)
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
-    @ApiResponse(responseCode = "400", description = "approvalMethod is not one of the accepted values.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "approvalMethod is not one of the accepted values.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approval capture rule to create, scoped by optional location and customer ids.",
             required = true,
@@ -193,7 +197,10 @@ public class ApprovalConfigurationController {
                     of the accepted values.
                     """)
     @ApiResponse(responseCode = "200", description = "Configuration updated successfully.")
-    @ApiResponse(responseCode = "400", description = "approvalMethod is not one of the accepted values.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "approvalMethod is not one of the accepted values.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Full replacement values for the approval configuration.",

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.CountResponse;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderResponse;
@@ -286,9 +287,15 @@ public class WorkorderController {
                     when the customer does not match the workorder's own customer.
                     """)
     @ApiResponse(responseCode = "200", description = "Work order approved successfully with signature captured.")
-    @ApiResponse(responseCode = "400", description = "Work order cannot be approved in current state.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Work order cannot be approved in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Work order not found.")
-    @ApiResponse(responseCode = "409", description = "Customer ID mismatch: workorder belongs to a different customer.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Customer ID mismatch: workorder belongs to a different customer.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity and captured signature artifacts.",
             required = true,
