@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AssignmentService;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
@@ -61,15 +62,22 @@ public class AssignmentController {
                     defaults to LEAD); resourceId and resourceType are optional, and override=true requires the \
                     shop:schedule:edit authority plus a non-blank overrideReason.
                     Emits a SHOPMGR_ASSIGNMENT_CREATED event and persists the assignment and its mechanic links.
-                    Returns 400 when the appointment or a mechanic cannot be resolved, the LEAD constraint is \
-                    violated, or overrideReason is blank with override=true, and 403 when override is requested \
-                    without the shop:schedule:edit authority.
+                    Returns 400 when a mechanic cannot be resolved, the LEAD constraint is violated, or \
+                    overrideReason is blank with override=true, 404 when the appointment cannot be resolved, and \
+                    403 when override is requested without the shop:schedule:edit authority.
                     """)
     @ApiResponse(
             responseCode = "201",
             description = "Assignments created",
             content = @Content(schema = @Schema(implementation = AssignmentResponse.class)))
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Appointment not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public @NonNull AssignmentResponse createAssignment(
             @Parameter(description = "Appointment identifier", required = true) @PathVariable UUID appointmentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

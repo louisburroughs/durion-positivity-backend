@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
@@ -67,8 +68,7 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         var appointment = appointmentRepository
                 .findById(request.getAppointmentId())
-                .orElseThrow(() ->
-                        new ShopManagerValidationException("Appointment not found: " + request.getAppointmentId()));
+                .orElseThrow(() -> new AppointmentNotFoundException(request.getAppointmentId()));
 
         if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
             throw new IllegalStateException("Appointment must be SCHEDULED to create an assignment, current status: "

@@ -14,6 +14,7 @@ import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
@@ -132,14 +133,14 @@ class AssignmentServiceTest {
     // --- appointment must exist (hard block) ---
 
     @Test
-    void appointmentNotFound_throwsValidationException() {
+    void appointmentNotFound_throwsAppointmentNotFoundException() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var request = buildSingleLeadRequest(appointmentId, "P-001");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(ShopManagerValidationException.class)
+                .isInstanceOf(AppointmentNotFoundException.class)
                 .hasMessageContaining("Appointment");
 
         verify(assignmentRepository, never()).save(any());

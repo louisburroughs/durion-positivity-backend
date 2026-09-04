@@ -257,7 +257,7 @@ paths:
 
         Emits a SHOPMGR_ASSIGNMENT_CREATED event and persists the assignment and its mechanic links.
 
-        Returns 400 when the appointment or a mechanic cannot be resolved, the LEAD constraint is violated, or overrideReason is blank with override=true, and 403 when override is requested without the shop:schedule:edit authority.
+        Returns 400 when a mechanic cannot be resolved, the LEAD constraint is violated, or overrideReason is blank with override=true, 404 when the appointment cannot be resolved, and 403 when override is requested without the shop:schedule:edit authority.
 
         '
       operationId: createAssignment
@@ -298,8 +298,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AssignmentResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Appointment not found.
       security:
       - bearerAuth:
         - shop:bay:assign
@@ -383,7 +389,7 @@ paths:
 
         Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event, sets the appointment''s conflict-override flag and stores the override record with the actor resolved from the security context.
 
-        Returns 400 when the path and body appointmentId differ, the overrideReason is blank, or the appointment cannot be resolved, and 403 when the caller lacks the required authority.
+        Returns 400 when the path and body appointmentId differ or the overrideReason is blank, 404 when the appointment cannot be resolved, and 403 when the caller lacks the required authority.
 
         '
       operationId: executeConflictOverride
@@ -420,19 +426,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConflictOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request or appointment ID mismatch.
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConflictOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Forbidden.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConflictOverrideResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Appointment not found.
       security:
       - bearerAuth:

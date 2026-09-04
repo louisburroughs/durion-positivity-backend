@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shopmanager.internal.entity.OverrideRecord;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.OverrideRecordRepository;
@@ -42,8 +43,7 @@ public class ConflictOverrideServiceImpl implements ConflictOverrideService {
         // Locate the appointment — required for flagging and record linkage
         var appointment = appointmentRepository
                 .findById(request.getAppointmentId())
-                .orElseThrow(() ->
-                        new ShopManagerValidationException("Appointment not found: " + request.getAppointmentId()));
+                .orElseThrow(() -> new AppointmentNotFoundException(request.getAppointmentId()));
 
         // AC4: Flag appointment as a conflict override
         appointment.setConflictOverride(true);

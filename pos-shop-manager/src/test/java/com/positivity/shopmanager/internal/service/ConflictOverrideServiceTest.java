@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.OverrideRecord;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.OverrideRecordRepository;
@@ -159,10 +160,10 @@ class ConflictOverrideServiceTest {
 
     /**
      * When the referenced appointment does not exist, the service throws
-     * ShopManagerValidationException without persisting any record.
+     * AppointmentNotFoundException without persisting any record.
      */
     @Test
-    void appointmentNotFound_throwsValidationException() {
+    void appointmentNotFound_throwsAppointmentNotFoundException() {
         when(appointmentRepository.findById(APPT_ID)).thenReturn(Optional.empty());
 
         ConflictOverrideRequest request = ConflictOverrideRequest.builder()
@@ -171,7 +172,7 @@ class ConflictOverrideServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.execute(request))
-                .isInstanceOf(ShopManagerValidationException.class)
+                .isInstanceOf(AppointmentNotFoundException.class)
                 .hasMessageContaining(APPT_ID.toString());
 
         verify(overrideRecordRepository, never()).save(any());
