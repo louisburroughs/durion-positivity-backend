@@ -14,6 +14,7 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -212,7 +213,7 @@ class EstimateItemGuideDefaultingTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.addEstimateItem(ESTIMATE_ID, laborRequest(null), "jane.smith"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("quantity is required");
 
         verify(estimateItemRepository, never()).save(any());

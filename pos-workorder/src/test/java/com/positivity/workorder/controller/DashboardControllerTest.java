@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.controller.DashboardController;
 import com.positivity.workorder.internal.dto.BayStatus;
 import com.positivity.workorder.internal.dto.DashboardResponse;
 import com.positivity.workorder.internal.dto.MobileUnitStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.service.DashboardService;
 import java.time.Clock;
 import java.time.Instant;
@@ -217,15 +218,15 @@ class DashboardControllerTest {
 
     // -----------------------------------------------------------------------
     // F1: non-UUID locationId → 400 Bad Request (GlobalExceptionHandler maps
-    // IllegalArgumentException → 400)
+    // WorkorderRequestValidationException → 400)
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("GET /today with non-UUID locationId returns 400 Bad Request")
     void getDashboard_nonUuidLocationId_returns400() throws Exception {
-        // Arrange — service throws IllegalArgumentException for non-UUID locationId
+        // Arrange — service throws WorkorderRequestValidationException for non-UUID locationId
         when(dashboardService.getDashboard(eq("not-a-uuid"), any(LocalDate.class)))
-                .thenThrow(new IllegalArgumentException("locationId is not a valid UUID: not-a-uuid"));
+                .thenThrow(new WorkorderRequestValidationException("locationId is not a valid UUID: not-a-uuid"));
 
         // Act & Assert
         mockMvc.perform(get("/v1/workexec/dashboard/today")

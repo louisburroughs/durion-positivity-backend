@@ -15,6 +15,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.TravelSegmentStatus;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.TravelSegmentAdjustmentRepository;
 import com.positivity.workorder.internal.repository.TravelSegmentRepository;
 import java.time.Clock;
@@ -50,7 +51,8 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
     public @NonNull TravelSegmentResponse startTravelSegment(@NonNull StartTravelSegmentRequest request) {
         // AC5: on-behalf requires a reason code
         if (request.getActedForPersonId() != null && request.getOnBehalfReasonCode() == null) {
-            throw new IllegalArgumentException("onBehalfReasonCode is required when actedForPersonId is set");
+            throw new WorkorderRequestValidationException(
+                    "onBehalfReasonCode is required when actedForPersonId is set");
         }
         // AC3: block if an active segment already exists for this assignment
         if (travelSegmentRepository.countByMobileWorkAssignmentIdAndStatus(
@@ -117,6 +119,10 @@ public class TravelSegmentServiceImpl implements TravelSegmentService {
         try {
             technicianId = UUID.fromString(username);
         } catch (IllegalArgumentException ex) {
+            // (issue #1694) The security-context username is populated by auth infrastructure
+            // (gateway/JWT), never by this request's caller-supplied fields, so a malformed value
+            // here is a server/config defect, not a client input error. Left as a bare
+            // IllegalArgumentException so it now falls through to the platform's generic 500.
             throw new IllegalArgumentException("Invalid technician id in security context username: " + username);
         }
 

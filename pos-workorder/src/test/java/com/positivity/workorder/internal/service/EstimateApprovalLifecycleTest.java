@@ -22,6 +22,10 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.EstimateNotFoundException;
+import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -259,7 +263,7 @@ class EstimateApprovalLifecycleTest {
 
             assertThatThrownBy(() -> service.approveEstimate(
                             ESTIMATE_ID, OTHER_CUSTOMER_ID, "sig", "image/png", "Someone Else", null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("Customer ID mismatch");
         }
 
@@ -286,12 +290,12 @@ class EstimateApprovalLifecycleTest {
 
             assertThatThrownBy(() -> service.approveEstimate(
                             ESTIMATE_ID, CUSTOMER_ID, "sig", "image/png", "Jane Smith", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PurchaseOrderRequiredException.class)
                     .hasMessage("Purchase order number is required for this customer account");
 
             assertThatThrownBy(() -> service.approveEstimate(
                             ESTIMATE_ID, CUSTOMER_ID, "sig", "image/png", "Jane Smith", null, "   "))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PurchaseOrderRequiredException.class)
                     .hasMessage("Purchase order number is required for this customer account");
             verify(estimateRepository, never()).save(any());
         }
@@ -433,7 +437,7 @@ class EstimateApprovalLifecycleTest {
             when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.declineEstimate(ESTIMATE_ID, "reason"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(EstimateNotFoundException.class)
                     .hasMessageContaining("Estimate not found");
         }
 
@@ -684,7 +688,7 @@ class EstimateApprovalLifecycleTest {
             when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getEstimateSummary(ESTIMATE_ID))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(EstimateNotFoundException.class)
                     .hasMessageContaining("Estimate not found");
         }
 
@@ -750,7 +754,7 @@ class EstimateApprovalLifecycleTest {
             when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.generateEstimatePdf(ESTIMATE_ID))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(EstimateNotFoundException.class);
         }
 
         @Test
@@ -775,7 +779,7 @@ class EstimateApprovalLifecycleTest {
             when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createEstimateSnapshot(ESTIMATE_ID, "jane.smith", null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(EstimateNotFoundException.class)
                     .hasMessageContaining("Estimate not found");
         }
     }
@@ -843,13 +847,13 @@ class EstimateApprovalLifecycleTest {
             CreateEstimateFromAppointmentRequest noAppointment = request();
             noAppointment.setAppointmentId(null);
             assertThatThrownBy(() -> service.createEstimateFromAppointment(noAppointment))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("appointmentId is required");
 
             CreateEstimateFromAppointmentRequest noCustomer = request();
             noCustomer.setCustomerId(null);
             assertThatThrownBy(() -> service.createEstimateFromAppointment(noCustomer))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("customerId is required");
         }
     }

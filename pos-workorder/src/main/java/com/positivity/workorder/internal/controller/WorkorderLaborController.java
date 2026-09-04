@@ -329,9 +329,6 @@ public class WorkorderLaborController {
         } catch (NoSuchElementException e) {
             log.warn("Adjust labor failed - not found: {}", e.getMessage());
             return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Adjust labor failed - invalid request: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
         }
     }
 }

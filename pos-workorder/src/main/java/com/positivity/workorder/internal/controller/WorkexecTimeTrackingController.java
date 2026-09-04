@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -197,7 +198,7 @@ public class WorkexecTimeTrackingController {
             return notFound("NOT_FOUND", ex.getMessage());
         } catch (WorkexecTimeTrackingService.WorkexecConflictException ex) {
             return conflict(ex.getCode(), ex.getMessage());
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException | WorkorderRequestValidationException ex) {
             return badRequest(ERROR_INVALID_REQUEST, ex.getMessage());
         }
     }

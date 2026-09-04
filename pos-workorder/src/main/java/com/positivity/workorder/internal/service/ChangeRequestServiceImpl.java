@@ -10,6 +10,9 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.ChangeRequestNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalRecordRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -37,7 +40,6 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Slf4j
 public class ChangeRequestServiceImpl implements ChangeRequestService {
-    private static final String CHANGE_REQUEST_NOT_FOUND = "Change request not found: ";
     private final Clock clock;
     private static final String IDEMPOTENCY_OPERATION_CHANGE_REQUEST_CREATE = "change-request.create";
 
@@ -66,19 +68,20 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     private ChangeRequest createChangeRequestInternal(CreateChangeRequestDTO dto) {
         // Validation
         if (dto.getDescription() == null || dto.getDescription().trim().isEmpty()) {
-            throw new IllegalArgumentException("Description is required for change request");
+            throw new WorkorderRequestValidationException("Description is required for change request");
         }
 
         boolean hasItems = (dto.getServices() != null && !dto.getServices().isEmpty())
                 || (dto.getParts() != null && !dto.getParts().isEmpty());
         if (!hasItems) {
-            throw new IllegalArgumentException("At least one service or part item is required for change request");
+            throw new WorkorderRequestValidationException(
+                    "At least one service or part item is required for change request");
         }
 
         // Validate work order exists and is in progress
         Workorder workOrder = workOrderRepository
                 .findById(dto.getWorkorderId())
-                .orElseThrow(() -> new IllegalArgumentException("Work order not found: " + dto.getWorkorderId()));
+                .orElseThrow(() -> new WorkorderNotFoundException(dto.getWorkorderId()));
 
         if (workOrder.getStatus() != WorkorderStatus.WORK_IN_PROGRESS) {
             throw new IllegalStateException(
@@ -227,7 +230,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                         "Authenticated user context is required for approving change request"));
         ChangeRequest changeRequest = changeRequestRepository
                 .findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
+                .orElseThrow(() -> new ChangeRequestNotFoundException(changeRequestId));
 
         if (!changeRequest.canApprove()) {
             throw new IllegalStateException(
@@ -236,7 +239,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Approval note is required as the approval artifact
         if (approvalNote == null || approvalNote.trim().isEmpty()) {
-            throw new IllegalArgumentException("Approval note is required as the approval artifact");
+            throw new WorkorderRequestValidationException("Approval note is required as the approval artifact");
         }
 
         changeRequest.setStatus(ChangeRequestStatus.APPROVED);
@@ -275,7 +278,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                         "Authenticated user context is required for declining change request"));
         ChangeRequest changeRequest = changeRequestRepository
                 .findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
+                .orElseThrow(() -> new ChangeRequestNotFoundException(changeRequestId));
 
         if (!changeRequest.canDecline()) {
             throw new IllegalStateException(
@@ -284,7 +287,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Approval note is required as the approval artifact (records the decision)
         if (approvalNote == null || approvalNote.trim().isEmpty()) {
-            throw new IllegalArgumentException("Approval note is required to record the decline decision");
+            throw new WorkorderRequestValidationException("Approval note is required to record the decline decision");
         }
 
         changeRequest.setStatus(ChangeRequestStatus.DECLINED);
@@ -323,7 +326,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                         new IllegalStateException("Authenticated user context is required for emergency override"));
         ChangeRequest changeRequest = changeRequestRepository
                 .findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
+                .orElseThrow(() -> new ChangeRequestNotFoundException(changeRequestId));
 
         if (!changeRequest.canApprove()) {
             throw new IllegalStateException(
@@ -332,7 +335,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
         // Exception reason is required for emergency override
         if (exceptionReason == null || exceptionReason.trim().isEmpty()) {
-            throw new IllegalArgumentException("Exception reason is required for emergency override");
+            throw new WorkorderRequestValidationException("Exception reason is required for emergency override");
         }
 
         changeRequest.setStatus(ChangeRequestStatus.APPROVED_WITH_EXCEPTION);
@@ -369,7 +372,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
     public void recordCustomerDenialAcknowledgment(UUID changeRequestId) {
         ChangeRequest changeRequest = changeRequestRepository
                 .findById(changeRequestId)
-                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + changeRequestId));
+                .orElseThrow(() -> new ChangeRequestNotFoundException(changeRequestId));
 
         boolean isEmergencyException = Boolean.TRUE.equals(changeRequest.getIsEmergencyException());
         if (!isEmergencyException) {
@@ -475,9 +478,8 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
 
     @Override
     public ChangeRequestResponse getChangeRequestById(UUID id) {
-        return ChangeRequestResponse.fromEntity(changeRequestRepository
-                .findById(id)
-                .orElseThrow(() -> new IllegalArgumentException(CHANGE_REQUEST_NOT_FOUND + id)));
+        return ChangeRequestResponse.fromEntity(
+                changeRequestRepository.findById(id).orElseThrow(() -> new ChangeRequestNotFoundException(id)));
     }
 
     private void validateEmergencyDocumentation(CreateChangeRequestDTO dto) {
@@ -502,7 +504,7 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
         }
 
         if (!hasEmergencyItems) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "Emergency exception flagged but no items are marked as emergency/safety");
         }
     }
@@ -516,12 +518,12 @@ public class ChangeRequestServiceImpl implements ChangeRequestService {
                 && !item.getEmergencyNotes().trim().isEmpty();
 
         if (!hasPhoto && !photoNotPossible) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "Emergency/safety items require photo evidence or must mark 'photo not possible'");
         }
 
         if (!hasPhoto && !hasNotes) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "Emergency/safety items without photo must have notes explaining the situation");
         }
     }

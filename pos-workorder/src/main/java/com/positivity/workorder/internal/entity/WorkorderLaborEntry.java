@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -156,6 +157,9 @@ public class WorkorderLaborEntry {
             throw new IllegalStateException("Labor session already stopped");
         }
         if (stopTime.isBefore(startTime)) {
+            // (issue #1694) Both current callers pass Clock.instant()-derived "now", never a
+            // client-supplied timestamp, so this guards clock-skew/data anomalies, not caller
+            // input. Left as a bare IllegalArgumentException.
             throw new IllegalArgumentException("End time cannot be before start time");
         }
         this.endTime = stopTime;
@@ -170,7 +174,7 @@ public class WorkorderLaborEntry {
      */
     public void adjustHours(@NonNull BigDecimal hours, @NonNull String reason) {
         if (hours.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Hours worked cannot be negative");
+            throw new WorkorderRequestValidationException("Hours worked cannot be negative");
         }
         this.hoursWorked = hours;
         this.adjustmentReason = reason;

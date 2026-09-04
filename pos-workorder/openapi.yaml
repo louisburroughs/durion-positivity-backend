@@ -876,7 +876,7 @@ paths:
 
         Emits a WORKORDER_WIP_VIEW audit event; no workorder state changes — this is a read-only projection.
 
-        Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found case surfaces as 400 rather than 404 in this operation.
+        Returns 404 when no workorder exists for the id.
 
         '
       operationId: getWipDetail
@@ -894,7 +894,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderStatusDetail'
-          description: OK
+          description: WIP detail retrieved successfully
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderStatusDetail'
+          description: Workorder not found
       security:
       - bearerAuth:
         - workorder:wip:view
@@ -1213,7 +1219,7 @@ paths:
 
         Emits a WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE event.
 
-        Returns 204 on success, and 400 when the change request cannot be found, is not an emergency exception, or is not declined — all failures surface as 400 in this operation.
+        Returns 204 on success, 400 when the change request is not an emergency exception or is not declined, and 404 when the change request does not exist.
 
         '
       operationId: acknowledgeChangeRequestDenial
@@ -1252,7 +1258,7 @@ paths:
 
         Emits a WORKORDER_CHANGE_REQUEST_APPROVE event and persists an ApprovalRecord audit row.
 
-        Returns 400 when the change request cannot be found, is not awaiting review, or the note is missing — all failures surface as 400 in this operation.
+        Returns 400 when the change request is not awaiting review or the note is missing, and 404 when the change request does not exist.
 
         '
       operationId: approveChangeRequest
@@ -1317,7 +1323,7 @@ paths:
 
         Emits a WORKORDER_CHANGE_REQUEST_DECLINE event; declined emergency items later require acknowledgeChangeRequestDenial before the workorder can close.
 
-        Returns 400 when the change request cannot be found, is not awaiting review, or the note is missing — all failures surface as 400 in this operation.
+        Returns 400 when the change request is not awaiting review or the note is missing, and 404 when the change request does not exist.
 
         '
       operationId: declineChangeRequest
@@ -1381,7 +1387,7 @@ paths:
 
         Emits a WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE event and persists an ApprovalRecord with the APPROVED_WITH_EXCEPTION resolution.
 
-        Returns 400 when the change request cannot be found, is not awaiting review, or the reason is missing — all failures surface as 400 in this operation.
+        Returns 400 when the change request is not awaiting review or the reason is missing, and 404 when the change request does not exist.
 
         '
       operationId: applyChangeRequestEmergencyOverride
@@ -1903,7 +1909,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_PATCH event.
 
-        Returns 400 with VALIDATION_ERROR when status is missing or not a known value, and 409 with CONFLICT when the target is unsupported or the transition is not allowed from the current state.
+        Returns 400 with VALIDATION_ERROR when status is missing or not a known value, 404 when the estimate does not exist, and 409 with CONFLICT when the target is unsupported or the transition is not allowed from the current state.
 
         '
       operationId: patchEstimateStatus
@@ -1939,6 +1945,12 @@ paths:
               schema:
                 type: object
           description: Estimate patch request is invalid
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: Estimate not found
         '409':
           content:
             application/json:
@@ -1965,7 +1977,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_APPROVE event.
 
-        Returns 404 when the estimate does not exist, and 400 when the customer does not match, the status is not PENDING_APPROVAL, or a required purchase order is missing.
+        Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL, 409 when the customer does not match the estimate''s own customer, and 422 when a required purchase order is missing.
 
         '
       operationId: approveEstimate
@@ -2007,13 +2019,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EstimateResponse'
-          description: Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.
+          description: Estimate cannot be approved in current state.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EstimateResponse'
           description: Estimate not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstimateResponse'
+          description: 'Customer ID mismatch: estimate belongs to a different customer.'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstimateResponse'
+          description: Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).
       security:
       - bearerAuth:
         - workorder:estimate:approve
@@ -2086,7 +2110,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_DECLINE event and marks the estimate fact changed.
 
-        Returns 400 when the estimate is missing or cannot be declined from its current status — both failures surface as 400 in this operation.
+        Returns 400 when the estimate cannot be declined from its current status, and 404 when the estimate does not exist.
 
         '
       operationId: declineEstimate
@@ -2481,7 +2505,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_REOPEN event and marks the estimate fact changed.
 
-        Returns 400 when the estimate is missing, not declined, or past its expiry window — all failures surface as 400 in this operation.
+        Returns 400 when the estimate is not declined or is past its expiry window, and 404 when the estimate does not exist.
 
         '
       operationId: reopenEstimate
@@ -3503,7 +3527,7 @@ paths:
 
         Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream replication.
 
-        Returns 400 when the workorder is missing, the customer does not match, or the status is not DRAFT — all failures surface as 400 in this operation.
+        Returns 404 when the workorder does not exist, 400 when the status is not DRAFT, and 409 when the customer does not match the workorder''s own customer.
 
         '
       operationId: approveWorkorder
@@ -3544,13 +3568,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderResponse'
-          description: Work order cannot be approved in current state or customer ID mismatch.
+          description: Work order cannot be approved in current state.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderResponse'
           description: Work order not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderResponse'
+          description: 'Customer ID mismatch: workorder belongs to a different customer.'
       security:
       - bearerAuth:
         - workorder:workorder:approve
@@ -3651,7 +3681,7 @@ paths:
 
         Emits a WORKORDER_CHANGE_REQUEST_CREATE event and renders a supplemental estimate PDF via the documents service when items are present.
 
-        Returns 400 when the description or items are missing, the workorder is absent or not WORK_IN_PROGRESS, or emergency documentation is incomplete — all failures surface as 400 in this operation.
+        Returns 400 when the description or items are missing, the workorder status is not WORK_IN_PROGRESS, or emergency documentation is incomplete, and 404 when the workorder does not exist.
 
         '
       operationId: createChangeRequest
@@ -3838,7 +3868,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found case surfaces as 400 rather than 404 in this operation.
+        Returns 404 when no workorder exists for the id.
 
         '
       operationId: getWorkorderDetail
@@ -4576,7 +4606,7 @@ paths:
 
         Emits a WORKORDER_PART_CONSUME event and marks the workorder fact changed.
 
-        Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the issued quantity, or the part cannot be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
+        Returns 201 with the CONSUME event, 400 when the quantity is not positive, 404 when the workorder or part cannot be found, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when consumption would exceed the issued quantity or the part belongs to a different workorder.
 
         '
       operationId: consumeParts
@@ -4617,13 +4647,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
-          description: Invalid request (exceeds issued quantity, etc.)
+          description: Invalid request (quantity not positive)
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
           description: Workorder or part not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+          description: Consumption exceeds issued quantity, or the part belongs to a different workorder
         '422':
           content:
             application/json:
@@ -4650,7 +4686,7 @@ paths:
 
         Emits a WORKORDER_PART_CORRECT event.
 
-        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 when newQuantity is not positive or the part does not belong to the workorder, and 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale.
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 when newQuantity is not positive, 409 when the part does not belong to the workorder, and 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale.
 
         '
       operationId: correctPartQuantity
@@ -4693,13 +4729,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
-          description: Invalid request
+          description: Invalid request (newQuantity not positive)
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
           description: Workorder or part not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+          description: Part belongs to a different workorder
         '422':
           content:
             application/json:
@@ -4726,7 +4768,7 @@ paths:
 
         Emits a WORKORDER_PART_ISSUE event and marks the workorder fact changed for downstream replication.
 
-        Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
+        Returns 201 with the ISSUE event, 400 when the quantity is not positive, 404 when the workorder or part cannot be found, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
 
         '
       operationId: issueParts
@@ -4806,7 +4848,7 @@ paths:
 
         Emits a WORKORDER_PART_RETURN event and marks the workorder fact changed.
 
-        Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the available quantity, or the part cannot be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
+        Returns 201 with the RETURN event, 400 when the quantity is not positive, 404 when the workorder or part cannot be found, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the return would exceed the available quantity or the part belongs to a different workorder.
 
         '
       operationId: returnParts
@@ -4847,13 +4889,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
-          description: Invalid request (exceeds available quantity, etc.)
+          description: Invalid request (quantity not positive)
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
           description: Workorder or part not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+          description: Return exceeds available quantity, or the part belongs to a different workorder
         '422':
           content:
             application/json:
@@ -4880,7 +4928,7 @@ paths:
 
         Emits a WORKORDER_PART_RETURN_UNUSED event.
 
-        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and 400 when the quantity is not positive, exceeds the available quantity, or the part does not belong to the workorder.
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 when the quantity is not positive, and 409 when the return would exceed the available quantity or the part does not belong to the workorder.
 
         '
       operationId: returnUnusedPartQuantity
@@ -4923,13 +4971,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
-          description: Invalid request (exceeds available quantity, etc.)
+          description: Invalid request (quantity not positive)
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
           description: Workorder or part not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+          description: Return exceeds available quantity, or the part belongs to a different workorder
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -4950,7 +5004,7 @@ paths:
 
         Emits a WORKORDER_PART_SUBSTITUTE event.
 
-        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and 400 when the part is already consumed, does not belong to the workorder, or the substitute equals the original.
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 when the substitute equals the original, and 409 when the part is already consumed, does not belong to the workorder, or an idempotency key collides.
 
         '
       operationId: substitutePart
@@ -4993,7 +5047,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
-          description: Invalid request (part already consumed, etc.)
+          description: Invalid request (substitute part equals original)
         '404':
           content:
             application/json:
@@ -5005,7 +5059,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
-          description: Idempotency conflict
+          description: Part already consumed, part belongs to a different workorder, or idempotency conflict
       security:
       - bearerAuth:
         - workorder:parts:add

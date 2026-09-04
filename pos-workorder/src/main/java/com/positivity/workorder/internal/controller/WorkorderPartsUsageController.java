@@ -63,10 +63,10 @@ public class WorkorderPartsUsageController {
                     header makes retries return the original usage event.
                     Emits a WORKORDER_PART_ISSUE event and marks the workorder fact changed for downstream \
                     replication.
-                    Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot \
-                    be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for \
-                    the product or the converted quantity exceeds its declared decimal scale, and 409 when the \
-                    part belongs to a different workorder.
+                    Returns 201 with the ISSUE event, 400 when the quantity is not positive, 404 when the \
+                    workorder or part cannot be found, 422 when uomCode has no conversion row for the product \
+                    or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs \
+                    to a different workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -123,22 +123,25 @@ public class WorkorderPartsUsageController {
                     for the product's base unit); an Idempotency-Key header makes retries return the original \
                     usage event.
                     Emits a WORKORDER_PART_CONSUME event and marks the workorder fact changed.
-                    Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the \
-                    issued quantity, or the part cannot be found, 404 when the workorder does not exist, 422 \
-                    when uomCode has no conversion row for the product or the converted quantity exceeds its \
-                    declared decimal scale, and 409 when the part belongs to a different workorder.
+                    Returns 201 with the CONSUME event, 400 when the quantity is not positive, 404 when the \
+                    workorder or part cannot be found, 422 when uomCode has no conversion row for the product \
+                    or the converted quantity exceeds its declared decimal scale, and 409 when consumption \
+                    would exceed the issued quantity or the part belongs to a different workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
             description = "Parts consumption recorded successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (exceeds issued quantity, etc.)")
+    @ApiResponse(responseCode = "400", description = "Invalid request (quantity not positive)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
                     + "converted quantity exceeds the product's declared decimal scale "
                     + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Consumption exceeds issued quantity, or the part belongs to a different workorder")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line and quantity actually consumed on the job.",
             required = true,
@@ -155,18 +158,10 @@ public class WorkorderPartsUsageController {
             @RequestBody @Valid @NonNull ConsumePartRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
-        try {
-            var event = usageService.consumePartQuantity(
-                    workorderId,
-                    request.getWorkorderPartId(),
-                    request.getQuantity(),
-                    request.getUomCode(),
-                    idempotencyKey);
+        var event = usageService.consumePartQuantity(
+                workorderId, request.getWorkorderPartId(), request.getQuantity(), request.getUomCode(), idempotencyKey);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(event);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
     /**
@@ -190,22 +185,25 @@ public class WorkorderPartsUsageController {
                     for the product's base unit); an Idempotency-Key header makes retries return the original \
                     usage event.
                     Emits a WORKORDER_PART_RETURN event and marks the workorder fact changed.
-                    Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the \
-                    available quantity, or the part cannot be found, 404 when the workorder does not exist, \
-                    422 when uomCode has no conversion row for the product or the converted quantity exceeds \
-                    its declared decimal scale, and 409 when the part belongs to a different workorder.
+                    Returns 201 with the RETURN event, 400 when the quantity is not positive, 404 when the \
+                    workorder or part cannot be found, 422 when uomCode has no conversion row for the product \
+                    or the converted quantity exceeds its declared decimal scale, and 409 when the return \
+                    would exceed the available quantity or the part belongs to a different workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
             description = "Parts returned successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartUsageEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
+    @ApiResponse(responseCode = "400", description = "Invalid request (quantity not positive)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
                     + "converted quantity exceeds the product's declared decimal scale "
                     + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Return exceeds available quantity, or the part belongs to a different workorder")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line and unused quantity going back to inventory.",
             required = true,
@@ -222,18 +220,10 @@ public class WorkorderPartsUsageController {
             @RequestBody @Valid @NonNull ReturnPartRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) @Nullable String idempotencyKey) {
 
-        try {
-            var event = usageService.returnPartQuantity(
-                    workorderId,
-                    request.getWorkorderPartId(),
-                    request.getQuantity(),
-                    request.getUomCode(),
-                    idempotencyKey);
+        var event = usageService.returnPartQuantity(
+                workorderId, request.getWorkorderPartId(), request.getQuantity(), request.getUomCode(), idempotencyKey);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(event);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
     /**

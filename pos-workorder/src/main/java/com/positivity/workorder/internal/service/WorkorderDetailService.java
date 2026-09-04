@@ -20,7 +20,7 @@ public interface WorkorderDetailService {
      * @param userAuthorities the set of user authorities for capability
      *                        determination
      * @return comprehensive workorder detail response
-     * @throws IllegalArgumentException if workorder not found
+     * @throws com.positivity.workorder.internal.exception.WorkorderNotFoundException if workorder not found
      */
     @NonNull
     WorkorderDetailResponse getWorkorderDetail(@NonNull UUID workorderId, @NonNull Set<String> userAuthorities);

@@ -20,6 +20,7 @@ import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -257,8 +258,8 @@ class EstimateServiceImplTest {
                 .build();
         when(peopleAvailabilityLocalService.resolveCurrentUserPrimaryLocation()).thenReturn(java.util.Optional.empty());
 
-        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class, () -> estimateService.createEstimate(request, "testuser"));
+        WorkorderRequestValidationException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                WorkorderRequestValidationException.class, () -> estimateService.createEstimate(request, "testuser"));
         org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("locationId is required"));
     }
 
@@ -268,8 +269,8 @@ class EstimateServiceImplTest {
                 CreateEstimateRequest.builder().vehicleId(LOCAL_VEHICLE_ID).build();
         String username = "testuser";
 
-        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class, () -> estimateService.createEstimate(request, username));
+        WorkorderRequestValidationException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                WorkorderRequestValidationException.class, () -> estimateService.createEstimate(request, username));
         assertEquals("customerId is required", exception.getMessage());
     }
 
@@ -279,8 +280,8 @@ class EstimateServiceImplTest {
                 CreateEstimateRequest.builder().customerId(LOCAL_CUSTOMER_ID).build();
         String username = "testuser";
 
-        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class, () -> estimateService.createEstimate(request, username));
+        WorkorderRequestValidationException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                WorkorderRequestValidationException.class, () -> estimateService.createEstimate(request, username));
         assertEquals("vehicleId is required", exception.getMessage());
     }
 

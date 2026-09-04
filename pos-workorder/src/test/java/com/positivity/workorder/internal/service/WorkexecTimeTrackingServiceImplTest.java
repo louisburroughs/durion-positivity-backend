@@ -14,6 +14,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -363,7 +364,7 @@ class WorkexecTimeTrackingServiceImplTest {
             WorkexecTimeTrackingService.LaborPerformedRequest request = request("1.5", "MINUTES");
 
             assertThatThrownBy(() -> service.recordLaborPerformed(request, IDEMPOTENCY_KEY))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("labor.unit must be HOURS");
         }
 
@@ -372,9 +373,9 @@ class WorkexecTimeTrackingServiceImplTest {
             stubWorkorder(WorkorderStatus.APPROVED);
 
             assertThatThrownBy(() -> service.recordLaborPerformed(request("0", "HOURS"), IDEMPOTENCY_KEY))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(WorkorderRequestValidationException.class);
             assertThatThrownBy(() -> service.recordLaborPerformed(request(null, "HOURS"), IDEMPOTENCY_KEY))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(WorkorderRequestValidationException.class);
         }
 
         @Test
@@ -464,7 +465,7 @@ class WorkexecTimeTrackingServiceImplTest {
             WorkexecTimeTrackingService.TimerStartRequest request = request(OTHER_TECHNICIAN_ID, "  ");
 
             assertThatThrownBy(() -> service.startTimer(TECHNICIAN_ID, request, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("reason is required");
         }
 

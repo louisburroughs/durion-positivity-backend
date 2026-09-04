@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.enums.TravelSegmentStatus;
 import com.positivity.workorder.internal.enums.TravelSegmentType;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.TravelSegmentAdjustmentRepository;
 import com.positivity.workorder.internal.repository.TravelSegmentRepository;
 import java.time.Clock;
@@ -230,7 +231,7 @@ class TravelSegmentServiceImplTest {
                 .build();
 
         assertThatThrownBy(() -> serviceImpl.startTravelSegment(req))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("onBehalfReasonCode is required");
     }
 

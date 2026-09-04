@@ -9,6 +9,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -51,7 +52,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
         // Load workorder with relations
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         // Load current technician assignment
         TechnicianAssignment currentAssignment = technicianAssignmentRepository

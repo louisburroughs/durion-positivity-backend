@@ -45,6 +45,8 @@ public class WorkorderNoteServiceImpl implements WorkorderNoteService {
         if (noteText == null) {
             // @NotBlank covers the HTTP path; this is for any other caller of the bean, which would
             // otherwise get an NPE out of normalize() instead of a 400 naming the field.
+            // (issue #1694) Defensive/internal invariant, not client-reachable via the controller —
+            // left as a bare IllegalArgumentException rather than a module exception type.
             throw new IllegalArgumentException("noteText must not be blank");
         }
         Workorder workorder = workorderRepository

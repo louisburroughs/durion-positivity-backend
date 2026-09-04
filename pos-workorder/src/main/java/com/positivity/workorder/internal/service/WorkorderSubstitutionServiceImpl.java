@@ -9,6 +9,7 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.SubstitutionStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -116,7 +117,7 @@ public class WorkorderSubstitutionServiceImpl implements WorkorderSubstitutionSe
         }
 
         if (originalPartId.equals(substitutePartId)) {
-            throw new IllegalArgumentException("Substitute part must be different from original part");
+            throw new WorkorderRequestValidationException("Substitute part must be different from original part");
         }
 
         UUID originalProductReference = resolveOriginalProductReference(originalPart, originalPartId);

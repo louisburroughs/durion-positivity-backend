@@ -1,7 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -109,28 +110,28 @@ class WorkorderAnalyticsServiceImplTest {
     @Test
     @DisplayName("woId together with a range param is rejected as ambiguous")
     void statusTransitions_woIdAndRangeParams_rejected() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(WorkorderRequestValidationException.class)
                 .isThrownBy(() -> service.getStatusTransitions(WO_1, null, null, LocalDate.of(2026, 6, 1), null, 100));
     }
 
     @Test
     @DisplayName("Neither woId nor any range param is rejected as an empty combination")
     void statusTransitions_emptyCombination_rejected() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(WorkorderRequestValidationException.class)
                 .isThrownBy(() -> service.getStatusTransitions(null, null, null, null, null, 100));
     }
 
     @Test
     @DisplayName("Range mode with only endDate (no startDate) is rejected")
     void statusTransitions_rangeModeMissingStartDate_rejected() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(WorkorderRequestValidationException.class)
                 .isThrownBy(() -> service.getStatusTransitions(null, null, null, null, LocalDate.of(2026, 6, 30), 100));
     }
 
     @Test
     @DisplayName("endDate before startDate is rejected")
     void statusTransitions_endBeforeStart_rejected() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(WorkorderRequestValidationException.class)
                 .isThrownBy(() -> service.getStatusTransitions(
                         null, null, null, LocalDate.of(2026, 6, 30), LocalDate.of(2026, 6, 1), 100));
     }
@@ -183,7 +184,7 @@ class WorkorderAnalyticsServiceImplTest {
     @Test
     @DisplayName("endDate before startDate is rejected")
     void reopened_endBeforeStart_rejected() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(WorkorderRequestValidationException.class)
                 .isThrownBy(() ->
                         service.getReopenedWorkorders(LocalDate.of(2026, 6, 30), LocalDate.of(2026, 6, 1), 7, 100));
     }
@@ -360,7 +361,7 @@ class WorkorderAnalyticsServiceImplTest {
     @Test
     @DisplayName("endDate before startDate is rejected")
     void technicianLabor_endBeforeStart_rejected() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(WorkorderRequestValidationException.class)
                 .isThrownBy(() -> service.getTechnicianLabor(LocalDate.of(2026, 6, 30), LocalDate.of(2026, 6, 1), 100));
     }
 

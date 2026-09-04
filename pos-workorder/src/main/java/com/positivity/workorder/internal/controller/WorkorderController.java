@@ -282,14 +282,13 @@ public class WorkorderController {
                     defaults to image/png.
                     Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream \
                     replication.
-                    Returns 400 when the workorder is missing, the customer does not match, or the status is not \
-                    DRAFT — all failures surface as 400 in this operation.
+                    Returns 404 when the workorder does not exist, 400 when the status is not DRAFT, and 409 \
+                    when the customer does not match the workorder's own customer.
                     """)
     @ApiResponse(responseCode = "200", description = "Work order approved successfully with signature captured.")
-    @ApiResponse(
-            responseCode = "400",
-            description = "Work order cannot be approved in current state or customer ID mismatch.")
+    @ApiResponse(responseCode = "400", description = "Work order cannot be approved in current state.")
     @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(responseCode = "409", description = "Customer ID mismatch: workorder belongs to a different customer.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity and captured signature artifacts.",
             required = true,
@@ -324,7 +323,7 @@ public class WorkorderController {
                     request.getSignerName(),
                     request.getNotes());
             return ResponseEntity.ok(approved);
-        } catch (IllegalStateException | IllegalArgumentException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }

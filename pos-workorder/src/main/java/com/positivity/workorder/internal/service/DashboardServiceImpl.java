@@ -18,6 +18,7 @@ import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -126,7 +127,7 @@ public class DashboardServiceImpl implements DashboardService {
         try {
             return UUID.fromString(locationId);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
+            throw new WorkorderRequestValidationException("locationId is not a valid UUID: " + locationId);
         }
     }
 

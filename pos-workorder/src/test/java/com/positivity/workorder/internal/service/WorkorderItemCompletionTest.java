@@ -12,6 +12,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
+import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -114,7 +115,7 @@ class WorkorderItemCompletionTest {
         when(workorderServiceRepository.findById(ITEM)).thenReturn(Optional.of(line(WorkorderItemStatus.OPEN, other)));
 
         assertThatThrownBy(() -> service.completeServiceItem(WORKORDER, ITEM, "tech"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ServiceLineNotFoundException.class);
     }
 
     @Test

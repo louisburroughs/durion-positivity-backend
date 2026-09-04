@@ -72,17 +72,19 @@ public class WorkorderPartAdjustmentController {
                     substitutePartId (UUIDs) and a reason in the body; notes are optional and an Idempotency-Key \
                     header deduplicates retries.
                     Emits a WORKORDER_PART_SUBSTITUTE event.
-                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and \
-                    400 when the part is already consumed, does not belong to the workorder, or the substitute \
-                    equals the original.
+                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 \
+                    when the substitute equals the original, and 409 when the part is already consumed, does \
+                    not belong to the workorder, or an idempotency key collides.
                     """)
     @ApiResponse(
             responseCode = "201",
             description = "Part substituted successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (part already consumed, etc.)")
+    @ApiResponse(responseCode = "400", description = "Invalid request (substitute part equals original)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
-    @ApiResponse(responseCode = "409", description = "Idempotency conflict")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Part already consumed, part belongs to a different workorder, or idempotency conflict")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Original part, replacement part, and the reason for the swap.",
             required = true,
@@ -112,8 +114,6 @@ public class WorkorderPartAdjustmentController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (NoSuchElementException _) {
             return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException | IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
         }
     }
 
@@ -137,16 +137,19 @@ public class WorkorderPartAdjustmentController {
                     positive quantity, and a reason in the body; notes are optional and an Idempotency-Key \
                     header deduplicates retries.
                     Emits a WORKORDER_PART_RETURN_UNUSED event.
-                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and \
-                    400 when the quantity is not positive, exceeds the available quantity, or the part does not \
-                    belong to the workorder.
+                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 \
+                    when the quantity is not positive, and 409 when the return would exceed the available \
+                    quantity or the part does not belong to the workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
             description = "Unused quantity returned successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
+    @ApiResponse(responseCode = "400", description = "Invalid request (quantity not positive)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Return exceeds available quantity, or the part belongs to a different workorder")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line, quantity going back, and the reason for the reasoned return.",
             required = true,
@@ -175,8 +178,6 @@ public class WorkorderPartAdjustmentController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (NoSuchElementException _) {
             return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException | IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
         }
     }
 
@@ -201,16 +202,17 @@ public class WorkorderPartAdjustmentController {
                     an Idempotency-Key header deduplicates retries.
                     Emits a WORKORDER_PART_CORRECT event.
                     Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 \
-                    when newQuantity is not positive or the part does not belong to the workorder, and 422 when \
-                    uomCode has no conversion row for the product or the converted quantity exceeds its \
-                    declared decimal scale.
+                    when newQuantity is not positive, 409 when the part does not belong to the workorder, and \
+                    422 when uomCode has no conversion row for the product or the converted quantity exceeds \
+                    its declared decimal scale.
                     """)
     @ApiResponse(
             responseCode = "201",
             description = "Part quantity corrected successfully",
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(responseCode = "400", description = "Invalid request (newQuantity not positive)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(responseCode = "409", description = "Part belongs to a different workorder")
     @ApiResponse(
             responseCode = "422",
             description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
@@ -245,8 +247,6 @@ public class WorkorderPartAdjustmentController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (NoSuchElementException _) {
             return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException | IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
         }
     }
 

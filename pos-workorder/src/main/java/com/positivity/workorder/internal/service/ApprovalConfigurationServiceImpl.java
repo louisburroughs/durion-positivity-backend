@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.service;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
+import com.positivity.workorder.internal.exception.ApprovalConfigurationNotFoundException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import java.util.List;
 import java.util.Optional;
@@ -50,7 +51,7 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
     public ApprovalConfigurationResponse updateConfiguration(UUID id, ApprovalConfigurationRequest request) {
         ApprovalConfiguration existing = approvalConfigurationRepository
                 .findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Configuration not found: " + id));
+                .orElseThrow(() -> new ApprovalConfigurationNotFoundException(id));
 
         existing.setLocationId(request.getLocationId());
         existing.setCustomerId(request.getCustomerId());

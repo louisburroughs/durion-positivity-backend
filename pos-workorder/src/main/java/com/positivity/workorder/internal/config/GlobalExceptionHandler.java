@@ -2,15 +2,21 @@ package com.positivity.workorder.internal.config;
 
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.workorder.internal.exception.ApprovalConfigurationNotFoundException;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.ChangeRequestNotFoundException;
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
+import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
+import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
+import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
@@ -21,6 +27,8 @@ import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
@@ -282,9 +290,79 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.CONFLICT, "STALE_SUBSTITUTE_LINK_VERSION", ex.getMessage(), request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, "INVALID_ARGUMENT", ex.getMessage(), request);
+    /**
+     * A workorder-domain request fails field-level or request-shape validation (issue #1694).
+     * Replaces the module's former blanket {@code @ExceptionHandler(IllegalArgumentException.class)},
+     * which also caught server-side defects (Hibernate/JPA lookups, malformed stored data) that
+     * happen to throw the same JDK exception and reported them to the client as a bad request.
+     * {@code INVALID_ARGUMENT} is the code that blanket handler used, kept here so the wire
+     * contract for genuine client validation failures does not drift.
+     */
+    @ExceptionHandler(WorkorderRequestValidationException.class)
+    public ResponseEntity<ApiError> handleWorkorderRequestValidation(
+            WorkorderRequestValidationException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST, WorkorderRequestValidationException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A well-formed request conflicts with the target resource's current state (ADR-0017 §2,
+     * issue #1694): a caller-supplied id does not match the resource it targets, or an operation
+     * would exceed a quantity the resource's current running totals actually have available. Uses
+     * the same {@code CONFLICT} code as {@link #handleIllegalState} so every stateful-collision
+     * response in this module carries one consistent code.
+     */
+    @ExceptionHandler(WorkorderResourceConflictException.class)
+    public ResponseEntity<ApiError> handleWorkorderResourceConflict(
+            WorkorderResourceConflictException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.CONFLICT, WorkorderResourceConflictException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A semantically valid estimate approval is missing a purchase order a commercial customer's
+     * billing rules require (CAP:092 Story #98, issue #1694). 422, not 400: the payload is
+     * well-formed, and whether a PO is required is a documented domain policy resolved by a
+     * billing-rules lookup, not request-shape validation.
+     */
+    @ExceptionHandler(PurchaseOrderRequiredException.class)
+    public ResponseEntity<ApiError> handlePurchaseOrderRequired(
+            PurchaseOrderRequiredException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, PurchaseOrderRequiredException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ChangeRequestNotFoundException.class)
+    public ResponseEntity<ApiError> handleChangeRequestNotFound(
+            ChangeRequestNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND, ChangeRequestNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ServiceLineNotFoundException.class)
+    public ResponseEntity<ApiError> handleServiceLineNotFound(
+            ServiceLineNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND, ServiceLineNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PartLineNotFoundException.class)
+    public ResponseEntity<ApiError> handlePartLineNotFound(PartLineNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, PartLineNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(EstimateItemNotFoundException.class)
+    public ResponseEntity<ApiError> handleEstimateItemNotFound(
+            EstimateItemNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND, EstimateItemNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ApprovalConfigurationNotFoundException.class)
+    public ResponseEntity<ApiError> handleApprovalConfigurationNotFound(
+            ApprovalConfigurationNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND, ApprovalConfigurationNotFoundException.ERROR_CODE, ex.getMessage(), request);
     }
 
     /**

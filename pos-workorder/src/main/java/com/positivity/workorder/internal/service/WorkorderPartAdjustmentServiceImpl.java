@@ -7,6 +7,8 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -117,7 +119,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param notes            optional additional notes
      * @return the adjustment event as DTO
      * @throws NoSuchElementException   if original part not found
-     * @throws IllegalArgumentException if substitute part ID equals original part
+     * @throws WorkorderRequestValidationException if substitute part ID equals original part
      *                                  ID
      * @throws IllegalStateException    if original part already consumed or cannot
      *                                  be substituted
@@ -168,7 +170,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Validate substitute part is different
         if (originalPartId.equals(substitutePartId)) {
-            throw new IllegalArgumentException("Substitute part must be different from original part");
+            throw new WorkorderRequestValidationException("Substitute part must be different from original part");
         }
 
         // Create new WorkorderPart for substitute with equivalent quantities
@@ -247,7 +249,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param notes          optional additional notes
      * @return the adjustment event as DTO
      * @throws NoSuchElementException   if part not found
-     * @throws IllegalArgumentException if quantity exceeds available quantity
+     * @throws WorkorderResourceConflictException if quantity exceeds available quantity
      */
     @Transactional
     @NonNull
@@ -280,7 +282,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Validate quantity
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Return quantity must be positive");
+            throw new WorkorderRequestValidationException("Return quantity must be positive");
         }
 
         // Validate part exists
@@ -298,7 +300,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
                 part.getQuantityIssued().subtract(part.getQuantityConsumed()).subtract(part.getQuantityReturned());
 
         if (quantity.compareTo(availableToReturn) > 0) {
-            throw new IllegalArgumentException(
+            throw new WorkorderResourceConflictException(
                     "Return quantity " + quantity + " exceeds available quantity " + availableToReturn);
         }
 
@@ -350,7 +352,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param notes          optional additional notes
      * @return the adjustment event as DTO
      * @throws NoSuchElementException   if part not found
-     * @throws IllegalArgumentException if new quantity is not positive
+     * @throws WorkorderRequestValidationException if new quantity is not positive
      */
     @Transactional
     @NonNull
@@ -384,7 +386,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Validate new quantity
         if (newQuantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("New quantity must be positive");
+            throw new WorkorderRequestValidationException("New quantity must be positive");
         }
 
         // Validate part exists

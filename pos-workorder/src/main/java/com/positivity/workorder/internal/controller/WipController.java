@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.service.WipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -100,9 +101,10 @@ public class WipController {
                     Required inputs: workorderId (UUID) as a path parameter.
                     Emits a WORKORDER_WIP_VIEW audit event; no workorder state changes — this is a read-only \
                     projection.
-                    Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found \
-                    case surfaces as 400 rather than 404 in this operation.
+                    Returns 404 when no workorder exists for the id.
                     """)
+    @ApiResponse(responseCode = "200", description = "WIP detail retrieved successfully")
+    @ApiResponse(responseCode = "404", description = "Workorder not found")
     @GetMapping("/{workorderId}")
     @PreAuthorize("hasAuthority('" + WorkorderPermissions.WIP_VIEW + "')")
     @EmitEvent(id = "WORKORDER_WIP_VIEW", apiVersion = "1")

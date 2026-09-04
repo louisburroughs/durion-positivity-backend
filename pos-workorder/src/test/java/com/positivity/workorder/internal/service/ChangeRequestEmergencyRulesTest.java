@@ -14,6 +14,8 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalRecordRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -143,7 +145,7 @@ class ChangeRequestEmergencyRulesTest {
         // Whitespace is included deliberately: the description is what the customer is shown
         // when asked to approve extra work, so a blank one is the same as none.
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("Description is required");
 
         verify(changeRequestRepository, never()).save(any());
@@ -157,7 +159,7 @@ class ChangeRequestEmergencyRulesTest {
         dto.setParts(List.of());
 
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("At least one service or part");
     }
 
@@ -171,7 +173,7 @@ class ChangeRequestEmergencyRulesTest {
         // The two collections are checked with a null guard before isEmpty; dropping it turns a
         // malformed request into a NullPointerException instead of a clear rejection.
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("At least one service or part");
     }
 
@@ -181,8 +183,8 @@ class ChangeRequestEmergencyRulesTest {
         when(workOrderRepository.findById(WORKORDER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createChangeRequest(dto(item())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Work order not found");
+                .isInstanceOf(WorkorderNotFoundException.class)
+                .hasMessageContaining("Workorder not found");
     }
 
     @ParameterizedTest(name = "workorder in {0} cannot take a change request")
@@ -218,7 +220,7 @@ class ChangeRequestEmergencyRulesTest {
         // The flag and the items must agree. A request that claims the exception but marks
         // nothing as emergency would take the fast path with no item to justify it.
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("no items are marked as emergency");
     }
 
@@ -231,7 +233,7 @@ class ChangeRequestEmergencyRulesTest {
         dto.setIsEmergencyException(true);
 
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("photo evidence");
     }
 
@@ -248,7 +250,7 @@ class ChangeRequestEmergencyRulesTest {
         // would let an item pass with the flag set and nothing written down, which is the same
         // as no evidence at all.
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("notes");
     }
 
@@ -281,7 +283,8 @@ class ChangeRequestEmergencyRulesTest {
         if (accepted) {
             assertThat(service.createChangeRequest(dto)).isNotNull();
         } else {
-            assertThatThrownBy(() -> service.createChangeRequest(dto)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> service.createChangeRequest(dto))
+                    .isInstanceOf(WorkorderRequestValidationException.class);
         }
     }
 
@@ -299,7 +302,7 @@ class ChangeRequestEmergencyRulesTest {
         // Services and parts are validated by two separate loops over the same helper. A part
         // that skipped the check would be the cheaper half of the bill going undocumented.
         assertThatThrownBy(() -> service.createChangeRequest(dto))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("photo evidence");
     }
 
