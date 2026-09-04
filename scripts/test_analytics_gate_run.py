@@ -607,6 +607,43 @@ class WindowGradingTest(unittest.TestCase):
         self.assertEqual(verdict, "UNGRADED")
         self.assertIn("quotes no resolver statement", detail)
 
+    def test_grading_is_anchored_to_the_run_date_not_the_corpus_as_of(self):
+        # The defect this pins: grade_window was correct and main() called it with the corpus's
+        # frozen eval_as_of, so q05/q13 would have failed on every day but 2026-09-01 — #1709's own
+        # defect, reinstated in the wiring. Testing the function alone did not catch it.
+        import datetime as _dt
+
+        today = _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+            os.environ, {}, clear=True
+        ), mock.patch.object(runner, "ask") as ask, mock.patch.object(
+            runner, "questions_provenance"
+        ) as provenance:
+            provenance.return_value = {"path": "q.json", "blob_sha": "abc", "commit": "d", "uncommitted": False}
+            ask.return_value = {"answer": f"as of {today} the balance is 1", "error": None, "elapsed_s": 1.0}
+            directory = Path(directory)
+            questions_path = directory / "questions.json"
+            document = {
+                "eval_as_of": "2026-09-01",
+                "questions": [
+                    {
+                        **question(),
+                        "window": {"shape": "point-in-time", "resolved_range": "as of 2026-09-01",
+                                   "expected": {"shape": None, "as_of_offset_days": 0}},
+                    }
+                ],
+            }
+            questions_path.write_text(json.dumps(document), encoding="utf-8")
+            out_dir = directory / "out"
+            runner.main([
+                "--out", str(out_dir), "--questions", str(questions_path),
+                "--token", _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"]}),
+            ])
+            record = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(record["graded_as_of"], today)
+        self.assertEqual(record["results"][0]["window_check"]["verdict"], "PASS")
+
     def test_an_unannotated_question_is_ungraded_and_says_why(self):
         verdict, detail = runner.grade_window(
             self._q({"shape": None, "note": "mixed window"}), "rolling: 2026-01-01 to 2026-02-01 — x", date(2026, 9, 1)

@@ -86,13 +86,18 @@ final class ChatResponseText {
     }
 
     /**
-     * Whether {@code content} is nothing but a serialised JSON value.
+     * Whether {@code content} is nothing but a serialised JSON <em>object or array</em>.
      *
      * <p>Deliberately whole-string: an answer that <em>contains</em> JSON — a fenced example, a
      * quoted identifier — is a legitimate answer and must not be discarded. Only a reply that is
      * itself a payload, start to finish, is the #1708 defect. The check is structural rather than a
      * parse: it needs no JSON dependency here, and a truncated payload is just as much "not an
      * answer" as a well-formed one.
+     *
+     * <p>Scalars are deliberately out of scope. A bare {@code "text"}, {@code 42} or {@code null}
+     * is not a tool payload — {@code 42} is a plausible answer to "how many open work orders?" —
+     * and treating one as a non-answer would discard a legitimate reply, which is the failure this
+     * guard must not cause. Every payload observed in #1708 was an object.
      */
     private static boolean isBareToolPayload(@NonNull String content) {
         String trimmed = content.strip();

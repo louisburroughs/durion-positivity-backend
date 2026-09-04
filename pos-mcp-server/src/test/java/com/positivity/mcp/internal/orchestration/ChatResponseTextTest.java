@@ -97,6 +97,18 @@ class ChatResponseTextTest {
     }
 
     @Test
+    @DisplayName("a bare scalar is an answer, not a payload")
+    void extractDetailed_bareScalar_isStillContent() {
+        // "42" is a plausible answer to "how many open work orders?". Scalars are out of scope by
+        // decision, not by accident; every payload observed in #1708 was an object.
+        assertThat(ChatResponseText.extractDetailed(new AssistantMessage("42")).source())
+                .isEqualTo(ChatResponseText.Source.CONTENT);
+        assertThat(ChatResponseText.extractDetailed(new AssistantMessage("\"OK\""))
+                        .source())
+                .isEqualTo(ChatResponseText.Source.CONTENT);
+    }
+
+    @Test
     @DisplayName("a markdown table answer is unaffected")
     void extractDetailed_tableAnswer_isStillContent() {
         String table = "| Vendor | Spend |\n|---|---|\n| Cascade | $12,000.00 |";

@@ -987,16 +987,18 @@ def main(argv=None):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_as_of = document.get("eval_as_of")
-    try:
-        as_of_date = date.fromisoformat(raw_as_of) if raw_as_of else None
-    except ValueError:
-        as_of_date = None
+    # The date point-in-time questions are graded against is THIS RUN'S date, not the corpus's
+    # eval_as_of. Anchoring to eval_as_of would reinstate the exact defect #1709 is about: the
+    # assistant resolves from its own clock, so a corpus date of 2026-09-01 makes q05/q13 fail on
+    # every day but one. eval_as_of stays in the record as documentation of when the ground-truth
+    # figures were computed; it no longer constrains grading.
+    run_as_of = datetime.now(timezone.utc).date()
 
     record = {
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "endpoint": args.url,
         "eval_as_of": document.get("eval_as_of"),
+        "graded_as_of": run_as_of.isoformat(),
         "questions_file": provenance,
         "actor": actor,
         "void": bool(role_mismatch),
@@ -1050,7 +1052,7 @@ def main(argv=None):
         }
         if grading is not None:
             result.update(grading)
-        verdict, detail = grade_window(question, result.get("answer"), as_of_date)
+        verdict, detail = grade_window(question, result.get("answer"), run_as_of)
         result["window_check"] = {"verdict": verdict, "detail": detail}
         record["results"].append(result)
         print(f"  {outcome['elapsed_s']}s"
