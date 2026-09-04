@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "suite": "analytics-gate multi-turn sequences",
+  "suite_notes": [
+    "#1690: multi-turn was entirely unmeasured. A sequence is scored as a SEQUENCE — a turn that",
+    "would be correct in isolation still fails if it lost the context the previous turn established.",
+    "",
+    "These are runnable against the existing chat path with no API change: SessionAgentManager keys",
+    "chat memory on (username, role), so consecutive calls with the same token already share a",
+    "conversation. That same property is why the single-turn gate is not actually single-turn —",
+    "tracked separately in #1735."
+  ],
+  "carries": {
+    "result_set": "The later turn must operate on the set the earlier turn produced, not re-run a broader query.",
+    "entity": "A pronoun or bare reference must resolve to the entity named earlier.",
+    "window": "The date window established earlier must persist, or shift relative to it, not reset to a default.",
+    "metric": "The measure established earlier must persist when the set or window changes."
+  },
+  "sequences": [
+    {
+      "sequence_id": "s01",
+      "carries": ["result_set"],
+      "turns": [
+        {"utterance": "Who are our five largest customers by revenue this year?", "expect": "answered"},
+        {
+          "utterance": "Which of those has the most outstanding AR?",
+          "expect": "answered",
+          "must_reference": "one of the customers named in turn 1",
+          "fails_if": "the answer ranks all customers by AR rather than only the five from turn 1"
+        }
+      ]
+    },
+    {
+      "sequence_id": "s02",
+      "carries": ["entity", "window"],
+      "turns": [
+        {"utterance": "How much did we spend with Cascade Auto Warehouse last quarter?", "expect": "answered"},
+        {
+          "utterance": "How does that compare with the same quarter last year?",
+          "expect": "answered",
+          "must_reference": "Cascade Auto Warehouse, and the same quarter shifted back one year",
+          "fails_if": "the vendor is re-asked for, or the comparison window is resolved from today rather than from turn 1's window"
+        }
+      ]
+    },
+    {
+      "sequence_id": "s03",
+      "carries": ["result_set", "metric"],
+      "turns": [
+        {"utterance": "Who are our ten largest customers by revenue?", "expect": "answered"},
+        {
+          "utterance": "Now rank those same ten by outstanding balance instead.",
+          "expect": "answered",
+          "must_reference": "the same ten customers, re-ordered",
+          "fails_if": "a different set appears, i.e. the top ten BY BALANCE rather than the original ten re-ranked"
+        },
+        {
+          "utterance": "Which three of them have the oldest past-due invoices?",
+          "expect": "answered",
+          "must_reference": "three of the ten from turn 1",
+          "fails_if": "the set widens beyond the original ten"
+        }
+      ]
+    },
+    {
+      "sequence_id": "s04",
+      "carries": ["window"],
+      "turns": [
+        {"utterance": "What was our total invoiced revenue last month?", "expect": "answered"},
+        {
+          "utterance": "And the month before that?",
+          "expect": "answered",
+          "must_reference": "the calendar month before turn 1's month",
+          "fails_if": "the window resets to a default range, or is resolved as a rolling window from today"
+        }
+      ]
+    },
+    {
+      "sequence_id": "s05",
+      "carries": ["entity"],
+      "turns": [
+        {"utterance": "Show me the open work orders for Harbor Tool & Die Inc.", "expect": "answered"},
+        {
+          "utterance": "What is their outstanding balance?",
+          "expect": "answered",
+          "must_reference": "Harbor Tool & Die Inc",
+          "fails_if": "the assistant asks which customer is meant"
+        }
+      ]
+    }
+  ]
+}
