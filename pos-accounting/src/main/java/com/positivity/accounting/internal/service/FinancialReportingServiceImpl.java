@@ -34,6 +34,8 @@ import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
@@ -165,7 +167,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         log.info("Generating income statement for period {} to {}", startDate, endDate);
@@ -451,7 +453,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @NonNull String statementLineCode, @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         log.info(
@@ -494,7 +496,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @NonNull String accountId, @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         UUID glAccountId;
@@ -503,7 +505,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         } catch (IllegalArgumentException e) {
             String maskedId = accountId.length() > 8 ? accountId.substring(0, 8) + "..." : accountId;
             log.warn("Invalid UUID format for accountId: {}", maskedId);
-            throw new IllegalArgumentException("Invalid UUID format for accountId", e);
+            throw new InvalidRequestParameterException("Invalid UUID format for accountId", e);
         }
 
         String maskedAccountId = accountId.substring(0, 8) + "...";
@@ -541,7 +543,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             @Nullable String accountId, @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         LocalDateTime startDateTime = startDate.atStartOfDay();
@@ -800,7 +802,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     public @NonNull TaxLiabilityReport generateTaxLiability(@NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         log.info("Generating sales-tax liability report for period {} to {}", startDate, endDate);
@@ -1236,7 +1238,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         } catch (IllegalArgumentException e) {
             String maskedId = accountId.length() > 8 ? accountId.substring(0, 8) + "..." : accountId;
             log.warn("Invalid UUID format for accountId: {}", maskedId);
-            throw new IllegalArgumentException("Invalid UUID format for accountId", e);
+            throw new InvalidRequestParameterException("Invalid UUID format for accountId", e);
         }
     }
 

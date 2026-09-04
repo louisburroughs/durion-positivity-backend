@@ -14,6 +14,8 @@ import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
+import com.positivity.accounting.internal.exception.PostingRuleSetNotFoundException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
@@ -147,7 +149,7 @@ class PostingRuleServiceImplTest {
                     .thenReturn(List.of(testVersion));
 
             assertThatThrownBy(() -> service.publishRuleSet(ruleSetId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("No DRAFT version");
         }
     }
@@ -183,7 +185,7 @@ class PostingRuleServiceImplTest {
                     .thenReturn(List.of(testVersion));
 
             assertThatThrownBy(() -> service.archiveRuleSet(ruleSetId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("No PUBLISHED version");
         }
     }
@@ -426,7 +428,7 @@ class PostingRuleServiceImplTest {
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
 
             assertThatThrownBy(() -> service.publishVersion(versionId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("rules definition is empty");
         }
 
@@ -485,13 +487,13 @@ class PostingRuleServiceImplTest {
         }
 
         @Test
-        @DisplayName("rejects unparseable rules definition JSON as IllegalArgumentException")
+        @DisplayName("rejects unparseable rules definition JSON as PostingRulePublishValidationException")
         void malformedJsonRejected() {
             testVersion.setRulesDefinition("not json at all {{");
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
 
             assertThatThrownBy(() -> service.publishVersion(versionId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("not valid JSON");
         }
     }
@@ -565,7 +567,7 @@ class PostingRuleServiceImplTest {
         when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPostingRuleSet(ruleSetId))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(PostingRuleSetNotFoundException.class)
                 .hasMessageContaining("not found");
     }
 

@@ -1718,7 +1718,7 @@ paths:
 
         Emits an ACCOUNTING_DEFAULT_MAPPING_CREATE event.
 
-        Returns 400 when a referenced GL account cannot be resolved.
+        Returns 400 for an invalid request, 404 GL_ACCOUNT_NOT_FOUND when a referenced GL account does not exist, and 422 GL_ACCOUNT_NOT_ACTIVE when it exists but is not active on the current date.
 
         '
       operationId: createDefaultMapping
@@ -1757,6 +1757,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+          description: Referenced GL account not found (GL_ACCOUNT_NOT_FOUND)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+          description: Referenced GL account is not active (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
         - accounting:default-mapping:create
@@ -1946,10 +1958,10 @@ paths:
       responses:
         '204':
           description: Default mapping deactivated
+        '400':
+          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
         '403':
           description: Forbidden
-        '404':
-          description: Default mapping not found
       security:
       - bearerAuth:
         - accounting:default-mapping:delete
@@ -1988,18 +2000,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Default mapping returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
-          description: Default mapping not found
       security:
       - bearerAuth:
         - accounting:default-mapping:view
@@ -2019,7 +2031,7 @@ paths:
 
         Emits an ACCOUNTING_DEFAULT_MAPPING_UPDATE event; future postings resolve against the updated pair while already-posted entries are untouched.
 
-        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404).
+        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404), 404 GL_ACCOUNT_NOT_FOUND when a referenced GL account does not exist, and 422 GL_ACCOUNT_NOT_ACTIVE when it exists but is not active on the current date.
 
         '
       operationId: updateDefaultMapping
@@ -2053,6 +2065,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Default mapping updated
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
         '403':
           content:
             application/json:
@@ -2064,7 +2082,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
-          description: Default mapping not found
+          description: Referenced GL account not found (GL_ACCOUNT_NOT_FOUND)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+          description: Referenced GL account is not active (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
         - accounting:default-mapping:edit
@@ -3023,7 +3047,7 @@ paths:
 
         Emits an ACCOUNTING_GL_ACCOUNT_ARCHIVE event; the row is never physically deleted.
 
-        Returns 404 when no GL account exists for the supplied id, and 400 when the account is not INACTIVE.
+        Returns 404 when no GL account exists for the supplied id, and 409 ACCOUNT_NOT_INACTIVE when the account is not INACTIVE.
 
         '
       operationId: archiveGLAccount
@@ -3057,6 +3081,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/GLAccountResponse'
           description: GL account not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountResponse'
+          description: Account is not INACTIVE (ACCOUNT_NOT_INACTIVE)
       security:
       - bearerAuth:
         - accounting:coa:deactivate
@@ -3122,7 +3152,7 @@ paths:
 
         Emits an ACCOUNTING_GL_ACCOUNT_DEACTIVATE event; historical journal entries remain intact.
 
-        Returns 404 when no GL account exists for the supplied id, and 400 when the account balance is not zero.
+        Returns 404 when no GL account exists for the supplied id, and 409 ACCOUNT_NOT_ZERO_BALANCE when the account balance is not zero.
 
         '
       operationId: deactivateGLAccount
@@ -3156,6 +3186,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/GLAccountResponse'
           description: GL account not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GLAccountResponse'
+          description: Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)
       security:
       - bearerAuth:
         - accounting:coa:deactivate
@@ -3430,7 +3466,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
 
-        Returns 400 when the entry is unbalanced or a GL account is missing or inactive on the transaction date.
+        Returns 400 for a malformed request, 404 GL_ACCOUNT_NOT_FOUND when a line''s glAccountId does not exist, and 422 UNBALANCED_ENTRY or GL_ACCOUNT_NOT_ACTIVE when the entry is unbalanced or a GL account is not active on the transaction date.
 
         '
       operationId: createJournalEntry
@@ -3467,6 +3503,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
           description: Invalid request
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
+          description: GL account not found (GL_ACCOUNT_NOT_FOUND)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
+          description: Entry is unbalanced (UNBALANCED_ENTRY), or a GL account is not active on the transaction date (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
         - accounting:je:create
@@ -3506,12 +3554,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
           description: Journal entry returned
-        '404':
+        '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-          description: Journal entry not found
+          description: No journal entry exists for the identifier (VALIDATION_ERROR)
       security:
       - bearerAuth:
         - accounting:je:view
@@ -3531,7 +3579,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_UPDATE event; GL balances are unchanged because drafts are not yet in the ledger.
 
-        Returns 409 when the entry is no longer DRAFT, and 400 when the updated entry is unbalanced or the entry id does not exist.
+        Returns 400 VALIDATION_ERROR when the entry id does not exist (this module maps entry not-found to 400, not 404), 409 when the entry is no longer DRAFT, and 422 UNBALANCED_ENTRY when the updated entry is unbalanced.
 
         '
       operationId: updateJournalEntry
@@ -3568,12 +3616,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
           description: Journal entry updated
-        '404':
+        '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-          description: Journal entry not found
+          description: No journal entry exists for the identifier (VALIDATION_ERROR)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
+          description: Entry is no longer DRAFT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryResponse'
+          description: Updated entry is unbalanced (UNBALANCED_ENTRY)
       security:
       - bearerAuth:
         - accounting:je:create
@@ -3594,7 +3654,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_POST event and returns the posted entry.
 
-        Returns 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, 422 UNBALANCED_ENTRY when debits do not equal credits, 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures, and 400 when no entry exists for the id.
+        Returns 400 VALIDATION_ERROR when no entry exists for the id (this module maps entry not-found to 400, not 404) or overrideJustification exceeds 500 characters, 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED or PERIOD_HARD_LOCKED for domain-policy or period-gate failures.
 
         '
       operationId: postJournalEntry
@@ -3647,7 +3707,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Transaction date is in a CLOSED period without a valid override (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification allows posting into closed periods), is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never overridable), or the entry is unbalanced (UNBALANCED_ENTRY)
+          description: Transaction date is in a CLOSED period without a valid override (PERIOD_CLOSED — accounting:period:override plus a non-blank overrideJustification allows posting into closed periods), is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never overridable), the entry is unbalanced (UNBALANCED_ENTRY), or a line's GL account is not active on the transaction date (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
         - accounting:je:post
@@ -3763,12 +3823,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
           description: Journal traceability returned
-        '404':
+        '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
-          description: Journal entry not found
+          description: No journal entry exists for the identifier (VALIDATION_ERROR)
       security:
       - bearerAuth:
         - accounting:je:view
@@ -5241,12 +5301,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostingRuleSetResponse'
           description: Posting rule set returned
-        '404':
+        '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostingRuleSetResponse'
-          description: Posting rule set not found
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:posting_rules:view
@@ -5300,12 +5360,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostingRuleSetResponse'
           description: Posting rule set updated
-        '404':
+        '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostingRuleSetResponse'
-          description: Posting rule set not found
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -5332,7 +5392,7 @@ paths:
 
         Emits an ACCOUNTING_POSTING_RULE_ARCHIVE event.
 
-        Returns 400 when no PUBLISHED version exists to archive.
+        Returns 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — mapped as VALIDATION_ERROR, not 404) or no PUBLISHED version exists to archive.
 
         '
       operationId: archivePostingRuleSet
@@ -5356,13 +5416,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostingRuleVersionResponse'
-          description: No PUBLISHED version to archive
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PostingRuleVersionResponse'
-          description: Posting rule set not found
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND), or no PUBLISHED version exists to archive
       security:
       - bearerAuth:
         - accounting:posting_rules:archive
@@ -5383,7 +5437,7 @@ paths:
 
         Emits an ACCOUNTING_POSTING_RULE_PUBLISH event; subsequent accounting events for the event type post through the new version.
 
-        Returns 400 when no DRAFT version exists or its definition is empty, and 422 UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when publish-time validation fails.
+        Returns 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — mapped as VALIDATION_ERROR, not 404) or no DRAFT version exists or its definition is empty, and 422 UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when publish-time validation fails.
 
         '
       operationId: publishPostingRuleSet
@@ -5407,13 +5461,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostingRuleVersionResponse'
-          description: No DRAFT version to publish
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PostingRuleVersionResponse'
-          description: Posting rule set not found
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND), or no DRAFT version exists to publish
       security:
       - bearerAuth:
         - accounting:posting_rules:publish
@@ -5434,7 +5482,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with an empty list when the page index is beyond the version history.
+        Returns 200 with an empty list when the page index is beyond the version history, and 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — mapped as VALIDATION_ERROR, not 404).
 
         '
       operationId: listPostingRuleVersions
@@ -5473,14 +5521,14 @@ paths:
                   $ref: '#/components/schemas/PostingRuleVersionResponse'
                 type: array
           description: Posting rule versions listed
-        '404':
+        '400':
           content:
             application/json:
               schema:
                 items:
                   $ref: '#/components/schemas/PostingRuleVersionResponse'
                 type: array
-          description: Posting rule set not found
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:posting_rules:view
@@ -5735,7 +5783,7 @@ paths:
 
         Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and posts a journal entry that changes GL balances.
 
-        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED or RECONCILIATION_ADJUSTMENT_SIGN_INVALID for period-gate or sign failures.
+        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED, RECONCILIATION_ADJUSTMENT_SIGN_INVALID or GL_MAPPING_NOT_CONFIGURED (no GL counter-account mapping configured for the adjustment type) for period-gate, sign or configuration failures.
 
         '
       operationId: addReconciliationAdjustment
@@ -5797,7 +5845,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), or the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative, INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID)
+          description: Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative, INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID) — or no GL counter-account mapping is configured for the adjustment type (GL_MAPPING_NOT_CONFIGURED)
       security:
       - bearerAuth:
         - accounting:reconciliation:adjust

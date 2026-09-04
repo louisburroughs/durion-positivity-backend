@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
@@ -607,14 +608,14 @@ class EventIngestionServiceAdditionalTest {
     }
 
     @Test
-    @DisplayName("submitEvent should throw IllegalArgumentException when event fails validation")
+    @DisplayName("submitEvent should throw EventValidationException when event fails validation")
     void submitEvent_ValidationFailure_Throws() {
         Map<String, Object> eventMap = new HashMap<>();
         eventMap.put("organizationId", testOrganizationId);
         // Missing eventType and payload
 
         assertThatThrownBy(() -> service.submitEvent(eventMap))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(EventValidationException.class)
                 .hasMessageContaining("Event validation failed");
 
         verify(accountingEventRepository, never()).save(any());

@@ -319,7 +319,7 @@ class PostingRuleEvaluatorFeatureFlagTest {
             // Act
             PostingResult result = evaluator.evaluateEvent(event);
 
-            // Assert — the impl throws IllegalArgumentException caught as INTERNAL_ERROR
+            // Assert — the impl throws EventValidationException caught as INTERNAL_ERROR
             assertThat(result.isSuccess()).isFalse();
             assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.INTERNAL_ERROR);
             assertThat(result.getFailureDetails()).contains("payload.amount");

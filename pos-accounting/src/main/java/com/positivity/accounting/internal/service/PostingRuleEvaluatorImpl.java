@@ -13,6 +13,8 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.EventValidationException;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
@@ -363,7 +365,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
         BigDecimal amount = resolveAmount("payload.amount", event);
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             if (defaultGLMappingProperties.isRequireAmountField()) {
-                throw new IllegalArgumentException(
+                throw new EventValidationException(
                         "Event " + event.getEventId() + " has zero or missing payload.amount field, "
                                 + "which is required when using default GL mappings (pos.accounting.default-mappings.require-amount-field=true)");
             }
@@ -576,7 +578,7 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
             try {
                 return glMappingResolver.resolveGLAccount(
                         postingCategoryId, mappingKeyId, event.getTransactionDate(), dimensions);
-            } catch (IllegalArgumentException e) {
+            } catch (GLMappingNotConfiguredException e) {
                 log.warn(
                         "GL mapping resolution failed for category={} key={}: {}",
                         postingCategoryId,

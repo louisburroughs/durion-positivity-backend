@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.service.VendorBillService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -89,7 +90,7 @@ class VendorBillControllerListTest extends BaseIntegrationTest {
     @DisplayName("GET / rejects dueTo before dueFrom with 400 VALIDATION_ERROR")
     void listRejectsInvalidRange() throws Exception {
         when(vendorBillService.listByDueDateWindow(any(), any(), any(), any()))
-                .thenThrow(new IllegalArgumentException("dueTo cannot be before dueFrom"));
+                .thenThrow(new InvalidDateRangeException("dueTo cannot be before dueFrom"));
 
         mockMvc.perform(withAuth(get(LIST_PATH).param("dueFrom", "2026-06-30").param("dueTo", "2026-06-01")))
                 .andExpect(status().isBadRequest())
@@ -100,7 +101,7 @@ class VendorBillControllerListTest extends BaseIntegrationTest {
     @DisplayName("GET / rejects a window wider than 366 days with 400 VALIDATION_ERROR")
     void listRejectsWindowTooWide() throws Exception {
         when(vendorBillService.listByDueDateWindow(any(), any(), any(), any()))
-                .thenThrow(new IllegalArgumentException("Due-date window cannot exceed 366 days"));
+                .thenThrow(new InvalidDateRangeException("Due-date window cannot exceed 366 days"));
 
         mockMvc.perform(withAuth(get(LIST_PATH).param("dueFrom", "2025-01-01").param("dueTo", "2026-06-30")))
                 .andExpect(status().isBadRequest())

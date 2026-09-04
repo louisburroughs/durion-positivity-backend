@@ -322,12 +322,12 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
         // Given - random UUID that doesn't exist
         UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        // When/Then - Service throws IllegalArgumentException which maps to 400 via
-        // APPaymentExceptionHandler
+        // When/Then - Service throws JournalEntryNotFoundException, mapped to 400
+        // VALIDATION_ERROR via AccountingExceptionHandler (deliberately not 404 — see
+        // JournalEntryController's endpoint descriptions).
         mockMvc.perform(withAuth(get(API_V1_JOURNAL_ENTRIES + "/{journalEntryId}", nonExistentId)))
                 .andDo(print())
-                .andExpect(status().isBadRequest()); // Service throws IllegalArgumentException which
-        // maps to 400
+                .andExpect(status().isBadRequest());
     }
 
     @Test

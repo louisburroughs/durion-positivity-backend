@@ -69,6 +69,12 @@ public class OutboxServiceImpl implements OutboxService {
             return saved;
 
         } catch (JsonProcessingException e) {
+            // (d) Defensive/internal invariant: a failure to serialize an event object our own
+            // code constructed is a server-side bug, never a client input problem — even
+            // though this method can run inside an HTTP request's transaction (e.g.
+            // APPaymentServiceImpl#executePayment persisting its GL-posting event). Left as
+            // IllegalArgumentException; falls through to the pos-web-common catch-all
+            // (correlated 500) now that no blanket handler maps it to 400.
             log.error("Failed to serialize event to JSON | eventId={} | eventType={}", eventId, eventType, e);
             throw new IllegalArgumentException("Failed to serialize event for outbox", e);
         }

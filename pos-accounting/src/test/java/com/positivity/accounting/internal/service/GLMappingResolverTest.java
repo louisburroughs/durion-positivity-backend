@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
@@ -390,7 +391,7 @@ class GLMappingResolverTest {
             // Act & Assert
             assertThatThrownBy(() ->
                             resolver.resolveGLAccount(postingCategoryId, mappingKeyId, transactionDate, dimensions))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(GLMappingNotConfiguredException.class)
                     .hasMessageContaining("No GL mapping found");
         }
     }
@@ -474,7 +475,7 @@ class GLMappingResolverTest {
 
             assertThatThrownBy(() ->
                             resolver.resolveGLAccount("PAYMENT_APPLICATION", "UNDEPOSITED_FUNDS", transactionDate))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(GLMappingNotConfiguredException.class)
                     .hasMessageContaining("Posting category not configured");
         }
 
@@ -491,7 +492,7 @@ class GLMappingResolverTest {
 
             assertThatThrownBy(() ->
                             resolver.resolveGLAccount("PAYMENT_APPLICATION", "UNDEPOSITED_FUNDS", transactionDate))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(GLMappingNotConfiguredException.class)
                     .hasMessageContaining("Mapping key not configured");
         }
     }

@@ -285,12 +285,13 @@ public class GLAccountController {
                     Required inputs: glAccountId (UUID) as a path parameter; the request body is optional and \
                     ignored.
                     Emits an ACCOUNTING_GL_ACCOUNT_DEACTIVATE event; historical journal entries remain intact.
-                    Returns 404 when no GL account exists for the supplied id, and 400 when the account \
-                    balance is not zero.
+                    Returns 404 when no GL account exists for the supplied id, and 409 ACCOUNT_NOT_ZERO_BALANCE \
+                    when the account balance is not zero.
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account deactivated")
     @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(responseCode = "409", description = "Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> deactivateGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
@@ -325,12 +326,13 @@ public class GLAccountController {
                     Required inputs: glAccountId (UUID) as a path parameter; the request body is optional and \
                     ignored.
                     Emits an ACCOUNTING_GL_ACCOUNT_ARCHIVE event; the row is never physically deleted.
-                    Returns 404 when no GL account exists for the supplied id, and 400 when the account is \
-                    not INACTIVE.
+                    Returns 404 when no GL account exists for the supplied id, and 409 ACCOUNT_NOT_INACTIVE \
+                    when the account is not INACTIVE.
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account archived")
     @ApiResponse(responseCode = "404", description = "GL account not found")
+    @ApiResponse(responseCode = "409", description = "Account is not INACTIVE (ACCOUNT_NOT_INACTIVE)")
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ARCHIVE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> archiveGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,

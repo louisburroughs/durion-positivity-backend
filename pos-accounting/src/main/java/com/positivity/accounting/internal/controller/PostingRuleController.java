@@ -111,7 +111,9 @@ public class PostingRuleController {
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set returned")
-    @ApiResponse(responseCode = "404", description = "Posting rule set not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)")
     public ResponseEntity<PostingRuleSetResponse> getPostingRuleSet(
             @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
         log.info("Get posting rule set - ruleSetId={}", postingRuleSetId);
@@ -187,14 +189,17 @@ public class PostingRuleController {
                     Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_POSTING_RULE_PUBLISH event; subsequent accounting events for the \
                     event type post through the new version.
-                    Returns 400 when no DRAFT version exists or its definition is empty, and 422 \
-                    UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when \
-                    publish-time validation fails.
+                    Returns 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND \
+                    — mapped as VALIDATION_ERROR, not 404) or no DRAFT version exists or its definition is \
+                    empty, and 422 UNBALANCED_RULES listing every offending condition, group or line in \
+                    fieldErrors when publish-time validation fails.
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set published")
-    @ApiResponse(responseCode = "404", description = "Posting rule set not found")
-    @ApiResponse(responseCode = "400", description = "No DRAFT version to publish")
+    @ApiResponse(
+            responseCode = "400",
+            description = "No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND), or no"
+                    + " DRAFT version exists to publish")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_PUBLISH", apiVersion = "1")
     public ResponseEntity<PostingRuleVersionResponse> publishPostingRuleSet(
             @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
@@ -225,7 +230,9 @@ public class PostingRuleController {
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set updated")
-    @ApiResponse(responseCode = "404", description = "Posting rule set not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)")
     @ApiResponse(responseCode = "409", description = "Cannot modify published rule set")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_UPDATE", apiVersion = "1")
     public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
@@ -269,12 +276,15 @@ public class PostingRuleController {
                     this type fall back to default GL mappings or fail as UNMAPPED_EVENT_TYPE.
                     Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_POSTING_RULE_ARCHIVE event.
-                    Returns 400 when no PUBLISHED version exists to archive.
+                    Returns 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND \
+                    — mapped as VALIDATION_ERROR, not 404) or no PUBLISHED version exists to archive.
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set archived")
-    @ApiResponse(responseCode = "404", description = "Posting rule set not found")
-    @ApiResponse(responseCode = "400", description = "No PUBLISHED version to archive")
+    @ApiResponse(
+            responseCode = "400",
+            description = "No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND), or no"
+                    + " PUBLISHED version exists to archive")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_ARCHIVE", apiVersion = "1")
     public ResponseEntity<PostingRuleVersionResponse> archivePostingRuleSet(
             @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId) {
@@ -301,11 +311,15 @@ public class PostingRuleController {
                     Required inputs: postingRuleSetId (UUID) as a path parameter; page defaults to 0 and \
                     size to 10.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with an empty list when the page index is beyond the version history.
+                    Returns 200 with an empty list when the page index is beyond the version history, and \
+                    400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — \
+                    mapped as VALIDATION_ERROR, not 404).
                     """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule versions listed")
-    @ApiResponse(responseCode = "404", description = "Posting rule set not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)")
     public ResponseEntity<List<PostingRuleVersionResponse>> listPostingRuleVersions(
             @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
             @Parameter(description = "Page index (0-based)") @PositiveOrZero @RequestParam(defaultValue = "0") int page,

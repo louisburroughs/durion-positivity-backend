@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.PaymentApplicationListRow;
 import com.positivity.accounting.internal.entity.PaymentApplication;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import java.time.Instant;
@@ -55,11 +56,11 @@ public class PaymentApplicationQueryServiceImpl implements PaymentApplicationQue
             @NonNull Pageable pageable) {
 
         if (appliedTo.isBefore(appliedFrom)) {
-            throw new IllegalArgumentException("appliedTo cannot be before appliedFrom");
+            throw new InvalidDateRangeException("appliedTo cannot be before appliedFrom");
         }
         long windowDays = ChronoUnit.DAYS.between(appliedFrom, appliedTo);
         if (windowDays > MAX_APPLIED_DATE_WINDOW_DAYS) {
-            throw new IllegalArgumentException(
+            throw new InvalidDateRangeException(
                     "Applied-date window cannot exceed " + MAX_APPLIED_DATE_WINDOW_DAYS + " days");
         }
 

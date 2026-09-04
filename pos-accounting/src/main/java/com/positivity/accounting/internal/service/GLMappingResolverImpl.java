@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.entity.PostingCategory;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
@@ -70,7 +71,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * @param dimensionContext  dimensional context (businessUnitId, locationId,
      *                          etc.)
      * @return GL account ID for posting
-     * @throws IllegalArgumentException if no valid mapping found
+     * @throws GLMappingNotConfiguredException if no valid mapping found
      */
     @Override
     public UUID resolveGLAccount(
@@ -120,7 +121,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
         String msg =
                 String.format("No GL mapping found for %s:%s on %s", postingCategoryId, mappingKeyId, transactionDate);
         log.warn(msg);
-        throw new IllegalArgumentException(msg);
+        throw new GLMappingNotConfiguredException(msg);
     }
 
     /**
@@ -132,19 +133,19 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * @param mappingKeyName      mapping key name within the category
      * @param transactionDate     effective date for resolution
      * @return GL account ID for posting
-     * @throws IllegalArgumentException if the category, key, or an effective
-     *                                  mapping is not configured
+     * @throws GLMappingNotConfiguredException if the category, key, or an
+     *                                         effective mapping is not configured
      */
     @Override
     public UUID resolveGLAccount(String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate) {
         PostingCategory category = postingCategoryRepository
                 .findByCategoryName(postingCategoryName)
-                .orElseThrow(
-                        () -> new IllegalArgumentException("Posting category not configured: " + postingCategoryName));
+                .orElseThrow(() ->
+                        new GLMappingNotConfiguredException("Posting category not configured: " + postingCategoryName));
 
         MappingKey mappingKey = mappingKeyRepository
                 .findByPostingCategory_PostingCategoryIdAndKeyName(category.getPostingCategoryId(), mappingKeyName)
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new GLMappingNotConfiguredException(
                         "Mapping key not configured: " + postingCategoryName + "/" + mappingKeyName));
 
         return resolveGLAccount(
@@ -264,6 +265,11 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      * @return true if valid, throws exception otherwise
      * @throws IllegalArgumentException if mapping is invalid
      */
+    // (d) Defensive/internal invariant: GLMappingResolver.validateMapping is not called
+    // anywhere in main (or by any test) — dead code on the interface, not reachable from a
+    // controller. Left as IllegalArgumentException throughout this method; falls through to
+    // the pos-web-common catch-all (correlated 500) if it is ever wired up without revisiting
+    // this classification.
     @Override
     public boolean validateMapping(GLMapping mapping) {
         if (mapping.getPostingCategoryId() == null) {
@@ -334,8 +340,8 @@ public class GLMappingResolverImpl implements GLMappingResolver {
         return mappingRepository
                 .findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
-                .orElseThrow(() -> new IllegalArgumentException("No effective mapping for " + postingCategoryId + ":"
-                        + mappingKeyId + " on " + transactionDate));
+                .orElseThrow(() -> new GLMappingNotConfiguredException("No effective mapping for " + postingCategoryId
+                        + ":" + mappingKeyId + " on " + transactionDate));
     }
 
     /**

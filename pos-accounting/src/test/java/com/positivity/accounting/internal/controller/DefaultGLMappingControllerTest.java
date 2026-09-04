@@ -19,6 +19,8 @@ import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
+import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.service.DefaultGLMappingService;
 import java.time.Clock;
 import java.time.Instant;
@@ -120,11 +122,11 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("should return 400 when GL account validation fails")
-        void shouldReturn400WhenValidationFails() throws Exception {
+        @DisplayName("should return 422 when GL account is not active")
+        void shouldReturn422WhenValidationFails() throws Exception {
             // Arrange
             when(service.createDefaultMapping(any(DefaultGLMappingRequest.class)))
-                    .thenThrow(new IllegalArgumentException("Debit account is not active"));
+                    .thenThrow(new GLAccountNotActiveException("Debit account is not active"));
 
             // Act & Assert
             mockMvc.perform(post("/v1/accounting/default-mappings")
@@ -132,7 +134,8 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
                             .header("X-User", "test-user")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validRequest)))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.code").value("GL_ACCOUNT_NOT_ACTIVE"));
         }
 
         @Test
@@ -195,7 +198,7 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
             // Arrange
             UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(service.updateDefaultMapping(eq(unknownId), any(DefaultGLMappingRequest.class)))
-                    .thenThrow(new IllegalArgumentException("Default GL mapping not found: " + unknownId));
+                    .thenThrow(new DefaultGLMappingNotFoundException("Default GL mapping not found: " + unknownId));
 
             // Act & Assert
             mockMvc.perform(put("/v1/accounting/default-mappings/{id}", unknownId)
@@ -229,7 +232,7 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
         void shouldReturn404WhenMappingNotFoundForDeactivation() throws Exception {
             // Arrange
             UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            doThrow(new IllegalArgumentException("Default GL mapping not found: " + unknownId))
+            doThrow(new DefaultGLMappingNotFoundException("Default GL mapping not found: " + unknownId))
                     .when(service)
                     .deactivateDefaultMapping(unknownId);
 
@@ -267,7 +270,7 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
             // Arrange
             UUID unknownId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             when(service.getDefaultMapping(unknownId))
-                    .thenThrow(new IllegalArgumentException("Default GL mapping not found: " + unknownId));
+                    .thenThrow(new DefaultGLMappingNotFoundException("Default GL mapping not found: " + unknownId));
 
             // Act & Assert
             mockMvc.perform(get("/v1/accounting/default-mappings/{id}", unknownId)

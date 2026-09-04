@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.CollectionsAnalyticsReport;
 import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
 import com.positivity.accounting.internal.dto.VendorSpendReport;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.AccountingAnalyticsService;
 import com.positivity.events.EmitEvent;
@@ -132,12 +133,10 @@ public class AccountingAnalyticsController {
                     @NonNull
                     LocalDate endDate) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (AccountingExceptionHandler) which maps it to 400 Bad Request
-        // with a consistent ApiError format, matching every other reporting endpoint in this
-        // module (ADR-0017).
+        // InvalidDateRangeException maps to 400 Bad Request via AccountingExceptionHandler,
+        // matching every other reporting endpoint in this module (ADR-0017).
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         CollectionsAnalyticsReport report = accountingAnalyticsService.getCollectionsAnalytics(startDate, endDate);
@@ -210,12 +209,10 @@ public class AccountingAnalyticsController {
                     @RequestParam(required = false, defaultValue = "4")
                     int limit) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (AccountingExceptionHandler) which maps it to 400 Bad Request
-        // with a consistent ApiError format, matching every other reporting endpoint in this
-        // module (ADR-0017).
+        // InvalidDateRangeException maps to 400 Bad Request via AccountingExceptionHandler,
+        // matching every other reporting endpoint in this module (ADR-0017).
         if (issuedTo.isBefore(issuedFrom)) {
-            throw new IllegalArgumentException("issuedTo cannot be before issuedFrom");
+            throw new InvalidDateRangeException("issuedTo cannot be before issuedFrom");
         }
 
         PaymentLagCohortsReport report = accountingAnalyticsService.getPaymentLagCohorts(issuedFrom, issuedTo, limit);
@@ -287,12 +284,10 @@ public class AccountingAnalyticsController {
                     @RequestParam(required = false, defaultValue = "20")
                     int limit) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (AccountingExceptionHandler) which maps it to 400 Bad Request
-        // with a consistent ApiError format, matching every other reporting endpoint in this
-        // module (ADR-0017).
+        // InvalidDateRangeException maps to 400 Bad Request via AccountingExceptionHandler,
+        // matching every other reporting endpoint in this module (ADR-0017).
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         VendorSpendReport report = accountingAnalyticsService.getVendorSpend(startDate, endDate, limit);

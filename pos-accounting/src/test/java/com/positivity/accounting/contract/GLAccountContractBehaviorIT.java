@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.enums.GLAccountStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.service.GLAccountService;
 import com.positivity.accounting.internal.service.JournalEntryService;
@@ -508,7 +509,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // When/Then - should throw
         assertThatThrownBy(() -> glAccountService.validateAccountForPosting(
                         created.getGlAccountId(), LocalDateTime.now(TEST_CLOCK).plusDays(1)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(GLAccountNotActiveException.class)
                 .hasMessageContaining("inactive");
     }
 }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.PaymentApplicationListRow;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import java.math.BigDecimal;
@@ -83,7 +84,7 @@ class PaymentApplicationQueryServiceImplTest {
         void rejectsInvalidRange() {
             assertThatThrownBy(
                             () -> service.listByAppliedDateWindow(appliedTo, appliedFrom, false, PageRequest.of(0, 20)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test
@@ -92,7 +93,7 @@ class PaymentApplicationQueryServiceImplTest {
             LocalDate wideTo = appliedFrom.plusDays(400);
 
             assertThatThrownBy(() -> service.listByAppliedDateWindow(appliedFrom, wideTo, false, PageRequest.of(0, 20)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test

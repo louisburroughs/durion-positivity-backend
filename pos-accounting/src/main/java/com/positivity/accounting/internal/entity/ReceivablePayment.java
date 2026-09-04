@@ -179,6 +179,11 @@ public class ReceivablePayment implements Persistable<UUID> {
      */
     public void applyAmount(@NonNull BigDecimal amount) {
         if (!hasSufficientFunds(amount)) {
+            // (d) Defensive/internal invariant: PaymentApplicationServiceImpl already calls
+            // validateSufficientFunds(...) (which throws ResponseStatusException(400)) before
+            // ever reaching this method, so this guard is not independently reachable from a
+            // controller. Left as IllegalArgumentException — falls through to the
+            // pos-web-common catch-all (correlated 500) if this invariant is ever violated.
             throw new IllegalArgumentException(
                     "Insufficient funds: requested " + amount + ", available " + unappliedAmount);
         }

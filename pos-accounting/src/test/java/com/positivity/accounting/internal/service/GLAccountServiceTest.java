@@ -18,7 +18,9 @@ import com.positivity.accounting.internal.enums.GLAccountStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
@@ -559,7 +561,7 @@ class GLAccountServiceTest {
                     .build();
 
             assertThatThrownBy(() -> service.validateGLAccount(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("Account code is required");
         }
 
@@ -574,7 +576,7 @@ class GLAccountServiceTest {
                     .build();
 
             assertThatThrownBy(() -> service.validateGLAccount(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("Account name is required");
         }
 
@@ -589,7 +591,7 @@ class GLAccountServiceTest {
                     .build();
 
             assertThatThrownBy(() -> service.validateGLAccount(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("Account type is required");
         }
 
@@ -607,7 +609,7 @@ class GLAccountServiceTest {
             when(glAccountRepository.existsById(testParentId)).thenReturn(false);
 
             assertThatThrownBy(() -> service.validateGLAccount(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("Parent account not found");
         }
     }
@@ -638,7 +640,7 @@ class GLAccountServiceTest {
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
 
             assertThatThrownBy(() -> service.validateAccountForPosting(testAccountId, transactionDate))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(GLAccountNotActiveException.class)
                     .hasMessageContaining("not yet active");
         }
 
@@ -651,7 +653,7 @@ class GLAccountServiceTest {
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
 
             assertThatThrownBy(() -> service.validateAccountForPosting(testAccountId, transactionDate))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(GLAccountNotActiveException.class)
                     .hasMessageContaining("inactive");
         }
     }

@@ -4,18 +4,31 @@ import com.positivity.accounting.internal.dto.DuplicateEventException;
 import com.positivity.accounting.internal.dto.UnbalancedEntryException;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
+import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
+import com.positivity.accounting.internal.exception.BankStatementParseException;
+import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.EventValidationException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
+import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.MultiApplicationReversalException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
+import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
+import com.positivity.accounting.internal.exception.PostingRuleSetNotFoundException;
 import com.positivity.accounting.internal.exception.ReceivablePaymentNotFoundException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
@@ -68,9 +81,119 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /*
+     * Request-shape / field-validation failures (ADR-0017 §1, 400 VALIDATION_ERROR).
+     * Deliberately several dedicated types instead of a blanket IllegalArgumentException
+     * handler (issue #1694): each type is thrown only where a throw site was audited and
+     * classified as genuine client input, so a Hibernate/JPA-thrown IllegalArgumentException
+     * (bad JPQL, malformed stored UUID) no longer surfaces as a misleading 400 with internal
+     * detail leaked into the body — it falls through to the pos-web-common catch-all instead.
+     */
+    @ExceptionHandler(InvalidDateRangeException.class)
+    public ResponseEntity<ApiError> handleInvalidDateRange(InvalidDateRangeException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidRequestParameterException.class)
+    public ResponseEntity<ApiError> handleInvalidRequestParameter(
+            InvalidRequestParameterException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(BankStatementParseException.class)
+    public ResponseEntity<ApiError> handleBankStatementParse(
+            BankStatementParseException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(EventValidationException.class)
+    public ResponseEntity<ApiError> handleEventValidation(EventValidationException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PostingRulePublishValidationException.class)
+    public ResponseEntity<ApiError> handlePostingRulePublishValidation(
+            PostingRulePublishValidationException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+    }
+
+    /**
+     * Journal entry lookup by id miss (get/update/post/reverse/traceability). 400
+     * VALIDATION_ERROR, deliberately not 404 — JournalEntryController's endpoint
+     * descriptions state this explicitly ("this module maps entry not-found to 400, not
+     * 404").
+     */
+    @ExceptionHandler(JournalEntryNotFoundException.class)
+    public ResponseEntity<ApiError> handleJournalEntryNotFound(
+            JournalEntryNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+    }
+
+    /**
+     * Default GL mapping lookup by id miss (get/update/deactivate). 400
+     * DEFAULT_GL_MAPPING_NOT_FOUND, deliberately not 404 —
+     * DefaultGLMappingController's endpoint descriptions state this explicitly
+     * ("mapped as VALIDATION_ERROR, not 404").
+     */
+    @ExceptionHandler(DefaultGLMappingNotFoundException.class)
+    public ResponseEntity<ApiError> handleDefaultGLMappingNotFound(
+            DefaultGLMappingNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "DEFAULT_GL_MAPPING_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    /**
+     * Posting rule set lookup by id miss (get/update/publish/archive/list-versions). 400
+     * POSTING_RULE_SET_NOT_FOUND, deliberately not 404 — PostingRuleController's endpoint
+     * descriptions state this explicitly ("mapped as VALIDATION_ERROR, not 404").
+     */
+    @ExceptionHandler(PostingRuleSetNotFoundException.class)
+    public ResponseEntity<ApiError> handlePostingRuleSetNotFound(
+            PostingRuleSetNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "POSTING_RULE_SET_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    /*
+     * Not-found lookups (ADR-0017 §1, 404), each with its own code so clients can branch.
+     */
+    @ExceptionHandler(GLAccountNotFoundException.class)
+    public ResponseEntity<ApiError> handleGLAccountNotFound(GLAccountNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "GL_ACCOUNT_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    /*
+     * Domain-policy violations on an otherwise valid payload (ADR-0017 §2, 422).
+     */
+    @ExceptionHandler(GLAccountNotActiveException.class)
+    public ResponseEntity<ApiError> handleGLAccountNotActive(
+            GLAccountNotActiveException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_ACCOUNT_NOT_ACTIVE", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(GLMappingNotConfiguredException.class)
+    public ResponseEntity<ApiError> handleGLMappingNotConfigured(
+            GLMappingNotConfiguredException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_MAPPING_NOT_CONFIGURED", ex.getMessage(), request);
+    }
+
+    /**
+     * Deactivating a GL account with a non-zero balance (story: chart-of-accounts lifecycle):
+     * current account state blocks the operation. 409 per ADR-0017 §2 (previously fell
+     * through unmapped to a generic 500 — issue #1694).
+     */
+    @ExceptionHandler(AccountNotZeroBalanceException.class)
+    public ResponseEntity<ApiError> handleAccountNotZeroBalance(
+            AccountNotZeroBalanceException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_ZERO_BALANCE", ex.getMessage(), request);
+    }
+
+    /**
+     * Archiving a GL account that is not INACTIVE: invalid lifecycle transition. 409 per
+     * ADR-0017 §2 (previously fell through unmapped to a generic 500 — issue #1694).
+     */
+    @ExceptionHandler(AccountNotInactiveException.class)
+    public ResponseEntity<ApiError> handleAccountNotInactive(
+            AccountNotInactiveException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_INACTIVE", ex.getMessage(), request);
     }
 
     @ExceptionHandler(DuplicateEventException.class)

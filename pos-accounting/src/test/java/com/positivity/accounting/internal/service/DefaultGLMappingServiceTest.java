@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
+import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.time.Clock;
@@ -338,7 +339,7 @@ class DefaultGLMappingServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> service.updateDefaultMapping(unknownId, validRequest))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(DefaultGLMappingNotFoundException.class)
                     .hasMessageContaining("Default GL mapping not found");
 
             verify(repository, never()).save(any());
@@ -390,7 +391,7 @@ class DefaultGLMappingServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> service.deactivateDefaultMapping(unknownId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(DefaultGLMappingNotFoundException.class)
                     .hasMessageContaining("Default GL mapping not found");
 
             verify(repository, never()).save(any());
@@ -427,7 +428,7 @@ class DefaultGLMappingServiceTest {
 
             // Act & Assert
             assertThatThrownBy(() -> service.getDefaultMapping(unknownId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(DefaultGLMappingNotFoundException.class)
                     .hasMessageContaining("Default GL mapping not found");
         }
 

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
@@ -352,7 +353,7 @@ class MappingResolutionTestServiceTest {
     class CallerErrors {
 
         @Test
-        @DisplayName("non-numeric amount field in sample payload throws IllegalArgumentException")
+        @DisplayName("non-numeric amount field in sample payload throws InvalidRequestParameterException")
         void nonNumericAmountThrows() {
             stubPublishedRules(rules(
                     "eventType == '" + EVENT_TYPE + "'", line(ACCOUNT_A, "DEBIT", ""), line(ACCOUNT_D, "CREDIT", "")));
@@ -361,18 +362,18 @@ class MappingResolutionTestServiceTest {
             payload.put("totalAmount", "not-a-number");
 
             assertThatThrownBy(() -> service.resolveTest(request(EVENT_TYPE, payload)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("totalAmount");
         }
 
         @Test
-        @DisplayName("non-UUID organizationId in sample payload throws IllegalArgumentException")
+        @DisplayName("non-UUID organizationId in sample payload throws InvalidRequestParameterException")
         void badOrganizationIdThrows() {
             Map<String, Object> payload = new HashMap<>();
             payload.put("organizationId", "not-a-uuid");
 
             assertThatThrownBy(() -> service.resolveTest(request(EVENT_TYPE, payload)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("organizationId");
         }
     }

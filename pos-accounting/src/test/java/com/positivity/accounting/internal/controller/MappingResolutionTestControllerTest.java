@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.MappingResolutionTestRequest;
 import com.positivity.accounting.internal.dto.MappingResolutionTestResponse;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.service.MappingResolutionTestService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -101,7 +102,7 @@ class MappingResolutionTestControllerTest extends BaseIntegrationTest {
     @DisplayName("returns 400 when the sample payload cannot be interpreted")
     void returns400ForUninterpretablePayload() throws Exception {
         when(mappingResolutionTestService.resolveTest(any(MappingResolutionTestRequest.class)))
-                .thenThrow(new IllegalArgumentException(
+                .thenThrow(new InvalidRequestParameterException(
                         "Sample payload field 'payload.totalAmount' value 'abc' cannot be interpreted as an amount"));
 
         mockMvc.perform(post(RESOLVE_TEST_URL)

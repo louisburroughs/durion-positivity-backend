@@ -426,8 +426,9 @@ public class BankReconciliationController {
                     changes GL balances.
                     Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is missing, 409 \
                     RECONCILIATION_ALREADY_FINALIZED when finalized, and 422 PERIOD_CLOSED, \
-                    PERIOD_HARD_LOCKED or RECONCILIATION_ADJUSTMENT_SIGN_INVALID for period-gate or sign \
-                    failures.
+                    PERIOD_HARD_LOCKED, RECONCILIATION_ADJUSTMENT_SIGN_INVALID or GL_MAPPING_NOT_CONFIGURED \
+                    (no GL counter-account mapping configured for the adjustment type) for period-gate, \
+                    sign or configuration failures.
                     """,
             tags = {"Bank Reconciliation"})
     @ApiResponse(
@@ -454,8 +455,10 @@ public class BankReconciliationController {
             responseCode = "422",
             description =
                     "Adjustment JE dated into a CLOSED or hard-locked period (PERIOD_CLOSED / PERIOD_HARD_LOCKED),"
-                            + " or the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative,"
-                            + " INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID)",
+                            + " the amount sign is not permitted for the type — BANK_FEE/NSF_FEE must be negative,"
+                            + " INTEREST_EARNED must be positive (RECONCILIATION_ADJUSTMENT_SIGN_INVALID) — or no GL"
+                            + " counter-account mapping is configured for the adjustment type"
+                            + " (GL_MAPPING_NOT_CONFIGURED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BankReconciliationResponse> addReconciliationAdjustment(
             @Parameter(description = "Reconciliation id", required = true) @PathVariable @NonNull UUID reconciliationId,

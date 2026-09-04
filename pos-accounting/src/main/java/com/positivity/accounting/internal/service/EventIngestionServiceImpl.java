@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
+import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import java.nio.charset.StandardCharsets;
@@ -124,7 +125,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      *
      * @param event map containing event details
      * @return generated journal entry
-     * @throws IllegalArgumentException if event is invalid or rule set not found
+     * @throws EventValidationException if event is invalid or rule set not found
      */
     @Override
     public AccountingEventResponse submitEvent(Map<String, Object> event) {
@@ -156,7 +157,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         if (!errors.isEmpty()) {
             String msg = "Event validation failed: " + String.join("; ", errors);
             log.warn(msg);
-            throw new IllegalArgumentException(msg);
+            throw new EventValidationException(msg);
         }
 
         // Idempotency check — reject duplicate events based on content hash
@@ -321,7 +322,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                     String msg = "Invalid UUID format for mappingVersionToUse: '" + request.getMappingVersionToUse()
                             + "'. Value must be a valid UUID or left empty to use the default active version.";
                     log.warn(msg);
-                    throw new IllegalArgumentException(msg, e);
+                    throw new EventValidationException(msg, e);
                 }
             }
 
@@ -704,7 +705,14 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         if (value instanceof UUID uuidValue) {
             return uuidValue;
         }
-        return UUID.fromString(String.valueOf(value));
+        // Client-supplied event field (organizationId): wrap UUID.fromString's raw
+        // IllegalArgumentException so this doesn't depend on catching a JDK exception type
+        // that Hibernate/JPA and other unrelated code also throw.
+        try {
+            return UUID.fromString(String.valueOf(value));
+        } catch (IllegalArgumentException e) {
+            throw new EventValidationException("organizationId must be a valid UUID: '" + value + "'", e);
+        }
     }
 
     private LocalDateTime parseLocalDateTime(Object value) {
@@ -717,7 +725,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         try {
             return LocalDateTime.parse(String.valueOf(value));
         } catch (DateTimeParseException ex) {
-            throw new IllegalArgumentException("transactionDate must be a valid ISO-8601 datetime", ex);
+            throw new EventValidationException("transactionDate must be a valid ISO-8601 datetime", ex);
         }
     }
 }

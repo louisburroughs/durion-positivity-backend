@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
@@ -103,14 +104,11 @@ public class FinancialReportingController {
                     @NonNull
                     LocalDate endDate) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
-        // Request
-        // with a consistent ApiError format (code: "VALIDATION_ERROR").
-        // This maintains the accounting domain's standard error contract across all
-        // endpoints.
+        // InvalidDateRangeException maps to 400 Bad Request (VALIDATION_ERROR) via
+        // AccountingExceptionHandler, matching the accounting domain's standard error
+        // contract across all endpoints.
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         IncomeStatementReport report = financialReportingService.generateIncomeStatement(startDate, endDate);
@@ -258,15 +256,12 @@ public class FinancialReportingController {
                     @NonNull
                     LocalDate endDate) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
-        // Request
-        // with a consistent ApiError format (code: "VALIDATION_ERROR").
-        // This maintains the accounting domain's standard error contract across all
-        // endpoints.
+        // InvalidDateRangeException maps to 400 Bad Request (VALIDATION_ERROR) via
+        // AccountingExceptionHandler, matching the accounting domain's standard error
+        // contract across all endpoints.
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         List<AccountDrilldownResponse> response =
@@ -329,15 +324,12 @@ public class FinancialReportingController {
                     @NonNull
                     LocalDate endDate) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
-        // Request
-        // with a consistent ApiError format (code: "VALIDATION_ERROR").
-        // This maintains the accounting domain's standard error contract across all
-        // endpoints.
+        // InvalidDateRangeException maps to 400 Bad Request (VALIDATION_ERROR) via
+        // AccountingExceptionHandler, matching the accounting domain's standard error
+        // contract across all endpoints.
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         List<JournalLineDrilldownResponse> response =
@@ -405,11 +397,10 @@ public class FinancialReportingController {
                     @NonNull
                     LocalDate endDate) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
-        // Request with the accounting domain's standard ApiError format (ADR-0017).
+        // InvalidDateRangeException maps to 400 Bad Request via AccountingExceptionHandler,
+        // matching the accounting domain's standard ApiError format (ADR-0017).
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         GeneralLedgerReport report = financialReportingService.generateGeneralLedger(accountId, startDate, endDate);
@@ -577,11 +568,10 @@ public class FinancialReportingController {
                     @NonNull
                     LocalDate endDate) {
 
-        // Use IllegalArgumentException for validation errors to leverage the module's
-        // @RestControllerAdvice (APPaymentExceptionHandler) which maps it to 400 Bad
-        // Request with the accounting domain's standard ApiError format (ADR-0017).
+        // InvalidDateRangeException maps to 400 Bad Request via AccountingExceptionHandler,
+        // matching the accounting domain's standard ApiError format (ADR-0017).
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         TaxLiabilityReport report = financialReportingService.generateTaxLiability(startDate, endDate);
