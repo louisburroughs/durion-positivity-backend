@@ -32,6 +32,13 @@ import org.junit.jupiter.api.Test;
  *   <li>declaring a visible (non-private) no-arg constructor, the default bean-deserialization
  *       path (e.g. Lombok {@code @Data}).
  * </ul>
+ *
+ * <p>Two known blind spots, both currently unexercised by this reactor. The rule inspects the
+ * declared parameter type only, so it does not follow nested types — the {@code
+ * MechanicAssignmentItem} inside {@code CreateAssignmentRequest} was caught by a controller-slice
+ * test, not by this rule. And a generic body such as {@code @RequestBody List<X>} resolves to the
+ * raw JDK type, which the {@code com.positivity.} filter drops before {@code X} is ever examined.
+ * Neither shape exists in the tree today; widen the rule if one is introduced.
  */
 class RequestBodyCreatorGuardTest {
 
