@@ -19,7 +19,21 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
-/** Global exception handler for pos-marketing REST controllers (ADR-0017). */
+/**
+ * Global exception handler for pos-marketing REST controllers (ADR-0017).
+ *
+ * <p>Deliberately does NOT map bare {@code IllegalArgumentException} (issue #1694): that type is
+ * not exclusive to this module's own throws — Hibernate/JPA throw it for an invalid query, {@code
+ * UUID.fromString} throws it on malformed stored data, and a JPA attribute converter throws it on
+ * corrupt stored JSON. This module's own services and controllers never throw it (every genuine
+ * client error already has its own type — {@link MarketingResourceNotFoundException}, {@link
+ * MarketingDuplicateResourceException}, {@link MarketingUnprocessableEntityException} — or is
+ * bean-validation handled below), so a blanket handler that caught it existed purely to catch
+ * faults from elsewhere and misreport them as 400s, leaking internal class names and query text.
+ * An unexpected {@code IllegalArgumentException} now falls through to {@code pos-web-common}'s
+ * platform-wide {@code GlobalApiExceptionHandler}, which answers a generic, correlated 500
+ * instead of echoing the exception's own text.
+ */
 @ControllerAdvice
 @Slf4j
 @RequiredArgsConstructor
@@ -79,13 +93,6 @@ public class MarketingExceptionHandler {
                         Instant.now(clock).toString(),
                         correlationId,
                         fieldErrors));
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(
-            IllegalArgumentException ex, HttpServletRequest request, HttpServletResponse response) {
-        log.warn("Invalid argument on {}: {}", path(request), ex.getMessage());
-        return error(request, response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage());
     }
 
     private ResponseEntity<ApiError> error(

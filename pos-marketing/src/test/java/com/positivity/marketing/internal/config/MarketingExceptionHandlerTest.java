@@ -138,20 +138,6 @@ class MarketingExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("maps an illegal argument to 400 VALIDATION_ERROR")
-    void illegalArgument() {
-        inboundCorrelationId("trace-3");
-
-        ResponseEntity<ApiError> result =
-                handler.handleIllegalArgument(new IllegalArgumentException("bad page size"), request, response);
-
-        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(result.getBody()).isNotNull();
-        assertThat(result.getBody().code()).isEqualTo("VALIDATION_ERROR");
-        assertThat(result.getBody().message()).isEqualTo("bad page size");
-    }
-
-    @Test
     @DisplayName("reports every rejected field, defaulting a null message rather than emitting null")
     void bodyValidationListsFieldErrors() throws NoSuchMethodException {
         inboundCorrelationId("trace-4");
