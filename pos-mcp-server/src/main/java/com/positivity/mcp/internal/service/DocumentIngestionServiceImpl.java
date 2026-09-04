@@ -9,6 +9,7 @@ import com.positivity.mcp.internal.config.DocumentIngestionService;
 import com.positivity.mcp.internal.domain.RagScope;
 import com.positivity.mcp.internal.entity.DocumentIngestionJobEntity;
 import com.positivity.mcp.internal.entity.DocumentIngestionJobState;
+import com.positivity.mcp.internal.exception.InvalidDocumentMetadataException;
 import com.positivity.mcp.internal.repository.DocumentIngestionJobRepository;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -168,7 +169,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         try {
             return objectMapper.writeValueAsString(metadata);
         } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("Document metadata must be JSON-serializable", exception);
+            throw new InvalidDocumentMetadataException("Document metadata must be JSON-serializable", exception);
         }
     }
 

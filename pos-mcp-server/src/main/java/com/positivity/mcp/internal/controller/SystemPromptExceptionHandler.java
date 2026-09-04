@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.controller;
 
+import com.positivity.mcp.internal.exception.SystemPromptNameConflictException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -8,8 +9,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +20,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = SystemPromptController.class)
 class SystemPromptExceptionHandler {
-
-    private static final Logger logger = LoggerFactory.getLogger(SystemPromptExceptionHandler.class);
 
     private final Clock clock;
 
@@ -61,15 +58,19 @@ class SystemPromptExceptionHandler {
                         correlationId.toString()));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest request) {
+    // ADR-0017: a name collision against existing data is a stateful conflict (409), not a
+    // malformed request (400) -- previously misrouted through a blanket
+    // @ExceptionHandler(IllegalArgumentException.class) that also swallowed unrelated
+    // IllegalArgumentExceptions from Hibernate/JPA and the JDK as fabricated 400s (#1694).
+    @ExceptionHandler(SystemPromptNameConflictException.class)
+    ResponseEntity<ApiError> handleNameConflict(SystemPromptNameConflictException ex, HttpServletRequest request) {
         UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
                 .body(ApiError.of(
-                        "INVALID_REQUEST",
+                        "SYSTEM_PROMPT_NAME_CONFLICT",
                         ex.getMessage(),
-                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId.toString()));
     }
@@ -109,20 +110,6 @@ class SystemPromptExceptionHandler {
                         "FORBIDDEN",
                         "Insufficient permissions",
                         HttpStatus.FORBIDDEN.value(),
-                        Instant.now(clock).toString(),
-                        correlationId.toString()));
-    }
-
-    @ExceptionHandler(Exception.class)
-    ResponseEntity<ApiError> handleUnexpected(Exception ex, HttpServletRequest request) {
-        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
-        logger.error("Unhandled system prompt controller exception with correlationId={}", correlationId, ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
-                .body(ApiError.of(
-                        "INTERNAL_SERVER_ERROR",
-                        "An unexpected error occurred",
-                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
                         Instant.now(clock).toString(),
                         correlationId.toString()));
     }

@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
@@ -44,7 +45,7 @@ public class EventsFacadeTool {
     public String getEventSummary(
             @ToolParam(description = "Time window: lastHour, lastDay, or lastWeek") @NonNull String window) {
         if (!SUMMARY_WINDOWS.contains(window)) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Unsupported window '" + window + "': must be one of lastHour, lastDay, lastWeek");
         }
         return restClient

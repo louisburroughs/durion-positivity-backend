@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import org.jspecify.annotations.NonNull;
@@ -40,7 +41,7 @@ final class ReportingPeriods {
         boolean hasEnd = endDate != null && !endDate.isBlank();
 
         if (!hasStart || !hasEnd) {
-            throw new IllegalArgumentException("startDate and endDate are both required (got "
+            throw new InvalidToolArgumentException("startDate and endDate are both required (got "
                     + (hasStart ? "only startDate" : hasEnd ? "only endDate" : "neither")
                     + "); call resolveDateWindow for a range relative to today (\"last month\", \"in the "
                     + "last six months\") or resolveNamedPeriod for a period the question names outright "
@@ -49,7 +50,7 @@ final class ReportingPeriods {
         LocalDate start = parseDate("startDate", startDate);
         LocalDate end = parseDate("endDate", endDate);
         if (start.isAfter(end)) {
-            throw new IllegalArgumentException("startDate '" + start + "' must not be after endDate '" + end + "'");
+            throw new InvalidToolArgumentException("startDate '" + start + "' must not be after endDate '" + end + "'");
         }
         return new DateRange(start.toString(), end.toString());
     }
@@ -62,7 +63,7 @@ final class ReportingPeriods {
             // model still carrying the removed `period` contract and putting its label ("2025",
             // "2026-07") into startDate — for which "pass YYYY-MM-DD" is true but not actionable,
             // since the caller wants a whole named period and needs to be told where to get one.
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form "
                             + "(e.g. 2026-06-30). For a whole named period such as '2025', '2026-07' or "
                             + "'2026-Q3', call resolveNamedPeriod and copy its startDate/endDate; for a range "

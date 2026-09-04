@@ -16,6 +16,10 @@ import com.positivity.mcp.internal.config.AgentOrchestrationService;
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.CurrentUserContextResolver;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -44,10 +49,18 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
  * Controller slice tests for {@link McpChatController}.
+ *
+ * <p>{@code @WebMvcTest} does not auto-register {@code pos-web-common}'s
+ * {@code WebCommonErrorAutoConfiguration}, so it is imported explicitly (#1694) to exercise the
+ * real fallback chain an unmapped exception now falls through to, since {@link NltiExceptionHandler}
+ * no longer carries a blanket {@code @ExceptionHandler(Exception.class)}.
  */
 @WebMvcTest(McpChatController.class)
+@Import(WebCommonErrorAutoConfiguration.class)
 @ActiveProfiles("test")
 class McpChatControllerTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-09-03T12:00:00Z"), ZoneOffset.UTC);
 
     @Autowired
     private MockMvc mockMvc;
@@ -130,6 +143,10 @@ class McpChatControllerTest {
         when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
                 .thenThrow(new RuntimeException("boom"));
 
+        // #1694: NltiExceptionHandler no longer carries a blanket @ExceptionHandler(Exception.class),
+        // so this now falls through to pos-web-common's GlobalApiExceptionHandler catch-all --
+        // canonical code INTERNAL_ERROR (not INTERNAL_SERVER_ERROR) and a generic message that
+        // never echoes the exception's own text ("boom" must not appear in the body).
         mockMvc.perform(post("/v1/mcp/chat")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -137,9 +154,9 @@ class McpChatControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.status").value(500))
-                .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
+                .andExpect(jsonPath("$.message").value("Unexpected error occurred"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
@@ -197,6 +214,12 @@ class McpChatControllerTest {
         @Bean
         SecurityExceptionControllerAdvice securityExceptionControllerAdvice() {
             return new SecurityExceptionControllerAdvice();
+        }
+
+        /** Required by pos-web-common's {@code GlobalApiExceptionHandler}. */
+        @Bean
+        Clock clock() {
+            return TEST_CLOCK;
         }
     }
 

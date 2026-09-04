@@ -10,6 +10,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -312,7 +313,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveNamedPeriod rejects a relative phrase and points at resolveDateWindow")
     void resolveNamedPeriod_rejectsRelativePhrase() {
         assertThatThrownBy(() -> tool.resolveNamedPeriod("last month"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("resolveDateWindow");
     }
 }

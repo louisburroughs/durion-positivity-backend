@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -78,7 +79,7 @@ class VehicleFacadeToolTest {
     @DisplayName("searchVehicles rejects queries shorter than 3 characters without calling downstream")
     void searchVehicles_rejectsShortQuery() {
         assertThatThrownBy(() -> tool.searchVehicles("  ab "))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("at least 3 characters");
         mockServer.verify();
     }

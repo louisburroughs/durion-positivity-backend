@@ -86,10 +86,10 @@ class SystemPromptController {
                     mandatory and non-blank.
                     Emits a MCP_SYSTEM_PROMPT_CREATE event and invalidates any cached agents built from a prompt \
                     of that name so they rebuild with the new content.
-                    Returns 201 with the stored prompt, and 400 when a prompt with the same name already exists.
+                    Returns 201 with the stored prompt, and 409 when a prompt with the same name already exists.
                     """)
     @ApiResponse(responseCode = "201", description = "System prompt created")
-    @ApiResponse(responseCode = "400", description = "System prompt request is invalid")
+    @ApiResponse(responseCode = "409", description = "A system prompt with the requested name already exists")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:create"})
@@ -125,11 +125,12 @@ class SystemPromptController {
                     fields are mandatory and fully replace the stored values.
                     Emits a MCP_SYSTEM_PROMPT_UPDATE event and invalidates cached agents built from the prompt so \
                     subsequent chats use the new content.
-                    Returns 200 with the updated prompt, 404 when no prompt exists for the id, and 400 when the \
+                    Returns 200 with the updated prompt, 404 when no prompt exists for the id, and 409 when the \
                     new name is already used by another prompt.
                     """)
     @ApiResponse(responseCode = "200", description = "System prompt updated")
     @ApiResponse(responseCode = "404", description = "System prompt not found")
+    @ApiResponse(responseCode = "409", description = "A system prompt with the requested name already exists")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"mcp:system_prompt:update"})

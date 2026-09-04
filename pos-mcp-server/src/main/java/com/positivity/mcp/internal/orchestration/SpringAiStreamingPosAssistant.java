@@ -63,6 +63,9 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             @Nullable ObservationRegistry observationRegistry) {
         this.streamingChatModel = streamingChatModel;
         if (!(streamingChatModel instanceof ChatModel chatModel)) {
+            // Bean-wiring invariant checked once at construction time from Spring configuration,
+            // never from a controller thread or client input (#1694) -- left as a bare
+            // IllegalArgumentException.
             throw new IllegalArgumentException(
                     "Streaming chat model %s must also implement ChatModel: tool execution runs through ChatClient and would otherwise be silently unavailable"
                             .formatted(streamingChatModel.getClass().getName()));

@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -121,20 +122,20 @@ final class DateWindowResolver {
             int count,
             @NonNull Comparison comparison) {
         if (shape == Shape.ABSOLUTE) {
-            throw new IllegalArgumentException("ABSOLUTE names a period outright rather than positioning one "
+            throw new InvalidToolArgumentException("ABSOLUTE names a period outright rather than positioning one "
                     + "relative to today, so it has no unit or count; call resolveNamedPeriod with a period "
                     + "label (YYYY, YYYY-MM, or YYYY-Qn) instead");
         }
         if (count <= 0) {
-            throw new IllegalArgumentException("count must be positive (got " + count + ")");
+            throw new InvalidToolArgumentException("count must be positive (got " + count + ")");
         }
         if (unit == Unit.DAY && shape != Shape.ROLLING) {
-            throw new IllegalArgumentException("DAY has no calendar form for shape " + shape
+            throw new InvalidToolArgumentException("DAY has no calendar form for shape " + shape
                     + "; pass shape=ROLLING for a day-expressed range, or a calendar unit "
                     + "(WEEK, MONTH, QUARTER, YEAR) for " + shape);
         }
         if ((shape == Shape.CURRENT_TO_DATE || shape == Shape.PRIOR_COMPLETE) && count != 1) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     shape + " always names exactly one period; pass count=1, or use CALENDAR_SPAN " + "for a span of "
                             + count + " periods");
         }
@@ -207,7 +208,7 @@ final class DateWindowResolver {
         } else {
             Matcher quarter = NAMED_YEAR_QUARTER.matcher(trimmed);
             if (!quarter.matches()) {
-                throw new IllegalArgumentException("Unsupported period '" + period
+                throw new InvalidToolArgumentException("Unsupported period '" + period
                         + "': name a calendar year as YYYY (e.g. 2026), a calendar month as YYYY-MM "
                         + "(e.g. 2026-05), or a calendar quarter as YYYY-Qn (e.g. 2026-Q3). For a range "
                         + "positioned relative to today (\"last month\", \"this quarter\") call "
@@ -227,7 +228,7 @@ final class DateWindowResolver {
         try {
             return YearMonth.parse(trimmed);
         } catch (DateTimeException exception) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Unsupported period '" + raw + "': a named calendar month is YYYY-MM with the month "
                             + "in 01-12 (e.g. 2026-05)",
                     exception);

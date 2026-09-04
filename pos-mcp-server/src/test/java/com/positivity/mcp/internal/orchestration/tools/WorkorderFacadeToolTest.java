@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -275,7 +276,7 @@ class WorkorderFacadeToolTest {
     @DisplayName("getTechnicianLaborAnalytics rejects a missing range and names the resolver tools to call")
     void getTechnicianLaborAnalytics_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -303,7 +304,7 @@ class WorkorderFacadeToolTest {
     @DisplayName("getTechnicianLaborAnalytics rejects an inverted startDate/endDate without issuing a request")
     void getTechnicianLaborAnalytics_rejectsInvertedDateRange() {
         assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("2026-06-30", "2026-06-01"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 

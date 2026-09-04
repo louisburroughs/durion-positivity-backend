@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -211,12 +212,12 @@ public class TaxFacadeTool {
         try {
             parsed = new BigDecimal(amount.trim());
         } catch (NumberFormatException notANumber) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "amount '" + amount + "' is not a number: pass a positive decimal amount such as 129.99",
                     notANumber);
         }
         if (parsed.signum() <= 0) {
-            throw new IllegalArgumentException("amount must be a positive number (tax on zero or negative "
+            throw new InvalidToolArgumentException("amount must be a positive number (tax on zero or negative "
                     + "amounts is not calculated); got '" + amount + "'");
         }
         return parsed;

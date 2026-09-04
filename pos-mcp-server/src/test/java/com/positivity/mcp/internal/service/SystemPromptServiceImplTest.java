@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
+import com.positivity.mcp.internal.exception.SystemPromptNameConflictException;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -82,13 +83,13 @@ class SystemPromptServiceImplTest {
     }
 
     @Test
-    @DisplayName("create(request) throws IllegalArgumentException when name already exists")
-    void create_whenNameAlreadyExists_throwsIllegalArgumentException() {
+    @DisplayName("create(request) throws SystemPromptNameConflictException when name already exists")
+    void create_whenNameAlreadyExists_throwsSystemPromptNameConflictException() {
         SystemPromptRequest request = buildRequest("default-prompt");
         when(repository.existsByName("default-prompt")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SystemPromptNameConflictException.class)
                 .hasMessageContaining("default-prompt");
     }
 
@@ -189,8 +190,8 @@ class SystemPromptServiceImplTest {
     }
 
     @Test
-    @DisplayName("update() throws IllegalArgumentException when new name already exists for different prompt")
-    void update_whenNewNameConflictsWithExistingPrompt_throwsIllegalArgumentException() {
+    @DisplayName("update() throws SystemPromptNameConflictException when new name already exists for different prompt")
+    void update_whenNewNameConflictsWithExistingPrompt_throwsSystemPromptNameConflictException() {
         SystemPrompt prompt = buildPrompt(EXISTING_ID, "default-prompt");
         // trying to rename to "concise-prompt" which already belongs to another record
         SystemPromptRequest request = new SystemPromptRequest("concise-prompt", "Some content.");
@@ -198,7 +199,7 @@ class SystemPromptServiceImplTest {
         when(repository.existsByName("concise-prompt")).thenReturn(true);
 
         assertThatThrownBy(() -> service.update(EXISTING_ID, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SystemPromptNameConflictException.class)
                 .hasMessageContaining("concise-prompt");
     }
 

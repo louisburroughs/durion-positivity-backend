@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -188,13 +189,13 @@ class TaxFacadeToolTest {
     @DisplayName("calculateTax rejects a non-positive or non-numeric amount without issuing any request")
     void calculateTax_rejectsInvalidAmounts() {
         assertThatThrownBy(() -> tool.calculateTax("0", LOCATION_ID))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("positive");
         assertThatThrownBy(() -> tool.calculateTax("-10", LOCATION_ID))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("positive");
         assertThatThrownBy(() -> tool.calculateTax("ten dollars", LOCATION_ID))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("not a number");
 
         directMockServer.verify();
@@ -222,7 +223,7 @@ class TaxFacadeToolTest {
     @DisplayName("getTaxSummary rejects a missing range and names the resolver tools to call")
     void getTaxSummary_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getTaxSummary(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -252,7 +253,7 @@ class TaxFacadeToolTest {
     @DisplayName("getTaxSummary rejects an unpaired startDate without issuing a request")
     void getTaxSummary_rejectsUnpairedStartDate() {
         assertThatThrownBy(() -> tool.getTaxSummary("2026-03-01", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 

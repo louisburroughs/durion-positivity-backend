@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.entity.LlmApiConfig;
+import com.positivity.mcp.internal.exception.LlmApiIdAlreadyExistsException;
 import com.positivity.mcp.internal.repository.LlmApiConfigRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -129,13 +130,13 @@ class LlmApiConfigServiceImplTest {
     }
 
     @Test
-    @DisplayName("create(request) throws IllegalArgumentException when apiId already exists")
-    void create_whenApiIdAlreadyExists_throwsIllegalArgumentException() {
+    @DisplayName("create(request) throws LlmApiIdAlreadyExistsException when apiId already exists")
+    void create_whenApiIdAlreadyExists_throwsLlmApiIdAlreadyExistsException() {
         LlmApiConfigRequest request = buildRequest();
         when(repository.existsByApiId("openai-gpt4")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(LlmApiIdAlreadyExistsException.class)
                 .hasMessageContaining("openai-gpt4");
     }
 
@@ -187,8 +188,8 @@ class LlmApiConfigServiceImplTest {
     }
 
     @Test
-    @DisplayName("update() throws IllegalArgumentException when new apiId conflicts with existing record")
-    void update_whenNewApiIdConflictsWithExisting_throwsIllegalArgumentException() {
+    @DisplayName("update() throws LlmApiIdAlreadyExistsException when new apiId conflicts with existing record")
+    void update_whenNewApiIdConflictsWithExisting_throwsLlmApiIdAlreadyExistsException() {
         LlmApiConfig entity = buildConfig(EXISTING_ID); // apiId = "openai-gpt4"
         // request attempts to change apiId to "azure-gpt4" which already exists
         LlmApiConfigRequest request =
@@ -197,7 +198,7 @@ class LlmApiConfigServiceImplTest {
         when(repository.existsByApiId("azure-gpt4")).thenReturn(true);
 
         assertThatThrownBy(() -> service.update(EXISTING_ID, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(LlmApiIdAlreadyExistsException.class)
                 .hasMessageContaining("azure-gpt4");
     }
 

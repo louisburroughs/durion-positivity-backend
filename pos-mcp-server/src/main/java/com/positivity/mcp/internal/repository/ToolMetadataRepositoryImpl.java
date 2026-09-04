@@ -378,6 +378,8 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         try {
             pgVector.setValue(sb.toString());
         } catch (SQLException e) {
+            // sb is a numeric literal built from a locally computed embedding array, not raw
+            // client input (#1694). Left as a bare IllegalArgumentException.
             throw new IllegalArgumentException("Failed to create vector PGobject", e);
         }
         return pgVector;

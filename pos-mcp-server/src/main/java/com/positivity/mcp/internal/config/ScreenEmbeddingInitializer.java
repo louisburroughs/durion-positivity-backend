@@ -77,6 +77,9 @@ public class ScreenEmbeddingInitializer implements ApplicationRunner {
         try {
             object.setValue(value.toString());
         } catch (SQLException exception) {
+            // value is built from a locally computed embedding array, not client input, and this
+            // runs at startup, never from a controller thread (#1694) -- left as a bare
+            // IllegalArgumentException.
             throw new IllegalArgumentException("Failed to build vector PGobject", exception);
         }
         return object;

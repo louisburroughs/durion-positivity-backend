@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -457,7 +458,7 @@ class DateWindowResolverTest {
     @ValueSource(strings = {"Q2-2026", "2026-13", "26", "last month", "2026/07", "2026-Q5", ""})
     void resolveNamed_rejectsUnsupportedForms(String period) {
         assertThatThrownBy(() -> DateWindowResolver.resolveNamed(period))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("YYYY");
     }
 
@@ -470,7 +471,7 @@ class DateWindowResolverTest {
                         DateWindowResolver.Unit.YEAR,
                         1,
                         DateWindowResolver.Comparison.NONE))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("resolveNamedPeriod");
     }
 }

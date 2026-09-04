@@ -135,6 +135,9 @@ public class OpenApiDocumentFetcher {
                     relativeSpecUri.getQuery(),
                     relativeSpecUri.getFragment());
         } catch (java.net.URISyntaxException ex) {
+            // relativeSpecUri is derived from mcp.server.aggregate-spec-url (server config) and
+            // this only runs from the startup/scheduled discovery path, never a controller thread
+            // (#1694) -- left as a bare IllegalArgumentException.
             throw new IllegalArgumentException("Invalid aggregate spec URI path: " + relativeSpecUri, ex);
         }
     }
