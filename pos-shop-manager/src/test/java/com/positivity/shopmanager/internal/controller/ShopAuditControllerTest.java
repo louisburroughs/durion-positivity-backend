@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.service.ShopAuditService;
 import java.time.Clock;
 import java.time.Instant;
@@ -101,7 +102,7 @@ class ShopAuditControllerTest {
     @WithMockUser(authorities = "shop:schedule:view")
     void searchAudit_withNoFilterParams_returns400() throws Exception {
         when(shopAuditService.search(any()))
-                .thenThrow(new IllegalArgumentException("At least one filter criterion is required"));
+                .thenThrow(new ShopManagerValidationException("At least one filter criterion is required"));
 
         mockMvc.perform(get("/v1/shop/audit")) // no filter params
                 .andExpect(status().isBadRequest());

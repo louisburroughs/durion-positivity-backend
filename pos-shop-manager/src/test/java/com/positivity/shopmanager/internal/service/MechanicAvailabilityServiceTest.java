@@ -13,6 +13,7 @@ import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.TravelBlock;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.TravelBlockRepository;
@@ -224,12 +225,12 @@ class MechanicAvailabilityServiceTest {
 
     /**
      * AC7: When windowStart is not before windowEnd, the service must throw
-     * IllegalArgumentException before calling any downstream system.
+     * ShopManagerValidationException before calling any downstream system.
      */
     @Test
-    void ac7_windowStartAfterEnd_throwsIllegalArgument() {
+    void ac7_windowStartAfterEnd_throwsValidationException() {
         assertThatThrownBy(() -> service.queryAvailability(PERSON_ID, WINDOW_END, WINDOW_START))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ShopManagerValidationException.class);
 
         // Guard must fire before any repository or HR client interaction
         verifyNoInteractions(mechanicRepository, appointmentRepository, travelBlockRepository, staffingScheduleService);
@@ -241,15 +242,15 @@ class MechanicAvailabilityServiceTest {
 
     /**
      * When personId does not match any mechanic in the local repository, the
-     * service throws IllegalArgumentException before querying any downstream
+     * service throws ShopManagerValidationException before querying any downstream
      * system.
      */
     @Test
-    void mechanicNotFound_throwsIllegalArgument() {
+    void mechanicNotFound_throwsValidationException() {
         when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.queryAvailability(PERSON_ID, WINDOW_START, WINDOW_END))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining(PERSON_ID);
 
         verifyNoInteractions(staffingScheduleService, appointmentRepository, travelBlockRepository);

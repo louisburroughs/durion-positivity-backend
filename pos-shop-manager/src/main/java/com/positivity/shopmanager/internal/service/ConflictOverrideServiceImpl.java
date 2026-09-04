@@ -2,6 +2,8 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shopmanager.internal.entity.OverrideRecord;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.OverrideRecordRepository;
 import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
@@ -35,14 +37,13 @@ public class ConflictOverrideServiceImpl implements ConflictOverrideService {
     public @NonNull ConflictOverrideResponse execute(@NonNull ConflictOverrideRequest request) {
         // AC3: Override reason must not be blank
         if (request.getOverrideReason() == null || request.getOverrideReason().isBlank()) {
-            throw new IllegalArgumentException("Override reason must not be blank");
+            throw new ShopManagerValidationException("Override reason must not be blank");
         }
 
         // Locate the appointment — required for flagging and record linkage
         var appointment = appointmentRepository
                 .findById(request.getAppointmentId())
-                .orElseThrow(
-                        () -> new IllegalArgumentException("Appointment not found: " + request.getAppointmentId()));
+                .orElseThrow(() -> new AppointmentNotFoundException(request.getAppointmentId()));
 
         // AC4: Flag appointment as a conflict override
         appointment.setConflictOverride(true);
