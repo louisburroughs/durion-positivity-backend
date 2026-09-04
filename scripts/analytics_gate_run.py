@@ -274,15 +274,10 @@ def classify_outcome(answer):
     """
     if not answer or not answer.strip():
         return "empty"
-    # Smart quotes and dashes are folded locally: assistant output is typographically formatted, so
-    # "isn\u2019t defined" would otherwise miss its marker. #1709 adds a shared normaliser for the
-    # window grader; when both have landed these should be unified rather than kept in parallel.
-    text = answer
-    for fancy, plain in (("\u2018", "'"), ("\u2019", "'"), ("\u201c", '"'), ("\u201d", '"'),
-                         ("\u2013", "-"), ("\u2014", "-"), ("\u2011", "-"), ("\u202f", " "),
-                         ("\u00a0", " ")):
-        text = text.replace(fancy, plain)
-    text = text.lower()
+    # Shared with the window grader: assistant output is typographically formatted, so
+    # "isn't defined" written with U+2019 would otherwise miss its marker. #1689 and #1709 landed
+    # in parallel each with its own fold; this is the unification both promised.
+    text = normalise_typography(answer).lower()
     if any(marker in text for marker in _ASK_MARKERS):
         return "asked"
     if any(marker in text for marker in _DECLINE_MARKERS):
