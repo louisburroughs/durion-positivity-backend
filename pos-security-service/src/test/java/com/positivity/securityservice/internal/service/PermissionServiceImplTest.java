@@ -104,7 +104,7 @@ class PermissionServiceImplTest {
                     "1.0");
 
             assertThatThrownBy(() -> sut.registerPermissions(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(com.positivity.securityservice.internal.exception.SecurityValidationException.class)
                     .hasMessageContaining("Permission key must match domain:resource:action");
         }
 

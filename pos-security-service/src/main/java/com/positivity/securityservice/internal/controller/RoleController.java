@@ -11,6 +11,7 @@ import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.dto.RolePersonasResponse;
 import com.positivity.securityservice.internal.dto.RoleUpdateRequest;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleAuthorityService;
 import com.positivity.securityservice.internal.service.RoleManagementService;
@@ -234,7 +235,7 @@ public class RoleController {
         if (request == null
                 || request.getPermission() == null
                 || request.getPermission().isBlank()) {
-            throw new IllegalArgumentException("permission is required");
+            throw new SecurityValidationException("permission is required");
         }
         return ResponseEntity.ok(rolePermissionService.grantPermission(roleId, request.getPermission()));
     }

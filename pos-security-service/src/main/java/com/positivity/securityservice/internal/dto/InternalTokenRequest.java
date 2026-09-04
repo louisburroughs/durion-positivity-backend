@@ -32,6 +32,10 @@ public record InternalTokenRequest(
 
     public void validate() {
         if (subject == null || subject.isBlank()) {
+            // (d) defensive/internal: no caller currently invokes validate() — JwtController
+            // does its own subject/user-existence check before calling the service layer — so
+            // this is never reachable from an HTTP request today. Left as IllegalArgumentException
+            // rather than retyped, since it isn't wired to GlobalExceptionHandler either way.
             throw new IllegalArgumentException("subject is required and cannot be blank");
         }
     }

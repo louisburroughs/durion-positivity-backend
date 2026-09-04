@@ -14,6 +14,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.ScopeType;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -154,7 +155,7 @@ class RoleManagementServiceImplTest {
                 userId, roleId, ScopeType.LOCATION, Set.of(), LocalDateTime.now(TEST_CLOCK), null);
 
         assertThatThrownBy(() -> roleManagementService.createRoleAssignment(invalidLocationRequest))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("LOCATION scope requires at least one location ID");
 
         when(roleRepository.findByName("MISSING")).thenReturn(Optional.empty());

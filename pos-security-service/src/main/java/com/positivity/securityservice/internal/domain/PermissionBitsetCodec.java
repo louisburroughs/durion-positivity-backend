@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.domain;
 
 import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.EnumSet;
@@ -54,7 +55,7 @@ public final class PermissionBitsetCodec {
      *
      * @param encoded the Base64URL-encoded bitset string; may be null or empty
      * @return the decoded {@link BitSet}, never null
-     * @throws IllegalArgumentException if the input is non-empty but not valid
+     * @throws SecurityValidationException if the input is non-empty but not valid
      *                                  Base64URL
      */
     public static BitSet decode(String encoded) {
@@ -62,10 +63,13 @@ public final class PermissionBitsetCodec {
             return new BitSet();
         }
         try {
+            // java.util.Base64's own IllegalArgumentException (JDK type, not this module's) is
+            // caught here and re-thrown as SecurityValidationException — reachable with raw
+            // client input via PermissionController#decodePermissions.
             byte[] bytes = Base64.getUrlDecoder().decode(encoded);
             return BitSet.valueOf(bytes);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Malformed Base64URL bitset: " + e.getMessage(), e);
+            throw new SecurityValidationException("Malformed Base64URL bitset: " + e.getMessage(), e);
         }
     }
 
@@ -81,12 +85,12 @@ public final class PermissionBitsetCodec {
      * @param encoded the Base64URL-encoded bitset string
      * @param permVer the catalog version from the token
      * @return the set of resolved {@link PermissionCode} values; never null
-     * @throws IllegalArgumentException if {@code permVer} does not match the
+     * @throws SecurityValidationException if {@code permVer} does not match the
      *                                  local catalog version
      */
     public static Set<PermissionCode> decodeToPermissions(String encoded, int permVer) {
         if (permVer != PermissionCode.CATALOG_VERSION) {
-            throw new IllegalArgumentException("Unsupported permission catalog version: " + permVer + " (expected "
+            throw new SecurityValidationException("Unsupported permission catalog version: " + permVer + " (expected "
                     + PermissionCode.CATALOG_VERSION + ")");
         }
         BitSet bitSet = decode(encoded);

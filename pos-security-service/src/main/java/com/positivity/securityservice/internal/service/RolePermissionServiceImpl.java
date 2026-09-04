@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.PrincipalRole;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.event.RolePermissionGrantAuditEvent;
+import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
@@ -44,7 +45,9 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional
     public RoleDto createRole(@NonNull String roleName, String description) {
         if (roleRepository.existsByName(roleName)) {
-            throw new IllegalArgumentException("Role already exists: " + roleName);
+            // (c) stateful collision — same case as RoleManagementServiceImpl#createRole's
+            // duplicate-name check; reuse the existing type rather than inventing a second one.
+            throw new DuplicateRoleNameException("Role already exists: " + roleName);
         }
         Role role = new Role();
         role.setName(roleName);

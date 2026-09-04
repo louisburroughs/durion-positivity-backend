@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
@@ -67,7 +68,7 @@ public class AuditEventServiceImpl implements AuditEventService {
     @Transactional(readOnly = true)
     public List<AuditLogEventDto> searchEvents(String entityId, String entityType, Instant from, Instant to) {
         if (isBlank(entityId) || isBlank(entityType)) {
-            throw new IllegalArgumentException("entityId and entityType are required");
+            throw new SecurityValidationException("entityId and entityType are required");
         }
 
         List<AuditLogEvent> events;
@@ -85,7 +86,7 @@ public class AuditEventServiceImpl implements AuditEventService {
     @Transactional(readOnly = true)
     public List<AuditLogEventDto> searchByEventType(@NonNull String eventType) {
         if (isBlank(eventType)) {
-            throw new IllegalArgumentException("eventType is required");
+            throw new SecurityValidationException("eventType is required");
         }
 
         return auditLogEventRepository.findByEventTypeOrderByTimestampDesc(eventType).stream()
@@ -101,7 +102,7 @@ public class AuditEventServiceImpl implements AuditEventService {
         if (filter.getFromDate() != null
                 && filter.getToDate() != null
                 && !filter.getFromDate().isBefore(filter.getToDate())) {
-            throw new IllegalArgumentException("fromDate must be before toDate");
+            throw new SecurityValidationException("fromDate must be before toDate");
         }
 
         Specification<AuditLogEvent> specification = (root, query, cb) -> {
@@ -137,19 +138,19 @@ public class AuditEventServiceImpl implements AuditEventService {
 
     private void validateCreateRequest(@NonNull AuditLogEventRequest request) {
         if (isBlank(request.getEventType())) {
-            throw new IllegalArgumentException("eventType is required");
+            throw new SecurityValidationException("eventType is required");
         }
         if (isBlank(request.getEntityId())) {
-            throw new IllegalArgumentException("entityId is required");
+            throw new SecurityValidationException("entityId is required");
         }
         if (isBlank(request.getEntityType())) {
-            throw new IllegalArgumentException("entityType is required");
+            throw new SecurityValidationException("entityType is required");
         }
         if (request.getOldValue() == null) {
-            throw new IllegalArgumentException("oldValue is required");
+            throw new SecurityValidationException("oldValue is required");
         }
         if (request.getNewValue() == null) {
-            throw new IllegalArgumentException("newValue is required");
+            throw new SecurityValidationException("newValue is required");
         }
     }
 
@@ -160,6 +161,11 @@ public class AuditEventServiceImpl implements AuditEventService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException exception) {
+            // (d) defensive/internal: oldValue/newValue/context were already deserialized from
+            // the client's own JSON body by Jackson, so re-serializing them should not fail in
+            // practice; a failure here indicates an internal defect (exotic value the codec
+            // cannot round-trip), not a client validation error. Left as IllegalArgumentException
+            // so it now surfaces as pos-web-common's generic correlated 500, not a misleading 400.
             throw new IllegalArgumentException("Failed to serialize JSON field", exception);
         }
     }

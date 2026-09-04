@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.dto.PermissionDecodeResponse;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.PermissionCatalogVersionService;
 import com.positivity.securityservice.internal.service.PermissionRegistryService;
@@ -125,10 +126,10 @@ public class PermissionController {
                     @NonNull
                     PermissionDecodeRequest request) {
         if (!StringUtils.hasText(request.permBits())) {
-            throw new IllegalArgumentException("perm_bits must be provided");
+            throw new SecurityValidationException("perm_bits must be provided");
         }
         if (request.permVer() <= 0) {
-            throw new IllegalArgumentException("perm_ver must be greater than 0");
+            throw new SecurityValidationException("perm_ver must be greater than 0");
         }
         return ResponseEntity.ok(new PermissionDecodeResponse(
                 permissionCatalogVersionService.decodePermissions(request.permBits(), request.permVer())));

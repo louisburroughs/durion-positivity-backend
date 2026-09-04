@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -120,7 +121,7 @@ class PermissionRegistryServiceImplTest {
                 "1.0");
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> permissionRegistryService.registerPermissions(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("serviceName is required");
     }
 
@@ -130,7 +131,7 @@ class PermissionRegistryServiceImplTest {
                 new PermissionRegistrationRequest("pricing", "pos-price", List.of(), "1.0");
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> permissionRegistryService.registerPermissions(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("permissions must not be empty");
     }
 

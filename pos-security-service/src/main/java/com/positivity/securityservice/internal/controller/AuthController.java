@@ -62,7 +62,10 @@ public class AuthController {
             content = @Content(schema = @Schema(implementation = TokenPairResponse.class)))
     @ApiResponse(responseCode = "400", description = "Missing or blank username/password")
     @ApiResponse(responseCode = "401", description = "Invalid credentials")
-    @ApiResponse(responseCode = "500", description = "Internal server error")
+    @ApiResponse(
+            responseCode = "500",
+            description = "Internal server error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_AUTH_LOGIN", apiVersion = "1")
     @PostMapping("/login")
     @PreAuthorize("permitAll()")

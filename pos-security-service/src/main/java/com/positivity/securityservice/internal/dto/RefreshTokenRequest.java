@@ -29,6 +29,10 @@ public record RefreshTokenRequest(
      */
     public void validate() {
         if (refreshToken == null || refreshToken.isBlank()) {
+            // (d) defensive/internal: no caller currently invokes validate() — JwtController
+            // hands the raw refreshToken straight to JwtService, which does its own checks — so
+            // this is never reachable from an HTTP request today. Left as IllegalArgumentException
+            // rather than retyped, since it isn't wired to GlobalExceptionHandler either way.
             throw new IllegalArgumentException("refreshToken is required and cannot be blank");
         }
     }

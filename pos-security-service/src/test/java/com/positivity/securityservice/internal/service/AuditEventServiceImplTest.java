@@ -10,6 +10,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
@@ -99,7 +100,7 @@ class AuditEventServiceImplTest {
                 new AuditLogEventRequest(null, "user-1", "quote-1", "QUOTE", Map.of(), Map.of(), null);
 
         assertThatThrownBy(() -> auditEventService.createEvent(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("eventType is required");
     }
 
@@ -209,11 +210,11 @@ class AuditEventServiceImplTest {
     @DisplayName("searchEvents throws when entity filters are missing")
     void searchEvents_missingFilters_throws() {
         assertThatThrownBy(() -> auditEventService.searchEvents(" ", "QUOTE", null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("entityId and entityType are required");
 
         assertThatThrownBy(() -> auditEventService.searchEvents("quote-5", " ", null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("entityId and entityType are required");
     }
 
@@ -246,7 +247,7 @@ class AuditEventServiceImplTest {
     @DisplayName("searchByEventType throws when eventType is blank")
     void searchByEventType_withBlankEventType_throwsIllegalArgumentException() {
         assertThatThrownBy(() -> auditEventService.searchByEventType(""))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("eventType is required");
     }
 }

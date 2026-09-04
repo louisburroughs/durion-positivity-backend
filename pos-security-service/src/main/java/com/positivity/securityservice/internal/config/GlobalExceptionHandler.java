@@ -4,9 +4,11 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
@@ -14,6 +16,7 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -61,7 +64,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * ```
  *
  * **Mapped Exceptions:**
- * - IllegalArgumentException → 400 Bad Request
+ * - SecurityValidationException → 400 Bad Request (INVALID_REQUEST) — this module's own
+ * request/field-shape validation failures (ADR-0017 §1)
+ * - NoRolesAssignedException → 422 Unprocessable Entity (USER_HAS_NO_ROLES) — a valid refresh
+ * token whose user currently has no roles (ADR-0017 §2, domain-policy violation on an
+ * otherwise-valid payload)
  * - InvalidRefreshTokenException → 401 Unauthorized
  * - LockedException → 401 Unauthorized
  * - DisabledException → 401 Unauthorized
@@ -75,9 +82,23 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * - Request-binding exceptions (MethodArgumentNotValidException, etc.) → 400
  * Bad Request
  * - RoleNotFoundException, UserNotFoundException,
- * RoleAssignmentNotFoundException, PermissionNotFoundException → 404 Not Found
+ * RoleAssignmentNotFoundException, PermissionNotFoundException, EntityNotFoundException →
+ * 404 Not Found
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
- * - Exception (catch-all) → 500 Internal Server Error
+ *
+ * <p>This class deliberately does NOT map bare {@code IllegalArgumentException} or a
+ * catch-all {@code Exception} handler (issue #1694). {@code IllegalArgumentException} is not
+ * exclusive to this module's own validation — Hibernate/JPA throw it for an invalid query and
+ * {@code UUID.fromString} throws it on malformed stored data — so a blanket handler previously
+ * reported such server-side defects back to the client as a {@code 400 INVALID_REQUEST}
+ * carrying internal class names and query text, especially sensitive in an auth service. And a
+ * blanket {@code @ExceptionHandler(Exception.class)} here pre-empted
+ * {@code pos-web-common}'s platform-wide {@code GlobalApiExceptionHandler}
+ * (Spring's {@code ExceptionHandlerExceptionResolver} picks the first advice with a matching
+ * handler method), so the ADR-0056 §2 {@code DataIntegrityViolationException} mapping (409
+ * unique/FK, 422 client-supplied not-null/check) never ran in this module. An unmapped
+ * exception now falls through to that platform advice, which answers a generic, correlated
+ * {@code 500 INTERNAL_ERROR} and logs the stack trace at ERROR.
  *
  * @since 1.0
  */
@@ -85,6 +106,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @ControllerAdvice
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
+    private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
+
     private final Clock clock;
     private final ObjectProvider<AuditEventService> auditEventServiceProvider;
 
@@ -216,24 +239,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles IllegalArgumentException (validation failures).
+     * Handles SecurityValidationException — this module's own genuine client input-validation
+     * failures (blank/malformed field, unresolved role/user reference, malformed permission
+     * key or bitset, invalid scope/location combination). See {@link SecurityValidationException}
+     * for why bare {@code IllegalArgumentException} is not used for this (issue #1694).
      *
-     * **Typical Causes:**
-     * - Invalid username or roles format
-     * - Blank or null required fields
-     * - Invalid refresh token
+     * **HTTP Status:** 400 Bad Request (ADR-0017 §1)
      *
-     * **HTTP Status:** 400 Bad Request
-     *
-     * @param ex      the exception
-     * @param request the web request
+     * @param ex       the exception
+     * @param request  the web request
+     * @param response the servlet response, used to echo the correlation id header (ADR-0017 §4)
      * @return error response with 400 status and correlation ID
      */
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler(SecurityValidationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ApiError> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
+    public ResponseEntity<ApiError> handleSecurityValidationException(
+            SecurityValidationException ex, WebRequest request, HttpServletResponse response) {
 
         String correlationId = extractCorrelationId(request);
+        response.setHeader(CORRELATION_ID_HEADER, correlationId);
         log.warn("Validation error (correlationId={}): {}", correlationId, ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -242,6 +266,33 @@ public class GlobalExceptionHandler {
                         ex.getMessage() != null ? ex.getMessage() : "Invalid request parameters",
                         HttpStatus.BAD_REQUEST,
                         correlationId));
+    }
+
+    /**
+     * Handles NoRolesAssignedException — a refresh token that is otherwise valid, but whose
+     * user currently has no roles assigned, so no non-empty roles/authorities claim can be
+     * issued. See {@link NoRolesAssignedException}.
+     *
+     * **HTTP Status:** 422 Unprocessable Entity (ADR-0017 §2 — domain-policy violation on an
+     * otherwise-valid payload, not a malformed request)
+     *
+     * @param ex       the exception
+     * @param request  the web request
+     * @param response the servlet response, used to echo the correlation id header (ADR-0017 §4)
+     * @return error response with 422 status and correlation ID
+     */
+    @ExceptionHandler(NoRolesAssignedException.class)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ResponseEntity<ApiError> handleNoRolesAssignedException(
+            NoRolesAssignedException ex, WebRequest request, HttpServletResponse response) {
+
+        String correlationId = extractCorrelationId(request);
+        response.setHeader(CORRELATION_ID_HEADER, correlationId);
+        log.warn("No roles assigned (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(errorResponse(
+                        "USER_HAS_NO_ROLES", ex.getMessage(), HttpStatus.UNPROCESSABLE_ENTITY, correlationId));
     }
 
     @ExceptionHandler({
@@ -468,30 +519,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(errorResponse(
                         "INVALID_CREDENTIALS", "Invalid username or password", HttpStatus.UNAUTHORIZED, correlationId));
-    }
-
-    /**
-     * Handles generic exceptions (catch-all).
-     *
-     * **HTTP Status:** 500 Internal Server Error
-     *
-     * @param ex      the exception
-     * @param request the web request
-     * @return error response with 500 status and correlation ID
-     */
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ResponseEntity<ApiError> handleGenericException(Exception ex, WebRequest request) {
-
-        String correlationId = extractCorrelationId(request);
-        log.error("Unhandled exception (correlationId={})", correlationId, ex);
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(errorResponse(
-                        "INTERNAL_SERVER_ERROR",
-                        "An unexpected error occurred. Please contact support with correlation ID: " + correlationId,
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        correlationId));
     }
 
     /**

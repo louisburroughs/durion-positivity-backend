@@ -17,6 +17,8 @@ import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import io.jsonwebtoken.Claims;
@@ -233,7 +235,7 @@ class JwtServiceImplTest {
     void generateTokenPair_blankUsername_throws() {
         Set<String> roles = Set.of("ADMIN");
         assertThatThrownBy(() -> sut.generateTokenPair("", TEST_USER_ID, null, roles))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Username cannot be blank");
     }
 
@@ -242,7 +244,7 @@ class JwtServiceImplTest {
     void generateTokenPair_nullUserId_throws() {
         Set<String> roles = Set.of("ADMIN");
         assertThatThrownBy(() -> sut.generateTokenPair("alice", null, null, roles))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("UserId cannot be null");
     }
 
@@ -251,7 +253,7 @@ class JwtServiceImplTest {
     void generateTokenPair_emptyRoles_throws() {
         Set<String> roles = Set.of();
         assertThatThrownBy(() -> sut.generateTokenPair("alice", TEST_USER_ID, null, roles))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Roles cannot be empty");
     }
 
@@ -406,7 +408,7 @@ class JwtServiceImplTest {
     @DisplayName("refreshAccessToken: invalid refresh token throws IllegalArgumentException")
     void refreshAccessToken_invalidRefreshToken_throws() {
         assertThatThrownBy(() -> sut.refreshAccessToken("not.a.real.token"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Invalid refresh token");
     }
 
@@ -743,14 +745,14 @@ class JwtServiceImplTest {
     }
 
     /**
-     * Verifies that refreshAccessToken throws IllegalArgumentException when the
-     * user referenced by the refresh token exists but has no roles assigned.
+     * Verifies that refreshAccessToken throws NoRolesAssignedException (422, issue #1694) when
+     * the user referenced by the refresh token exists but has no roles assigned.
      *
      * Issue: PERM-004
      */
     @Test
-    @DisplayName("refreshAccessToken throws IllegalArgumentException when user has no roles assigned")
-    void refreshAccessToken_userHasNoRoles_throwsIllegalArgumentException() {
+    @DisplayName("refreshAccessToken throws NoRolesAssignedException when user has no roles assigned")
+    void refreshAccessToken_userHasNoRoles_throwsNoRolesAssignedException() {
         UUID userId = UUID.randomUUID();
         JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, null, Set.of("ADMIN"));
         String refreshToken = tokenPair.refreshToken();
@@ -776,7 +778,7 @@ class JwtServiceImplTest {
                         .build()));
 
         assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(NoRolesAssignedException.class)
                 .hasMessageContaining("no roles assigned");
     }
 

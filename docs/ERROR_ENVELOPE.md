@@ -206,14 +206,23 @@ Any service may therefore return these in addition to its module codes below.
 | `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
 | `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
+| `USER_HAS_NO_ROLES` | 422 | Refresh token is valid, but the referenced user currently has no roles assigned |
 
 ### pos-accounting
 | Code | Status | Description |
 |------|--------|-------------|
 | `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
-| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance |
+| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
 | `GL_POSTING_FAILED` | 409 | General ledger posting failed |
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
+| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist |
+| `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
+| `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
+| `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
+| `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor |
+| `DEFAULT_GL_MAPPING_NOT_FOUND` | 400 | Referenced default GL mapping does not exist (mapped as 400, not 404, by design) |
+| `POSTING_RULE_SET_NOT_FOUND` | 400 | Referenced posting rule set does not exist (mapped as 400, not 404, by design) |
 
 ### pos-catalog
 | Code | Status | Description |

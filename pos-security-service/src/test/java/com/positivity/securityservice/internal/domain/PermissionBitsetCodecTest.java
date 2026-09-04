@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.EnumSet;
@@ -83,7 +84,7 @@ class PermissionBitsetCodecTest {
     @DisplayName("decode malformed Base64 input throws IllegalArgumentException")
     void decodeThrowsIllegalArgumentForMalformedBase64() {
         // Issue PERM-003: codec must surface invalid input clearly to callers
-        assertThatThrownBy(() -> PermissionBitsetCodec.decode("!@#$%")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> PermissionBitsetCodec.decode("!@#$%")).isInstanceOf(SecurityValidationException.class);
     }
 
     // -------------------------------------------------------------------------
@@ -167,7 +168,7 @@ class PermissionBitsetCodecTest {
                 );
         String encoded = PermissionBitsetCodec.encode(perms);
         assertThatThrownBy(() -> PermissionBitsetCodec.decodeToPermissions(encoded, 99))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Unsupported permission catalog version");
     }
 

@@ -77,6 +77,10 @@ public class TokenRevocationManager {
      *
      * @throws IllegalArgumentException if jti is blank or expirationSeconds <= 0
      */
+    // (d) defensive/internal: every caller (JwtServiceImpl) derives jti from an already-parsed
+    // JWT claim behind a `jti != null` guard, and expirationSeconds from a computed
+    // token-remaining-lifetime value — neither is client-supplied on a request path. Left as
+    // IllegalArgumentException.
     public boolean revokeToken(String jti, long expirationSeconds) {
         if (jti == null || jti.isBlank()) {
             throw new IllegalArgumentException("JTI cannot be blank");
@@ -130,6 +134,9 @@ public class TokenRevocationManager {
      *
      * @throws IllegalArgumentException if jti is blank
      */
+    // (d) defensive/internal: every caller guards with `jti != null` before calling isRevoked,
+    // and jti always comes from an already-parsed JWT claim, never a raw request value. Left as
+    // IllegalArgumentException.
     public boolean isRevoked(String jti) {
         if (jti == null || jti.isBlank()) {
             throw new IllegalArgumentException("JTI cannot be blank");
@@ -167,6 +174,9 @@ public class TokenRevocationManager {
      * @return true if successfully removed, false if Redis unavailable or key
      *         doesn't exist
      */
+    // (d) defensive/internal: unrevokeToken has no production caller at all (the javadoc marks
+    // it test/maintenance tooling), so it is not reachable from any controller. Left as
+    // IllegalArgumentException.
     public boolean unrevokeToken(String jti) {
         if (jti == null || jti.isBlank()) {
             throw new IllegalArgumentException("JTI cannot be blank");

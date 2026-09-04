@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.service.UserService;
@@ -120,7 +121,7 @@ public class JwtController {
 
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> new IllegalArgumentException("User not found for subject: " + request.subject()));
+                .orElseThrow(() -> new SecurityValidationException("User not found for subject: " + request.subject()));
         if (user.getId() == null) {
             throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
         }
@@ -195,7 +196,7 @@ public class JwtController {
 
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> new IllegalArgumentException("User not found for subject: " + request.subject()));
+                .orElseThrow(() -> new SecurityValidationException("User not found for subject: " + request.subject()));
         if (user.getId() == null) {
             throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
         }
@@ -223,9 +224,10 @@ public class JwtController {
                     Required inputs: refreshToken, the exact refresh token string previously issued.
                     Emits a SECURITY_AUTH_REFRESH event, revokes the old access and refresh token JTIs in Redis, \
                     deletes the stored pair, and persists the replacement pair.
-                    Returns 400 when the refresh token is invalid, expired, revoked, or unknown, or the user has no \
-                    roles, 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists, and 409 when \
-                    concurrent refreshes race on the same token.
+                    Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with \
+                    INVALID_REFRESH_TOKEN when the referenced user no longer exists; 409 when concurrent refreshes \
+                    race on the same token; and 422 with USER_HAS_NO_ROLES when the referenced user currently has \
+                    no roles assigned — the token itself is valid, but no non-empty roles claim can be issued.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -238,6 +240,11 @@ public class JwtController {
     @ApiResponse(
             responseCode = "409",
             description = "Concurrency conflict during token revocation",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "USER_HAS_NO_ROLES: the refresh token is valid, but the referenced user currently has no "
+                    + "roles assigned",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",

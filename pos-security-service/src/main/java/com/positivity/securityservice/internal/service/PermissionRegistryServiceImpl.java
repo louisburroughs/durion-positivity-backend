@@ -5,6 +5,7 @@ import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -78,13 +79,13 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
 
     private void validateRegistrationRequest(PermissionRegistrationRequest request) {
         if (request == null) {
-            throw new IllegalArgumentException("Request body is required");
+            throw new SecurityValidationException("Request body is required");
         }
         if (request.getServiceName() == null || request.getServiceName().isBlank()) {
-            throw new IllegalArgumentException("serviceName is required");
+            throw new SecurityValidationException("serviceName is required");
         }
         if (request.getPermissions() == null || request.getPermissions().isEmpty()) {
-            throw new IllegalArgumentException("permissions must not be empty");
+            throw new SecurityValidationException("permissions must not be empty");
         }
     }
 
@@ -185,7 +186,11 @@ public class PermissionRegistryServiceImpl implements PermissionRegistryService 
             permissionRepository.save(permission);
             log.debug("Registered new permission: {}", permDef.getName());
             return incrementRegistered(counters);
-        } catch (IllegalArgumentException e) {
+        } catch (SecurityValidationException | IllegalArgumentException e) {
+            // Issue #1694: parsePermissionName() now throws SecurityValidationException, not
+            // IllegalArgumentException — caught alongside the bare type so a still-possible
+            // IllegalArgumentException from the repository/persistence layer (e.g. save()) is
+            // not silently missed here either.
             errors.add("Failed to parse permission " + permDef.getName() + ": " + e.getMessage());
             return incrementSkipped(counters);
         }
