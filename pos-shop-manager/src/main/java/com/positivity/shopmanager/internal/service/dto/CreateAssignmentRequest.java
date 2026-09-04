@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -19,6 +20,7 @@ import org.jspecify.annotations.NonNull;
  */
 @Value
 @Builder
+@Jacksonized
 @Schema(description = "Request to assign mechanics and an optional resource to an appointment")
 public class CreateAssignmentRequest {
     @Schema(
