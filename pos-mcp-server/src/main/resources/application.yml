@@ -14,9 +14,24 @@ spring:
       chat:
         options:
           # Deliberate default executor model (Gate 0 config-hygiene). Documented in README.
-          # Tier routing (Gate 4) may select a smaller/larger model per request; this is the single default.
+          # Tier routing (Gate 4) could select a smaller/larger model per request, but is dormant
+          # (see mcp.model.tiering-enabled below), so today this is the model for every request.
           model: ${OLLAMA_CHAT_MODEL:gpt-oss:120b}
-          temperature: 0.2
+          # #1683: 0 (not 0.2). The analytics gate is graded at n=1, so sampling only adds
+          # run-to-run variance to the "did that PR help?" comparison. Override per host with
+          # OLLAMA_CHAT_TEMPERATURE if a workload ever needs sampling.
+          temperature: ${OLLAMA_CHAT_TEMPERATURE:0.0}
+          # #1683: always send num_ctx rather than letting the backend pick the window.
+          # Ollama truncates the FRONT of the context — the system prompt — once the assembled
+          # prompt exceeds it, with no error and no log line, and one analytics turn (layered
+          # prompt + tool schemas + RAG snippets + memory + tool results) is well past 4096.
+          # What "unset" inherits depends on the backend: a self-hosted daemon applies its own
+          # OLLAMA_CONTEXT_LENGTH (4096 unless raised — gate3-openapi-bridge-design.md records
+          # needing 16384 on the alpha CPU host for exactly this reason), while the hosted
+          # ollama.com backend that the alpha chat base-url points at applies its own per-model
+          # default, which we neither set nor can read back. Sending it explicitly is what makes
+          # the window OURS in both cases. Tune per host with OLLAMA_NUM_CTX.
+          num-ctx: ${OLLAMA_NUM_CTX:32768}
         timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
         streaming-timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
       embedding:
@@ -293,16 +308,24 @@ mcp:
     eval-freshness-hours: ${MCP_TUNING_EVAL_FRESHNESS_HOURS:48}
     cron: "0 0 2 * * ?"
   model:
-    # Gate 4 (#1192) tiered model router. Feature flag / rollback: set
-    # MCP_MODEL_TIERING_ENABLED=false and every request uses the single default executor model
-    # (spring.ai.ollama.chat.options.model) with the historical cache keys.
-    tiering-enabled: ${MCP_MODEL_TIERING_ENABLED:true}
+    # Gate 4 (#1192) tiered model router. DORMANT by default since #1683 — see the `simple` /
+    # `complex` comments below: with both tier models blank, T2-simple and T2-complex resolve to
+    # the SAME model, so every non-simple-chat turn was paying a qwen3:4b classification call to
+    # choose between two identical destinations. Re-enable together with a real
+    # MCP_MODEL_SIMPLE (see below); enabling it alone only restores that cost.
+    # Note for operators: the NltiModelTierStarved and NltiRoutingMixShift Loki alerts in
+    # observability/loki/rules/nlti-alerts.yml only make sense with tiering ON — keep them
+    # silenced while this is false (docs/alerts/nlti-alerts.md).
+    tiering-enabled: ${MCP_MODEL_TIERING_ENABLED:false}
     # T1 router/classifier model (strict JSON, always temperature 0). Deliberately small. If the
     # model is not pulled on the Ollama host the router call fails fast and the request safely
     # defaults to T2-complex — never silently to a smaller model.
     router: ${MCP_MODEL_ROUTER:qwen3:4b}
     # T2-simple executor (single-tool lookups). Blank = use the default executor model; set to a
-    # smaller pulled model (e.g. qwen3:8b) to realize the latency/cost win.
+    # smaller pulled model (e.g. gpt-oss:20b) to realize the latency/cost win. Left blank on
+    # purpose while the analytics gate (#1601) is being measured: a second executor model would
+    # add a confound to every gate comparison. Setting it is what makes tiering-enabled=true
+    # worth paying for again.
     simple: ${MCP_MODEL_SIMPLE:}
     # T2-complex executor (multi-tool, writes, accounting/tax/admin/security). Blank = use the
     # default executor model (gpt-oss:120b), which is already the complex-class model.

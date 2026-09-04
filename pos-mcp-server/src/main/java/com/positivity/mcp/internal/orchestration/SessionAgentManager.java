@@ -136,7 +136,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull NltiWorkflowStateService workflowStateService,
             @Nullable NltiRouter nltiRouter,
             @Nullable TieredChatModelResolver tieredChatModelResolver,
-            @Value("${mcp.model.tiering-enabled:true}") boolean tieringEnabled,
+            @Value("${mcp.model.tiering-enabled:false}") boolean tieringEnabled,
             @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,

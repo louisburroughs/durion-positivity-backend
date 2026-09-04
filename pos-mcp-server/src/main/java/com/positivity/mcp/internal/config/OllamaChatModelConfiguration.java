@@ -2,6 +2,8 @@ package com.positivity.mcp.internal.config;
 
 import java.time.Duration;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
@@ -21,6 +23,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Profile("!test")
 public class OllamaChatModelConfiguration {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(OllamaChatModelConfiguration.class);
+
     @Bean
     @Primary
     public @NonNull ChatModel chatModel(
@@ -31,8 +35,10 @@ public class OllamaChatModelConfiguration {
                     String modelName,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value("${spring.ai.ollama.chat.timeout:${OLLAMA_CHAT_TIMEOUT:180s}}") @NonNull Duration timeout,
-            @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think) {
-        return buildChatModel(baseUrl, modelName, apiKey, timeout, think);
+            @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think,
+            @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
+            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx) {
+        return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx);
     }
 
     @Bean
@@ -48,12 +54,30 @@ public class OllamaChatModelConfiguration {
                             "${spring.ai.ollama.chat.streaming-timeout:${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}}")
                     @NonNull
                     Duration timeout,
-            @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think) {
-        return buildChatModel(baseUrl, modelName, apiKey, timeout, think);
+            @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think,
+            @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
+            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx) {
+        return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx);
     }
 
     /**
      * Builds the Ollama chat model.
+     *
+     * <p><strong>{@code numCtx} is always sent explicitly (#1683).</strong> Ollama silently drops
+     * the front of the context — the system prompt — once the assembled prompt exceeds the window,
+     * with no error and no log line. One analytics turn (layered system prompt + tool schemas + RAG
+     * snippets + chat memory + tool results) is well past 4096, so an inherited window would
+     * truncate exactly the layer prompt tuning edits.
+     *
+     * <p>What "not sent" inherits depends on the backend: a self-hosted daemon applies its own
+     * {@code OLLAMA_CONTEXT_LENGTH} (4096 unless raised), while the hosted ollama.com backend the
+     * alpha chat base-url points at applies a per-model default we neither set nor can read back.
+     * Sending it explicitly is what makes the window ours in both cases — though it is a request,
+     * not a guarantee: a backend may still cap it below what we ask for, which is why the
+     * verification procedure in {@code docs/gate-verification-runbook.md} exists.
+     *
+     * <p>Temperature defaults to 0: the analytics workload is graded at n=1, so sampling only adds
+     * run-to-run variance to results we compare across builds.
      *
      * <p>Thinking is left to the model default unless {@code OLLAMA_CHAT_THINK} is set. We must not
      * send a {@code think} field unconditionally: Ollama rejects it for models that don't support
@@ -69,7 +93,9 @@ public class OllamaChatModelConfiguration {
             @NonNull String modelName,
             @NonNull String apiKey,
             @NonNull Duration timeout,
-            @NonNull String think) {
+            @NonNull String think,
+            double temperature,
+            int numCtx) {
         int timeoutMillis = Math.toIntExact(timeout.toMillis());
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeoutMillis);
@@ -91,9 +117,21 @@ public class OllamaChatModelConfiguration {
                 .webClientBuilder(webClientBuilder)
                 .build();
 
-        OllamaChatOptions.Builder optionsBuilder =
-                OllamaChatOptions.builder().model(modelName).temperature(0.2d);
+        OllamaChatOptions.Builder optionsBuilder = OllamaChatOptions.builder()
+                .model(modelName)
+                .temperature(temperature)
+                .numCtx(numCtx);
         applyThinking(optionsBuilder, think);
+
+        // Logged at INFO so the effective context window is verifiable from a deployed instance's
+        // startup log: compare it against the response's prompt_eval_count to confirm or rule out
+        // prompt truncation without shell access to the Ollama host (#1683).
+        LOGGER.info(
+                "MCP Ollama chat model configured: model={} temperature={} numCtx={} timeoutMs={}",
+                modelName,
+                temperature,
+                numCtx,
+                timeoutMillis);
 
         return OllamaChatModel.builder()
                 .ollamaApi(ollamaApi)

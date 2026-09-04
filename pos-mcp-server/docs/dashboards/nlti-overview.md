@@ -192,7 +192,11 @@ pipeline-parsed label that Loki's `label_values` API cannot enumerate.
   - Metric: `routing.tier` present vs absent (Loki)
   - Type: timeseries
   - Description: Proxy for "the tiered router did not run". Expected near zero with
-    `MCP_MODEL_TIERING_ENABLED=true`.
+    `MCP_MODEL_TIERING_ENABLED=true` — and expected at **100 %** today, because tiering is dormant
+    (#1683): both tier models were blank, so T2-simple and T2-complex resolved to the same
+    `gpt-oss:120b` and the per-turn `qwen3:4b` classification bought nothing. Read this panel, the
+    tier-mix panels above, and the `NltiModelTierStarved` alert as "tiering is off on purpose"
+    until `MCP_MODEL_SIMPLE` names a real smaller model. See docs/gate4-tiered-router-design.md.
 
 ### 4. Prompt layers
 
