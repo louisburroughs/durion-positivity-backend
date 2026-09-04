@@ -8,10 +8,12 @@ import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.GLAccountService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -291,7 +293,10 @@ public class GLAccountController {
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account deactivated")
     @ApiResponse(responseCode = "404", description = "GL account not found")
-    @ApiResponse(responseCode = "409", description = "Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> deactivateGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,
@@ -332,7 +337,10 @@ public class GLAccountController {
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account archived")
     @ApiResponse(responseCode = "404", description = "GL account not found")
-    @ApiResponse(responseCode = "409", description = "Account is not INACTIVE (ACCOUNT_NOT_INACTIVE)")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Account is not INACTIVE (ACCOUNT_NOT_INACTIVE)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_ARCHIVE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> archiveGLAccount(
             @Parameter(description = "GL account identifier") @PathVariable UUID glAccountId,

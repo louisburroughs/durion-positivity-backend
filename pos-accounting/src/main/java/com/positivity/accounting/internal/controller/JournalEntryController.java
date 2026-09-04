@@ -165,7 +165,10 @@ public class JournalEntryController {
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entry returned")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<JournalEntryResponse> getJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
         log.debug("Getting journal entry: {}", journalEntryId);
@@ -194,7 +197,10 @@ public class JournalEntryController {
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal traceability returned")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<JournalEntryTraceabilityResponse> getJournalTraceability(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
         log.debug("Getting journal traceability: {}", journalEntryId);
@@ -229,11 +235,15 @@ public class JournalEntryController {
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "201", description = "Journal entry created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "GL account not found (GL_ACCOUNT_NOT_FOUND)")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found (GL_ACCOUNT_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "Entry is unbalanced (UNBALANCED_ENTRY), or a GL account is not active on the"
-                    + " transaction date (GL_ACCOUNT_NOT_ACTIVE)")
+                    + " transaction date (GL_ACCOUNT_NOT_ACTIVE)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_CREATE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> createJournalEntry(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -285,9 +295,18 @@ public class JournalEntryController {
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entry updated")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)")
-    @ApiResponse(responseCode = "409", description = "Entry is no longer DRAFT")
-    @ApiResponse(responseCode = "422", description = "Updated entry is unbalanced (UNBALANCED_ENTRY)")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Entry is no longer DRAFT",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Updated entry is unbalanced (UNBALANCED_ENTRY)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_UPDATE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> updateJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,

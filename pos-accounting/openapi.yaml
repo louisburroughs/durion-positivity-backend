@@ -1761,13 +1761,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Referenced GL account not found (GL_ACCOUNT_NOT_FOUND)
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Referenced GL account is not active (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
@@ -1961,6 +1961,10 @@ paths:
         '403':
           description: Forbidden
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
       security:
       - bearerAuth:
@@ -2010,7 +2014,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
       security:
       - bearerAuth:
@@ -2075,13 +2079,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND), or a referenced GL account not found (GL_ACCOUNT_NOT_FOUND)
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Referenced GL account is not active (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
@@ -3079,7 +3083,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account is not INACTIVE (ACCOUNT_NOT_INACTIVE)
       security:
       - bearerAuth:
@@ -3184,7 +3188,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GLAccountResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)
       security:
       - bearerAuth:
@@ -3501,13 +3505,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: GL account not found (GL_ACCOUNT_NOT_FOUND)
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Entry is unbalanced (UNBALANCED_ENTRY), or a GL account is not active on the transaction date (GL_ACCOUNT_NOT_ACTIVE)
       security:
       - bearerAuth:
@@ -3552,7 +3556,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
       security:
       - bearerAuth:
@@ -3614,19 +3618,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Entry is no longer DRAFT
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Updated entry is unbalanced (UNBALANCED_ENTRY)
       security:
       - bearerAuth:
@@ -3833,7 +3837,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
       security:
       - bearerAuth:
@@ -5311,7 +5315,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleSetResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
@@ -5370,7 +5374,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleSetResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
         '409':
           content:
@@ -5421,13 +5425,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleVersionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No PUBLISHED version exists to archive
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleVersionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
@@ -5472,13 +5476,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleVersionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No DRAFT version exists to publish
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostingRuleVersionResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
@@ -5543,9 +5547,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/PostingRuleVersionResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
