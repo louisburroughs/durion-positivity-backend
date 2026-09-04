@@ -19,6 +19,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.execution.ToolExecutionException;
 import org.springframework.ai.tool.metadata.DefaultToolMetadata;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.util.ClassUtils;
@@ -105,7 +106,13 @@ final class SpringAiToolCallbackResolver {
                 throw new IllegalStateException("Unable to access tool method " + method.getName(), e);
             } catch (InvocationTargetException e) {
                 Throwable cause = e.getCause() == null ? e : e.getCause();
-                throw new IllegalStateException("Tool method failed: " + method.getName(), cause);
+                // ToolExecutionException, not IllegalStateException (#1711). Spring AI's
+                // DefaultToolCallingManager catches ONLY this type and converts it into a result
+                // message the model can read and retry from; any other exception escapes the
+                // tool-calling loop, kills the turn, and the model never learns its argument was
+                // wrong. The ~21 InvalidToolArgumentException throws added in #1694 were inert for
+                // exactly this reason — they were re-typed for clarity and nothing consumed them.
+                throw new ToolExecutionException(getToolDefinition(), cause);
             }
         }
 

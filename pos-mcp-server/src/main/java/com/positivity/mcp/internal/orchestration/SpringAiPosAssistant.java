@@ -30,6 +30,7 @@ import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.execution.ToolExecutionException;
 
 final class SpringAiPosAssistant implements PosAssistant {
 
@@ -209,8 +210,18 @@ final class SpringAiPosAssistant implements PosAssistant {
     private @Nullable ChatResponse callModel(@NonNull Prompt prompt) {
         try {
             return chatClient.prompt(prompt).call().chatResponse();
+        } catch (ToolExecutionException exception) {
+            // Distinguished from a model failure (#1711). Reaching here means the tool-calling loop
+            // did NOT convert the failure into a result the model could correct — either the
+            // configured processor rethrows, or the failure escaped a path that never had one. That
+            // is a wiring fault worth its own signal, not the same event as the model timing out.
+            LOGGER.error(
+                    "Tool execution failed and was not converted into a model-readable result; "
+                            + "the model cannot retry this turn",
+                    exception);
+            return null;
         } catch (RuntimeException exception) {
-            LOGGER.warn("Chat turn failed during model call or tool execution; falling back", exception);
+            LOGGER.warn("Chat turn failed during the model call; falling back", exception);
             return null;
         }
     }
