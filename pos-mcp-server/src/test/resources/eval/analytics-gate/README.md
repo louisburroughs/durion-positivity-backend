@@ -283,6 +283,33 @@ expectation: q07's mixed comparison does not trigger the calendar precedence und
 contract (both windows read rolling), and q17 names no window at all. Asserting a shape for either
 would convert an acknowledged gap into ground truth that lies — the failure mode #1659 was.
 
+## The run is one conversation, not twelve independent questions
+
+`SessionAgentManager` keys chat memory on `(username, role)` and the runner sends every question
+with the same bearer token and no session identifier, so **all questions in a run land on one
+memory key**. With `mcp.agent.memory-max-messages: 100` nothing evicts them within a run: twelve
+questions and twelve answers is 24 messages.
+
+So q17 is answered with q01 through q15 in context. The corpus's framing — one utterance, one
+expected answer, one window — assumes an independence the run does not have.
+
+Consequences to keep in mind when reading any score:
+
+- A question can be answered correctly because an earlier one established a window, an entity or a
+  metric, and the record cannot distinguish that from answering it cold.
+- **`--only q09` is not the same experiment as a full run**, because the preceding context differs.
+  Single-question re-checks are a different measurement, not a reproduction.
+- It is a candidate explanation for run-to-run inconsistency on identical builds — q15 resolved
+  `CALENDAR_SPAN` once and `ROLLING` another time with no relevant code change between.
+
+This is not a production defect: sharing memory across a user's turns is what a chat assistant
+should do, and it is what `MULTI_TURN.json` exercises deliberately. The defect is that the gate
+relied on independence without disclosing it.
+
+Tracked in #1735, which proposes measuring the size of the effect first — run the gate twice with
+the question order reversed — before deciding whether to isolate turns, evict between them, or
+accept and account for it.
+
 ## Which actor to run as
 
 **`admin.alpha`** — the `ITEST_USERNAME` / `ITEST_PASSWORD` pair in the itest credentials file.
