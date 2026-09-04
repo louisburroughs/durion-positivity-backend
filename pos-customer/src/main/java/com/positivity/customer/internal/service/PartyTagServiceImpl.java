@@ -9,6 +9,7 @@ import com.positivity.customer.internal.entity.PartyTagAssignment;
 import com.positivity.customer.internal.enums.TagAssignmentSource;
 import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
 import com.positivity.customer.internal.repository.PartyTagRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -123,7 +124,9 @@ public class PartyTagServiceImpl implements PartyTagService {
             return toResponse(existing.get(), tag);
         }
         if (!tag.isActive()) {
-            throw new IllegalArgumentException("Tag is inactive and cannot be assigned: " + tag.getName());
+            // Valid tagId, valid payload — the domain refuses the operation because of the
+            // tag's own lifecycle state. ADR-0017 §2: 422, not 400.
+            throw new CrmUnprocessableEntityException("Tag is inactive and cannot be assigned: " + tag.getName());
         }
         PartyTagAssignment assignment = PartyTagAssignment.builder()
                 .partyId(partyId)

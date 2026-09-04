@@ -12,6 +12,7 @@ import com.positivity.customer.internal.enums.LifecycleStage;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.InquiryRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -187,7 +188,7 @@ public class InquiryServiceImpl implements InquiryService {
         // with no way to reach the enquirer cannot be actioned, and letting it reach the
         // database would surface as a 500 rather than a validation error.
         if (isBlank(request.getEmail()) && isBlank(request.getPhone())) {
-            throw new IllegalArgumentException("An inquiry must include an email address or a phone number");
+            throw new CrmValidationException("An inquiry must include an email address or a phone number");
         }
         return Inquiry.builder()
                 .channel(request.getChannel())

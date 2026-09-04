@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import java.util.List;
 import java.util.Map;
@@ -350,13 +351,13 @@ class PersonPartyServiceImplTest {
                                 .firstName(blank)
                                 .lastName("Lovelace")
                                 .build()))
-                        .isInstanceOf(IllegalArgumentException.class);
+                        .isInstanceOf(CrmValidationException.class);
                 assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
                                 .customerType("PERSON")
                                 .firstName("Ada")
                                 .lastName(blank)
                                 .build()))
-                        .isInstanceOf(IllegalArgumentException.class);
+                        .isInstanceOf(CrmValidationException.class);
             }
 
             verifyNoInteractions(customerRepository);

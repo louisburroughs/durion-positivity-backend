@@ -812,7 +812,7 @@ paths:
 
         Emits a CUSTOMER_ACCOUNT_TIER_RESOLVE event; when the tier is applied the account record is updated with assignedBy SYSTEM and a customer fact is republished.
 
-        Returns 404 when the account does not exist or the accountId is not a valid UUID.
+        Returns 400 when the accountId is not a valid UUID, and 404 when it is well-formed but no matching account exists.
 
         '
       operationId: resolveAccountTier
@@ -2582,7 +2582,7 @@ paths:
 
         Emits a CRM_PARTY_TAG_ASSIGN event and publishes a party-tag-changed fact when a new assignment is created.
 
-        Returns 404 when the tag does not exist, and 400 when the tag is inactive and not already assigned.
+        Returns 404 when the tag does not exist, and 422 when the tag is inactive and not already assigned.
 
         '
       operationId: assignTagToParty
@@ -2613,12 +2613,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartyTagAssignmentResponse'
           description: Tag assigned (or already present)
-        '400':
-          description: Tag is inactive
         '403':
           description: Forbidden - insufficient permissions
         '404':
           description: Tag not found
+        '422':
+          description: Tag is inactive
       security:
       - bearerAuth:
         - crm:tag:assign

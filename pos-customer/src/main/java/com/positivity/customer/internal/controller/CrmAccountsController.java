@@ -103,13 +103,10 @@ public class CrmAccountsController {
     public ResponseEntity<GetAccountTierResponse> getAccountTier(
             @Parameter(description = "Account ID", required = true) @PathVariable UUID accountId) {
         log.info("Getting account tier for accountId={}", accountId);
-        try {
-            GetAccountTierResponse response = accountTierService.getAccountTier(accountId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException _) {
-            log.warn("Account not found: {}", accountId);
-            return ResponseEntity.notFound().build();
-        }
+        // No local catch: a missing account raises CrmResourceNotFoundException, which
+        // CrmExceptionHandler maps to 404 with a full ApiError body and correlation id.
+        GetAccountTierResponse response = accountTierService.getAccountTier(accountId);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(operationId = "resolveAccountTier", summary = "Resolve Account Tier", description = """
@@ -124,7 +121,8 @@ public class CrmAccountsController {
                     default to false, so the default call is a dry run.
                     Emits a CUSTOMER_ACCOUNT_TIER_RESOLVE event; when the tier is applied the account record is \
                     updated with assignedBy SYSTEM and a customer fact is republished.
-                    Returns 404 when the account does not exist or the accountId is not a valid UUID.
+                    Returns 400 when the accountId is not a valid UUID, and 404 when it is well-formed but no \
+                    matching account exists.
                     """)
     @ApiResponses(
             value = {
@@ -163,13 +161,11 @@ public class CrmAccountsController {
                                                                     """)))
                     @RequestBody
                     ResolveAccountTierRequest body) {
-        try {
-            ResolveAccountTierResponse response = accountTierService.resolveAccountTier(body);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Account not found or invalid request: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+        // No local catch: a malformed accountId raises CrmValidationException (400) and a
+        // missing account raises CrmResourceNotFoundException (404); CrmExceptionHandler maps
+        // both to a full ApiError body with a correlation id.
+        ResolveAccountTierResponse response = accountTierService.resolveAccountTier(body);
+        return ResponseEntity.ok(response);
     }
 
     // --- Party/Commercial Account Management (Issue #176) ---

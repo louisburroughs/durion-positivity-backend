@@ -6,6 +6,8 @@ import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
 import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.AccountTier;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -60,7 +62,7 @@ public class AccountTierServiceImpl implements AccountTierService {
      *
      * @param accountId the account/party identifier
      * @return tier information response
-     * @throws IllegalArgumentException if account not found
+     * @throws CrmResourceNotFoundException if account not found
      */
     @Override
     @Transactional(readOnly = true)
@@ -69,7 +71,7 @@ public class AccountTierServiceImpl implements AccountTierService {
 
         CommercialParty party = commercialPartyRepository
                 .findById(accountId)
-                .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
+                .orElseThrow(() -> new CrmResourceNotFoundException("Account", accountId));
 
         return buildTierResponse(party);
     }
@@ -81,7 +83,8 @@ public class AccountTierServiceImpl implements AccountTierService {
      *
      * @param request tier resolution request with calculation criteria
      * @return resolution result with recommended tier
-     * @throws IllegalArgumentException if account not found
+     * @throws CrmValidationException if the account id is not a valid UUID
+     * @throws CrmResourceNotFoundException if account not found
      */
     @Override
     @Transactional
@@ -92,11 +95,12 @@ public class AccountTierServiceImpl implements AccountTierService {
         try {
             partyId = UUID.fromString(request.getAccountId());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid account ID format: " + request.getAccountId(), e);
+            // UUID.fromString: malformed accountId string, a genuine 400 (not a not-found).
+            throw new CrmValidationException("Invalid account ID format: " + request.getAccountId(), e);
         }
         CommercialParty party = commercialPartyRepository
                 .findById(partyId)
-                .orElseThrow(() -> new IllegalArgumentException("Account not found: " + request.getAccountId()));
+                .orElseThrow(() -> new CrmResourceNotFoundException("Account", request.getAccountId()));
 
         AccountTier currentTier = party.getTier() != null ? party.getTier() : AccountTier.STANDARD;
         boolean manualOverride = party.isTierManualOverride();

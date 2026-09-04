@@ -264,7 +264,7 @@ public class CrmTagController {
                     source defaults to MANUAL and accepts MANUAL, CAMPAIGN, IMPORT, or RULE.
                     Emits a CRM_PARTY_TAG_ASSIGN event and publishes a party-tag-changed fact when a new \
                     assignment is created.
-                    Returns 404 when the tag does not exist, and 400 when the tag is inactive and not \
+                    Returns 404 when the tag does not exist, and 422 when the tag is inactive and not \
                     already assigned.
                     """)
     @ApiResponses({
@@ -272,7 +272,7 @@ public class CrmTagController {
                 responseCode = "200",
                 description = "Tag assigned (or already present)",
                 content = @Content(schema = @Schema(implementation = PartyTagAssignmentResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Tag is inactive", content = @Content),
+        @ApiResponse(responseCode = "422", description = "Tag is inactive", content = @Content),
         @ApiResponse(responseCode = "404", description = "Tag not found", content = @Content),
         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
     })

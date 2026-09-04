@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.enums.MarketingChannel;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,7 +28,7 @@ public final class MarketingAddressNormalizer {
     public static @NonNull String normalize(@NonNull MarketingChannel channel, @NonNull String address) {
         String trimmed = address.trim();
         if (trimmed.isEmpty()) {
-            throw new IllegalArgumentException("address must not be blank");
+            throw new CrmValidationException("address must not be blank");
         }
         return channel == MarketingChannel.EMAIL ? trimmed.toLowerCase(Locale.ROOT) : normalizePhone(trimmed);
     }
@@ -57,7 +58,7 @@ public final class MarketingAddressNormalizer {
         boolean international = value.startsWith("+");
         String digits = value.replaceAll("\\D", "");
         if (digits.isEmpty()) {
-            throw new IllegalArgumentException("phone address must contain digits");
+            throw new CrmValidationException("phone address must contain digits");
         }
         return international ? "+" + digits : digits;
     }

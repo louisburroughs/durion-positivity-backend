@@ -9,6 +9,7 @@ import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
@@ -145,10 +146,10 @@ class CrmExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("maps an invalid argument to 400 VALIDATION_ERROR")
-    void illegalArgument() {
+    @DisplayName("maps a module validation failure to 400 VALIDATION_ERROR")
+    void validation() {
         ResponseEntity<ApiError> result =
-                handler.handleIllegalArgument(new IllegalArgumentException("page must be >= 0"), request, response);
+                handler.handleValidation(new CrmValidationException("page must be >= 0"), request, response);
 
         assertEnvelope(result, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
         assertThat(result.getBody().message()).isEqualTo("page must be >= 0");
@@ -179,7 +180,7 @@ class CrmExceptionHandlerTest {
         when(request.getHeader(CORRELATION_HEADER)).thenReturn(null);
 
         ResponseEntity<ApiError> result =
-                handler.handleIllegalArgument(new IllegalArgumentException("bad"), request, response);
+                handler.handleValidation(new CrmValidationException("bad"), request, response);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(response).setHeader(org.mockito.ArgumentMatchers.eq(CORRELATION_HEADER), captor.capture());
@@ -193,7 +194,7 @@ class CrmExceptionHandlerTest {
         when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
 
         ResponseEntity<ApiError> result =
-                handler.handleIllegalArgument(new IllegalArgumentException("bad"), request, response);
+                handler.handleValidation(new CrmValidationException("bad"), request, response);
 
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().correlationId()).isNotBlank().isNotEqualTo("   ");

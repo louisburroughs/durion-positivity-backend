@@ -4,6 +4,7 @@ import com.positivity.customer.internal.dto.snapshot.CrmSnapshotDTO;
 import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ExtVehicle;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -208,6 +209,6 @@ public class CrmVehicleServiceImpl implements CrmVehicleService {
                 .orElseGet(() -> commercialPartyRepository
                         .findById(partyId)
                         .map(p -> (AbstractParty) p)
-                        .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + partyId)));
+                        .orElseThrow(() -> new CrmResourceNotFoundException("Customer", partyId)));
     }
 }
