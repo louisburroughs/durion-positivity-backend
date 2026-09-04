@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.controller;
 
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.service.ArtifactTokenService.InvalidTokenException;
 import com.positivity.invoice.internal.service.InvoiceArtifactService.ArtifactNotFoundException;
 import com.positivity.shared.error.ApiError;
@@ -44,8 +45,17 @@ public class InvoiceArtifactExceptionHandler {
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * #1694: was a blanket {@code IllegalArgumentException} handler — that type is also what
+     * Hibernate/JPA and {@code UUID.fromString} throw for reasons unrelated to a malformed
+     * artifactRefId, so it risked reporting a server-side defect as a client 400.
+     * {@link InvoiceRequestValidationException} is thrown only by {@code ArtifactRef.decode}'s
+     * own validation of the caller-supplied path segment; everything else now falls through to
+     * pos-web-common's platform-wide 500 fallback. Status/code unchanged (ADR-0017 §1: malformed
+     * request-shape maps to 400).
+     */
+    @ExceptionHandler(InvoiceRequestValidationException.class)
+    public ResponseEntity<ApiError> handleBadRequest(InvoiceRequestValidationException ex, HttpServletRequest request) {
         log.warn(
                 "Artifact request returned 400 for {} {}: {}",
                 request.getMethod(),

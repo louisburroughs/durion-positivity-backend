@@ -77,18 +77,15 @@ public class PaymentExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest request) {
-        String correlationId = correlationId(request);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
-                        "BAD_REQUEST",
-                        ex.getMessage(),
-                        HttpStatus.BAD_REQUEST.value(),
-                        Instant.now(clock).toString(),
-                        correlationId));
-    }
+    // #1694: the blanket `@ExceptionHandler(IllegalArgumentException.class)` (400 BAD_REQUEST)
+    // that lived here is deleted, not replaced. PaymentServiceImpl throws no
+    // IllegalArgumentException reachable from this controller — every genuine field-validation
+    // 400 documented on initiatePayment is already produced by bean validation on
+    // InitiatePaymentRequest (@NotNull/@Positive/@NotBlank), handled by pos-web-common's
+    // GlobalApiExceptionHandler before this advice ever runs. The blanket handler here existed
+    // only to catch whatever IllegalArgumentException a bug might throw (e.g. Hibernate/JPA) and
+    // mis-report it as a client 400; that now correctly falls through to the platform's
+    // correlated 500 fallback.
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleForbidden(AccessDeniedException ex, HttpServletRequest request) {

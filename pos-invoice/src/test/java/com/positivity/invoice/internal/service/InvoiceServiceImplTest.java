@@ -17,6 +17,7 @@ import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
@@ -272,7 +273,8 @@ class InvoiceServiceImplTest {
         InvoiceCreationRequest request =
                 InvoiceCreationRequest.builder().workorderId(null).build();
 
-        assertThatThrownBy(() -> invoiceService.createInvoice(request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> invoiceService.createInvoice(request))
+                .isInstanceOf(InvoiceRequestValidationException.class);
     }
 
     // ---- applyAdjustment ----
@@ -481,7 +483,7 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
 
         assertThatThrownBy(() -> invoiceService.applyAdjustment(invoiceId, request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvoiceRequestValidationException.class);
     }
 
     @Test

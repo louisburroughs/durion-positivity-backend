@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.UUID;
@@ -30,23 +31,23 @@ public record ArtifactRef(@NonNull Type type, @NonNull UUID id) {
         try {
             raw = new String(Base64.getUrlDecoder().decode(artifactRefId), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Malformed artifactRefId", ex);
+            throw new InvoiceRequestValidationException("Malformed artifactRefId", ex);
         }
         int sep = raw.indexOf(':');
         if (sep <= 0) {
-            throw new IllegalArgumentException("Malformed artifactRefId");
+            throw new InvoiceRequestValidationException("Malformed artifactRefId");
         }
         Type type;
         try {
             type = Type.valueOf(raw.substring(0, sep));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown artifact type in artifactRefId", ex);
+            throw new InvoiceRequestValidationException("Unknown artifact type in artifactRefId", ex);
         }
         UUID id;
         try {
             id = UUID.fromString(raw.substring(sep + 1));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Malformed artifact id in artifactRefId", ex);
+            throw new InvoiceRequestValidationException("Malformed artifact id in artifactRefId", ex);
         }
         return new ArtifactRef(type, id);
     }

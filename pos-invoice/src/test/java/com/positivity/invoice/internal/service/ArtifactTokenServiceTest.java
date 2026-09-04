@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.service.ArtifactTokenService.InvalidTokenException;
 import java.time.Clock;
 import java.time.Duration;
@@ -104,8 +105,9 @@ class ArtifactTokenServiceTest {
 
     @Test
     void artifactRef_decode_rejectsGarbage() {
-        assertThatThrownBy(() -> ArtifactRef.decode("!!!not-base64!!!")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ArtifactRef.decode("!!!not-base64!!!"))
+                .isInstanceOf(InvoiceRequestValidationException.class);
         assertThatThrownBy(() -> ArtifactRef.decode(Duration.ZERO.toString()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvoiceRequestValidationException.class);
     }
 }

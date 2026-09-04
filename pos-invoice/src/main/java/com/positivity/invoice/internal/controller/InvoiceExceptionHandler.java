@@ -1,13 +1,16 @@
 package com.positivity.invoice.internal.controller;
 
+import com.positivity.invoice.internal.exception.ExcessiveAdjustmentException;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
+import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -65,30 +68,88 @@ public class InvoiceExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * #1694: was a blanket {@code IllegalArgumentException} handler (400 VALIDATION_ERROR),
+     * with a special case that attached a {@code managerApprovalCode} field error whenever the
+     * message mentioned "approval code" — that blanket also caught whatever
+     * {@code IllegalArgumentException} Hibernate/JPA or {@code UUID.fromString} might throw and
+     * reported it as a client 400. The approval-code cases now have their own domain-policy
+     * types (422; see {@link #handleManagerApprovalRequired} and {@link
+     * #handleInvalidManagerApproval}), so the field-error special-casing no longer applies to
+     * anything and is dropped; this handler now only maps this module's own request-shape
+     * validation type. Status/code unchanged for the remaining (genuine) 400 cases.
+     */
+    @ExceptionHandler(InvoiceRequestValidationException.class)
+    public ResponseEntity<ApiError> handleValidation(InvoiceRequestValidationException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
-        String msg = ex.getMessage() != null ? ex.getMessage() : "";
-        List<ApiError.FieldError> fieldErrors = msg.toLowerCase().contains("approval code")
-                ? List.of(new ApiError.FieldError("managerApprovalCode", msg))
-                : null;
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(
-                        fieldErrors != null
-                                ? ApiError.withFieldErrors(
-                                        "VALIDATION_ERROR",
-                                        msg,
-                                        HttpStatus.BAD_REQUEST.value(),
-                                        Instant.now(clock).toString(),
-                                        correlationId,
-                                        fieldErrors)
-                                : ApiError.of(
-                                        "VALIDATION_ERROR",
-                                        msg,
-                                        HttpStatus.BAD_REQUEST.value(),
-                                        Instant.now(clock).toString(),
-                                        correlationId));
+                .body(ApiError.of(
+                        "VALIDATION_ERROR",
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * (b) ADR-0017 §2: the finalize/revert request is shape-valid, but the manager-approval
+     * permission matrix requires an elevation token that was not supplied. #1694: previously
+     * folded into the blanket 400 handler above (with a fieldErrors hint) — moved to 422 since
+     * this is a domain-policy condition on the caller's role and the invoice amount, not a
+     * malformed request. New code, documented in docs/ERROR_ENVELOPE.md.
+     */
+    @ExceptionHandler(ManagerApprovalRequiredException.class)
+    public ResponseEntity<ApiError> handleManagerApprovalRequired(
+            ManagerApprovalRequiredException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "MANAGER_APPROVAL_REQUIRED",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * (b) ADR-0017 §2: a supplied manager-approval elevation token does not verify (wrong scope,
+     * tampered, or expired) — mirrors {@link #handleManagerApprovalRequired}. #1694: previously
+     * folded into the blanket 400 handler above; moved to 422 for the same reason. New code,
+     * documented in docs/ERROR_ENVELOPE.md.
+     */
+    @ExceptionHandler(InvalidManagerApprovalException.class)
+    public ResponseEntity<ApiError> handleInvalidManagerApproval(
+            InvalidManagerApprovalException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "MANAGER_APPROVAL_INVALID",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * (b) ADR-0017 §2: the adjustment itself is shape-valid, but combined with the invoice's
+     * existing state it would drive the total negative — a documented domain-policy violation,
+     * not a malformed request. New code, documented in docs/ERROR_ENVELOPE.md.
+     */
+    @ExceptionHandler(ExcessiveAdjustmentException.class)
+    public ResponseEntity<ApiError> handleExcessiveAdjustment(
+            ExcessiveAdjustmentException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "EXCESSIVE_ADJUSTMENT",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
     }
 
     private static String correlationId(HttpServletRequest request) {

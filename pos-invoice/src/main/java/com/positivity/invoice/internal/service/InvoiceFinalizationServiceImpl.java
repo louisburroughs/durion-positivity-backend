@@ -11,7 +11,9 @@ import com.positivity.invoice.internal.dto.InvoiceItemResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
@@ -251,7 +253,10 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     @Transactional
     public InvoiceDetailsResponse revert(
             @NonNull UUID invoiceId, @NonNull String managerApprovalCode, @NonNull String reason) {
-        // M6: Approval code must be supplied
+        // M6: Approval code must be supplied.
+        // #1694 (d): defensive invariant — RevertRequest.managerApprovalCode carries @NotBlank,
+        // so a blank code is already rejected by bean validation (400) before this method runs;
+        // left as a bare IllegalArgumentException for any future direct caller.
         if (managerApprovalCode.isBlank()) {
             throw new IllegalArgumentException("Manager approval code is required to revert a finalized invoice");
         }
@@ -287,10 +292,12 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         // used, capture the approving manager's person id for audit (non-repudiation).
         UUID revertApprover = null;
         if (!callerCanOverride()) {
+            // (b) ADR-0017 §2: a supplied token that fails verification is a domain-policy
+            // rejection, not a malformed request (#1694).
             revertApprover = elevationTokenService
                     .verify(managerApprovalCode, invoiceId)
-                    .orElseThrow(() ->
-                            new IllegalArgumentException("Invalid or expired manager approval code for this invoice"));
+                    .orElseThrow(() -> new InvalidManagerApprovalException(
+                            "Invalid or expired manager approval code for this invoice"));
         }
 
         // Transition back to DRAFT
@@ -392,16 +399,19 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             return;
         }
 
-        // Above the cap, a verified manager-approval elevation token is mandatory.
+        // Above the cap, a verified manager-approval elevation token is mandatory. (b) ADR-0017
+        // §2: FinalizationRequest.managerApprovalCode is optional at the DTO level — it becomes
+        // required only by this amount-conditioned domain policy, not by request shape (#1694).
         String approvalCode = request.getManagerApprovalCode();
         if (approvalCode == null || approvalCode.isBlank()) {
-            throw new IllegalArgumentException("Manager approval code required: cannot finalize invoices exceeding $"
-                    + SERVICE_ADVISOR_LIMIT + " without a manager approval code");
+            throw new ManagerApprovalRequiredException(
+                    "Manager approval code required: cannot finalize invoices exceeding $" + SERVICE_ADVISOR_LIMIT
+                            + " without a manager approval code");
         }
         UUID approvingManager = elevationTokenService
                 .verify(approvalCode, invoiceId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Invalid or expired manager approval code for this invoice"));
+                .orElseThrow(() -> new InvalidManagerApprovalException(
+                        "Invalid or expired manager approval code for this invoice"));
 
         // M4 + ADR-0018: Audit the manager approval override. The approving manager's
         // person id is recorded UNMASKED — it is the non-repudiation value the audit

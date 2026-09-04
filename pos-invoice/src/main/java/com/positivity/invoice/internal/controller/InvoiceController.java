@@ -13,9 +13,11 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceResponse;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -220,10 +222,15 @@ public class InvoiceController {
                     Emits an INVOICE_ADJUSTMENT_APPLY event, replaces the persisted per-line tax breakdown, and \
                     publishes an invoice-updated notification.
                     Returns 200 with the recalculated invoice, 404 when the invoice does not exist, 409 when the \
-                    invoice has left DRAFT, and 400 when the type, amount, reason, or authorizedBy is missing or the \
-                    amount is not positive.
+                    invoice has left DRAFT, 400 when the amount is not positive (type, reason and authorizedBy are \
+                    enforced by request validation), and 422 when the adjustment would drive the invoice total \
+                    negative (a credit memo is required instead).
                     """)
     @ApiResponse(responseCode = "200", description = "Adjustment applied")
+    @ApiResponse(
+            responseCode = "422",
+            description = "The adjustment would drive the invoice total negative",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:manage"})
@@ -264,10 +271,14 @@ public class InvoiceController {
                     posting; the tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for \
                     the re-commit job, and is skipped entirely when nothing is taxable.
                     Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the \
-                    invoice is not DRAFT or tax has not been calculated, and 400 when a required managerApprovalCode \
+                    invoice is not DRAFT or tax has not been calculated, and 422 when a required managerApprovalCode \
                     is missing, invalid, or expired.
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice finalized")
+    @ApiResponse(
+            responseCode = "422",
+            description = "A required managerApprovalCode is missing, invalid, or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:finalize"})
@@ -309,10 +320,14 @@ public class InvoiceController {
                     Emits an INVOICE_DRAFT_REVERT event, publishes an invoice-updated notification, and issues a tax \
                     void toward pos-tax for the reverted document.
                     Returns 200 with the DRAFT invoice, 404 when the invoice does not exist, 409 when it is POSTED, \
-                    not FINALIZED, or the 24-hour window has expired, and 400 when the approval code is blank, \
-                    invalid, or expired.
+                    not FINALIZED, or the 24-hour window has expired, and 422 when the approval code is invalid or \
+                    expired (a blank approval code is rejected as a 400 request-shape error before this check).
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice reverted to DRAFT")
+    @ApiResponse(
+            responseCode = "422",
+            description = "The approval code is invalid or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:finalize"})

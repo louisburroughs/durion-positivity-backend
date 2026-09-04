@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InvoicingLagReport;
 import com.positivity.invoice.internal.dto.RevenueByCustomerReport;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.InvoiceAnalyticsService;
 import com.positivity.shared.error.ApiError;
@@ -109,7 +110,7 @@ public class InvoiceAnalyticsController {
         // FinancialReportingController in pos-accounting, the structural template for this
         // controller), and a caller of the service interface directly still gets the guard.
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvoiceRequestValidationException("End date cannot be before start date");
         }
         return invoiceAnalyticsService.revenueByCustomer(startDate, endDate, clampLimit(limit));
     }
@@ -167,7 +168,7 @@ public class InvoiceAnalyticsController {
                     @NonNull
                     LocalDate endDate) {
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvoiceRequestValidationException("End date cannot be before start date");
         }
         return invoiceAnalyticsService.invoicingLag(startDate, endDate);
     }
@@ -183,7 +184,7 @@ public class InvoiceAnalyticsController {
             return DEFAULT_LIMIT;
         }
         if (requested < 1) {
-            throw new IllegalArgumentException("limit must be at least 1");
+            throw new InvoiceRequestValidationException("limit must be at least 1");
         }
         return Math.min(requested, MAX_LIMIT);
     }

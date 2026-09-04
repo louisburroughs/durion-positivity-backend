@@ -4,12 +4,16 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.CreateDepositRequest;
 import com.positivity.invoice.internal.dto.DepositCreditResponse;
 import com.positivity.invoice.internal.enums.DepositSourceType;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.DepositCreditService;
 import com.positivity.invoice.internal.service.model.CreateDepositCommand;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -60,10 +64,15 @@ public class DepositCreditController {
                     sourceId (UUID) and amount (positive); partyId is optional and currencyCode defaults to USD.
                     Emits an INVOICE_DEPOSIT_CREATE event; no invoice records are touched until settlement applies \
                     the credit.
-                    Returns 201 with the credit (existing or new), and 422 when the amount is not positive or the \
-                    sourceType is not a known value.
+                    Returns 201 with the credit (existing or new), and 400 when amount is missing or not positive, \
+                    or sourceType is not a known value.
                     """,
             tags = {"Deposit Credits"})
+    @ApiResponse(responseCode = "201", description = "Deposit credit registered (existing or new)")
+    @ApiResponse(
+            responseCode = "400",
+            description = "amount missing/non-positive, or sourceType is not a known value",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping
     @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_DEPOSIT_CREATE", apiVersion = "1")
@@ -131,15 +140,20 @@ public class DepositCreditController {
                     Required inputs: sourceType query parameter (ESTIMATE, WORKORDER or ORDER, case-insensitive) and \
                     sourceId (UUID) query parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 422 when sourceType is not one of the known values.
+                    Returns 400 when sourceType is not one of the known values.
                     """,
             tags = {"Deposit Credits"})
+    @ApiResponse(responseCode = "200", description = "Deposit credits for the source returned")
+    @ApiResponse(
+            responseCode = "400",
+            description = "sourceType is not a known value",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping
     @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<List<DepositCreditResponse>> listBySource(
             @RequestParam String sourceType, @RequestParam UUID sourceId) {
-        DepositSourceType type = DepositSourceType.valueOf(sourceType.trim().toUpperCase(Locale.ROOT));
+        DepositSourceType type = parseSourceType(sourceType);
         return ResponseEntity.ok(depositCreditService.listBySource(type, sourceId).stream()
                 .map(DepositCreditResponse::from)
                 .toList());
@@ -170,5 +184,20 @@ public class DepositCreditController {
             @PathVariable UUID depositCreditId, @RequestParam(name = "reason", required = false) String reason) {
         depositCreditService.refundDeposit(depositCreditId, reason == null ? "source cancelled" : reason);
         return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
+    }
+
+    /**
+     * #1694: {@code DepositSourceType.valueOf} throws a bare {@code IllegalArgumentException}
+     * for an unrecognized literal, which is exactly the shape Hibernate/JPA and {@code
+     * UUID.fromString} also throw for unrelated server-side reasons — wrapped here into the
+     * module's own request-validation type so {@link DepositCreditExceptionHandler} maps only
+     * genuine client errors, never a masked server defect.
+     */
+    private static DepositSourceType parseSourceType(String raw) {
+        try {
+            return DepositSourceType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new InvoiceRequestValidationException("Unknown deposit source type: " + raw, ex);
+        }
     }
 }

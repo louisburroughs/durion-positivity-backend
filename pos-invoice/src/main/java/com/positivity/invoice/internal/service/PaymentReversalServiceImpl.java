@@ -296,6 +296,10 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @Nullable String notes,
             @Nullable String externalReference) {
         requireAuthority(ISSUE_MANUAL_REFUND);
+        // #1694 (d): defensive invariant, not reachable via HTTP — StandaloneRefundController's
+        // PartyStandaloneRefundRequest.partyId already carries @NotBlank, so a blank value is
+        // rejected by bean validation (400) before this method ever runs. Left as a bare
+        // IllegalArgumentException, not retyped, for any future direct caller of this interface.
         if (partyId.isBlank()) {
             throw new IllegalArgumentException("partyId must not be blank");
         }

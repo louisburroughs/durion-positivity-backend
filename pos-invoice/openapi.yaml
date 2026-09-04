@@ -382,7 +382,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 422 when sourceType is not one of the known values.
+        Returns 400 when sourceType is not one of the known values.
 
         '
       operationId: listDepositCreditsBySource
@@ -406,7 +406,13 @@ paths:
                 items:
                   $ref: '#/components/schemas/DepositCreditResponse'
                 type: array
-          description: OK
+          description: Deposit credits for the source returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: sourceType is not a known value
       security:
       - bearerAuth: []
       summary: List Deposit Credits by Source
@@ -425,7 +431,7 @@ paths:
 
         Emits an INVOICE_DEPOSIT_CREATE event; no invoice records are touched until settlement applies the credit.
 
-        Returns 201 with the credit (existing or new), and 422 when the amount is not positive or the sourceType is not a known value.
+        Returns 201 with the credit (existing or new), and 400 when amount is missing or not positive, or sourceType is not a known value.
 
         '
       operationId: createDepositCredit
@@ -447,12 +453,18 @@ paths:
         description: Deposit taken at checkout to register as a credit against its source document.
         required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DepositCreditResponse'
-          description: OK
+          description: Deposit credit registered (existing or new)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: amount missing/non-positive, or sourceType is not a known value
       security:
       - bearerAuth: []
       summary: Register a Deposit Credit
@@ -821,7 +833,7 @@ paths:
 
         Emits an INVOICE_ADJUSTMENT_APPLY event, replaces the persisted per-line tax breakdown, and publishes an invoice-updated notification.
 
-        Returns 200 with the recalculated invoice, 404 when the invoice does not exist, 409 when the invoice has left DRAFT, and 400 when the type, amount, reason, or authorizedBy is missing or the amount is not positive.
+        Returns 200 with the recalculated invoice, 404 when the invoice does not exist, 409 when the invoice has left DRAFT, 400 when the amount is not positive (type, reason and authorizedBy are enforced by request validation), and 422 when the adjustment would drive the invoice total negative (a credit memo is required instead).
 
         '
       operationId: applyInvoiceAdjustment
@@ -855,6 +867,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDetailsResponse'
           description: Adjustment applied
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The adjustment would drive the invoice total negative
       security:
       - bearerAuth:
         - invoice:manage
@@ -1072,7 +1090,7 @@ paths:
 
         Emits an INVOICE_FINALIZED event and publishes the async accounting event that drives GL posting; the tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit job, and is skipped entirely when nothing is taxable.
 
-        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, and 400 when a required managerApprovalCode is missing, invalid, or expired.
+        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, and 422 when a required managerApprovalCode is missing, invalid, or expired.
 
         '
       operationId: finalizeInvoice
@@ -1103,6 +1121,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDetailsResponse'
           description: Invoice finalized
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A required managerApprovalCode is missing, invalid, or expired
       security:
       - bearerAuth:
         - invoice:finalize
@@ -1743,7 +1767,7 @@ paths:
 
         Emits an INVOICE_DRAFT_REVERT event, publishes an invoice-updated notification, and issues a tax void toward pos-tax for the reverted document.
 
-        Returns 200 with the DRAFT invoice, 404 when the invoice does not exist, 409 when it is POSTED, not FINALIZED, or the 24-hour window has expired, and 400 when the approval code is blank, invalid, or expired.
+        Returns 200 with the DRAFT invoice, 404 when the invoice does not exist, 409 when it is POSTED, not FINALIZED, or the 24-hour window has expired, and 422 when the approval code is invalid or expired (a blank approval code is rejected as a 400 request-shape error before this check).
 
         '
       operationId: revertInvoice
@@ -1774,6 +1798,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDetailsResponse'
           description: Invoice reverted to DRAFT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The approval code is invalid or expired
       security:
       - bearerAuth:
         - invoice:finalize
