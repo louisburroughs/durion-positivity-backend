@@ -248,6 +248,48 @@ def observed_shapes(answer):
     return seen
 
 
+
+# Phrases that mark a reply as a clarifying question or a refusal. Deliberately conservative: a
+# false "declined" would score a real answer as a correct refusal, which is the one mistake that
+# makes the impossible band worthless.
+_ASK_MARKERS = (
+    "which metric", "which measure", "please tell me which", "could you clarify",
+    "isn't defined in the business glossary", "is not defined in the business glossary",
+    "i need the exact", "please confirm", "do you mean",
+)
+_DECLINE_MARKERS = (
+    "i'm unable", "i am unable", "unable to", "cannot answer", "can't answer",
+    "couldn't find a way", "could not find a way", "does not expose", "doesn't expose",
+    "no tool", "not supported",
+)
+
+
+def classify_outcome(answer):
+    """Classifies a reply as `asked`, `declined` or `answered` (#1689).
+
+    Order matters: a refusal often ends by offering alternatives phrased as a question, so the ask
+    markers are checked first only where they are unambiguous. Anything not clearly one of the two
+    is `answered`, because scoring a genuine answer as a refusal would quietly turn the impossible
+    band into a band that passes on failure.
+    """
+    if not answer or not answer.strip():
+        return "empty"
+    # Smart quotes and dashes are folded locally: assistant output is typographically formatted, so
+    # "isn\u2019t defined" would otherwise miss its marker. #1709 adds a shared normaliser for the
+    # window grader; when both have landed these should be unified rather than kept in parallel.
+    text = answer
+    for fancy, plain in (("\u2018", "'"), ("\u2019", "'"), ("\u201c", '"'), ("\u201d", '"'),
+                         ("\u2013", "-"), ("\u2014", "-"), ("\u2011", "-"), ("\u202f", " "),
+                         ("\u00a0", " ")):
+        text = text.replace(fancy, plain)
+    text = text.lower()
+    if any(marker in text for marker in _ASK_MARKERS):
+        return "asked"
+    if any(marker in text for marker in _DECLINE_MARKERS):
+        return "declined"
+    return "answered"
+
+
 def grade_window(question, answer, as_of):
     """Grades the window a question was answered on.
 
