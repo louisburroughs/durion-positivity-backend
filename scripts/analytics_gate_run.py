@@ -31,6 +31,11 @@ Usage:
 Config (env, or a --env-file in KEY=VALUE form — the itest credentials file is the usual source):
     MCP_CHAT_URL        default http://localhost:18086/mcp-server/v1/mcp/chat
     MCP_BEARER_TOKEN    bearer token for the calling actor (required unless --token is given)
+                        Mint it for admin.alpha — the ITEST_USERNAME/ITEST_PASSWORD pair in the
+                        itest credentials file. The corpus spans workorder, invoice and A/P
+                        questions and no role-scoped actor holds codes across all three; the run
+                        aborts if the token's role is not --expect-role (default ROLE_ADMIN).
+    MCP_EXPECTED_ROLE   override the expected role; empty string disables the check
     MCP_API_VERSION     default 1, sent as X-API-Version when going through the gateway
 
 Credentials are read from the environment or the env file and are never printed or written into the
@@ -38,6 +43,7 @@ run record. Stdlib only.
 """
 
 import argparse
+import base64
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 import json
@@ -95,6 +101,64 @@ def git(*args):
     except (OSError, subprocess.CalledProcessError):
         return None
     return out.stdout.strip()
+
+
+
+# The corpus spans workorder labor, invoice revenue and A/P vendor spend, so the caller needs
+# permission codes across all three domains. No single role-scoped seeded actor holds that set:
+# ROLE_CONTROLLER and ROLE_ACCOUNT_MANAGER answer workorder and A/R questions but deflect on A/P
+# vendor spend, and ROLE_LOCATION_MANAGER is offered location tools and deflects on everything the
+# corpus asks. `admin.alpha` (ROLE_ADMIN) is the actor the gate is written for — and it is the
+# ITEST_USERNAME/ITEST_PASSWORD pair in the itest credentials file, so the default env-file
+# credentials were always correct; the 2026-09-04 void runs came from reaching past them for a
+# role-specific actor (#1706).
+EXPECTED_ROLE_DEFAULT = "ROLE_ADMIN"
+
+
+def actor_provenance(token):
+    """The calling actor's identity, read from the bearer token's own claims.
+
+    A gate score is meaningless without this. Two runs minutes apart on 2026-09-04, same
+    questions blob and same endpoint, scored 0/12 and 2/12 purely because the first used a
+    location manager and the second a controller — and neither run record said so, so the first
+    looked like twelve model failures rather than a void run (#1706).
+
+    Only non-secret claims are read: the subject, the roles, and the LENGTH of the permission
+    bitset. The token itself is never returned, logged or written to the record, which keeps the
+    existing "credentials are never printed or written into the run record" guarantee intact — a
+    role name is not a credential.
+
+    Returns a dict with `error` set rather than raising, so the caller decides what an
+    unreadable token means. `main` treats it as a failed preflight and refuses to start: the
+    point of recording the actor is to know who asked, and "could not tell" is not an answer
+    that makes a score comparable. The error is still recorded rather than only printed, so a
+    run aborted this way says why in the same place a completed run says who.
+    """
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except Exception as exc:  # noqa: BLE001 - any malformed token lands here, all handled alike
+        return {"error": f"could not decode the bearer token's claims: {type(exc).__name__}"}
+
+    roles = claims.get("role") or claims.get("roles") or []
+    if isinstance(roles, str):
+        roles = [roles]
+    # ROLE_FACTOR_PASSWORD is an authentication-factor marker every seeded actor carries; it says
+    # nothing about what the caller may reach, so it is recorded but never treated as the role.
+    effective = [r for r in roles if r != "ROLE_FACTOR_PASSWORD"]
+    # Deliberately NOT the encoded bitset's length: pos-security-service issues `perm_bits` as a
+    # Base64URL BitSet, and BitSet.toByteArray drops trailing zero bytes, so the length tracks the
+    # highest set bit index rather than how many codes were granted. One high-index permission
+    # encodes longer than fifty low-index ones, which makes it useless as coverage provenance.
+    # `perm_ver` is recorded instead: without the catalog version a role name cannot be
+    # interpreted across catalog changes.
+    return {
+        "subject": claims.get("sub") or claims.get("username"),
+        "roles": roles,
+        "effective_roles": effective,
+        "permission_catalog_version": claims.get("perm_ver"),
+    }
 
 
 def questions_provenance(path):
@@ -628,25 +692,56 @@ def format_tool_calls(tool_calls):
     return ", ".join(f"{tool}×{count}" for tool, count in sorted(tool_calls.items()))
 
 
+
+def _actor_line(actor):
+    """One line naming who asked. A score is not comparable without it (#1706)."""
+    if actor.get("not_applicable"):
+        return f"Actor: n/a — {actor['not_applicable']}"
+    if actor.get("error"):
+        return f"Actor: **unknown** — {actor['error']}"
+    roles = ", ".join(actor.get("effective_roles") or []) or "none"
+    version = actor.get("permission_catalog_version")
+    suffix = f", permission catalog v{version}" if version is not None else ""
+    return f"Actor: `{actor.get('subject')}` (roles: {roles}{suffix})"
+
+
 def write_markdown(out_dir, record):
     """Emit either the live grading skeleton or a deterministic replay report."""
     provenance = record["questions_file"]
     lines = [
         f"# Analytics gate chat-path run — {record['started_at'][:10]}",
         "",
+    ]
+    if record.get("void"):
+        # Above everything, including the verdict. --allow-role-mismatch otherwise produces a
+        # report indistinguishable from a valid one — which is the exact defect #1706 is about,
+        # re-created inside the escape hatch added to fix it.
+        lines += [
+            "> [!CAUTION]",
+            f"> **THIS RUN IS VOID — do not quote its score.** {record['void_reason']}.",
+            "> It was produced with `--allow-role-mismatch`. A caller without the corpus's"
+            " permission codes is offered a different tool set and answers honestly that the"
+            " platform cannot do what was asked, so its failures are not model failures (#1706).",
+            "",
+        ]
+    lines += [
         f"Questions: `{provenance['path']}` blob `{provenance['blob_sha']}`"
         f" (repo commit `{provenance['commit']}`"
         + (", **uncommitted edits present**" if provenance["uncommitted"] else "")
         + ")",
         "Ground truth: `pos-mcp-server/src/test/resources/eval/analytics-gate/"
         "ground-truth/EXPECTED.md`",
+        _actor_line(record.get("actor") or {}),
     ]
     replay = record.get("mode") == "replay"
     if replay:
         lines.extend([
             f"Replay report: `{record['replay_report']}` - questions graded:"
             f" {len(record['results'])}",
-            f"Overall verdict: **{record['summary']['verdict']}**",
+            (
+                f"Overall verdict: **{record['summary']['verdict']}**"
+                + (" — but see the VOID banner above; this verdict is not usable" if record.get("void") else "")
+            ),
             "",
             "| Q | Outcome | Verdict | Failed axes | Elapsed | Tool calls |",
             "|---|---|---|---|---|---|",
@@ -724,6 +819,17 @@ def main(argv=None):
     parser.add_argument("--token", default=None, help="bearer token; prefer MCP_BEARER_TOKEN")
     parser.add_argument("--env-file", default=None, help="KEY=VALUE file to read config from")
     parser.add_argument(
+        "--expect-role",
+        default=None,
+        help=f"abort unless the token carries this role (default {EXPECTED_ROLE_DEFAULT}); "
+        "pass an empty string to skip the check",
+    )
+    parser.add_argument(
+        "--allow-role-mismatch",
+        action="store_true",
+        help="run anyway when the actor's role is not --expect-role, and mark the record void",
+    )
+    parser.add_argument(
         "--replay-report",
         default=None,
         help="machine-readable JSON report; disables authentication and HTTP calls",
@@ -735,9 +841,52 @@ def main(argv=None):
 
     if args.env_file:
         load_env_file(args.env_file)
+    # Resolved after load_env_file, not as an argparse default: a default is evaluated at
+    # add_argument time, so MCP_EXPECTED_ROLE set in an --env-file was silently ignored while
+    # MCP_BEARER_TOKEN from the same file worked.
+    if args.expect_role is None:
+        args.expect_role = os.environ.get("MCP_EXPECTED_ROLE", EXPECTED_ROLE_DEFAULT)
     token = args.token or os.environ.get("MCP_BEARER_TOKEN")
     if not args.replay_report and not token:
         sys.exit("no bearer token: pass --token or set MCP_BEARER_TOKEN (or --env-file)")
+
+    # Replay grades a recorded trace and issues no request, so the local token says nothing about
+    # who produced it. Recording this run's actor there would be a FALSE provenance claim — worse
+    # than the missing one #1706 is about — and refusing the run over a role it never uses would
+    # block a check that needs no credentials at all.
+    replaying = bool(args.replay_report)
+    actor = (
+        {"not_applicable": "replay mode grades a recorded trace; this run issued no request"}
+        if replaying
+        else actor_provenance(token) if token else {"error": "no token"}
+    )
+    role_mismatch = None
+    if not replaying and token and args.expect_role:
+        effective = actor.get("effective_roles") or []
+        if actor.get("error"):
+            # Distinct from a role mismatch: the roles list is empty because nothing could be
+            # read, not because the actor holds none. Saying "carries roles []" here would send
+            # the reader to check permissions on an actor whose token never parsed.
+            role_mismatch = f"could not establish the actor: {actor['error']}"
+        elif args.expect_role not in effective:
+            role_mismatch = (
+                f"actor {actor.get('subject')!r} carries roles {effective} "
+                f"but this gate expects {args.expect_role!r}"
+            )
+        if role_mismatch and not args.allow_role_mismatch:
+            why = (
+                "The token's claims could not be read, so there is no way to tell whether this "
+                "actor can reach the tools the corpus needs."
+                if actor.get("error")
+                else "A caller without the corpus's permission codes is offered a different tool set "
+                "and answers honestly that the platform cannot do what was asked — twelve "
+                "well-formed deflections that look like model failures and are not."
+            )
+            sys.exit(
+                f"refusing to run: {role_mismatch}.\n{why} (#1706)\n"
+                "Use the ITEST_USERNAME/ITEST_PASSWORD pair from the itest credentials file, or pass "
+                "--expect-role '' to skip this check, or --allow-role-mismatch to run anyway."
+            )
 
     questions_path = Path(args.questions).resolve()
     document = json.loads(questions_path.read_text(encoding="utf-8"))
@@ -772,8 +921,14 @@ def main(argv=None):
         "endpoint": args.url,
         "eval_as_of": document.get("eval_as_of"),
         "questions_file": provenance,
+        "actor": actor,
+        "void": bool(role_mismatch),
         "results": [],
     }
+    if role_mismatch:
+        # Recorded, not just warned: a score produced by the wrong actor must be self-evidently
+        # void when someone reads the file later, not only in the terminal of whoever ran it.
+        record["void_reason"] = role_mismatch
     if replay_by_fixture is not None:
         record["mode"] = "replay"
         record["replay_report"] = str(Path(args.replay_report).resolve())

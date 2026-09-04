@@ -225,3 +225,58 @@ an empty A/R aging report and a silently wrong Q13.
    `invoice_created_at` (null `due_date`s, or due dates chosen to be ignored) will produce
    different buckets under the corrected rule and must be revisited before it is used as ground
    truth. See `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
+
+## Which actor to run as
+
+**`admin.alpha`** — the `ITEST_USERNAME` / `ITEST_PASSWORD` pair in the itest credentials file.
+Its token carries `ROLE_ADMIN`, `ROLE_SYSTEM_ADMINISTRATOR` and `ROLE_FACTOR_PASSWORD` (the last is
+an authentication-factor marker every seeded actor holds; it says nothing about reach, and the
+runner excludes it when checking the role, so `run.json` lists all three while the check matches
+`ROLE_ADMIN`).
+
+This is not a convenience. The corpus spans three permission domains — workorder labor (q01, q03,
+q04), invoice revenue and A/R (q05, q07, q08, q09, q12, q13) and A/P vendor spend (q15, q16, q17) —
+and no role-scoped seeded actor was found to cover all three.
+
+**Evidence, and its limits.** The table below is a **three-question probe** run on alpha
+`sha-3dd57ac` on 2026-09-04, asking exactly one question per domain — q01 (workorder labor), q13
+(A/R aging), q15 (A/P vendor spend). It is not a full-corpus measurement and must not be read as
+one:
+
+| Actor | Role | q01 | q13 | q15 |
+|---|---|---|---|---|
+| `ITEST_CONTROLLER` | `ROLE_CONTROLLER` | answered | answered | deflected |
+| `ITEST_ACCT` | `ROLE_ACCOUNT_MANAGER` | answered | answered | deflected |
+| `ITEST_MANAGER` | `ROLE_LOCATION_MANAGER` | deflected | deflected | deflected |
+
+A full-corpus run as `ITEST_CONTROLLER` on the same build scored **2 answered, 7 deflected, 3
+asked** — so "answered q01" does *not* generalise to "answers workorder questions"; that actor also
+deflected q03 and q04. The probe is enough to rule the role-scoped actors out, and not enough to
+characterise them. `admin.alpha` has not been probed per-domain because it is the actor the corpus
+is written for.
+
+A caller without a domain's codes is offered a different tool set and answers, correctly, that the
+platform exposes no such query. Those answers are well-formed, plausible, and **indistinguishable
+from model failures** in the run record — two runs on 2026-09-04 scored 0/12 and 2/12 for exactly
+this reason and neither record said so. That is why `analytics_gate_run.py` now decodes the token's
+role, records it under `actor`, and refuses to start unless it matches. See #1706.
+
+### When the check refuses
+
+- `--expect-role ROLE_X` / `MCP_EXPECTED_ROLE=ROLE_X` (readable from `--env-file`) — check a
+  different role, for a deliberate role-scoped probe like the one above.
+- `--expect-role ''` — skip the check entirely.
+- `--allow-role-mismatch` — run anyway. The record is stamped `void: true` with a `void_reason`,
+  and `run.md` opens with a VOID banner above everything else. Use it for probes, never for a
+  score you intend to quote.
+
+`run.json` always carries `void` (false on a normal run), so a record without the key predates this
+check rather than being a run that passed it.
+
+### The cost of running as an administrator
+
+The gate never exercises permission gating. Every question is asked by a caller that can reach
+everything, so a regression that wrongly *widens* a role's tool set would not show up here. If a
+future change gives a role-scoped actor full corpus coverage, prefer it. That is a corpus decision,
+not a runner one.
+

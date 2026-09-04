@@ -47,9 +47,11 @@ public class GlossaryFacadeTool {
                     + "technicians\"). Call this BEFORE answering any question whose metric is a business term "
                     + "rather than a plain field. Returns defined=true with metric and defaultWindow — apply "
                     + "them and answer, quoting the definition so the user can see which reading you used — or "
-                    + "defined=false, which means the metric genuinely has no agreed definition and you should "
-                    + "ask the user which measure they want instead of choosing one. A missing date range is "
-                    + "NOT a reason to ask: resolve that through resolveDateWindow. Only a missing METRIC is.")
+                    + "defined=false, meaning the glossary has no entry for the phrase. defined=false is NOT an "
+                    + "instruction to ask: if the question already names a measure (\"busiest locations by appointment "
+                    + "count\"), use that measure and answer. Ask only when the phrase is undefined AND the "
+                    + "question names no measure at all. A missing date range is never a reason to ask: resolve "
+                    + "that through resolveDateWindow.")
     public String lookupBusinessTerm(
             @ToolParam(
                             description = "The business phrase as the user wrote it, e.g. \"best customers\" or "
@@ -74,9 +76,12 @@ public class GlossaryFacadeTool {
             root.put("defined", false);
             root.put(
                     "guidance",
-                    "This metric has no agreed definition. Ask the user which measure they mean rather than "
-                            + "choosing one — a silently chosen metric produces an answer that looks confident "
-                            + "and cannot be checked. Do not ask about the date range; resolve that with "
+                    "The glossary has no entry for this phrase, which is not by itself a reason to ask. If the "
+                            + "question already names a measure — \"busiest locations by appointment count\", \"slowest "
+                            + "suppliers by lead time\" — use the measure the question named and answer, saying "
+                            + "which you used. Ask only when the question names no measure at all; then ask rather than "
+                            + "choosing one silently, because a metric picked without being asked for looks "
+                            + "confident and cannot be checked. Never ask about the date range; resolve that with "
                             + "resolveDateWindow.");
             return serialize(root);
         }

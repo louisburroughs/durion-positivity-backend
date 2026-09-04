@@ -275,12 +275,48 @@ class RolePromptResolverImplTest {
      * answer: choosing a metric silently, and asking about a range that already has a default. The
      * text has to name both sides, or it only closes one of them.
      */
+    /**
+     * #1705: q01 asked for "top technicians BY LABOR REVENUE" and the assistant replied that "top
+     * technicians" was not in the glossary and asked which measure to use — offering, as its first
+     * suggestion, the measure the question had already named. The layer had said `defined: false`
+     * means ASK, full stop, so the model never got as far as re-reading the question.
+     */
+    @Test
+    @DisplayName("GLOSSARY layer says an undefined phrase is not by itself a reason to ask")
+    void glossaryLayer_undefinedPhraseIsNotAReasonToAsk() {
+        assertThat(SystemPromptDefaults.GLOSSARY_LAYER_TEXT)
+                .contains("NOT by itself a reason to ask")
+                .contains("use the measure the question named")
+                .contains("Ask only when the phrase is undefined AND the question names no measure")
+                // The narrowing is only worth anything if no unqualified instruction survives
+                // beside it. #1702's override clause failed precisely because a competing
+                // unconditional sentence sat in the same layer, and this rule repeated that shape
+                // until review caught it.
+                .doesNotContain("Ask when the METRIC is undefined");
+    }
+
+    /**
+     * The layer's worked examples must not be drawn from the corpus it is scored on. Two of the
+     * originals were q01's and q15's utterances verbatim, which turns part of a gate score into
+     * the model recalling its own system prompt rather than generalising.
+     */
+    @Test
+    @DisplayName("GLOSSARY layer illustrations are not gate-corpus utterances")
+    void glossaryLayer_examplesAreNotDrawnFromTheCorpus() {
+        assertThat(SystemPromptDefaults.GLOSSARY_LAYER_TEXT)
+                .doesNotContain("top technicians")
+                .doesNotContain("largest vendors by spend");
+    }
+
     @Test
     @DisplayName("GLOSSARY layer separates an undefined metric from an unstated range")
     void glossaryLayer_separatesUndefinedMetricFromUnstatedRange() {
         assertThat(SystemPromptDefaults.GLOSSARY_LAYER_TEXT)
                 .contains("lookupBusinessTerm")
-                .contains("Ask when the METRIC is undefined")
+                // The metric side is now stated only in its narrowed form, asserted by
+                // glossaryLayer_undefinedPhraseIsNotAReasonToAsk; what this test pins is that the
+                // range side stayed absolute, since that half was never the defect.
+                .contains("Ask only when the phrase is undefined AND the question names no measure")
                 .contains("Never ask because a date range was left unstated");
     }
 
