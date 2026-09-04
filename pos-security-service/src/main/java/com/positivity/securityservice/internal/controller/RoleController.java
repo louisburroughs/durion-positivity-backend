@@ -11,6 +11,7 @@ import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
 import com.positivity.securityservice.internal.dto.RolePersonasResponse;
 import com.positivity.securityservice.internal.dto.RoleUpdateRequest;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleAuthorityService;
@@ -664,7 +665,7 @@ public class RoleController {
         return roleManagementService
                 .getRoleById(id)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new RoleNotFoundException("Role not found: " + id));
     }
 
     /**
