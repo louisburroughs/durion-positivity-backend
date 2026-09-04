@@ -8,12 +8,14 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.eval.AlphaEvalTurnTraceRecorder;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.Optional;
 import java.util.Set;
@@ -22,12 +24,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 /**
- * #1422: per-execution invocation logging must attribute a real {@code tool_id}, never fail the
+ * #1422: per-execution invocation logging must attribute a real
+ * {@code tool_id}, never fail the
  * wrapped tool call, and hit the repository once per distinct lookup name.
  */
 class ToolInvocationRecorderTest {
@@ -36,8 +40,10 @@ class ToolInvocationRecorderTest {
 
     private final ToolAuditService auditService = mock(ToolAuditService.class);
     private final ToolMetadataRepository repository = mock(ToolMetadataRepository.class);
+    private final AlphaEvalTurnTraceRecorder traceRecorder = mock(AlphaEvalTurnTraceRecorder.class);
     private final RequestScopedUserContext userContext = new RequestScopedUserContext();
-    private final ToolInvocationRecorder recorder = new ToolInvocationRecorder(auditService, repository, userContext);
+    private final ToolInvocationRecorder recorder =
+            new ToolInvocationRecorder(auditService, repository, userContext, traceRecorder);
 
     @BeforeEach
     void setUp() {
@@ -67,6 +73,25 @@ class ToolInvocationRecorderTest {
     }
 
     @Test
+    @DisplayName("successful callbacks append exact arguments and results to the active eval turn in call order")
+    void wrap_success_recordsFullTurnIoInOrder() {
+        when(repository.findToolIdByName("OrderFacadeTool")).thenReturn(Optional.of(TOOL_ID));
+        ToolCallback first = recorder.wrap(callback("first", input -> "first-result"), "OrderFacadeTool");
+        ToolCallback second = recorder.wrap(callback("second", input -> "second-result"), "OrderFacadeTool");
+
+        first.call("{\"startDate\":\"2026-08-01\"}");
+        second.call("{\"customerId\":\"TRACKB-C1\"}");
+
+        InOrder ordered = inOrder(traceRecorder);
+        ordered.verify(traceRecorder)
+                .recordToolCall(
+                        eq("first"), eq("{\"startDate\":\"2026-08-01\"}"), eq("first-result"), isNull(), anyInt());
+        ordered.verify(traceRecorder)
+                .recordToolCall(
+                        eq("second"), eq("{\"customerId\":\"TRACKB-C1\"}"), eq("second-result"), isNull(), anyInt());
+    }
+
+    @Test
     @DisplayName("failing call logs success=false with the failure description and rethrows")
     void wrap_failure_logsErrorTypeAndRethrows() {
         when(repository.findToolIdByName("OrderFacadeTool")).thenReturn(Optional.of(TOOL_ID));
@@ -82,14 +107,19 @@ class ToolInvocationRecorderTest {
                         eq(false),
                         anyInt(),
                         eq("IllegalStateException: boom"));
+        verify(traceRecorder)
+                .recordToolCall(eq("sample"), eq("{}"), isNull(), eq("IllegalStateException: boom"), anyInt());
     }
 
     // ─── describeFailure (#1660) ────────────────────────────────────────────
 
     /**
-     * The defect this closes. {@code ReflectiveToolCallback} wraps every tool failure in the same
-     * {@code IllegalStateException("Tool method failed: <name>")}, so recording the thrown type
-     * stored {@code IllegalStateException} for every failure alike and gate q04's could not be
+     * The defect this closes. {@code ReflectiveToolCallback} wraps every tool
+     * failure in the same
+     * {@code IllegalStateException("Tool method failed: <name>")}, so recording the
+     * thrown type
+     * stored {@code IllegalStateException} for every failure alike and gate q04's
+     * could not be
      * diagnosed from the table. The cause is the part that differs.
      */
     @Test
@@ -130,7 +160,8 @@ class ToolInvocationRecorderTest {
     }
 
     /**
-     * {@code error_type} is {@code VARCHAR(200)} (V6). An overflowing value would fail the audit
+     * {@code error_type} is {@code VARCHAR(200)} (V6). An overflowing value would
+     * fail the audit
      * insert, turning a diagnostic improvement into a new failure on the tool path.
      */
     @Test
@@ -214,18 +245,18 @@ class ToolInvocationRecorderTest {
     }
 
     private static ToolCallback fixedCallback(String result) {
-        return callback(input -> result);
+        return callback("sample", input -> result);
     }
 
     private static ToolCallback throwingCallback(RuntimeException exception) {
-        return callback(input -> {
+        return callback("sample", input -> {
             throw exception;
         });
     }
 
-    private static ToolCallback callback(java.util.function.Function<String, String> body) {
+    private static ToolCallback callback(String name, java.util.function.Function<String, String> body) {
         ToolDefinition definition = DefaultToolDefinition.builder()
-                .name("sample")
+                .name(name)
                 .description("sample")
                 .inputSchema("{\"type\":\"object\",\"properties\":{}}")
                 .build();

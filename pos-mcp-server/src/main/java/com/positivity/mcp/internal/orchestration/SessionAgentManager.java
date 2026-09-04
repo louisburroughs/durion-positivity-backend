@@ -209,7 +209,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         long startMs = System.currentTimeMillis();
         NltiRouter.RoutingDecision routingDecision = null;
         try {
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.beginTurn(currentUserContext, message);
+            }
             boolean simpleChat = simpleChatFastPath.isSimpleChat(message);
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.recordSimpleChat(simpleChat);
+            }
             if (LOGGER.isDebugEnabled()) {
                 String messagePreview = sharedOrchestrationSupport.preview(message);
                 int tokenCount = tokenCount(message);
@@ -226,7 +232,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 String messagePreview = sharedOrchestrationSupport.preview(message);
                 LOGGER.debug(
                         "MCP simple chat dispatch username={} role={} preview=\"{}\"", username, role, messagePreview);
-                return simpleChat(currentUserContext, message, startMs);
+                String response = simpleChat(currentUserContext, message, startMs);
+                if (toolInvocationRecorder != null) {
+                    toolInvocationRecorder.completeTurn(response);
+                }
+                return response;
             }
 
             // Gate 4 (#1192): classify the request with the T1 router (temperature 0) and select the
@@ -235,6 +245,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             // never affects tool or permission gating (Permission lock).
             routingDecision = routeTier(message);
             ModelTier tier = routingDecision == null ? null : routingDecision.tier();
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.recordRouting(
+                        routingDecision == null
+                                ? null
+                                : routingDecision.classification().intentType().name(),
+                        tier == null ? null : tier.name());
+            }
 
             // #778: gate tool selection by the subject's persisted session workflow state when they
             // have one; otherwise fall back to message-heuristic derivation (session-less callers).
@@ -246,6 +263,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                             toolSelectionEngine.selectRoleTools(role, currentUserContext.permissionCodes(), message));
             List<Object> selectedTools =
                     sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
+            List<String> selectedToolNames = sharedOrchestrationSupport.toolNames(selectedTools);
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.recordWorkflowState(
+                        selection.workflowState().name());
+                toolInvocationRecorder.recordSelectedTools(selectedToolNames);
+            }
             String cacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
             if (LOGGER.isDebugEnabled()) {
                 String messagePreview = sharedOrchestrationSupport.preview(message);
@@ -285,7 +308,6 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             if (toolExecutionAuditLogger != null) {
                 toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
             }
-            List<String> toolNames = sharedOrchestrationSupport.toolNames(selectedTools);
             String ragScope = toolRegistry.resolveRagScopeForTools(selectedTools);
             // #1193: read the per-request write-capability signal (recorded by OpenApiToolProvider
             // during agent.chat, before the finally-clear below) so the telemetry prompt layers
@@ -295,7 +317,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
             emitChatTelemetry(
                     currentUserContext,
-                    toolNames,
+                    selectedToolNames,
                     promptLayers,
                     false,
                     null,
@@ -305,8 +327,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     null,
                     tierRoutingOf(routingDecision),
                     writeCapableToolsPresent);
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.completeTurn(response);
+            }
             return response;
         } catch (RuntimeException exception) {
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.failTurn(exception);
+            }
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
             if (toolExecutionAuditLogger != null) {
                 toolExecutionAuditLogger.logToolExecution(
@@ -336,6 +364,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         } finally {
             if (requestScopedUserContext != null) {
                 requestScopedUserContext.clear();
+            }
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.clearTurn();
             }
         }
     }

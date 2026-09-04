@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.internal.eval.EvalTurnTrace.ToolDefinitionTrace;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
@@ -48,6 +49,7 @@ final class SpringAiPosAssistant implements PosAssistant {
     private final Function<String, ChatMemory> chatMemoryProvider;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable AnswerResolutionLadder answerResolutionLadder;
+    private final @Nullable ToolInvocationRecorder invocationRecorder;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
 
     SpringAiPosAssistant(
@@ -69,6 +71,7 @@ final class SpringAiPosAssistant implements PosAssistant {
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;
         this.answerResolutionLadder = answerResolutionLadder;
+        this.invocationRecorder = invocationRecorder;
         this.requestScopedUserContext = requestScopedUserContext;
     }
 
@@ -88,6 +91,14 @@ final class SpringAiPosAssistant implements PosAssistant {
         // agent is cached per role, so the recorder must not read the caller at execution time.
         toolCallbacks = CallerBoundToolCallback.bindCurrentCaller(toolCallbacks, requestScopedUserContext);
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
+        if (invocationRecorder != null) {
+            List<ToolDefinitionTrace> toolDefinitions = toolCallbacks.stream()
+                    .map(ToolCallback::getToolDefinition)
+                    .map(definition -> new ToolDefinitionTrace(
+                            definition.name(), definition.description(), definition.inputSchema()))
+                    .toList();
+            invocationRecorder.recordPrompt(systemPrompt, toolDefinitions);
+        }
         List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
         promptMessages.add(new SystemMessage(systemPrompt));
         promptMessages.add(new UserMessage(userMessage));

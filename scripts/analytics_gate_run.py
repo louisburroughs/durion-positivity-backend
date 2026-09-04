@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chat-path analytics gate runner (#1671).
+"""Chat-path analytics gate runner (#1671, #1682).
 
 Sends the versioned analytics-gate questions to a running stack's chat endpoint and writes a run
 record that is reproducible: the questions come from
@@ -13,31 +13,20 @@ apart from a reworded question. The 2026-09-03 q09 UNSCORABLE verdict was exactl
 the question asked live carried a calendar-year window, the versioned fixture carried none, and
 EXPECTED.md Q9 measures twelve calendar months.
 
-The scoring itself is deliberately NOT automated here. Plan §2.1 criterion 1 is "the ground-truth
-script is the specification of the expected answer", and comparing a prose answer to it is a human
-judgement (see docs/gate-runs/wave-2/*). This script collects evidence and pins provenance; a
-grader fills in the verdicts.
+Live endpoint scoring remains a human judgement against the ground-truth scripts. An optional
+machine-readable replay report can provide the observed routing and tool-call trace; when supplied,
+the question's `expected` block is graded deterministically without an LLM judge.
 
-Tool-call observability (#1676): a composition question (q05's aged-receivables-then-per-customer
-plan being the motivating case) can fail by silently truncating the plan — the model runs the first
-call, then offers a menu of partial answers instead of the remaining per-customer calls. That
-failure mode should be visible on the run document rather than reading as an ordinary wrong answer.
-`POST /mcp/chat` (`McpChatController.ChatResponse`) carries only the final response text, no tool
-name or count, and no admin/observability endpoint exposes `mcp_tool_invocation_log` over HTTP —
-grep confirmed no controller reads `ToolAuditRepository`/`ToolAuditService`. This script does not
-build one (out of scope here); it records that gap honestly instead. Every result therefore carries
-a `tool_calls` field that is always `null` today, a "Tool calls" column reading `n/a (not exposed
-by the endpoint)`, and — for a question whose QUESTIONS.json entry carries `expected_plan` — a
-`plan_check` field explaining why no automatic verdict was possible. The comparison logic
-(`check_expected_plan`) is written to activate the moment `tool_calls` becomes observable (a future
-admin endpoint, or a `--admin-url` this script would then grow), so wiring in real data later is a
-one-line change here, not a rewrite.
+The live chat endpoint does not expose tool calls, so live records retain `tool_calls: null` and the
+existing n/a composition note. Replay mode reads ordered calls from the report, activates
+`check_expected_plan`, and records per-axis pass/fail details plus an aggregate outcome and verdict.
 
 Usage:
     scripts/alpha-itest-tunnel.sh                      # SSM port-forward, if running against alpha
     python3 scripts/analytics_gate_run.py --out /tmp/gaterun3
     python3 scripts/analytics_gate_run.py --out /tmp/q09 --only q09,q12
     python3 scripts/analytics_gate_run.py --out /tmp/all --all      # includes excluded questions
+    python3 scripts/analytics_gate_run.py --out /tmp/replay --replay-report report.json
 
 Config (env, or a --env-file in KEY=VALUE form — the itest credentials file is the usual source):
     MCP_CHAT_URL        default http://localhost:18086/mcp-server/v1/mcp/chat
@@ -49,8 +38,11 @@ run record. Stdlib only.
 """
 
 import argparse
+from collections import Counter
+from decimal import Decimal, InvalidOperation
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -62,6 +54,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 QUESTIONS_PATH = ROOT / "pos-mcp-server/src/test/resources/eval/analytics-gate/QUESTIONS.json"
 DEFAULT_URL = "http://localhost:18086/mcp-server/v1/mcp/chat"
+OUTCOMES = {
+    "answered-correctly",
+    "asked-appropriately",
+    "declined-appropriately",
+    "failed",
+}
+AXES = (
+    "intent",
+    "tool_selection",
+    "argument_accuracy",
+    "tool_call_sequence",
+    "aggregation",
+    "final_answer",
+)
+UUID_PATTERN = re.compile(
+    r"(?<![0-9A-Fa-f])"
+    r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+    r"(?![0-9A-Fa-f])"
+)
+NUMBER_PATTERN = re.compile(r"(?<![\w-])[-+]?\$?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 
 
 def load_env_file(path):
@@ -161,6 +173,423 @@ def ask(url, token, api_version, message, timeout):
                 "elapsed_s": round(time.monotonic() - started, 1)}
 
 
+def _axis(passed, details):
+    return {"passed": bool(passed), "details": details}
+
+
+def _field(mapping, *names, default=None):
+    for name in names:
+        if name in mapping:
+            return mapping[name]
+    return default
+
+
+def _normalize_arguments(fixture_id, call_index, arguments):
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"fixture {fixture_id} tool call {call_index} arguments must be valid JSON:"
+                f" {exc.msg}"
+            ) from exc
+    if not isinstance(arguments, dict):
+        raise ValueError(
+            f"fixture {fixture_id} tool call {call_index} arguments must be a JSON object"
+        )
+    return arguments
+
+
+def normalize_replay_entry(fixture_id, entry):
+    """Normalize one snake_case or EvalTurnTrace-shaped report entry."""
+    if not isinstance(entry, dict):
+        raise ValueError(f"fixture {fixture_id} report entry must be a JSON object")
+    wrapped = _field(entry, "observed", "trace")
+    if wrapped is not None:
+        if not isinstance(wrapped, dict):
+            raise ValueError(f"fixture {fixture_id} observed trace must be a JSON object")
+        entry = wrapped
+
+    raw_calls = _field(entry, "tool_calls", "toolCalls", default=[])
+    if not isinstance(raw_calls, list):
+        raise ValueError(f"fixture {fixture_id} tool_calls must be a JSON array")
+    calls = []
+    for index, raw_call in enumerate(raw_calls, start=1):
+        if not isinstance(raw_call, dict):
+            raise ValueError(f"fixture {fixture_id} tool call {index} must be a JSON object")
+        name = _field(raw_call, "name", "tool_name", "toolName")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(
+                f"fixture {fixture_id} tool call {index} name must be a non-empty string"
+            )
+        sequence = raw_call.get("sequence", index)
+        if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence != index:
+            raise ValueError(
+                f"fixture {fixture_id} tool call {index} sequence must be the ordered value {index}"
+            )
+        calls.append({
+            "sequence": sequence,
+            "name": name,
+            "arguments": _normalize_arguments(fixture_id, index, raw_call.get("arguments", {})),
+            "result": raw_call.get("result"),
+            "error": raw_call.get("error"),
+            "elapsed_ms": _field(raw_call, "elapsed_ms", "elapsedMs"),
+        })
+
+    intent = entry.get("intent")
+    tier = _field(entry, "tier", "model_tier", "modelTier")
+    answer = _field(entry, "answer", "response", "final_response", "finalResponse", default="")
+    error = entry.get("error")
+    if intent is not None and not isinstance(intent, str):
+        raise ValueError(f"fixture {fixture_id} intent must be a string or null")
+    if tier is not None and not isinstance(tier, str):
+        raise ValueError(f"fixture {fixture_id} tier must be a string or null")
+    if answer is None:
+        answer = ""
+    if not isinstance(answer, str):
+        raise ValueError(f"fixture {fixture_id} response must be a string or null")
+    if error is not None and not isinstance(error, str):
+        raise ValueError(f"fixture {fixture_id} error must be a string or null")
+    return {
+        "intent": intent,
+        "tier": tier,
+        "tool_calls": calls,
+        "answer": answer,
+        "error": error,
+        "elapsed_s": _field(entry, "elapsed_s", "elapsedSeconds", default=0.0),
+        "ids": entry.get("ids"),
+        "numbers": entry.get("numbers"),
+    }
+
+
+def load_replay_report(path, known_fixture_ids):
+    """Read and validate a replay report, returning normalized entries keyed by fixture id."""
+    try:
+        report = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"cannot read replay report {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"replay report {path} is not valid JSON: {exc.msg}") from exc
+    if not isinstance(report, dict) or not isinstance(report.get("results"), list):
+        raise ValueError("replay report must be a JSON object with a results array")
+
+    by_fixture = {}
+    unknown = []
+    for index, entry in enumerate(report["results"], start=1):
+        if not isinstance(entry, dict):
+            raise ValueError(f"replay report entry {index} must be a JSON object")
+        fixture_id = entry.get("fixture_id")
+        if not isinstance(fixture_id, str) or not fixture_id:
+            raise ValueError(f"replay report entry {index} fixture_id must be a non-empty string")
+        if fixture_id in by_fixture:
+            raise ValueError(f"replay report has duplicate fixture_id: {fixture_id}")
+        if fixture_id not in known_fixture_ids:
+            unknown.append(fixture_id)
+            continue
+        by_fixture[fixture_id] = normalize_replay_entry(fixture_id, entry)
+    if unknown:
+        raise ValueError(f"replay report has unknown fixture_id(s): {', '.join(sorted(unknown))}")
+    return by_fixture
+
+
+def _require_string_list(fixture_id, expected, field):
+    values = expected.get(field)
+    if values is None:
+        return
+    if (not isinstance(values, list)
+            or any(not isinstance(value, str) or not value for value in values)):
+        raise ValueError(f"fixture {fixture_id} expected.{field} must be an array of strings")
+    if len(set(values)) != len(values):
+        raise ValueError(f"fixture {fixture_id} expected.{field} must not contain duplicates")
+
+
+def validate_expected(fixture_id, expected):
+    """Reject ambiguous expected-block shapes before any grading is attempted."""
+    if not isinstance(expected, dict):
+        raise ValueError(f"fixture {fixture_id} must have an expected JSON object")
+    outcome = expected.get("outcome")
+    if outcome not in OUTCOMES:
+        raise ValueError(
+            f"fixture {fixture_id} expected.outcome must be one of {', '.join(sorted(OUTCOMES))}"
+        )
+    for field in ("intent", "tier"):
+        if field in expected and (not isinstance(expected[field], str) or not expected[field]):
+            raise ValueError(f"fixture {fixture_id} expected.{field} must be a non-empty string")
+    for field in ("tool_sequence", "id_set", "id_order", "required_strings", "forbidden_strings"):
+        _require_string_list(fixture_id, expected, field)
+
+    expected_calls = expected.get("tool_calls")
+    if expected_calls is not None:
+        if not isinstance(expected_calls, list):
+            raise ValueError(f"fixture {fixture_id} expected.tool_calls must be an array")
+        for index, call in enumerate(expected_calls, start=1):
+            if not isinstance(call, dict):
+                raise ValueError(
+                    f"fixture {fixture_id} expected.tool_calls[{index}] must be an object"
+                )
+            if not isinstance(call.get("name"), str) or not call["name"]:
+                raise ValueError(
+                    f"fixture {fixture_id} expected.tool_calls[{index}].name must be a string"
+                )
+            if not isinstance(call.get("arguments", {}), dict):
+                raise ValueError(
+                    f"fixture {fixture_id} expected.tool_calls[{index}].arguments must be an object"
+                )
+            if call.get("arguments_match", "exact") not in {"exact", "partial"}:
+                raise ValueError(
+                    f"fixture {fixture_id} expected.tool_calls[{index}].arguments_match"
+                    " must be exact or partial"
+                )
+        sequence = expected.get("tool_sequence")
+        call_names = [call["name"] for call in expected_calls]
+        if sequence is not None and sequence != call_names:
+            raise ValueError(
+                f"fixture {fixture_id} expected.tool_sequence must match expected.tool_calls names"
+            )
+
+    numbers = expected.get("numbers")
+    if numbers is not None:
+        if not isinstance(numbers, list):
+            raise ValueError(f"fixture {fixture_id} expected.numbers must be an array")
+        for index, number in enumerate(numbers, start=1):
+            if not isinstance(number, dict) or isinstance(number.get("value"), bool):
+                raise ValueError(
+                    f"fixture {fixture_id} expected.numbers[{index}] must contain a numeric value"
+                )
+            try:
+                value = Decimal(str(number["value"]))
+                tolerance = Decimal(str(number.get("absolute_tolerance", 0)))
+            except (KeyError, InvalidOperation, ValueError) as exc:
+                raise ValueError(
+                    f"fixture {fixture_id} expected.numbers[{index}] value and"
+                    " absolute_tolerance must be numeric"
+                ) from exc
+            if not value.is_finite() or not tolerance.is_finite() or tolerance < 0:
+                raise ValueError(
+                    f"fixture {fixture_id} expected.numbers[{index}].absolute_tolerance"
+                    " must be a finite non-negative number"
+                )
+
+
+def grade_intent(expected, observed):
+    checks = []
+    if "intent" in expected:
+        checks.append(("intent", expected["intent"], observed.get("intent")))
+    if "tier" in expected:
+        checks.append(("tier", expected["tier"], observed.get("tier")))
+    mismatches = [
+        f"{field} expected {wanted!r}, observed {actual!r}"
+        for field, wanted, actual in checks
+        if wanted != actual
+    ]
+    if mismatches:
+        return _axis(False, "; ".join(mismatches))
+    if not checks:
+        return _axis(True, "not specified")
+    return _axis(True, "; ".join(f"{field}={actual}" for field, _, actual in checks))
+
+
+def _expected_tool_names(expected):
+    if "tool_sequence" in expected:
+        return expected["tool_sequence"]
+    return [call["name"] for call in expected.get("tool_calls", [])]
+
+
+def grade_tool_selection(expected, observed_calls):
+    expected_names = _expected_tool_names(expected)
+    if "tool_sequence" not in expected and "tool_calls" not in expected:
+        return _axis(True, "not specified")
+    observed_names = [call["name"] for call in observed_calls]
+    missing = sorted(set(expected_names) - set(observed_names))
+    unexpected = sorted(set(observed_names) - set(expected_names))
+    if missing or unexpected:
+        return _axis(
+            False,
+            f"missing tools {missing or '[]'}; unexpected tools {unexpected or '[]'}",
+        )
+    return _axis(True, f"selected {sorted(set(observed_names))}")
+
+
+def _json_mismatches(expected, observed, partial, path="$"):
+    if isinstance(expected, dict):
+        if not isinstance(observed, dict):
+            return [f"{path} expected object, observed {type(observed).__name__}"]
+        missing = sorted(set(expected) - set(observed))
+        unexpected = sorted(set(observed) - set(expected)) if not partial else []
+        mismatches = []
+        if missing:
+            mismatches.append(f"{path} missing keys {missing}")
+        if unexpected:
+            mismatches.append(f"{path} unexpected keys {unexpected}")
+        for key in expected.keys() & observed.keys():
+            mismatches.extend(
+                _json_mismatches(expected[key], observed[key], partial, f"{path}.{key}")
+            )
+        return mismatches
+    if isinstance(expected, list):
+        if not isinstance(observed, list):
+            return [f"{path} expected array, observed {type(observed).__name__}"]
+        if len(expected) != len(observed):
+            return [f"{path} expected {len(expected)} items, observed {len(observed)}"]
+        mismatches = []
+        for index, (wanted, actual) in enumerate(zip(expected, observed)):
+            mismatches.extend(_json_mismatches(wanted, actual, False, f"{path}[{index}]"))
+        return mismatches
+    if expected != observed:
+        return [f"{path} expected {expected!r}, observed {observed!r}"]
+    return []
+
+
+def grade_argument_accuracy(expected_calls, observed_calls):
+    if expected_calls is None:
+        return _axis(True, "not specified")
+    if len(expected_calls) != len(observed_calls):
+        return _axis(False, f"expected {len(expected_calls)} calls, observed {len(observed_calls)}")
+    mismatches = []
+    for index, (expected_call, observed_call) in enumerate(
+            zip(expected_calls, observed_calls), start=1):
+        if expected_call["name"] != observed_call.get("name"):
+            mismatches.append(
+                f"call {index} expected tool {expected_call['name']!r},"
+                f" observed {observed_call.get('name')!r}"
+            )
+            continue
+        partial = expected_call.get("arguments_match", "exact") == "partial"
+        for mismatch in _json_mismatches(
+                expected_call.get("arguments", {}), observed_call.get("arguments", {}), partial):
+            mismatches.append(f"call {index} {mismatch}")
+    if mismatches:
+        return _axis(False, "; ".join(mismatches))
+    return _axis(True, f"matched arguments for {len(expected_calls)} ordered call(s)")
+
+
+def grade_tool_call_sequence(expected, observed_calls):
+    expected_names = _expected_tool_names(expected)
+    if "tool_sequence" not in expected and "tool_calls" not in expected:
+        return _axis(True, "not specified")
+    observed_names = [call["name"] for call in observed_calls]
+    if expected_names != observed_names:
+        return _axis(False, f"expected {expected_names}, observed {observed_names}")
+    return _axis(True, f"matched {observed_names}")
+
+
+def _extract_numbers(answer):
+    numbers = []
+    for match in NUMBER_PATTERN.findall(answer):
+        try:
+            numbers.append(Decimal(match.replace("$", "").replace(",", "")))
+        except InvalidOperation:
+            continue
+    return numbers
+
+
+def _extract_ids(answer, expected_ids):
+    if expected_ids and all(UUID_PATTERN.fullmatch(value) for value in expected_ids):
+        return UUID_PATTERN.findall(answer)
+    numbered = [re.fullmatch(r"(.*?)(\d+)", value) for value in expected_ids]
+    if numbered and all(match and match.group(1) == numbered[0].group(1) for match in numbered):
+        prefix = re.escape(numbered[0].group(1))
+        return re.findall(rf"(?<!\w){prefix}\d+(?!\w)", answer)
+    return [value for value in expected_ids if value in answer]
+
+
+def grade_aggregation(expected, answer, observed_numbers=None, observed_ids=None):
+    failures = []
+    checks = 0
+    numbers = expected.get("numbers", [])
+    if numbers:
+        checks += 1
+        actual_numbers = (
+            [Decimal(str(value)) for value in observed_numbers]
+            if observed_numbers is not None
+            else _extract_numbers(answer)
+        )
+        for item in numbers:
+            wanted = Decimal(str(item["value"]))
+            tolerance = Decimal(str(item.get("absolute_tolerance", 0)))
+            if not any(abs(actual - wanted) <= tolerance for actual in actual_numbers):
+                failures.append(
+                    f"expected number {wanted} within absolute tolerance {tolerance};"
+                    f" observed {actual_numbers}"
+                )
+
+    expected_set = expected.get("id_set")
+    expected_order = expected.get("id_order")
+    id_expectations = expected_set or expected_order or []
+    actual_ids = (
+        list(observed_ids)
+        if observed_ids is not None
+        else _extract_ids(answer, id_expectations)
+    )
+    if expected_set is not None:
+        checks += 1
+        wanted = {value.lower() for value in expected_set}
+        actual = {value.lower() for value in actual_ids}
+        missing = sorted(wanted - actual)
+        unexpected = sorted(actual - wanted)
+        if missing or unexpected:
+            failures.append(f"missing ids {missing or '[]'}; unexpected ids {unexpected or '[]'}")
+    if expected_order is not None:
+        checks += 1
+        wanted_order = [value.lower() for value in expected_order]
+        actual_order = [value.lower() for value in actual_ids if value.lower() in wanted_order]
+        if actual_order != wanted_order:
+            failures.append(f"id ordering expected {wanted_order}, observed {actual_order}")
+
+    if failures:
+        return _axis(False, "; ".join(failures))
+    return _axis(True, "not specified" if checks == 0 else f"passed {checks} aggregation check(s)")
+
+
+def grade_final_answer(expected, answer, error):
+    outcome = expected["outcome"]
+    failures = []
+    if outcome == "failed":
+        if not error:
+            failures.append("expected a failed turn with an error")
+    else:
+        if error:
+            failures.append(f"unexpected replay error: {error}")
+        if not answer.strip():
+            failures.append("response is empty")
+        if outcome == "asked-appropriately" and "?" not in answer:
+            failures.append("expected a clarifying question")
+    for required in expected.get("required_strings", []):
+        if required not in answer:
+            failures.append(f"missing required string {required!r}")
+    for forbidden in expected.get("forbidden_strings", []):
+        if forbidden in answer:
+            failures.append(f"found forbidden string {forbidden!r}")
+    if failures:
+        return _axis(False, "; ".join(failures))
+    return _axis(True, f"response satisfies {outcome} checks")
+
+
+def grade_fixture(question, observation):
+    fixture_id = question.get("fixture_id", "<unknown>")
+    expected = question.get("expected")
+    validate_expected(fixture_id, expected)
+    observed = normalize_replay_entry(fixture_id, observation)
+    calls = observed["tool_calls"]
+    axes = {
+        "intent": grade_intent(expected, observed),
+        "tool_selection": grade_tool_selection(expected, calls),
+        "argument_accuracy": grade_argument_accuracy(expected.get("tool_calls"), calls),
+        "tool_call_sequence": grade_tool_call_sequence(expected, calls),
+        "aggregation": grade_aggregation(
+            expected, observed["answer"], observed["numbers"], observed["ids"]
+        ),
+        "final_answer": grade_final_answer(expected, observed["answer"], observed["error"]),
+    }
+    passed = all(axes[axis]["passed"] for axis in AXES)
+    return {
+        "expected_outcome": expected["outcome"],
+        "outcome": expected["outcome"] if passed else "failed",
+        "verdict": "PASS" if passed else "FAIL",
+        "axes": axes,
+    }
+
+
 def check_expected_plan(expected_plan, tool_calls):
     """Compare an observed tool-call count against QUESTIONS.json's `expected_plan`, if any.
 
@@ -174,6 +603,8 @@ def check_expected_plan(expected_plan, tool_calls):
         return None
     if tool_calls is None:
         return "not checked: tool calls are not observable on this endpoint (see script docstring)"
+    if isinstance(tool_calls, list):
+        tool_calls = Counter(call["name"] for call in tool_calls)
     shortfalls = []
     for tool, minimum in expected_plan.get("min_tool_calls", {}).items():
         observed = tool_calls.get(tool, 0)
@@ -192,11 +623,13 @@ def format_tool_calls(tool_calls):
         return "n/a (not exposed by the endpoint)"
     if not tool_calls:
         return "(none)"
+    if isinstance(tool_calls, list):
+        tool_calls = Counter(call["name"] for call in tool_calls)
     return ", ".join(f"{tool}×{count}" for tool, count in sorted(tool_calls.items()))
 
 
 def write_markdown(out_dir, record):
-    """Emit the run-document skeleton a grader fills in, with provenance already recorded."""
+    """Emit either the live grading skeleton or a deterministic replay report."""
     provenance = record["questions_file"]
     lines = [
         f"# Analytics gate chat-path run — {record['started_at'][:10]}",
@@ -205,23 +638,47 @@ def write_markdown(out_dir, record):
         f" (repo commit `{provenance['commit']}`"
         + (", **uncommitted edits present**" if provenance["uncommitted"] else "")
         + ")",
-        "Ground truth: `pos-mcp-server/src/test/resources/eval/analytics-gate/ground-truth/EXPECTED.md`",
-        f"Endpoint: `{record['endpoint']}` · questions asked: {len(record['results'])}",
-        "",
-        "Verdicts are graded by hand against the ground truth (plan §2.1 criterion 1); this file is"
-        " generated with the Verdict column empty. Tool calls are not observable on this endpoint"
-        " today (#1676 — see script docstring), so that column always reads n/a and a question"
-        " with an expected_plan gets a plan_check note instead of an automatic verdict.",
-        "",
-        "| Q | Verdict | Window the question fixes | Elapsed | Tool calls |",
-        "|---|---|---|---|---|",
+        "Ground truth: `pos-mcp-server/src/test/resources/eval/analytics-gate/"
+        "ground-truth/EXPECTED.md`",
     ]
+    replay = record.get("mode") == "replay"
+    if replay:
+        lines.extend([
+            f"Replay report: `{record['replay_report']}` - questions graded:"
+            f" {len(record['results'])}",
+            f"Overall verdict: **{record['summary']['verdict']}**",
+            "",
+            "| Q | Outcome | Verdict | Failed axes | Elapsed | Tool calls |",
+            "|---|---|---|---|---|---|",
+        ])
+    else:
+        lines.extend([
+            f"Endpoint: `{record['endpoint']}` \u00b7 questions asked:"
+            f" {len(record['results'])}",
+            "",
+            "Verdicts are graded by hand against the ground truth (plan \u00a72.1 criterion 1);"
+            " this file is generated with the Verdict column empty. Tool calls are not observable"
+            " on this endpoint today (#1676 \u2014 see script docstring),"
+            " so that column always reads n/a and a question"
+            " with an expected_plan gets a plan_check note instead of an automatic verdict.",
+            "",
+            "| Q | Verdict | Window the question fixes | Elapsed | Tool calls |",
+            "|---|---|---|---|---|",
+        ])
     for result in record["results"]:
-        window = result["window"]
-        lines.append(
-            f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']} |"
-            f" {result['elapsed_s']}s | {format_tool_calls(result['tool_calls'])} |"
-        )
+        if replay:
+            failed_axes = [name for name, axis in result["axes"].items() if not axis["passed"]]
+            lines.append(
+                f"| {result['fixture_id']} | {result['outcome']} | {result['verdict']} |"
+                f" {', '.join(failed_axes) or '(none)'} | {result['elapsed_s']}s |"
+                f" {format_tool_calls(result['tool_calls'])} |"
+            )
+        else:
+            window = result["window"]
+            lines.append(
+                f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']} |"
+                f" {result['elapsed_s']}s | {format_tool_calls(result['tool_calls'])} |"
+            )
     lines.append("")
     for result in record["results"]:
         lines.append(f"## {result['fixture_id']} — {result['expected_section']}")
@@ -231,6 +688,27 @@ def write_markdown(out_dir, record):
         if result["plan_check"]:
             lines.append(f"**Composition check ({result['fixture_id']}):** {result['plan_check']}")
             lines.append("")
+        if replay:
+            lines.extend([
+                f"**Outcome:** {result['outcome']} - **Verdict:** {result['verdict']}",
+                "",
+                "| Axis | Result | Details |",
+                "|---|---|---|",
+            ])
+            for name in AXES:
+                axis = result["axes"][name]
+                details = axis["details"].replace("|", "\\|").replace("\n", " ")
+                lines.append(f"| {name} | {'PASS' if axis['passed'] else 'FAIL'} | {details} |")
+            lines.extend(["", "**Tool calls:**"])
+            if result["tool_calls"]:
+                for call in result["tool_calls"]:
+                    arguments = json.dumps(
+                        call["arguments"], sort_keys=True, separators=(",", ":")
+                    )
+                    lines.append(f"{call['sequence']}. `{call['name']}` `{arguments}`")
+            else:
+                lines.append("(none)")
+            lines.append("")
         lines.append("```")
         lines.append(result["error"] or result["answer"] or "(empty response)")
         lines.append("```")
@@ -238,22 +716,27 @@ def write_markdown(out_dir, record):
     (out_dir / "run.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--out", required=True, help="directory for run.json / run.md")
     parser.add_argument("--questions", default=str(QUESTIONS_PATH))
     parser.add_argument("--url", default=os.environ.get("MCP_CHAT_URL", DEFAULT_URL))
     parser.add_argument("--token", default=None, help="bearer token; prefer MCP_BEARER_TOKEN")
     parser.add_argument("--env-file", default=None, help="KEY=VALUE file to read config from")
+    parser.add_argument(
+        "--replay-report",
+        default=None,
+        help="machine-readable JSON report; disables authentication and HTTP calls",
+    )
     parser.add_argument("--only", default=None, help="comma-separated fixture ids, e.g. q09,q12")
     parser.add_argument("--all", action="store_true", help="also ask the excluded questions")
     parser.add_argument("--timeout", type=int, default=180, help="per-turn timeout, seconds")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.env_file:
         load_env_file(args.env_file)
     token = args.token or os.environ.get("MCP_BEARER_TOKEN")
-    if not token:
+    if not args.replay_report and not token:
         sys.exit("no bearer token: pass --token or set MCP_BEARER_TOKEN (or --env-file)")
 
     questions_path = Path(args.questions).resolve()
@@ -261,6 +744,22 @@ def main():
     selected = select(document["questions"], args.only, args.all)
     if not selected:
         sys.exit("no questions selected")
+    replay_by_fixture = None
+    if args.replay_report:
+        try:
+            replay_by_fixture = load_replay_report(
+                args.replay_report, {question["fixture_id"] for question in document["questions"]}
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        missing = [
+            question["fixture_id"] for question in selected
+            if question["fixture_id"] not in replay_by_fixture
+        ]
+        if missing:
+            parser.error(
+                f"replay report is missing selected fixture_id(s): {', '.join(sorted(missing))}"
+            )
 
     # Provenance first: a run that cannot be traced back to its questions is refused, and
     # refusing before the output directory exists leaves nothing half-written behind.
@@ -275,6 +774,11 @@ def main():
         "questions_file": provenance,
         "results": [],
     }
+    if replay_by_fixture is not None:
+        record["mode"] = "replay"
+        record["replay_report"] = str(Path(args.replay_report).resolve())
+    else:
+        record["mode"] = "live"
     if record["questions_file"]["uncommitted"]:
         print(f"WARNING: {record['questions_file']['path']} has uncommitted edits;"
               " this run is not reproducible from a commit", file=sys.stderr)
@@ -282,13 +786,25 @@ def main():
     api_version = os.environ.get("MCP_API_VERSION", "1")
     for question in selected:
         print(f"{question['fixture_id']} …", flush=True)
-        outcome = ask(args.url, token, api_version, question["utterance"], args.timeout)
-        # tool_calls is always None today — see the module docstring's #1676 note on why nothing
-        # observable exists yet; check_expected_plan degrades to a "not checked" note in that case.
-        tool_calls = None
+        grading = None
+        if replay_by_fixture is not None:
+            observed = replay_by_fixture[question["fixture_id"]]
+            outcome = {
+                "answer": observed["answer"],
+                "error": observed["error"],
+                "elapsed_s": observed["elapsed_s"],
+            }
+            tool_calls = observed["tool_calls"]
+            try:
+                grading = grade_fixture(question, observed)
+            except ValueError as exc:
+                parser.error(str(exc))
+        else:
+            outcome = ask(args.url, token, api_version, question["utterance"], args.timeout)
+            tool_calls = None
         expected_plan = question.get("expected_plan")
         plan_check = check_expected_plan(expected_plan, tool_calls)
-        record["results"].append({
+        result = {
             "fixture_id": question["fixture_id"],
             "expected_section": question["expected_section"],
             "ground_truth_sql": question["ground_truth_sql"],
@@ -298,11 +814,24 @@ def main():
             "tool_calls": tool_calls,
             "plan_check": plan_check,
             **outcome,
-        })
+        }
+        if grading is not None:
+            result.update(grading)
+        record["results"].append(result)
         print(f"  {outcome['elapsed_s']}s"
               + (f" — {outcome['error']}" if outcome["error"] else "")
               + (f" — {plan_check}" if plan_check and plan_check.startswith("FAIL") else ""),
               flush=True)
+
+    if replay_by_fixture is not None:
+        outcome_counts = Counter(result["outcome"] for result in record["results"])
+        failed = sum(result["verdict"] == "FAIL" for result in record["results"])
+        record["summary"] = {
+            "verdict": "PASS" if failed == 0 else "FAIL",
+            "passed": len(record["results"]) - failed,
+            "failed": failed,
+            "outcomes": dict(sorted(outcome_counts.items())),
+        }
 
     (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     write_markdown(out_dir, record)

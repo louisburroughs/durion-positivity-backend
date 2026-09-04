@@ -33,6 +33,7 @@ import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.RolePromptResolver;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
@@ -58,6 +59,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
@@ -70,7 +72,8 @@ import org.springframework.web.client.RestClient;
  * never
  * instantiates it during slice tests. Here we construct it directly via
  * {@code new},
- * bypassing the profile gate, and supply Mockito mocks for all assistant runtime
+ * bypassing the profile gate, and supply Mockito mocks for all assistant
+ * runtime
  * dependencies.
  *
  * <p>
@@ -80,7 +83,8 @@ import org.springframework.web.client.RestClient;
  * {@link ExaWebSearchTool}
  * instance (empty API key, never makes HTTP calls) is used rather than a
  * Mockito mock.
- * Using a Mockito mock would trigger an assistant runtime "Duplicated definition for
+ * Using a Mockito mock would trigger an assistant runtime "Duplicated
+ * definition for
  * tool: webSearch"
  * error because Mockito subclasses inherit and re-expose the parent's
  * {@code @Tool} annotation.
@@ -121,6 +125,9 @@ class SessionAgentManagerTest {
     @Mock
     private NltiWorkflowStateService workflowStateService;
 
+    @Mock
+    private ToolInvocationRecorder toolInvocationRecorder;
+
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
     // in the assistant runtime
     private DateWindowFacadeTool dateWindowFacadeTool;
@@ -135,8 +142,10 @@ class SessionAgentManagerTest {
 
     @BeforeEach
     void setUp() {
-        // ChatClient (which runs the tool-execution loop) dereferences ChatModel.getOptions()
-        // unconditionally, so a bare @Mock returning null options NPEs the whole chat path.
+        // ChatClient (which runs the tool-execution loop) dereferences
+        // ChatModel.getOptions()
+        // unconditionally, so a bare @Mock returning null options NPEs the whole chat
+        // path.
         // Real models always carry options; mirror that here.
         lenient()
                 .when(chatModel.getOptions())
@@ -152,7 +161,8 @@ class SessionAgentManagerTest {
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
-        // #778: default to session-less so existing tests exercise the message-heuristic path.
+        // #778: default to session-less so existing tests exercise the
+        // message-heuristic path.
         lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient()
@@ -187,6 +197,9 @@ class SessionAgentManagerTest {
         lenient()
                 .when(scopedContentRetrieverFactory.create(anyString(), anyInt(), anyDouble()))
                 .thenReturn(scopedRetriever);
+        lenient()
+                .when(toolInvocationRecorder.wrap(any(ToolCallback.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         manager = new SessionAgentManager(
                 chatModel,
                 embeddingModel,
@@ -205,7 +218,7 @@ class SessionAgentManagerTest {
                 null, // requestScopedUserContext
                 null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
-                null, // toolInvocationRecorder
+                toolInvocationRecorder,
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -282,11 +295,17 @@ class SessionAgentManagerTest {
     @DisplayName("chat with greeting uses simple no-tool model path")
     void chat_withGreeting_usesSimpleModelPath() {
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
+        CurrentUserContext currentUser = userContext("user-1", USER_ID, "ROLE_ADMIN");
 
-        String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
+        String response = manager.chat(currentUser, "hello");
 
         assertThat(response).isEqualTo("Hello!");
-        // Prompt resolution now happens deferred in systemMessageProvider lambda at runtime
+        verify(toolInvocationRecorder).beginTurn(currentUser, "hello");
+        verify(toolInvocationRecorder).recordSimpleChat(true);
+        verify(toolInvocationRecorder).completeTurn("Hello!");
+        verify(toolInvocationRecorder).clearTurn();
+        // Prompt resolution now happens deferred in systemMessageProvider lambda at
+        // runtime
         verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
         verify(toolRegistryService, never()).resolveCandidateTools(any(ToolSelectionContext.class), anyInt());
     }
@@ -309,7 +328,8 @@ class SessionAgentManagerTest {
         String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
 
         assertThat(response).isEqualTo("Stock found");
-        // Prompt resolution now happens deferred in systemMessageProvider lambda at runtime
+        // Prompt resolution now happens deferred in systemMessageProvider lambda at
+        // runtime
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
         verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
@@ -345,7 +365,8 @@ class SessionAgentManagerTest {
         assertThat(event.rag()).isNotNull();
         assertThat(event.rag().promptLayers())
                 .containsExactly(NltiRequestTelemetry.PromptLayer.BASE, NltiRequestTelemetry.PromptLayer.ROLE);
-        // Gate 2C: the resolved workflow state is surfaced (IDLE for this session-less lookup query).
+        // Gate 2C: the resolved workflow state is surfaced (IDLE for this session-less
+        // lookup query).
         assertThat(event.routing()).isNotNull();
         assertThat(event.routing().workflowState()).isEqualTo("IDLE");
     }
@@ -367,15 +388,20 @@ class SessionAgentManagerTest {
         String response = selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
 
         assertThat(response).isEqualTo("Stock found");
-        // Prompt resolution now happens deferred in systemMessageProvider lambda at runtime
+        // Prompt resolution now happens deferred in systemMessageProvider lambda at
+        // runtime
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
-        // Second-order effect of failing closed, asserted rather than glossed: RAG scope is derived
-        // from the resolved tool set, so emptying roleTools leaves only the keyword fallback
-        // (inventory) and the scope narrows from "master" to "inventory" — less context, which is
+        // Second-order effect of failing closed, asserted rather than glossed: RAG
+        // scope is derived
+        // from the resolved tool set, so emptying roleTools leaves only the keyword
+        // fallback
+        // (inventory) and the scope narrows from "master" to "inventory" — less
+        // context, which is
         // consistent with a caller the gate authorised for nothing.
         verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
         verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
-        // #1606: an empty gated set no longer substitutes the ungated domain tool set, so the
+        // #1606: an empty gated set no longer substitutes the ungated domain tool set,
+        // so the
         // agent is built with no role tools and the cache key reflects that.
         assertThat(roleAgentCacheKeys(selectorManager))
                 .doesNotContain("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
@@ -424,7 +450,7 @@ class SessionAgentManagerTest {
                 null, // requestScopedUserContext
                 null, // observationRegistry (#1655)
                 null, // roleDefaultPermissionsClient
-                null, // toolInvocationRecorder
+                toolInvocationRecorder,
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -447,7 +473,8 @@ class SessionAgentManagerTest {
     @Test
     @DisplayName("onAgentConfigurationChanged evicts prebuilt role agents so the next request rebuilds")
     void onAgentConfigurationChanged_evictsCachedRoleAgents() {
-        // Prebuilt at construction time — a warm request is served from cache without a rebuild.
+        // Prebuilt at construction time — a warm request is served from cache without a
+        // rebuild.
         manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
         verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
 

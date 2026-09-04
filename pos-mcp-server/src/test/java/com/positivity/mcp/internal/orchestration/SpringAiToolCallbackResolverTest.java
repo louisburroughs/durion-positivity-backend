@@ -19,8 +19,10 @@ class SpringAiToolCallbackResolverTest {
 
     @Test
     void fromObjects_decoratorReceivesOwningFacadeClassSimpleName() {
-        // #1422: mcp_tool facade rows are keyed by the facade CLASS name, not the @Tool method
-        // name, so the recorder wrap must be handed the owning class simple name as lookup key.
+        // #1422: mcp_tool facade rows are keyed by the facade CLASS name, not the @Tool
+        // method
+        // name, so the recorder wrap must be handed the owning class simple name as
+        // lookup key.
         java.util.List<String> lookupNames = new java.util.ArrayList<>();
         com.positivity.mcp.internal.service.ToolAuditService auditService =
                 org.mockito.Mockito.mock(com.positivity.mcp.internal.service.ToolAuditService.class);
@@ -30,7 +32,10 @@ class SpringAiToolCallbackResolverTest {
                 .thenReturn(java.util.Optional.empty());
         com.positivity.mcp.internal.service.ToolInvocationRecorder recorder =
                 new com.positivity.mcp.internal.service.ToolInvocationRecorder(
-                        auditService, repository, new com.positivity.mcp.internal.service.RequestScopedUserContext()) {
+                        auditService,
+                        repository,
+                        new com.positivity.mcp.internal.service.RequestScopedUserContext(),
+                        null) {
                     @Override
                     public ToolCallback wrap(ToolCallback delegate, String toolLookupName) {
                         lookupNames.add(toolLookupName);

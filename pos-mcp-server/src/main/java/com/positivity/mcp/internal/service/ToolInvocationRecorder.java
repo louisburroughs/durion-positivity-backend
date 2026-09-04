@@ -1,12 +1,16 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.eval.AlphaEvalTurnTraceRecorder;
+import com.positivity.mcp.internal.eval.EvalTurnTrace.ToolDefinitionTrace;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -52,15 +56,18 @@ public class ToolInvocationRecorder {
     private final ToolAuditService auditService;
     private final ToolMetadataRepository toolMetadataRepository;
     private final RequestScopedUserContext userContext;
+    private final @Nullable AlphaEvalTurnTraceRecorder traceRecorder;
     private final Map<String, Optional<UUID>> toolIdCache = new ConcurrentHashMap<>();
 
     public ToolInvocationRecorder(
             @NonNull ToolAuditService auditService,
             @NonNull ToolMetadataRepository toolMetadataRepository,
-            @NonNull RequestScopedUserContext userContext) {
+            @NonNull RequestScopedUserContext userContext,
+            @Nullable AlphaEvalTurnTraceRecorder traceRecorder) {
         this.auditService = auditService;
         this.toolMetadataRepository = toolMetadataRepository;
         this.userContext = userContext;
+        this.traceRecorder = traceRecorder;
     }
 
     /**
@@ -70,6 +77,42 @@ public class ToolInvocationRecorder {
      */
     public @NonNull ToolCallback wrap(@NonNull ToolCallback delegate, @NonNull String toolLookupName) {
         return new RecordingToolCallback(delegate, toolLookupName);
+    }
+
+    public void beginTurn(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
+        recordTrace(recorder -> recorder.begin(currentUserContext, message), "begin turn");
+    }
+
+    public void recordSimpleChat(boolean simpleChat) {
+        recordTrace(recorder -> recorder.recordSimpleChat(simpleChat), "record simple-chat decision");
+    }
+
+    public void recordRouting(@Nullable String intent, @Nullable String modelTier) {
+        recordTrace(recorder -> recorder.recordRouting(intent, modelTier), "record routing");
+    }
+
+    public void recordWorkflowState(@NonNull String workflowState) {
+        recordTrace(recorder -> recorder.recordWorkflowState(workflowState), "record workflow state");
+    }
+
+    public void recordSelectedTools(@NonNull List<String> selectedTools) {
+        recordTrace(recorder -> recorder.recordSelectedTools(selectedTools), "record selected tools");
+    }
+
+    public void recordPrompt(@NonNull String systemPrompt, @NonNull List<ToolDefinitionTrace> toolDefinitions) {
+        recordTrace(recorder -> recorder.recordPrompt(systemPrompt, toolDefinitions), "record prompt");
+    }
+
+    public void completeTurn(@NonNull String response) {
+        recordTrace(recorder -> recorder.complete(response), "complete turn");
+    }
+
+    public void failTurn(@NonNull Throwable failure) {
+        recordTrace(recorder -> recorder.fail(failure), "fail turn");
+    }
+
+    public void clearTurn() {
+        recordTrace(AlphaEvalTurnTraceRecorder::clear, "clear turn");
     }
 
     /**
@@ -138,6 +181,17 @@ public class ToolInvocationRecorder {
         return userContext.current().map(CurrentUserContext::username).orElse("unknown");
     }
 
+    private void recordTrace(@NonNull Consumer<AlphaEvalTurnTraceRecorder> action, @NonNull String operation) {
+        if (traceRecorder == null) {
+            return;
+        }
+        try {
+            action.accept(traceRecorder);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Failed to {} for alpha eval trace", operation, exception);
+        }
+    }
+
     private final class RecordingToolCallback implements ToolCallback {
 
         private final ToolCallback delegate;
@@ -163,11 +217,15 @@ public class ToolInvocationRecorder {
             long startNanos = System.nanoTime();
             try {
                 String result = delegate.call(toolInput);
-                record(toolLookupName, true, elapsedMs(startNanos), null);
+                int elapsedMs = elapsedMs(startNanos);
+                record(toolLookupName, true, elapsedMs, null);
+                recordTrace(toolInput, result, null, elapsedMs);
                 return result;
             } catch (RuntimeException exception) {
                 int elapsedMs = elapsedMs(startNanos);
-                record(toolLookupName, false, elapsedMs, describeFailure(exception));
+                String error = describeFailure(exception);
+                record(toolLookupName, false, elapsedMs, error);
+                recordTrace(toolInput, null, error, elapsedMs);
                 // The row alone cannot hold a stack, and nothing else on this path logged the
                 // failure at all, so the throwable is emitted here with its whole cause chain.
                 // The tool input is deliberately not logged: arguments carry customer identifiers.
@@ -178,6 +236,17 @@ public class ToolInvocationRecorder {
                         elapsedMs,
                         exception);
                 throw exception;
+            }
+        }
+
+        private void recordTrace(String toolInput, @Nullable String result, @Nullable String error, int elapsedMs) {
+            if (traceRecorder == null) {
+                return;
+            }
+            try {
+                traceRecorder.recordToolCall(delegate.getToolDefinition().name(), toolInput, result, error, elapsedMs);
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Failed to append '{}' to the active eval turn trace", toolLookupName, exception);
             }
         }
 

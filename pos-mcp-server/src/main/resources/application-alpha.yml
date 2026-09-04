@@ -53,6 +53,11 @@ server:
   port: 8086
 
 mcp:
+  eval:
+    turn-trace:
+      enabled: ${MCP_EVAL_TURN_TRACE_ENABLED:true}
+      retention: ${MCP_EVAL_TURN_TRACE_RETENTION:24h}
+      cleanup-interval: ${MCP_EVAL_TURN_TRACE_CLEANUP_INTERVAL:1h}
   server:
     aggregate-spec-url: ${MCP_AGGREGATE_SPEC_URL:http://pos-api-gateway:8080/v3/api-docs}
     excluded-path-fragments:
@@ -86,7 +91,8 @@ mcp:
           source-path: "classpath:rag/accounting-journal-entries-rag.md"
           rag-scope: "accounting"
           # #1525: dual-listed for the reshaped facade JE surface — rationale in application.yml.
-          required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
+          required-permissions:
+            ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "accounting.financial-statements"
           source-path: "classpath:rag/accounting-financial-statements-rag.md"
           rag-scope: "accounting"
@@ -99,7 +105,8 @@ mcp:
           source-path: "classpath:rag/accounting-codes-rag.md"
           rag-scope: "accounting"
           # #1525: dual-listed for the reshaped facade JE surface — rationale in application.yml.
-          required-permissions: ["accounting:je:view", "reporting:view:financial-statements"]
+          required-permissions:
+            ["accounting:je:view", "reporting:view:financial-statements"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
@@ -133,7 +140,8 @@ mcp:
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
-          required-permissions: ["security:permission:view", "security:role:view"]
+          required-permissions:
+            ["security:permission:view", "security:role:view"]
         # Gate 5 documents. `required-permissions` is bound by StaticDocEntry (G5.2) and enforced by
         # the permission-aware RAG filter (G5.1). Permission codes verified against the service
         # permissions.yaml files. Kept in parity with application.yml so alpha's corpus matches the
@@ -199,7 +207,14 @@ mcp:
           source-path: "classpath:rag/customer-vehicle-guide.md"
           rag-scope: "customer"
           # #1525: crm:vehicle:search → vehicle-inventory:search:view — see application.yml.
-          required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "vehicle-inventory:search:view", "crm:contact:view"]
+          required-permissions:
+            [
+              "crm:party:view",
+              "crm:party:search",
+              "crm:vehicle:view",
+              "vehicle-inventory:search:view",
+              "crm:contact:view",
+            ]
         - id: "crm.party-account-model"
           source-path: "classpath:rag/crm-party-account-model-rag.md"
           rag-scope: "customer"
@@ -211,11 +226,13 @@ mcp:
         - id: "reporting.metrics"
           source-path: "classpath:rag/reporting-metrics.md"
           rag-scope: "reporting"
-          required-permissions: ["accounting:report:export", "workorder:dashboard:view"]
+          required-permissions:
+            ["accounting:report:export", "workorder:dashboard:view"]
         - id: "admin.governance"
           source-path: "classpath:rag/admin-governance.md"
           rag-scope: "admin"
-          required-permissions: ["security:permission:view", "workorder:approval_config:view"]
+          required-permissions:
+            ["security:permission:view", "workorder:approval_config:view"]
         - id: "events.observability"
           source-path: "classpath:rag/events-observability.md"
           rag-scope: "events"
@@ -223,7 +240,8 @@ mcp:
         - id: "security.role-permission-matrix"
           source-path: "classpath:rag/role-permission-matrix.md"
           rag-scope: "security"
-          required-permissions: ["security:role:view", "security:permission:view"]
+          required-permissions:
+            ["security:role:view", "security:permission:view"]
         - id: "workorder.estimate-promotion"
           source-path: "classpath:rag/workorder-estimate-promotion-rag.md"
           rag-scope: "workorder"

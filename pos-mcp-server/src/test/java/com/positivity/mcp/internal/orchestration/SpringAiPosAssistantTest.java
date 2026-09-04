@@ -13,6 +13,7 @@ import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.LadderResult;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder.Rung;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
@@ -47,8 +48,10 @@ class SpringAiPosAssistantTest {
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
+        ToolInvocationRecorder invocationRecorder = mock(ToolInvocationRecorder.class);
         when(chatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
+        when(invocationRecorder.wrap(any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("resolved answer"));
         when(ragRetriever.retrieve("where is stock")).thenReturn(List.of(new Document("Inventory policy A")));
@@ -62,7 +65,7 @@ class SpringAiPosAssistantTest {
                 ignored -> chatMemory,
                 openApiToolProvider,
                 null,
-                null,
+                invocationRecorder,
                 null,
                 null);
 
@@ -92,6 +95,13 @@ class SpringAiPosAssistantTest {
                 .contains("Relevant retrieved context:")
                 .contains("Inventory policy A");
         assertThat(promptMessages.get(2).getText()).isEqualTo("where is stock");
+        verify(invocationRecorder)
+                .recordPrompt(
+                        org.mockito.ArgumentMatchers.contains("base prompt"),
+                        org.mockito.ArgumentMatchers.argThat(definitions -> definitions.size() == 1
+                                && definitions.getFirst().name().equals("ping")
+                                && definitions.getFirst().description().equals("Health check")
+                                && definitions.getFirst().inputSchema().contains("object")));
 
         ArgumentCaptor<List<Message>> persistedMessages = messageListCaptor();
         verify(chatMemory).add(eq("user-1::ROLE_TECH"), persistedMessages.capture());
@@ -244,12 +254,19 @@ class SpringAiPosAssistantTest {
     /**
      * Regression guard for the tool-execution path.
      *
-     * <p>As of Spring AI 2.0 {@code ChatModel.call} does not run tools: it advertises the tool
-     * definitions and returns the model's tool-call turn verbatim, leaving execution to
-     * {@code ChatClient}'s {@code ToolCallingAdvisor}. Calling the model directly therefore invoked
-     * no tool at all, and because a tool-call turn carries empty content the reply silently degraded
-     * to recovered reasoning or a ladder hand-off — indistinguishable, from the outside, from a
-     * model that simply chose not to answer. This asserts the tool actually runs and that the
+     * <p>
+     * As of Spring AI 2.0 {@code ChatModel.call} does not run tools: it advertises
+     * the tool
+     * definitions and returns the model's tool-call turn verbatim, leaving
+     * execution to
+     * {@code ChatClient}'s {@code ToolCallingAdvisor}. Calling the model directly
+     * therefore invoked
+     * no tool at all, and because a tool-call turn carries empty content the reply
+     * silently degraded
+     * to recovered reasoning or a ladder hand-off — indistinguishable, from the
+     * outside, from a
+     * model that simply chose not to answer. This asserts the tool actually runs
+     * and that the
      * post-tool answer is what reaches the caller.
      */
     @Test
@@ -264,7 +281,8 @@ class SpringAiPosAssistantTest {
         when(chatMemory.get(any())).thenReturn(List.of());
 
         AtomicInteger invocations = new AtomicInteger();
-        // Turn 1: the model asks for the tool and returns no content (the real gpt-oss shape).
+        // Turn 1: the model asks for the tool and returns no content (the real gpt-oss
+        // shape).
         // Turn 2: having seen the tool result, it answers.
         when(chatModel.call(any(Prompt.class)))
                 .thenReturn(toolCallResponse("ping"), chatResponse("There are 12 open work orders."));
@@ -287,7 +305,8 @@ class SpringAiPosAssistantTest {
                 .as("the requested tool must actually be invoked")
                 .isEqualTo(1);
         assertThat(response).isEqualTo("There are 12 open work orders.");
-        // A tool-call turn has blank content; the ladder must not pre-empt the post-tool answer.
+        // A tool-call turn has blank content; the ladder must not pre-empt the
+        // post-tool answer.
         verifyNoInteractions(ladder);
     }
 
@@ -333,14 +352,21 @@ class SpringAiPosAssistantTest {
     }
 
     /**
-     * A model naming a tool that is not in the per-request callback list must degrade, not 500.
+     * A model naming a tool that is not in the per-request callback list must
+     * degrade, not 500.
      *
-     * <p>{@code DefaultToolCallingManager} throws a raw {@code IllegalStateException} ("No
-     * ToolCallback found for tool name") for an unresolved name, which the session manager would
-     * surface as a 500. With sixteen facades in context this is a realistic model slip. It is also
+     * <p>
+     * {@code DefaultToolCallingManager} throws a raw {@code IllegalStateException}
+     * ("No
+     * ToolCallback found for tool name") for an unresolved name, which the session
+     * manager would
+     * surface as a 500. With sixteen facades in context this is a realistic model
+     * slip. It is also
      * the permission gate's backstop: because the client is built with a hand-made
-     * {@code ToolCallingManager} that has no bean-name resolver, only callbacks carried in the
-     * request's own options are executable, so naming a tool the caller is not entitled to fails
+     * {@code ToolCallingManager} that has no bean-name resolver, only callbacks
+     * carried in the
+     * request's own options are executable, so naming a tool the caller is not
+     * entitled to fails
      * closed here rather than executing it.
      */
     @Test
@@ -376,7 +402,10 @@ class SpringAiPosAssistantTest {
 
     // ─── ChatClient observability (#1655) ───────────────────────────────────
 
-    /** Collects observation names so a NOOP registry is distinguishable from a live one. */
+    /**
+     * Collects observation names so a NOOP registry is distinguishable from a live
+     * one.
+     */
     private static ObservationRegistry recordingRegistry(List<String> sink) {
         ObservationRegistry registry = ObservationRegistry.create();
         registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
@@ -394,9 +423,12 @@ class SpringAiPosAssistantTest {
     }
 
     /**
-     * The defect: {@code ChatClient.builder(chatModel)} hardcodes {@code ObservationRegistry.NOOP},
-     * so the chat-client and per-advisor observations were silently dropped. Model-level metrics
-     * survived it — the Ollama bean carries its own registry — which is why the gap was invisible
+     * The defect: {@code ChatClient.builder(chatModel)} hardcodes
+     * {@code ObservationRegistry.NOOP},
+     * so the chat-client and per-advisor observations were silently dropped.
+     * Model-level metrics
+     * survived it — the Ollama bean carries its own registry — which is why the gap
+     * was invisible
      * from the metrics that did appear.
      */
     @Test
@@ -457,14 +489,22 @@ class SpringAiPosAssistantTest {
     }
 
     /**
-     * #1683 follow-up. Spring AI 2.0's {@code OllamaChatModel.buildRequestPrompt} attaches the
-     * model's default options ONLY when {@code prompt.getOptions() == null}; a non-null runtime
-     * options object is used verbatim, with no merge against the defaults. Every production turn
-     * takes the non-null branch ({@code chat} always passes {@code toolCallingOptions(...)}), so
-     * the {@code numCtx}/{@code temperature} configured on the chat model reach the wire purely
-     * because {@code mutate()} copies them. Nothing else asserts that, and the wire-level tests in
-     * {@code OllamaChatModelConfigurationTest} exercise the null-options path only — so without
-     * this test, a change that dropped either option from the per-request copy would silently
+     * #1683 follow-up. Spring AI 2.0's {@code OllamaChatModel.buildRequestPrompt}
+     * attaches the
+     * model's default options ONLY when {@code prompt.getOptions() == null}; a
+     * non-null runtime
+     * options object is used verbatim, with no merge against the defaults. Every
+     * production turn
+     * takes the non-null branch ({@code chat} always passes
+     * {@code toolCallingOptions(...)}), so
+     * the {@code numCtx}/{@code temperature} configured on the chat model reach the
+     * wire purely
+     * because {@code mutate()} copies them. Nothing else asserts that, and the
+     * wire-level tests in
+     * {@code OllamaChatModelConfigurationTest} exercise the null-options path only
+     * — so without
+     * this test, a change that dropped either option from the per-request copy
+     * would silently
      * un-fix #1683 with the whole suite still green.
      */
     @Test
@@ -485,10 +525,14 @@ class SpringAiPosAssistantTest {
     }
 
     /**
-     * The generic fallback branch drops every provider-specific option — it copies only the model
-     * name. That is correct for a non-Ollama {@link ChatOptions} (there is no {@code numCtx} to
-     * carry), but it means reaching this branch with an Ollama backend would silently restore the
-     * unset-{@code num_ctx} behaviour #1683 fixed. Pinned here so the trade-off is visible rather
+     * The generic fallback branch drops every provider-specific option — it copies
+     * only the model
+     * name. That is correct for a non-Ollama {@link ChatOptions} (there is no
+     * {@code numCtx} to
+     * carry), but it means reaching this branch with an Ollama backend would
+     * silently restore the
+     * unset-{@code num_ctx} behaviour #1683 fixed. Pinned here so the trade-off is
+     * visible rather
      * than discovered.
      */
     @Test
