@@ -244,8 +244,10 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (request.getType() == null) {
             throw new IllegalArgumentException("adjustment type is required");
         }
-        // (a): the null case is dead (AdjustmentRequest.amount carries @NotNull), but the
-        // DTO has no @Positive, so a zero/negative amount is genuinely reachable via HTTP.
+        // #1694 (d): defensive invariant — AdjustmentRequest.amount carries @DecimalMin("0.0001")
+        // and InvoiceController applies @Valid, so bean validation rejects a null, zero or negative
+        // amount before this runs. Kept as the module's own type rather than a bare
+        // IllegalArgumentException for any future direct caller that bypasses the controller.
         if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvoiceRequestValidationException("adjustment amount must be greater than zero");
         }

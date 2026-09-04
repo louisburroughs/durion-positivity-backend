@@ -181,11 +181,13 @@ public class BulkLoadJobFactory {
      * Resolves an uploaded file inside the storage root, refusing anything that escapes it.
      *
      * <p>Called only from {@link #reader}, a {@code @StepScope} bean built when Spring Batch
-     * starts the step (issue #1694 audit): that runs inside the batch job's own asynchronous
-     * execution, not the HTTP request thread that launched it, so a thrown exception here never
-     * reaches this module's {@code @RestControllerAdvice} — Spring Batch catches it and records
-     * it on the {@code JobExecution} instead, which {@code BulkLoadJobExecutionListener} then
-     * folds into the job's status. {@code storagePath} itself is a job parameter this module
+     * starts the step (issue #1694 audit), so a thrown exception here never reaches this module's
+     * {@code @RestControllerAdvice}: {@code AbstractStep.execute} catches everything raised during
+     * step execution and records it on the {@code JobExecution}, which {@code
+     * BulkLoadJobExecutionListener} then folds into the job's status. Note this holds regardless
+     * of which thread the job runs on — this module configures no {@code TaskExecutor}, so Spring
+     * Batch uses a {@code SyncTaskExecutor} and the job actually runs on the HTTP request thread
+     * that launched it. {@code storagePath} itself is a job parameter this module
      * fills from {@code BulkLoadJob.getOriginalFilePath()}, a server-computed value (see {@link
      * com.positivity.bulkloader.internal.service.LocalFileStorageServiceImpl#store}), never raw
      * client input — so both throws below are defensive/internal invariants, deliberately left as
