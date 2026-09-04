@@ -71,6 +71,13 @@ public class BulkIngestResultRecorder {
             @NonNull List<?> submitted,
             @Nullable BulkIngestResponse response) {
 
+        // Defensive/internal invariant (issue #1694 audit), left as bare IllegalArgumentException:
+        // both lists are built together, positionally, by the one caller
+        // (BulkIngestWriterFactory's chunk writer) from the same chunk, so a mismatch is a coding
+        // bug in that pairing, not client input. This method also runs inside a @StepScope
+        // ItemWriter during Spring Batch's own (async) step execution, so a throw here never
+        // reaches this module's @RestControllerAdvice regardless — Spring Batch records it
+        // against the JobExecution instead.
         if (rowNumbers.size() != submitted.size()) {
             throw new IllegalArgumentException("rowNumbers and submitted records must be the same length: %d vs %d"
                     .formatted(rowNumbers.size(), submitted.size()));

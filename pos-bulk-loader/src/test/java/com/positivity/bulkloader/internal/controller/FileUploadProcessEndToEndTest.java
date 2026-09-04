@@ -12,20 +12,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.bulkingest.BulkIngestRequest;
+import com.positivity.bulkingest.BulkIngestResponse;
+import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.bulkloader.PosBlkLoaderApplication;
 import com.positivity.bulkloader.internal.config.BulkLoaderEventTypeInitializer;
 import com.positivity.bulkloader.internal.config.PermissionRegistration;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
+import com.positivity.bulkloader.internal.entity.BulkLoadRecordAudit;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.enums.ReviewStatus;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.bulkloader.internal.repository.BulkLoadRecordAuditRepository;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -68,6 +74,9 @@ class FileUploadProcessEndToEndTest {
     BulkLoadJobRepository bulkLoadJobRepository;
 
     @Autowired
+    BulkLoadRecordAuditRepository bulkLoadRecordAuditRepository;
+
+    @Autowired
     BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
 
     @MockitoBean
@@ -92,6 +101,7 @@ class FileUploadProcessEndToEndTest {
     @BeforeEach
     void setUp() throws IOException {
         Files.createDirectories(STORAGE_ROOT);
+        bulkLoadRecordAuditRepository.deleteAll();
         bulkLoadJobRepository.deleteAll();
 
         mockRestClient = mock(RestClient.class);
@@ -111,6 +121,7 @@ class FileUploadProcessEndToEndTest {
 
     @AfterEach
     void tearDown() throws IOException {
+        bulkLoadRecordAuditRepository.deleteAll();
         bulkLoadJobRepository.deleteAll();
         if (Files.exists(STORAGE_ROOT)) {
             try (var paths = Files.walk(STORAGE_ROOT)) {
@@ -172,6 +183,84 @@ class FileUploadProcessEndToEndTest {
         assertThat(request.getOperatorId()).isEqualTo("test-operator");
         assertThat(request.getRecords()).hasSize(1);
         assertThat(bulkLoadAuthorizationContext.getAuthorizationHeader()).isNull();
+    }
+
+    /**
+     * Proves the issue #1694 catch-site audit's central claim for this module: a bad record
+     * inside an uploaded file is never an HTTP error, and never aborts the rest of the import.
+     * {@link com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy#validate} rejects
+     * the blank-sku row through the loader's own
+     * per-row error report ({@code recordRejected} → {@link BulkLoadRecordAudit}, {@code
+     * ReviewStatus.PENDING}) — not by throwing — so the second, valid row still reaches the
+     * writer and is posted to the owning service exactly as if the bad row were never in the
+     * file.
+     */
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void startProcessing_endToEnd_badRecordRejectedButGoodRecordStillPosted() throws Exception {
+        String relativeStoragePath = JOB_ID + "/catalog-products-mixed.csv";
+        Files.createDirectories(STORAGE_ROOT.resolve(JOB_ID.toString()));
+        Files.writeString(STORAGE_ROOT.resolve(relativeStoragePath), """
+            sku,upc,name,description,categoryName,subcategoryName,price
+            ,,Widget With No Sku,Widget Description,Parts,Filters,19.99
+            SKU-002,,Widget,Widget Description,Parts,Filters,24.99
+            """);
+
+        saveJob("catalog-products-mixed.csv", relativeStoragePath);
+
+        // The one record that reaches the writer (row 1's SKU-002) is answered as accepted, so
+        // its audit row lands as APPROVED rather than falling into the "no usable response"
+        // failure path the recorder also treats as PENDING — isolating the assertion below to
+        // exactly the loader-side rejection this test is about.
+        when(responseSpec.body(BulkIngestResponse.class))
+                .thenReturn(BulkIngestResponse.builder()
+                        .totalSubmitted(1)
+                        .successCount(1)
+                        .failureCount(0)
+                        .results(List.of(BulkIngestResult.builder()
+                                .rowIndex(0)
+                                .success(true)
+                                .entityId(UUID.randomUUID())
+                                .build()))
+                        .build());
+
+        // No custom TaskExecutor/JobLauncher bean is configured anywhere in this module, so
+        // Spring Boot Batch's default JobOperator runs the job with a SyncTaskExecutor: this
+        // POST does not return until the whole batch run (reader, processor, writer and
+        // BulkLoadJobExecutionListener#afterJob) has completed on this same thread — despite the
+        // controller's own Javadoc calling it "asynchronous". So the response already carries the
+        // finished run's row counts, and every assertion below can run immediately after, with no
+        // polling needed.
+        mockMvc.perform(post("/v1/bulk-jobs/{jobId}/process", JOB_ID)
+                        .header(GatewaySecurityConstants.HEADER_TOKEN, "token-e2e"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(JOB_ID.toString()))
+                .andExpect(jsonPath("$.processedRows").value(2))
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(1));
+
+        // The good row (row 1, 0-indexed) is the only one posted — the bad row never reaches the
+        // writer at all, so the chunk the owning service sees is exactly as if row 0 were absent.
+        BulkIngestRequest<CatalogProductRecord> request = capturedCatalogRequest();
+        assertThat(request.getRecords()).hasSize(1);
+        assertThat(request.getRecords().get(0).getSku()).isEqualTo("SKU-002");
+
+        // The bad row is recorded in the reviewable error report instead, keyed to its own file
+        // line, rather than failing the whole job — and the good row's own audit row confirms it
+        // was actually accepted, not silently dropped alongside it.
+        List<BulkLoadRecordAudit> rejected =
+                bulkLoadRecordAuditRepository.findByJobIdAndReviewStatus(JOB_ID, ReviewStatus.PENDING);
+        assertThat(rejected).hasSize(1);
+        BulkLoadRecordAudit rejectedAudit = rejected.get(0);
+        assertThat(rejectedAudit.getRowNumber()).isZero();
+        assertThat(rejectedAudit.getReasonCodes())
+                .contains("BULK_LOAD_VALIDATION_FAILED")
+                .contains("sku is required");
+
+        List<BulkLoadRecordAudit> approved =
+                bulkLoadRecordAuditRepository.findByJobIdAndReviewStatus(JOB_ID, ReviewStatus.APPROVED);
+        assertThat(approved).hasSize(1);
+        assertThat(approved.get(0).getRowNumber()).isEqualTo(1L);
     }
 
     @Test
