@@ -9,11 +9,13 @@ import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 import org.jspecify.annotations.NonNull;
 
 /** Request payload for bypassing a scheduling conflict with manager permission. */
 @Value
 @Builder
+@Jacksonized
 @Schema(description = "Request to bypass a scheduling conflict with manager permission")
 public class ConflictOverrideRequest {
     @Schema(

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -18,6 +19,7 @@ import org.jspecify.annotations.NonNull;
  */
 @Value
 @Builder
+@Jacksonized
 @Schema(description = "A single mechanic entry within an assignment request")
 public class MechanicAssignmentItem {
     @Schema(
