@@ -275,6 +275,21 @@ class RolePromptResolverImplTest {
      * answer: choosing a metric silently, and asking about a range that already has a default. The
      * text has to name both sides, or it only closes one of them.
      */
+    /**
+     * #1705: q01 asked for "top technicians BY LABOR REVENUE" and the assistant replied that "top
+     * technicians" was not in the glossary and asked which measure to use — offering, as its first
+     * suggestion, the measure the question had already named. The layer had said `defined: false`
+     * means ASK, full stop, so the model never got as far as re-reading the question.
+     */
+    @Test
+    @DisplayName("GLOSSARY layer says an undefined phrase is not by itself a reason to ask")
+    void glossaryLayer_undefinedPhraseIsNotAReasonToAsk() {
+        assertThat(SystemPromptDefaults.GLOSSARY_LAYER_TEXT)
+                .contains("NOT by itself a reason to ask")
+                .contains("use the measure the question named")
+                .contains("Ask only when the phrase is undefined AND the question names no measure");
+    }
+
     @Test
     @DisplayName("GLOSSARY layer separates an undefined metric from an unstated range")
     void glossaryLayer_separatesUndefinedMetricFromUnstatedRange() {

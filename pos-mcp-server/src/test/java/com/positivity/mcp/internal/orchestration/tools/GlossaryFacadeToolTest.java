@@ -36,15 +36,29 @@ class GlossaryFacadeToolTest {
     }
 
     @Test
-    @DisplayName("an undefined term reports defined=false and tells the model to ask, not to choose")
+    @DisplayName("an undefined term reports defined=false without instructing the model to ask")
     void lookup_undefinedTerm() {
         JsonNode node = lookup("our most loyal customers");
 
         assertThat(node.get("defined").asBoolean()).isFalse();
         assertThat(node.has("metric")).isFalse();
+        // #1705: the guidance used to say "Ask the user which measure they mean" unconditionally,
+        // which the model applied even when the question named the measure. It must now route the
+        // stated-measure case to an answer and reserve asking for the genuinely open one.
         assertThat(node.get("guidance").asText())
-                .contains("Ask the user which measure")
-                .contains("Do not ask about the date range");
+                .contains("not by itself a reason to ask")
+                .contains("use the measure the question named")
+                .contains("Ask only when the question names no measure")
+                .contains("Never ask about the date range");
+    }
+
+    @Test
+    @DisplayName("the undefined-term guidance never issues a bare instruction to ask")
+    void lookup_undefinedTerm_doesNotIssueABareAskInstruction() {
+        // The exact string that produced the q01 regression. Its absence is the fix; asserting on
+        // it keeps a future edit from reintroducing the unconditional form.
+        assertThat(lookup("our most loyal customers").get("guidance").asText())
+                .doesNotContain("Ask the user which measure they mean rather than choosing one");
     }
 
     @Test

@@ -351,7 +351,7 @@ class CliModeTest(unittest.TestCase):
                     "--questions",
                     str(questions_path),
                     "--token",
-                    "test-token",
+                    _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"], "perm_bits": "test-token"}),
                 ]
             )
 
@@ -360,7 +360,11 @@ class CliModeTest(unittest.TestCase):
 
         ask.assert_called_once()
         self.assertIsNone(record["results"][0]["tool_calls"])
+        # The bearer token must not survive into the record; only its decoded, non-secret claims.
         self.assertNotIn("test-token", json.dumps(record))
+        self.assertEqual(record["actor"]["subject"], "admin.alpha")
+        self.assertEqual(record["actor"]["effective_roles"], ["ROLE_ADMIN"])
+        self.assertNotIn("void", record)
         self.assertIn("n/a (not exposed by the endpoint)", markdown)
 
 
@@ -378,6 +382,60 @@ class ExistingHelperBehaviorTest(unittest.TestCase):
             runner.check_expected_plan({"min_tool_calls": {"tool": 1}}, None),
         )
         self.assertEqual("n/a (not exposed by the endpoint)", runner.format_tool_calls(None))
+
+def _token(claims):
+    """A JWT-shaped string carrying `claims`. Signature is irrelevant — the runner only decodes."""
+    import base64
+
+    def seg(obj):
+        raw = json.dumps(obj).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    return f"{seg({'alg': 'none'})}.{seg(claims)}.signature"
+
+
+class ActorProvenanceTest(unittest.TestCase):
+    """#1706: a run whose actor is unrecorded cannot be compared with any other run."""
+
+    def test_records_subject_and_effective_roles(self):
+        actor = runner.actor_provenance(
+            _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN", "ROLE_FACTOR_PASSWORD"], "perm_bits": "abc"})
+        )
+
+        self.assertEqual(actor["subject"], "admin.alpha")
+        self.assertEqual(actor["roles"], ["ROLE_ADMIN", "ROLE_FACTOR_PASSWORD"])
+        # The factor marker says nothing about what the caller may reach, so it must not be
+        # mistaken for the role the gate checks against.
+        self.assertEqual(actor["effective_roles"], ["ROLE_ADMIN"])
+        self.assertEqual(actor["permission_bits_length"], 3)
+
+    def test_never_returns_the_token_or_its_signature(self):
+        token = _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"], "perm_bits": "s3cr3t-bits"})
+        actor = runner.actor_provenance(token)
+
+        # The record is written to disk and pasted into issues; the credential must not ride along.
+        blob = json.dumps(actor)
+        self.assertNotIn(token, blob)
+        self.assertNotIn("signature", blob)
+        self.assertNotIn("s3cr3t-bits", blob)
+        self.assertEqual(actor["permission_bits_length"], len("s3cr3t-bits"))
+
+    def test_malformed_token_records_an_error_rather_than_raising(self):
+        actor = runner.actor_provenance("not-a-jwt")
+
+        self.assertIn("error", actor)
+        self.assertNotIn("subject", actor)
+
+    def test_role_claim_may_be_singular_or_a_bare_string(self):
+        self.assertEqual(runner.actor_provenance(_token({"role": "ROLE_ADMIN"}))["effective_roles"], ["ROLE_ADMIN"])
+        self.assertEqual(
+            runner.actor_provenance(_token({"role": ["ROLE_CONTROLLER"]}))["effective_roles"], ["ROLE_CONTROLLER"]
+        )
+
+    def test_expected_role_default_is_the_documented_gate_actor(self):
+        # Pinned deliberately: the corpus README names admin.alpha and explains why no role-scoped
+        # actor covers workorder + A/R + A/P. Changing one without the other reopens #1706.
+        self.assertEqual(runner.EXPECTED_ROLE_DEFAULT, "ROLE_ADMIN")
 
 
 if __name__ == "__main__":

@@ -225,3 +225,31 @@ an empty A/R aging report and a silently wrong Q13.
    `invoice_created_at` (null `due_date`s, or due dates chosen to be ignored) will produce
    different buckets under the corrected rule and must be revisited before it is used as ground
    truth. See `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
+
+## Which actor to run as
+
+**`admin.alpha`** — the `ITEST_USERNAME` / `ITEST_PASSWORD` pair in the itest credentials file.
+Roles `ROLE_ADMIN`, `ROLE_SYSTEM_ADMINISTRATOR`.
+
+This is not a convenience. The corpus spans three permission domains — workorder labor (q01, q03,
+q04), invoice revenue and A/R (q05, q07, q08, q09, q12, q13) and A/P vendor spend (q15, q16, q17) —
+and **no role-scoped seeded actor holds codes across all three.** Measured on alpha 2026-09-04:
+
+| Actor | Role | workorder | A/R | A/P |
+|---|---|---|---|---|
+| `ITEST_CONTROLLER` | `ROLE_CONTROLLER` | answers | answers | **deflects** |
+| `ITEST_ACCT` | `ROLE_ACCOUNT_MANAGER` | answers | answers | **deflects** |
+| `ITEST_MANAGER` | `ROLE_LOCATION_MANAGER` | **deflects** | **deflects** | **deflects** |
+| `ITEST_USERNAME` (`admin.alpha`) | `ROLE_ADMIN` | — the gate actor — | | |
+
+A caller without a domain's codes is offered a different tool set and answers, correctly, that the
+platform exposes no such query. Those answers are well-formed, plausible, and **indistinguishable
+from model failures** in the run record. Two runs on 2026-09-04 scored 0/12 and 2/12 for exactly
+this reason and neither record said so — which is why `analytics_gate_run.py` now decodes the
+token's role, records it under `actor`, and refuses to start unless it matches `--expect-role`
+(default `ROLE_ADMIN`). See #1706.
+
+If a future change gives a role-scoped actor full coverage, prefer it over admin: running as an
+administrator means the gate never exercises permission gating, which is a real part of the
+surface. That is a corpus decision, not a runner one.
+
