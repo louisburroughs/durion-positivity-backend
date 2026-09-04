@@ -33,7 +33,19 @@ final class ChatResponseText {
         /** Recovered from the {@code thinking} channel because {@code content} was blank. */
         THINKING,
         /** Neither channel had text; the fixed fallback string is used. */
-        BLANK
+        BLANK,
+        /**
+         * {@code content} held nothing but a serialised tool payload (#1708).
+         *
+         * <p>Observed on the 2026-09-04 gate run: q04 replied with
+         * {@code {"startDate":"2026-03-01","endDate":"2026-03-31","rows":[…]}} and q05 with what
+         * reads as a tool <em>request</em>. The source is {@code content} — the model emitted the
+         * payload itself rather than composing an answer from it — so this is not the blank-content
+         * path and is not the ladder leaking. It is nonetheless not an answer: a reader gets raw
+         * JSON, and a grader reading the reply records a data failure for a turn whose tools all
+         * ran correctly.
+         */
+        TOOL_PAYLOAD
     }
 
     /** The extracted user-facing text plus its {@link Source}. */
@@ -55,6 +67,11 @@ final class ChatResponseText {
         }
         String content = stripThinkBlocks(message.getText());
         if (!content.isBlank()) {
+            if (isBareToolPayload(content)) {
+                LOGGER.warn("Chat model returned a bare serialised tool payload as its answer; "
+                        + "treating it as no direct answer (#1708)");
+                return new Extracted(content, Source.TOOL_PAYLOAD);
+            }
             return new Extracted(content, Source.CONTENT);
         }
         // content was empty: the model routed its answer into the reasoning channel.
@@ -66,6 +83,32 @@ final class ChatResponseText {
         }
         LOGGER.warn("Chat model returned blank content and no thinking channel; using blank-response fallback");
         return new Extracted(BLANK_RESPONSE_FALLBACK, Source.BLANK);
+    }
+
+    /**
+     * Whether {@code content} is nothing but a serialised JSON value.
+     *
+     * <p>Deliberately whole-string: an answer that <em>contains</em> JSON — a fenced example, a
+     * quoted identifier — is a legitimate answer and must not be discarded. Only a reply that is
+     * itself a payload, start to finish, is the #1708 defect. The check is structural rather than a
+     * parse: it needs no JSON dependency here, and a truncated payload is just as much "not an
+     * answer" as a well-formed one.
+     */
+    private static boolean isBareToolPayload(@NonNull String content) {
+        String trimmed = content.strip();
+        if (trimmed.length() < 2) {
+            return false;
+        }
+        char first = trimmed.charAt(0);
+        char last = trimmed.charAt(trimmed.length() - 1);
+        boolean object = first == '{' && last == '}';
+        boolean array = first == '[' && last == ']';
+        if (!(object || array)) {
+            return false;
+        }
+        // A payload carries at least one quoted key or element; prose that merely opens and closes
+        // with a brace does not.
+        return trimmed.indexOf('"') >= 0;
     }
 
     private static @NonNull String stripThinkBlocks(@Nullable String text) {

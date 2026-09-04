@@ -226,6 +226,43 @@ an empty A/R aging report and a silently wrong Q13.
    different buckets under the corrected rule and must be revisited before it is used as ground
    truth. See `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
 
+## How windows are graded
+
+**The shape, not the endpoints** (#1709, option 3).
+
+A relative window's endpoints are a derived consequence of its shape, unit, count and the run's own
+date. Comparing them against dates baked from a fixed `eval_as_of` fails every run that does not
+execute on that exact day — a three-day offset on 2026-09-04 made every range in this corpus
+unmatchable, however correct the assistant was.
+
+So each question carries `window.expected`:
+
+```json
+"expected": { "shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER" }
+```
+
+and the grader reads the shape out of the answer itself. `DateWindowResolver` prefixes every window
+statement with its shape label (`calendar span: …`, `rolling: …`, `prior complete: …`), and the
+DATE_WINDOW contract requires the model to quote that statement — so the shape is observable with no
+production change.
+
+- `also_accept` lets a question admit more than one correct shape. q04 buckets by month, so six
+  `ABSOLUTE` resolutions satisfy it as well as one `CALENDAR_SPAN`; both have been observed.
+- `as_of_offset_days` handles the questions where an endpoint genuinely matters and no resolver
+  shape describes it — point-in-time questions (q05, q13). Expressed as an offset from the run's own
+  as-of date (option 2), so any run can satisfy it.
+- `shape: null` with a `note` means deliberately ungraded. q08 is mixed — a rolling 90-day filter
+  AND a prior-calendar-year condition — and no single shape describes it; expressing two windows per
+  question is #1689 work. Eight non-gate questions are unannotated for the same reason.
+
+An answer that quotes no statement grades **UNGRADED**, never PASS: the contract requires the quote,
+and silence about the window is not evidence the window was right.
+
+### What this deliberately does not check
+
+Endpoints for relative windows, and `q16`'s day-count edge — whether "the next 14 days" starts today
+or tomorrow is still open (#1681), so its shape and unit are graded and its endpoints are not.
+
 ## Which actor to run as
 
 **`admin.alpha`** — the `ITEST_USERNAME` / `ITEST_PASSWORD` pair in the itest credentials file.

@@ -54,7 +54,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -159,6 +159,75 @@ def actor_provenance(token):
         "effective_roles": effective,
         "permission_catalog_version": claims.get("perm_ver"),
     }
+
+
+
+# DateWindowResolver.statement() prefixes every window with its shape label, and the DATE_WINDOW
+# contract requires the model to quote that statement in the answer. That makes the shape readable
+# from the reply itself, with no production change — which is what lets the gate grade the SHAPE
+# rather than the endpoints (#1709 option 3).
+_STATEMENT_LABELS = {
+    "rolling": "ROLLING",
+    "current to date": "CURRENT_TO_DATE",
+    "prior complete": "PRIOR_COMPLETE",
+    "calendar span": "CALENDAR_SPAN",
+    "absolute": "ABSOLUTE",
+}
+_STATEMENT_RE = re.compile(
+    r"\b(" + "|".join(sorted(_STATEMENT_LABELS, key=len, reverse=True)) + r")\s*:\s*\d{4}-\d{2}-\d{2}",
+    re.IGNORECASE,
+)
+
+
+def observed_shapes(answer):
+    """Every resolver shape the answer quotes, in order, de-duplicated.
+
+    A question may legitimately quote more than one — q04 buckets six months and so resolves six
+    ABSOLUTE windows — so this returns all of them and the caller decides what satisfies the
+    expectation.
+    """
+    if not answer:
+        return []
+    seen = []
+    for match in _STATEMENT_RE.finditer(answer):
+        shape = _STATEMENT_LABELS[match.group(1).lower()]
+        if shape not in seen:
+            seen.append(shape)
+    return seen
+
+
+def grade_window(question, answer, as_of):
+    """Grades the window a question was answered on.
+
+    Endpoints are deliberately not compared for relative windows. They are a derived consequence of
+    (shape, unit, count) and the run's own date, so comparing them to dates baked from a fixed
+    `eval_as_of` fails every run that does not execute on that exact day — which is the defect this
+    replaces (#1709). Where an endpoint genuinely matters and no resolver shape describes it
+    (point-in-time questions), it is expressed as an offset from the run's as-of date instead.
+
+    Returns (verdict, detail) where verdict is PASS / FAIL / UNGRADED.
+    """
+    expected = (question.get("window") or {}).get("expected") or {}
+    wanted = expected.get("shape")
+
+    if wanted is None:
+        if "as_of_offset_days" in expected and as_of is not None:
+            target = as_of + timedelta(days=int(expected["as_of_offset_days"]))
+            if answer and target.isoformat() in answer:
+                return "PASS", f"answer states the as-of date {target.isoformat()}"
+            return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
+        return "UNGRADED", expected.get("note") or "no window expectation recorded"
+
+    observed = observed_shapes(answer)
+    if not observed:
+        return "UNGRADED", (
+            "the answer quotes no resolver statement, so the shape cannot be read from it "
+            "(the DATE_WINDOW contract requires quoting it)"
+        )
+    acceptable = {wanted, *expected.get("also_accept", [])}
+    if acceptable & set(observed):
+        return "PASS", f"expected {wanted}, answer quotes {observed}"
+    return "FAIL", f"expected {wanted}, answer quotes {observed}"
 
 
 def questions_provenance(path):
@@ -770,8 +839,10 @@ def write_markdown(out_dir, record):
             )
         else:
             window = result["window"]
+            check = result.get("window_check") or {}
             lines.append(
-                f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']} |"
+                f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']}"
+                f" — window: **{check.get('verdict', 'UNGRADED')}** ({check.get('detail', '')}) |"
                 f" {result['elapsed_s']}s | {format_tool_calls(result['tool_calls'])} |"
             )
     lines.append("")
@@ -916,6 +987,12 @@ def main(argv=None):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    raw_as_of = document.get("eval_as_of")
+    try:
+        as_of_date = date.fromisoformat(raw_as_of) if raw_as_of else None
+    except ValueError:
+        as_of_date = None
+
     record = {
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "endpoint": args.url,
@@ -965,6 +1042,7 @@ def main(argv=None):
             "ground_truth_sql": question["ground_truth_sql"],
             "utterance": question["utterance"],
             "window": question["window"],
+            "window_check": None,  # filled below, once the answer exists
             "expected_plan": expected_plan,
             "tool_calls": tool_calls,
             "plan_check": plan_check,
@@ -972,6 +1050,8 @@ def main(argv=None):
         }
         if grading is not None:
             result.update(grading)
+        verdict, detail = grade_window(question, result.get("answer"), as_of_date)
+        result["window_check"] = {"verdict": verdict, "detail": detail}
         record["results"].append(result)
         print(f"  {outcome['elapsed_s']}s"
               + (f" — {outcome['error']}" if outcome["error"] else "")
