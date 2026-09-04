@@ -17,6 +17,7 @@ import com.positivity.warranty.internal.enums.ProviderType;
 import com.positivity.warranty.internal.enums.ReimbursementStatus;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.VendorReimbursementRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyProviderRepository;
@@ -206,7 +207,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
 
         ReimbursementStatus target = request.status();
         if (!UPDATABLE_TARGETS.contains(target)) {
-            throw new IllegalArgumentException("status must be one of " + UPDATABLE_TARGETS + " but was " + target);
+            throw new WarrantyValidationException("status must be one of " + UPDATABLE_TARGETS + " but was " + target);
         }
         ReimbursementStatus current = reimbursement.getStatus();
         if (!LEGAL_MOVES.getOrDefault(current, Set.of()).contains(target)) {
@@ -217,7 +218,7 @@ public class ReimbursementServiceImpl implements ReimbursementService {
         }
         if ((target == ReimbursementStatus.APPROVED || target == ReimbursementStatus.PARTIALLY_APPROVED)
                 && request.amountApproved() == null) {
-            throw new IllegalArgumentException("amountApproved is required when status is " + target);
+            throw new WarrantyValidationException("amountApproved is required when status is " + target);
         }
 
         bumpClaimAggregateVersion(claim);

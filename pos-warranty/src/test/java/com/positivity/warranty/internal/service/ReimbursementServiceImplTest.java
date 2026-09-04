@@ -24,6 +24,7 @@ import com.positivity.warranty.internal.enums.ProviderType;
 import com.positivity.warranty.internal.enums.ReimbursementStatus;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.VendorReimbursementRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyProviderRepository;
@@ -398,7 +399,7 @@ class ReimbursementServiceImplTest {
 
             assertThatThrownBy(() -> service.update(
                             CLAIM_ID, new ReimbursementUpdateRequest(ReimbursementStatus.APPROVED, null, null, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("amountApproved");
         }
 
@@ -408,7 +409,7 @@ class ReimbursementServiceImplTest {
 
             assertThatThrownBy(() -> service.update(
                             CLAIM_ID, new ReimbursementUpdateRequest(ReimbursementStatus.SUBMITTED, null, null, null)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(WarrantyValidationException.class);
         }
 
         @Test

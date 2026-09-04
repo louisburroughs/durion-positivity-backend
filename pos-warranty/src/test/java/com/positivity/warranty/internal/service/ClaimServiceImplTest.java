@@ -33,6 +33,8 @@ import com.positivity.warranty.internal.enums.PartReturnStatus;
 import com.positivity.warranty.internal.enums.ReimbursementStatus;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.exception.WarrantyUnprocessableException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
@@ -464,7 +466,7 @@ class ClaimServiceImplTest {
             stubLoad(empty);
 
             assertThatThrownBy(() -> service.submit(CLAIM_ID))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyUnprocessableException.class)
                     .hasMessageContaining("at least one claim line");
             verify(eligibilityService, never()).evaluate(any());
         }
@@ -482,7 +484,7 @@ class ClaimServiceImplTest {
                             .build()));
 
             assertThatThrownBy(() -> service.submit(CLAIM_ID))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyUnprocessableException.class)
                     .hasMessageContaining("photo evidence");
             verify(eligibilityService).evaluate(CLAIM_ID);
             verify(statusHistoryRepository, never()).save(any());
@@ -574,7 +576,7 @@ class ClaimServiceImplTest {
 
             assertThatThrownBy(() ->
                             service.decide(CLAIM_ID, new ClaimDecisionRequest(ClaimDecisionRequest.Action.DENY, "  ")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("requires a reason");
             verify(claimRepository, never()).save(any());
         }
@@ -603,7 +605,7 @@ class ClaimServiceImplTest {
 
             assertThatThrownBy(() -> service.decide(
                             CLAIM_ID, new ClaimDecisionRequest(ClaimDecisionRequest.Action.APPROVE, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("override reason");
         }
 
@@ -709,7 +711,7 @@ class ClaimServiceImplTest {
                                     null,
                                     List.of(new ClaimDecisionRequest.LineDecision(
                                             LINE_ID, new BigDecimal("50.00"), null, null)))))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("override reason is required");
             verify(claimRepository, never()).save(any());
         }
@@ -798,7 +800,7 @@ class ClaimServiceImplTest {
                                     ClaimDecisionRequest.Action.REQUEST_INFO,
                                     "need tread depth",
                                     List.of(new ClaimDecisionRequest.LineDecision(LINE_ID, null, null, null)))))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("APPROVE or DENY");
         }
 
@@ -833,7 +835,7 @@ class ClaimServiceImplTest {
 
             assertThatThrownBy(() -> service.decide(
                             CLAIM_ID, new ClaimDecisionRequest(ClaimDecisionRequest.Action.APPEAL, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("requires a reason");
         }
 

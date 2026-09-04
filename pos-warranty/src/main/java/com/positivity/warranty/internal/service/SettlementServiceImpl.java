@@ -19,6 +19,7 @@ import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyIntegrationException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
 import com.positivity.warranty.internal.exception.WarrantyUnprocessableException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
@@ -319,7 +320,7 @@ public class SettlementServiceImpl implements SettlementService {
     @NonNull
     private static UUID require(@Nullable UUID value, @NonNull String message) {
         if (value == null) {
-            throw new IllegalArgumentException(message);
+            throw new WarrantyValidationException(message);
         }
         return value;
     }

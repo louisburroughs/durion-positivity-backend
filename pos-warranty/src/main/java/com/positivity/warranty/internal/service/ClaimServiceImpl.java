@@ -23,6 +23,8 @@ import com.positivity.warranty.internal.enums.PartReturnStatus;
 import com.positivity.warranty.internal.enums.ReimbursementStatus;
 import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.exception.WarrantyUnprocessableException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
@@ -58,6 +60,8 @@ public class ClaimServiceImpl implements ClaimService {
     static final String LINE_NOT_FOUND_CODE = "WARRANTY_CLAIM_LINE_NOT_FOUND";
     static final String PHOTO_NOT_FOUND_CODE = "WARRANTY_CLAIM_PHOTO_NOT_FOUND";
     static final String CLOSE_BLOCKED_CODE = "WARRANTY_CLAIM_CLOSE_BLOCKED";
+    static final String MISSING_LINES_CODE = "WARRANTY_CLAIM_MISSING_LINES";
+    static final String PHOTO_EVIDENCE_REQUIRED_CODE = "WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED";
 
     private static final String DEFAULT_ACTOR = "system";
 
@@ -282,7 +286,8 @@ public class ClaimServiceImpl implements ClaimService {
                 };
 
         if (claim.getLines().isEmpty()) {
-            throw new IllegalArgumentException("A claim must have at least one claim line before it can be submitted");
+            throw new WarrantyUnprocessableException(
+                    MISSING_LINES_CODE, "A claim must have at least one claim line before it can be submitted");
         }
 
         // Eligibility runs automatically at submit (PRD §6) and persists results + policy
@@ -335,11 +340,11 @@ public class ClaimServiceImpl implements ClaimService {
                     case APPEAL -> throw new IllegalStateException("unreachable");
                 };
         if (request.decision() == ClaimDecisionRequest.Action.DENY && reason == null) {
-            throw new IllegalArgumentException("Denying a claim requires a reason");
+            throw new WarrantyValidationException("Denying a claim requires a reason");
         }
         boolean overrode = contradictsSuggestion(claim, request.decision());
         if (overrode && reason == null) {
-            throw new IllegalArgumentException("This decision contradicts the computed suggestion ("
+            throw new WarrantyValidationException("This decision contradicts the computed suggestion ("
                     + claim.getEligibilityResult() + "); an override reason is required");
         }
         boolean lineOverride = applyLineDecisions(claim, request);
@@ -435,7 +440,7 @@ public class ClaimServiceImpl implements ClaimService {
                     claim.getStatus(), "appeal (only a DENIED claim can be appealed)");
         }
         if (reason == null) {
-            throw new IllegalArgumentException("Appealing a denied claim requires a reason");
+            throw new WarrantyValidationException("Appealing a denied claim requires a reason");
         }
         transition(claim, ClaimStatus.IN_REVIEW, "appeal: " + reason);
         // The claim is back under adjudication: clear the standing decision (the denial stays
@@ -460,8 +465,10 @@ public class ClaimServiceImpl implements ClaimService {
             boolean hasPhotos = claim.getPhotoEvidenceUrls() != null
                     && !claim.getPhotoEvidenceUrls().isEmpty();
             if (requiresPhotos && !hasPhotos) {
-                throw new IllegalArgumentException("Policy '" + policy.getName()
-                        + "' requires photo evidence: attach at least one photo before submitting");
+                throw new WarrantyUnprocessableException(
+                        PHOTO_EVIDENCE_REQUIRED_CODE,
+                        "Policy '" + policy.getName()
+                                + "' requires photo evidence: attach at least one photo before submitting");
             }
         });
     }
@@ -524,7 +531,7 @@ public class ClaimServiceImpl implements ClaimService {
                 || request.decision() == ClaimDecisionRequest.Action.DENY;
         if (!adjudicating) {
             if (!decisions.isEmpty()) {
-                throw new IllegalArgumentException("lineDecisions are only accepted with APPROVE or DENY");
+                throw new WarrantyValidationException("lineDecisions are only accepted with APPROVE or DENY");
             }
             return false;
         }
@@ -554,7 +561,7 @@ public class ClaimServiceImpl implements ClaimService {
         Map<UUID, ClaimDecisionRequest.LineDecision> byLineId = new LinkedHashMap<>();
         for (ClaimDecisionRequest.LineDecision decision : decisions) {
             if (byLineId.put(decision.lineId(), decision) != null) {
-                throw new IllegalArgumentException(
+                throw new WarrantyValidationException(
                         "Duplicate line decision for claim line '" + decision.lineId() + "'");
             }
         }
@@ -586,7 +593,7 @@ public class ClaimServiceImpl implements ClaimService {
                 && (computed == null || decision.amountApproved().compareTo(computed) != 0);
         String overrideReason = trimToNull(decision.overrideReason());
         if (overridesComputed && overrideReason == null) {
-            throw new IllegalArgumentException("Claim line '" + line.getId() + "': amountApproved "
+            throw new WarrantyValidationException("Claim line '" + line.getId() + "': amountApproved "
                     + decision.amountApproved() + " overrides the computed amountRequested " + computed
                     + "; an override reason is required");
         }
@@ -615,6 +622,11 @@ public class ClaimServiceImpl implements ClaimService {
             case APPROVE -> ClaimDecision.APPROVE;
             case DENY -> ClaimDecision.DENY;
             case REQUEST_INFO -> ClaimDecision.REQUEST_INFO;
+            // Defensive invariant, not client input: decide() always routes APPEAL to appeal()
+            // and returns before this is ever called with it (line ~321). Left as
+            // IllegalArgumentException on purpose — it is unreachable from any request, so it
+            // must fall through to the platform 500 fallback like any other programming-error
+            // assertion, never be reported to the caller as their bad input.
             case APPEAL -> throw new IllegalArgumentException("APPEAL is not a persisted decision");
         };
     }
