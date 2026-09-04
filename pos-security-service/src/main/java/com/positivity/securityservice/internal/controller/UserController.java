@@ -6,10 +6,12 @@ import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.UserService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -45,6 +47,10 @@ public class UserController {
                         role is not found.
                         """)
     @ApiResponse(responseCode = "201", description = "User created successfully.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Username already exists",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_USER_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -163,12 +169,11 @@ public class UserController {
                         follow the account out.
                         Use this tool to remove an account permanently; do not use disableUserAccount, which blocks \
                         sign-in reversibly and keeps the record.
-                        Preconditions: the caller must hold security:user:delete; deleting an id that does not exist is \
-                        a silent no-op.
+                        Preconditions: the caller must hold security:user:delete and the user must exist.
                         Required inputs: id (UUID) as a path parameter.
                         Emits a SECURITY_USER_DELETE event and sends a UserPersonLinkRemoveRequested command to the \
                         people-contact domain in the same transaction.
-                        Returns 204 in all cases, including when the user was already absent.
+                        Returns 404 when the user does not exist.
                         """)
     @ApiResponse(responseCode = "204", description = "User deleted successfully.")
     @ApiResponse(responseCode = "404", description = "User not found.")

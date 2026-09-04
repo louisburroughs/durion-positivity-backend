@@ -378,6 +378,10 @@ public class RoleController {
             responseCode = "404",
             description = "User or role not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Overlapping role assignment for the same user, role, and scope",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RoleAssignmentDto> createRoleAssignment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "The user, role, scope, and effective window of the assignment to create.",

@@ -129,10 +129,25 @@ class UserServiceTest {
     @Test
     void deleteUser_delegatesToRepository() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        User user = new User();
+        user.setUsername("alice");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         userService.deleteUser(userId);
 
         verify(userRepository).deleteById(userId);
+    }
+
+    @Test
+    void deleteUser_unknownId_throwsAndNeverDeletes() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.deleteUser(userId))
+                .isInstanceOf(com.positivity.securityservice.internal.exception.UserNotFoundException.class);
+
+        verify(userRepository, org.mockito.Mockito.never()).deleteById(any());
+        verify(peopleContactCommandEmitter, org.mockito.Mockito.never()).requestLinkRemove(any());
     }
 
     @Test

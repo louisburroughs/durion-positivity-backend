@@ -4,7 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleManagementService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Set;
 import java.util.UUID;
@@ -52,6 +56,11 @@ public class UserRoleController {
                     Emits a SECURITY_USER_ROLE_ASSIGN event and writes a RoleAssignedToUser audit record.
                     Returns 404 when the user or role does not exist.
                     """)
+    @ApiResponse(responseCode = "201", description = "Role assigned to user")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User or role not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> assignRoleToUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.assignRoleToUser(userId, roleId);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -77,6 +86,11 @@ public class UserRoleController {
                     Emits a SECURITY_USER_ROLE_REVOKE event and writes a RoleRevokedFromUser audit record.
                     Returns 404 when the user or role does not exist, or when no active assignment links them.
                     """)
+    @ApiResponse(responseCode = "204", description = "Role revoked from user")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User, role, or active role assignment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> revokeRoleFromUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.revokeRoleFromUser(userId, roleId);
         return ResponseEntity.noContent().build();
@@ -101,6 +115,11 @@ public class UserRoleController {
                     Returns 403 when the caller is asking about another user without \
                     security:permission:view, and 404 when the user does not exist.
                     """)
+    @ApiResponse(responseCode = "200", description = "User permissions returned successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
         return ResponseEntity.ok(roleManagementService.getUserPermissions(userId));
     }

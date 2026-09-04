@@ -194,6 +194,11 @@ public class PermissionController {
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 404 when no permission exists for the supplied id.
                     """)
+    @ApiResponse(responseCode = "200", description = "Permission returned successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Permission not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
