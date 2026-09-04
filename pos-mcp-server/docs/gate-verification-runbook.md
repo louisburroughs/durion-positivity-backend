@@ -91,7 +91,56 @@ grep -A2 'tuning:' pos-mcp-server/src/main/resources/application.yml      # enab
 # single documented default model (yml and README agree)
 grep 'OLLAMA_CHAT_MODEL' pos-mcp-server/src/main/resources/application.yml
 grep 'chat-model.model-name' pos-mcp-server/README.md
+# #1683: num_ctx explicit in every profile, executor deterministic, tiering dormant
+grep -c 'num-ctx' pos-mcp-server/src/main/resources/application{,-dev,-alpha}.yml   # 1 each
+grep 'temperature' pos-mcp-server/src/main/resources/application.yml                # ${OLLAMA_CHAT_TEMPERATURE:0.0}
+grep 'tiering-enabled' pos-mcp-server/src/main/resources/application.yml            # ${MCP_MODEL_TIERING_ENABLED:false}
 ```
+(Also asserted by `McpServerPropertiesDefaultsTest` and `OllamaChatModelConfigurationTest`, so these
+are a fast eyeball rather than the actual guard.)
+
+### Prompt-truncation check (#1683) — run before trusting any prompt-tuning result
+
+Ollama truncates from the **front** of the context, which drops the system prompt first, with no
+error and no log line. Before #1683 the service never sent `num_ctx`, so the window was whatever the
+backend picked — a self-hosted daemon's `OLLAMA_CONTEXT_LENGTH` (4096 unless raised;
+`gate3-openapi-bridge-design.md` records needing 16384 on the alpha CPU host for exactly this
+reason), or the hosted ollama.com backend's own per-model default. Either way it was not ours, and
+either way a gate result measured before the fix was measured through a prompt the model may not
+have fully received.
+
+`/api/chat` gives **no read-back of the granted window**, so no single call can report it directly.
+It has to be inferred from `prompt_eval_count` on a prompt long enough to cross the suspected cap —
+which is why a trivial `"hi"` probe proves nothing: it returns a handful of tokens whatever the
+window is.
+
+```bash
+# 1. What the service asks for (INFO, once per chat-model bean at startup)
+grep 'MCP Ollama chat model configured' <service log>       # ... numCtx=32768 ...
+
+# 2. What actually got evaluated, from a REAL gate turn through the service.
+#    Preferred: run one analytics gate question and read prompt_eval_count off that response —
+#    it is the only prompt whose assembled length is the thing in question.
+#    Failing that, probe directly with a prompt deliberately padded past the suspected cap:
+PAD=$(python3 -c "print('the quick brown fox jumps over the lazy dog. ' * 1200)")   # ~12k tokens
+curl -s "$OLLAMA_CHAT_BASE_URL/api/chat" -H "Authorization: Bearer $OLLAMA_API_KEY" \
+  -d "$(python3 -c "
+import json,os
+print(json.dumps({'model': os.environ['OLLAMA_CHAT_MODEL'], 'stream': False,
+                  'options': {'num_ctx': 32768},
+                  'messages': [{'role': 'user', 'content': os.environ['PAD'] + ' Reply with OK.'}]}))
+")" | python3 -m json.tool | grep prompt_eval_count
+
+# 3. Self-hosted daemon only: what the loaded model is actually running with.
+curl -s "$OLLAMA_CHAT_BASE_URL/api/ps" | python3 -m json.tool | grep -i context_length
+```
+
+Interpretation: with a ~12k-token prompt, `prompt_eval_count` landing near 12k means the window was
+honoured. It pinning just under a round number (4096, 8192) means the backend capped `num_ctx`
+below what we asked for and the front of the prompt was dropped. On a self-hosted daemon, raise
+`OLLAMA_CONTEXT_LENGTH`; on ollama.com, lower `OLLAMA_NUM_CTX` to what the backend honours and
+shrink the prompt to fit. Re-run the analytics gate after any change here before drawing
+conclusions from prompt work (tracked under #1601, executed under #1697).
 
 ### Gate 0 fixture-minimum exit gate (currently @Disabled)
 Counts are seed-only (4/4/4 vs required 100/50/30). To check current counts:

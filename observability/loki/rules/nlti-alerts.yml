@@ -161,6 +161,9 @@ groups:
           runbook: pos-mcp-server/docs/runbooks/planning-failure.md
       # Doc rule 6. Only meaningful with MCP_MODEL_TIERING_ENABLED=true — the flag is
       # not visible to LogQL, so silence this alert when tiering is deliberately off.
+      # As of #1683 the flag DEFAULTS to false (tier routing is dormant: both T2 tiers resolved
+      # to the same model), so this rule and the NltiRoutingMixShift rules above should be
+      # silenced until MCP_MODEL_SIMPLE names a real smaller model and tiering goes back on.
       - alert: NltiModelTierStarved
         expr: |
           sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100

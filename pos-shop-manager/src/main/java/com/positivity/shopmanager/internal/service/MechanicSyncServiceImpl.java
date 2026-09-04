@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicAuditLog;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
@@ -37,13 +38,13 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
     public void processHrEvent(@NonNull HrMechanicEvent event) {
         // AC5: validate required fields before any side-effects
         if (event.getPersonId() == null || event.getPersonId().isBlank()) {
-            throw new IllegalArgumentException("personId is required");
+            throw new ShopManagerValidationException("personId is required");
         }
         if (event.getVersion() == null) {
-            throw new IllegalArgumentException("version is required");
+            throw new ShopManagerValidationException("version is required");
         }
         if (event.getEventId() == null) {
-            throw new IllegalArgumentException("eventId is required");
+            throw new ShopManagerValidationException("eventId is required");
         }
 
         // BR2: idempotency — skip already-processed events
@@ -60,7 +61,7 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         }
 
         if (event.getEventType() == null) {
-            throw new IllegalArgumentException(
+            throw new ShopManagerValidationException(
                     "HrMechanicEvent.eventType must not be null, eventId=" + event.getEventId());
         }
 

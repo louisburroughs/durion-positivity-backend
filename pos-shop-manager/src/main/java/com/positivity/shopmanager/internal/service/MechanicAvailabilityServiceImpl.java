@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import com.positivity.shopmanager.internal.dto.HrScheduleBlock;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.TravelBlock;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.TravelBlockRepository;
@@ -43,13 +44,13 @@ public class MechanicAvailabilityServiceImpl implements MechanicAvailabilityServ
             @NonNull String personId, @NonNull Instant windowStart, @NonNull Instant windowEnd) {
 
         if (!windowStart.isBefore(windowEnd)) {
-            throw new IllegalArgumentException(
+            throw new ShopManagerValidationException(
                     "windowStart must be before windowEnd, got: " + windowStart + " >= " + windowEnd);
         }
 
         var mechanic = mechanicRepository
                 .findByPersonId(personId)
-                .orElseThrow(() -> new IllegalArgumentException("Mechanic not found for personId: " + personId));
+                .orElseThrow(() -> new ShopManagerValidationException("Mechanic not found for personId: " + personId));
 
         // Schedule blocks come from the local staffing-assignment replica (#877); the HR
         // remote-failure path (503 HR_UNAVAILABLE) is gone with the sync client.

@@ -1,6 +1,8 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.ConflictOverrideService;
 import com.positivity.shopmanager.internal.service.dto.ConflictOverrideRequest;
@@ -9,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -69,13 +72,22 @@ public class ConflictOverrideController {
                     Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event, sets the appointment's \
                     conflict-override flag and stores the override record with the actor resolved from the security \
                     context.
-                    Returns 400 when the path and body appointmentId differ, the overrideReason is blank, or the \
-                    appointment cannot be resolved, and 403 when the caller lacks the required authority.
+                    Returns 400 when the path and body appointmentId differ or the overrideReason is blank, 404 when \
+                    the appointment cannot be resolved, and 403 when the caller lacks the required authority.
                     """)
     @ApiResponse(responseCode = "201", description = "Conflict override executed.")
-    @ApiResponse(responseCode = "400", description = "Invalid request or appointment ID mismatch.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
-    @ApiResponse(responseCode = "404", description = "Appointment not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or appointment ID mismatch.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Appointment not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public @NonNull ConflictOverrideResponse executeOverride(
             @Parameter(description = "Appointment ID", required = true) @PathVariable @NonNull UUID appointmentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -99,7 +111,7 @@ public class ConflictOverrideController {
         // Validate that path appointmentId is consistent with request body
         // appointmentId
         if (!appointmentId.equals(request.getAppointmentId())) {
-            throw new IllegalArgumentException("Path appointmentId does not match request body appointmentId");
+            throw new ShopManagerValidationException("Path appointmentId does not match request body appointmentId");
         }
         return conflictOverrideService.execute(request);
     }

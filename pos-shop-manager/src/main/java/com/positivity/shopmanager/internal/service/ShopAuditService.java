@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -71,7 +72,7 @@ public interface ShopAuditService {
     /**
      * Searches the audit trail by the supplied filter criteria.
      * At least one filter criterion must be present; the service MUST throw
-     * {@link IllegalArgumentException} if the filter is empty.
+     * {@link ShopManagerValidationException} if the filter is empty.
      *
      * <p>
      * If no {@code fromDateTime} is supplied, a default of 90 days before now is
