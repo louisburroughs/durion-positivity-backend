@@ -226,6 +226,63 @@ an empty A/R aging report and a silently wrong Q13.
    different buckets under the corrected rule and must be revisited before it is used as ground
    truth. See `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
 
+## How windows are graded
+
+**The shape, not the endpoints** (#1709, option 3).
+
+A relative window's endpoints are a derived consequence of its shape, unit, count and the run's own
+date. Comparing them against dates baked from a fixed `eval_as_of` fails every run that does not
+execute on that exact day — a three-day offset on 2026-09-04 made every range in this corpus
+unmatchable, however correct the assistant was.
+
+So each question carries `window.expected`:
+
+```json
+"expected": { "shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER" }
+```
+
+and the grader reads the shape out of the answer itself. `DateWindowResolver` prefixes every window
+statement with its shape label (`calendar span: …`, `rolling: …`, `prior complete: …`), and the
+DATE_WINDOW contract requires the model to quote that statement — so the shape is observable with no
+production change.
+
+- `shape`, `unit`, `count` and `comparison` are all graded. A right shape with the wrong count is a
+  FAIL: answering q12 on one calendar month where six were specified is the wrong window, and
+  grading the label alone would call it correct.
+- `also_accept` lets a question admit more than one correct shape. q04 buckets by month, so six
+  `ABSOLUTE` resolutions satisfy it as well as one `CALENDAR_SPAN` — and **six** is checked, not
+  "at least one": a single named month is the under-answer that actually occurred on 2026-09-04.
+- `as_of_offset_days` handles the questions where an endpoint genuinely matters and no resolver
+  shape describes it — point-in-time questions (q05, q13). Expressed as an offset from the run's own
+  as-of date (option 2), so any run can satisfy it.
+- `shape: null` with a `note` means deliberately ungraded. q08 is mixed — a rolling 90-day filter
+  AND a prior-calendar-year condition — and no single shape describes it; expressing two windows per
+  question is #1689 work. Eight non-gate questions are unannotated for the same reason.
+
+An answer that quotes no statement grades **UNGRADED**, never PASS: the contract requires the quote,
+and silence about the window is not evidence the window was right. A turn with no answer at all
+(timeout, HTTP error) is likewise UNGRADED — a transport failure is not a window failure, and
+keeping them separable is the point of grading per stage.
+
+In replay mode a window FAIL **fails the run**. Answering the right question on the wrong six months
+is a wrong answer, and a verdict that ignored it would report PASS for exactly the failures this
+grading exists to catch.
+
+### What this deliberately does not check
+
+Endpoints for relative windows.
+
+**q16 is unannotated entirely.** It asks for bills due in the *next* 14 days, and the resolver has no
+forward shape — `ROLLING` is `start = today - N + 1, end = today`. A `ROLLING` expectation would
+therefore pass an answer that used the wrong, backward window and leave a correct forward answer
+UNGRADED. It needs either a forward shape in the resolver or an endpoint-based expectation; the
+day-count edge is separately open in #1681.
+
+**q07 and q17 are unannotated** because their own notes say the corpus cannot support an
+expectation: q07's mixed comparison does not trigger the calendar precedence under the shipped
+contract (both windows read rolling), and q17 names no window at all. Asserting a shape for either
+would convert an acknowledged gap into ground truth that lies — the failure mode #1659 was.
+
 ## Which actor to run as
 
 **`admin.alpha`** — the `ITEST_USERNAME` / `ITEST_PASSWORD` pair in the itest credentials file.

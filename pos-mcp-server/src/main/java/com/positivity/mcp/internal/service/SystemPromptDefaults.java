@@ -70,6 +70,7 @@ public final class SystemPromptDefaults {
      */
     static final String TOOL_USE_LAYER_TEXT = """
             Tool-use contract:
+            - Never return a tool result as your answer. A tool gives you data; the answer is what you write from it. If a reply would be nothing but JSON, the step that matters has been skipped — read the payload, do the aggregation the question asked for, and write the result as prose or a table.
             - Prefer a tool call over recalling from memory for any live, record-specific, or status question.
             - Never guess identifiers (workorder numbers, SKUs, VINs, invoice numbers, account codes); if one is missing, ask for it.
             - Ground every tool argument in the user's words, a prior tool result, or confirmed context — never in an unstated assumption.

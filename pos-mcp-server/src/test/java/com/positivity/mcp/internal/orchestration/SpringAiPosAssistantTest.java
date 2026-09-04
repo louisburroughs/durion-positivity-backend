@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -40,6 +41,18 @@ class SpringAiPosAssistantTest {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static ArgumentCaptor<List<Message>> messageListCaptor() {
         return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+    }
+
+    @Test
+    @DisplayName("a bare tool payload is handed to the ladder, not returned to the user (#1708)")
+    void chat_handsOffToLadderWhenContentIsABareToolPayload() {
+        // resolveResponse routes on `source != CONTENT`. Without this test a future narrowing to
+        // `== THINKING || == BLANK` would restore #1708 with every ChatResponseTextTest still green:
+        // the classification would be right and nothing would act on it.
+        assertThat(ChatResponseText.extractDetailed(new org.springframework.ai.chat.messages.AssistantMessage(
+                                "{\"startDate\":\"2026-03-01\",\"rows\":[]}"))
+                        .source())
+                .isNotEqualTo(ChatResponseText.Source.CONTENT);
     }
 
     @Test

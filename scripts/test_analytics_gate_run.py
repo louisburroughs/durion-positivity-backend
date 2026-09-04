@@ -1,4 +1,5 @@
 import json
+from datetime import date
 import os
 import tempfile
 import unittest
@@ -544,6 +545,171 @@ class ActorProvenanceTest(unittest.TestCase):
         # Pinned deliberately: the corpus README names admin.alpha and explains why no role-scoped
         # actor covers workorder + A/R + A/P. Changing one without the other reopens #1706.
         self.assertEqual(runner.EXPECTED_ROLE_DEFAULT, "ROLE_ADMIN")
+
+
+
+class WindowGradingTest(unittest.TestCase):
+    """#1709: grade the SHAPE, not endpoints baked from a fixed eval_as_of."""
+
+    @staticmethod
+    def _q(expected):
+        return {"fixture_id": "qx", "window": {"expected": expected}}
+
+    def test_reads_the_shape_from_the_quoted_resolver_statement(self):
+        answer = "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months ending with August 2026"
+        verdict, _ = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}), answer, date(2026, 9, 1)
+        )
+        self.assertEqual(verdict, "PASS")
+
+    def test_a_rolling_answer_fails_a_calendar_span_expectation(self):
+        # The live failure this exists to catch: q09/q12/q15/q17 all answered on a rolling window
+        # where the corpus specifies a calendar span.
+        answer = "rolling: 2026-03-05 to 2026-09-04 — 6 months ending today (2026-09-04)"
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}), answer, date(2026, 9, 1)
+        )
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("CALENDAR_SPAN", detail)
+        self.assertIn("ROLLING", detail)
+
+    def test_endpoints_are_not_compared_for_a_relative_window(self):
+        # Same shape, dates three days off because the run is not on eval_as_of. Under the old
+        # absolute-range comparison this failed; it must now pass.
+        verdict, _ = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-04 to 2026-09-03 — 6 whole months",
+            date(2026, 9, 1),
+        )
+        self.assertEqual(verdict, "PASS")
+
+    def test_also_accept_requires_as_many_absolute_windows_as_periods_asked_for(self):
+        # q04 buckets six months, so six ABSOLUTE resolutions satisfy it — and one does not. The
+        # single-month reply is the actual under-answer from the 2026-09-04 run, and grading it PASS
+        # on shape alone would have called that turn correct.
+        expectation = {"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "also_accept": ["ABSOLUTE"]}
+        one_month = "absolute: 2026-03-01 to 2026-03-31 — the named calendar month March 2026"
+        six_months = " ".join(
+            f"absolute: 2026-0{m}-01 to 2026-0{m}-28 — the named calendar month M{m} 2026" for m in range(3, 9)
+        )
+
+        self.assertEqual(runner.grade_window(self._q(expectation), one_month, date(2026, 9, 1))[0], "FAIL")
+        self.assertEqual(runner.grade_window(self._q(expectation), six_months, date(2026, 9, 1))[0], "PASS")
+
+    def test_a_right_shape_with_the_wrong_count_fails(self):
+        # The decision on #1709 asks for the triple, not the label. One calendar month where six
+        # were specified is the wrong window.
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-08-01 to 2026-08-31 — 1 whole month ending with August 2026",
+            date(2026, 9, 1),
+        )
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("count", detail)
+
+    def test_a_missing_comparison_window_fails(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER"}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months ending with August 2026",
+            date(2026, 9, 1),
+        )
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("comparison", detail)
+
+    def test_a_present_comparison_window_passes(self):
+        verdict, _ = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER"}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months ending with August 2026. "
+            "year earlier: 2025-03-01 to 2025-08-31 — the same span one year earlier",
+            date(2026, 9, 1),
+        )
+        self.assertEqual(verdict, "PASS")
+
+    def test_no_answer_is_ungraded_not_failed(self):
+        # A transport failure is not a window failure; keeping them separable is the point.
+        verdict, _ = runner.grade_window(self._q({"shape": None, "as_of_offset_days": 0}), None, date(2026, 9, 1))
+        self.assertEqual(verdict, "UNGRADED")
+
+    def test_point_in_time_is_graded_on_the_runs_own_as_of(self):
+        question = self._q({"shape": None, "as_of_offset_days": 0})
+        self.assertEqual(runner.grade_window(question, "as of 2026-09-01 the balance is…", date(2026, 9, 1))[0], "PASS")
+        # A different run date moves the target with it, rather than failing every run that is not
+        # executed on the corpus's frozen date.
+        self.assertEqual(runner.grade_window(question, "as of 2026-09-04 the balance is…", date(2026, 9, 4))[0], "PASS")
+        self.assertEqual(runner.grade_window(question, "as of 2026-08-01 the balance is…", date(2026, 9, 4))[0], "FAIL")
+
+    def test_an_answer_quoting_no_statement_is_ungraded_not_a_pass(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN"}), "Here are the numbers.", date(2026, 9, 1)
+        )
+        self.assertEqual(verdict, "UNGRADED")
+        self.assertIn("quotes no resolver statement", detail)
+
+    def test_grading_is_anchored_to_the_run_date_not_the_corpus_as_of(self):
+        # The defect this pins: grade_window was correct and main() called it with the corpus's
+        # frozen eval_as_of, so q05/q13 would have failed on every day but 2026-09-01 — #1709's own
+        # defect, reinstated in the wiring. Testing the function alone did not catch it.
+        import datetime as _dt
+
+        today = _dt.datetime.now(_dt.timezone.utc).date().isoformat()
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+            os.environ, {}, clear=True
+        ), mock.patch.object(runner, "ask") as ask, mock.patch.object(
+            runner, "questions_provenance"
+        ) as provenance:
+            provenance.return_value = {"path": "q.json", "blob_sha": "abc", "commit": "d", "uncommitted": False}
+            ask.return_value = {"answer": f"as of {today} the balance is 1", "error": None, "elapsed_s": 1.0}
+            directory = Path(directory)
+            questions_path = directory / "questions.json"
+            document = {
+                "eval_as_of": "2026-09-01",
+                "questions": [
+                    {
+                        **question(),
+                        "window": {"shape": "point-in-time", "resolved_range": "as of 2026-09-01",
+                                   "expected": {"shape": None, "as_of_offset_days": 0}},
+                    }
+                ],
+            }
+            questions_path.write_text(json.dumps(document), encoding="utf-8")
+            out_dir = directory / "out"
+            runner.main([
+                "--out", str(out_dir), "--questions", str(questions_path),
+                "--token", _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"]}),
+            ])
+            record = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(record["graded_as_of"], today)
+        self.assertEqual(record["results"][0]["window_check"]["verdict"], "PASS")
+
+    def test_an_unannotated_question_is_ungraded_and_says_why(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": None, "note": "mixed window"}), "rolling: 2026-01-01 to 2026-02-01 — x", date(2026, 9, 1)
+        )
+        self.assertEqual(verdict, "UNGRADED")
+        self.assertEqual(detail, "mixed window")
+
+    def test_observed_shapes_deduplicates_and_preserves_order(self):
+        # All on one line: a greedy clause used to swallow everything after the first statement.
+        answer = (
+            "absolute: 2026-03-01 to 2026-03-31 — the named calendar month March 2026; "
+            "absolute: 2026-04-01 to 2026-04-30 — the named calendar month April 2026; "
+            "rolling: 2026-01-01 to 2026-02-01 — 1 month ending today (2026-02-01)"
+        )
+        self.assertEqual(runner.observed_shapes(answer), ["ABSOLUTE", "ROLLING"])
+
+    def test_every_gate_question_carries_an_expectation_or_a_reason(self):
+        # A silently missing expectation would grade as UNGRADED forever without anyone noticing.
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "pos-mcp-server/src/test/resources/eval/analytics-gate/QUESTIONS.json"
+        )
+        document = json.loads(path.read_text(encoding="utf-8"))
+        for question in document["questions"]:
+            expected = question["window"].get("expected")
+            self.assertIsNotNone(expected, question["fixture_id"])
+            if expected.get("shape") is None and "as_of_offset_days" not in expected:
+                self.assertTrue(expected.get("note"), f"{question['fixture_id']} must say why it is unset")
 
 
 if __name__ == "__main__":

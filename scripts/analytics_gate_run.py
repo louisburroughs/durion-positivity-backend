@@ -54,7 +54,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -159,6 +159,144 @@ def actor_provenance(token):
         "effective_roles": effective,
         "permission_catalog_version": claims.get("perm_ver"),
     }
+
+
+
+# DateWindowResolver.statement() prefixes every window with its shape label, and the DATE_WINDOW
+# contract requires the model to quote that statement in the answer. That makes the shape readable
+# from the reply itself, with no production change — which is what lets the gate grade the SHAPE
+# rather than the endpoints (#1709 option 3).
+_STATEMENT_LABELS = {
+    "rolling": "ROLLING",
+    "current to date": "CURRENT_TO_DATE",
+    "prior complete": "PRIOR_COMPLETE",
+    "calendar span": "CALENDAR_SPAN",
+    "absolute": "ABSOLUTE",
+}
+# The comparison window carries its own label, so a question expecting one can check the model
+# actually resolved it rather than only that it picked the right primary shape.
+_COMPARISON_LABELS = {"prior period": "PRIOR_PERIOD", "year earlier": "YEAR_EARLIER"}
+
+_ALL_LABELS = {**_STATEMENT_LABELS, **_COMPARISON_LABELS}
+_LABEL_ALTERNATION = "|".join(sorted(_ALL_LABELS, key=len, reverse=True))
+_STATEMENT_RE = re.compile(
+    r"\b(" + _LABEL_ALTERNATION + r")\s*:\s*"
+    r"(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\s*[^A-Za-z0-9]*"
+    # Non-greedy, stopping at the next label: a greedy clause ran to end of line and swallowed any
+    # further statement on it, so a multi-window answer reported only its first window.
+    r"(.*?)(?=\b(?:" + _LABEL_ALTERNATION + r")\s*:|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_UNIT_RE = re.compile(r"\b(day|week|month|quarter|year)s?\b", re.IGNORECASE)
+_COUNT_RE = re.compile(r"(?<![\d-])(\d+)\s+(?:whole\s+)?(?:day|week|month|quarter|year)s?\b", re.IGNORECASE)
+
+
+def parse_statements(answer):
+    """Every resolver statement the answer quotes, as {shape, unit, count} dicts, in order.
+
+    The clause after the dates carries the unit and (for the multi-period shapes) the count —
+    "6 whole months ending with the last complete month" — so the triple the #1709 decision asks
+    for is readable from the same string the shape came from.
+    """
+    if not answer:
+        return []
+    parsed = []
+    for match in _STATEMENT_RE.finditer(answer):
+        label, _start, _end, clause = match.groups()
+        unit = _UNIT_RE.search(clause)
+        count = _COUNT_RE.search(clause)
+        parsed.append(
+            {
+                "shape": _ALL_LABELS[label.lower()],
+                "unit": unit.group(1).upper() if unit else None,
+                # A shape that names exactly one period states no number; treat that as count 1
+                # rather than unknown, which is what PRIOR_COMPLETE and CURRENT_TO_DATE mean.
+                "count": int(count.group(1))
+                if count
+                else (1 if _ALL_LABELS[label.lower()] in {"PRIOR_COMPLETE", "CURRENT_TO_DATE"} else None),
+            }
+        )
+    return parsed
+
+
+def observed_shapes(answer):
+    """Primary shapes quoted by the answer, de-duplicated, comparison labels excluded."""
+    seen = []
+    for statement in parse_statements(answer):
+        if statement["shape"] in _STATEMENT_LABELS.values() and statement["shape"] not in seen:
+            seen.append(statement["shape"])
+    return seen
+
+
+def grade_window(question, answer, as_of):
+    """Grades the window a question was answered on.
+
+    Endpoints are deliberately not compared for relative windows. They are a derived consequence of
+    (shape, unit, count) and the run's own date, so comparing them to dates baked from a fixed
+    `eval_as_of` fails every run that does not execute on that exact day — which is the defect this
+    replaces (#1709). Where an endpoint genuinely matters and no resolver shape describes it
+    (point-in-time questions), it is expressed as an offset from the run's as-of date instead.
+
+    Returns (verdict, detail) where verdict is PASS / FAIL / UNGRADED.
+    """
+    expected = (question.get("window") or {}).get("expected") or {}
+    wanted = expected.get("shape")
+
+    if wanted is None:
+        if "as_of_offset_days" in expected and as_of is not None:
+            if not answer:
+                # A transport failure is not a window failure. Keeping them separable is the whole
+                # point of grading per stage.
+                return "UNGRADED", "no answer to read an as-of date from"
+            target = as_of + timedelta(days=int(expected["as_of_offset_days"]))
+            if target.isoformat() in answer:
+                return "PASS", f"answer states the as-of date {target.isoformat()}"
+            return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
+        return "UNGRADED", expected.get("note") or "no window expectation recorded"
+
+    statements = parse_statements(answer)
+    observed = observed_shapes(answer)
+    if not observed:
+        return "UNGRADED", (
+            "the answer quotes no resolver statement, so the shape cannot be read from it "
+            "(the DATE_WINDOW contract requires quoting it)"
+        )
+
+    acceptable = {wanted, *expected.get("also_accept", [])}
+    matching = [s for s in statements if s["shape"] in acceptable]
+    if not matching:
+        return "FAIL", f"expected {wanted}, answer quotes {observed}"
+
+    # Shape alone is not the decision recorded on #1709 — it asks for the triple. A question
+    # answered on ONE calendar month where six were specified is the wrong window, and grading only
+    # the label would call it a pass.
+    problems = []
+    want_unit = expected.get("unit")
+    if want_unit and not any(statement["unit"] == want_unit.upper() for statement in matching):
+        problems.append(f"unit: expected {want_unit.upper()}, answer quotes {[s['unit'] for s in matching]}")
+
+    want_count = expected.get("count")
+    if want_count is not None:
+        absolute = [s for s in matching if s["shape"] == "ABSOLUTE"]
+        if absolute and len(absolute) == len(matching):
+            # A named period states no count; for a bucketed question the count is how many were
+            # resolved. One ABSOLUTE month does not satisfy "six months" — that was q04's actual
+            # under-answer on the 2026-09-04 run.
+            if len(absolute) != want_count:
+                problems.append(
+                    f"count: expected {want_count} periods, answer quotes {len(absolute)} ABSOLUTE window(s)"
+                )
+        elif not any(statement["count"] == want_count for statement in matching):
+            problems.append(f"count: expected {want_count}, answer quotes {[s['count'] for s in matching]}")
+
+    wanted_comparison = expected.get("comparison")
+    if wanted_comparison and wanted_comparison != "NONE":
+        if not any(s["shape"] == wanted_comparison for s in statements):
+            problems.append(f"comparison: expected a {wanted_comparison} window, answer quotes none")
+
+    if problems:
+        return "FAIL", f"shape {wanted} matched, but " + "; ".join(problems)
+    return "PASS", f"expected {wanted}, answer quotes {observed}"
 
 
 def questions_provenance(path):
@@ -739,6 +877,9 @@ def write_markdown(out_dir, record):
             f"Replay report: `{record['replay_report']}` - questions graded:"
             f" {len(record['results'])}",
             (
+                f"Window grading: {record['summary'].get('window_counts')}"
+            ),
+            (
                 f"Overall verdict: **{record['summary']['verdict']}**"
                 + (" — but see the VOID banner above; this verdict is not usable" if record.get("void") else "")
             ),
@@ -770,8 +911,10 @@ def write_markdown(out_dir, record):
             )
         else:
             window = result["window"]
+            check = result.get("window_check") or {}
             lines.append(
-                f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']} |"
+                f"| {result['fixture_id']} |  | {window['shape']}, {window['resolved_range']}"
+                f" — window: **{check.get('verdict', 'UNGRADED')}** ({check.get('detail', '')}) |"
                 f" {result['elapsed_s']}s | {format_tool_calls(result['tool_calls'])} |"
             )
     lines.append("")
@@ -916,10 +1059,18 @@ def main(argv=None):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # The date point-in-time questions are graded against is THIS RUN'S date, not the corpus's
+    # eval_as_of. Anchoring to eval_as_of would reinstate the exact defect #1709 is about: the
+    # assistant resolves from its own clock, so a corpus date of 2026-09-01 makes q05/q13 fail on
+    # every day but one. eval_as_of stays in the record as documentation of when the ground-truth
+    # figures were computed; it no longer constrains grading.
+    run_as_of = datetime.now(timezone.utc).date()
+
     record = {
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "endpoint": args.url,
         "eval_as_of": document.get("eval_as_of"),
+        "graded_as_of": run_as_of.isoformat(),
         "questions_file": provenance,
         "actor": actor,
         "void": bool(role_mismatch),
@@ -965,6 +1116,7 @@ def main(argv=None):
             "ground_truth_sql": question["ground_truth_sql"],
             "utterance": question["utterance"],
             "window": question["window"],
+            "window_check": None,  # filled below, once the answer exists
             "expected_plan": expected_plan,
             "tool_calls": tool_calls,
             "plan_check": plan_check,
@@ -972,6 +1124,8 @@ def main(argv=None):
         }
         if grading is not None:
             result.update(grading)
+        verdict, detail = grade_window(question, result.get("answer"), run_as_of)
+        result["window_check"] = {"verdict": verdict, "detail": detail}
         record["results"].append(result)
         print(f"  {outcome['elapsed_s']}s"
               + (f" — {outcome['error']}" if outcome["error"] else "")
@@ -980,12 +1134,22 @@ def main(argv=None):
 
     if replay_by_fixture is not None:
         outcome_counts = Counter(result["outcome"] for result in record["results"])
+        # A window FAIL must be able to fail the run. Recording it in a JSON field a reader has to go
+        # looking for is the same "clean-looking report" failure #1706 was about, one axis down.
+        window_counts = Counter(
+            (result.get("window_check") or {}).get("verdict", "UNGRADED") for result in record["results"]
+        )
         failed = sum(result["verdict"] == "FAIL" for result in record["results"])
+        window_failed = window_counts.get("FAIL", 0)
         record["summary"] = {
-            "verdict": "PASS" if failed == 0 else "FAIL",
+            # A window FAIL fails the run. The window is not a side note: answering the right
+            # question on the wrong six months is a wrong answer, and a verdict that ignored it
+            # would report PASS for exactly the q09/q12/q15 failures this work exists to catch.
+            "verdict": "PASS" if failed == 0 and window_failed == 0 else "FAIL",
             "passed": len(record["results"]) - failed,
             "failed": failed,
             "outcomes": dict(sorted(outcome_counts.items())),
+            "window_counts": dict(sorted(window_counts.items())),
         }
 
     (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")

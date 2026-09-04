@@ -6,7 +6,20 @@
   "ground_truth": "ground-truth/EXPECTED.md",
   "chat_path_gate": {
     "size": 12,
-    "fixture_ids": ["q01", "q03", "q04", "q05", "q07", "q08", "q09", "q12", "q13", "q15", "q16", "q17"],
+    "fixture_ids": [
+      "q01",
+      "q03",
+      "q04",
+      "q05",
+      "q07",
+      "q08",
+      "q09",
+      "q12",
+      "q13",
+      "q15",
+      "q16",
+      "q17"
+    ],
     "rationale": "Every question whose serving endpoints have shipped (Wave 1 and Wave 2, analytics-capability-plan.md §3/§4) AND whose ground truth is computable on the TRACKB seed AND whose Wave 2 call count is inside its §6 budget. The other eight are excluded for a stated reason on their own entry — an unbuilt Wave 3 composition, an over-budget Wave 2 loop, or a BLOCKED ground truth. The set is the Wave 2 exit gate (docs/gate-runs/wave-2/README.md) plus Wave 1's q13.",
     "endpoint": "POST /mcp-server/v1/mcp/chat"
   },
@@ -31,7 +44,12 @@
         "shape": "calendar",
         "resolved_range": "2026-08-01..2026-08-31",
         "stated_in_question": true,
-        "notes": null
+        "notes": null,
+        "expected": {
+          "shape": "PRIOR_COMPLETE",
+          "unit": "MONTH",
+          "count": 1
+        }
       }
     },
     {
@@ -48,7 +66,11 @@
         "shape": "calendar",
         "resolved_range": "2026-06-01..2026-08-31, bucketed by month",
         "stated_in_question": false,
-        "notes": "QUESTION/GROUND-TRUTH GAP. `over the last three months` reads ROLLING under the #1670 preposition rule, but the ground truth buckets the three complete calendar months Jun/Jul/Aug 2026. Excluded from the gate today, so the gap is inert; restate to `in the last three months` before promoting this question."
+        "notes": "QUESTION/GROUND-TRUTH GAP. `over the last three months` reads ROLLING under the #1670 preposition rule, but the ground truth buckets the three complete calendar months Jun/Jul/Aug 2026. Excluded from the gate today, so the gap is inert; restate to `in the last three months` before promoting this question.",
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -65,7 +87,12 @@
         "shape": "calendar",
         "resolved_range": "2026-07-01..2026-09-01",
         "stated_in_question": false,
-        "notes": "Boundary-day divergence only. `this quarter` resolves to 2026-07-01..2026-08-31 under the calendar rule (whole periods ending with the last complete month); the ground truth runs to the as-of date 2026-09-01 inclusive. Inert on the TRACKB seed — no reopen pair falls on 2026-09-01 — and the 2026-09-03 run PASSed under both readings."
+        "notes": "'This quarter' is CURRENT_TO_DATE: the first day of the quarter containing the current date through that date, per SystemPromptDefaults DATE_WINDOW ('NEVER the previous complete period'). An earlier version of this note read it as whole periods ending with the last complete month; that predates the current contract and was wrong.",
+        "expected": {
+          "shape": "CURRENT_TO_DATE",
+          "unit": "QUARTER",
+          "count": 1
+        }
       }
     },
     {
@@ -82,10 +109,21 @@
         "shape": "calendar",
         "resolved_range": "2026-03-01..2026-08-31, bucketed by month",
         "stated_in_question": true,
-        "notes": null
+        "notes": null,
+        "expected": {
+          "shape": "CALENDAR_SPAN",
+          "unit": "MONTH",
+          "count": 6,
+          "also_accept": [
+            "ABSOLUTE"
+          ],
+          "note": "Bucketed by month, so six ABSOLUTE calls (2026-03 .. 2026-08) satisfy it as well as one CALENDAR_SPAN; both were observed."
+        }
       },
       "expected_plan": {
-        "min_tool_calls": { "getInvoicingLag": 6 },
+        "min_tool_calls": {
+          "getInvoicingLag": 6
+        },
         "per": "one getInvoicingLag call per month, single-window E4 has no groupBy (plan §6 row 4)",
         "declined_reason": "declined composition"
       }
@@ -104,10 +142,18 @@
         "shape": "point-in-time",
         "resolved_range": "as of 2026-09-01",
         "stated_in_question": true,
-        "notes": "`past due` and `currently` are both measured at the as-of date; aging is by due date since #1604."
+        "notes": "`past due` and `currently` are both measured at the as-of date; aging is by due date since #1604.",
+        "expected": {
+          "shape": null,
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
+        }
       },
       "expected_plan": {
-        "min_tool_calls": { "getAgedReceivables": 1, "searchWorkorders": 1 },
+        "min_tool_calls": {
+          "getAgedReceivables": 1,
+          "searchWorkorders": 1
+        },
         "per": "one searchWorkorders call per past-due customer (#1676 status=OPEN, one call per customer id)",
         "declined_reason": "declined composition"
       }
@@ -126,7 +172,11 @@
         "shape": "calendar",
         "resolved_range": "2026-08-01..2026-08-31",
         "stated_in_question": true,
-        "notes": null
+        "notes": null,
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -143,7 +193,11 @@
         "shape": "calendar",
         "resolved_range": "2025-09-01..2026-08-31 vs 2024-09-01..2025-08-31",
         "stated_in_question": false,
-        "notes": "QUESTION/GROUND-TRUTH GAP. `over the last twelve months` reads ROLLING, and the comparison phrase `the twelve months before that` names no calendar period, so the #1670 mixed-comparison precedence does not fire and both windows read rolling — while the ground truth measures both on the calendar. With EVAL_AS_OF on a month boundary the two readings differ only at the endpoints, so the gap has not yet moved a score (q07 DEFLECTed on 2026-09-03). Resolve by restating to `in the last twelve months compared with the twelve months before that` when the question is next revised."
+        "notes": "QUESTION/GROUND-TRUTH GAP. `over the last twelve months` reads ROLLING, and the comparison phrase `the twelve months before that` names no calendar period, so the #1670 mixed-comparison precedence does not fire and both windows read rolling — while the ground truth measures both on the calendar. With EVAL_AS_OF on a month boundary the two readings differ only at the endpoints, so the gap has not yet moved a score (q07 DEFLECTed on 2026-09-03). Resolve by restating to `in the last twelve months compared with the twelve months before that` when the question is next revised.",
+        "expected": {
+          "shape": null,
+          "note": "Left unset deliberately. This question's own note says the mixed-comparison precedence does NOT fire here — 'over the last twelve months' reads ROLLING and 'the twelve months before that' names no calendar period — so under the shipped DATE_WINDOW contract both windows read rolling. An expectation of CALENDAR_SPAN would fail a contract-correct answer. Annotate once the utterance is restated to name the shape it wants; the comparison is also PRIOR_PERIOD, not YEAR_EARLIER."
+        }
       }
     },
     {
@@ -160,7 +214,11 @@
         "shape": "mixed",
         "resolved_range": "no invoice on or after 2026-06-03 (rolling 90 days); revenue in 2024-09-01..2025-08-31 (calendar prior year)",
         "stated_in_question": true,
-        "notes": "Two independent conditions, not a comparison: a day-expressed range is always rolling (#1670), and `the prior year` is calendar. The paired-window rule deliberately does not apply here."
+        "notes": "Two independent conditions, not a comparison: a day-expressed range is always rolling (#1670), and `the prior year` is calendar. The paired-window rule deliberately does not apply here.",
+        "expected": {
+          "shape": null,
+          "note": "Mixed: a rolling 90-day filter AND a prior-calendar-year revenue condition, so no single resolver shape describes it. Needs the corpus to express two windows per question before it can be graded (#1689)."
+        }
       }
     },
     {
@@ -177,10 +235,18 @@
         "shape": "calendar",
         "resolved_range": "revenue, count, average and days-to-pay over 2025-09-01..2026-08-31; outstanding balance as of 2026-09-01",
         "stated_in_question": true,
-        "notes": "#1671 fix. The previous wording carried NO window, while EXPECTED.md Q9 and the ground-truth SQL both measure the twelve calendar months ending 2026-08-31 — which is what made the 2026-09-03 answer UNSCORABLE. `in the last twelve months` resolves to exactly that range under the #1670 calendar rule. The outstanding balance stays a point-in-time figure at the as-of date, as the ground truth computes it."
+        "notes": "#1671 fix. The previous wording carried NO window, while EXPECTED.md Q9 and the ground-truth SQL both measure the twelve calendar months ending 2026-08-31 — which is what made the 2026-09-03 answer UNSCORABLE. `in the last twelve months` resolves to exactly that range under the #1670 calendar rule. The outstanding balance stays a point-in-time figure at the as-of date, as the ground truth computes it.",
+        "expected": {
+          "shape": "CALENDAR_SPAN",
+          "unit": "MONTH",
+          "count": 12
+        }
       },
       "expected_plan": {
-        "min_tool_calls": { "getRevenueByCustomer": 1, "getAgedReceivables": 1 },
+        "min_tool_calls": {
+          "getRevenueByCustomer": 1,
+          "getAgedReceivables": 1
+        },
         "per": "E1 revenue-by-customer ranking plus one aging call for outstanding balance/days-to-pay (plan §6 row 9)",
         "declined_reason": "declined composition"
       }
@@ -199,7 +265,11 @@
         "shape": "calendar",
         "resolved_range": "2026-06-01..2026-08-31, bucketed by month; aging as of each month-end",
         "stated_in_question": false,
-        "notes": "Same preposition gap as q02: `over the last three months` reads rolling, the ground truth buckets calendar months. Inert while the question is excluded."
+        "notes": "Same preposition gap as q02: `over the last three months` reads rolling, the ground truth buckets calendar months. Inert while the question is excluded.",
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -216,7 +286,11 @@
         "shape": "calendar",
         "resolved_range": "twelve Mon–Sun weeks, 2026-06-08..2026-08-30",
         "stated_in_question": true,
-        "notes": "EXPECTED.md Q11 answers the settlement question (settled / invoiced) and also reports the cash-only collection rate, per the #1605 money-measure split; both must be labelled in the answer."
+        "notes": "EXPECTED.md Q11 answers the settlement question (settled / invoiced) and also reports the cash-only collection rate, per the #1605 money-measure split; both must be labelled in the answer.",
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -233,7 +307,12 @@
         "shape": "calendar",
         "resolved_range": "invoices finalized 2026-03-01..2026-08-31",
         "stated_in_question": true,
-        "notes": "`in the last six months` is the calendar form under the #1670 preposition rule. The 2026-09-03 run answered it on a rolling 2026-03-04..2026-09-03 window and was scored FAIL; that is the model behaviour #1670 addresses, not a question defect."
+        "notes": "`in the last six months` is the calendar form under the #1670 preposition rule. The 2026-09-03 run answered it on a rolling 2026-03-04..2026-09-03 window and was scored FAIL; that is the model behaviour #1670 addresses, not a question defect.",
+        "expected": {
+          "shape": "CALENDAR_SPAN",
+          "unit": "MONTH",
+          "count": 6
+        }
       }
     },
     {
@@ -250,7 +329,12 @@
         "shape": "point-in-time",
         "resolved_range": "as of 2026-09-01",
         "stated_in_question": true,
-        "notes": null
+        "notes": null,
+        "expected": {
+          "shape": null,
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
+        }
       }
     },
     {
@@ -267,7 +351,11 @@
         "shape": "calendar",
         "resolved_range": "month-ends 2025-09-30 .. 2026-08-31",
         "stated_in_question": true,
-        "notes": null
+        "notes": null,
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -284,10 +372,18 @@
         "shape": "calendar",
         "resolved_range": "2026-03-01..2026-08-31 vs 2025-03-01..2025-08-31",
         "stated_in_question": true,
-        "notes": "Resolved by the #1670 mixed-comparison precedence: `over the last six months` alone reads rolling, but it is paired with `the same six months last year`, which names a specific period, so BOTH windows take the calendar shape — matching the ground truth."
+        "notes": "Resolved by the #1670 mixed-comparison precedence: `over the last six months` alone reads rolling, but it is paired with `the same six months last year`, which names a specific period, so BOTH windows take the calendar shape — matching the ground truth.",
+        "expected": {
+          "shape": "CALENDAR_SPAN",
+          "unit": "MONTH",
+          "count": 6,
+          "comparison": "YEAR_EARLIER"
+        }
       },
       "expected_plan": {
-        "min_tool_calls": { "getVendorSpend": 2 },
+        "min_tool_calls": {
+          "getVendorSpend": 2
+        },
         "per": "two getVendorSpend windows, current and same-period-last-year (plan §6 row 15)",
         "declined_reason": "declined composition"
       }
@@ -306,7 +402,11 @@
         "shape": "rolling",
         "resolved_range": "due 2026-09-01..2026-09-15 (14 days inclusive, forward from the as-of)",
         "stated_in_question": true,
-        "notes": "A day-expressed range has no calendar form (#1670) — forward-rolling from the as-of date."
+        "notes": "A day-expressed range has no calendar form (#1670) — forward-rolling from the as-of date.",
+        "expected": {
+          "shape": null,
+          "note": "Left unset deliberately. The question asks for bills due in the NEXT 14 days, and the resolver has no forward shape — ROLLING is start = today - N + 1, end = today. A ROLLING expectation would therefore pass an answer that used the wrong, backward window and leave a correct forward answer ungraded. Needs either a forward shape in the resolver or an endpoint-based expectation; the day-count edge is separately open in #1681."
+        }
       }
     },
     {
@@ -323,10 +423,16 @@
         "shape": "calendar",
         "resolved_range": "2026-03-01..2026-08-31 vs 2025-03-01..2025-08-31",
         "stated_in_question": false,
-        "notes": "OPEN QUESTION/GROUND-TRUTH GAP — the same defect class #1671 fixed on q09, left open deliberately. The question names no window at all; `year over year` says only that two equal periods are compared. The ground truth inherits q15's six-month windows because both are served by the same E8 call, which is an implementation accident, not something the question says. Any score on q17 is therefore conditional on the grader accepting those windows. Fixing it means either restating the question with an explicit period or restating EXPECTED.md Q17 against a twelve-month year-over-year comparison; that choice interacts with the q15/q17 reading corrected by #1670 and is tracked separately."
+        "notes": "OPEN QUESTION/GROUND-TRUTH GAP — the same defect class #1671 fixed on q09, left open deliberately. The question names no window at all; `year over year` says only that two equal periods are compared. The ground truth inherits q15's six-month windows because both are served by the same E8 call, which is an implementation accident, not something the question says. Any score on q17 is therefore conditional on the grader accepting those windows. Fixing it means either restating the question with an explicit period or restating EXPECTED.md Q17 against a twelve-month year-over-year comparison; that choice interacts with the q15/q17 reading corrected by #1670 and is tracked separately.",
+        "expected": {
+          "shape": null,
+          "note": "Left unset deliberately. This question's own note records that it names no window, that the six-month windows are an implementation accident rather than something the question says, and that any score on it is conditional. Annotating it would convert an acknowledged ground-truth gap into binding ground truth."
+        }
       },
       "expected_plan": {
-        "min_tool_calls": { "getVendorSpend": 2 },
+        "min_tool_calls": {
+          "getVendorSpend": 2
+        },
         "per": "two getVendorSpend windows, current and same-period-last-year, compared on avgIssuedBillAmount (plan §6 row 17)",
         "declined_reason": "declined composition"
       }
@@ -345,7 +451,11 @@
         "shape": "rolling",
         "resolved_range": "thirteen Mon–Sun weeks, 2026-06-01..2026-08-30",
         "stated_in_question": false,
-        "notes": "QUESTION/GROUND-TRUTH GAP. `the last quarter` reads as the last complete calendar quarter (2026-04-01..2026-06-30) under the #1670 rule, but the ground truth measures the thirteen weeks ending 2026-08-30 so the weekly buckets stay whole. Inert while the question is excluded; restate to `the last thirteen weeks` before promoting it."
+        "notes": "QUESTION/GROUND-TRUTH GAP. `the last quarter` reads as the last complete calendar quarter (2026-04-01..2026-06-30) under the #1670 rule, but the ground truth measures the thirteen weeks ending 2026-08-30 so the weekly buckets stay whole. Inert while the question is excluded; restate to `the last thirteen weeks` before promoting it.",
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -362,7 +472,11 @@
         "shape": "calendar",
         "resolved_range": "2026-08-01..2026-08-31",
         "stated_in_question": false,
-        "notes": "QUESTION/GROUND-TRUTH GAP. The question names no period; the ground truth uses last month, aligned with q01 so both stay hand-checkable. Give it an explicit window before promoting it — the q09 defect in waiting."
+        "notes": "QUESTION/GROUND-TRUTH GAP. The question names no period; the ground truth uses last month, aligned with q01 so both stay hand-checkable. Give it an explicit window before promoting it — the q09 defect in waiting.",
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     },
     {
@@ -379,7 +493,11 @@
         "shape": "calendar",
         "resolved_range": "months 2025-09 .. 2026-08",
         "stated_in_question": true,
-        "notes": "`a twelve-month summary` with monthly rows takes the twelve complete calendar months ending 2026-08."
+        "notes": "`a twelve-month summary` with monthly rows takes the twelve complete calendar months ending 2026-08.",
+        "expected": {
+          "shape": null,
+          "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
+        }
       }
     }
   ]

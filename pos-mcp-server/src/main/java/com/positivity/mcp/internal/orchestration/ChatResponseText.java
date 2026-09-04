@@ -1,5 +1,9 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -33,7 +37,19 @@ final class ChatResponseText {
         /** Recovered from the {@code thinking} channel because {@code content} was blank. */
         THINKING,
         /** Neither channel had text; the fixed fallback string is used. */
-        BLANK
+        BLANK,
+        /**
+         * {@code content} held nothing but a serialised tool payload (#1708).
+         *
+         * <p>Observed on the 2026-09-04 gate run: q04 replied with
+         * {@code {"startDate":"2026-03-01","endDate":"2026-03-31","rows":[…]}} and q05 with what
+         * reads as a tool <em>request</em>. The source is {@code content} — the model emitted the
+         * payload itself rather than composing an answer from it — so this is not the blank-content
+         * path and is not the ladder leaking. It is nonetheless not an answer: a reader gets raw
+         * JSON, and a grader reading the reply records a data failure for a turn whose tools all
+         * ran correctly.
+         */
+        TOOL_PAYLOAD
     }
 
     /** The extracted user-facing text plus its {@link Source}. */
@@ -55,6 +71,14 @@ final class ChatResponseText {
         }
         String content = stripThinkBlocks(message.getText());
         if (!content.isBlank()) {
+            if (isBareToolPayload(content)) {
+                // Deliberately does not say "tool payload": this helper also serves the tool-less
+                // simple-chat path, where a JSON-shaped reply is not a tool result and naming one
+                // would mislead whoever is triaging the log.
+                LOGGER.warn("Chat model returned a bare JSON object or array as its answer; "
+                        + "treating it as no direct answer (#1708)");
+                return new Extracted(content, Source.TOOL_PAYLOAD);
+            }
             return new Extracted(content, Source.CONTENT);
         }
         // content was empty: the model routed its answer into the reasoning channel.
@@ -66,6 +90,43 @@ final class ChatResponseText {
         }
         LOGGER.warn("Chat model returned blank content and no thinking channel; using blank-response fallback");
         return new Extracted(BLANK_RESPONSE_FALLBACK, Source.BLANK);
+    }
+
+    private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
+    private static final Pattern JSON_FENCE =
+            Pattern.compile("(?s)\\A```(?:json)?\\s*(.*?)\\s*```\\z", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Whether {@code content} is nothing but a serialised JSON object or array (#1708).
+     *
+     * <p>Decided by an actual parse rather than by inspecting the first and last characters. The
+     * character check produced a false positive on ordinary prose that merely opened and closed
+     * with braces and contained a quote — {@code {Top vendor is "Cascade Parts" at $12,000}} — and
+     * a false positive here is the worst outcome available: the reply is routed to the fallback
+     * ladder, so a real answer is silently replaced. A parse cannot make that mistake.
+     *
+     * <p>A fenced block is unwrapped first. A model told not to reply with bare JSON is at least as
+     * likely to fence it, and a fenced payload is the same defect with three backticks in front.
+     *
+     * <p>Scalars are deliberately out of scope: a bare {@code 42} is a plausible answer to "how
+     * many open work orders?", and {@code "OK"} to a confirmation. Every payload observed in #1708
+     * was an object.
+     */
+    private static boolean isBareToolPayload(@NonNull String content) {
+        String trimmed = content.strip();
+        Matcher fence = JSON_FENCE.matcher(trimmed);
+        if (fence.matches()) {
+            trimmed = fence.group(1).strip();
+        }
+        if (trimmed.isEmpty() || (trimmed.charAt(0) != '{' && trimmed.charAt(0) != '[')) {
+            return false;
+        }
+        try {
+            JsonNode parsed = PAYLOAD_MAPPER.readTree(trimmed);
+            return parsed != null && (parsed.isObject() || parsed.isArray());
+        } catch (JacksonException notJson) {
+            return false;
+        }
     }
 
     private static @NonNull String stripThinkBlocks(@Nullable String text) {
