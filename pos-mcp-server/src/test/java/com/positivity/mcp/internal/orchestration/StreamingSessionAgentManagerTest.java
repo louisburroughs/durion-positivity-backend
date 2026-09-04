@@ -29,6 +29,7 @@ import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -126,6 +127,7 @@ class StreamingSessionAgentManagerTest {
     private NltiWorkflowStateService workflowStateService;
 
     // Real instance required to prevent @Tool duplicate registration
+    private DateWindowFacadeTool dateWindowFacadeTool;
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
@@ -154,6 +156,7 @@ class StreamingSessionAgentManagerTest {
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
+        dateWindowFacadeTool = new DateWindowFacadeTool(Clock.systemUTC());
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(
                 RestClient.builder(),
@@ -585,6 +588,7 @@ class StreamingSessionAgentManagerTest {
     private ToolSelectionEngine realToolSelectionEngine() {
         return new ToolSelectionEngine(
                 toolRegistry,
+                dateWindowFacadeTool,
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,

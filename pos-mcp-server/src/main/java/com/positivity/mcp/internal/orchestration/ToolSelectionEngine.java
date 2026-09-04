@@ -4,6 +4,7 @@ import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -12,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -24,7 +26,54 @@ public class ToolSelectionEngine {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolSelectionEngine.class);
 
+    /**
+     * Vocabulary that makes a question a dated one, and so makes {@code resolveDateWindow}
+     * mandatory rather than merely likely (#1684). Broad on purpose: the tool is additive to the
+     * semantic top-K rather than competing for a slot in it, so a false positive costs one tool
+     * schema in the prompt while a false negative costs the whole date-window contract — the
+     * DATE_WINDOW layer would be instructing the model to call a tool it cannot see, leaving it to
+     * compute the dates itself, which is the failure #1675 and #1684 exist to remove.
+     *
+     * <p>Broad is not unbounded, and the schema is not free: this tool's description and parameters
+     * are roughly 440 tokens, more than the ~305 the #1684 prompt-layer shrink saves. On a question
+     * that matches a token but needs no window the assembled prompt is therefore <em>larger</em>
+     * than before, which is the opposite of what the shrink was for. So a token earns its place only
+     * by naming a window the resolver can actually resolve. Four were cut on that test: {@code
+     * recent}, {@code recently} and {@code lately} are the phrases the layer itself singles out as
+     * having no conventional reading and tells the model to ask about, so offering a resolver for
+     * them is incoherent (and {@code recent} already pulls in the web-search tool below, making two
+     * extra schemas); {@code period} is accounting vocabulary far more often than it is a window,
+     * and it names the {@code period} shortcut that is a shape bypass rather than a resolver call.
+     */
+    private static final List<Pattern> DATE_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
+            "annual",
+            "daily",
+            "day",
+            "days",
+            "month",
+            "monthly",
+            "months",
+            "mtd",
+            "quarter",
+            "quarterly",
+            "quarters",
+            "qtd",
+            "since",
+            "today",
+            "week",
+            "weekly",
+            "weeks",
+            "year",
+            "yearly",
+            "years",
+            "yesterday",
+            "ytd"));
+
+    /** Multi-word date vocabulary, matched as plain substrings rather than on word boundaries. */
+    private static final Set<String> DATE_WINDOW_PHRASES = Set.of("to date", "so far this");
+
     private final MasterAgentRegistry toolRegistry;
+    private final DateWindowFacadeTool dateWindowFacadeTool;
     private final ExaWebSearchTool exaWebSearchTool;
     private final InventoryFacadeTool inventoryFacadeTool;
     private final OrderFacadeTool orderFacadeTool;
@@ -37,6 +86,7 @@ public class ToolSelectionEngine {
 
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
+            @NonNull DateWindowFacadeTool dateWindowFacadeTool,
             @NonNull ExaWebSearchTool exaWebSearchTool,
             @NonNull InventoryFacadeTool inventoryFacadeTool,
             @NonNull OrderFacadeTool orderFacadeTool,
@@ -44,6 +94,7 @@ public class ToolSelectionEngine {
             @NonNull SharedOrchestrationSupport sharedOrchestrationSupport,
             @Value("${mcp.agent.candidate-tool-limit:8}") int candidateToolLimit) {
         this.toolRegistry = toolRegistry;
+        this.dateWindowFacadeTool = dateWindowFacadeTool;
         this.exaWebSearchTool = exaWebSearchTool;
         this.inventoryFacadeTool = inventoryFacadeTool;
         this.orderFacadeTool = orderFacadeTool;
@@ -84,9 +135,17 @@ public class ToolSelectionEngine {
         return new ToolSelectionResult(roleTools, fallbackTools, workflowState);
     }
 
+    /**
+     * The message-independent superset of {@link #fallbackToolsForMessage}, for the role-level agent
+     * paths that build before a question exists (cache warm-up, {@code getOrCreateAgent}). Every
+     * keyword-addable tool belongs here precisely because there is no keyword to match on yet —
+     * omitting {@code dateWindowFacadeTool} would leave those agents unable to resolve a window at
+     * all while their prompt still required one (#1684).
+     */
     public @NonNull List<Object> fullFallbackTools() {
         return sharedOrchestrationSupport.mergeTools(
-                toolRegistry.resolveMasterTools(), List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+                toolRegistry.resolveMasterTools(),
+                List.of(dateWindowFacadeTool, exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
     }
 
     private @NonNull List<Object> roleToolsForMessage(
@@ -279,9 +338,23 @@ public class ToolSelectionEngine {
         return WorkflowState.IDLE;
     }
 
+    /**
+     * Tools added on top of the semantic top-K rather than selected within it, so nothing here can
+     * displace a tool the embedding ranking chose.
+     */
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
         String text = message.toLowerCase(Locale.ROOT);
         List<Object> selected = new ArrayList<>();
+        // #1684: a dated question must always be able to reach resolveDateWindow. Its mcp_tool row
+        // (V43) carries domain 'date-window', and no ROLE resolves to that domain agent —
+        // resolveDomainTools is keyed on the domain string — so its only route into the candidate
+        // set is the embedding ranking in ToolRegistryService.resolveCandidateTools, where it
+        // competes with every other gated tool on description similarity and can lose. Nothing about
+        // "which customers haven't bought in the last 90 days" reads as a date-arithmetic request,
+        // which is exactly the question whose window shape the gate keeps getting wrong.
+        if (mentionsDateWindow(text)) {
+            selected.add(dateWindowFacadeTool);
+        }
         if (containsAny(text, Set.of("current", "internet", "news", "online", "recent", "web"))) {
             selected.add(exaWebSearchTool);
         }
@@ -296,6 +369,37 @@ public class ToolSelectionEngine {
             LOGGER.debug("MCP shared fallback tool matches tools={}", sharedOrchestrationSupport.toolNames(selected));
         }
         return selected;
+    }
+
+    /**
+     * Whether {@code text} names a date window.
+     *
+     * <p>Deliberately not {@link #containsAny}: that builds {@code ".*\\btoken\\b.*"} and calls
+     * {@link String#matches}, which anchors the whole input and — without {@code DOTALL} — has
+     * {@code .} exclude {@code \n}, so no single-word token matches a message containing a line
+     * break at all. A pasted or multi-paragraph question is ordinary in a chat surface, and this
+     * guard is the one whose false negative costs the whole date-window contract, so it uses
+     * {@code Matcher.find} on precompiled patterns instead. Precompiling also keeps the added
+     * vocabulary off the per-request regex-compilation path.
+     */
+    private static boolean mentionsDateWindow(@NonNull String text) {
+        for (String phrase : DATE_WINDOW_PHRASES) {
+            if (text.contains(phrase)) {
+                return true;
+            }
+        }
+        for (Pattern pattern : DATE_WINDOW_WORD_PATTERNS) {
+            if (pattern.matcher(text).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static @NonNull List<Pattern> compileWordPatterns(@NonNull Set<String> words) {
+        return words.stream()
+                .map(word -> Pattern.compile("\\b" + Pattern.quote(word) + "\\b"))
+                .toList();
     }
 
     private static boolean containsAny(@NonNull String text, @NonNull Set<String> tokens) {

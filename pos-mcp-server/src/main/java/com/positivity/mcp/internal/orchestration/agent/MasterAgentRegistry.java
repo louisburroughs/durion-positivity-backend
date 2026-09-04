@@ -27,6 +27,9 @@ public final class MasterAgentRegistry {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MasterAgentRegistry.class);
 
+    /** Tools that are selected alongside domain tools but imply no domain (#1684). */
+    private static final Set<String> SCOPE_NEUTRAL_TOOL_NAMES = Set.of("DateWindowFacadeTool");
+
     /** Roles to warm up when no snapshot has been synced yet, or for a registry built without one. */
     private static final int DEFAULT_MAX_PRELOADED_ROLES = 16;
 
@@ -157,12 +160,32 @@ public final class MasterAgentRegistry {
         return allTools;
     }
 
+    /**
+     * The RAG scope implied by the selected tools: one domain's scope when they all belong to it,
+     * {@link RagScope#MASTER} otherwise.
+     *
+     * <p>Scope-neutral tools are skipped (#1684). A tool earns a vote here by implying the caller is
+     * asking about its domain, and {@code DateWindowFacadeTool} implies nothing of the sort — it
+     * retrieves no content, owns no documents, and is reachable from a dated question in every
+     * domain. Counting it would move the scope in two directions at once: beside one domain's tools
+     * it makes two scopes and widens an otherwise domain-scoped retrieval to MASTER, and on the
+     * fail-closed path where the gated set is empty it would be the only tool left, making the scope
+     * literally {@code "date-window"} — a scope no {@code rag_document} row carries, which
+     * {@code RagScope.normalize} passes through unchanged and which then filters retrieval down to
+     * master-only. Neither is a decision anyone made; both are artefacts of a utility tool sitting
+     * in the same list as the domain tools.
+     */
     public @NonNull String resolveRagScopeForTools(@NonNull Collection<Object> tools) {
-        if (tools.stream().anyMatch(this::isSharedTool)) {
+        List<Object> scopeBearingTools =
+                tools.stream().filter(tool -> !isScopeNeutralTool(tool)).toList();
+        if (scopeBearingTools.stream().anyMatch(this::isSharedTool)) {
+            return RagScope.MASTER;
+        }
+        if (scopeBearingTools.isEmpty()) {
             return RagScope.MASTER;
         }
         Set<String> ragScopes = new TreeSet<>();
-        for (Object tool : tools) {
+        for (Object tool : scopeBearingTools) {
             Optional<DomainAgentDefinition> domainAgent = findDomainAgentForTool(tool);
             if (domainAgent.isEmpty()) {
                 return RagScope.MASTER;
@@ -207,6 +230,16 @@ public final class MasterAgentRegistry {
         return domainAgents.stream()
                 .filter(agent -> agent.tools().stream().anyMatch(tool -> sameTool(tool, selectedTool)))
                 .findFirst();
+    }
+
+    /**
+     * Whether a tool carries no domain meaning for {@link #resolveRagScopeForTools}. Matched by
+     * simple class name so this holds for a CGLIB proxy and needs no dependency on the tools package
+     * from the registry.
+     */
+    private static boolean isScopeNeutralTool(@NonNull Object selectedTool) {
+        return SCOPE_NEUTRAL_TOOL_NAMES.contains(
+                ClassUtils.getUserClass(selectedTool).getSimpleName());
     }
 
     private boolean isSharedTool(@NonNull Object selectedTool) {

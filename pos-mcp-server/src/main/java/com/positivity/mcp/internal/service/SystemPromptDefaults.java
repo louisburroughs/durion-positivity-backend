@@ -79,9 +79,12 @@ public final class SystemPromptDefaults {
             """;
 
     /**
-     * DATE-WINDOW layer (#1661, narrowed to classification-plus-protocol by #1675): how a relative
-     * date range's SHAPE is classified from the wording, and the protocol for turning that
-     * classification into concrete dates.
+     * DATE-WINDOW layer (#1661; narrowed to classification-plus-protocol by #1675, reduced to the
+     * classification rules and that protocol alone by #1684): which wording names which window
+     * SHAPE, and the protocol for turning that classification into concrete dates. The protocol
+     * bullet stays — something has to send the model to {@code resolveDateWindow} and tell it to
+     * copy the result verbatim; what #1684 removed is everything that was neither a classification
+     * rule nor that protocol.
      *
      * <p>Three rounds of prompt-only arithmetic (#1661, #1664, #1670, #1672) left this layer doing
      * two jobs at once — classify the shape from the wording, then compute its concrete dates — and
@@ -97,6 +100,32 @@ public final class SystemPromptDefaults {
      * arithmetic or walked through a worked date (the illustration, the count-back rule, the
      * January-inversion floor) moved with it, since the resolver now gets that arithmetic right by
      * construction rather than by a model computing it under a prose rule.
+     *
+     * <p>#1684 removed what #1675 left behind: the layer had kept a second tier of rules
+     * <em>about how to read its own rules</em> — "Read the wording carefully…", "'This X' and
+     * 'last X' are BOTH fixed, and they are NOT the same period" — each restating a distinction the
+     * shape definitions already draw. A rule that exists to correct the reading of the rule above it
+     * is evidence the rule above it is unclear, not a fix for it, and it costs context on every
+     * request. Each removed bullet's guarantee still holds, from the definition or the code that now
+     * owns it:
+     *
+     * <ul>
+     *   <li>"during"/"for the last N" as a calendar span — kept, in CALENDAR SPAN's own trigger list.
+     *   <li>"this X" never resolving to the previous complete period — kept, in CURRENT-TO-DATE's own
+     *       definition ("NEVER the previous complete period").
+     *   <li>a day-expressed range always being rolling — kept as a clause on ROLLING's definition,
+     *       and enforced besides: {@code DateWindowResolver} rejects {@code DAY} under any calendar
+     *       shape with a message naming what to pass instead.
+     *   <li>sourcing "today" from the caller-context block rather than inventing one — the resolver
+     *       reads the shared {@code Clock} itself, so the model no longer needs a "today" at all;
+     *       "Never compute or assume a date yourself" is what remains of the rule.
+     *   <li>disclosing the window in the answer — kept, as a clause on the protocol bullet rather
+     *       than a bullet of its own, and carried a second time by the tool's own description.
+     *   <li>why mismatched comparison windows are wrong ("makes the difference an artefact of the
+     *       windows rather than of the business") — dropped as rationale, not rule. The rule it
+     *       justified ("the same shape and the same length, offset by one period") is unchanged, and
+     *       a classifier does not need the argument for a rule it is being given outright.
+     * </ul>
      *
      * <p>The convention resolves rather than asks. Asking is right for a missing identifier, where
      * no default can be correct and a guess fabricates data; that case stays with the tool-use
@@ -114,36 +143,25 @@ public final class SystemPromptDefaults {
      * shape and length; measuring one rolling and one calendar makes the year-on-year difference an
      * artefact of the windows.
      *
-     * <p>Two details this text still has to get right (raised on review of #1664, still true after
-     * #1675 narrowed the layer):
-     *
-     * <ul>
-     *   <li>The current date is supplied by the caller-context block, which both assistants append
-     *       <em>after</em> the assembled layers ({@code SpringAiPosAssistant.buildSystemPrompt}), so
-     *       this layer must not describe it as being "above". It names the block instead of a
-     *       direction, which stays true wherever the block is placed.
-     *   <li>{@code SharedOrchestrationSupport.formatUserContext} keeps injecting today's date, and
-     *       {@code DateWindowFacadeTool} resolves off the same shared {@code Clock} bean — the two
-     *       cannot disagree, which is what let the worked illustration be removed instead of merely
-     *       relabelled: there is no longer a model-carried "today" for it to anchor.
-     * </ul>
+     * <p>The layer names no direction and no date. The current date is supplied by the
+     * caller-context block, which both assistants append <em>after</em> the assembled layers
+     * ({@code SpringAiPosAssistant.buildSystemPrompt}), so a rule pointing "above" for it would
+     * point away from the one fact it needs; and {@code DateWindowFacadeTool} resolves off the same
+     * shared {@code Clock} bean {@code SharedOrchestrationSupport.formatUserContext} states the date
+     * from, so the two cannot disagree. That is what let the worked illustration go rather than be
+     * relabelled: there is no model-carried "today" left for it to anchor.
      */
     static final String DATE_WINDOW_LAYER_TEXT = """
             Date-window contract:
-            - Resolve every relative date range from the current date stated in the authenticated user context block. Never use a date you assume, recall, or infer from the conversation.
-            - The wording decides the SHAPE of the window:
-            -   ROLLING — "over the last N days/weeks/months/years", "over the past N": the N units ending on the current date, that date included.
+            - The wording decides the SHAPE of the window. Classify the shape; `resolveDateWindow` computes the dates.
+            -   ROLLING — "over the last N days/weeks/months/years", "over the past N": the N units ending on the current date, that date included. A range expressed in days is always rolling; only weeks, months, quarters and years have complete calendar periods.
             -   CURRENT-TO-DATE — "this week/month/quarter/year", "week/month/quarter/year to date": from the FIRST day of the period that contains the current date, up to the current date. NEVER the previous complete period.
             -   PRIOR COMPLETE — "last week/month/quarter/year", "the previous month": exactly one whole period, the most recent one that has ended.
             -   CALENDAR SPAN — "in the last N weeks/months", "during the last N months", "for the last N months": the N whole periods ENDING WITH THE MOST RECENT COMPLETE ONE.
-            - Read the wording carefully: "over the last six months" is rolling; "in the last six months", "during the last six months" and "for the last six months" are a calendar span. They are different questions and must not be answered alike.
-            - "This X" and "last X" are BOTH fixed, and they are NOT the same period. "This X" includes the current date and is deliberately partial; "last X" is the whole period before it. Answering "this quarter" with the previous complete quarter reports a period the user did not ask about, and can return nothing at all when the data lies in the current one.
-            - A range expressed in days has no calendar form and is always rolling; only weeks, months, quarters and years have complete calendar periods.
-            - When a question pairs a range with a comparison period — "compared with the same six months last year", "versus the prior quarter", "compared with last year" — classify BOTH windows on the same shape and the same length, offset by one period. "Compared with last year" against a partial current year means the SAME partial span one year earlier, never a complete prior year against an incomplete current one. Comparing a rolling window against a calendar one, or a longer period against a shorter, makes the difference an artefact of the windows rather than of the business.
+            - When a question pairs a range with a comparison period — "compared with the same six months last year", "versus the prior quarter", "compared with last year" — classify BOTH windows on the same shape and the same length, offset by one period. "Compared with last year" against a partial current year means the SAME partial span one year earlier, never a complete prior year against an incomplete current one.
             - PRECEDENCE for a mixed comparison: where the two phrasings disagree in shape — "over the last six months" (rolling) paired with "the same six months last year" (named calendar months) — resolve BOTH on the CALENDAR shape. The fixed phrase wins because it names a specific period; taking the rolling side instead would silently redefine the period the question explicitly named.
             - This precedence applies only to windows being compared with each other. Independent conditions in one question keep their own shapes: "hasn't bought in the last 90 days but spent over $10,000 in the prior year" is a rolling filter and a calendar filter, not a mixed comparison, and forcing them to one shape would change what was asked.
-            - Before calling any tool that takes a date or a date range, call `resolveDateWindow` with the shape, unit, count and comparison you classified from the wording; copy its `startDate`/`endDate` into the tool arguments verbatim. Never compute a date yourself.
-            - State the window you used in the answer itself, with explicit start and end dates and whether it is rolling or calendar — not only in the tool arguments. Quote `resolveDateWindow`'s `statement` for this; a figure whose window is invisible cannot be checked, and the two shapes are indistinguishable from the number alone.
+            - Before calling any tool that takes a date or a date range, call `resolveDateWindow` with the shape, unit, count and comparison you classified; copy its `startDate`/`endDate` into the tool arguments verbatim, and quote its `statement` in the answer so the window is visible. Never compute or assume a date yourself.
             - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
             - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
             - These rules take precedence over any role persona or domain guidance above them.

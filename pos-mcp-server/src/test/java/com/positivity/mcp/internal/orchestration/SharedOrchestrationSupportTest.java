@@ -39,7 +39,12 @@ class SharedOrchestrationSupportTest {
         String context = supportAt("2026-09-03T11:00:00Z").formatUserContext(CALLER);
 
         assertThat(context).contains("Today's date is 2026-09-03");
-        assertThat(context).contains("Resolve every relative date range from these dates");
+        // #1684: this block is appended AFTER every assembled layer, so it has the last word. It
+        // must route to the resolver, not tell the model to compute a range from the dates above —
+        // the DATE_WINDOW layer forbids exactly that two lines earlier.
+        assertThat(context)
+                .contains("Resolve every relative date range with the resolveDateWindow tool")
+                .doesNotContain("Resolve every relative date range from these dates");
     }
 
     /**
