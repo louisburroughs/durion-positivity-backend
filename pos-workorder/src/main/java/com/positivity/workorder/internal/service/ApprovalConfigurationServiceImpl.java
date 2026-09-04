@@ -4,7 +4,9 @@ import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.exception.ApprovalConfigurationNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +39,7 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
         ApprovalConfiguration configuration = new ApprovalConfiguration();
         configuration.setLocationId(request.getLocationId());
         configuration.setCustomerId(request.getCustomerId());
-        configuration.setApprovalMethod(ApprovalConfiguration.ApprovalMethod.valueOf(request.getApprovalMethod()));
+        configuration.setApprovalMethod(parseApprovalMethod(request.getApprovalMethod()));
         configuration.setDeclineExpiryDays(request.getDeclineExpiryDays());
         configuration.setRequireSignature(request.getRequireSignature());
         configuration.setPriority(request.getPriority());
@@ -55,7 +57,7 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
 
         existing.setLocationId(request.getLocationId());
         existing.setCustomerId(request.getCustomerId());
-        existing.setApprovalMethod(ApprovalConfiguration.ApprovalMethod.valueOf(request.getApprovalMethod()));
+        existing.setApprovalMethod(parseApprovalMethod(request.getApprovalMethod()));
         existing.setDeclineExpiryDays(request.getDeclineExpiryDays());
         existing.setRequireSignature(request.getRequireSignature());
         existing.setPriority(request.getPriority());
@@ -96,6 +98,21 @@ public class ApprovalConfigurationServiceImpl implements ApprovalConfigurationSe
         return approvalConfigurationRepository
                 .findByLocationIdIsNullAndCustomerIdIsNull()
                 .map(this::entityToResponse);
+    }
+
+    /**
+     * Parse the request's approvalMethod into the enum, translating a bad value into a
+     * client-facing validation failure (issue #1694) rather than a bare IllegalArgumentException
+     * -- request.getApprovalMethod() is caller-supplied, so an unrecognized value here is a
+     * genuine client input error, not a server anomaly.
+     */
+    private ApprovalConfiguration.ApprovalMethod parseApprovalMethod(String approvalMethod) {
+        try {
+            return ApprovalConfiguration.ApprovalMethod.valueOf(approvalMethod);
+        } catch (IllegalArgumentException e) {
+            throw new WorkorderRequestValidationException("approvalMethod must be one of "
+                    + Arrays.toString(ApprovalConfiguration.ApprovalMethod.values()) + ": " + approvalMethod);
+        }
     }
 
     /**

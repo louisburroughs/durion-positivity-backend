@@ -391,8 +391,6 @@ public class WorkorderController {
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         }
     }
 
@@ -472,27 +470,23 @@ public class WorkorderController {
                             example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID workorderId) {
-        try {
-            WorkorderStateMachine.CompletionPreconditions preconditions =
-                    workorderService.getCompletionPreconditions(workorderId);
+        WorkorderStateMachine.CompletionPreconditions preconditions =
+                workorderService.getCompletionPreconditions(workorderId);
 
-            CompletionPreconditionsResponse response = CompletionPreconditionsResponse.builder()
-                    .workorderId(preconditions.workorderId())
-                    .canComplete(preconditions.canComplete())
-                    .currentStatus(preconditions.currentStatus())
-                    .checklistItems(preconditions.checklistItems())
-                    .blockingReasons(preconditions.blockingReasons())
-                    .unresolvedApprovalGatedChangeRequests(preconditions.unresolvedApprovalGatedChangeRequests())
-                    .nonTerminalServiceItems(preconditions.nonTerminalServiceItems())
-                    .nonTerminalPartItems(preconditions.nonTerminalPartItems())
-                    .emergencyDenialAcknowledged(preconditions.emergencyDenialAcknowledged())
-                    .hasBillableItems(preconditions.hasBillableItems())
-                    .build();
+        CompletionPreconditionsResponse response = CompletionPreconditionsResponse.builder()
+                .workorderId(preconditions.workorderId())
+                .canComplete(preconditions.canComplete())
+                .currentStatus(preconditions.currentStatus())
+                .checklistItems(preconditions.checklistItems())
+                .blockingReasons(preconditions.blockingReasons())
+                .unresolvedApprovalGatedChangeRequests(preconditions.unresolvedApprovalGatedChangeRequests())
+                .nonTerminalServiceItems(preconditions.nonTerminalServiceItems())
+                .nonTerminalPartItems(preconditions.nonTerminalPartItems())
+                .emergencyDenialAcknowledged(preconditions.emergencyDenialAcknowledged())
+                .hasBillableItems(preconditions.hasBillableItems())
+                .build();
 
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(response);
     }
 
     @Operation(operationId = "reopenWorkorder", summary = "Reopen a Completed Workorder", description = """
@@ -550,8 +544,6 @@ public class WorkorderController {
                     .build();
 
             return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest()
                     .body(ReopenWorkorderResponse.builder()
@@ -590,8 +582,6 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completeServiceItem(workorderId, serviceLineId, resolveCurrentActorUserId()));
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -626,8 +616,6 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completePartItem(workorderId, partId, resolveCurrentActorUserId()));
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }

@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -235,7 +236,7 @@ class WorkexecTimeTrackingControllerTest {
             assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(conflict.getBody().toString()).contains("WORKEXEC_CONFLICT_WORKORDER_STATE");
 
-            doThrow(new IllegalArgumentException("labor.unit must be HOURS"))
+            doThrow(new WorkorderRequestValidationException("labor.unit must be HOURS"))
                     .when(service)
                     .recordLaborPerformed(any(), anyString());
             assertThat(controller

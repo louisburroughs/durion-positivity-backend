@@ -268,7 +268,7 @@ public class EstimateController {
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
-        } catch (IllegalArgumentException | WorkorderRequestValidationException e) {
+        } catch (WorkorderRequestValidationException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
 

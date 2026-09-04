@@ -229,9 +229,9 @@ class EstimateControllerTest {
         }
 
         @Test
-        void reportsAValidationErrorForAnIllegalArgument() {
+        void reportsAValidationErrorForAWorkorderRequestValidationException() {
             when(estimateService.createEstimate(any(), anyString()))
-                    .thenThrow(new IllegalArgumentException("customerId is required"));
+                    .thenThrow(new WorkorderRequestValidationException("customerId is required"));
 
             ResponseEntity<Object> response = controller.createEstimate(createRequest(), null);
 

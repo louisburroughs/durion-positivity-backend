@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -19,6 +20,9 @@ import com.positivity.workorder.internal.dto.ReopenWorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderItemCompletionResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.PartLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.service.WorkorderCountService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
 import com.positivity.workorder.internal.service.WorkorderService;
@@ -229,7 +233,7 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void mapsCompletionFailuresOntoBadRequestAndNotFound() {
+        void mapsCompletionFailuresOntoBadRequest() {
             CompleteWorkorderRequest request =
                     CompleteWorkorderRequest.builder().build();
 
@@ -238,12 +242,35 @@ class WorkorderControllerTest {
                     .completeWorkorder(any(), anyString(), any());
             assertThat(controller.completeWorkorder(WORKORDER_ID, request).getStatusCode())
                     .isEqualTo(HttpStatus.BAD_REQUEST);
+        }
 
-            doThrow(new IllegalArgumentException("no such workorder"))
+        @Test
+        void propagatesNotFoundForCompletionOfAnUnknownWorkorder() {
+            // (issue #1694) getCurrentWorkorderStatus, called before completeWorkorder, throws a typed
+            // WorkorderNotFoundException on a missing workorder -- the controller no longer catches
+            // IllegalArgumentException locally, so this propagates for GlobalExceptionHandler to map to 404.
+            CompleteWorkorderRequest request =
+                    CompleteWorkorderRequest.builder().build();
+            when(workorderService.getCurrentWorkorderStatus(WORKORDER_ID))
+                    .thenThrow(new WorkorderNotFoundException(WORKORDER_ID));
+
+            assertThatThrownBy(() -> controller.completeWorkorder(WORKORDER_ID, request))
+                    .isInstanceOf(WorkorderNotFoundException.class);
+        }
+
+        @Test
+        void propagatesABareIllegalArgumentExceptionFromThePostCompletionRefetch() {
+            // (issue #1694) A concurrent delete mid-transaction after a successful completion is a
+            // server-side anomaly, not a client input problem -- it must not be answered as 404. The
+            // controller has no local catch for it, so it propagates for the platform's generic 500.
+            CompleteWorkorderRequest request =
+                    CompleteWorkorderRequest.builder().build();
+            doThrow(new IllegalArgumentException("Workorder not found after completion: " + WORKORDER_ID))
                     .when(workorderService)
                     .completeWorkorder(any(), anyString(), any());
-            assertThat(controller.completeWorkorder(WORKORDER_ID, request).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+
+            assertThatThrownBy(() -> controller.completeWorkorder(WORKORDER_ID, request))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -268,13 +295,13 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void reportsNotFoundForPreconditionsOfAnUnknownWorkorder() {
-            doThrow(new IllegalArgumentException("no such workorder"))
+        void propagatesNotFoundForPreconditionsOfAnUnknownWorkorder() {
+            doThrow(new WorkorderNotFoundException(WORKORDER_ID))
                     .when(workorderService)
                     .getCompletionPreconditions(WORKORDER_ID);
 
-            assertThat(controller.getCompletionPreconditions(WORKORDER_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.getCompletionPreconditions(WORKORDER_ID))
+                    .isInstanceOf(WorkorderNotFoundException.class);
         }
 
         @Test
@@ -293,15 +320,22 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void mapsReopenFailuresOntoNotFoundAndBadRequest() {
+        void propagatesNotFoundForReopenOfAnUnknownWorkorder() {
             ReopenWorkorderRequest request =
                     ReopenWorkorderRequest.builder().reopenReason("more work").build();
 
-            doThrow(new IllegalArgumentException("no such workorder"))
+            doThrow(new WorkorderNotFoundException(WORKORDER_ID))
                     .when(workorderService)
                     .reopenCompletedWorkorder(any(), anyString(), any());
-            assertThat(controller.reopenWorkorder(WORKORDER_ID, request).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+
+            assertThatThrownBy(() -> controller.reopenWorkorder(WORKORDER_ID, request))
+                    .isInstanceOf(WorkorderNotFoundException.class);
+        }
+
+        @Test
+        void mapsReopenFailuresOntoBadRequest() {
+            ReopenWorkorderRequest request =
+                    ReopenWorkorderRequest.builder().reopenReason("more work").build();
 
             doThrow(new IllegalStateException("not completed"))
                     .when(workorderService)
@@ -358,15 +392,17 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void mapsServiceLineFailuresOntoNotFoundAndBadRequest() {
-            doThrow(new IllegalArgumentException("no such line"))
+        void propagatesNotFoundForAnUnknownServiceLine() {
+            doThrow(ServiceLineNotFoundException.forId(SERVICE_LINE_ID))
                     .when(workorderService)
                     .completeServiceItem(any(), any(), anyString());
-            assertThat(controller
-                            .completeServiceItem(WORKORDER_ID, SERVICE_LINE_ID)
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
 
+            assertThatThrownBy(() -> controller.completeServiceItem(WORKORDER_ID, SERVICE_LINE_ID))
+                    .isInstanceOf(ServiceLineNotFoundException.class);
+        }
+
+        @Test
+        void mapsServiceLineFailuresOntoBadRequest() {
             doThrow(new IllegalStateException("line is cancelled"))
                     .when(workorderService)
                     .completeServiceItem(any(), any(), anyString());
@@ -389,13 +425,17 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void mapsPartLineFailuresOntoNotFoundAndBadRequest() {
-            doThrow(new IllegalArgumentException("no such part"))
+        void propagatesNotFoundForAnUnknownPartLine() {
+            doThrow(PartLineNotFoundException.forId(PART_ID))
                     .when(workorderService)
                     .completePartItem(any(), any(), anyString());
-            assertThat(controller.completePartItem(WORKORDER_ID, PART_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
 
+            assertThatThrownBy(() -> controller.completePartItem(WORKORDER_ID, PART_ID))
+                    .isInstanceOf(PartLineNotFoundException.class);
+        }
+
+        @Test
+        void mapsPartLineFailuresOntoBadRequest() {
             doThrow(new IllegalStateException("part is cancelled"))
                     .when(workorderService)
                     .completePartItem(any(), any(), anyString());

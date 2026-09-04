@@ -198,7 +198,7 @@ public class WorkexecTimeTrackingController {
             return notFound("NOT_FOUND", ex.getMessage());
         } catch (WorkexecTimeTrackingService.WorkexecConflictException ex) {
             return conflict(ex.getCode(), ex.getMessage());
-        } catch (IllegalArgumentException | WorkorderRequestValidationException ex) {
+        } catch (WorkorderRequestValidationException ex) {
             return badRequest(ERROR_INVALID_REQUEST, ex.getMessage());
         }
     }
