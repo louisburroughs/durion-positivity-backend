@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.service.model.CommercialAccountRequest;
 import com.positivity.supplier.internal.service.model.EndpointBindingRequest;
 import com.positivity.supplier.internal.service.model.RetryBackoff;
@@ -32,7 +33,7 @@ class ServiceModelInvariantsTest {
             // ADR-0050 §5: DELIVERY rows ARE the pos-location -> vendor-account mapping;
             // a DELIVERY account without a location maps nothing.
             assertThatThrownBy(() -> new CommercialAccountRequest(SupplierAccountRole.DELIVERY, "ACC-9", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("deliveryLocationId is required for DELIVERY");
         }
 
@@ -40,7 +41,7 @@ class ServiceModelInvariantsTest {
         void billingRoleForbidsDeliveryLocation() {
             assertThatThrownBy(() -> new CommercialAccountRequest(
                             SupplierAccountRole.BILLING, "ACC-9", "GLN", UUID.randomUUID()))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("deliveryLocationId must be null for BILLING");
         }
 
@@ -60,7 +61,7 @@ class ServiceModelInvariantsTest {
         void rejectsBlankAccountNumber() {
             assertThatThrownBy(() ->
                             new CommercialAccountRequest(SupplierAccountRole.DELIVERY, " ", null, UUID.randomUUID()))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("accountNumber");
         }
     }
@@ -197,7 +198,7 @@ class ServiceModelInvariantsTest {
         void rejectsBlankSandboxBaseUrlOverride() {
             // A blank override is not "absent": it would resolve to no host at call time.
             assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, true, null, null, null, "  ", null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("sandboxBaseUrlOverride");
         }
 
@@ -213,13 +214,13 @@ class ServiceModelInvariantsTest {
         @Test
         void rejectsNonPositiveTimeoutsAndNegativeRetries() {
             assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, 0, null, null, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("connectTimeoutMillis");
             assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, -1, null, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("readTimeoutMillis");
             assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, null, -1, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("maxRetries");
             // Zero retries is a legal budget (no pre-send retries), unlike zero timeouts.
             assertThat(new VendorProfileRequest("m", "M", true, false, null, null, 0, null, null).maxRetries())
@@ -243,7 +244,7 @@ class ServiceModelInvariantsTest {
                             true,
                             null,
                             null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("version must not be blank");
         }
     }

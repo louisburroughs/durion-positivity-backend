@@ -35,6 +35,9 @@ public final class AuditActorContext {
     public static void withActor(@NonNull String actor, @NonNull Runnable action) {
         Objects.requireNonNull(actor, "actor must not be null");
         Objects.requireNonNull(action, "action must not be null");
+        // Left as IllegalArgumentException (#1694): every caller passes a hardcoded system actor
+        // constant (e.g. "system:yaml-bootstrap"), never client input. A violation here is a
+        // programming defect, not something an HTTP caller could trigger.
         if (actor.isBlank()) {
             throw new IllegalArgumentException("actor must not be blank");
         }

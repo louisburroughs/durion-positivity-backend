@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -54,8 +55,11 @@ class DomainModelInvariantsTest {
         @Test
         void rejectsNullAndBlankAlias() {
             assertThatNullPointerException().isThrownBy(() -> new SupplierRef(null));
+            // SupplierValidationException, not a bare IllegalArgumentException (#1694): reachable
+            // from an HTTP path variable in several controllers, so it must not be caught by
+            // (nor confused with) the removed blanket IllegalArgumentException handler.
             assertThatThrownBy(() -> new SupplierRef(""))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SupplierValidationException.class)
                     .hasMessageContaining("blank");
         }
 

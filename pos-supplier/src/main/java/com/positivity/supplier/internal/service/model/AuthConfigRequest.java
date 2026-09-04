@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.service.model;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
@@ -108,8 +109,12 @@ public record AuthConfigRequest(
     public AuthConfigRequest {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(type, "type must not be null");
+        // Genuine client-input validation on an admin @RequestBody (#1694); typed rather than a
+        // bare IllegalArgumentException, matching the per-type reference checks in
+        // AuthReferenceRules which already use SupplierValidationException.
         if (name.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "name must not be blank");
         }
     }
 }

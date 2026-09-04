@@ -90,6 +90,9 @@ public record SupplierStockInquiryResult(
             @Nullable BigDecimal quotedUnitPrice,
             @Nullable String currency) {
 
+        // Left as IllegalArgumentException (#1694): built server-side from a decoded vendor
+        // availability answer, never from client input. A violation here is this module's own
+        // defect and belongs on the platform 500 fallback, not a client 4xx.
         public Line {
             Objects.requireNonNull(status, "status must not be null");
             if (status != LineStatus.AVAILABLE && status != LineStatus.UNAVAILABLE && availableQuantity != null) {

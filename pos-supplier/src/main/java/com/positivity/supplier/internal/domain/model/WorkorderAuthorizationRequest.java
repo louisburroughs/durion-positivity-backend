@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.domain.model;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -51,8 +52,12 @@ public record WorkorderAuthorizationRequest(
             @Nullable String tirePosition) {
 
         public Line {
+            // Genuine client-input validation reachable from the fleet-authorization @RequestBody
+            // via toDomain(...) (#1694); typed rather than a bare IllegalArgumentException so it
+            // cannot be confused with a server-side defect once the blanket handler is gone.
             if (quantity < 0) {
-                throw new IllegalArgumentException("quantity must not be negative");
+                throw new SupplierValidationException(
+                        SupplierValidationException.VALIDATION_ERROR, "quantity must not be negative");
             }
         }
     }
@@ -63,8 +68,12 @@ public record WorkorderAuthorizationRequest(
         lines = List.copyOf(lines);
         if (!identifiesAVehicle(vendorVehicleId, licensePlate, vin, fleetNumber)) {
             // Refused here rather than sent, because a request with no vehicle cannot be authorized
-            // by anyone and the vendor's rejection would arrive hours later as an opaque 400.
-            throw new IllegalArgumentException(
+            // by anyone and the vendor's rejection would arrive hours later as an opaque 400. Typed
+            // rather than a bare IllegalArgumentException (#1694) so it cannot be confused with a
+            // server-side defect once the blanket handler is gone; the controller documents this
+            // exact 400.
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR,
                     "an authorization request must identify a vehicle by vendor id, plate, VIN or fleet number");
         }
     }

@@ -23,6 +23,9 @@ public record ProtocolVersion(@NonNull String value) {
     public static final ProtocolVersion C1_2 = new ProtocolVersion("C1_2");
     public static final ProtocolVersion S2S_V1 = new ProtocolVersion("S2S_V1");
 
+    // Left as IllegalArgumentException (#1694): constructed only from the constants above or from
+    // internal adapter/config code, never from client input. A violation here is this module's
+    // own defect and belongs on the platform 500 fallback, not a client 4xx.
     public ProtocolVersion {
         Objects.requireNonNull(value, "value must not be null");
         if (value.isBlank()) {

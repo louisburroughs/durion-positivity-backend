@@ -27,6 +27,9 @@ public record PartyContext(
         @Nullable String billingAgencyCode,
         @Nullable UUID deliveryLocationId) {
 
+    // Left as IllegalArgumentException (#1694): built internally from the resolved billing/
+    // delivery account entity, never from client input directly. A violation here is this
+    // module's own defect and belongs on the platform 500 fallback, not a client 4xx.
     public PartyContext {
         Objects.requireNonNull(billingAccountNumber, "billingAccountNumber must not be null");
         if (billingAccountNumber.isBlank()) {

@@ -98,6 +98,9 @@ public record SupplierOrderStatusResult(
         }
     }
 
+    // Left as IllegalArgumentException (#1694): built server-side from decoded vendor order-status
+    // wire data (or the notFound(...) factory below), never from client input. A violation here is
+    // this module's own defect and belongs on the platform 500 fallback, not a client 4xx.
     public SupplierOrderStatusResult {
         Objects.requireNonNull(documentId, "documentId must not be null");
         Objects.requireNonNull(status, "status must not be null");

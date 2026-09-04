@@ -41,6 +41,14 @@ public record StockInquiryRequest(
     public record Line(
             @Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
 
+        // Deliberately left as IllegalArgumentException rather than a module exception type
+        // (#1694): this record lives on the ADR-0026 D4 grant surface (com.positivity.supplier.
+        // service..), which must not depend on internal.exception.*, and the controller-bound
+        // path already converts this correctly — Jackson wraps a constructor exception thrown
+        // while deserializing the @RequestBody as HttpMessageNotReadableException, and
+        // SupplierExceptionHandler#handleUnreadableBody unwraps an IllegalArgumentException cause
+        // into VALIDATION_ERROR/400 explicitly for this reason (see its javadoc). It never reaches
+        // the (now-removed) blanket IllegalArgumentException handler.
         public Line {
             if (requestedQuantity < 1) {
                 throw new IllegalArgumentException("requestedQuantity must be >= 1");
@@ -53,6 +61,10 @@ public record StockInquiryRequest(
         }
     }
 
+    // See the Line compact constructor above: left as IllegalArgumentException because this
+    // grant-surface record (ADR-0026 D4) cannot depend on internal.exception.*, and the
+    // constructor-time failure is already correctly unwrapped to 400 via
+    // HttpMessageNotReadableException by SupplierExceptionHandler#handleUnreadableBody.
     public StockInquiryRequest {
         Objects.requireNonNull(inquiryId, "inquiryId must not be null");
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");

@@ -40,6 +40,9 @@ public record SupplierHttpRequest(
         boolean idempotent,
         @NonNull Map<String, String> headers) {
 
+    // Left as IllegalArgumentException (#1694): built exclusively by internal transport code from
+    // an already-validated SupplierRequestSpec, never from client-supplied HTTP input. A violation
+    // here is this module's own defect and belongs on the platform 500 fallback, not a client 4xx.
     public SupplierHttpRequest {
         Objects.requireNonNull(binding, "binding must not be null");
         Objects.requireNonNull(method, "method must not be null");

@@ -18,6 +18,14 @@ public record SecretReference(
 
     private static final Pattern SCHEME_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+.-]*");
 
+    // Left as IllegalArgumentException throughout this class (#1694) — the compact constructor
+    // below, and parse()'s own throw — rather than retyped to a module exception: this is a
+    // low-level parsing helper, and every one of its three call sites (AuthReferenceRules,
+    // SecretSchemeRegistry, EnvSecretReferenceResolver) already wraps SecretReference.parse(...)
+    // in catch (IllegalArgumentException ex) and converts it to the appropriate typed exception
+    // (SupplierValidationException on the admin write path, SupplierConfigurationException on the
+    // runtime-resolution path) before it can reach any controller. Retyping this class would break
+    // all three of those catches at once for no behavioural gain.
     public SecretReference {
         Objects.requireNonNull(scheme, "scheme must not be null");
         Objects.requireNonNull(key, "key must not be null");

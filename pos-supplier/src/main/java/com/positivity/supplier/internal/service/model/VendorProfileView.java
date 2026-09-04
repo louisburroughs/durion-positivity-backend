@@ -98,6 +98,10 @@ public record VendorProfileView(
         @Nullable
         RetryBackoff retryBackoff) {
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from a
+    // persisted entity by the admin service, never from client input (the create/update payload
+    // is VendorProfileRequest, validated separately). A violation here is this module's own
+    // defect, so it belongs on the platform 500 fallback, not a client 4xx.
     public VendorProfileView {
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");

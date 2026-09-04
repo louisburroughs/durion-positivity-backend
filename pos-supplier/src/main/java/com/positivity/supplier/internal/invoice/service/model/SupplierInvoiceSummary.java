@@ -26,6 +26,9 @@ public record SupplierInvoiceSummary(
         @NonNull String currency,
         @Nullable BigDecimal totalGrossAmount) {
 
+    // Left as IllegalArgumentException (#1694): built server-side from decoded vendor invoice
+    // data, never from client input. A violation here is this module's own defect, so it belongs
+    // on the platform 500 fallback, not a client 4xx.
     public SupplierInvoiceSummary {
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(vendorInvoiceNumber, "vendorInvoiceNumber must not be null");

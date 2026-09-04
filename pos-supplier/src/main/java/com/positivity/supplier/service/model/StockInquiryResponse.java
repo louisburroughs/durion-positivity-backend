@@ -131,6 +131,12 @@ public record StockInquiryResponse(
             // one of these. A quantity on a line the vendor never answered is a number with no
             // author, and it is precisely the value a consumer would render as fact. The canonical
             // model carries the same guard; this is the copy that faces callers outside the module.
+            //
+            // Left as IllegalArgumentException rather than a module exception type (#1694): this
+            // record is server-constructed for the response body (never from client input), it
+            // lives on the ADR-0026 D4 grant surface which must not depend on internal.exception.*,
+            // and a violation here is this module's own defect — it should reach the platform 500
+            // fallback, not be reported as a 4xx.
             if (status != LineStatus.AVAILABLE && status != LineStatus.UNAVAILABLE && availableQuantity != null) {
                 throw new IllegalArgumentException(
                         "a quantity may only accompany an answered line, but status was " + status);

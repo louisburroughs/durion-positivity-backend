@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.service.model;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import java.util.UUID;
@@ -52,14 +53,22 @@ public record CommercialAccountRequest(
     public CommercialAccountRequest {
         Objects.requireNonNull(role, "role must not be null");
         Objects.requireNonNull(accountNumber, "accountNumber must not be null");
+        // Genuine client-input validation on an admin @RequestBody (#1694): typed rather than a
+        // bare IllegalArgumentException so it cannot be confused with a server-side defect once
+        // the blanket IllegalArgumentException handler is gone.
         if (accountNumber.isBlank()) {
-            throw new IllegalArgumentException("accountNumber must not be blank");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "accountNumber must not be blank");
         }
         if (role == SupplierAccountRole.DELIVERY && deliveryLocationId == null) {
-            throw new IllegalArgumentException("deliveryLocationId is required for DELIVERY accounts");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR,
+                    "deliveryLocationId is required for DELIVERY accounts");
         }
         if (role == SupplierAccountRole.BILLING && deliveryLocationId != null) {
-            throw new IllegalArgumentException("deliveryLocationId must be null for BILLING accounts");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR,
+                    "deliveryLocationId must be null for BILLING accounts");
         }
     }
 }

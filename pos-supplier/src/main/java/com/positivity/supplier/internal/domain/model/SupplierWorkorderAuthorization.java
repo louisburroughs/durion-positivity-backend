@@ -52,6 +52,9 @@ public record SupplierWorkorderAuthorization(
         NOT_FOUND
     }
 
+    // Left as IllegalArgumentException (#1694): built server-side from a decoded vendor fleet
+    // authorization answer, never from client input. A violation here is this module's own defect
+    // and belongs on the platform 500 fallback, not a client 4xx.
     public SupplierWorkorderAuthorization {
         Objects.requireNonNull(workorderId, "workorderId must not be null");
         Objects.requireNonNull(status, "status must not be null");

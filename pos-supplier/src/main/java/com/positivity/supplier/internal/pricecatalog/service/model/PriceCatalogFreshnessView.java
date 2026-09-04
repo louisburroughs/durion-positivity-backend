@@ -88,6 +88,9 @@ public record PriceCatalogFreshnessView(
         @NonNull
         List<PriceCatalogBindingFreshness> bindings) {
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from
+    // internal freshness state, never from client input. A violation here is this module's own
+    // defect, so it belongs on the platform 500 fallback, not a client 4xx.
     public PriceCatalogFreshnessView {
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(stalenessThreshold, "stalenessThreshold must not be null");

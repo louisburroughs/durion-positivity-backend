@@ -30,6 +30,11 @@ public record SupplierStockInquiry(
     public record Line(
             @Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
 
+        // Left as IllegalArgumentException (#1694): this is the internal canonical twin of
+        // service.model.StockInquiryRequest, built server-side by converting an already-validated
+        // StockInquiryRequest/availability-controller call — the same guard at the boundary makes
+        // this one unreachable in practice. A violation here would be this module's own defect and
+        // belongs on the platform 500 fallback, not a client 4xx.
         public Line {
             if (requestedQuantity < 1) {
                 throw new IllegalArgumentException("requestedQuantity must be >= 1");
@@ -42,6 +47,7 @@ public record SupplierStockInquiry(
         }
     }
 
+    // See the Line compact constructor above: same reasoning applies here.
     public SupplierStockInquiry {
         Objects.requireNonNull(inquiryId, "inquiryId must not be null");
         Objects.requireNonNull(lines, "lines must not be null");

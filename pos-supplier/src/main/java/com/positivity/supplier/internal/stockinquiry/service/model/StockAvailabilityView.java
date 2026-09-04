@@ -124,6 +124,9 @@ public record StockAvailabilityView(
             @Schema(description = "Per-article answers; empty unless the vendor answered.") @NonNull
             List<Line> lines) {
 
+        // Left as IllegalArgumentException (#1694): this is a response view built server-side from
+        // vendor answers/cache state, never from client input. A violation here is this module's
+        // own defect, so it belongs on the platform 500 fallback, not a client 4xx.
         public VendorAvailability {
             Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
             Objects.requireNonNull(vendorDisplayName, "vendorDisplayName must not be null");
@@ -172,6 +175,9 @@ public record StockAvailabilityView(
             @Schema(description = "ISO 4217 currency of the quoted price, when quoted.") @Nullable
             String currency) {
 
+        // Left as IllegalArgumentException (#1694): this is a response view built server-side from
+        // vendor answers, never from client input. A violation here is this module's own defect,
+        // so it belongs on the platform 500 fallback, not a client 4xx.
         public Line {
             Objects.requireNonNull(status, "status must not be null");
             if (status != StockInquiryResponse.LineStatus.AVAILABLE
