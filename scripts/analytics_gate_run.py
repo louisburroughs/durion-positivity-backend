@@ -166,6 +166,26 @@ def actor_provenance(token):
 # contract requires the model to quote that statement in the answer. That makes the shape readable
 # from the reply itself, with no production change — which is what lets the gate grade the SHAPE
 # rather than the endpoints (#1709 option 3).
+
+# Assistant output is typographically formatted: dates arrive as "2026\u201109\u201104" with U+2011
+# NON-BREAKING HYPHEN, spaces as U+202F NARROW NO-BREAK SPACE, and em/en dashes in place of the
+# resolver's ASCII separator. Grading against the raw string made two correct answers (q05, q13)
+# grade FAIL on 2026-09-04 — a grader defect that reads as a model failure, which is precisely the
+# confusion this whole line of work exists to remove.
+_TYPOGRAPHIC = {
+    "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-", "\u2212": "-",
+    "\u00a0": " ", "\u202f": " ", "\u2009": " ", "\u2007": " ",
+    "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+}
+
+
+def normalise_typography(text):
+    """Folds typographic punctuation to ASCII so grading reads what the model meant."""
+    if not text:
+        return text
+    return "".join(_TYPOGRAPHIC.get(ch, ch) for ch in text)
+
+
 _STATEMENT_LABELS = {
     "rolling": "ROLLING",
     "current to date": "CURRENT_TO_DATE",
@@ -201,7 +221,7 @@ def parse_statements(answer):
     if not answer:
         return []
     parsed = []
-    for match in _STATEMENT_RE.finditer(answer):
+    for match in _STATEMENT_RE.finditer(normalise_typography(answer)):
         label, _start, _end, clause = match.groups()
         unit = _UNIT_RE.search(clause)
         count = _COUNT_RE.search(clause)
@@ -249,7 +269,7 @@ def grade_window(question, answer, as_of):
                 # point of grading per stage.
                 return "UNGRADED", "no answer to read an as-of date from"
             target = as_of + timedelta(days=int(expected["as_of_offset_days"]))
-            if target.isoformat() in answer:
+            if target.isoformat() in normalise_typography(answer):
                 return "PASS", f"answer states the as-of date {target.isoformat()}"
             return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
         return "UNGRADED", expected.get("note") or "no window expectation recorded"

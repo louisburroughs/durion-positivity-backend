@@ -638,6 +638,24 @@ class WindowGradingTest(unittest.TestCase):
         self.assertEqual(runner.grade_window(question, "as of 2026-09-04 the balance is…", date(2026, 9, 4))[0], "PASS")
         self.assertEqual(runner.grade_window(question, "as of 2026-08-01 the balance is…", date(2026, 9, 4))[0], "FAIL")
 
+    def test_typographic_hyphens_and_spaces_do_not_defeat_grading(self):
+        # Observed live on 2026-09-04: the model renders dates as "2026\u201109\u201104" with U+2011
+        # NON-BREAKING HYPHEN and U+202F NARROW NO-BREAK SPACE. q05 and q13 graded FAIL while their
+        # answers stated the as-of date correctly — two false failures caused by the grader, not the
+        # model.
+        answer = "Customers > 60 days past\u2011due (as of\u202f2026\u201109\u201104) and their open work orders"
+        verdict, _ = runner.grade_window(
+            self._q({"shape": None, "as_of_offset_days": 0}), answer, date(2026, 9, 4)
+        )
+        self.assertEqual(verdict, "PASS")
+
+    def test_typographic_dashes_do_not_defeat_shape_reading(self):
+        answer = "calendar span:\u202f2026\u201103\u201101 to 2026\u201108\u201131 \u2014 6 whole months"
+        verdict, _ = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}), answer, date(2026, 9, 4)
+        )
+        self.assertEqual(verdict, "PASS")
+
     def test_an_answer_quoting_no_statement_is_ungraded_not_a_pass(self):
         verdict, detail = runner.grade_window(
             self._q({"shape": "CALENDAR_SPAN"}), "Here are the numbers.", date(2026, 9, 1)
