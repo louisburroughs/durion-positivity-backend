@@ -147,13 +147,17 @@ def actor_provenance(token):
     # ROLE_FACTOR_PASSWORD is an authentication-factor marker every seeded actor carries; it says
     # nothing about what the caller may reach, so it is recorded but never treated as the role.
     effective = [r for r in roles if r != "ROLE_FACTOR_PASSWORD"]
-    bits = claims.get("permissionCodes") or claims.get("perm_bits") or claims.get("permissions")
+    # Deliberately NOT the encoded bitset's length: pos-security-service issues `perm_bits` as a
+    # Base64URL BitSet, and BitSet.toByteArray drops trailing zero bytes, so the length tracks the
+    # highest set bit index rather than how many codes were granted. One high-index permission
+    # encodes longer than fifty low-index ones, which makes it useless as coverage provenance.
+    # `perm_ver` is recorded instead: without the catalog version a role name cannot be
+    # interpreted across catalog changes.
     return {
         "subject": claims.get("sub") or claims.get("username"),
         "roles": roles,
         "effective_roles": effective,
-        "permission_bits_length": len(bits) if isinstance(bits, str) else None,
-        "permission_count": len(bits) if isinstance(bits, (list, dict)) else None,
+        "permission_catalog_version": claims.get("perm_ver"),
     }
 
 
@@ -688,25 +692,56 @@ def format_tool_calls(tool_calls):
     return ", ".join(f"{tool}×{count}" for tool, count in sorted(tool_calls.items()))
 
 
+
+def _actor_line(actor):
+    """One line naming who asked. A score is not comparable without it (#1706)."""
+    if actor.get("not_applicable"):
+        return f"Actor: n/a — {actor['not_applicable']}"
+    if actor.get("error"):
+        return f"Actor: **unknown** — {actor['error']}"
+    roles = ", ".join(actor.get("effective_roles") or []) or "none"
+    version = actor.get("permission_catalog_version")
+    suffix = f", permission catalog v{version}" if version is not None else ""
+    return f"Actor: `{actor.get('subject')}` (roles: {roles}{suffix})"
+
+
 def write_markdown(out_dir, record):
     """Emit either the live grading skeleton or a deterministic replay report."""
     provenance = record["questions_file"]
     lines = [
         f"# Analytics gate chat-path run — {record['started_at'][:10]}",
         "",
+    ]
+    if record.get("void"):
+        # Above everything, including the verdict. --allow-role-mismatch otherwise produces a
+        # report indistinguishable from a valid one — which is the exact defect #1706 is about,
+        # re-created inside the escape hatch added to fix it.
+        lines += [
+            "> [!CAUTION]",
+            f"> **THIS RUN IS VOID — do not quote its score.** {record['void_reason']}.",
+            "> It was produced with `--allow-role-mismatch`. A caller without the corpus's"
+            " permission codes is offered a different tool set and answers honestly that the"
+            " platform cannot do what was asked, so its failures are not model failures (#1706).",
+            "",
+        ]
+    lines += [
         f"Questions: `{provenance['path']}` blob `{provenance['blob_sha']}`"
         f" (repo commit `{provenance['commit']}`"
         + (", **uncommitted edits present**" if provenance["uncommitted"] else "")
         + ")",
         "Ground truth: `pos-mcp-server/src/test/resources/eval/analytics-gate/"
         "ground-truth/EXPECTED.md`",
+        _actor_line(record.get("actor") or {}),
     ]
     replay = record.get("mode") == "replay"
     if replay:
         lines.extend([
             f"Replay report: `{record['replay_report']}` - questions graded:"
             f" {len(record['results'])}",
-            f"Overall verdict: **{record['summary']['verdict']}**",
+            (
+                f"Overall verdict: **{record['summary']['verdict']}**"
+                + (" — but see the VOID banner above; this verdict is not usable" if record.get("void") else "")
+            ),
             "",
             "| Q | Outcome | Verdict | Failed axes | Elapsed | Tool calls |",
             "|---|---|---|---|---|---|",
@@ -785,7 +820,7 @@ def main(argv=None):
     parser.add_argument("--env-file", default=None, help="KEY=VALUE file to read config from")
     parser.add_argument(
         "--expect-role",
-        default=os.environ.get("MCP_EXPECTED_ROLE", EXPECTED_ROLE_DEFAULT),
+        default=None,
         help=f"abort unless the token carries this role (default {EXPECTED_ROLE_DEFAULT}); "
         "pass an empty string to skip the check",
     )
@@ -806,13 +841,27 @@ def main(argv=None):
 
     if args.env_file:
         load_env_file(args.env_file)
+    # Resolved after load_env_file, not as an argparse default: a default is evaluated at
+    # add_argument time, so MCP_EXPECTED_ROLE set in an --env-file was silently ignored while
+    # MCP_BEARER_TOKEN from the same file worked.
+    if args.expect_role is None:
+        args.expect_role = os.environ.get("MCP_EXPECTED_ROLE", EXPECTED_ROLE_DEFAULT)
     token = args.token or os.environ.get("MCP_BEARER_TOKEN")
     if not args.replay_report and not token:
         sys.exit("no bearer token: pass --token or set MCP_BEARER_TOKEN (or --env-file)")
 
-    actor = actor_provenance(token) if token else {"error": "no token (replay mode)"}
+    # Replay grades a recorded trace and issues no request, so the local token says nothing about
+    # who produced it. Recording this run's actor there would be a FALSE provenance claim — worse
+    # than the missing one #1706 is about — and refusing the run over a role it never uses would
+    # block a check that needs no credentials at all.
+    replaying = bool(args.replay_report)
+    actor = (
+        {"not_applicable": "replay mode grades a recorded trace; this run issued no request"}
+        if replaying
+        else actor_provenance(token) if token else {"error": "no token"}
+    )
     role_mismatch = None
-    if token and args.expect_role:
+    if not replaying and token and args.expect_role:
         effective = actor.get("effective_roles") or []
         if actor.get("error"):
             # Distinct from a role mismatch: the roles list is empty because nothing could be
@@ -873,12 +922,12 @@ def main(argv=None):
         "eval_as_of": document.get("eval_as_of"),
         "questions_file": provenance,
         "actor": actor,
+        "void": bool(role_mismatch),
         "results": [],
     }
     if role_mismatch:
         # Recorded, not just warned: a score produced by the wrong actor must be self-evidently
         # void when someone reads the file later, not only in the terminal of whoever ran it.
-        record["void"] = True
         record["void_reason"] = role_mismatch
     if replay_by_fixture is not None:
         record["mode"] = "replay"

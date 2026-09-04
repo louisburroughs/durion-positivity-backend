@@ -48,8 +48,8 @@ public class GlossaryFacadeTool {
                     + "rather than a plain field. Returns defined=true with metric and defaultWindow — apply "
                     + "them and answer, quoting the definition so the user can see which reading you used — or "
                     + "defined=false, meaning the glossary has no entry for the phrase. defined=false is NOT an "
-                    + "instruction to ask: if the question already names a measure (\"top technicians by labor "
-                    + "revenue\"), use that measure and answer. Ask only when the phrase is undefined AND the "
+                    + "instruction to ask: if the question already names a measure (\"busiest locations by appointment "
+                    + "count\"), use that measure and answer. Ask only when the phrase is undefined AND the "
                     + "question names no measure at all. A missing date range is never a reason to ask: resolve "
                     + "that through resolveDateWindow.")
     public String lookupBusinessTerm(
@@ -77,9 +77,9 @@ public class GlossaryFacadeTool {
             root.put(
                     "guidance",
                     "The glossary has no entry for this phrase, which is not by itself a reason to ask. If the "
-                            + "question already names a measure — \"top technicians by labor revenue\", \"best "
-                            + "customers by revenue\" — use the measure the question named and answer, saying which "
-                            + "you used. Ask only when the question names no measure either; then ask rather than "
+                            + "question already names a measure — \"busiest locations by appointment count\", \"slowest "
+                            + "suppliers by lead time\" — use the measure the question named and answer, saying "
+                            + "which you used. Ask only when the question names no measure at all; then ask rather than "
                             + "choosing one silently, because a metric picked without being asked for looks "
                             + "confident and cannot be checked. Never ask about the date range; resolve that with "
                             + "resolveDateWindow.");

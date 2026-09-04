@@ -49,7 +49,10 @@ class GlossaryFacadeToolTest {
                 .contains("not by itself a reason to ask")
                 .contains("use the measure the question named")
                 .contains("Ask only when the question names no measure")
-                .contains("Never ask about the date range");
+                .contains("Never ask about the date range")
+                // Same contamination guard as the layer: the tool's examples must not be corpus
+                // utterances, or q01 passing partly measures prompt recall.
+                .doesNotContain("top technicians");
     }
 
     @Test

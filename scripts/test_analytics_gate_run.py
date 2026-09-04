@@ -364,7 +364,9 @@ class CliModeTest(unittest.TestCase):
         self.assertNotIn("test-token", json.dumps(record))
         self.assertEqual(record["actor"]["subject"], "admin.alpha")
         self.assertEqual(record["actor"]["effective_roles"], ["ROLE_ADMIN"])
-        self.assertNotIn("void", record)
+        # Always written, so its absence means "produced before this check existed" rather than
+        # being ambiguous with "checked and valid" — the ambiguity #1706 was filed about.
+        self.assertIs(record["void"], False)
         self.assertIn("n/a (not exposed by the endpoint)", markdown)
 
 
@@ -383,15 +385,20 @@ class ExistingHelperBehaviorTest(unittest.TestCase):
         )
         self.assertEqual("n/a (not exposed by the endpoint)", runner.format_tool_calls(None))
 
-def _token(claims):
-    """A JWT-shaped string carrying `claims`. Signature is irrelevant — the runner only decodes."""
+def _token(claims, signature="p9Zk3Qx7Lm2Rt5Vw8Yb1Nc4Fh6Jd0Sg"):
+    """A JWT-shaped string carrying `claims`.
+
+    The signature is a realistic base64-ish blob rather than the literal word "signature": a test
+    asserting the record omits the string "signature" would pass over an implementation that
+    copied a REAL signature in, which is the case worth guarding.
+    """
     import base64
 
     def seg(obj):
         raw = json.dumps(obj).encode()
         return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
-    return f"{seg({'alg': 'none'})}.{seg(claims)}.signature"
+    return f"{seg({'alg': 'none'})}.{seg(claims)}.{signature}"
 
 
 class ActorProvenanceTest(unittest.TestCase):
@@ -399,15 +406,28 @@ class ActorProvenanceTest(unittest.TestCase):
 
     def test_records_subject_and_effective_roles(self):
         actor = runner.actor_provenance(
-            _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN", "ROLE_FACTOR_PASSWORD"], "perm_bits": "abc"})
+            _token(
+                {
+                    # The exact claim shape pos-security-service issues: `roles` (plural, a sorted
+                    # list) and `perm_ver`. Anything else here would be testing a shape the gate
+                    # never sees.
+                    "sub": "admin.alpha",
+                    "roles": ["ROLE_ADMIN", "ROLE_FACTOR_PASSWORD", "ROLE_SYSTEM_ADMINISTRATOR"],
+                    "perm_bits": "_wcAAAAA",
+                    "perm_ver": 73,
+                }
+            )
         )
 
         self.assertEqual(actor["subject"], "admin.alpha")
-        self.assertEqual(actor["roles"], ["ROLE_ADMIN", "ROLE_FACTOR_PASSWORD"])
+        self.assertEqual(actor["roles"], ["ROLE_ADMIN", "ROLE_FACTOR_PASSWORD", "ROLE_SYSTEM_ADMINISTRATOR"])
         # The factor marker says nothing about what the caller may reach, so it must not be
         # mistaken for the role the gate checks against.
-        self.assertEqual(actor["effective_roles"], ["ROLE_ADMIN"])
-        self.assertEqual(actor["permission_bits_length"], 3)
+        self.assertEqual(actor["effective_roles"], ["ROLE_ADMIN", "ROLE_SYSTEM_ADMINISTRATOR"])
+        self.assertEqual(actor["permission_catalog_version"], 73)
+        # The encoded bitset length tracks the highest set bit, not the number of granted codes,
+        # so it must not be recorded as though it were coverage provenance.
+        self.assertNotIn("permission_bits_length", actor)
 
     def test_never_returns_the_token_or_its_signature(self):
         token = _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"], "perm_bits": "s3cr3t-bits"})
@@ -416,9 +436,8 @@ class ActorProvenanceTest(unittest.TestCase):
         # The record is written to disk and pasted into issues; the credential must not ride along.
         blob = json.dumps(actor)
         self.assertNotIn(token, blob)
-        self.assertNotIn("signature", blob)
+        self.assertNotIn(token.rsplit(".", 1)[1], blob)
         self.assertNotIn("s3cr3t-bits", blob)
-        self.assertEqual(actor["permission_bits_length"], len("s3cr3t-bits"))
 
     def test_malformed_token_records_an_error_rather_than_raising(self):
         actor = runner.actor_provenance("not-a-jwt")
@@ -431,6 +450,66 @@ class ActorProvenanceTest(unittest.TestCase):
         self.assertEqual(
             runner.actor_provenance(_token({"role": ["ROLE_CONTROLLER"]}))["effective_roles"], ["ROLE_CONTROLLER"]
         )
+
+    def _run(self, argv_extra, token):
+        """Runs main() over a one-question document, mirroring CliModeTest's fixture shape."""
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+            os.environ, {}, clear=True
+        ), mock.patch.object(runner, "ask") as ask, mock.patch.object(
+            runner, "questions_provenance"
+        ) as provenance:
+            provenance.return_value = {
+                "path": "questions.json",
+                "blob_sha": "abc",
+                "commit": "def",
+                "uncommitted": False,
+            }
+            ask.return_value = {"answer": "live answer", "error": None, "elapsed_s": 1.0}
+            directory = Path(directory)
+            questions_path = directory / "questions.json"
+            questions_path.write_text(
+                json.dumps({"eval_as_of": "2026-09-01", "questions": [question()]}), encoding="utf-8"
+            )
+            out_dir = directory / "out"
+            runner.main(
+                ["--out", str(out_dir), "--questions", str(questions_path), "--token", token]
+                + argv_extra
+            )
+            return (
+                json.loads((out_dir / "run.json").read_text(encoding="utf-8")),
+                (out_dir / "run.md").read_text(encoding="utf-8"),
+            )
+
+    def test_allow_role_mismatch_runs_but_stamps_the_record_void(self):
+        token = _token({"sub": "margaret.olsen", "roles": ["ROLE_CONTROLLER"]})
+        record, report = self._run(["--allow-role-mismatch"], token)
+
+        self.assertIs(record["void"], True)
+        self.assertIn("margaret.olsen", record["void_reason"])
+        self.assertNotIn(token, json.dumps(record))
+        # The banner must reach the artefact a human reads, above the results — otherwise the
+        # escape hatch reproduces the very defect #1706 describes: a clean-looking void report.
+        self.assertIn("THIS RUN IS VOID", report)
+        self.assertLess(report.index("THIS RUN IS VOID"), report.index("Questions:"))
+
+    def test_empty_expect_role_skips_the_check(self):
+        token = _token({"sub": "margaret.olsen", "roles": ["ROLE_CONTROLLER"]})
+        record, _ = self._run(["--expect-role", ""], token)
+
+        self.assertIs(record["void"], False)
+        self.assertEqual(record["actor"]["subject"], "margaret.olsen")
+
+    def test_env_file_can_set_the_expected_role(self):
+        # The default used to be captured at add_argument time, before load_env_file ran, so a role
+        # set in the env file was silently ignored while MCP_BEARER_TOKEN from the same file worked.
+        token = _token({"sub": "margaret.olsen", "roles": ["ROLE_CONTROLLER"]})
+        env_dir = Path(tempfile.mkdtemp())
+        env_file = env_dir / "gate.env"
+        env_file.write_text("MCP_EXPECTED_ROLE=ROLE_CONTROLLER\n", encoding="utf-8")
+
+        record, _ = self._run(["--env-file", str(env_file)], token)
+
+        self.assertIs(record["void"], False)
 
     def test_undecodable_token_is_reported_as_such_not_as_a_role_mismatch(self):
         # "carries roles []" would send the reader to check an actor's permissions when the real

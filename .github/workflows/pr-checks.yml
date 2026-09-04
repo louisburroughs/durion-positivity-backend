@@ -136,6 +136,19 @@ jobs:
         run: |
           python3 scripts/check-mcp-facade-paths.py --baseline scripts/mcp-facade-paths-baseline.json
 
+      - name: Analytics gate runner unit tests (test_analytics_gate_run.py)
+        # The gate runner decides whether a run is valid at all: it decodes the caller's role from
+        # the bearer token and refuses to start for the wrong actor (#1706). Two runs on
+        # 2026-09-04 scored 0/12 and 2/12 purely because of the actor, and produced complete,
+        # plausible-looking records that said nothing about it.
+        #
+        # Those tests existed but nothing ran them, so the pins they carry -- including that the
+        # expected role matches the actor the corpus README documents, and that the token never
+        # reaches run.json or an abort message -- were pins no job evaluated. Stdlib only, no
+        # build, no network, no database.
+        run: |
+          python3 -m unittest scripts.test_analytics_gate_run
+
   pr-comment:
     name: PR Summary Comment
     runs-on: ubuntu-latest
