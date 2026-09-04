@@ -467,7 +467,9 @@ class ClaimServiceImplTest {
 
             assertThatThrownBy(() -> service.submit(CLAIM_ID))
                     .isInstanceOf(WarrantyUnprocessableException.class)
-                    .hasMessageContaining("at least one claim line");
+                    .hasMessageContaining("at least one claim line")
+                    .satisfies(ex -> assertThat(((WarrantyUnprocessableException) ex).getCode())
+                            .isEqualTo(ClaimServiceImpl.MISSING_LINES_CODE));
             verify(eligibilityService, never()).evaluate(any());
         }
 
@@ -485,7 +487,9 @@ class ClaimServiceImplTest {
 
             assertThatThrownBy(() -> service.submit(CLAIM_ID))
                     .isInstanceOf(WarrantyUnprocessableException.class)
-                    .hasMessageContaining("photo evidence");
+                    .hasMessageContaining("photo evidence")
+                    .satisfies(ex -> assertThat(((WarrantyUnprocessableException) ex).getCode())
+                            .isEqualTo(ClaimServiceImpl.PHOTO_EVIDENCE_REQUIRED_CODE));
             verify(eligibilityService).evaluate(CLAIM_ID);
             verify(statusHistoryRepository, never()).save(any());
             verify(claimRepository, never()).save(any());

@@ -1198,7 +1198,7 @@ paths:
 
         Emits a WARRANTY_CLAIM_SUBMIT event and republishes the claim snapshot.
 
-        Returns 400 when the claim has no lines or the selected policy requires missing photo evidence, 404 when the claim does not exist, and 409 when the current status does not allow submit (nextAction lists the legal moves).
+        Returns 422 when the claim has no lines (WARRANTY_CLAIM_MISSING_LINES) or the selected policy requires missing photo evidence (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED), 404 when the claim does not exist, and 409 when the current status does not allow submit (nextAction lists the legal moves).
 
         '
       operationId: submitClaim
@@ -1217,12 +1217,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClaimResponse'
           description: Claim submitted.
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ClaimResponse'
-          description: Intake incomplete (no lines, missing required photos).
         '404':
           content:
             application/json:
@@ -1235,6 +1229,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClaimResponse'
           description: Illegal transition; nextAction lists legal moves.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+          description: 'Intake incomplete: no claim line (WARRANTY_CLAIM_MISSING_LINES) or the winning policy requires photo evidence that is missing (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED).'
       security:
       - bearerAuth: []
       summary: Submit claim
