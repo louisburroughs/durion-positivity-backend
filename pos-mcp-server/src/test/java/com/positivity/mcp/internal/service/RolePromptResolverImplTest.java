@@ -257,7 +257,9 @@ class RolePromptResolverImplTest {
      * A calendar span is defined as ending with the last complete period, and the answer has to
      * disclose the window it used — the number alone cannot show which window produced it. Which
      * dates that period actually is (and dropping the current partial one) is #1675 resolver
-     * arithmetic now, not a prompt rule.
+     * arithmetic now, not a prompt rule. #1684 shortened the disclosure requirement from a bullet
+     * of its own into a clause on the protocol bullet: what to disclose is entirely the resolver's
+     * `statement`, so naming that is the whole rule.
      */
     @Test
     @DisplayName(
@@ -265,24 +267,28 @@ class RolePromptResolverImplTest {
     void dateWindowLayer_calendarSpanEndsAtTheLastCompletePeriodAndDisclosesTheWindow() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("ENDING WITH THE MOST RECENT COMPLETE ONE")
-                .contains("State the window you used in the answer itself");
+                .contains("quote its `statement` in the answer so the window is visible");
     }
 
     /**
      * The distinction the first version of this layer got wrong by treating every relative range as
      * calendar. The preposition is the whole discriminator, and the gate corpus contains both forms:
      * "over the last twelve months" (Q9) and "in the last six months" (Q12).
+     *
+     * <p>#1684 removed the bullet that restated the split in prose ("Read the wording carefully:
+     * 'over the last six months' is rolling; 'in the last six months' … are a calendar span"). Each
+     * shape's own trigger list already carries its preposition, so the restatement was a rule about
+     * how to read the rule above it. This asserts the split where it now lives — on the definitions
+     * — which is a stronger guarantee than the prose sentence was: the prose could drift from the
+     * definitions, and one line cannot drift from itself.
      */
     @Test
     @DisplayName("DATE_WINDOW layer separates rolling from calendar on the preposition")
     void dateWindowLayer_separatesRollingFromCalendar() {
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("ROLLING")
-                .contains("CALENDAR")
-                .contains("\"over the last six months\" is rolling");
+        assertThat(shapeLine("ROLLING")).contains("\"over the last N days/weeks/months/years\"");
+        assertThat(shapeLine("CALENDAR SPAN")).contains("\"in the last N weeks/months\"");
         // ROLLING ends on the current date, that date included — no separate exclusion rule needed.
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("the N units ending on the current date, that date included");
+        assertThat(shapeLine("ROLLING")).contains("the N units ending on the current date, that date included");
     }
 
     /**
@@ -325,12 +331,18 @@ class RolePromptResolverImplTest {
                 .contains("not a mixed comparison");
     }
 
-    /** A 90-day range has no complete-calendar form, so the calendar branch must not claim it. */
+    /**
+     * A 90-day range has no complete-calendar form, so the calendar branch must not claim it. #1684
+     * folded this from a standalone bullet into a clause on ROLLING's own definition, which is where
+     * a classifier looks for it; {@code DateWindowResolver} rejects DAY under any calendar shape
+     * besides, so a misclassification fails loudly rather than silently resolving.
+     */
     @Test
     @DisplayName("DATE_WINDOW layer treats a day-expressed range as always rolling")
     void dateWindowLayer_dayRangesAreAlwaysRolling() {
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("A range expressed in days has no calendar form and is always rolling");
+        assertThat(shapeLine("ROLLING"))
+                .contains("A range expressed in days is always rolling")
+                .contains("only weeks, months, quarters and years have complete calendar periods");
     }
 
     /**
@@ -342,11 +354,14 @@ class RolePromptResolverImplTest {
     @Test
     @DisplayName("DATE_WINDOW layer reads this-X as the current period to date, never the previous one")
     void dateWindowLayer_thisPeriodIsCurrentToDate() {
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("CURRENT-TO-DATE")
+        assertThat(shapeLine("CURRENT-TO-DATE"))
+                .contains("\"this week/month/quarter/year\"")
                 .contains("NEVER the previous complete period");
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("are BOTH fixed, and they are NOT the same period");
+        // #1684 dropped the bullet restating that "this X" and "last X" are different periods. The
+        // separation is structural instead: each phrase is a trigger for exactly one shape, and the
+        // two shapes have different definitions.
+        assertThat(shapeLine("PRIOR COMPLETE")).contains("\"last week/month/quarter/year\"");
+        assertThat(shapeLine("CURRENT-TO-DATE")).doesNotContain("\"last week/month/quarter/year\"");
     }
 
     /**
@@ -356,10 +371,9 @@ class RolePromptResolverImplTest {
     @Test
     @DisplayName("DATE_WINDOW layer treats during/for the last N as a calendar span")
     void dateWindowLayer_duringAndForAreCalendarSpans() {
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+        assertThat(shapeLine("CALENDAR SPAN"))
                 .contains("during the last N months")
-                .contains("for the last N months")
-                .contains("are a calendar span");
+                .contains("for the last N months");
     }
 
     /**
@@ -376,7 +390,7 @@ class RolePromptResolverImplTest {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("ENDING WITH THE MOST RECENT COMPLETE ONE")
                 .contains("call `resolveDateWindow`")
-                .contains("Never compute a date yourself.");
+                .contains("Never compute or assume a date yourself.");
     }
 
     /**
@@ -427,11 +441,19 @@ class RolePromptResolverImplTest {
         assertThat(span).isZero();
     }
 
-    /** The shape is invisible in the figure, so it has to be named alongside the dates. */
+    /**
+     * The shape is invisible in the figure, so it has to be named alongside the dates. #1684 stopped
+     * the layer spelling out what to disclose ("with explicit start and end dates and whether it is
+     * rolling or calendar") and requires the resolver's own `statement` instead — which opens with
+     * the shape's label, so it discloses strictly more than the instruction it replaced and cannot
+     * disagree with the window actually used. {@code DateWindowResolverTest} pins the label.
+     */
     @Test
-    @DisplayName("DATE_WINDOW layer requires the answer to name the shape, not only the dates")
+    @DisplayName("DATE_WINDOW layer requires the answer to quote the resolver's statement of the window")
     void dateWindowLayer_requiresTheShapeToBeNamed() {
-        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT).contains("whether it is rolling or calendar");
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("quote its `statement` in the answer so the window is visible")
+                .doesNotContain("whether it is rolling or calendar");
     }
 
     /**
@@ -449,14 +471,18 @@ class RolePromptResolverImplTest {
     /**
      * The caller-context block carrying the current date is appended <em>after</em> the assembled
      * layers, so a layer telling the model to look "above" for it would point away from the one
-     * fact this contract exists to supply — and straight back to an invented date.
+     * fact this contract exists to supply — and straight back to an invented date. #1684 removed
+     * the sourcing bullet outright: {@code DateWindowFacadeTool} reads the same shared Clock, so
+     * the model needs no "today" of its own and the layer says so directly rather than telling it
+     * where to find one it must not use.
      */
     @Test
-    @DisplayName("DATE_WINDOW layer locates the current date by block, never by direction")
+    @DisplayName("DATE_WINDOW layer gives the model no date to source, in any direction")
     void dateWindowLayer_doesNotClaimTheCallerContextIsAbove() {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
-                .contains("stated in the authenticated user context block")
-                .doesNotContain("caller context above");
+                .contains("Never compute or assume a date yourself.")
+                .doesNotContain("caller context above")
+                .doesNotContain("Resolve every relative date range from the current date");
     }
 
     /**
@@ -486,7 +512,52 @@ class RolePromptResolverImplTest {
         assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
                 .contains("call `resolveDateWindow`")
                 .contains("copy its `startDate`/`endDate`")
-                .contains("Never compute a date yourself.");
+                .contains("Never compute or assume a date yourself.");
+    }
+
+    /**
+     * #1684's own guarantee. The layer had grown a second tier of rules whose subject was the first
+     * tier — "Read the wording carefully…", "'This X' and 'last X' are BOTH fixed…" — each one
+     * restating a distinction the shape definitions already draw. A rule that exists to correct the
+     * reading of the rule above it is evidence that rule is unclear, not a repair for it, and it is
+     * paid for on every single request. Any future one belongs in the definition it is correcting.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer carries no rule about how to read its own rules")
+    void dateWindowLayer_carriesNoMetaRules() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .doesNotContain("Read the wording carefully")
+                .doesNotContain("are BOTH fixed, and they are NOT the same period")
+                .doesNotContain("They are different questions and must not be answered alike");
+    }
+
+    /**
+     * The layer's bulk is what #1684 set out to cut — it was the largest single item in the
+     * assembled prompt, and every request pays for it whether or not the question carries a date.
+     * The bound is the reason the shrink is expected to hold, not a measurement of the current
+     * text: 3,400 characters leaves room for a genuine new classification rule while a restored
+     * arithmetic or meta-rule bullet (each 250-450 characters, five of them removed here) puts the
+     * layer back over it.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer stays within its classification-only size budget")
+    void dateWindowLayer_staysWithinItsSizeBudget() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT.length()).isLessThan(3400);
+    }
+
+    /**
+     * The single line defining {@code shape}, so a test can assert a rule sits on the definition it
+     * belongs to rather than merely somewhere in the layer. #1684 folded several standalone bullets
+     * into the definitions; asserting containment in the whole layer would pass equally for a rule
+     * that had drifted back out into prose.
+     */
+    private static String shapeLine(String shape) {
+        return java.util.Arrays.stream(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT.split("\n"))
+                .filter(line -> line.contains(shape + " —"))
+                .reduce((first, second) -> {
+                    throw new AssertionError(shape + " is defined on more than one line");
+                })
+                .orElseThrow(() -> new AssertionError("no definition line for " + shape));
     }
 
     private double fallbackCount(String reason, String requested) {

@@ -27,6 +27,7 @@ import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -122,6 +123,7 @@ class SessionAgentManagerTest {
 
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
     // in the assistant runtime
+    private DateWindowFacadeTool dateWindowFacadeTool;
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
@@ -157,6 +159,7 @@ class SessionAgentManagerTest {
                 .when(rolePromptResolver.assemble(anyString(), anyString(), anyBoolean()))
                 .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient().when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f});
+        dateWindowFacadeTool = new DateWindowFacadeTool(Clock.systemUTC());
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(
                 RestClient.builder(),
@@ -511,6 +514,7 @@ class SessionAgentManagerTest {
     private ToolSelectionEngine realToolSelectionEngine() {
         return new ToolSelectionEngine(
                 toolRegistry,
+                dateWindowFacadeTool,
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,

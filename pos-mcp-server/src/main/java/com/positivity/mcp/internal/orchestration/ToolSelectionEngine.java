@@ -4,6 +4,7 @@ import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
@@ -24,7 +25,46 @@ public class ToolSelectionEngine {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolSelectionEngine.class);
 
+    /**
+     * Vocabulary that makes a question a dated one, and so makes {@code resolveDateWindow}
+     * mandatory rather than merely likely (#1684). Deliberately broad: the tool is additive to the
+     * semantic top-K rather than competing for a slot in it, so a false positive costs one tool
+     * schema in the prompt while a false negative costs the whole date-window contract — the
+     * DATE_WINDOW layer would be instructing the model to call a tool it cannot see, leaving it to
+     * compute the dates itself, which is the failure #1675 and #1684 exist to remove.
+     */
+    private static final Set<String> DATE_WINDOW_TOKENS = Set.of(
+            "annual",
+            "daily",
+            "day",
+            "days",
+            "lately",
+            "month",
+            "monthly",
+            "months",
+            "mtd",
+            "period",
+            "quarter",
+            "quarterly",
+            "quarters",
+            "qtd",
+            "recent",
+            "recently",
+            "since",
+            "today",
+            "week",
+            "weekly",
+            "weeks",
+            "year",
+            "yearly",
+            "years",
+            "yesterday",
+            "ytd",
+            "to date",
+            "so far this");
+
     private final MasterAgentRegistry toolRegistry;
+    private final DateWindowFacadeTool dateWindowFacadeTool;
     private final ExaWebSearchTool exaWebSearchTool;
     private final InventoryFacadeTool inventoryFacadeTool;
     private final OrderFacadeTool orderFacadeTool;
@@ -37,6 +77,7 @@ public class ToolSelectionEngine {
 
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
+            @NonNull DateWindowFacadeTool dateWindowFacadeTool,
             @NonNull ExaWebSearchTool exaWebSearchTool,
             @NonNull InventoryFacadeTool inventoryFacadeTool,
             @NonNull OrderFacadeTool orderFacadeTool,
@@ -44,6 +85,7 @@ public class ToolSelectionEngine {
             @NonNull SharedOrchestrationSupport sharedOrchestrationSupport,
             @Value("${mcp.agent.candidate-tool-limit:8}") int candidateToolLimit) {
         this.toolRegistry = toolRegistry;
+        this.dateWindowFacadeTool = dateWindowFacadeTool;
         this.exaWebSearchTool = exaWebSearchTool;
         this.inventoryFacadeTool = inventoryFacadeTool;
         this.orderFacadeTool = orderFacadeTool;
@@ -84,9 +126,17 @@ public class ToolSelectionEngine {
         return new ToolSelectionResult(roleTools, fallbackTools, workflowState);
     }
 
+    /**
+     * The message-independent superset of {@link #fallbackToolsForMessage}, for the role-level agent
+     * paths that build before a question exists (cache warm-up, {@code getOrCreateAgent}). Every
+     * keyword-addable tool belongs here precisely because there is no keyword to match on yet —
+     * omitting {@code dateWindowFacadeTool} would leave those agents unable to resolve a window at
+     * all while their prompt still required one (#1684).
+     */
     public @NonNull List<Object> fullFallbackTools() {
         return sharedOrchestrationSupport.mergeTools(
-                toolRegistry.resolveMasterTools(), List.of(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+                toolRegistry.resolveMasterTools(),
+                List.of(dateWindowFacadeTool, exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
     }
 
     private @NonNull List<Object> roleToolsForMessage(
@@ -279,9 +329,22 @@ public class ToolSelectionEngine {
         return WorkflowState.IDLE;
     }
 
+    /**
+     * Tools added on top of the semantic top-K rather than selected within it, so nothing here can
+     * displace a tool the embedding ranking chose.
+     */
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
         String text = message.toLowerCase(Locale.ROOT);
         List<Object> selected = new ArrayList<>();
+        // #1684: a dated question must always be able to reach resolveDateWindow. Its mcp_tool row
+        // (V43) has no domain agent of its own, so its only route into the candidate set is the
+        // embedding ranking in ToolRegistryService.resolveCandidateTools — where it competes with
+        // every other gated tool on description similarity and can lose. Nothing about "which
+        // customers haven't bought in the last 90 days" reads as a date-arithmetic request, which is
+        // exactly the question whose window shape the gate keeps getting wrong.
+        if (containsAny(text, DATE_WINDOW_TOKENS)) {
+            selected.add(dateWindowFacadeTool);
+        }
         if (containsAny(text, Set.of("current", "internet", "news", "online", "recent", "web"))) {
             selected.add(exaWebSearchTool);
         }

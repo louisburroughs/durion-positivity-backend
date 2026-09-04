@@ -3,6 +3,9 @@ package com.positivity.mcp.internal.orchestration.tools;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +15,7 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /**
  * Unit tests for {@link DateWindowFacadeTool} (#1675): the {@code resolveDateWindow} JSON shape,
@@ -121,5 +125,83 @@ class DateWindowFacadeToolTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null))
                 .withMessageContaining("DAY has no calendar form");
+    }
+
+    /**
+     * #1684: the shape is the stage that fails, and once a window leaves this tool it is two dates
+     * in some other tool's arguments — a window resolved under the wrong shape is byte-identical to
+     * a correct one from there on. Logging the classification alongside the dates it produced is
+     * what lets the per-stage eval (#1682) assert on it instead of a human reading the answer prose
+     * for the word "rolling". This pins the argument names the eval parses, not only that something
+     * was logged.
+     */
+    @Test
+    @DisplayName("resolveDateWindow logs the classified shape alongside the dates it produced")
+    void resolveDateWindow_logsTheClassifiedShapeAndResolvedDates() {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        try {
+            tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 12, "YEAR_EARLIER");
+
+            assertThat(appender.list).hasSize(1);
+            ILoggingEvent logged = appender.list.getFirst();
+            assertThat(logged.getLevel()).isEqualTo(Level.INFO);
+            assertThat(logged.getFormattedMessage())
+                    .isEqualTo("MCP date window resolved shape=CALENDAR_SPAN unit=MONTH count=12 "
+                            + "comparison=YEAR_EARLIER startDate=2025-09-01 endDate=2026-08-31");
+        } finally {
+            detachAppender(appender);
+        }
+    }
+
+    /**
+     * The line has to be readable without the caller's question, so an absent comparison logs the
+     * NONE it resolved to rather than a null the eval would have to interpret.
+     */
+    @Test
+    @DisplayName("resolveDateWindow logs comparison=NONE when no comparison was requested")
+    void resolveDateWindow_logsNoneWhenNoComparisonRequested() {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        try {
+            tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null);
+
+            assertThat(appender.list.getFirst().getFormattedMessage()).contains("comparison=NONE");
+        } finally {
+            detachAppender(appender);
+        }
+    }
+
+    /**
+     * A rejected classification resolved no window, so there is nothing to log — and logging a
+     * shape the resolver refused would put a window in the eval's trace that never existed.
+     */
+    @Test
+    @DisplayName("resolveDateWindow logs nothing when the classification is rejected")
+    void resolveDateWindow_logsNothingWhenRejected() {
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        try {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null));
+
+            assertThat(appender.list).isEmpty();
+        } finally {
+            detachAppender(appender);
+        }
+    }
+
+    private static ListAppender<ILoggingEvent> attachAppender() {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(DateWindowFacadeTool.class);
+        logger.setLevel(Level.INFO);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachAppender(ListAppender<ILoggingEvent> appender) {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(DateWindowFacadeTool.class);
+        logger.detachAppender(appender);
+        logger.setLevel(null);
     }
 }

@@ -80,8 +80,16 @@ narrows the active tool set:
 2. `ToolScorer` ranks candidates by a weighted blend of semantic similarity and normalized priority
    (`Math.clamp(priority, 0.0, 1.0)`).
 3. If no embeddings are stored yet, a deterministic fallback returns gated tools sorted by `priority DESC, name ASC`.
-4. Selection is capped at `mcp.agent.candidate-tool-limit` (default 8). The Exa web-search tool is always included.
-5. The resolved agent is cached keyed by `role::toolCacheKey` (sorted tool names joined with `+`) and expires after
+4. Selection is capped at `mcp.agent.candidate-tool-limit` (default 8; 16 on `alpha`).
+5. `ToolSelectionEngine.fallbackToolsForMessage()` then adds keyword-matched tools **on top of** that cut,
+   so they never displace a semantically ranked one: Exa web search (`current`, `news`, `online`, …),
+   inventory (`stock`, `sku`, …), order (`order`, `po`, `sale`, …), and — since #1684 — `DateWindowFacadeTool`
+   on any calendar vocabulary (`month`, `quarter`, `year`, `week`, `days`, `ytd`, `to date`, `since`, …).
+   The date-window tool has to be reachable this way: the `DATE_WINDOW` prompt layer requires
+   `resolveDateWindow` before every dated tool argument, and nothing in a question like "which customers
+   haven't bought in the last 90 days" ranks a date-arithmetic tool description highly, so the embedding
+   cut alone would leave the model instructed to call a tool it cannot see.
+6. The resolved agent is cached keyed by `role::toolCacheKey` (sorted tool names joined with `+`) and expires after
    `mcp.agent.cache-ttl-minutes` (default 30) so DB priority/prompt edits take effect without restart.
 
 **AND-group gating (V40, #1606).** Every `mcp_tool_permission` row belongs to a `permission_group`, and a facade
@@ -230,6 +238,19 @@ performance_score = (success_rate * 0.6) + ((1 - normalized_latency) * 0.3) + ..
 
 Tuning is enabled by default with a runtime kill switch (`mcp.tuning.enabled`). Owning classes: `ToolAuditService`,
 `ToolPriorityTuningService`.
+
+`mcp_tool_invocation_log` records *that* a tool ran, never its arguments — those carry customer identifiers. One
+exception is logged rather than stored, because its arguments carry none: `DateWindowFacadeTool` emits an INFO line
+per resolution (#1684),
+
+```
+MCP date window resolved shape=CALENDAR_SPAN unit=MONTH count=12 comparison=NONE startDate=2025-09-01 endDate=2026-08-31
+```
+
+so the window a turn actually used can be graded on its own. The shape is the classification the model makes and the
+one that has been getting the analytics gate's dated questions wrong; once the window leaves this tool it is a pair of
+dates in some other tool's arguments, indistinguishable from a correctly shaped one. A rejected classification logs
+nothing — no window was resolved.
 
 ## RAG Retrieval Pipeline (Tier 2)
 

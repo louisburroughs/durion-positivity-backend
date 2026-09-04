@@ -8,6 +8,8 @@ import java.time.LocalDate;
 import java.util.Locale;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -21,9 +23,20 @@ import org.springframework.stereotype.Component;
  * {@link DateWindowResolver} does the arithmetic deterministically from the shared {@link Clock}
  * bean, the same one {@code SharedOrchestrationSupport.formatUserContext} uses to state "today" in
  * every caller-context block, so the two can never disagree.
+ *
+ * <p>#1684: every resolution is logged at INFO as {@code shape}/{@code unit}/{@code count}/{@code
+ * comparison} plus the dates they produced. Shape is the stage that fails — the arithmetic has been
+ * right since #1675, and a window resolved under the wrong shape is byte-indistinguishable from a
+ * correct one once it is a pair of dates in a downstream tool's arguments. Naming it in a log line
+ * is what turns "which stage was wrong?" from a human reading answer prose for the word "rolling"
+ * into an assertion the per-stage eval (#1682) can make. The line carries no customer identifier —
+ * a shape, a unit, a count and two calendar dates — which is why it logs where {@code
+ * ToolInvocationRecorder} deliberately declines to log tool arguments at all.
  */
 @Component
 public class DateWindowFacadeTool {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DateWindowFacadeTool.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -69,8 +82,19 @@ public class DateWindowFacadeTool {
                             required = false)
                     @Nullable
                     String comparison) {
-        DateWindowResolver.ResolvedWindow resolved = DateWindowResolver.resolve(
-                LocalDate.now(clock), parseShape(shape), parseUnit(unit), count, parseComparison(comparison));
+        DateWindowResolver.Shape parsedShape = parseShape(shape);
+        DateWindowResolver.Unit parsedUnit = parseUnit(unit);
+        DateWindowResolver.Comparison parsedComparison = parseComparison(comparison);
+        DateWindowResolver.ResolvedWindow resolved =
+                DateWindowResolver.resolve(LocalDate.now(clock), parsedShape, parsedUnit, count, parsedComparison);
+        LOGGER.info(
+                "MCP date window resolved shape={} unit={} count={} comparison={} startDate={} endDate={}",
+                parsedShape,
+                parsedUnit,
+                count,
+                parsedComparison,
+                resolved.startDate(),
+                resolved.endDate());
         return write(resolved);
     }
 
