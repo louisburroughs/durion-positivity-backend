@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import io.micrometer.core.instrument.Counter;
@@ -24,6 +25,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 /**
@@ -149,10 +151,28 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // truth.
         lockoutService.recordSuccessfulLogin(userId);
 
+        // Spring Security 7 appends authentication-factor markers (FactorGrantedAuthority, e.g.
+        // FACTOR_PASSWORD) to every successful password authentication. They describe how the
+        // caller authenticated, not what the account is allowed to do, so they are not roles.
+        // Without excluding them by type, roleNames is never empty on the real login path: the
+        // #1725 no-roles guard below is unreachable and every token carries a bogus
+        // ROLE_FACTOR_PASSWORD. Filtering by type (not prefix) keeps the T14 contract that a
+        // plain authority without a ROLE_ prefix passes through unchanged.
         Set<String> roleNames = authentication.getAuthorities().stream()
+                .filter(a -> !(a instanceof FactorGrantedAuthority))
                 .map(GrantedAuthority::getAuthority)
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toSet());
+
+        // ADR-0017 §2 (question 1): an authenticated account with no roles is a refusal about
+        // the caller's authorization, not about the request — 403 USER_HAS_NO_ROLES, the same
+        // answer the refresh path gives for the same condition (#1725). Checked here rather
+        // than relying on generateTokenPair's empty-roles guard, which is request-shape
+        // validation (400) for the internal token endpoints that pass a client-supplied set.
+        if (roleNames.isEmpty()) {
+            log.warn("Login refused: account has no roles assigned. username={}, userId={}", username, userId);
+            throw new NoRolesAssignedException("User has no roles assigned");
+        }
 
         JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, p.personId(), roleNames);
         incrementSuccessCounter();

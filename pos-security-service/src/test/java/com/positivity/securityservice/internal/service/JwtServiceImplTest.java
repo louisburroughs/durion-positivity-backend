@@ -745,7 +745,7 @@ class JwtServiceImplTest {
     }
 
     /**
-     * Verifies that refreshAccessToken throws NoRolesAssignedException (422, issue #1694) when
+     * Verifies that refreshAccessToken throws NoRolesAssignedException (403, issues #1694/#1725) when
      * the user referenced by the refresh token exists but has no roles assigned.
      *
      * Issue: PERM-004

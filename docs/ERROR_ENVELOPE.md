@@ -34,7 +34,7 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 | `correlationId` | `string`       | ✅ Yes          | UUID identifying this specific request across all services. Include this in bug reports and support tickets. Also present in the `X-Correlation-Id` response header. |
 | `fieldErrors` | `array\|null`    | ❌ Conditional  | Present (non-null) when the response contains field-level validation details; typically accompanies validation-related codes such as `VALIDATION_ERROR` or `VALIDATION_FAILED`. Each entry names the offending field and why it failed. Omitted entirely for all other error types. |
 | `referenceId` | `string\|null`   | ❌ Conditional  | Reference to a workflow case, review request, or external audit record. Present for guided error flows such as self-registration review. |
-| `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended action for the caller to resolve the error (e.g. "Sign in with the existing account"). Present alongside `referenceId`. |
+| `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended next step for the caller to resolve the error (e.g. "Sign in with the existing account"). May appear with or without `referenceId` — guided flows such as self-registration review pair it with a `referenceId`, while authorization refusals such as `USER_HAS_NO_ROLES` and `MANAGER_APPROVAL_REQUIRED` carry it alone. |
 | `supportAction` | `string\|null` | ❌ Conditional  | Investigation guidance for operations or support staff. Not intended for end-user display. |
 
 > **Note:** Fields that are `null` or absent are omitted from the JSON payload entirely (Jackson `@JsonInclude(NON_NULL)`). Clients should treat a missing field as `null`, not as an error.
@@ -186,8 +186,8 @@ Any service may therefore return these in addition to its module codes below.
 | `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |
 | `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
 | `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
-| `MANAGER_APPROVAL_REQUIRED` | 422 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
-| `MANAGER_APPROVAL_INVALID` | 422 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
+| `MANAGER_APPROVAL_REQUIRED` | 403 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied — a step-up credential the caller lacks (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `MANAGER_APPROVAL_INVALID` | 403 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) — a step-up credential the server considers insufficient (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
 | `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
 
 ### pos-inventory
@@ -210,7 +210,7 @@ Any service may therefore return these in addition to its module codes below.
 | `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
 | `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
-| `USER_HAS_NO_ROLES` | 422 | Refresh token is valid, but the referenced user currently has no roles assigned |
+| `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
 
 ### pos-accounting
 | Code | Status | Description |

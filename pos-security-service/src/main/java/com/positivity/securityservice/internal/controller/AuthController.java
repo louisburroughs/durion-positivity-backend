@@ -54,7 +54,8 @@ public class AuthController {
                     the issued token pair for later validation and revocation.
                     Returns 401 with code ACCOUNT_LOCKED while the lockout window is active, INVALID_CREDENTIALS on \
                     a bad password, and ACCOUNT_DISABLED, ACCOUNT_EXPIRED, or CREDENTIALS_EXPIRED for the matching \
-                    account states.
+                    account states; and 403 with USER_HAS_NO_ROLES when the credentials are valid but the account \
+                    currently has no roles assigned.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -62,6 +63,11 @@ public class AuthController {
             content = @Content(schema = @Schema(implementation = TokenPairResponse.class)))
     @ApiResponse(responseCode = "400", description = "Missing or blank username/password")
     @ApiResponse(responseCode = "401", description = "Invalid credentials")
+    @ApiResponse(
+            responseCode = "403",
+            description = "USER_HAS_NO_ROLES: the credentials are valid, but the account currently has no roles "
+                    + "assigned",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
             description = "Internal server error",

@@ -66,9 +66,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * **Mapped Exceptions:**
  * - SecurityValidationException → 400 Bad Request (INVALID_REQUEST) — this module's own
  * request/field-shape validation failures (ADR-0017 §1)
- * - NoRolesAssignedException → 422 Unprocessable Entity (USER_HAS_NO_ROLES) — a valid refresh
- * token whose user currently has no roles (ADR-0017 §2, domain-policy violation on an
- * otherwise-valid payload)
+ * - NoRolesAssignedException → 403 Forbidden (USER_HAS_NO_ROLES) — valid credentials or refresh
+ * token, but the account currently holds no roles and so no effective permissions (ADR-0017 §2
+ * question 1: a refusal about the caller's authorization, answered the same on login and refresh)
  * - InvalidRefreshTokenException → 401 Unauthorized
  * - LockedException → 401 Unauthorized
  * - DisabledException → 401 Unauthorized
@@ -269,20 +269,22 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles NoRolesAssignedException — a refresh token that is otherwise valid, but whose
-     * user currently has no roles assigned, so no non-empty roles/authorities claim can be
-     * issued. See {@link NoRolesAssignedException}.
+     * Handles NoRolesAssignedException — valid credentials or a valid refresh token, but the
+     * account currently has no roles assigned and so no effective permissions, so no non-empty
+     * roles/authorities claim can be issued. Thrown from both credential login and refresh and
+     * answered the same way on each. See {@link NoRolesAssignedException}.
      *
-     * **HTTP Status:** 422 Unprocessable Entity (ADR-0017 §2 — domain-policy violation on an
-     * otherwise-valid payload, not a malformed request)
+     * **HTTP Status:** 403 Forbidden (ADR-0017 §2 question 1 — a refusal about the caller's
+     * authorization, not a malformed request; decided in #1725). The body carries a
+     * {@code nextAction} hint telling the caller how to get the account back into service.
      *
      * @param ex       the exception
      * @param request  the web request
      * @param response the servlet response, used to echo the correlation id header (ADR-0017 §4)
-     * @return error response with 422 status and correlation ID
+     * @return error response with 403 status, a {@code nextAction} hint, and correlation ID
      */
     @ExceptionHandler(NoRolesAssignedException.class)
-    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ApiError> handleNoRolesAssignedException(
             NoRolesAssignedException ex, WebRequest request, HttpServletResponse response) {
 
@@ -290,9 +292,15 @@ public class GlobalExceptionHandler {
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
         log.warn("No roles assigned (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(errorResponse(
-                        "USER_HAS_NO_ROLES", ex.getMessage(), HttpStatus.UNPROCESSABLE_ENTITY, correlationId));
+                        "USER_HAS_NO_ROLES",
+                        ex.getMessage(),
+                        HttpStatus.FORBIDDEN,
+                        correlationId,
+                        null,
+                        "Ask an administrator to assign at least one role to this account, then sign in again",
+                        null));
     }
 
     @ExceptionHandler({

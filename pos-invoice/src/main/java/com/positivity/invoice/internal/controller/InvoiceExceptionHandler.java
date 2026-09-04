@@ -24,6 +24,11 @@ public class InvoiceExceptionHandler {
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
+    /** Recovery hint for the two step-up (403) manager-approval refusals (ADR-0017 §2, #1725). */
+    private static final String MANAGER_APPROVAL_NEXT_ACTION =
+            "Obtain a manager-approval elevation token for this invoice via elevateManagerApproval and resend it as"
+                    + " managerApprovalCode";
+
     @ExceptionHandler(InvoiceNotFoundException.class)
     public ResponseEntity<ApiError> handleInvoiceNotFound(InvoiceNotFoundException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
@@ -73,8 +78,8 @@ public class InvoiceExceptionHandler {
      * with a special case that attached a {@code managerApprovalCode} field error whenever the
      * message mentioned "approval code" — that blanket also caught whatever
      * {@code IllegalArgumentException} Hibernate/JPA or {@code UUID.fromString} might throw and
-     * reported it as a client 400. The approval-code cases now have their own domain-policy
-     * types (422; see {@link #handleManagerApprovalRequired} and {@link
+     * reported it as a client 400. The approval-code cases now have their own step-up
+     * authorization types (403; see {@link #handleManagerApprovalRequired} and {@link
      * #handleInvalidManagerApproval}), so the field-error special-casing no longer applies to
      * anything and is dropped; this handler now only maps this module's own request-shape
      * validation type. Status/code unchanged for the remaining (genuine) 400 cases.
@@ -93,44 +98,51 @@ public class InvoiceExceptionHandler {
     }
 
     /**
-     * (b) ADR-0017 §2: the finalize/revert request is shape-valid, but the manager-approval
-     * permission matrix requires an elevation token that was not supplied. #1694: previously
-     * folded into the blanket 400 handler above (with a fieldErrors hint) — moved to 422 since
-     * this is a domain-policy condition on the caller's role and the invoice amount, not a
-     * malformed request. New code, documented in docs/ERROR_ENVELOPE.md.
+     * ADR-0017 §2 question 1 (#1725): the finalize/revert request is shape-valid, but the
+     * manager-approval permission matrix requires a step-up elevation token that was not
+     * supplied. That is a refusal about what the caller is allowed to do, so it answers 403 with
+     * a {@code nextAction} naming the recovery. #1694 had first moved this out of the blanket
+     * 400 handler above (with a fieldErrors hint) to a 422. Documented in docs/ERROR_ENVELOPE.md.
      */
     @ExceptionHandler(ManagerApprovalRequiredException.class)
     public ResponseEntity<ApiError> handleManagerApprovalRequired(
             ManagerApprovalRequiredException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
+                .body(ApiError.guided(
                         "MANAGER_APPROVAL_REQUIRED",
                         ex.getMessage(),
-                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.FORBIDDEN.value(),
                         Instant.now(clock).toString(),
-                        correlationId));
+                        correlationId,
+                        null,
+                        MANAGER_APPROVAL_NEXT_ACTION,
+                        null));
     }
 
     /**
-     * (b) ADR-0017 §2: a supplied manager-approval elevation token does not verify (wrong scope,
-     * tampered, or expired) — mirrors {@link #handleManagerApprovalRequired}. #1694: previously
-     * folded into the blanket 400 handler above; moved to 422 for the same reason. New code,
-     * documented in docs/ERROR_ENVELOPE.md.
+     * ADR-0017 §2 question 1 (#1725): a supplied manager-approval elevation token does not verify
+     * (wrong scope, tampered, or expired) — a step-up credential the server considers
+     * insufficient, so 403, mirroring {@link #handleManagerApprovalRequired}. #1694 had first
+     * moved this out of the blanket 400 handler above to a 422. Documented in
+     * docs/ERROR_ENVELOPE.md.
      */
     @ExceptionHandler(InvalidManagerApprovalException.class)
     public ResponseEntity<ApiError> handleInvalidManagerApproval(
             InvalidManagerApprovalException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
+                .body(ApiError.guided(
                         "MANAGER_APPROVAL_INVALID",
                         ex.getMessage(),
-                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.FORBIDDEN.value(),
                         Instant.now(clock).toString(),
-                        correlationId));
+                        correlationId,
+                        null,
+                        MANAGER_APPROVAL_NEXT_ACTION,
+                        null));
     }
 
     /**

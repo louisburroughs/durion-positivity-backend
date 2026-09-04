@@ -219,12 +219,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Search Audit Events With Filters
@@ -302,12 +296,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Record an Immutable Audit Event
@@ -364,12 +352,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Reject Audit Event Deletion
@@ -425,12 +407,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Reject Audit Event Modification
@@ -498,12 +474,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Get One Audit Event by Id
@@ -579,12 +549,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Request an Asynchronous Audit Export
@@ -654,12 +618,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Get Audit Export Job Status
@@ -742,12 +700,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Record an Immutable Pricing Snapshot
@@ -815,12 +767,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Get One Pricing Snapshot by Id
@@ -895,12 +841,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
         '500':
           content:
             application/json:
@@ -927,7 +867,7 @@ paths:
 
         Emits a SECURITY_AUTH_LOGIN event, resets the failed-attempt counter on success, and persists the issued token pair for later validation and revocation.
 
-        Returns 401 with code ACCOUNT_LOCKED while the lockout window is active, INVALID_CREDENTIALS on a bad password, and ACCOUNT_DISABLED, ACCOUNT_EXPIRED, or CREDENTIALS_EXPIRED for the matching account states.
+        Returns 401 with code ACCOUNT_LOCKED while the lockout window is active, INVALID_CREDENTIALS on a bad password, and ACCOUNT_DISABLED, ACCOUNT_EXPIRED, or CREDENTIALS_EXPIRED for the matching account states; and 403 with USER_HAS_NO_ROLES when the credentials are valid but the account currently has no roles assigned.
 
         '
       operationId: loginUser
@@ -968,7 +908,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Forbidden
+          description: 'USER_HAS_NO_ROLES: the credentials are valid, but the account currently has no roles assigned'
         '404':
           content:
             application/json:
@@ -981,12 +921,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
         '500':
           content:
             application/json:
@@ -1008,7 +942,7 @@ paths:
 
         Emits a SECURITY_AUTH_REFRESH event, revokes the old access and refresh token JTIs in Redis, deletes the stored pair, and persists the replacement pair.
 
-        Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists; 409 when concurrent refreshes race on the same token; and 422 with USER_HAS_NO_ROLES when the referenced user currently has no roles assigned — the token itself is valid, but no non-empty roles claim can be issued.
+        Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists; 409 when concurrent refreshes race on the same token; and 403 with USER_HAS_NO_ROLES when the referenced user currently has no roles assigned — the token itself is valid, but the account holds no effective permissions until an administrator assigns a role.
 
         '
       operationId: refreshTokenPair
@@ -1048,7 +982,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Forbidden
+          description: 'USER_HAS_NO_ROLES: the refresh token is valid, but the referenced user currently has no roles assigned'
         '404':
           content:
             application/json:
@@ -1061,12 +995,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Concurrency conflict during token revocation
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: 'USER_HAS_NO_ROLES: the refresh token is valid, but the referenced user currently has no roles assigned'
         '500':
           content:
             application/json:
@@ -1131,12 +1059,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Revoke a JWT Access Token
@@ -1206,12 +1128,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Extract Roles From JWT Token
@@ -1289,12 +1205,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Registration blocked because an account or linked person already exists; response includes nextAction and supportAction guidance
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       summary: Self-Register a New Customer Account
       tags:
       - Auth API
@@ -1357,12 +1267,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Extract Subject From JWT Token
@@ -1438,12 +1342,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
         '500':
           content:
             application/json:
@@ -1517,12 +1415,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth: []
       summary: Extract User Id From JWT Token
@@ -1589,12 +1481,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       summary: Validate a JWT Access Token
       tags:
       - JWT API
@@ -1683,12 +1569,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -1750,12 +1630,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       summary: Get Current Permission Catalog Version
       tags:
       - Permission Registry
@@ -1825,12 +1699,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -1900,12 +1768,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -1973,12 +1835,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -2059,12 +1915,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:register
@@ -2147,12 +1997,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:register
@@ -2220,12 +2064,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -2294,12 +2132,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -2363,12 +2195,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:view
@@ -2444,12 +2270,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role name already exists
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:create
@@ -2529,12 +2349,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:assign
@@ -2615,12 +2429,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:view
@@ -2695,12 +2503,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:assign
@@ -2787,12 +2589,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:create
@@ -2860,12 +2656,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:view
@@ -2944,12 +2734,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -3026,12 +2810,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:edit
@@ -3117,12 +2895,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:edit
@@ -3194,12 +2966,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -3263,12 +3029,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:view
@@ -3333,12 +3093,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:delete
@@ -3406,12 +3160,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:view
@@ -3497,12 +3245,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:edit
@@ -3583,12 +3325,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:edit
@@ -3658,12 +3394,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:edit
@@ -3732,12 +3462,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:edit
@@ -3805,12 +3529,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:view
@@ -3891,12 +3609,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -3965,12 +3677,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -4051,12 +3757,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -4120,12 +3820,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:view
@@ -4201,12 +3895,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:create
@@ -4283,12 +3971,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:authorization:decide
@@ -4366,12 +4048,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:authorization:decide
@@ -4456,12 +4132,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:create
@@ -4542,12 +4212,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:edit
@@ -4619,12 +4283,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:assign
@@ -4691,12 +4349,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:delete
@@ -4766,12 +4418,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:view
@@ -4855,12 +4501,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:edit
@@ -4929,12 +4569,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -4999,12 +4633,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -5069,12 +4697,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -5139,12 +4761,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -5209,12 +4825,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -5291,12 +4901,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user:edit
@@ -5361,12 +4965,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -5438,12 +5036,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:permission:view
@@ -5514,12 +5106,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:assign
@@ -5589,12 +5175,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:assign
@@ -5677,12 +5257,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Conflict
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unprocessable Content
       security:
       - bearerAuth:
         - security:role:assign

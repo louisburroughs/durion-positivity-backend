@@ -226,8 +226,9 @@ public class JwtController {
                     deletes the stored pair, and persists the replacement pair.
                     Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with \
                     INVALID_REFRESH_TOKEN when the referenced user no longer exists; 409 when concurrent refreshes \
-                    race on the same token; and 422 with USER_HAS_NO_ROLES when the referenced user currently has \
-                    no roles assigned — the token itself is valid, but no non-empty roles claim can be issued.
+                    race on the same token; and 403 with USER_HAS_NO_ROLES when the referenced user currently has \
+                    no roles assigned — the token itself is valid, but the account holds no effective \
+                    permissions until an administrator assigns a role.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -242,7 +243,7 @@ public class JwtController {
             description = "Concurrency conflict during token revocation",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "422",
+            responseCode = "403",
             description = "USER_HAS_NO_ROLES: the refresh token is valid, but the referenced user currently has no "
                     + "roles assigned",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
