@@ -5,7 +5,6 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -140,8 +139,7 @@ public class InvoiceFacadeTool {
     @Tool(
             description = "Get per-customer revenue for a date window (Wave 2 E1). Get the window from "
                     + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
-                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
-                    + "or year; pass either period or startDate+endDate, never both. Returns rows — customerId, "
+                    + "is one call, not a loop. For a period the question names outright (\"in 2025\", \"Q3 2026\") call resolveNamedPeriod instead; startDate and endDate are both required. Returns rows — customerId, "
                     + "name (null until the customer-party replica has caught up), revenue, invoiceCount, "
                     + "avgInvoiceValue (revenue / invoiceCount, server-computed), lastInvoiceDate — ordered by "
                     + "revenue descending and capped at the top 20 customers; the response's truncated flag is "
@@ -153,24 +151,16 @@ public class InvoiceFacadeTool {
                     + "invoices use getInvoicesByCustomer instead.")
     public String getRevenueByCustomer(
             @ToolParam(
-                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
-                                    + "(YYYY); omit when passing startDate/endDate",
-                            required = false)
-                    @Nullable
-                    String period,
-            @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String startDate,
             @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String endDate) {
-        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(startDate, endDate);
         return restClient
                 .get()
                 .uri(revenueByCustomerUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))

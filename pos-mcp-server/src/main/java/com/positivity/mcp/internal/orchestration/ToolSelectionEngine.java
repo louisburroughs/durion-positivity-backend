@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
@@ -74,6 +75,7 @@ public class ToolSelectionEngine {
 
     private final MasterAgentRegistry toolRegistry;
     private final DateWindowFacadeTool dateWindowFacadeTool;
+    private final GlossaryFacadeTool glossaryFacadeTool;
     private final ExaWebSearchTool exaWebSearchTool;
     private final InventoryFacadeTool inventoryFacadeTool;
     private final OrderFacadeTool orderFacadeTool;
@@ -87,6 +89,7 @@ public class ToolSelectionEngine {
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
             @NonNull DateWindowFacadeTool dateWindowFacadeTool,
+            @NonNull GlossaryFacadeTool glossaryFacadeTool,
             @NonNull ExaWebSearchTool exaWebSearchTool,
             @NonNull InventoryFacadeTool inventoryFacadeTool,
             @NonNull OrderFacadeTool orderFacadeTool,
@@ -95,6 +98,7 @@ public class ToolSelectionEngine {
             @Value("${mcp.agent.candidate-tool-limit:8}") int candidateToolLimit) {
         this.toolRegistry = toolRegistry;
         this.dateWindowFacadeTool = dateWindowFacadeTool;
+        this.glossaryFacadeTool = glossaryFacadeTool;
         this.exaWebSearchTool = exaWebSearchTool;
         this.inventoryFacadeTool = inventoryFacadeTool;
         this.orderFacadeTool = orderFacadeTool;
@@ -345,6 +349,14 @@ public class ToolSelectionEngine {
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
         String text = message.toLowerCase(Locale.ROOT);
         List<Object> selected = new ArrayList<>();
+        // #1688: always offered, with no keyword guard. Every other entry here is gated on wording
+        // that names its domain, but the glossary's job is to answer "is this metric defined?" — and
+        // the phrases that most need it are precisely the ones NOT in the glossary ("our most loyal
+        // customers"), which no keyword derived from the glossary could match. A guard would
+        // therefore fire only for terms the model could already have handled and stay silent for the
+        // undefined ones, inverting the tool's purpose. It makes no HTTP call and carries one small
+        // schema, so offering it unconditionally costs a few prompt tokens and nothing else.
+        selected.add(glossaryFacadeTool);
         // #1684: a dated question must always be able to reach resolveDateWindow. Its mcp_tool row
         // (V43) carries domain 'date-window', and no ROLE resolves to that domain agent —
         // resolveDomainTools is keyed on the domain string — so its only route into the candidate

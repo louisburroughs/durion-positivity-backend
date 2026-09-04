@@ -221,6 +221,18 @@ DateWindowFacadeTool.resolveDateWindow:
   downstreamPath: ""
   # #1675: DateWindowResolver arithmetic, in-process; no HTTP call.
 
+DateWindowFacadeTool.resolveNamedPeriod:
+  verb: NONE
+  route: NONE
+  downstreamPath: ""
+  # #1684: DateWindowResolver.resolveNamed, in-process; no HTTP call.
+
+GlossaryFacadeTool.lookupBusinessTerm:
+  verb: NONE
+  route: NONE
+  downstreamPath: ""
+  # #1688: BusinessGlossary map lookup, in-process; no HTTP call.
+
 EventsFacadeTool.getEventTypes:
   verb: GET
   baseUrlProperty: pos.event-receiver.base-url

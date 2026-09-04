@@ -2,7 +2,6 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -31,30 +30,22 @@ public class ReportingFacadeTool {
     }
 
     @Tool(
-            description = "Get the sales report (income statement) for a date window. Get the window from "
-                    + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
-                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
-                    + "or year; pass either period or startDate+endDate, never both.")
+            description =
+                    "Get the sales report (income statement) for a date window. Get the window from "
+                            + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
+                            + "is one call, not a loop. For a period the question names outright (\"in 2025\", \"Q3 2026\") call resolveNamedPeriod instead; startDate and endDate are both required.")
     public String getSalesReport(
             @ToolParam(
-                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
-                                    + "(YYYY); omit when passing startDate/endDate",
-                            required = false)
-                    @Nullable
-                    String period,
-            @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String startDate,
             @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String endDate) {
-        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(startDate, endDate);
         return restClient
                 .get()
                 .uri(salesReportUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))
@@ -77,8 +68,7 @@ public class ReportingFacadeTool {
     @Tool(
             description = "Get a composed revenue report for a date window. Get the window from "
                     + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
-                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
-                    + "or year; pass either period or startDate+endDate, never both. Returns a "
+                    + "is one call, not a loop. For a period the question names outright (\"in 2025\", \"Q3 2026\") call resolveNamedPeriod instead; startDate and endDate are both required. Returns a "
                     + "JSON envelope with two sections: incomeStatement (the window's income statement — its "
                     + "revenue lines are the earned revenue) and agedReceivables (per-customer open invoice "
                     + "balances bucketed against the window's end date). A failed or unauthorized "
@@ -91,24 +81,16 @@ public class ReportingFacadeTool {
                     + "window-scoped and carries no such caveat.")
     public String getRevenueReport(
             @ToolParam(
-                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
-                                    + "(YYYY); omit when passing startDate/endDate",
-                            required = false)
-                    @Nullable
-                    String period,
-            @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String startDate,
             @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String endDate) {
-        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(startDate, endDate);
         return ToolComposition.named("revenueReport")
                 .call(
                         "incomeStatement",

@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.stream.Stream;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Table-driven tests for {@link DateWindowResolver} (#1675). The primary-window cases replay
@@ -390,5 +392,85 @@ class DateWindowResolverTest {
                         3,
                         DateWindowResolver.Comparison.NONE))
                 .withMessageContaining("CALENDAR_SPAN");
+    }
+
+    // ── ABSOLUTE (#1684) ─────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("resolveNamed expands a named calendar year to the whole year")
+    void resolveNamed_year() {
+        DateWindowResolver.ResolvedWindow window = DateWindowResolver.resolveNamed("2025");
+
+        assertThat(window.startDate()).isEqualTo(LocalDate.of(2025, 1, 1));
+        assertThat(window.endDate()).isEqualTo(LocalDate.of(2025, 12, 31));
+        assertThat(window.shape()).isEqualTo(DateWindowResolver.Shape.ABSOLUTE);
+        assertThat(window.statement()).contains("absolute").contains("named calendar year 2025");
+        assertThat(window.comparison()).isNull();
+    }
+
+    @Test
+    @DisplayName("resolveNamed expands a named calendar month to that month, including a leap February")
+    void resolveNamed_month() {
+        assertThat(DateWindowResolver.resolveNamed("2026-07").startDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(DateWindowResolver.resolveNamed("2026-07").endDate()).isEqualTo(LocalDate.of(2026, 7, 31));
+        assertThat(DateWindowResolver.resolveNamed("2024-02").endDate()).isEqualTo(LocalDate.of(2024, 2, 29));
+        assertThat(DateWindowResolver.resolveNamed("2026-02").endDate()).isEqualTo(LocalDate.of(2026, 2, 28));
+    }
+
+    @Test
+    @DisplayName("resolveNamed expands every named calendar quarter, case-insensitively")
+    void resolveNamed_quarter() {
+        assertThat(DateWindowResolver.resolveNamed("2026-Q1").startDate()).isEqualTo(LocalDate.of(2026, 1, 1));
+        assertThat(DateWindowResolver.resolveNamed("2026-Q1").endDate()).isEqualTo(LocalDate.of(2026, 3, 31));
+        assertThat(DateWindowResolver.resolveNamed("2026-q3").startDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(DateWindowResolver.resolveNamed("2026-q3").endDate()).isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(DateWindowResolver.resolveNamed("2026-Q4").endDate()).isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    @DisplayName("a named period is never clipped to today, so a period still running returns its full extent")
+    void resolveNamed_isNotClippedToToday() {
+        // The whole reason ABSOLUTE exists: "2026" asked in September is the calendar year, while
+        // "this year" is CURRENT_TO_DATE and ends today. Clipping here would erase that distinction
+        // and silently reintroduce the ambiguity the removed `period` shortcut had.
+        DateWindowResolver.ResolvedWindow named = DateWindowResolver.resolveNamed("2026");
+        DateWindowResolver.ResolvedWindow toDate = DateWindowResolver.resolve(
+                LocalDate.of(2026, 9, 4),
+                DateWindowResolver.Shape.CURRENT_TO_DATE,
+                DateWindowResolver.Unit.YEAR,
+                1,
+                DateWindowResolver.Comparison.NONE);
+
+        assertThat(named.endDate()).isEqualTo(LocalDate.of(2026, 12, 31));
+        assertThat(toDate.endDate()).isEqualTo(LocalDate.of(2026, 9, 4));
+        assertThat(named.startDate()).isEqualTo(toDate.startDate());
+    }
+
+    @Test
+    @DisplayName("resolveNamed trims whitespace before matching")
+    void resolveNamed_trimsWhitespace() {
+        assertThat(DateWindowResolver.resolveNamed("  2025 ").startDate()).isEqualTo(LocalDate.of(2025, 1, 1));
+    }
+
+    @ParameterizedTest
+    @DisplayName("resolveNamed rejects a form it does not support and names the three that it does")
+    @ValueSource(strings = {"Q2-2026", "2026-13", "26", "last month", "2026/07", "2026-Q5", ""})
+    void resolveNamed_rejectsUnsupportedForms(String period) {
+        assertThatThrownBy(() -> DateWindowResolver.resolveNamed(period))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("YYYY");
+    }
+
+    @Test
+    @DisplayName("resolve rejects ABSOLUTE and redirects to resolveNamedPeriod")
+    void resolve_rejectsAbsoluteShape() {
+        assertThatThrownBy(() -> DateWindowResolver.resolve(
+                        LocalDate.of(2026, 9, 4),
+                        DateWindowResolver.Shape.ABSOLUTE,
+                        DateWindowResolver.Unit.YEAR,
+                        1,
+                        DateWindowResolver.Comparison.NONE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("resolveNamedPeriod");
     }
 }

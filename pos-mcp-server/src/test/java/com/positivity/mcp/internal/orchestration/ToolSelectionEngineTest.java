@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
@@ -44,6 +45,7 @@ class ToolSelectionEngineTest {
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
     private SharedOrchestrationSupport sharedOrchestrationSupport;
+    private GlossaryFacadeTool glossaryFacadeTool;
     private ToolSelectionEngine toolSelectionEngine;
 
     @BeforeEach
@@ -63,9 +65,11 @@ class ToolSelectionEngineTest {
                 "/order/v1/orders/search?q={query}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         when(toolRegistry.resolveMasterTools()).thenReturn(List.of(exaWebSearchTool));
+        glossaryFacadeTool = new GlossaryFacadeTool();
         toolSelectionEngine = new ToolSelectionEngine(
                 toolRegistry,
                 dateWindowFacadeTool,
+                glossaryFacadeTool,
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,
@@ -98,7 +102,7 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
 
         assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
-        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, inventoryFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, inventoryFacadeTool);
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
@@ -242,7 +246,7 @@ class ToolSelectionEngineTest {
         // longer substituted. Keyword fallbacks are a separate list and still populate, so the
         // assistant keeps web search rather than going mute.
         assertThat(result.roleTools()).isEmpty();
-        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, orderFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, orderFacadeTool);
     }
 
     @Test

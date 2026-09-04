@@ -91,6 +91,33 @@ public class DateWindowFacadeTool {
         return write(resolved);
     }
 
+    @Tool(
+            description = "Resolve a period the question NAMES OUTRIGHT — \"in 2025\", \"July 2026\", \"Q3 "
+                    + "2026\" — to that period's whole calendar span. Pass period as YYYY (a calendar year), "
+                    + "YYYY-MM (a calendar month) or YYYY-Qn (a calendar quarter). Copy the returned "
+                    + "startDate/endDate verbatim into the tool that needs them and quote the statement in "
+                    + "your answer, exactly as with resolveDateWindow. Use this ONLY when the question names "
+                    + "the period itself; for anything positioned relative to today (\"this year\", \"last "
+                    + "month\", \"in the last six months\") call resolveDateWindow instead — \"2026\" and "
+                    + "\"this year\" are different windows and only resolveDateWindow can tell them apart. The "
+                    + "span is never clipped to today, so a named period that has not finished yet returns its "
+                    + "full calendar extent.")
+    public String resolveNamedPeriod(
+            @ToolParam(
+                            description = "The named calendar period: YYYY (e.g. 2025), YYYY-MM (e.g. 2026-07), "
+                                    + "or YYYY-Qn (e.g. 2026-Q3)")
+                    @NonNull
+                    String period) {
+        DateWindowResolver.ResolvedWindow resolved = DateWindowResolver.resolveNamed(period);
+        LOGGER.info(
+                "MCP date window resolved shape={} period={} startDate={} endDate={}",
+                resolved.shape(),
+                period,
+                resolved.startDate(),
+                resolved.endDate());
+        return write(resolved);
+    }
+
     /**
      * The assertable record of what the model classified and what that resolved to (#1684, consumed
      * by #1682's per-stage grading).

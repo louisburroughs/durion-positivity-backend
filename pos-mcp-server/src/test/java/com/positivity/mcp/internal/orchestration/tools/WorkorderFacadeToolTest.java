@@ -272,42 +272,13 @@ class WorkorderFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getTechnicianLaborAnalytics maps a YYYY-MM period to GET technician-labor?startDate&endDate")
-    void getTechnicianLaborAnalytics_mapsCalendarMonthToDateRange() {
-        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
-        mockServer
-                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
-                .andExpect(method(entry.httpMethod()))
-                .andRespond(withSuccess("{\"rows\":[],\"truncated\":false,\"limit\":100}", MediaType.APPLICATION_JSON));
-
-        String result = tool.getTechnicianLaborAnalytics("2026-06", null, null);
-
-        mockServer.verify();
-        assertThat(result).isNotEmpty().contains("\"truncated\":false");
-    }
-
-    @Test
-    @DisplayName("getTechnicianLaborAnalytics maps a YYYY period to the full calendar year")
-    void getTechnicianLaborAnalytics_mapsCalendarYearToDateRange() {
-        FacadeContractManifest.Entry entry = contract("getTechnicianLaborAnalytics");
-        mockServer
-                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
-                .andExpect(method(entry.httpMethod()))
-                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
-
-        String result = tool.getTechnicianLaborAnalytics("2026", null, null);
-
-        mockServer.verify();
-        assertThat(result).isNotEmpty();
-    }
-
-    @Test
-    @DisplayName("getTechnicianLaborAnalytics rejects an unsupported period form without issuing a request")
-    void getTechnicianLaborAnalytics_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("Q2-2026", null, null))
+    @DisplayName("getTechnicianLaborAnalytics rejects a missing range and names the resolver tools to call")
+    void getTechnicianLaborAnalytics_rejectsMissingRange() {
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics(null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("YYYY-MM")
-                .hasMessageContaining("YYYY");
+                .hasMessageContaining("startDate and endDate are both required")
+                .hasMessageContaining("resolveDateWindow")
+                .hasMessageContaining("resolveNamedPeriod");
 
         mockServer.verify();
     }
@@ -322,28 +293,16 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getTechnicianLaborAnalytics(null, "2025-07-01", "2026-06-30");
+        String result = tool.getTechnicianLaborAnalytics("2025-07-01", "2026-06-30");
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
     }
 
     @Test
-    @DisplayName(
-            "getTechnicianLaborAnalytics rejects period together with startDate/endDate without issuing " + "a request")
-    void getTechnicianLaborAnalytics_rejectsPeriodTogetherWithDateRange() {
-        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("2026-06", "2025-07-01", "2026-06-30"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("period")
-                .hasMessageContaining("startDate");
-
-        mockServer.verify();
-    }
-
-    @Test
     @DisplayName("getTechnicianLaborAnalytics rejects an inverted startDate/endDate without issuing a request")
     void getTechnicianLaborAnalytics_rejectsInvertedDateRange() {
-        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics(null, "2026-06-30", "2026-06-01"))
+        assertThatThrownBy(() -> tool.getTechnicianLaborAnalytics("2026-06-30", "2026-06-01"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");

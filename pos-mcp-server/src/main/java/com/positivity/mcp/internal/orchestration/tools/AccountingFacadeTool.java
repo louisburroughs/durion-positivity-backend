@@ -5,7 +5,6 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -84,8 +83,7 @@ public class AccountingFacadeTool {
     @Tool(
             description = "Get a composed financial summary for a date window. Get the window from "
                     + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
-                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
-                    + "or year; pass either period or startDate+endDate, never both. Returns a JSON envelope "
+                    + "is one call, not a loop. For a period the question names outright (\"in 2025\", \"Q3 2026\") call resolveNamedPeriod instead; startDate and endDate are both required. Returns a JSON envelope "
                     + "with three sections: incomeStatement (revenue and expense activity over the window), "
                     + "balanceSheet (assets, liabilities and equity as of the window's end date), and "
                     + "trialBalance (per-account debit/credit proof as of the window's end date). A section "
@@ -94,24 +92,16 @@ public class AccountingFacadeTool {
                     + "statement is unavailable.")
     public String getFinancialSummary(
             @ToolParam(
-                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
-                                    + "(YYYY); omit when passing startDate/endDate",
-                            required = false)
-                    @Nullable
-                    String period,
-            @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String startDate,
             @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String endDate) {
-        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(startDate, endDate);
         return ToolComposition.named("financialSummary")
                 .call(
                         "incomeStatement",
@@ -204,8 +194,7 @@ public class AccountingFacadeTool {
     @Tool(
             description = "Get per-vendor spend for a date window (Wave 2 E8). Get the window from "
                     + "resolveDateWindow and pass its startDate/endDate verbatim — a six- or twelve-month span "
-                    + "is one call, not a loop. period is only a shortcut for exactly one whole calendar month "
-                    + "or year; pass either period or startDate+endDate, never both. Returns "
+                    + "is one call, not a loop. For a period the question names outright (\"in 2025\", \"Q3 2026\") call resolveNamedPeriod instead; startDate and endDate are both required. Returns "
                     + "rows — vendorId, name (falls back to a bill/payment name snapshot, null only if "
                     + "neither source has one), paidAmount, billsIssuedInWindow, avgIssuedBillAmount — "
                     + "ordered by paidAmount descending and capped at the top 20 vendors; the response's "
@@ -219,24 +208,16 @@ public class AccountingFacadeTool {
                     + "eligible bills rather than a per-vendor aggregate.")
     public String getVendorSpend(
             @ToolParam(
-                            description = "Shortcut for exactly one whole calendar month (YYYY-MM) or year "
-                                    + "(YYYY); omit when passing startDate/endDate",
-                            required = false)
-                    @Nullable
-                    String period,
-            @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String startDate,
             @ToolParam(
-                            description = "ISO YYYY-MM-DD, inclusive; take both from resolveDateWindow's "
-                                    + "startDate/endDate",
-                            required = false)
-                    @Nullable
+                            description = "ISO YYYY-MM-DD, inclusive; copy from resolveDateWindow or "
+                                    + "resolveNamedPeriod verbatim")
+                    @NonNull
                     String endDate) {
-        ReportingPeriods.DateRange range = ReportingPeriods.resolve(period, startDate, endDate);
+        ReportingPeriods.DateRange range = ReportingPeriods.resolve(startDate, endDate);
         return restClient
                 .get()
                 .uri(vendorSpendUriTemplate, Map.of("startDate", range.startDate(), "endDate", range.endDate()))

@@ -1,10 +1,14 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -51,7 +55,13 @@ final class DateWindowResolver {
         ROLLING,
         CURRENT_TO_DATE,
         PRIOR_COMPLETE,
-        CALENDAR_SPAN
+        CALENDAR_SPAN,
+        /**
+         * A period the question names outright ("in 2025", "July 2026", "Q3 2026") rather than
+         * one positioned relative to today. Resolved by {@link #resolveNamed(String)}, not by
+         * {@link #resolve}, because it takes a period label instead of a unit and a count.
+         */
+        ABSOLUTE
     }
 
     /** The calendar unit the count is expressed in. */
@@ -86,6 +96,10 @@ final class DateWindowResolver {
             @NonNull String statement,
             @Nullable Window comparison) {}
 
+    private static final Pattern NAMED_YEAR = Pattern.compile("\\d{4}");
+    private static final Pattern NAMED_YEAR_MONTH = Pattern.compile("\\d{4}-\\d{2}");
+    private static final Pattern NAMED_YEAR_QUARTER = Pattern.compile("(\\d{4})-[Qq]([1-4])");
+
     private DateWindowResolver() {}
 
     /**
@@ -103,6 +117,11 @@ final class DateWindowResolver {
             @NonNull Unit unit,
             int count,
             @NonNull Comparison comparison) {
+        if (shape == Shape.ABSOLUTE) {
+            throw new IllegalArgumentException("ABSOLUTE names a period outright rather than positioning one "
+                    + "relative to today, so it has no unit or count; call resolveNamedPeriod with a period "
+                    + "label (YYYY, YYYY-MM, or YYYY-Qn) instead");
+        }
         if (count <= 0) {
             throw new IllegalArgumentException("count must be positive (got " + count + ")");
         }
@@ -144,6 +163,72 @@ final class DateWindowResolver {
         String statement = statement(shape, unit, count, start, end, today);
         Window comparisonWindow = resolveComparison(comparison, unit, count, start, end);
         return new ResolvedWindow(start, end, shape, statement, comparisonWindow);
+    }
+
+    /**
+     * Resolves a period the question names outright — {@code "2025"}, {@code "2026-07"}, {@code
+     * "2026-Q3"} — to that period's whole calendar span.
+     *
+     * <p>This exists to close the {@code period} shortcut that used to sit on every reporting
+     * facade (#1684). That shortcut accepted a label and expanded it to a range inside the
+     * reporting tool, so a window reached the downstream call without any shape ever being
+     * classified or logged: {@code period="2026"} asked for the whole of 2026 whether the
+     * question meant the named year or "this year", and the two are different windows. Naming the
+     * period here routes it through the same tool, and the same {@link ResolvedWindow}, as every
+     * relative window — so the shape is recorded at the tool boundary either way.
+     *
+     * <p>The span is the period as written, never clamped to today. A named period is an
+     * assertion about the calendar, not about the present: {@code "2026"} is January to December
+     * even when asked in September, and a future-dated span (a scheduling window, say) is a
+     * legitimate thing to ask for. A caller that means "the part of this year so far" wants
+     * {@link Shape#CURRENT_TO_DATE}, which is the distinction this method exists to keep visible.
+     *
+     * @throws IllegalArgumentException if {@code period} is not one of the three supported forms;
+     *     the message names them so a caller can self-correct.
+     */
+    static @NonNull ResolvedWindow resolveNamed(@NonNull String period) {
+        String trimmed = period.trim();
+        LocalDate start;
+        LocalDate end;
+        String label;
+        if (NAMED_YEAR.matcher(trimmed).matches()) {
+            int year = Integer.parseInt(trimmed);
+            start = LocalDate.of(year, 1, 1);
+            end = LocalDate.of(year, 12, 31);
+            label = "the named calendar year " + year;
+        } else if (NAMED_YEAR_MONTH.matcher(trimmed).matches()) {
+            YearMonth month = parseYearMonth(period, trimmed);
+            start = month.atDay(1);
+            end = month.atEndOfMonth();
+            label = "the named calendar month " + periodLabel(start, Unit.MONTH);
+        } else {
+            Matcher quarter = NAMED_YEAR_QUARTER.matcher(trimmed);
+            if (!quarter.matches()) {
+                throw new IllegalArgumentException("Unsupported period '" + period
+                        + "': name a calendar year as YYYY (e.g. 2026), a calendar month as YYYY-MM "
+                        + "(e.g. 2026-05), or a calendar quarter as YYYY-Qn (e.g. 2026-Q3). For a range "
+                        + "positioned relative to today (\"last month\", \"this quarter\") call "
+                        + "resolveDateWindow instead.");
+            }
+            int year = Integer.parseInt(quarter.group(1));
+            int quarterNumber = Integer.parseInt(quarter.group(2));
+            start = LocalDate.of(year, (quarterNumber - 1) * 3 + 1, 1);
+            end = start.plusMonths(3).minusDays(1);
+            label = "the named calendar quarter " + periodLabel(start, Unit.QUARTER);
+        }
+        String statement = "absolute: " + start + " to " + end + " — " + label;
+        return new ResolvedWindow(start, end, Shape.ABSOLUTE, statement, null);
+    }
+
+    private static @NonNull YearMonth parseYearMonth(@NonNull String raw, @NonNull String trimmed) {
+        try {
+            return YearMonth.parse(trimmed);
+        } catch (DateTimeException exception) {
+            throw new IllegalArgumentException(
+                    "Unsupported period '" + raw + "': a named calendar month is YYYY-MM with the month "
+                            + "in 01-12 (e.g. 2026-05)",
+                    exception);
+        }
     }
 
     // ── comparison ────────────────────────────────────────────────────────────
@@ -199,6 +284,9 @@ final class DateWindowResolver {
                     case CURRENT_TO_DATE -> "current to date";
                     case PRIOR_COMPLETE -> "prior complete";
                     case CALENDAR_SPAN -> "calendar span";
+                    // Unreachable: resolve() rejects ABSOLUTE up front, and resolveNamed builds its
+                    // own statement without calling this method.
+                    case ABSOLUTE -> throw new IllegalStateException("ABSOLUTE is resolved by resolveNamed");
                 };
         String clause =
                 switch (shape) {
@@ -211,6 +299,7 @@ final class DateWindowResolver {
                         count + " whole " + unitNoun(unit, count)
                                 + " ending with the last complete " + unitNoun(unit, 1) + " ("
                                 + periodLabel(periodStartContaining(end, unit), unit) + ")";
+                    case ABSOLUTE -> throw new IllegalStateException("ABSOLUTE is resolved by resolveNamed");
                 };
         return label + ": " + start + " to " + end + " — " + clause;
     }

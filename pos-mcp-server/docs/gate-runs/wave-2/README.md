@@ -51,3 +51,11 @@ as the Q-gate runs above and was not exercised in this sandbox. The permission-g
 this is covered statically by `FacadeToolPermissionSeedTest` and `EvalFixtureSatisfiabilityTest`
 (a caller without the code cannot reach the tool per the seeded groups), but that is not the same
 as observing the actual degraded chat response end-to-end.
+
+## Live runs recorded here
+
+- `2026-09-02-chat-path-gate-run.md`
+- `2026-09-03-chat-path-gate-rerun.md`
+- `2026-09-03-window-shape-evidence.md` — the three runs across the date-window work (#1675 →
+  #1677 → #1684), and the finding that moving the arithmetic into code did not move q09/q12/q15
+  because shape *classification*, not arithmetic, is the failing stage.

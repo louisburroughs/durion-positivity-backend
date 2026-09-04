@@ -31,6 +31,7 @@ import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
@@ -301,7 +302,8 @@ class StreamingSessionAgentManagerTest {
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_CASHIER::InventoryFacadeTool");
+        assertThat(roleAgentCacheKeys(selectorManager))
+                .contains("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool");
     }
 
     @Test
@@ -359,7 +361,7 @@ class StreamingSessionAgentManagerTest {
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
         // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
         assertThat(roleAgentCacheKeys(selectorManager))
-                .doesNotContain("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
+                .doesNotContain("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test
@@ -382,7 +384,7 @@ class StreamingSessionAgentManagerTest {
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
         // #1606/#1608: fail closed — the ungated domain set is no longer substituted.
         assertThat(roleAgentCacheKeys(selectorManager))
-                .doesNotContain("ROLE_CASHIER::InventoryFacadeTool+OrderFacadeTool");
+                .doesNotContain("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test
@@ -479,7 +481,7 @@ class StreamingSessionAgentManagerTest {
         selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "stock part 1234");
 
         assertThat(roleAgentCacheKeys(selectorManager))
-                .contains("ROLE_CASHIER::InventoryFacadeTool")
+                .contains("ROLE_CASHIER::GlossaryFacadeTool+InventoryFacadeTool")
                 .contains("ROLE_CASHIER::full");
     }
 
@@ -496,7 +498,7 @@ class StreamingSessionAgentManagerTest {
         selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "find latest internet news");
 
         assertThat(roleAgentCacheKeys(selectorManager))
-                .contains("ROLE_CASHIER::ExaWebSearchTool")
+                .contains("ROLE_CASHIER::ExaWebSearchTool+GlossaryFacadeTool")
                 .contains("ROLE_CASHIER::full");
     }
 
@@ -589,6 +591,7 @@ class StreamingSessionAgentManagerTest {
         return new ToolSelectionEngine(
                 toolRegistry,
                 dateWindowFacadeTool,
+                new GlossaryFacadeTool(),
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,

@@ -62,7 +62,7 @@ class RolePromptAssemblyTest {
 
         AssembledPrompt out = resolver.assemble("ROLE_TECHNICIAN", "accounting");
 
-        assertThat(out.layers()).containsExactly("BASE", "ROLE", "DOMAIN", "TOOL_USE", "DATE_WINDOW");
+        assertThat(out.layers()).containsExactly("BASE", "ROLE", "DOMAIN", "TOOL_USE", "DATE_WINDOW", "GLOSSARY");
         assertThat(out.text()).contains("BASE_TEXT").contains("ROLE_TEXT").contains("DOMAIN_TEXT");
         // order: BASE before ROLE before DOMAIN
         assertThat(out.text().indexOf("BASE_TEXT")).isLessThan(out.text().indexOf("ROLE_TEXT"));
@@ -80,7 +80,7 @@ class RolePromptAssemblyTest {
 
         AssembledPrompt out = resolver.assemble("ROLE_UNSEEDED", "master");
 
-        assertThat(out.layers()).containsExactly("BASE", "TOOL_USE", "DATE_WINDOW");
+        assertThat(out.layers()).containsExactly("BASE", "TOOL_USE", "DATE_WINDOW", "GLOSSARY");
         assertThat(out.text()).contains("BASE_TEXT");
     }
 
@@ -94,7 +94,7 @@ class RolePromptAssemblyTest {
 
         AssembledPrompt out = resolver.assemble("ROLE_USER", "master");
 
-        assertThat(out.layers()).containsExactly("BASE", "TOOL_USE", "DATE_WINDOW");
+        assertThat(out.layers()).containsExactly("BASE", "TOOL_USE", "DATE_WINDOW", "GLOSSARY");
         assertThat(out.text()).contains("master orchestration agent"); // from built-in DEFAULT_PROMPT_TEXT
     }
 
