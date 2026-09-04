@@ -147,7 +147,8 @@ class DateWindowFacadeToolTest {
             assertThat(logged.getLevel()).isEqualTo(Level.INFO);
             assertThat(logged.getFormattedMessage())
                     .isEqualTo("MCP date window resolved shape=CALENDAR_SPAN unit=MONTH count=12 "
-                            + "comparison=YEAR_EARLIER startDate=2025-09-01 endDate=2026-08-31");
+                            + "comparison=YEAR_EARLIER startDate=2025-09-01 endDate=2026-08-31 "
+                            + "comparisonStartDate=2024-09-01 comparisonEndDate=2025-08-31");
         }
     }
 
@@ -161,7 +162,27 @@ class DateWindowFacadeToolTest {
         try (LogCapture captured = new LogCapture()) {
             tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null);
 
-            assertThat(captured.events().getFirst().getFormattedMessage()).contains("comparison=NONE");
+            assertThat(captured.events().getFirst().getFormattedMessage())
+                    .contains("comparison=NONE")
+                    .doesNotContain("comparisonStartDate");
+        }
+    }
+
+    /**
+     * The comparison window's dates, not just the comparison mode. q09, q12 and q15 — the questions
+     * #1684 exists for — are paired comparisons, so the window a grader checks is often the
+     * comparison one. Logging {@code comparison=PRIOR_PERIOD} alone would name the mode and drop the
+     * value, leaving the graded half out of the trace.
+     */
+    @Test
+    @DisplayName("resolveDateWindow logs the comparison window's own dates, not just its mode")
+    void resolveDateWindow_logsTheComparisonWindowDates() {
+        try (LogCapture captured = new LogCapture()) {
+            tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "PRIOR_PERIOD");
+
+            assertThat(captured.events().getFirst().getFormattedMessage())
+                    .contains("startDate=2026-03-01 endDate=2026-08-31")
+                    .contains("comparisonStartDate=2025-09-01 comparisonEndDate=2026-02-28");
         }
     }
 

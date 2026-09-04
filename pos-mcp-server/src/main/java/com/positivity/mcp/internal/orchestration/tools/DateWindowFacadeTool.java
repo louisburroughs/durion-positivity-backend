@@ -87,15 +87,49 @@ public class DateWindowFacadeTool {
         DateWindowResolver.Comparison parsedComparison = parseComparison(comparison);
         DateWindowResolver.ResolvedWindow resolved =
                 DateWindowResolver.resolve(LocalDate.now(clock), parsedShape, parsedUnit, count, parsedComparison);
-        LOGGER.info(
-                "MCP date window resolved shape={} unit={} count={} comparison={} startDate={} endDate={}",
-                parsedShape,
-                parsedUnit,
-                count,
-                parsedComparison,
-                resolved.startDate(),
-                resolved.endDate());
+        logResolution(parsedShape, parsedUnit, count, parsedComparison, resolved);
         return write(resolved);
+    }
+
+    /**
+     * The assertable record of what the model classified and what that resolved to (#1684, consumed
+     * by #1682's per-stage grading).
+     *
+     * <p>The comparison window's dates are logged too, not just the comparison mode. The questions
+     * this whole effort targets — q09, q12 and q15's mixed comparison — are paired-comparison
+     * questions, so the window a grader has to check is frequently the comparison one; logging only
+     * {@code comparison=YEAR_EARLIER} would name the mode and omit the value, leaving exactly the
+     * half that gets graded out of the trace.
+     */
+    private static void logResolution(
+            DateWindowResolver.@NonNull Shape shape,
+            DateWindowResolver.@NonNull Unit unit,
+            int count,
+            DateWindowResolver.@NonNull Comparison comparison,
+            DateWindowResolver.@NonNull ResolvedWindow resolved) {
+        DateWindowResolver.Window comparisonWindow = resolved.comparison();
+        if (comparisonWindow == null) {
+            LOGGER.info(
+                    "MCP date window resolved shape={} unit={} count={} comparison={} startDate={} endDate={}",
+                    shape,
+                    unit,
+                    count,
+                    comparison,
+                    resolved.startDate(),
+                    resolved.endDate());
+            return;
+        }
+        LOGGER.info(
+                "MCP date window resolved shape={} unit={} count={} comparison={} startDate={} endDate={} "
+                        + "comparisonStartDate={} comparisonEndDate={}",
+                shape,
+                unit,
+                count,
+                comparison,
+                resolved.startDate(),
+                resolved.endDate(),
+                comparisonWindow.startDate(),
+                comparisonWindow.endDate());
     }
 
     private static DateWindowResolver.Shape parseShape(@NonNull String raw) {

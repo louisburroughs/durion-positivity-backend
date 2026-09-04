@@ -9,6 +9,7 @@ import com.positivity.mcp.internal.domain.RolePersonaSnapshot;
 import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistryFactory;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.service.RolePersonaSnapshotHolder;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
@@ -184,6 +185,43 @@ class MasterAgentRegistryTest {
 
         assertThat(registry.resolveRagScopeForTools(List.of(inventoryTool, exaWebSearchTool)))
                 .isEqualTo("master");
+    }
+
+    /**
+     * #1684. `DateWindowFacadeTool` joins the merged tool set on any dated question, and it sits in
+     * a domain agent of its own (`V43` gives its `mcp_tool` row `domain='date-window'`, and
+     * `MasterAgentRegistryLoader` turns every non-shared domain into one). Counted as a domain vote
+     * it would widen an otherwise single-domain retrieval to `master` on every dated question —
+     * a silent change to what RAG returns, made by a tool that retrieves nothing.
+     */
+    @Test
+    void resolveRagScopeForToolsIgnoresTheDateWindowToolWhenScopingASingleDomain() {
+        Object inventoryTool = new InventoryFacadeToolStub();
+        DateWindowFacadeTool dateWindowTool = new DateWindowFacadeTool(Clock.systemUTC());
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(),
+                List.of(
+                        new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)),
+                        new DomainAgentDefinition("date-window", "date-window", List.of(dateWindowTool))));
+
+        assertThat(registry.resolveRagScopeForTools(List.of(inventoryTool, dateWindowTool)))
+                .isEqualTo("inventory");
+    }
+
+    /**
+     * The fail-closed path (#1606): an empty gated set yields no role tools, so on a dated question
+     * the merged set is the date-window tool alone. Scoped off that single tool the answer would be
+     * the literal string "date-window" — a scope no `rag_document` row carries, which
+     * `RagScope.normalize` passes through unchanged and which then filters retrieval down to
+     * master-only rows instead of searching every scope.
+     */
+    @Test
+    void resolveRagScopeForToolsReturnsMasterWhenOnlyTheDateWindowToolIsSelected() {
+        DateWindowFacadeTool dateWindowTool = new DateWindowFacadeTool(Clock.systemUTC());
+        MasterAgentRegistry registry = new MasterAgentRegistry(
+                List.of(), List.of(new DomainAgentDefinition("date-window", "date-window", List.of(dateWindowTool))));
+
+        assertThat(registry.resolveRagScopeForTools(List.of(dateWindowTool))).isEqualTo("master");
     }
 
     private static final class SharedToolStub {}

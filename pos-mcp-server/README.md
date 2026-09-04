@@ -84,7 +84,7 @@ narrows the active tool set:
 5. `ToolSelectionEngine.fallbackToolsForMessage()` then adds keyword-matched tools **on top of** that cut,
    so they never displace a semantically ranked one: Exa web search (`current`, `news`, `online`, …),
    inventory (`stock`, `sku`, …), order (`order`, `po`, `sale`, …), and — since #1684 — `DateWindowFacadeTool`
-   on any calendar vocabulary (`month`, `quarter`, `year`, `week`, `days`, `ytd`, `to date`, `since`, …).
+   on calendar vocabulary (`month`, `quarter`, `year`, `week`, `days`, `ytd`, `to date`, `since`, …).
    The date-window tool has to be reachable this way: the `DATE_WINDOW` prompt layer requires
    `resolveDateWindow` before every dated tool argument, and nothing in a question like "which customers
    haven't bought in the last 90 days" ranks a date-arithmetic tool description highly, so the embedding

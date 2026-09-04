@@ -46,9 +46,19 @@ public class SharedOrchestrationSupport {
      *
      * <p>Carries the current date (#1661). Without it the model has no supplied "today" and resolves
      * every relative range — "last six months", "this year" — from a date it invents, while the
-     * TOOL-USE layer two lines above forbids exactly that kind of unstated assumption. Supplying it
-     * also makes a run reproducible: the same question asked on two days resolved to two different
-     * windows, so a gate could change verdict with no code change.
+     * TOOL-USE layer forbids exactly that kind of unstated assumption. Supplying it also makes a run
+     * reproducible: the same question asked on two days resolved to two different windows, so a gate
+     * could change verdict with no code change.
+     *
+     * <p>#1684: the closing sentence used to read "Resolve every relative date range from these
+     * dates", which was correct when the model did the arithmetic and became a contradiction when
+     * #1675 moved it into {@code resolveDateWindow}. This block is appended <em>after</em> every
+     * assembled layer ({@code SpringAiPosAssistant.buildSystemPrompt}), so it had the last word: the
+     * DATE_WINDOW layer said "Never compute or assume a date yourself" and then, in the position
+     * recency favours most, this told the model to compute one from two supplied dates. It now
+     * routes to the tool instead, so the two agree. The dates themselves stay — they are what makes
+     * "is that this year?" answerable without a tool round trip, and the T0 fast path has no tools
+     * at all.
      */
     public @NonNull String formatUserContext(@NonNull CurrentUserContext userContext) {
         LocalDate today = LocalDate.now(clock);
@@ -63,7 +73,8 @@ public class SharedOrchestrationSupport {
                 + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
                 + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers."
                 + " Today's date is " + today + " (UTC); the last complete calendar month ended "
-                + lastCompleteMonthEnd + ". Resolve every relative date range from these dates.";
+                + lastCompleteMonthEnd + ". Resolve every relative date range with the resolveDateWindow tool"
+                + " rather than by computing dates from these.";
     }
 
     public @NonNull String preview(@NonNull String text) {

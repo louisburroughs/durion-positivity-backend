@@ -152,7 +152,12 @@ class ToolSelectionEngineTest {
                 "sales year to date",
                 "reopened workorders this week",
                 "what did we take yesterday",
-                "spend since April")) {
+                "spend since April",
+                // A pasted or multi-paragraph question is ordinary in a chat surface, and the
+                // String.matches guard this replaced could not match a single word across a line
+                // break at all: it anchors the whole input, and without DOTALL "." excludes "\n".
+                "Hi,\nwhat was revenue last month?",
+                "Two things:\n\n1. this quarter's totals\n2. anything overdue")) {
             assertThat(toolSelectionEngine
                             .selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, question)
                             .fallbackTools())
@@ -174,10 +179,24 @@ class ToolSelectionEngineTest {
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of());
 
-        ToolSelectionEngine.ToolSelectionResult result = toolSelectionEngine.selectRoleTools(
-                "ROLE_ADMIN", PERMISSION_CODES, "what is the phone number for NAPA");
-
-        assertThat(result.fallbackTools()).doesNotContain(dateWindowFacadeTool);
+        // Near misses, not just an obviously undated question: each of these was pulled in by a
+        // token the set used to carry. "recent"/"recently"/"lately" are the very phrases the
+        // DATE_WINDOW layer singles out as having no conventional reading and tells the model to ask
+        // about, so offering a resolver for them is incoherent; "period" is accounting vocabulary far
+        // more often than a window. A tool schema is ~440 tokens, so a false positive is a real cost,
+        // not a rounding error — this is the bound on how broad the set may grow.
+        for (String question : List.of(
+                "what is the phone number for NAPA",
+                "show me recent notes on this vehicle",
+                "has anything odd happened lately",
+                "which parts are on a periodic maintenance schedule",
+                "post this to the open accounting period")) {
+            assertThat(toolSelectionEngine
+                            .selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, question)
+                            .fallbackTools())
+                    .as("date-window tool withheld from \"%s\"", question)
+                    .doesNotContain(dateWindowFacadeTool);
+        }
     }
 
     /**
