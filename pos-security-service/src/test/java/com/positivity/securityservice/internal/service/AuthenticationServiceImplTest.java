@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.security.service.JwtService.TokenPair;
@@ -120,6 +121,13 @@ class AuthenticationServiceImplTest {
     @InjectMocks
     private AuthenticationServiceImpl sut;
 
+    /**
+     * Any one authority: since #1725 (ADR-0017 §2 question 1) login() refuses an account with no
+     * roles as 403 {@code USER_HAS_NO_ROLES} before minting, so every success-path test must
+     * present at least one.
+     */
+    private static final org.springframework.security.core.GrantedAuthority ANY_ROLE = () -> "ROLE_USER";
+
     // =========================================================
     // T7 — login() must NOT use PasswordEncoder directly (AC2)
     // =========================================================
@@ -152,6 +160,7 @@ class AuthenticationServiceImplTest {
                     .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                             UUID.randomUUID(), null, new User("testuser", "password", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
@@ -180,6 +189,7 @@ class AuthenticationServiceImplTest {
                     .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                             UUID.randomUUID(), null, new User("alice", "secret", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
@@ -248,6 +258,7 @@ class AuthenticationServiceImplTest {
             when(successAuth.getPrincipal())
                     .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                             UUID.randomUUID(), null, new User("bob", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
 
             String fakeAccess = "access.token.stub";
@@ -266,6 +277,31 @@ class AuthenticationServiceImplTest {
                     .isEqualTo(fakeRefresh);
 
             verify(jwtService).generateTokenPair(argThat("bob"::equals), any(UUID.class), isNull(), any());
+        }
+
+        /**
+         * ADR-0017 §2 question 1 (#1725): an authenticated account with no roles is refused as a
+         * caller-authorization failure — {@link NoRolesAssignedException}, 403 {@code
+         * USER_HAS_NO_ROLES} — before any token is minted, the same answer the refresh path gives
+         * for the same condition. Previously this fell through to generateTokenPair's empty-roles
+         * guard and answered 400.
+         */
+        @Test
+        @DisplayName("T9b: login() throws NoRolesAssignedException when the account has no roles, minting nothing")
+        void login_throwsNoRolesAssigned_whenAccountHasNoRoles() {
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("bob");
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("bob", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of());
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("bob", "pass")))
+                    .isInstanceOf(NoRolesAssignedException.class)
+                    .hasMessageContaining("no roles assigned");
+
+            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any());
         }
     }
 
@@ -321,6 +357,7 @@ class AuthenticationServiceImplTest {
                             null,
                             new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
@@ -481,7 +518,7 @@ class AuthenticationServiceImplTest {
                             t18UserId,
                             t18PersonId,
                             new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
-            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of());
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 

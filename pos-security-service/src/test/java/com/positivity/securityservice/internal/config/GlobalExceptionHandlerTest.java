@@ -343,18 +343,19 @@ class GlobalExceptionHandlerTest {
     class HandleNoRolesAssignedException {
 
         @Test
-        @DisplayName("returns 422 USER_HAS_NO_ROLES with message, and echoes correlation id in header")
-        void returns422WithMessage() {
+        @DisplayName("returns 403 USER_HAS_NO_ROLES with message and nextAction, and echoes correlation id in header")
+        void returns403WithMessageAndNextAction() {
             NoRolesAssignedException ex = new NoRolesAssignedException("User has no roles assigned");
             HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
             ResponseEntity<ApiError> response =
                     sut.handleNoRolesAssignedException(ex, requestWithHeader(), httpResponse);
 
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("USER_HAS_NO_ROLES");
             assertThat(response.getBody().message()).isEqualTo("User has no roles assigned");
+            assertThat(response.getBody().nextAction()).contains("assign at least one role");
             verify(httpResponse).setHeader("X-Correlation-Id", CORRELATION_ID);
         }
     }

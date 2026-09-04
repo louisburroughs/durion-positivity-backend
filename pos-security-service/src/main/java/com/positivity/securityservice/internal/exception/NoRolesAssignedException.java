@@ -5,11 +5,11 @@ package com.positivity.securityservice.internal.exception;
  * out — but the referenced user account currently has no roles assigned, so a token cannot be
  * issued with a non-empty {@code roles}/authorities claim.
  *
- * <p>This is a domain-policy violation on an otherwise-valid payload (ADR-0017 §1/§2: "422 for
- * semantically valid requests that violate domain policy and are not representable as a
- * conflict"), not a malformed request — the refresh token itself is well-formed, unexpired,
- * unrevoked, and present in the token store. Mapped to {@code 422 Unprocessable Entity} with
- * code {@code USER_HAS_NO_ROLES} by {@code GlobalExceptionHandler}.
+ * <p>This is a refusal about the caller's authorization, not about the request (ADR-0017 §2,
+ * question 1): the credentials or refresh token are fine, but the account holds no roles and so
+ * no effective permissions, and only an administrator can change that. Mapped to {@code 403
+ * Forbidden} with code {@code USER_HAS_NO_ROLES} by {@code GlobalExceptionHandler}, on every
+ * entry point that can reach it (credential login and refresh alike — one condition, one status).
  */
 public class NoRolesAssignedException extends RuntimeException {
 

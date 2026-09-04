@@ -32,8 +32,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * {@code @ExceptionHandler(IllegalArgumentException.class)} that used to live in {@link
  * InvoiceExceptionHandler} (400 {@code VALIDATION_ERROR}, with a special case attaching a {@code
  * managerApprovalCode} field error whenever the message mentioned "approval code") is deleted.
- * The approval-code cases now have their own domain-policy types at 422 ({@link
- * ManagerApprovalRequiredException}, {@link InvalidManagerApprovalException}); a new-total-goes-
+ * The approval-code cases now have their own step-up authorization types at 403 ({@link
+ * ManagerApprovalRequiredException}, {@link InvalidManagerApprovalException}; ADR-0017 §2
+ * question 1, decided in #1725); a new-total-goes-
  * negative adjustment now has its own domain-policy type at 422 ({@link
  * ExcessiveAdjustmentException}); plain request-shape validation keeps its 400 via this module's
  * own {@link InvoiceRequestValidationException}. A bare {@code IllegalArgumentException} — what
@@ -91,10 +92,10 @@ class InvoiceControllerErrorHandlingTest {
                 .andExpect(header().exists("X-Correlation-Id"));
     }
 
-    /** A required-but-missing manager approval code above the cap answers its documented 422. */
+    /** A required-but-missing manager approval code above the cap answers its documented 403. */
     @Test
-    @DisplayName("a required-but-missing manager approval code answers 422 with its own code")
-    void missingManagerApprovalAnswers422WithItsOwnMessageAndCode() throws Exception {
+    @DisplayName("a required-but-missing manager approval code answers 403 with its own code and a nextAction")
+    void missingManagerApprovalAnswers403WithItsOwnMessageAndCode() throws Exception {
         when(invoiceFinalizationService.completeInvoice(any(), any()))
                 .thenThrow(
                         new ManagerApprovalRequiredException(
@@ -105,16 +106,18 @@ class InvoiceControllerErrorHandlingTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{}"),
                         InvoicePermissions.FINALIZE))
-                .andExpect(status().is(422))
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("MANAGER_APPROVAL_REQUIRED"))
+                .andExpect(
+                        jsonPath("$.nextAction").value(org.hamcrest.Matchers.containsString("elevateManagerApproval")))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }
 
-    /** An invalid/expired manager approval token answers its documented 422. */
+    /** An invalid/expired manager approval token answers its documented 403. */
     @Test
-    @DisplayName("an invalid manager approval token answers 422 with its own message and code")
-    void invalidManagerApprovalAnswers422WithItsOwnMessageAndCode() throws Exception {
+    @DisplayName("an invalid manager approval token answers 403 with its own message, code, and a nextAction")
+    void invalidManagerApprovalAnswers403WithItsOwnMessageAndCode() throws Exception {
         when(invoiceFinalizationService.revert(any(), any(), any()))
                 .thenThrow(new InvalidManagerApprovalException(
                         "Invalid or expired manager approval code for this invoice"));
@@ -125,9 +128,11 @@ class InvoiceControllerErrorHandlingTest {
                                 .content(
                                         "{\"managerApprovalCode\":\"not-a-valid-token\",\"reason\":\"Customer dispute\"}"),
                         InvoicePermissions.FINALIZE))
-                .andExpect(status().is(422))
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("MANAGER_APPROVAL_INVALID"))
                 .andExpect(jsonPath("$.message").value("Invalid or expired manager approval code for this invoice"))
+                .andExpect(
+                        jsonPath("$.nextAction").value(org.hamcrest.Matchers.containsString("elevateManagerApproval")))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }

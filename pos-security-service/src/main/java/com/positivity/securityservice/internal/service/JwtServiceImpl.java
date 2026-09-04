@@ -299,13 +299,12 @@ public class JwtServiceImpl implements JwtService {
             throw new SecurityValidationException("UserId cannot be null");
         }
         if (roles == null || roles.isEmpty()) {
-            // (a) reachable both as request-shape validation (JwtController's issueInternalToken
-            // and generateTokenPair pass a client-supplied `roles` set straight through, and
-            // both document "Returns 400 ... or the role set is empty") and, via the login flow
-            // (AuthenticationServiceImpl -> this method), when an authenticated account has zero
-            // roles. Kept at 400 for both: the two documented HTTP entry points already commit
-            // to 400 for an empty role set, and this single throw site cannot serve one caller
-            // 400 and another 422 for the identical message.
+            // (a) request-shape validation: JwtController's issueInternalToken and
+            // generateTokenPair pass a client-supplied `roles` set straight through, and both
+            // document "Returns 400 ... or the role set is empty". The login flow
+            // (AuthenticationServiceImpl) rejects an account with no roles before calling this
+            // method (403 USER_HAS_NO_ROLES, ADR-0017 §2 / #1725), so this guard only ever sees
+            // a caller-supplied empty set.
             throw new SecurityValidationException("Roles cannot be empty");
         }
 
@@ -442,13 +441,12 @@ public class JwtServiceImpl implements JwtService {
         UserDto user = userOpt.get();
         Set<String> roles = user.getRoles() == null ? Collections.<String>emptySet() : user.getRoles();
         if (roles.isEmpty()) {
-            // (b) domain-policy violation on an otherwise-valid payload (ADR-0017 §2): the
-            // refresh token itself is well-formed, unexpired, unrevoked, and present in the
-            // token store — the failure is the referenced account's current role state, not the
-            // request. Distinct from generateTokenPair's "Roles cannot be empty" above, which
-            // stays 400 because two of its three callers pass a client-supplied `roles` set
-            // directly; this throw's only caller is this refresh flow, so it can be reclassified
-            // without touching an unrelated endpoint's documented status.
+            // ADR-0017 §2 (question 1): the refresh token is well-formed, unexpired, unrevoked,
+            // and present in the token store — the refusal is about the caller's authorization
+            // (an account with no roles holds no effective permissions), so it answers 403
+            // USER_HAS_NO_ROLES, the same status the login path gives for the same condition
+            // (#1725). Distinct from generateTokenPair's "Roles cannot be empty" above, which is
+            // request-shape validation of a client-supplied set.
             throw new NoRolesAssignedException("User has no roles assigned");
         }
         String username = jwtToken.getSubject();

@@ -43,8 +43,8 @@ import org.springframework.test.web.servlet.MockMvc;
  *       (400 {@code INVALID_REQUEST}, message echoed) — the blanket
  *       {@code @ExceptionHandler(IllegalArgumentException.class)} that used to catch this is
  *       gone.
- *   <li>{@link NoRolesAssignedException} answers the new 422 {@code USER_HAS_NO_ROLES} mapping
- *       (ADR-0017 §2) added alongside this sweep.
+ *   <li>{@link NoRolesAssignedException} answers the 403 {@code USER_HAS_NO_ROLES} mapping
+ *       (ADR-0017 §2 question 1, decided in #1725) added alongside this sweep.
  *   <li>A bare {@code IllegalArgumentException} — what Hibernate/JPA throw for an invalid query,
  *       what {@code UUID.fromString} throws on malformed stored data — is no longer caught by
  *       this module's {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler}:
@@ -106,17 +106,18 @@ class JwtControllerErrorHandlingTest {
     }
 
     @Test
-    @DisplayName("a NoRolesAssignedException answers the new 422 USER_HAS_NO_ROLES mapping")
-    void aNoRolesAssignedFailureAnswers422WithItsOwnMessageAndCode() throws Exception {
+    @DisplayName("a NoRolesAssignedException answers the 403 USER_HAS_NO_ROLES mapping")
+    void aNoRolesAssignedFailureAnswers403WithItsOwnMessageAndCode() throws Exception {
         when(jwtService.refreshAccessToken(anyString()))
                 .thenThrow(new NoRolesAssignedException("User has no roles assigned"));
 
         mockMvc.perform(post("/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"a-valid-looking-token\"}"))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("USER_HAS_NO_ROLES"))
-                .andExpect(jsonPath("$.message").value("User has no roles assigned"));
+                .andExpect(jsonPath("$.message").value("User has no roles assigned"))
+                .andExpect(jsonPath("$.nextAction").isNotEmpty());
     }
 
     /**

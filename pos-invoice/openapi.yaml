@@ -1090,7 +1090,7 @@ paths:
 
         Emits an INVOICE_FINALIZED event and publishes the async accounting event that drives GL posting; the tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit job, and is skipped entirely when nothing is taxable.
 
-        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, and 422 when a required managerApprovalCode is missing, invalid, or expired.
+        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, and 403 with MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID when a required managerApprovalCode is missing, invalid, or expired (a step-up credential the caller lacks; nextAction points at elevateManagerApproval).
 
         '
       operationId: finalizeInvoice
@@ -1121,12 +1121,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDetailsResponse'
           description: Invoice finalized
-        '422':
+        '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: A required managerApprovalCode is missing, invalid, or expired
+          description: 'MANAGER_APPROVAL_REQUIRED or MANAGER_APPROVAL_INVALID: a required managerApprovalCode is missing, invalid, or expired'
       security:
       - bearerAuth:
         - invoice:finalize
@@ -1767,7 +1767,7 @@ paths:
 
         Emits an INVOICE_DRAFT_REVERT event, publishes an invoice-updated notification, and issues a tax void toward pos-tax for the reverted document.
 
-        Returns 200 with the DRAFT invoice, 404 when the invoice does not exist, 409 when it is POSTED, not FINALIZED, or the 24-hour window has expired, and 422 when the approval code is invalid or expired (a blank approval code is rejected as a 400 request-shape error before this check).
+        Returns 200 with the DRAFT invoice, 404 when the invoice does not exist, 409 when it is POSTED, not FINALIZED, or the 24-hour window has expired, and 403 with MANAGER_APPROVAL_INVALID when the approval code is invalid or expired (a step-up credential the server considers insufficient; a blank approval code is rejected as a 400 request-shape error before this check).
 
         '
       operationId: revertInvoice
@@ -1798,12 +1798,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDetailsResponse'
           description: Invoice reverted to DRAFT
-        '422':
+        '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: The approval code is invalid or expired
+          description: 'MANAGER_APPROVAL_INVALID: the approval code is invalid or expired'
       security:
       - bearerAuth:
         - invoice:finalize

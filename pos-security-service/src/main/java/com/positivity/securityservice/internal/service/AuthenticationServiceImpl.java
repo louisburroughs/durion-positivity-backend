@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import io.micrometer.core.instrument.Counter;
@@ -153,6 +154,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .map(GrantedAuthority::getAuthority)
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toSet());
+
+        // ADR-0017 §2 (question 1): an authenticated account with no roles is a refusal about
+        // the caller's authorization, not about the request — 403 USER_HAS_NO_ROLES, the same
+        // answer the refresh path gives for the same condition (#1725). Checked here rather
+        // than relying on generateTokenPair's empty-roles guard, which is request-shape
+        // validation (400) for the internal token endpoints that pass a client-supplied set.
+        if (roleNames.isEmpty()) {
+            log.warn("Login refused: account has no roles assigned. username={}, userId={}", username, userId);
+            throw new NoRolesAssignedException("User has no roles assigned");
+        }
 
         JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, p.personId(), roleNames);
         incrementSuccessCounter();

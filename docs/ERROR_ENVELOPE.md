@@ -186,8 +186,8 @@ Any service may therefore return these in addition to its module codes below.
 | `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |
 | `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
 | `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
-| `MANAGER_APPROVAL_REQUIRED` | 422 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
-| `MANAGER_APPROVAL_INVALID` | 422 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
+| `MANAGER_APPROVAL_REQUIRED` | 403 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied — a step-up credential the caller lacks (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `MANAGER_APPROVAL_INVALID` | 403 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) — a step-up credential the server considers insufficient (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
 | `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
 
 ### pos-inventory
@@ -210,7 +210,7 @@ Any service may therefore return these in addition to its module codes below.
 | `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
 | `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
-| `USER_HAS_NO_ROLES` | 422 | Refresh token is valid, but the referenced user currently has no roles assigned |
+| `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
 
 ### pos-accounting
 | Code | Status | Description |
