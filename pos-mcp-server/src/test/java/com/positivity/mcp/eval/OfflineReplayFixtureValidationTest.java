@@ -195,7 +195,10 @@ class OfflineReplayFixtureValidationTest {
     }
 
     @Test
-    @DisplayName("every utterance and window match its analytics-gate QUESTIONS.json counterpart")
+    // Utterance only: the replay fixtures carry no window metadata, so there is nothing here to
+    // check it against. Window assertions belong with the fixture work that adds the data (#1689),
+    // and a DisplayName claiming a check that does not exist is worse than no check at all.
+    @DisplayName("every utterance matches its analytics-gate QUESTIONS.json counterpart")
     void utterancesMatchQuestionsJson() throws IOException {
         java.util.Map<String, String> utteranceByFixtureId = new java.util.HashMap<>();
         for (JsonNode question : questions().get("questions")) {

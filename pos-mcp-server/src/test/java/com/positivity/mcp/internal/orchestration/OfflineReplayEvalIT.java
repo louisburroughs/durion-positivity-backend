@@ -71,7 +71,10 @@ class OfflineReplayEvalIT {
             System.getProperty("user.dir"), "src/test/resources/eval/offline-replay/analytics-gate-replay.json");
     private static final Path REPORT_PATH =
             Paths.get(System.getProperty("user.dir"), "target/eval/offline-replay-report.json");
-    private static final UUID SYNTHETIC_USER_ID = UUID.fromString("01960010-0000-7000-8000-0000000016820");
+    // 8-4-4-4-12. The last group encodes the issue number (1682) and must be exactly twelve hex
+    // digits: the earlier value carried thirteen, so UUID.fromString threw "UUID string too large"
+    // in the static initializer and the whole IT failed on class load, before any fixture ran.
+    private static final UUID SYNTHETIC_USER_ID = UUID.fromString("01960010-0000-7000-8000-000000001682");
 
     @Test
     void replayEveryFixtureAgainstTheConfiguredModel() throws IOException {
@@ -84,13 +87,12 @@ class OfflineReplayEvalIT {
         for (JsonNode fixture : fixtures) {
             String fixtureId = fixture.path("fixture_id").asText();
             FixtureSetup setup = buildFixtureSetup(fixture);
-            List<OfflineReplayEvaluator.ObservedToolCall> observedCalls = new ArrayList<>();
             OfflineReplayEvaluator.ReplayResult result = OfflineReplayEvaluator.replay(
                     chatModel,
                     fixture.path("system_prompt").asText(),
                     fixture.path("utterance").asText(),
                     setup.toolCallbacks(),
-                    observedCalls);
+                    setup.observedCalls());
 
             reportResults.add(toReportEntry(fixtureId, fixture, setup, result));
             failures.addAll(gradeStructuralAxes(fixtureId, fixture, result));
@@ -104,11 +106,22 @@ class OfflineReplayEvalIT {
         }
     }
 
-    private record FixtureSetup(
+    /**
+     * The stub tools for one fixture, plus the single mutable sink they all append to.
+     *
+     * <p>{@code observedCalls} is carried here rather than created by the caller because the stubs
+     * are the only writers: a caller that built its own list would hand {@code replay} an empty one
+     * and get an empty {@link OfflineReplayEvaluator.ReplayResult#toolCalls()} back, which silently
+     * empties every structural axis — tool selection, call sequence and argument accuracy all read
+     * that list. Keeping the sink with the callbacks that write to it means there is no second list
+     * in scope to pass by mistake.
+     */
+    record FixtureSetup(
             @NonNull List<ToolCallback> toolCallbacks,
-            @NonNull List<ToolDefinitionTrace> offeredTools) {}
+            @NonNull List<ToolDefinitionTrace> offeredTools,
+            @NonNull List<OfflineReplayEvaluator.ObservedToolCall> observedCalls) {}
 
-    private static @NonNull FixtureSetup buildFixtureSetup(@NonNull JsonNode fixture) {
+    static @NonNull FixtureSetup buildFixtureSetup(@NonNull JsonNode fixture) {
         Map<String, Deque<OfflineReplayEvaluator.ToolResponseFixture>> responsesByTool = new LinkedHashMap<>();
         for (JsonNode canned : fixture.path("tool_responses")) {
             String toolName = canned.path("tool_name").asText();
@@ -139,7 +152,7 @@ class OfflineReplayEvalIT {
                     responsesByTool.computeIfAbsent(name, ignored -> OfflineReplayEvaluator.newResponseQueue()),
                     sharedObservedCalls));
         }
-        return new FixtureSetup(toolCallbacks, offeredTools);
+        return new FixtureSetup(toolCallbacks, offeredTools, sharedObservedCalls);
     }
 
     private static @NonNull List<String> gradeStructuralAxes(
@@ -159,10 +172,20 @@ class OfflineReplayEvalIT {
                     "%s[%s]: expected %s, observed %s".formatted(fixtureId, axis, expectedSequence, observedSequence));
         }
         for (OfflineReplayEvaluator.ObservedToolCall call : result.toolCalls()) {
-            if (!call.argumentsMatched()) {
-                failures.add("%s[argument_accuracy]: call #%d to '%s' missing a required argument key: %s"
-                        .formatted(fixtureId, call.sequence(), call.name(), call.arguments()));
+            if (call.argumentsMatched()) {
+                continue;
             }
+            // A stub records argumentsMatched=false for BOTH a genuine argument mismatch and a call
+            // it could not serve at all (an exhausted response queue, say). Reporting the second as
+            // "missing a required argument key" sends the reader looking at the model's arguments
+            // when the fixture is what ran out, so the two are named separately.
+            if (call.error() != null) {
+                failures.add("%s[tool_error]: call #%d to '%s' could not be served by the fixture: %s"
+                        .formatted(fixtureId, call.sequence(), call.name(), call.error()));
+                continue;
+            }
+            failures.add("%s[argument_accuracy]: call #%d to '%s' missing a required argument key: %s"
+                    .formatted(fixtureId, call.sequence(), call.name(), call.arguments()));
         }
         return failures;
     }
