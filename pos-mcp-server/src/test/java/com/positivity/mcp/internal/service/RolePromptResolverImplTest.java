@@ -235,6 +235,70 @@ class RolePromptResolverImplTest {
     }
 
     /**
+     * The GLOSSARY layer (#1688) is unconditional for the same reason DATE-WINDOW is: the failure it
+     * closes is the assistant deciding, per turn, whether a business phrase was answerable. A layer
+     * present for only some roles or scopes leaves that decision unmade for the rest.
+     */
+    @Test
+    @DisplayName("assemble always appends the GLOSSARY layer")
+    void assemble_alwaysIncludesGlossaryLayer() {
+        when(systemPromptRepository.findByName(MASTER_NAME))
+                .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
+
+        var assembled = resolver.assemble("ROLE_TECHNICIAN", "master", false);
+
+        assertThat(assembled.layers()).contains("GLOSSARY");
+        assertThat(assembled.text()).contains(SystemPromptDefaults.GLOSSARY_LAYER_TEXT);
+    }
+
+    /**
+     * Order is load-bearing here too. The glossary layer's rule ends "never ask because a date range
+     * was left unstated", which is only meaningful once the layer that resolves ranges has been
+     * stated. Read the other way round it looks like a bare prohibition with nothing behind it.
+     */
+    @Test
+    @DisplayName("assemble places GLOSSARY after DATE_WINDOW, whose range rule it defers to")
+    void assemble_placesGlossaryAfterDateWindow() {
+        when(systemPromptRepository.findByName(MASTER_NAME))
+                .thenReturn(Optional.of(buildPrompt(MASTER_NAME, "master content")));
+
+        var assembled = resolver.assemble("ROLE_TECHNICIAN", "master", false);
+
+        assertThat(assembled.layers().indexOf("GLOSSARY"))
+                .isGreaterThan(assembled.layers().indexOf("DATE_WINDOW"));
+        assertThat(assembled.text().indexOf(SystemPromptDefaults.GLOSSARY_LAYER_TEXT))
+                .isGreaterThan(assembled.text().indexOf(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT));
+    }
+
+    /**
+     * The whole point of the layer is that the two failure modes are opposite and look alike in an
+     * answer: choosing a metric silently, and asking about a range that already has a default. The
+     * text has to name both sides, or it only closes one of them.
+     */
+    @Test
+    @DisplayName("GLOSSARY layer separates an undefined metric from an unstated range")
+    void glossaryLayer_separatesUndefinedMetricFromUnstatedRange() {
+        assertThat(SystemPromptDefaults.GLOSSARY_LAYER_TEXT)
+                .contains("lookupBusinessTerm")
+                .contains("Ask when the METRIC is undefined")
+                .contains("Never ask because a date range was left unstated");
+    }
+
+    /**
+     * The date-window layer has to name resolveNamedPeriod now that the reporting facades no longer
+     * accept a `period` argument (#1684): without it the model is told to resolve every window
+     * through a tool that only expresses relative shapes, and a question naming "in 2025" has no
+     * route at all.
+     */
+    @Test
+    @DisplayName("DATE_WINDOW layer routes a named period to resolveNamedPeriod")
+    void dateWindowLayer_routesNamedPeriodToItsOwnTool() {
+        assertThat(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT)
+                .contains("resolveNamedPeriod")
+                .contains("Reporting tools no longer accept a `period` argument");
+    }
+
+    /**
      * Ordering is load-bearing rather than cosmetic: the TOOL-USE layer says to ask when an argument
      * is missing, and the DATE-WINDOW layer narrows that by supplying a default for a named range.
      * Read in the other order the narrowing reads as the thing being overridden.

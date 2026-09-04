@@ -28,7 +28,7 @@ public final class MasterAgentRegistry {
     private static final Logger LOGGER = LoggerFactory.getLogger(MasterAgentRegistry.class);
 
     /** Tools that are selected alongside domain tools but imply no domain (#1684). */
-    private static final Set<String> SCOPE_NEUTRAL_TOOL_NAMES = Set.of("DateWindowFacadeTool");
+    private static final Set<String> SCOPE_NEUTRAL_TOOL_NAMES = Set.of("DateWindowFacadeTool", "GlossaryFacadeTool");
 
     /** Roles to warm up when no snapshot has been synced yet, or for a registry built without one. */
     private static final int DEFAULT_MAX_PRELOADED_ROLES = 16;

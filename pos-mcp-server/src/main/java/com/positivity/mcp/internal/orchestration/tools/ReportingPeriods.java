@@ -1,63 +1,50 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import java.time.DateTimeException;
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Maps the LLM-facing {@code period} / {@code startDate}+{@code endDate} arguments of reporting
- * facades onto the ISO {@code startDate}/{@code endDate} ({@code YYYY-MM-DD}) range parameters
- * the accounting report endpoints actually take (#1519 Wave 2; range form added #1677 so these
- * tools can take {@code resolveDateWindow}'s output directly instead of being limited to a single
- * whole month or year).
+ * Validates the {@code startDate}/{@code endDate} ({@code YYYY-MM-DD}) range parameters the
+ * accounting report endpoints take, as supplied by {@code DateWindowFacadeTool} (#1519 Wave 2;
+ * range form added #1677).
  *
- * <p>{@link #resolve} accepts exactly one of two forms: {@code period} alone ({@code YYYY-MM} for
- * a calendar month or {@code YYYY} for a calendar year — a shortcut for a single whole period), or
- * both {@code startDate} and {@code endDate} (ISO {@code YYYY-MM-DD}, inclusive, from the
- * resolver's own {@code startDate}/{@code endDate}). Any other combination — neither, both forms
- * at once, one date without the other, a malformed date, or {@code startDate} after {@code
- * endDate} — is rejected with a message stating which form to pass so the model can self-correct.
+ * <p><strong>The {@code period} shortcut was removed in #1684.</strong> It accepted a label
+ * ({@code YYYY} or {@code YYYY-MM}) and expanded it to a range inside the reporting tool, which
+ * made it a hole in the date-window contract: a window reached the downstream call without any
+ * shape ever being classified, so nothing distinguished {@code period="2026"} meaning the named
+ * year 2026 from the same argument standing in for "this year", which is
+ * {@code CURRENT_TO_DATE} and a different window. Because the expansion happened here rather
+ * than in the resolver, neither reading was recorded at the tool boundary and neither could be
+ * graded. Both readings now have a resolver call that names them —
+ * {@code resolveNamedPeriod("2026")} and {@code resolveDateWindow(CURRENT_TO_DATE, YEAR, 1)} —
+ * so requiring the dates here costs no expressiveness and makes the shape observable on every
+ * dated call.
  */
 final class ReportingPeriods {
-
-    private static final Pattern YEAR = Pattern.compile("\\d{4}");
-    private static final Pattern YEAR_MONTH = Pattern.compile("\\d{4}-\\d{2}");
 
     record DateRange(@NonNull String startDate, @NonNull String endDate) {}
 
     private ReportingPeriods() {}
 
     /**
-     * Resolves either the {@code period} shortcut or an explicit {@code startDate}/{@code
-     * endDate} range — exactly one of the two forms must be supplied.
+     * Validates an explicit inclusive {@code startDate}/{@code endDate} range.
      *
-     * @throws IllegalArgumentException if neither form, both forms, only one of startDate/endDate,
-     *     a malformed period or date, or an inverted startDate/endDate is supplied
+     * @throws IllegalArgumentException if either date is missing, malformed, or if
+     *     {@code startDate} is after {@code endDate}; every message names the resolver tool to
+     *     call so the model can self-correct rather than guess a range.
      */
-    static @NonNull DateRange resolve(@Nullable String period, @Nullable String startDate, @Nullable String endDate) {
-        boolean hasPeriod = period != null && !period.isBlank();
+    static @NonNull DateRange resolve(@Nullable String startDate, @Nullable String endDate) {
         boolean hasStart = startDate != null && !startDate.isBlank();
         boolean hasEnd = endDate != null && !endDate.isBlank();
 
-        if (hasPeriod) {
-            if (hasStart || hasEnd) {
-                throw new IllegalArgumentException("Pass either period on its own, or both startDate and endDate "
-                        + "— not both forms together; got period='" + period + "' together with startDate/endDate");
-            }
-            return toDateRange(period);
-        }
-        if (hasStart != hasEnd) {
-            throw new IllegalArgumentException("startDate and endDate must be given together (got only "
-                    + (hasStart ? "startDate" : "endDate")
-                    + "); pass both, ISO YYYY-MM-DD, or use period instead for a single month/year");
-        }
-        if (!hasStart) {
-            throw new IllegalArgumentException("Pass either period (a single calendar month as YYYY-MM or year as "
-                    + "YYYY) or both startDate and endDate (ISO YYYY-MM-DD, from resolveDateWindow)");
+        if (!hasStart || !hasEnd) {
+            throw new IllegalArgumentException("startDate and endDate are both required (got "
+                    + (hasStart ? "only startDate" : hasEnd ? "only endDate" : "neither")
+                    + "); call resolveDateWindow for a range relative to today (\"last month\", \"in the "
+                    + "last six months\") or resolveNamedPeriod for a period the question names outright "
+                    + "(\"2025\", \"2026-07\", \"2026-Q3\"), then copy its startDate/endDate verbatim");
         }
         LocalDate start = parseDate("startDate", startDate);
         LocalDate end = parseDate("endDate", endDate);
@@ -71,33 +58,16 @@ final class ReportingPeriods {
         try {
             return LocalDate.parse(value.trim());
         } catch (DateTimeParseException exception) {
+            // Names the resolvers, not just the format. The likeliest way to reach this branch is a
+            // model still carrying the removed `period` contract and putting its label ("2025",
+            // "2026-07") into startDate — for which "pass YYYY-MM-DD" is true but not actionable,
+            // since the caller wants a whole named period and needs to be told where to get one.
             throw new IllegalArgumentException(
-                    "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form (e.g. 2026-06-30)",
+                    "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form "
+                            + "(e.g. 2026-06-30). For a whole named period such as '2025', '2026-07' or "
+                            + "'2026-Q3', call resolveNamedPeriod and copy its startDate/endDate; for a range "
+                            + "relative to today, call resolveDateWindow.",
                     exception);
         }
-    }
-
-    static @NonNull DateRange toDateRange(@NonNull String period) {
-        String trimmed = period.trim();
-        if (YEAR.matcher(trimmed).matches()) {
-            return new DateRange(trimmed + "-01-01", trimmed + "-12-31");
-        }
-        if (YEAR_MONTH.matcher(trimmed).matches()) {
-            try {
-                YearMonth month = YearMonth.parse(trimmed);
-                return new DateRange(
-                        month.atDay(1).toString(), month.atEndOfMonth().toString());
-            } catch (DateTimeException exception) {
-                throw invalidPeriod(period, exception);
-            }
-        }
-        throw invalidPeriod(period, null);
-    }
-
-    private static IllegalArgumentException invalidPeriod(String period, Throwable cause) {
-        return new IllegalArgumentException(
-                "Unsupported period '" + period
-                        + "': pass a calendar month as YYYY-MM (e.g. 2026-05) or a calendar year as YYYY (e.g. 2026)",
-                cause);
     }
 }

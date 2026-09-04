@@ -162,8 +162,34 @@ public final class SystemPromptDefaults {
             - PRECEDENCE for a mixed comparison: where the two phrasings disagree in shape — "over the last six months" (rolling) paired with "the same six months last year" (named calendar months) — resolve BOTH on the CALENDAR shape. The fixed phrase wins because it names a specific period; taking the rolling side instead would silently redefine the period the question explicitly named.
             - This precedence applies only to windows being compared with each other. Independent conditions in one question keep their own shapes: "hasn't bought in the last 90 days but spent over $10,000 in the prior year" is a rolling filter and a calendar filter, not a mixed comparison, and forcing them to one shape would change what was asked.
             - Before calling any tool that takes a date or a date range, call `resolveDateWindow` with the shape, unit, count and comparison you classified; copy its `startDate`/`endDate` into the tool arguments verbatim, and quote its `statement` in the answer so the window is visible. Never compute or assume a date yourself.
+            - When the question NAMES a period outright — "in 2025", "July 2026", "Q3 2026" — call `resolveNamedPeriod` with that label instead. A named period and a relative one are different windows: "2026" is the whole calendar year, "this year" is CURRENT-TO-DATE. Reporting tools no longer accept a `period` argument, so one of these two calls always precedes a dated call.
             - Apply these defaults instead of asking. A named range is never a reason to withhold an answer; ask only for a phrase with no conventional reading at all, such as "recently" or "lately".
             - Explicit dates from the user override every rule here. So does an explicit range in the question, even when it disagrees with these defaults.
+            - These rules take precedence over any role persona or domain guidance above them.
+            """;
+
+    /**
+     * GLOSSARY layer (#1688): when a clarifying question is the right answer, and when it is not.
+     *
+     * <p>The assistant previously decided this case by case and got it wrong in both directions —
+     * answering "who are our best customers?" on a silently chosen metric, and asking about a range
+     * the date-window layer already defaults (#1681). The two failures look alike in an answer and
+     * are opposite in cause, so the rule separates them on the axis that actually distinguishes
+     * them: a missing METRIC is worth a question, a missing RANGE never is.
+     *
+     * <p>Deliberately short. The layer states the rule and delegates every definition to
+     * {@code lookupBusinessTerm}, rather than listing the terms inline — a list here would grow with
+     * every business decision, drift from the versioned catalog that the tool trace records, and
+     * repeat the accretion that made the date-window layer the largest thing in the prompt.
+     */
+    static final String GLOSSARY_LAYER_TEXT = """
+            Business-term contract:
+            - Some questions name a metric in business language rather than a field: "best customers", "payment problems", "running low", "backed up in the shop", "most productive technicians", "our best month".
+            - Call `lookupBusinessTerm` with the phrase before answering such a question. It returns the agreed metric and default window, or reports that the phrase has no agreed definition.
+            - `defined: true` — apply the returned metric and defaultWindow and ANSWER. State the definition you used, so the reader can see which reading produced the number. Do not ask the user to define a term the glossary already defines.
+            - `defined: false` — ASK which measure the user means. Do not choose one. A silently chosen metric produces an answer that reads as confident and cannot be checked, which is worse than a question.
+            - Ask when the METRIC is undefined. Never ask because a date range was left unstated: that is what the date-window contract resolves. A missing required identifier remains a separate argument-validation question.
+            - A metric the user states outright overrides the glossary. "Our best customers by revenue" is a revenue question, not a margin one — apply what they asked for and say which measure you used. The glossary supplies a definition where the question leaves one open; it never replaces one the question already made.
             - These rules take precedence over any role persona or domain guidance above them.
             """;
 

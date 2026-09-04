@@ -211,7 +211,7 @@ class TaxFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"netTax\":4000}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getTaxSummary("2026-03", null, null);
+        String result = tool.getTaxSummary("2026-03-01", "2026-03-31");
 
         directMockServer.verify();
         gatewayMockServer.verify();
@@ -219,15 +219,15 @@ class TaxFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getTaxSummary rejects an unsupported period form without issuing a request")
-    void getTaxSummary_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getTaxSummary("2025-Q1", null, null))
+    @DisplayName("getTaxSummary rejects a missing range and names the resolver tools to call")
+    void getTaxSummary_rejectsMissingRange() {
+        assertThatThrownBy(() -> tool.getTaxSummary(null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("YYYY-MM")
-                .hasMessageContaining("YYYY");
+                .hasMessageContaining("startDate and endDate are both required")
+                .hasMessageContaining("resolveDateWindow")
+                .hasMessageContaining("resolveNamedPeriod");
 
         directMockServer.verify();
-        gatewayMockServer.verify();
     }
 
     @Test
@@ -241,7 +241,7 @@ class TaxFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"netTax\":4000}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getTaxSummary(null, "2026-03-01", "2026-08-31");
+        String result = tool.getTaxSummary("2026-03-01", "2026-08-31");
 
         directMockServer.verify();
         gatewayMockServer.verify();
@@ -249,21 +249,9 @@ class TaxFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getTaxSummary rejects period together with startDate/endDate without issuing a request")
-    void getTaxSummary_rejectsPeriodTogetherWithDateRange() {
-        assertThatThrownBy(() -> tool.getTaxSummary("2026-03", "2026-03-01", "2026-08-31"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("period")
-                .hasMessageContaining("startDate");
-
-        directMockServer.verify();
-        gatewayMockServer.verify();
-    }
-
-    @Test
     @DisplayName("getTaxSummary rejects an unpaired startDate without issuing a request")
     void getTaxSummary_rejectsUnpairedStartDate() {
-        assertThatThrownBy(() -> tool.getTaxSummary(null, "2026-03-01", null))
+        assertThatThrownBy(() -> tool.getTaxSummary("2026-03-01", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");

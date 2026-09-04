@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -265,5 +266,53 @@ class DateWindowFacadeToolTest {
             appender.stop();
             logger.setLevel(previousLevel);
         }
+    }
+
+    // ── resolveNamedPeriod (#1684) ───────────────────────────────────────────
+
+    @Test
+    @DisplayName("resolveNamedPeriod returns the named period's whole span with shape ABSOLUTE")
+    void resolveNamedPeriod_returnsAbsoluteWindow() {
+        JsonNode node = parse(tool.resolveNamedPeriod("2025"));
+
+        assertThat(node.get("startDate").asText()).isEqualTo("2025-01-01");
+        assertThat(node.get("endDate").asText()).isEqualTo("2025-12-31");
+        assertThat(node.get("shape").asText()).isEqualTo("ABSOLUTE");
+        assertThat(node.get("statement").asText()).contains("named calendar year 2025");
+        assertThat(node.has("comparison")).isFalse();
+    }
+
+    @Test
+    @DisplayName("resolveNamedPeriod handles months and quarters")
+    void resolveNamedPeriod_handlesMonthsAndQuarters() {
+        assertThat(parse(tool.resolveNamedPeriod("2026-07")).get("endDate").asText())
+                .isEqualTo("2026-07-31");
+        assertThat(parse(tool.resolveNamedPeriod("2026-Q3")).get("startDate").asText())
+                .isEqualTo("2026-07-01");
+        assertThat(parse(tool.resolveNamedPeriod("2026-Q3")).get("endDate").asText())
+                .isEqualTo("2026-09-30");
+    }
+
+    @Test
+    @DisplayName("resolveNamedPeriod logs the shape and dates, so the trace records which reading was used")
+    void resolveNamedPeriod_logsResolution() {
+        try (LogCapture capture = new LogCapture()) {
+            tool.resolveNamedPeriod("2026-Q3");
+
+            assertThat(capture.events())
+                    .anySatisfy(event -> assertThat(event.getFormattedMessage())
+                            .contains("shape=ABSOLUTE")
+                            .contains("period=2026-Q3")
+                            .contains("startDate=2026-07-01")
+                            .contains("endDate=2026-09-30"));
+        }
+    }
+
+    @Test
+    @DisplayName("resolveNamedPeriod rejects a relative phrase and points at resolveDateWindow")
+    void resolveNamedPeriod_rejectsRelativePhrase() {
+        assertThatThrownBy(() -> tool.resolveNamedPeriod("last month"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("resolveDateWindow");
     }
 }

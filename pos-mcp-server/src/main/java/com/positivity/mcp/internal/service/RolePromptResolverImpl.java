@@ -125,6 +125,13 @@ public class RolePromptResolverImpl implements RolePromptResolver {
         text.append("\n\n").append(SystemPromptDefaults.DATE_WINDOW_LAYER_TEXT);
         layers.add("DATE_WINDOW");
 
+        // GLOSSARY (#1688) — business-term resolution, always present. Sits after DATE-WINDOW
+        // because it defers to it: the two layers together say "ask about an undefined metric,
+        // never about an unstated range", and that sentence only parses once the range rule above
+        // has been stated.
+        text.append("\n\n").append(SystemPromptDefaults.GLOSSARY_LAYER_TEXT);
+        layers.add("GLOSSARY");
+
         // WRITE-GATE (Gate 6, #1193) — only when a write-capable tool is in the candidate set.
         if (writeCapableToolsPresent) {
             text.append("\n\n").append(SystemPromptDefaults.WRITE_GATE_LAYER_TEXT);

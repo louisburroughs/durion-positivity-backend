@@ -29,6 +29,7 @@ import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
@@ -335,7 +336,7 @@ class SessionAgentManagerTest {
         verify(scopedContentRetrieverFactory).create("inventory", 10, 0.6);
         verify(scopedContentRetrieverFactory).create("inventory", 20, 0.55);
         assertThat(contextCaptor.getValue().workflowState()).isEqualTo("IDLE");
-        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool");
+        assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::GlossaryFacadeTool+InventoryFacadeTool");
     }
 
     @Test
@@ -404,7 +405,7 @@ class SessionAgentManagerTest {
         // so the
         // agent is built with no role tools and the cache key reflects that.
         assertThat(roleAgentCacheKeys(selectorManager))
-                .doesNotContain("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
+                .doesNotContain("ROLE_ADMIN::GlossaryFacadeTool+InventoryFacadeTool+OrderFacadeTool");
     }
 
     @Test
@@ -542,6 +543,7 @@ class SessionAgentManagerTest {
         return new ToolSelectionEngine(
                 toolRegistry,
                 dateWindowFacadeTool,
+                new GlossaryFacadeTool(),
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,

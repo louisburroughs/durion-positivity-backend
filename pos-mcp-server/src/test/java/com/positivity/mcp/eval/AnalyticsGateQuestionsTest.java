@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.orchestration.tools.CatalogFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.CustomerFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.EventsFacadeTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.HrFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InvoiceFacadeTool;
@@ -98,6 +99,7 @@ class AnalyticsGateQuestionsTest {
             CatalogFacadeTool.class,
             CustomerFacadeTool.class,
             DateWindowFacadeTool.class,
+            GlossaryFacadeTool.class,
             EventsFacadeTool.class,
             HrFacadeTool.class,
             InventoryFacadeTool.class,

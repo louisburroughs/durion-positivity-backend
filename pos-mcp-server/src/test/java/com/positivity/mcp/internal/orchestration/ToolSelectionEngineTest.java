@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
@@ -23,6 +24,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,6 +47,7 @@ class ToolSelectionEngineTest {
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
     private SharedOrchestrationSupport sharedOrchestrationSupport;
+    private GlossaryFacadeTool glossaryFacadeTool;
     private ToolSelectionEngine toolSelectionEngine;
 
     @BeforeEach
@@ -63,9 +67,11 @@ class ToolSelectionEngineTest {
                 "/order/v1/orders/search?q={query}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         when(toolRegistry.resolveMasterTools()).thenReturn(List.of(exaWebSearchTool));
+        glossaryFacadeTool = new GlossaryFacadeTool();
         toolSelectionEngine = new ToolSelectionEngine(
                 toolRegistry,
                 dateWindowFacadeTool,
+                glossaryFacadeTool,
                 exaWebSearchTool,
                 inventoryFacadeTool,
                 orderFacadeTool,
@@ -98,7 +104,7 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
 
         assertThat(result.roleTools()).containsExactly(inventoryFacadeTool);
-        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, inventoryFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, inventoryFacadeTool);
 
         ArgumentCaptor<ToolSelectionContext> contextCaptor = ArgumentCaptor.forClass(ToolSelectionContext.class);
         verify(toolRegistryService).resolveCandidateTools(contextCaptor.capture(), eq(3));
@@ -242,7 +248,7 @@ class ToolSelectionEngineTest {
         // longer substituted. Keyword fallbacks are a separate list and still populate, so the
         // assistant keeps web search rather than going mute.
         assertThat(result.roleTools()).isEmpty();
-        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, orderFacadeTool);
+        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, orderFacadeTool);
     }
 
     @Test
@@ -304,5 +310,47 @@ class ToolSelectionEngineTest {
                 toolSelectionEngine.selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, "show stock for sku ABC");
 
         assertThat(result.roleTools()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the glossary tool is offered for a message matching no keyword at all (#1688)")
+    void fallbackTools_offersGlossaryWithNoKeywordMatch() {
+        // The design decision this pins: the phrases that most need the glossary are the ones NOT in
+        // it, which no glossary-derived keyword could match. Re-adding a keyword guard would keep the
+        // other selection tests green, so this is the one that would fail.
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_USER", Set.of(), "who are our most loyal customers");
+
+        assertThat(result.fallbackTools()).contains(glossaryFacadeTool);
+    }
+
+    @ParameterizedTest
+    @DisplayName("a question naming an absolute period reaches the date-window resolver (#1684)")
+    @ValueSource(
+            strings = {
+                "what did we spend with Michelin in 2025?",
+                "revenue for Q3 2026",
+                "sales in July 2026",
+                "how much did we bill in December?"
+            })
+    void fallbackTools_offersDateWindowForANamedPeriod(String message) {
+        // Removing the `period` shortcut made a resolver call mandatory before any dated report call,
+        // and ReportingPeriods now rejects a missing range by telling the model to call
+        // resolveNamedPeriod. If the tool is not offered for exactly this wording, that instruction
+        // names a tool the model does not have and the turn dead-ends.
+        ToolSelectionEngine.ToolSelectionResult result =
+                toolSelectionEngine.selectRoleTools("ROLE_USER", Set.of(), message);
+
+        assertThat(result.fallbackTools()).contains(dateWindowFacadeTool);
+    }
+
+    @Test
+    @DisplayName("fullFallbackTools stays a superset of the unconditional keyword-path additions")
+    void fullFallbackTools_isASupersetOfTheUnconditionalAdditions() {
+        // The role-level agent builds from fullFallbackTools before a question exists, while the
+        // DATE_WINDOW and GLOSSARY prompt layers are appended unconditionally. A tool added
+        // unconditionally to the keyword path but missing here hands that agent a prompt instructing
+        // it to call a tool it does not have.
+        assertThat(toolSelectionEngine.fullFallbackTools()).contains(dateWindowFacadeTool, glossaryFacadeTool);
     }
 }

@@ -133,7 +133,7 @@ class AccountingFacadeToolTest {
                 .andExpect(method(trialBalance.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getFinancialSummary("2026-03", null, null));
+        JsonNode envelope = parse(tool.getFinancialSummary("2026-03-01", "2026-03-31"));
 
         mockServer.verify();
         assertThat(envelope.get("composition").asText()).isEqualTo("financialSummary");
@@ -175,7 +175,7 @@ class AccountingFacadeToolTest {
                 .expect(requestTo(BASE_URL + summary.leg("trialBalance").expand(Map.of("asOf", "2026-03-31"))))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String rendered = tool.getFinancialSummary("2026-03", null, null);
+        String rendered = tool.getFinancialSummary("2026-03-01", "2026-03-31");
 
         mockServer.verify();
         assertThat(rendered).doesNotContain("FORBIDDEN-PAYLOAD");
@@ -204,7 +204,7 @@ class AccountingFacadeToolTest {
                 .expect(requestTo(BASE_URL + summary.leg("trialBalance").expand(Map.of("asOf", "2026-12-31"))))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getFinancialSummary("2026", null, null));
+        JsonNode envelope = parse(tool.getFinancialSummary("2026-01-01", "2026-12-31"));
 
         mockServer.verify();
         assertThat(envelope.get("status").asText()).isEqualTo("degraded");
@@ -213,12 +213,13 @@ class AccountingFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getFinancialSummary rejects an unsupported period form without issuing a request")
-    void getFinancialSummary_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getFinancialSummary("2025-Q1", null, null))
+    @DisplayName("getFinancialSummary rejects a missing range and names the resolver tools to call")
+    void getFinancialSummary_rejectsMissingRange() {
+        assertThatThrownBy(() -> tool.getFinancialSummary(null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("YYYY-MM")
-                .hasMessageContaining("YYYY");
+                .hasMessageContaining("startDate and endDate are both required")
+                .hasMessageContaining("resolveDateWindow")
+                .hasMessageContaining("resolveNamedPeriod");
 
         mockServer.verify();
     }
@@ -245,7 +246,7 @@ class AccountingFacadeToolTest {
                 .andExpect(method(trialBalance.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        JsonNode envelope = parse(tool.getFinancialSummary(null, "2026-03-01", "2026-08-31"));
+        JsonNode envelope = parse(tool.getFinancialSummary("2026-03-01", "2026-08-31"));
 
         mockServer.verify();
         assertThat(envelope.get("status").asText()).isEqualTo("ok");
@@ -255,20 +256,9 @@ class AccountingFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getFinancialSummary rejects period together with startDate/endDate without issuing a request")
-    void getFinancialSummary_rejectsPeriodTogetherWithDateRange() {
-        assertThatThrownBy(() -> tool.getFinancialSummary("2026-03", "2026-03-01", "2026-08-31"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("period")
-                .hasMessageContaining("startDate");
-
-        mockServer.verify();
-    }
-
-    @Test
     @DisplayName("getFinancialSummary rejects an unpaired startDate without issuing a request")
     void getFinancialSummary_rejectsUnpairedStartDate() {
-        assertThatThrownBy(() -> tool.getFinancialSummary(null, "2026-03-01", null))
+        assertThatThrownBy(() -> tool.getFinancialSummary("2026-03-01", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
@@ -347,44 +337,13 @@ class AccountingFacadeToolTest {
     }
 
     @Test
-    @DisplayName("getVendorSpend maps a YYYY-MM period to GET vendor-spend?startDate&endDate")
-    void getVendorSpend_mapsCalendarMonthToDateRange() {
-        FacadeContractManifest.Entry entry = contract("getVendorSpend");
-        mockServer
-                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-06-01", "endDate", "2026-06-30"))))
-                .andExpect(method(entry.httpMethod()))
-                .andRespond(withSuccess(
-                        "{\"rows\":[{\"vendorId\":\"v1\",\"paidAmount\":1000.00,\"billsIssuedInWindow\":0}]}",
-                        MediaType.APPLICATION_JSON));
-
-        String result = tool.getVendorSpend("2026-06", null, null);
-
-        mockServer.verify();
-        assertThat(result).isNotEmpty().contains("paidAmount");
-    }
-
-    @Test
-    @DisplayName("getVendorSpend maps a YYYY period to the full calendar year")
-    void getVendorSpend_mapsCalendarYearToDateRange() {
-        FacadeContractManifest.Entry entry = contract("getVendorSpend");
-        mockServer
-                .expect(requestTo(BASE_URL + entry.expand(Map.of("startDate", "2026-01-01", "endDate", "2026-12-31"))))
-                .andExpect(method(entry.httpMethod()))
-                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
-
-        String result = tool.getVendorSpend("2026", null, null);
-
-        mockServer.verify();
-        assertThat(result).isNotEmpty();
-    }
-
-    @Test
-    @DisplayName("getVendorSpend rejects an unsupported period form without issuing a request")
-    void getVendorSpend_rejectsUnsupportedPeriod() {
-        assertThatThrownBy(() -> tool.getVendorSpend("2025-Q1", null, null))
+    @DisplayName("getVendorSpend rejects a missing range and names the resolver tools to call")
+    void getVendorSpend_rejectsMissingRange() {
+        assertThatThrownBy(() -> tool.getVendorSpend(null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("YYYY-MM")
-                .hasMessageContaining("YYYY");
+                .hasMessageContaining("startDate and endDate are both required")
+                .hasMessageContaining("resolveDateWindow")
+                .hasMessageContaining("resolveNamedPeriod");
 
         mockServer.verify();
     }
@@ -394,8 +353,7 @@ class AccountingFacadeToolTest {
             + "them paid, and no tool description on this class still names the old billCount/avgBillAmount "
             + "fields")
     void getVendorSpendDescription_namesNewFieldsAndNeverLabelsThemPaid() throws NoSuchMethodException {
-        Method getVendorSpend =
-                AccountingFacadeTool.class.getMethod("getVendorSpend", String.class, String.class, String.class);
+        Method getVendorSpend = AccountingFacadeTool.class.getMethod("getVendorSpend", String.class, String.class);
         String description = getVendorSpend.getAnnotation(Tool.class).description();
 
         assertThat(description).contains("billsIssuedInWindow").contains("avgIssuedBillAmount");
@@ -419,40 +377,19 @@ class AccountingFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.getVendorSpend(null, "2025-07-01", "2026-06-30");
+        String result = tool.getVendorSpend("2025-07-01", "2026-06-30");
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
     }
 
     @Test
-    @DisplayName("getVendorSpend rejects period together with startDate/endDate without issuing a request")
-    void getVendorSpend_rejectsPeriodTogetherWithDateRange() {
-        assertThatThrownBy(() -> tool.getVendorSpend("2026-06", "2025-07-01", "2026-06-30"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("period")
-                .hasMessageContaining("startDate");
-
-        mockServer.verify();
-    }
-
-    @Test
     @DisplayName("getVendorSpend rejects an unpaired startDate without issuing a request")
     void getVendorSpend_rejectsUnpairedStartDate() {
-        assertThatThrownBy(() -> tool.getVendorSpend(null, "2025-07-01", null))
+        assertThatThrownBy(() -> tool.getVendorSpend("2025-07-01", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
-
-        mockServer.verify();
-    }
-
-    @Test
-    @DisplayName("getVendorSpend rejects when neither period nor a date range is given")
-    void getVendorSpend_rejectsWhenNeitherFormGiven() {
-        assertThatThrownBy(() -> tool.getVendorSpend(null, null, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("period");
 
         mockServer.verify();
     }

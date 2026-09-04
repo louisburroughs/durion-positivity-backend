@@ -34,7 +34,7 @@ class WriteGatePromptLayerTest {
     void assemble_withWriteCapableTools_appendsWriteGateLayer() {
         AssembledPrompt prompt = resolver.assemble("ROLE_SERVICE_ADVISOR", "master", true);
 
-        assertThat(prompt.layers()).endsWith("TOOL_USE", "DATE_WINDOW", "WRITE_GATE");
+        assertThat(prompt.layers()).endsWith("TOOL_USE", "DATE_WINDOW", "GLOSSARY", "WRITE_GATE");
         assertThat(prompt.text()).contains("Write-action gate:");
         assertThat(prompt.text()).contains("explicit user confirmation");
     }

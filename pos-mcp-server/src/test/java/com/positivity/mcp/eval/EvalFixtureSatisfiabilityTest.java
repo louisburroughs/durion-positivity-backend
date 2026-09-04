@@ -198,14 +198,18 @@ class EvalFixtureSatisfiabilityTest {
                 .sorted()
                 .toList();
 
-        // EventsFacadeTool and DateWindowFacadeTool (#1675, V43) are the only facades whose gate is
-        // the sentinel. This mirrors FacadeToolPermissionSeedTest#assistantOnlyCallerQualifiesOnlyEventsFacade
-        // from the seed side; asserting it here as well is what keeps a ROLE_USER fixture from
-        // re-acquiring the pre-V40 expectation that any authenticated caller is offered a privileged
-        // facade.
+        // EventsFacadeTool, DateWindowFacadeTool (#1675, V43) and GlossaryFacadeTool (#1688, V46)
+        // are the only facades whose gate is the sentinel, and the two additions are deliberate: both
+        // return computed answers rather than data — a date range and a definition — so neither reads
+        // a customer, invoice or workorder row and neither has a permission of its own to enforce.
+        // This mirrors FacadeToolPermissionSeedTest#assistantOnlyCallerQualifiesOnlyEventsFacade from
+        // the seed side; asserting it here as well is what keeps a ROLE_USER fixture from re-acquiring
+        // the pre-V40 expectation that any authenticated caller is offered a privileged facade. Adding
+        // a name to this list is a decision, never a fix — if a facade that reads data ever appears
+        // here, the seed is wrong, not the assertion.
         assertThat(offered)
                 .as("facades offered to a caller holding only %s", AUTHENTICATED)
-                .containsExactly("DateWindowFacadeTool", "EventsFacadeTool");
+                .containsExactly("DateWindowFacadeTool", "EventsFacadeTool", "GlossaryFacadeTool");
     }
 
     private static boolean reaches(Map<String, Map<String, Set<String>>> groups, String tool, Set<String> held) {

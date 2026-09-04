@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
 import com.positivity.mcp.internal.service.ToolRegistryService;
@@ -69,11 +70,36 @@ public class ToolSelectionEngine {
             "yesterday",
             "ytd"));
 
+    /**
+     * Vocabulary that names an ABSOLUTE period rather than a relative one — a four-digit year, a
+     * calendar quarter, or a month name (#1684).
+     *
+     * <p>These were not in {@link #DATE_WINDOW_WORD_PATTERNS} because when that list was written the
+     * only resolver expressed relative shapes, so a bare "2025" named no window it could resolve —
+     * which is the exact test that list applies. {@code resolveNamedPeriod} changed that: "in 2025",
+     * "Q3 2026" and "July 2026" are now resolvable, so the tokens earn their place under the same
+     * rule rather than in spite of it.
+     *
+     * <p>Adding them is load-bearing, not tidying. Removing the {@code period} shortcut made a
+     * resolver call mandatory before any dated report call, and {@code ReportingPeriods} now hard
+     * rejects a missing range with a message telling the model to call {@code resolveNamedPeriod}.
+     * Without these tokens "what did we spend with Michelin in 2025?" matches nothing here, the
+     * resolver is left to compete in the embedding ranking (which this class already documents it
+     * can lose), and the turn can dead-end being told to call a tool it was never offered — in
+     * precisely the case {@code resolveNamedPeriod} exists to serve.
+     */
+    private static final List<Pattern> NAMED_PERIOD_PATTERNS = List.of(
+            Pattern.compile("\\b(?:19|20)\\d{2}\\b"),
+            Pattern.compile("\\bq[1-4]\\b"),
+            Pattern.compile("\\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
+                    + "(?:uary|ruary|ch|il|e|y|ust|tember|ober|ember)?\\b"));
+
     /** Multi-word date vocabulary, matched as plain substrings rather than on word boundaries. */
     private static final Set<String> DATE_WINDOW_PHRASES = Set.of("to date", "so far this");
 
     private final MasterAgentRegistry toolRegistry;
     private final DateWindowFacadeTool dateWindowFacadeTool;
+    private final GlossaryFacadeTool glossaryFacadeTool;
     private final ExaWebSearchTool exaWebSearchTool;
     private final InventoryFacadeTool inventoryFacadeTool;
     private final OrderFacadeTool orderFacadeTool;
@@ -87,6 +113,7 @@ public class ToolSelectionEngine {
     public ToolSelectionEngine(
             @NonNull MasterAgentRegistry toolRegistry,
             @NonNull DateWindowFacadeTool dateWindowFacadeTool,
+            @NonNull GlossaryFacadeTool glossaryFacadeTool,
             @NonNull ExaWebSearchTool exaWebSearchTool,
             @NonNull InventoryFacadeTool inventoryFacadeTool,
             @NonNull OrderFacadeTool orderFacadeTool,
@@ -95,6 +122,7 @@ public class ToolSelectionEngine {
             @Value("${mcp.agent.candidate-tool-limit:8}") int candidateToolLimit) {
         this.toolRegistry = toolRegistry;
         this.dateWindowFacadeTool = dateWindowFacadeTool;
+        this.glossaryFacadeTool = glossaryFacadeTool;
         this.exaWebSearchTool = exaWebSearchTool;
         this.inventoryFacadeTool = inventoryFacadeTool;
         this.orderFacadeTool = orderFacadeTool;
@@ -140,12 +168,20 @@ public class ToolSelectionEngine {
      * paths that build before a question exists (cache warm-up, {@code getOrCreateAgent}). Every
      * keyword-addable tool belongs here precisely because there is no keyword to match on yet —
      * omitting {@code dateWindowFacadeTool} would leave those agents unable to resolve a window at
-     * all while their prompt still required one (#1684).
+     * all while their prompt still required one (#1684). {@code glossaryFacadeTool} is here for the
+     * same reason (#1688): it is added unconditionally below, and the GLOSSARY prompt layer is
+     * appended unconditionally too, so leaving it out here would hand those agents a prompt telling
+     * them to call {@code lookupBusinessTerm} before answering and no such tool to call.
      */
     public @NonNull List<Object> fullFallbackTools() {
         return sharedOrchestrationSupport.mergeTools(
                 toolRegistry.resolveMasterTools(),
-                List.of(dateWindowFacadeTool, exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
+                List.of(
+                        dateWindowFacadeTool,
+                        exaWebSearchTool,
+                        glossaryFacadeTool,
+                        inventoryFacadeTool,
+                        orderFacadeTool));
     }
 
     private @NonNull List<Object> roleToolsForMessage(
@@ -345,6 +381,14 @@ public class ToolSelectionEngine {
     private @NonNull List<Object> fallbackToolsForMessage(@NonNull String message) {
         String text = message.toLowerCase(Locale.ROOT);
         List<Object> selected = new ArrayList<>();
+        // #1688: always offered, with no keyword guard. Every other entry here is gated on wording
+        // that names its domain, but the glossary's job is to answer "is this metric defined?" — and
+        // the phrases that most need it are precisely the ones NOT in the glossary ("our most loyal
+        // customers"), which no keyword derived from the glossary could match. A guard would
+        // therefore fire only for terms the model could already have handled and stay silent for the
+        // undefined ones, inverting the tool's purpose. It makes no HTTP call and carries one small
+        // schema, so offering it unconditionally costs a few prompt tokens and nothing else.
+        selected.add(glossaryFacadeTool);
         // #1684: a dated question must always be able to reach resolveDateWindow. Its mcp_tool row
         // (V43) carries domain 'date-window', and no ROLE resolves to that domain agent —
         // resolveDomainTools is keyed on the domain string — so its only route into the candidate
@@ -389,6 +433,11 @@ public class ToolSelectionEngine {
             }
         }
         for (Pattern pattern : DATE_WINDOW_WORD_PATTERNS) {
+            if (pattern.matcher(text).find()) {
+                return true;
+            }
+        }
+        for (Pattern pattern : NAMED_PERIOD_PATTERNS) {
             if (pattern.matcher(text).find()) {
                 return true;
             }
