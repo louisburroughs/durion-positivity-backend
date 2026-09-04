@@ -34,7 +34,7 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 | `correlationId` | `string`       | ✅ Yes          | UUID identifying this specific request across all services. Include this in bug reports and support tickets. Also present in the `X-Correlation-Id` response header. |
 | `fieldErrors` | `array\|null`    | ❌ Conditional  | Present (non-null) when the response contains field-level validation details; typically accompanies validation-related codes such as `VALIDATION_ERROR` or `VALIDATION_FAILED`. Each entry names the offending field and why it failed. Omitted entirely for all other error types. |
 | `referenceId` | `string\|null`   | ❌ Conditional  | Reference to a workflow case, review request, or external audit record. Present for guided error flows such as self-registration review. |
-| `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended action for the caller to resolve the error (e.g. "Sign in with the existing account"). Present alongside `referenceId`. |
+| `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended next step for the caller to resolve the error (e.g. "Sign in with the existing account"). May appear with or without `referenceId` — guided flows such as self-registration review pair it with a `referenceId`, while authorization refusals such as `USER_HAS_NO_ROLES` and `MANAGER_APPROVAL_REQUIRED` carry it alone. |
 | `supportAction` | `string\|null` | ❌ Conditional  | Investigation guidance for operations or support staff. Not intended for end-user display. |
 
 > **Note:** Fields that are `null` or absent are omitted from the JSON payload entirely (Jackson `@JsonInclude(NON_NULL)`). Clients should treat a missing field as `null`, not as an error.

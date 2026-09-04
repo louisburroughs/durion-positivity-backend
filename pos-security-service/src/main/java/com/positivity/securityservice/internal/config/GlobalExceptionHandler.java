@@ -269,12 +269,14 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles NoRolesAssignedException — a refresh token that is otherwise valid, but whose
-     * user currently has no roles assigned, so no non-empty roles/authorities claim can be
-     * issued. See {@link NoRolesAssignedException}.
+     * Handles NoRolesAssignedException — valid credentials or a valid refresh token, but the
+     * account currently has no roles assigned and so no effective permissions, so no non-empty
+     * roles/authorities claim can be issued. Thrown from both credential login and refresh and
+     * answered the same way on each. See {@link NoRolesAssignedException}.
      *
-     * **HTTP Status:** 422 Unprocessable Entity (ADR-0017 §2 — domain-policy violation on an
-     * otherwise-valid payload, not a malformed request)
+     * **HTTP Status:** 403 Forbidden (ADR-0017 §2 question 1 — a refusal about the caller's
+     * authorization, not a malformed request; decided in #1725). The body carries a
+     * {@code nextAction} hint telling the caller how to get the account back into service.
      *
      * @param ex       the exception
      * @param request  the web request

@@ -25,6 +25,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 /**
@@ -150,7 +151,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // truth.
         lockoutService.recordSuccessfulLogin(userId);
 
+        // Spring Security 7 appends authentication-factor markers (FactorGrantedAuthority, e.g.
+        // FACTOR_PASSWORD) to every successful password authentication. They describe how the
+        // caller authenticated, not what the account is allowed to do, so they are not roles.
+        // Without excluding them by type, roleNames is never empty on the real login path: the
+        // #1725 no-roles guard below is unreachable and every token carries a bogus
+        // ROLE_FACTOR_PASSWORD. Filtering by type (not prefix) keeps the T14 contract that a
+        // plain authority without a ROLE_ prefix passes through unchanged.
         Set<String> roleNames = authentication.getAuthorities().stream()
+                .filter(a -> !(a instanceof FactorGrantedAuthority))
                 .map(GrantedAuthority::getAuthority)
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toSet());

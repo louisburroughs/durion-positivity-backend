@@ -1,7 +1,9 @@
 package com.positivity.securityservice.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -107,6 +109,7 @@ class AuthControllerIT extends BaseContractIntegrationTest {
     private static final String TEST_USERNAME = "auth001_user";
     private static final String TEST_PASSWORD = "password";
     private static final String TEST_ROLE = "SHOP_MANAGER";
+    private static final String NO_ROLES_USERNAME = "auth001_noroles_user";
 
     @Autowired
     private UserRepository userRepository;
@@ -143,6 +146,14 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         user.setPassword(passwordEncoder.encode(TEST_PASSWORD));
         user.setRoles(Set.of(role));
         userRepository.save(user);
+
+        // #1725: a second, otherwise-valid account with no roles at all, for the 403 case.
+        userRepository.findByUsername(NO_ROLES_USERNAME).ifPresent(userRepository::delete);
+        User noRolesUser = new User();
+        noRolesUser.setUsername(NO_ROLES_USERNAME);
+        noRolesUser.setPassword(passwordEncoder.encode(TEST_PASSWORD));
+        noRolesUser.setRoles(Set.of());
+        userRepository.save(noRolesUser);
     }
 
     // =========================================================
@@ -189,6 +200,15 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         assertThat(claims.get(JwtService.AUTHORITIES))
                 .as("accessToken must NOT contain legacy authorities claim")
                 .isNull();
+
+        // Spring Security 7 appends a FACTOR_PASSWORD FactorGrantedAuthority to every password
+        // authentication; login() must drop it by type so the roles claim is exactly the seeded
+        // role (JwtServiceImpl normalizes claims to the ROLE_ form) and never carries a bogus
+        // ROLE_FACTOR_PASSWORD / FACTOR_PASSWORD entry.
+        assertThat(claims.get(JwtService.ROLES, java.util.List.class))
+                .as("roles claim must be exactly the seeded role; the authentication-factor marker is not a role")
+                .containsExactly("ROLE_" + TEST_ROLE)
+                .doesNotContain("ROLE_FACTOR_PASSWORD", "FACTOR_PASSWORD");
     }
 
     // =========================================================
@@ -223,6 +243,34 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         mockMvc.perform(post(LOGIN_PATH).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized()) // FAILS in RED (500 ≠ 401)
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+    }
+
+    // =========================================================
+    // T8 — Valid credentials, no roles → 403 USER_HAS_NO_ROLES (#1725, ADR-0017 §2)
+    // =========================================================
+
+    @Nested
+    @DisplayName("No roles assigned (#1725, ADR-0017 §2)")
+    class NoRolesAssigned {
+
+        @Test
+        @DisplayName(
+                "T8: valid credentials but no roles → HTTP 403 USER_HAS_NO_ROLES with nextAction and correlation id")
+        void login_validCredentialsNoRoles_returns403UserHasNoRoles() throws Exception {
+            String body = objectMapper.writeValueAsString(new LoginRequest(NO_ROLES_USERNAME, TEST_PASSWORD));
+
+            // The real AuthenticationManager accepts the credentials; AuthenticationServiceImpl.login
+            // then refuses to mint a token because the account carries no authorities, and the
+            // module's GlobalExceptionHandler answers the same 403 envelope the refresh path gives.
+            mockMvc.perform(post(LOGIN_PATH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isForbidden())
+                    .andExpect(header().exists("X-Correlation-Id"))
+                    .andExpect(jsonPath("$.code").value("USER_HAS_NO_ROLES"))
+                    .andExpect(jsonPath("$.message").value("User has no roles assigned"))
+                    .andExpect(jsonPath("$.nextAction").value(containsString("assign at least one role")));
+        }
     }
 
     // =========================================================

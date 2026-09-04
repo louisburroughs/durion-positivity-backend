@@ -112,10 +112,8 @@ class AuthMetricsTest {
                 .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                         userId, null, new User("alice", "pass", List.of())));
         // #1725 (ADR-0017 §2): login() refuses an account with no roles before minting, so a
-        // success-path Authentication must carry at least one authority. Lenient because some
-        // callers fail earlier and never read it.
-        org.mockito.Mockito.lenient()
-                .when(auth.getAuthorities())
+        // success-path Authentication must carry at least one authority.
+        when(auth.getAuthorities())
                 .thenAnswer(inv -> List.of((org.springframework.security.core.GrantedAuthority) () -> "ROLE_USER"));
         return auth;
     }

@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -117,7 +118,7 @@ class JwtControllerErrorHandlingTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("USER_HAS_NO_ROLES"))
                 .andExpect(jsonPath("$.message").value("User has no roles assigned"))
-                .andExpect(jsonPath("$.nextAction").isNotEmpty());
+                .andExpect(jsonPath("$.nextAction").value(containsString("assign at least one role")));
     }
 
     /**
