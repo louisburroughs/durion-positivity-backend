@@ -16,6 +16,8 @@ import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.OverCapReturnException;
+import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
+import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.order.internal.repository.ReturnOrderLineRepository;
 import com.positivity.order.internal.repository.ReturnOrderRepository;
@@ -181,7 +183,7 @@ class ReturnOrderServiceImplTest {
         stubOrder(soldLine(2, "108.0000", Boolean.FALSE, SourceType.WORKORDER));
 
         assertThatThrownBy(() -> service.createReturn(command(1, "RESTOCK")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ReturnLineNotReturnableException.class);
     }
 
     @Test
@@ -287,7 +289,7 @@ class ReturnOrderServiceImplTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createReturn(duplicated))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ReturnRequestValidationException.class)
                 .hasMessageContaining("Duplicate return line");
     }
 

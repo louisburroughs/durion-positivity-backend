@@ -12,10 +12,15 @@ import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.OverCapReturnException;
 import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
+import com.positivity.order.internal.exception.PriceOverrideRequestValidationException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
+import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
+import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
+import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.exception.TaxUnavailableException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
@@ -44,7 +49,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
 /**
- * ApiError mapping for the four controller-scoped advices in pos-order.
+ * ApiError mapping for four of pos-order's six controller-scoped advices (OrderCancellationExceptionHandler
+ * and PurchaseOrderExceptionHandler are exercised separately, in their own controller-slice tests).
  *
  * <p>
  * Each advice is deliberately scoped with {@code assignableTypes} so it does not
@@ -165,12 +171,26 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
+        @DisplayName("maps a malformed cart/checkout request to 400, not the former 422")
+        void invalidRequestIsABadRequestNow() {
+            // Issue #1694: request-shape validation (unsupported tenderType, missing locationId,
+            // an unrecognised status/sourceType filter, ...) moved from 422 to 400 per ADR-0017 —
+            // the old status was never deliberate, just whatever the blanket IllegalArgumentException
+            // handler this replaced happened to answer.
+            assertEnvelope(
+                    salesOrder.handleInvalidRequest(
+                            new SalesOrderRequestValidationException("Unsupported tenderType: CRYPTO"), request),
+                    HttpStatus.BAD_REQUEST,
+                    "ORDER_INVALID_ARGUMENT");
+        }
+
+        @Test
         @DisplayName("mints a correlation id when the caller sent none")
         void mintsCorrelationIdWhenAbsent() {
             when(request.getHeader(CORRELATION_HEADER)).thenReturn(null);
 
             ResponseEntity<ApiError> result =
-                    salesOrder.handleIllegalArgument(new IllegalArgumentException("bad qty"), request);
+                    salesOrder.handleInvalidRequest(new SalesOrderRequestValidationException("bad qty"), request);
 
             assertThat(result.getBody()).isNotNull();
             assertThat(result.getBody().correlationId()).isNotBlank();
@@ -250,12 +270,26 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("maps an invalid argument to 422 RETURN_INVALID_ARGUMENT")
-        void invalidArgument() {
+        @DisplayName("maps a malformed return request to 400, not the former 422")
+        void invalidRequestIsABadRequestNow() {
+            // Issue #1694: request-shape validation (no lines, a duplicate/unknown line, a
+            // non-positive returnQty, an unrecognised refundMethod/condition) moved from 422 to
+            // 400 per ADR-0017; the code (RETURN_INVALID_ARGUMENT) is unchanged.
             assertEnvelope(
-                    returns.handleInvalidArgument(new IllegalArgumentException("qty must be positive"), request),
-                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    returns.handleInvalidRequest(new ReturnRequestValidationException("qty must be positive"), request),
+                    HttpStatus.BAD_REQUEST,
                     "RETURN_INVALID_ARGUMENT");
+        }
+
+        @Test
+        @DisplayName("maps a not-returnable line to 422 RETURN_LINE_NOT_RETURNABLE, its own new code")
+        void lineNotReturnable() {
+            // Split out of the former blanket 422 catch-all: a well-formed request the domain
+            // refuses on its merits is distinguishable now from a malformed one (400 above).
+            assertEnvelope(
+                    returns.handleLineNotReturnable(new ReturnLineNotReturnableException(ID), request),
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "RETURN_LINE_NOT_RETURNABLE");
         }
     }
 
@@ -286,11 +320,15 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("maps an invalid argument to 422 and a permission failure to 403")
-        void invalidArgumentAndAccessDenied() {
+        @DisplayName("maps an invalid request to 400 (not the former 422) and a permission failure to 403")
+        void invalidRequestAndAccessDenied() {
+            // Issue #1694: a non-positive cash-movement amount or unknown movementType is
+            // request-shape validation, moved from 422 to 400 per ADR-0017; the code
+            // (REGISTER_SESSION_INVALID_ARGUMENT) is unchanged.
             assertEnvelope(
-                    sessions.handleIllegalArgument(new IllegalArgumentException("negative float"), request),
-                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    sessions.handleInvalidRequest(
+                            new RegisterSessionRequestValidationException("negative float"), request),
+                    HttpStatus.BAD_REQUEST,
                     "REGISTER_SESSION_INVALID_ARGUMENT");
             assertEnvelope(
                     sessions.handleAccessDenied(new AccessDeniedException("denied"), request),
@@ -327,10 +365,11 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("maps an invalid argument to 400 here, unlike the 422 the other advices use")
-        void illegalArgumentIsABadRequestHere() {
+        @DisplayName("maps an invalid request to 400 here, same status the blanket handler already used")
+        void invalidRequestIsABadRequestHere() {
             assertEnvelope(
-                    overrides.handleIllegalArgument(new IllegalArgumentException("bad price"), request),
+                    overrides.handleInvalidRequest(
+                            new PriceOverrideRequestValidationException("orderId must be a UUID: not-a-uuid"), request),
                     HttpStatus.BAD_REQUEST,
                     "ORDER_PRICE_OVERRIDE_BAD_REQUEST");
         }

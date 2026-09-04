@@ -2,6 +2,7 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
+import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -71,8 +72,15 @@ public class PurchaseOrderExceptionHandler {
         return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_INVALID_STATE", ex.getMessage(), request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * A malformed purchase-order line: no quantity and no document-UoM pair to derive one from,
+     * or a half-specified/non-positive document-UoM pair. Same code and status the blanket
+     * {@code IllegalArgumentException} handler this replaces already used (issue #1694) — no
+     * status change here, since 400 was already correct for this case.
+     */
+    @ExceptionHandler(PurchaseOrderRequestValidationException.class)
+    public ResponseEntity<ApiError> handleInvalidRequest(
+            PurchaseOrderRequestValidationException ex, HttpServletRequest request) {
         log.warn("Invalid purchase-order request", ex);
         return respond(HttpStatus.BAD_REQUEST, "PURCHASE_ORDER_BAD_REQUEST", ex.getMessage(), request);
     }

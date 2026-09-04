@@ -2,6 +2,7 @@ package com.positivity.order.internal.service;
 
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtProductUomReplica;
+import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
@@ -67,8 +68,8 @@ public class DocumentQuantityConverter {
      * @param productId catalog product id, or {@code null} when the line's stock reference does
      *     not resolve to one (raises {@code UOM_CONVERSION_UNDEFINED} if a document UoM is given)
      * @param stockReference the line's stock reference as keyed, for error messages
-     * @throws IllegalArgumentException when only one of the pair is supplied, or the document
-     *     quantity is not positive
+     * @throws PurchaseOrderRequestValidationException when only one of the pair is supplied, or
+     *     the document quantity is not positive
      * @throws UomConversionUndefinedException when no conversion path to base exists
      */
     @Transactional(readOnly = true)
@@ -81,10 +82,11 @@ public class DocumentQuantityConverter {
             return Optional.empty();
         }
         if (documentUom == null || documentUom.isBlank() || documentQuantity == null) {
-            throw new IllegalArgumentException("documentUom and documentQuantity must be provided together");
+            throw new PurchaseOrderRequestValidationException(
+                    "documentUom and documentQuantity must be provided together");
         }
         if (documentQuantity.signum() <= 0) {
-            throw new IllegalArgumentException("documentQuantity must be positive");
+            throw new PurchaseOrderRequestValidationException("documentQuantity must be positive");
         }
         if (productId == null) {
             throw UomConversionUndefinedException.unresolvableProduct(stockReference, documentUom);

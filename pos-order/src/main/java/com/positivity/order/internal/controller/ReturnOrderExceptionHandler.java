@@ -1,7 +1,9 @@
 package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.OverCapReturnException;
+import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
+import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.shared.error.ApiError;
@@ -90,13 +92,41 @@ public class ReturnOrderExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleInvalidArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * A malformed return request (no lines, a duplicate/unknown line reference, a non-positive
+     * returnQty, or an unrecognised refundMethod/condition). Maps to 400 per ADR-0017 —
+     * request-shape validation, not a domain-policy refusal — replacing the former blanket
+     * {@code IllegalArgumentException} handler that answered 422 for this same case (a status the
+     * issue #1694 audit found was never deliberate). The {@code RETURN_INVALID_ARGUMENT} code is
+     * unchanged so the wire contract's error code does not drift; only the status moved.
+     */
+    @ExceptionHandler(ReturnRequestValidationException.class)
+    public ResponseEntity<ApiError> handleInvalidRequest(
+            ReturnRequestValidationException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "RETURN_INVALID_ARGUMENT",
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A requested line is not returnable per policy: well-formed request, existing line, refused
+     * on its merits. New code (issue #1694), split out of the former blanket 422 catch-all so a
+     * caller can tell this apart from a malformed request.
+     */
+    @ExceptionHandler(ReturnLineNotReturnableException.class)
+    public ResponseEntity<ApiError> handleLineNotReturnable(
+            ReturnLineNotReturnableException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
-                        "RETURN_INVALID_ARGUMENT",
+                        "RETURN_LINE_NOT_RETURNABLE",
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),

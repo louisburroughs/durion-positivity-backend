@@ -3,6 +3,7 @@ package com.positivity.order.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.ApprovePriceOverrideRequest;
 import com.positivity.order.internal.dto.RejectPriceOverrideRequest;
+import com.positivity.order.internal.exception.PriceOverrideRequestValidationException;
 import com.positivity.order.internal.security.PriceOverridePermissions;
 import com.positivity.order.internal.service.PriceOverrideService;
 import com.positivity.order.internal.service.model.ApplyPriceOverrideRequest;
@@ -332,13 +333,19 @@ public class PriceOverrideController {
         List<PriceOverrideDetail> overrides;
 
         if (orderId != null) {
-            overrides = priceOverrideService.getOverridesByOrderId(UUID.fromString(orderId));
+            UUID parsedOrderId;
+            try {
+                parsedOrderId = UUID.fromString(orderId);
+            } catch (IllegalArgumentException e) {
+                throw new PriceOverrideRequestValidationException("orderId must be a UUID: " + orderId);
+            }
+            overrides = priceOverrideService.getOverridesByOrderId(parsedOrderId);
         } else if (status != null) {
             overrides = priceOverrideService.getOverridesByStatus(status);
         } else if (startDate != null && endDate != null) {
             overrides = priceOverrideService.getOverridesByDateRange(startDate, endDate);
         } else {
-            throw new IllegalArgumentException("At least one filter parameter is required");
+            throw new PriceOverrideRequestValidationException("At least one filter parameter is required");
         }
 
         return ResponseEntity.ok(overrides);

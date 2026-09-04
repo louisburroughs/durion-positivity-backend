@@ -2,6 +2,7 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
+import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -68,16 +69,24 @@ public class RegisterSessionExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * A malformed cash-movement request (non-positive amount, unknown movementType). Maps to 400
+     * per ADR-0017 — request-shape validation, not a domain-policy refusal — replacing the former
+     * blanket {@code IllegalArgumentException} handler that answered 422 for this same case (a
+     * status the issue #1694 audit found was never deliberate). The {@code REGISTER_SESSION_INVALID_ARGUMENT}
+     * code is unchanged so the wire contract's error code does not drift; only the status moved.
+     */
+    @ExceptionHandler(RegisterSessionRequestValidationException.class)
+    public ResponseEntity<ApiError> handleInvalidRequest(
+            RegisterSessionRequestValidationException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
-        log.warn("Invalid register-session argument: correlationId={}", correlationId, ex);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        log.warn("Invalid register-session request: correlationId={}", correlationId, ex);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
                         "REGISTER_SESSION_INVALID_ARGUMENT",
                         ex.getMessage(),
-                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

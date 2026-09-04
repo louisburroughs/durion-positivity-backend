@@ -99,6 +99,9 @@ public class SupplierArticleCodeEventsListener {
 
         // Validated before parsing, so a missing field reads as "missing field" rather than
         // surfacing as a UUID-parse or null-pointer failure that means the same thing but hides it.
+        // Left as a bare IllegalArgumentException (issue #1694 audit, category d): this is an
+        // internal Kafka payload, never reachable from a controller, and the caller (line ~87)
+        // already catches Exception broadly and logs+skips a malformed event.
         if (supplierRef == null
                 || supplierRef.isBlank()
                 || productIdValue == null

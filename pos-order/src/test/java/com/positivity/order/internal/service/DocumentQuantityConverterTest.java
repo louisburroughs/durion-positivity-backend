@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtProductUomReplica;
+import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
@@ -145,15 +146,15 @@ class DocumentQuantityConverterTest {
     @DisplayName("half a pair is a caller error, not a conversion problem")
     void halfAPairIsRejected() {
         assertThatThrownBy(() -> converter.convertIfPresent(PRODUCT_ID, "sku", "CASE", null))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(PurchaseOrderRequestValidationException.class);
         assertThatThrownBy(() -> converter.convertIfPresent(PRODUCT_ID, "sku", null, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(PurchaseOrderRequestValidationException.class);
     }
 
     @Test
     @DisplayName("a non-positive document quantity is rejected")
     void nonPositiveQuantityIsRejected() {
         assertThatThrownBy(() -> converter.convertIfPresent(PRODUCT_ID, "sku", "CASE", BigDecimal.ZERO))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(PurchaseOrderRequestValidationException.class);
     }
 }

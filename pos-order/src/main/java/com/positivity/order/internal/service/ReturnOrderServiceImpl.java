@@ -17,7 +17,9 @@ import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.OverCapReturnException;
+import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
+import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
@@ -92,7 +94,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
             }
         }
         if (command.lines().isEmpty()) {
-            throw new IllegalArgumentException("A return must have at least one line");
+            throw new ReturnRequestValidationException("A return must have at least one line");
         }
 
         SalesOrder original = salesOrderRepository
@@ -216,23 +218,23 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         // remainder (letting the combined qty exceed the cap) and collide on the inventory
         // restock idempotency key (returnOrderId:originalOrderLineId).
         if (!seenLineIds.add(lineCommand.originalOrderLineId())) {
-            throw new IllegalArgumentException("Duplicate return line for order line "
+            throw new ReturnRequestValidationException("Duplicate return line for order line "
                     + lineCommand.originalOrderLineId() + "; combine the quantity into a single line");
         }
         SalesOrderLine sold = soldLines.get(lineCommand.originalOrderLineId());
         if (sold == null) {
-            throw new IllegalArgumentException(
+            throw new ReturnRequestValidationException(
                     "Line " + lineCommand.originalOrderLineId() + " is not part of order " + original.getOrderId());
         }
         if (lineCommand.returnQty() <= 0) {
-            throw new IllegalArgumentException(
+            throw new ReturnRequestValidationException(
                     "returnQty must be positive for line " + lineCommand.originalOrderLineId());
         }
         if (!lineReturnable(sold)) {
             if (condition == ReturnCondition.WARRANTY) {
                 throw new WarrantyReturnRoutingException(sold.getOrderLineId());
             }
-            throw new IllegalArgumentException("Line " + sold.getOrderLineId() + " is not returnable");
+            throw new ReturnLineNotReturnableException(sold.getOrderLineId());
         }
         return sold;
     }
@@ -506,7 +508,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         try {
             return RefundMethod.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown refund method: " + raw);
+            throw new ReturnRequestValidationException("Unknown refund method: " + raw);
         }
     }
 
@@ -514,7 +516,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         try {
             return ReturnCondition.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown return condition: " + raw);
+            throw new ReturnRequestValidationException("Unknown return condition: " + raw);
         }
     }
 
