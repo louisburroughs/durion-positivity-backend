@@ -583,14 +583,52 @@ class WindowGradingTest(unittest.TestCase):
         )
         self.assertEqual(verdict, "PASS")
 
-    def test_also_accept_covers_a_bucketed_question_answered_as_absolute_periods(self):
-        # q04 buckets by month, so six ABSOLUTE resolutions satisfy it as well as one span.
+    def test_also_accept_requires_as_many_absolute_windows_as_periods_asked_for(self):
+        # q04 buckets six months, so six ABSOLUTE resolutions satisfy it — and one does not. The
+        # single-month reply is the actual under-answer from the 2026-09-04 run, and grading it PASS
+        # on shape alone would have called that turn correct.
+        expectation = {"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "also_accept": ["ABSOLUTE"]}
+        one_month = "absolute: 2026-03-01 to 2026-03-31 — the named calendar month March 2026"
+        six_months = " ".join(
+            f"absolute: 2026-0{m}-01 to 2026-0{m}-28 — the named calendar month M{m} 2026" for m in range(3, 9)
+        )
+
+        self.assertEqual(runner.grade_window(self._q(expectation), one_month, date(2026, 9, 1))[0], "FAIL")
+        self.assertEqual(runner.grade_window(self._q(expectation), six_months, date(2026, 9, 1))[0], "PASS")
+
+    def test_a_right_shape_with_the_wrong_count_fails(self):
+        # The decision on #1709 asks for the triple, not the label. One calendar month where six
+        # were specified is the wrong window.
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-08-01 to 2026-08-31 — 1 whole month ending with August 2026",
+            date(2026, 9, 1),
+        )
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("count", detail)
+
+    def test_a_missing_comparison_window_fails(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER"}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months ending with August 2026",
+            date(2026, 9, 1),
+        )
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("comparison", detail)
+
+    def test_a_present_comparison_window_passes(self):
         verdict, _ = runner.grade_window(
-            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "also_accept": ["ABSOLUTE"]}),
-            "absolute: 2026-03-01 to 2026-03-31 — the named calendar month March 2026",
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER"}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months ending with August 2026. "
+            "year earlier: 2025-03-01 to 2025-08-31 — the same span one year earlier",
             date(2026, 9, 1),
         )
         self.assertEqual(verdict, "PASS")
+
+    def test_no_answer_is_ungraded_not_failed(self):
+        # A transport failure is not a window failure; keeping them separable is the point.
+        verdict, _ = runner.grade_window(self._q({"shape": None, "as_of_offset_days": 0}), None, date(2026, 9, 1))
+        self.assertEqual(verdict, "UNGRADED")
 
     def test_point_in_time_is_graded_on_the_runs_own_as_of(self):
         question = self._q({"shape": None, "as_of_offset_days": 0})
@@ -652,9 +690,11 @@ class WindowGradingTest(unittest.TestCase):
         self.assertEqual(detail, "mixed window")
 
     def test_observed_shapes_deduplicates_and_preserves_order(self):
+        # All on one line: a greedy clause used to swallow everything after the first statement.
         answer = (
-            "absolute: 2026-03-01 to 2026-03-31 — x; absolute: 2026-04-01 to 2026-04-30 — y; "
-            "rolling: 2026-01-01 to 2026-02-01 — z"
+            "absolute: 2026-03-01 to 2026-03-31 — the named calendar month March 2026; "
+            "absolute: 2026-04-01 to 2026-04-30 — the named calendar month April 2026; "
+            "rolling: 2026-01-01 to 2026-02-01 — 1 month ending today (2026-02-01)"
         )
         self.assertEqual(runner.observed_shapes(answer), ["ABSOLUTE", "ROLLING"])
 

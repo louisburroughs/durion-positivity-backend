@@ -87,7 +87,7 @@
         "shape": "calendar",
         "resolved_range": "2026-07-01..2026-09-01",
         "stated_in_question": false,
-        "notes": "Boundary-day divergence only. `this quarter` resolves to 2026-07-01..2026-08-31 under the calendar rule (whole periods ending with the last complete month); the ground truth runs to the as-of date 2026-09-01 inclusive. Inert on the TRACKB seed — no reopen pair falls on 2026-09-01 — and the 2026-09-03 run PASSed under both readings.",
+        "notes": "'This quarter' is CURRENT_TO_DATE: the first day of the quarter containing the current date through that date, per SystemPromptDefaults DATE_WINDOW ('NEVER the previous complete period'). An earlier version of this note read it as whole periods ending with the last complete month; that predates the current contract and was wrong.",
         "expected": {
           "shape": "CURRENT_TO_DATE",
           "unit": "QUARTER",
@@ -195,10 +195,8 @@
         "stated_in_question": false,
         "notes": "QUESTION/GROUND-TRUTH GAP. `over the last twelve months` reads ROLLING, and the comparison phrase `the twelve months before that` names no calendar period, so the #1670 mixed-comparison precedence does not fire and both windows read rolling — while the ground truth measures both on the calendar. With EVAL_AS_OF on a month boundary the two readings differ only at the endpoints, so the gap has not yet moved a score (q07 DEFLECTed on 2026-09-03). Resolve by restating to `in the last twelve months compared with the twelve months before that` when the question is next revised.",
         "expected": {
-          "shape": "CALENDAR_SPAN",
-          "unit": "MONTH",
-          "count": 12,
-          "comparison": "YEAR_EARLIER"
+          "shape": null,
+          "note": "Left unset deliberately. This question's own note says the mixed-comparison precedence does NOT fire here — 'over the last twelve months' reads ROLLING and 'the twelve months before that' names no calendar period — so under the shipped DATE_WINDOW contract both windows read rolling. An expectation of CALENDAR_SPAN would fail a contract-correct answer. Annotate once the utterance is restated to name the shape it wants; the comparison is also PRIOR_PERIOD, not YEAR_EARLIER."
         }
       }
     },
@@ -406,10 +404,8 @@
         "stated_in_question": true,
         "notes": "A day-expressed range has no calendar form (#1670) — forward-rolling from the as-of date.",
         "expected": {
-          "shape": "ROLLING",
-          "unit": "DAY",
-          "count": 14,
-          "note": "The day-count edge (does day 1 start today or tomorrow?) is still open — #1681. Shape and unit are graded; the endpoints deliberately are not."
+          "shape": null,
+          "note": "Left unset deliberately. The question asks for bills due in the NEXT 14 days, and the resolver has no forward shape — ROLLING is start = today - N + 1, end = today. A ROLLING expectation would therefore pass an answer that used the wrong, backward window and leave a correct forward answer ungraded. Needs either a forward shape in the resolver or an endpoint-based expectation; the day-count edge is separately open in #1681."
         }
       }
     },
@@ -429,10 +425,8 @@
         "stated_in_question": false,
         "notes": "OPEN QUESTION/GROUND-TRUTH GAP — the same defect class #1671 fixed on q09, left open deliberately. The question names no window at all; `year over year` says only that two equal periods are compared. The ground truth inherits q15's six-month windows because both are served by the same E8 call, which is an implementation accident, not something the question says. Any score on q17 is therefore conditional on the grader accepting those windows. Fixing it means either restating the question with an explicit period or restating EXPECTED.md Q17 against a twelve-month year-over-year comparison; that choice interacts with the q15/q17 reading corrected by #1670 and is tracked separately.",
         "expected": {
-          "shape": "CALENDAR_SPAN",
-          "unit": "MONTH",
-          "count": 6,
-          "comparison": "YEAR_EARLIER"
+          "shape": null,
+          "note": "Left unset deliberately. This question's own note records that it names no window, that the six-month windows are an implementation accident rather than something the question says, and that any score on it is conditional. Annotating it would convert an acknowledged ground-truth gap into binding ground truth."
         }
       },
       "expected_plan": {

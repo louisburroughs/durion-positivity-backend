@@ -1,5 +1,9 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -68,7 +72,10 @@ final class ChatResponseText {
         String content = stripThinkBlocks(message.getText());
         if (!content.isBlank()) {
             if (isBareToolPayload(content)) {
-                LOGGER.warn("Chat model returned a bare serialised tool payload as its answer; "
+                // Deliberately does not say "tool payload": this helper also serves the tool-less
+                // simple-chat path, where a JSON-shaped reply is not a tool result and naming one
+                // would mislead whoever is triaging the log.
+                LOGGER.warn("Chat model returned a bare JSON object or array as its answer; "
                         + "treating it as no direct answer (#1708)");
                 return new Extracted(content, Source.TOOL_PAYLOAD);
             }
@@ -85,35 +92,41 @@ final class ChatResponseText {
         return new Extracted(BLANK_RESPONSE_FALLBACK, Source.BLANK);
     }
 
+    private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
+    private static final Pattern JSON_FENCE =
+            Pattern.compile("(?s)\\A```(?:json)?\\s*(.*?)\\s*```\\z", Pattern.CASE_INSENSITIVE);
+
     /**
-     * Whether {@code content} is nothing but a serialised JSON <em>object or array</em>.
+     * Whether {@code content} is nothing but a serialised JSON object or array (#1708).
      *
-     * <p>Deliberately whole-string: an answer that <em>contains</em> JSON — a fenced example, a
-     * quoted identifier — is a legitimate answer and must not be discarded. Only a reply that is
-     * itself a payload, start to finish, is the #1708 defect. The check is structural rather than a
-     * parse: it needs no JSON dependency here, and a truncated payload is just as much "not an
-     * answer" as a well-formed one.
+     * <p>Decided by an actual parse rather than by inspecting the first and last characters. The
+     * character check produced a false positive on ordinary prose that merely opened and closed
+     * with braces and contained a quote — {@code {Top vendor is "Cascade Parts" at $12,000}} — and
+     * a false positive here is the worst outcome available: the reply is routed to the fallback
+     * ladder, so a real answer is silently replaced. A parse cannot make that mistake.
      *
-     * <p>Scalars are deliberately out of scope. A bare {@code "text"}, {@code 42} or {@code null}
-     * is not a tool payload — {@code 42} is a plausible answer to "how many open work orders?" —
-     * and treating one as a non-answer would discard a legitimate reply, which is the failure this
-     * guard must not cause. Every payload observed in #1708 was an object.
+     * <p>A fenced block is unwrapped first. A model told not to reply with bare JSON is at least as
+     * likely to fence it, and a fenced payload is the same defect with three backticks in front.
+     *
+     * <p>Scalars are deliberately out of scope: a bare {@code 42} is a plausible answer to "how
+     * many open work orders?", and {@code "OK"} to a confirmation. Every payload observed in #1708
+     * was an object.
      */
     private static boolean isBareToolPayload(@NonNull String content) {
         String trimmed = content.strip();
-        if (trimmed.length() < 2) {
+        Matcher fence = JSON_FENCE.matcher(trimmed);
+        if (fence.matches()) {
+            trimmed = fence.group(1).strip();
+        }
+        if (trimmed.isEmpty() || (trimmed.charAt(0) != '{' && trimmed.charAt(0) != '[')) {
             return false;
         }
-        char first = trimmed.charAt(0);
-        char last = trimmed.charAt(trimmed.length() - 1);
-        boolean object = first == '{' && last == '}';
-        boolean array = first == '[' && last == ']';
-        if (!(object || array)) {
+        try {
+            JsonNode parsed = PAYLOAD_MAPPER.readTree(trimmed);
+            return parsed != null && (parsed.isObject() || parsed.isArray());
+        } catch (JacksonException notJson) {
             return false;
         }
-        // A payload carries at least one quoted key or element; prose that merely opens and closes
-        // with a brace does not.
-        return trimmed.indexOf('"') >= 0;
     }
 
     private static @NonNull String stripThinkBlocks(@Nullable String text) {

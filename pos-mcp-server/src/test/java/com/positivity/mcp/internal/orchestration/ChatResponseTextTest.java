@@ -88,12 +88,39 @@ class ChatResponseTextTest {
     }
 
     @Test
-    @DisplayName("prose that happens to open and close with braces is not a payload")
+    @DisplayName("prose that opens and closes with braces is not a payload, even with a quoted name in it")
     void extractDetailed_braceWrappedProse_isStillContent() {
-        ChatResponseText.Extracted extracted =
-                ChatResponseText.extractDetailed(new AssistantMessage("{see the attached summary}"));
+        assertThat(ChatResponseText.extractDetailed(new AssistantMessage("{see the attached summary}"))
+                        .source())
+                .isEqualTo(ChatResponseText.Source.CONTENT);
+        // The sample that matters: the earlier character-based check flagged this as a payload
+        // because it starts with '{', ends with '}' and contains a quote — silently replacing a
+        // real answer with the ladder's fallback, which is the worst outcome this guard can cause.
+        assertThat(ChatResponseText.extractDetailed(
+                                new AssistantMessage("{Top vendor is \"Cascade Parts\" at $12,000}"))
+                        .source())
+                .isEqualTo(ChatResponseText.Source.CONTENT);
+    }
 
-        assertThat(extracted.source()).isEqualTo(ChatResponseText.Source.CONTENT);
+    @Test
+    @DisplayName("a fenced JSON payload is caught too")
+    void extractDetailed_fencedPayload_isNotContent() {
+        // A model told not to reply with bare JSON is at least as likely to fence it.
+        String fenced = "```json\n{\"startDate\":\"2026-03-01\",\"rows\":[]}\n```";
+
+        assertThat(ChatResponseText.extractDetailed(new AssistantMessage(fenced))
+                        .source())
+                .isEqualTo(ChatResponseText.Source.TOOL_PAYLOAD);
+    }
+
+    @Test
+    @DisplayName("malformed JSON-looking text is not a payload")
+    void extractDetailed_truncatedJson_isStillContent() {
+        // A parse decides this now. Truncated output is a different defect and must not be routed
+        // to the ladder on the strength of looking a bit like JSON.
+        assertThat(ChatResponseText.extractDetailed(new AssistantMessage("{\"startDate\":\"2026-03-01\","))
+                        .source())
+                .isEqualTo(ChatResponseText.Source.CONTENT);
     }
 
     @Test

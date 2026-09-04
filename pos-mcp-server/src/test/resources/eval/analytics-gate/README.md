@@ -246,8 +246,12 @@ statement with its shape label (`calendar span: …`, `rolling: …`, `prior com
 DATE_WINDOW contract requires the model to quote that statement — so the shape is observable with no
 production change.
 
+- `shape`, `unit`, `count` and `comparison` are all graded. A right shape with the wrong count is a
+  FAIL: answering q12 on one calendar month where six were specified is the wrong window, and
+  grading the label alone would call it correct.
 - `also_accept` lets a question admit more than one correct shape. q04 buckets by month, so six
-  `ABSOLUTE` resolutions satisfy it as well as one `CALENDAR_SPAN`; both have been observed.
+  `ABSOLUTE` resolutions satisfy it as well as one `CALENDAR_SPAN` — and **six** is checked, not
+  "at least one": a single named month is the under-answer that actually occurred on 2026-09-04.
 - `as_of_offset_days` handles the questions where an endpoint genuinely matters and no resolver
   shape describes it — point-in-time questions (q05, q13). Expressed as an offset from the run's own
   as-of date (option 2), so any run can satisfy it.
@@ -256,12 +260,28 @@ production change.
   question is #1689 work. Eight non-gate questions are unannotated for the same reason.
 
 An answer that quotes no statement grades **UNGRADED**, never PASS: the contract requires the quote,
-and silence about the window is not evidence the window was right.
+and silence about the window is not evidence the window was right. A turn with no answer at all
+(timeout, HTTP error) is likewise UNGRADED — a transport failure is not a window failure, and
+keeping them separable is the point of grading per stage.
+
+In replay mode a window FAIL **fails the run**. Answering the right question on the wrong six months
+is a wrong answer, and a verdict that ignored it would report PASS for exactly the failures this
+grading exists to catch.
 
 ### What this deliberately does not check
 
-Endpoints for relative windows, and `q16`'s day-count edge — whether "the next 14 days" starts today
-or tomorrow is still open (#1681), so its shape and unit are graded and its endpoints are not.
+Endpoints for relative windows.
+
+**q16 is unannotated entirely.** It asks for bills due in the *next* 14 days, and the resolver has no
+forward shape — `ROLLING` is `start = today - N + 1, end = today`. A `ROLLING` expectation would
+therefore pass an answer that used the wrong, backward window and leave a correct forward answer
+UNGRADED. It needs either a forward shape in the resolver or an endpoint-based expectation; the
+day-count edge is separately open in #1681.
+
+**q07 and q17 are unannotated** because their own notes say the corpus cannot support an
+expectation: q07's mixed comparison does not trigger the calendar precedence under the shipped
+contract (both windows read rolling), and q17 names no window at all. Asserting a shape for either
+would convert an acknowledged gap into ground truth that lies — the failure mode #1659 was.
 
 ## Which actor to run as
 

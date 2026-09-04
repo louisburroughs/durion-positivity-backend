@@ -173,26 +173,58 @@ _STATEMENT_LABELS = {
     "calendar span": "CALENDAR_SPAN",
     "absolute": "ABSOLUTE",
 }
+# The comparison window carries its own label, so a question expecting one can check the model
+# actually resolved it rather than only that it picked the right primary shape.
+_COMPARISON_LABELS = {"prior period": "PRIOR_PERIOD", "year earlier": "YEAR_EARLIER"}
+
+_ALL_LABELS = {**_STATEMENT_LABELS, **_COMPARISON_LABELS}
+_LABEL_ALTERNATION = "|".join(sorted(_ALL_LABELS, key=len, reverse=True))
 _STATEMENT_RE = re.compile(
-    r"\b(" + "|".join(sorted(_STATEMENT_LABELS, key=len, reverse=True)) + r")\s*:\s*\d{4}-\d{2}-\d{2}",
-    re.IGNORECASE,
+    r"\b(" + _LABEL_ALTERNATION + r")\s*:\s*"
+    r"(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\s*[^A-Za-z0-9]*"
+    # Non-greedy, stopping at the next label: a greedy clause ran to end of line and swallowed any
+    # further statement on it, so a multi-window answer reported only its first window.
+    r"(.*?)(?=\b(?:" + _LABEL_ALTERNATION + r")\s*:|$)",
+    re.IGNORECASE | re.MULTILINE,
 )
+_UNIT_RE = re.compile(r"\b(day|week|month|quarter|year)s?\b", re.IGNORECASE)
+_COUNT_RE = re.compile(r"(?<![\d-])(\d+)\s+(?:whole\s+)?(?:day|week|month|quarter|year)s?\b", re.IGNORECASE)
 
 
-def observed_shapes(answer):
-    """Every resolver shape the answer quotes, in order, de-duplicated.
+def parse_statements(answer):
+    """Every resolver statement the answer quotes, as {shape, unit, count} dicts, in order.
 
-    A question may legitimately quote more than one — q04 buckets six months and so resolves six
-    ABSOLUTE windows — so this returns all of them and the caller decides what satisfies the
-    expectation.
+    The clause after the dates carries the unit and (for the multi-period shapes) the count —
+    "6 whole months ending with the last complete month" — so the triple the #1709 decision asks
+    for is readable from the same string the shape came from.
     """
     if not answer:
         return []
-    seen = []
+    parsed = []
     for match in _STATEMENT_RE.finditer(answer):
-        shape = _STATEMENT_LABELS[match.group(1).lower()]
-        if shape not in seen:
-            seen.append(shape)
+        label, _start, _end, clause = match.groups()
+        unit = _UNIT_RE.search(clause)
+        count = _COUNT_RE.search(clause)
+        parsed.append(
+            {
+                "shape": _ALL_LABELS[label.lower()],
+                "unit": unit.group(1).upper() if unit else None,
+                # A shape that names exactly one period states no number; treat that as count 1
+                # rather than unknown, which is what PRIOR_COMPLETE and CURRENT_TO_DATE mean.
+                "count": int(count.group(1))
+                if count
+                else (1 if _ALL_LABELS[label.lower()] in {"PRIOR_COMPLETE", "CURRENT_TO_DATE"} else None),
+            }
+        )
+    return parsed
+
+
+def observed_shapes(answer):
+    """Primary shapes quoted by the answer, de-duplicated, comparison labels excluded."""
+    seen = []
+    for statement in parse_statements(answer):
+        if statement["shape"] in _STATEMENT_LABELS.values() and statement["shape"] not in seen:
+            seen.append(statement["shape"])
     return seen
 
 
@@ -212,22 +244,59 @@ def grade_window(question, answer, as_of):
 
     if wanted is None:
         if "as_of_offset_days" in expected and as_of is not None:
+            if not answer:
+                # A transport failure is not a window failure. Keeping them separable is the whole
+                # point of grading per stage.
+                return "UNGRADED", "no answer to read an as-of date from"
             target = as_of + timedelta(days=int(expected["as_of_offset_days"]))
-            if answer and target.isoformat() in answer:
+            if target.isoformat() in answer:
                 return "PASS", f"answer states the as-of date {target.isoformat()}"
             return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
         return "UNGRADED", expected.get("note") or "no window expectation recorded"
 
+    statements = parse_statements(answer)
     observed = observed_shapes(answer)
     if not observed:
         return "UNGRADED", (
             "the answer quotes no resolver statement, so the shape cannot be read from it "
             "(the DATE_WINDOW contract requires quoting it)"
         )
+
     acceptable = {wanted, *expected.get("also_accept", [])}
-    if acceptable & set(observed):
-        return "PASS", f"expected {wanted}, answer quotes {observed}"
-    return "FAIL", f"expected {wanted}, answer quotes {observed}"
+    matching = [s for s in statements if s["shape"] in acceptable]
+    if not matching:
+        return "FAIL", f"expected {wanted}, answer quotes {observed}"
+
+    # Shape alone is not the decision recorded on #1709 — it asks for the triple. A question
+    # answered on ONE calendar month where six were specified is the wrong window, and grading only
+    # the label would call it a pass.
+    problems = []
+    want_unit = expected.get("unit")
+    if want_unit and not any(statement["unit"] == want_unit.upper() for statement in matching):
+        problems.append(f"unit: expected {want_unit.upper()}, answer quotes {[s['unit'] for s in matching]}")
+
+    want_count = expected.get("count")
+    if want_count is not None:
+        absolute = [s for s in matching if s["shape"] == "ABSOLUTE"]
+        if absolute and len(absolute) == len(matching):
+            # A named period states no count; for a bucketed question the count is how many were
+            # resolved. One ABSOLUTE month does not satisfy "six months" — that was q04's actual
+            # under-answer on the 2026-09-04 run.
+            if len(absolute) != want_count:
+                problems.append(
+                    f"count: expected {want_count} periods, answer quotes {len(absolute)} ABSOLUTE window(s)"
+                )
+        elif not any(statement["count"] == want_count for statement in matching):
+            problems.append(f"count: expected {want_count}, answer quotes {[s['count'] for s in matching]}")
+
+    wanted_comparison = expected.get("comparison")
+    if wanted_comparison and wanted_comparison != "NONE":
+        if not any(s["shape"] == wanted_comparison for s in statements):
+            problems.append(f"comparison: expected a {wanted_comparison} window, answer quotes none")
+
+    if problems:
+        return "FAIL", f"shape {wanted} matched, but " + "; ".join(problems)
+    return "PASS", f"expected {wanted}, answer quotes {observed}"
 
 
 def questions_provenance(path):
@@ -808,6 +877,9 @@ def write_markdown(out_dir, record):
             f"Replay report: `{record['replay_report']}` - questions graded:"
             f" {len(record['results'])}",
             (
+                f"Window grading: {record['summary'].get('window_counts')}"
+            ),
+            (
                 f"Overall verdict: **{record['summary']['verdict']}**"
                 + (" — but see the VOID banner above; this verdict is not usable" if record.get("void") else "")
             ),
@@ -1062,12 +1134,22 @@ def main(argv=None):
 
     if replay_by_fixture is not None:
         outcome_counts = Counter(result["outcome"] for result in record["results"])
+        # A window FAIL must be able to fail the run. Recording it in a JSON field a reader has to go
+        # looking for is the same "clean-looking report" failure #1706 was about, one axis down.
+        window_counts = Counter(
+            (result.get("window_check") or {}).get("verdict", "UNGRADED") for result in record["results"]
+        )
         failed = sum(result["verdict"] == "FAIL" for result in record["results"])
+        window_failed = window_counts.get("FAIL", 0)
         record["summary"] = {
-            "verdict": "PASS" if failed == 0 else "FAIL",
+            # A window FAIL fails the run. The window is not a side note: answering the right
+            # question on the wrong six months is a wrong answer, and a verdict that ignored it
+            # would report PASS for exactly the q09/q12/q15 failures this work exists to catch.
+            "verdict": "PASS" if failed == 0 and window_failed == 0 else "FAIL",
             "passed": len(record["results"]) - failed,
             "failed": failed,
             "outcomes": dict(sorted(outcome_counts.items())),
+            "window_counts": dict(sorted(window_counts.items())),
         }
 
     (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
