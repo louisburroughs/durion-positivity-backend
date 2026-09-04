@@ -117,44 +117,41 @@ public class AccountingExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
     }
 
-    /**
-     * Journal entry lookup by id miss (get/update/post/reverse/traceability). 400
-     * VALIDATION_ERROR, deliberately not 404 — JournalEntryController's endpoint
-     * descriptions state this explicitly ("this module maps entry not-found to 400, not
-     * 404").
+    /*
+     * Not-found lookups (ADR-0017 §1, 404), each with its own code so clients can branch.
+     *
+     * JournalEntryNotFoundException, DefaultGLMappingNotFoundException and
+     * PostingRuleSetNotFoundException used to answer 400 here, "deliberately not 404" per
+     * @Operation prose that commit 52ed7b13 (issue #1694) added in the same change that flipped
+     * their @ApiResponse annotations from a pre-existing, unremarked 404 — with no ADR
+     * authorizing an override of ADR-0017 §1's default matrix (checked docs/adr/ and
+     * domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md, which documents
+     * PERIOD_NOT_FOUND as 404, the ADR-conformant default). All three name a genuinely missing
+     * addressed resource — a journal entry, GL mapping or posting rule set by id — so they
+     * converge on 404 here (review finding, same issue #1694). PostingRuleServiceImpl's
+     * publishRuleSet/archiveRuleSet/listVersionsAsResponse gained their own existence check
+     * (throwing this exception) alongside this change: they previously never reached it for a
+     * genuinely missing rule set, masking the miss as a misleading 400 "no DRAFT/PUBLISHED
+     * version" or a silent 200 empty list.
      */
     @ExceptionHandler(JournalEntryNotFoundException.class)
     public ResponseEntity<ApiError> handleJournalEntryNotFound(
             JournalEntryNotFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
+        return build(HttpStatus.NOT_FOUND, "JOURNAL_ENTRY_NOT_FOUND", ex.getMessage(), request);
     }
 
-    /**
-     * Default GL mapping lookup by id miss (get/update/deactivate). 400
-     * DEFAULT_GL_MAPPING_NOT_FOUND, deliberately not 404 —
-     * DefaultGLMappingController's endpoint descriptions state this explicitly
-     * ("mapped as VALIDATION_ERROR, not 404").
-     */
     @ExceptionHandler(DefaultGLMappingNotFoundException.class)
     public ResponseEntity<ApiError> handleDefaultGLMappingNotFound(
             DefaultGLMappingNotFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "DEFAULT_GL_MAPPING_NOT_FOUND", ex.getMessage(), request);
+        return build(HttpStatus.NOT_FOUND, "DEFAULT_GL_MAPPING_NOT_FOUND", ex.getMessage(), request);
     }
 
-    /**
-     * Posting rule set lookup by id miss (get/update/publish/archive/list-versions). 400
-     * POSTING_RULE_SET_NOT_FOUND, deliberately not 404 — PostingRuleController's endpoint
-     * descriptions state this explicitly ("mapped as VALIDATION_ERROR, not 404").
-     */
     @ExceptionHandler(PostingRuleSetNotFoundException.class)
     public ResponseEntity<ApiError> handlePostingRuleSetNotFound(
             PostingRuleSetNotFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "POSTING_RULE_SET_NOT_FOUND", ex.getMessage(), request);
+        return build(HttpStatus.NOT_FOUND, "POSTING_RULE_SET_NOT_FOUND", ex.getMessage(), request);
     }
 
-    /*
-     * Not-found lookups (ADR-0017 §1, 404), each with its own code so clients can branch.
-     */
     @ExceptionHandler(GLAccountNotFoundException.class)
     public ResponseEntity<ApiError> handleGLAccountNotFound(GLAccountNotFoundException ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, "GL_ACCOUNT_NOT_FOUND", ex.getMessage(), request);

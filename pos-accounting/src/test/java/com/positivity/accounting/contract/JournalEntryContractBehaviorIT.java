@@ -317,17 +317,18 @@ class JournalEntryContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Get non-existent journal entry - 400 bad request")
+    @DisplayName("Get non-existent journal entry - 404 not found")
     void testGetJournalEntry_NotFound() throws Exception {
         // Given - random UUID that doesn't exist
         UUID nonExistentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        // When/Then - Service throws JournalEntryNotFoundException, mapped to 400
-        // VALIDATION_ERROR via AccountingExceptionHandler (deliberately not 404 — see
-        // JournalEntryController's endpoint descriptions).
+        // When/Then - Service throws JournalEntryNotFoundException, mapped to 404
+        // JOURNAL_ENTRY_NOT_FOUND via AccountingExceptionHandler (issue #1694 review finding:
+        // converges on ADR-0017 §1's default for a missing addressed resource).
         mockMvc.perform(withAuth(get(API_V1_JOURNAL_ENTRIES + "/{journalEntryId}", nonExistentId)))
                 .andDo(print())
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("JOURNAL_ENTRY_NOT_FOUND"));
     }
 
     @Test

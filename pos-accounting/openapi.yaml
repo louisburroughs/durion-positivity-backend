@@ -1943,7 +1943,7 @@ paths:
 
         Emits an ACCOUNTING_DEFAULT_MAPPING_DELETE event.
 
-        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404), and 204 with no body on success.
+        Returns 204 with no body on success, and 404 DEFAULT_GL_MAPPING_NOT_FOUND when no default mapping exists for the supplied id.
 
         '
       operationId: deactivateDefaultMapping
@@ -1958,10 +1958,10 @@ paths:
       responses:
         '204':
           description: Default mapping deactivated
-        '400':
-          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
         '403':
           description: Forbidden
+        '404':
+          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:default-mapping:delete
@@ -1981,7 +1981,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404).
+        Returns 404 DEFAULT_GL_MAPPING_NOT_FOUND when no default mapping exists for the supplied id.
 
         '
       operationId: getDefaultMapping
@@ -2000,18 +2000,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Default mapping returned
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
-          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultGLMappingResponse'
+          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:default-mapping:view
@@ -2031,7 +2031,7 @@ paths:
 
         Emits an ACCOUNTING_DEFAULT_MAPPING_UPDATE event; future postings resolve against the updated pair while already-posted entries are untouched.
 
-        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404), 404 GL_ACCOUNT_NOT_FOUND when a referenced GL account does not exist, and 422 GL_ACCOUNT_NOT_ACTIVE when it exists but is not active on the current date.
+        Returns 404 DEFAULT_GL_MAPPING_NOT_FOUND when no default mapping exists for the supplied id, 404 GL_ACCOUNT_NOT_FOUND when a referenced GL account does not exist, and 422 GL_ACCOUNT_NOT_ACTIVE when it exists but is not active on the current date.
 
         '
       operationId: updateDefaultMapping
@@ -2065,12 +2065,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
           description: Default mapping updated
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DefaultGLMappingResponse'
-          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)
         '403':
           content:
             application/json:
@@ -2082,7 +2076,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DefaultGLMappingResponse'
-          description: Referenced GL account not found (GL_ACCOUNT_NOT_FOUND)
+          description: No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND), or a referenced GL account not found (GL_ACCOUNT_NOT_FOUND)
         '422':
           content:
             application/json:
@@ -3535,7 +3529,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id (this module maps entry not-found to 400, not 404).
+        Returns 404 JOURNAL_ENTRY_NOT_FOUND when no journal entry exists for the supplied id.
 
         '
       operationId: getJournalEntry
@@ -3554,12 +3548,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
           description: Journal entry returned
-        '400':
+        '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-          description: No journal entry exists for the identifier (VALIDATION_ERROR)
+          description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:je:view
@@ -3579,7 +3573,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_UPDATE event; GL balances are unchanged because drafts are not yet in the ledger.
 
-        Returns 400 VALIDATION_ERROR when the entry id does not exist (this module maps entry not-found to 400, not 404), 409 when the entry is no longer DRAFT, and 422 UNBALANCED_ENTRY when the updated entry is unbalanced.
+        Returns 404 JOURNAL_ENTRY_NOT_FOUND when the entry id does not exist, 409 when the entry is no longer DRAFT, and 422 UNBALANCED_ENTRY when the updated entry is unbalanced.
 
         '
       operationId: updateJournalEntry
@@ -3616,12 +3610,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
           description: Journal entry updated
-        '400':
+        '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryResponse'
-          description: No journal entry exists for the identifier (VALIDATION_ERROR)
+          description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -3654,7 +3648,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_POST event and returns the posted entry.
 
-        Returns 400 VALIDATION_ERROR when no entry exists for the id (this module maps entry not-found to 400, not 404) or overrideJustification exceeds 500 characters, 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED or PERIOD_HARD_LOCKED for domain-policy or period-gate failures.
+        Returns 400 ARGUMENT_NOT_VALID when overrideJustification exceeds 500 characters, 404 JOURNAL_ENTRY_NOT_FOUND when no entry exists for the id, 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED or PERIOD_HARD_LOCKED for domain-policy or period-gate failures.
 
         '
       operationId: postJournalEntry
@@ -3689,13 +3683,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: No journal entry exists for the identifier (VALIDATION_ERROR), or the overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)
+          description: overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks the accounting:je:post permission
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -3728,7 +3728,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
 
-        Returns 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures, and 400 when the reason is blank or the entry does not exist.
+        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures.
 
         '
       operationId: reverseJournalEntry
@@ -3765,13 +3765,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Reason is missing or blank (ARGUMENT_NOT_VALID), or no journal entry exists for the identifier (VALIDATION_ERROR)
+          description: Reason is missing or blank (ARGUMENT_NOT_VALID)
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Caller lacks the accounting:je:reverse permission
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -3804,7 +3810,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id.
+        Returns 404 JOURNAL_ENTRY_NOT_FOUND when no journal entry exists for the supplied id.
 
         '
       operationId: getJournalEntryTraceability
@@ -3823,12 +3829,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
           description: Journal traceability returned
-        '400':
+        '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntryTraceabilityResponse'
-          description: No journal entry exists for the identifier (VALIDATION_ERROR)
+          description: Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:je:view
@@ -5282,7 +5288,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 when no posting rule set exists for the supplied id (mapped as VALIDATION_ERROR, not 404).
+        Returns 404 POSTING_RULE_SET_NOT_FOUND when no posting rule set exists for the supplied id.
 
         '
       operationId: getPostingRuleSet
@@ -5301,7 +5307,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostingRuleSetResponse'
           description: Posting rule set returned
-        '400':
+        '404':
           content:
             application/json:
               schema:
@@ -5326,7 +5332,7 @@ paths:
 
         Emits an ACCOUNTING_POSTING_RULE_UPDATE event.
 
-        Returns 409 when a PUBLISHED version already exists, and 400 when the rule set id cannot be resolved (mapped as VALIDATION_ERROR, not 404).
+        Returns 404 POSTING_RULE_SET_NOT_FOUND when the rule set id cannot be resolved, and 409 when a PUBLISHED version already exists.
 
         '
       operationId: updatePostingRuleSet
@@ -5360,7 +5366,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostingRuleSetResponse'
           description: Posting rule set updated
-        '400':
+        '404':
           content:
             application/json:
               schema:
@@ -5392,7 +5398,7 @@ paths:
 
         Emits an ACCOUNTING_POSTING_RULE_ARCHIVE event.
 
-        Returns 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — mapped as VALIDATION_ERROR, not 404) or no PUBLISHED version exists to archive.
+        Returns 400 when no PUBLISHED version exists to archive, and 404 POSTING_RULE_SET_NOT_FOUND when no posting rule set exists for the supplied id.
 
         '
       operationId: archivePostingRuleSet
@@ -5416,7 +5422,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostingRuleVersionResponse'
-          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND), or no PUBLISHED version exists to archive
+          description: No PUBLISHED version exists to archive
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:posting_rules:archive
@@ -5437,7 +5449,7 @@ paths:
 
         Emits an ACCOUNTING_POSTING_RULE_PUBLISH event; subsequent accounting events for the event type post through the new version.
 
-        Returns 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — mapped as VALIDATION_ERROR, not 404) or no DRAFT version exists or its definition is empty, and 422 UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when publish-time validation fails.
+        Returns 400 when no DRAFT version exists or its definition is empty, 404 POSTING_RULE_SET_NOT_FOUND when no posting rule set exists for the supplied id, and 422 UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when publish-time validation fails.
 
         '
       operationId: publishPostingRuleSet
@@ -5461,7 +5473,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostingRuleVersionResponse'
-          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND), or no DRAFT version exists to publish
+          description: No DRAFT version exists to publish
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostingRuleVersionResponse'
+          description: No posting rule set exists for the identifier (POSTING_RULE_SET_NOT_FOUND)
       security:
       - bearerAuth:
         - accounting:posting_rules:publish
@@ -5482,7 +5500,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with an empty list when the page index is beyond the version history, and 400 when no posting rule set exists for the supplied id (POSTING_RULE_SET_NOT_FOUND — mapped as VALIDATION_ERROR, not 404).
+        Returns 200 with an empty list when the page index is beyond the version history, and 404 POSTING_RULE_SET_NOT_FOUND when no posting rule set exists for the supplied id.
 
         '
       operationId: listPostingRuleVersions
@@ -5521,7 +5539,7 @@ paths:
                   $ref: '#/components/schemas/PostingRuleVersionResponse'
                 type: array
           description: Posting rule versions listed
-        '400':
+        '404':
           content:
             application/json:
               schema:

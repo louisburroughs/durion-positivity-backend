@@ -206,7 +206,8 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
                             .header("X-User", "test-user")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(validRequest)))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code", is("DEFAULT_GL_MAPPING_NOT_FOUND")));
         }
     }
 
@@ -240,7 +241,8 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
             mockMvc.perform(delete("/v1/accounting/default-mappings/{id}", unknownId)
                             .header("X-Authorities", TEST_AUTHORITIES)
                             .header("X-User", "test-user"))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code", is("DEFAULT_GL_MAPPING_NOT_FOUND")));
         }
     }
 
@@ -276,7 +278,8 @@ class DefaultGLMappingControllerTest extends BaseIntegrationTest {
             mockMvc.perform(get("/v1/accounting/default-mappings/{id}", unknownId)
                             .header("X-Authorities", TEST_AUTHORITIES)
                             .header("X-User", "test-user"))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code", is("DEFAULT_GL_MAPPING_NOT_FOUND")));
         }
     }
 

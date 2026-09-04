@@ -48,7 +48,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * {@code com.positivity.accounting.internal.config.AccountingExceptionHandler} (unscoped) for
  * every controller in this module; the two are kept separate along their existing thematic
  * split (AP-payment/vendor-bill operator actions here, everything else there) and no exception
- * type is ever mapped in both.
+ * type is mapped in both — {@code IllegalStateException} deliberately is NOT mapped here
+ * (it previously was, duplicating {@code AccountingExceptionHandler#handleIllegalState}, which
+ * left the answered error {@code code} dependent on Spring bean registration order — issue
+ * #1694 review finding). It is mapped exactly once, in {@code AccountingExceptionHandler}, whose
+ * {@code resolveStateErrorCode} distinguishes {@code ENTRY_ALREADY_POSTED} from a generic
+ * conflict; that handler answers state conflicts for every controller in this module, this one
+ * included.
  */
 @RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
 @RequiredArgsConstructor
@@ -69,12 +75,6 @@ public class APPaymentExceptionHandler {
             IdempotencyConflictException ex, HttpServletRequest request) {
         log.warn("Idempotency conflict: {}", ex.getMessage());
         return build(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", ex.getMessage(), request);
-    }
-
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
-        log.warn("Illegal state conflict: {}", ex.getMessage());
-        return build(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request);
     }
 
     @ExceptionHandler(ExportJobNotFoundException.class)

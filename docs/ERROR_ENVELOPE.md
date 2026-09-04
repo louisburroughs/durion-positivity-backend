@@ -220,9 +220,10 @@ Any service may therefore return these in addition to its module codes below.
 | `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
 | `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
 | `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
-| `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor |
-| `DEFAULT_GL_MAPPING_NOT_FOUND` | 400 | Referenced default GL mapping does not exist (mapped as 400, not 404, by design) |
-| `POSTING_RULE_SET_NOT_FOUND` | 400 | Referenced posting rule set does not exist (mapped as 400, not 404, by design) |
+| `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor (a failed match, not a missing addressed resource) |
+| `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
+| `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
+| `POSTING_RULE_SET_NOT_FOUND` | 404 | Referenced posting rule set does not exist |
 
 ### pos-catalog
 | Code | Status | Description |

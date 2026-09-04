@@ -140,4 +140,33 @@ class APPaymentControllerErrorHandlingTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.correlationId").value(CLIENT_CORRELATION_ID))
                 .andExpect(header().string("X-Correlation-Id", CLIENT_CORRELATION_ID));
     }
+
+    /**
+     * Regression pin (issue #1694 review finding): {@code IllegalStateException} used to be
+     * mapped in both {@code AccountingExceptionHandler} (unscoped) and this controller's
+     * {@code APPaymentExceptionHandler} (scoped to this package), so which advice answered — and
+     * therefore which {@code code} the client received for the same 409 — depended on Spring bean
+     * registration order. {@code APPaymentExceptionHandler} no longer maps the type at all, so
+     * {@code AccountingExceptionHandler#handleIllegalState} is now the only possible answerer for
+     * this AP-payment endpoint. It runs the message through {@code resolveStateErrorCode}, which
+     * falls through to {@code ILLEGAL_STATE} for a message matching none of the special-cased
+     * journal/period phrasings — the opposite of the generic {@code CONFLICT} the deleted
+     * duplicate always returned, so a regression back to bean-order-dependent behavior (or to the
+     * deleted handler winning the race) would flip this code and fail the test.
+     */
+    @Test
+    @DisplayName(
+            "A state conflict deterministically answers AccountingExceptionHandler's code, not the deleted duplicate's")
+    void aStateConflictAnswersTheSurvivingHandlersCodeDeterministically() throws Exception {
+        when(apPaymentService.getPaymentByRef(anyString())).thenReturn(Optional.empty());
+        when(apPaymentService.executePayment(any(), anyString()))
+                .thenThrow(new IllegalStateException("Vendor payment gateway session is not open"));
+
+        mockMvc.perform(withAuth(post("/v1/accounting/ap/payments"), "accounting:ap:pay")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_PAYMENT_REQUEST))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ILLEGAL_STATE"))
+                .andExpect(jsonPath("$.message").value("Vendor payment gateway session is not open"));
+    }
 }

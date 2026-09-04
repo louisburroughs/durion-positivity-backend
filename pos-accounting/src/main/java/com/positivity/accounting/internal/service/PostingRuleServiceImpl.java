@@ -99,6 +99,11 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersionResponse publishRuleSet(UUID ruleSetId) {
+        // Existence is checked separately from version-state (issue #1694 review finding): a
+        // ruleSetId that names no posting rule set at all must answer 404
+        // POSTING_RULE_SET_NOT_FOUND, not the misleading 400 "No DRAFT version found to publish"
+        // that findVersionsByRuleSetId's empty list would otherwise produce for either cause.
+        findRuleSetById(ruleSetId);
         List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         PostingRuleVersion draftVersion = versions.stream()
                 .filter(v -> v.getState() == PostingRuleSetState.DRAFT)
@@ -111,6 +116,10 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersionResponse archiveRuleSet(UUID ruleSetId) {
+        // See publishRuleSet above: existence is checked first so a missing rule set answers 404
+        // POSTING_RULE_SET_NOT_FOUND rather than the misleading 400 "No PUBLISHED version found
+        // to archive".
+        findRuleSetById(ruleSetId);
         List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         PostingRuleVersion publishedVersion = versions.stream()
                 .filter(v -> v.getState() == PostingRuleSetState.PUBLISHED)
@@ -140,6 +149,12 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId, int page, int size) {
+        // Existence is checked separately from the (possibly legitimately empty, for an
+        // out-of-range page) version list (issue #1694 review finding): a ruleSetId that names
+        // no posting rule set at all must answer 404 POSTING_RULE_SET_NOT_FOUND rather than
+        // silently returning 200 with an empty list indistinguishable from a real rule set whose
+        // requested page is past its version history.
+        findRuleSetById(ruleSetId);
         List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         // Apply pagination
         int fromIndex = page * size;
