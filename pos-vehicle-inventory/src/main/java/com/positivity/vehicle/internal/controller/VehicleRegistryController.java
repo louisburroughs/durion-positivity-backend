@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehicle.internal.dto.VehicleFactReplayResultDto;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.internal.service.VehicleFactReplayService;
@@ -41,8 +42,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>
  * Failures are left to {@code VehicleExceptionHandler}, which maps
- * {@code EntityNotFoundException} to 404 and {@code IllegalArgumentException} to
- * 400 and returns the {@code ApiError} envelope (ADR-0017) in both cases.
+ * {@code EntityNotFoundException} to 404, {@code VehicleValidationException} to
+ * 400 and {@code VehicleVinConflictException} to 409, returning the
+ * {@code ApiError} envelope (ADR-0017) in each case.
  */
 @Tag(name = "Vehicle Registry API", description = "Operations for creating and maintaining vehicle registry records")
 @RequiredArgsConstructor
@@ -89,12 +91,20 @@ public class VehicleRegistryController {
                     are optional.
                     Emits a VEHICLE_CREATE event and queues a vehicle.vehicle.updated fact on the vehicle.events.v1 \
                     outbox for downstream replicas.
-                    Returns 201 with the created record, and 400 with a VALIDATION_ERROR ApiError when the VIN is \
-                    malformed or an active vehicle already holds the same normalized VIN; the duplicate-VIN case is \
-                    reported as 400, not 409.
+                    Returns 201 with the created record, 400 with a VALIDATION_ERROR ApiError when the VIN is \
+                    malformed, and 409 with a VEHICLE_VIN_CONFLICT ApiError when an active vehicle already holds \
+                    the same normalized VIN, since that is a collision with existing state rather than a \
+                    malformed request.
                     """)
     @ApiResponse(responseCode = "201", description = "Vehicle created successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid vehicle request.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid vehicle request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "An active vehicle already holds this VIN.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_CREATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

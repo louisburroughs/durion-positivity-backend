@@ -33,7 +33,7 @@ paths:
 
         Emits a VEHICLE_CREATE event and queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
 
-        Returns 201 with the created record, and 400 with a VALIDATION_ERROR ApiError when the VIN is malformed or an active vehicle already holds the same normalized VIN; the duplicate-VIN case is reported as 400, not 409.
+        Returns 201 with the created record, 400 with a VALIDATION_ERROR ApiError when the VIN is malformed, and 409 with a VEHICLE_VIN_CONFLICT ApiError when an active vehicle already holds the same normalized VIN, since that is a collision with existing state rather than a malformed request.
 
         '
       operationId: createVehicle
@@ -69,8 +69,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid vehicle request.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: An active vehicle already holds this VIN.
       security:
       - bearerAuth: []
       summary: Create vehicle
@@ -1097,6 +1103,54 @@ paths:
       - vehicle-inventory:preferences:manage
 components:
   schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     BulkIngestRequestVehicleBulkIngestRecord:
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
       properties:
@@ -1232,6 +1286,21 @@ components:
       required:
       - accountId
       - vin
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
       type: object
     PreferencesMergeDto:
       description: Request to partially merge fields into existing vehicle care preferences

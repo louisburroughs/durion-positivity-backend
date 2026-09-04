@@ -268,6 +268,14 @@ Any service may therefore return these in addition to its module codes below.
 | Dynamic `CustomerRequirementsNotMetException` codes | 409/503 | Customer-requirements verdict blocked workorder creation; see that exception |
 | `FORBIDDEN` | 403 | Caller lacks required workorder permissions |
 
+### pos-vehicle-inventory
+| Code | Status | Description |
+|------|--------|-------------|
+| `VALIDATION_FAILED` | 400 | Bean-validation failure (with `fieldErrors`), or Jakarta constraint violation on a path/query parameter |
+| `VALIDATION_ERROR` | 400 | Field-level or request-shape validation failure (`VehicleValidationException`) (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, code unchanged) |
+| `RESOURCE_NOT_FOUND` | 404 | Vehicle or care-preference document not found |
+| `VEHICLE_VIN_CONFLICT` | 409 | An active vehicle already holds the requested VIN — a stateful collision (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, which had reported this same case as 400) |
+
 ---
 
 ## Client Handling Guidelines

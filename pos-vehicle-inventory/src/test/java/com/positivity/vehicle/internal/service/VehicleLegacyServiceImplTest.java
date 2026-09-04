@@ -16,6 +16,7 @@ import com.positivity.vehicle.internal.entity.CommercialTruck;
 import com.positivity.vehicle.internal.entity.PassengerTruck;
 import com.positivity.vehicle.internal.entity.Van;
 import com.positivity.vehicle.internal.entity.VehicleEntity;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -124,7 +125,7 @@ class VehicleLegacyServiceImplTest {
         void unsupportedTypeIsRejected() {
             // Without this validation, "MOTORCYCLE" would silently persist as a Car.
             assertThatThrownBy(() -> service.createVehicle(request("MOTORCYCLE", null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VehicleValidationException.class)
                     .hasMessageContaining("MOTORCYCLE");
 
             verifyNoInteractions(vehicleDao);
@@ -169,7 +170,7 @@ class VehicleLegacyServiceImplTest {
             } else {
                 // 1886 is the first model year; the +1 buffer admits next year's models mid-cycle.
                 assertThatThrownBy(() -> service.createVehicle(request))
-                        .isInstanceOf(IllegalArgumentException.class)
+                        .isInstanceOf(VehicleValidationException.class)
                         .hasMessageContaining("year");
             }
         }
@@ -180,19 +181,19 @@ class VehicleLegacyServiceImplTest {
             VehicleLegacyRequest noMake = request("CAR", null);
             noMake.setMake("  ");
             assertThatThrownBy(() -> service.createVehicle(noMake))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VehicleValidationException.class)
                     .hasMessageContaining("make");
 
             VehicleLegacyRequest noModel = request("CAR", null);
             noModel.setModel(null);
             assertThatThrownBy(() -> service.createVehicle(noModel))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VehicleValidationException.class)
                     .hasMessageContaining("model");
 
             VehicleLegacyRequest noYear = request("CAR", null);
             noYear.setYear(null);
             assertThatThrownBy(() -> service.createVehicle(noYear))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VehicleValidationException.class)
                     .hasMessageContaining("year");
         }
 
@@ -204,7 +205,7 @@ class VehicleLegacyServiceImplTest {
 
             // Null means "no VIN recorded"; blank means the caller sent something broken.
             assertThatThrownBy(() -> service.createVehicle(request("CAR", "   ")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VehicleValidationException.class)
                     .hasMessageContaining("blank");
         }
 
@@ -227,7 +228,7 @@ class VehicleLegacyServiceImplTest {
         void vinRequired(String vin) {
             // A vehicle created by VIN without one would be unreachable through these endpoints.
             assertThatThrownBy(() -> service.createVehicleByVin(request("CAR", vin.isEmpty() ? null : vin)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VehicleValidationException.class)
                     .hasMessageContaining("vin");
 
             verifyNoInteractions(vehicleDao);

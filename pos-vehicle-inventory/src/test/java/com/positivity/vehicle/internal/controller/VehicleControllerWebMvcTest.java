@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import com.positivity.vehicle.internal.service.VehicleLegacyService;
 import java.util.List;
 import java.util.Optional;
@@ -87,7 +88,7 @@ class VehicleControllerWebMvcTest {
     @Test
     @DisplayName("POST turns a rejected create into 400, not 500")
     void createRejectionIsBadRequest() throws Exception {
-        when(vehicleLegacyService.createVehicle(any())).thenThrow(new IllegalArgumentException("bad VIN"));
+        when(vehicleLegacyService.createVehicle(any())).thenThrow(new VehicleValidationException("bad VIN"));
 
         mockMvc.perform(post(PATH)
                         .header(AUTH, BEARER)

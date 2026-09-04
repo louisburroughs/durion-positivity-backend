@@ -4,6 +4,7 @@ import com.positivity.vehicle.internal.dao.VehicleDao;
 import com.positivity.vehicle.internal.dto.VehicleLegacyMapper;
 import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import java.time.Clock;
 import java.time.Year;
 import java.util.List;
@@ -134,8 +135,10 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
     }
 
     private void validateVehicleRequest(@NonNull VehicleLegacyRequest request, boolean vinRequired) {
+        // Reachable: the controller's @RequestBody carries no @Valid/@NotNull here, so a
+        // literal `null` JSON body reaches this method (issue #1694).
         if (request == null) {
-            throw new IllegalArgumentException("Vehicle request cannot be null");
+            throw new VehicleValidationException("Vehicle request cannot be null");
         }
 
         validateRequiredText(request.getMake(), "make");
@@ -153,7 +156,7 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
     private void validateRequiredText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " is required");
+            throw new VehicleValidationException(fieldName + " is required");
         }
     }
 
@@ -164,21 +167,28 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
         var normalizedType = vehicleType.trim().toUpperCase(Locale.ROOT);
         if (!ALLOWED_VEHICLE_TYPES.contains(normalizedType)) {
-            throw new IllegalArgumentException("Unsupported vehicleType: " + vehicleType);
+            throw new VehicleValidationException("Unsupported vehicleType: " + vehicleType);
         }
     }
 
     private void validateYear(Integer year) {
         if (year == null) {
-            throw new IllegalArgumentException("year is required");
+            throw new VehicleValidationException("year is required");
         }
 
         int maxYear = Year.now(clock).getValue() + FUTURE_YEAR_BUFFER;
         if (year < MIN_MODEL_YEAR || year > maxYear) {
-            throw new IllegalArgumentException("year must be between " + MIN_MODEL_YEAR + " and " + maxYear);
+            throw new VehicleValidationException("year must be between " + MIN_MODEL_YEAR + " and " + maxYear);
         }
     }
 
+    /**
+     * Defensive/(d): every caller passes a {@code @PathVariable UUID id}; Spring's own type
+     * conversion rejects a missing or malformed path segment (400, unmapped by this module)
+     * before the controller method — and therefore this service method — is ever invoked, so a
+     * null id cannot reach here through HTTP today. Left as a bare IllegalArgumentException, not
+     * retyped, so a future direct/internal caller still fails loudly (issue #1694).
+     */
     private void validateId(UUID id) {
         if (id == null) {
             throw new IllegalArgumentException("id is required");
@@ -192,14 +202,14 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
         var normalized = vin.trim();
         if (normalized.isEmpty()) {
-            throw new IllegalArgumentException("vin must not be blank");
+            throw new VehicleValidationException("vin must not be blank");
         }
         return Optional.of(normalized);
     }
 
     private String normalizeRequiredVin(String vin, String fieldName) {
         if (vin == null || vin.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " is required");
+            throw new VehicleValidationException(fieldName + " is required");
         }
         return vin.trim();
     }

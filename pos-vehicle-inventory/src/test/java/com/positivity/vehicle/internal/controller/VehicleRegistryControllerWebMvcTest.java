@@ -17,6 +17,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
+import com.positivity.vehicle.internal.exception.VehicleVinConflictException;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.internal.service.VehicleFactReplayService;
 import com.positivity.vehicle.internal.service.VehicleService;
@@ -40,8 +42,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * <p>
  * The controller no longer catches anything (#1269); the mapping now belongs to
  * {@code VehicleExceptionHandler} and is still the contract:
- * {@link EntityNotFoundException} becomes 404 and {@link IllegalArgumentException}
- * becomes 400. Those two arrive from the same service methods, so collapsing them
+ * {@link EntityNotFoundException} becomes 404, {@code VehicleValidationException}
+ * becomes 400, and {@code VehicleVinConflictException} becomes 409 (issue #1694).
+ * Those first two arrive from the same service methods, so collapsing them
  * would turn "you asked for something that does not exist" into "your request was
  * malformed", or the reverse. The pair is pinned on both update and delete.
  *
@@ -139,7 +142,7 @@ class VehicleRegistryControllerWebMvcTest {
     void updateDistinguishesNotFoundFromBadRequest() throws Exception {
         when(vehicleService.updateVehicle(eq(VEHICLE_ID), any()))
                 .thenThrow(new EntityNotFoundException("no such vehicle"))
-                .thenThrow(new IllegalArgumentException("unit number too long"));
+                .thenThrow(new VehicleValidationException("unit number too long"));
 
         // Two consecutive calls, two different exceptions from the same method. Collapsing the
         // advice's two handlers would make one of these silently report the other.
@@ -224,9 +227,9 @@ class VehicleRegistryControllerWebMvcTest {
     }
 
     @Test
-    @DisplayName("POST turns a rejected create into 400 carrying the reason, not 500")
-    void createRejectionCarriesApiError() throws Exception {
-        when(vehicleService.createVehicle(any())).thenThrow(new IllegalArgumentException("duplicate VIN"));
+    @DisplayName("POST turns a malformed-VIN rejection into 400 carrying the reason, not 500")
+    void createValidationRejectionCarriesApiError() throws Exception {
+        when(vehicleService.createVehicle(any())).thenThrow(new VehicleValidationException("malformed VIN"));
 
         // The status alone was never the useful part: before #1269 the 400 had an empty body, so
         // the reason the service rejected the request was written to the log and discarded.
@@ -236,6 +239,25 @@ class VehicleRegistryControllerWebMvcTest {
                         .content(CREATE_BODY))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("malformed VIN"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("POST turns a duplicate-VIN rejection into 409, not 400 (issue #1694)")
+    void createDuplicateVinConflictCarriesApiError() throws Exception {
+        when(vehicleService.createVehicle(any())).thenThrow(new VehicleVinConflictException("duplicate VIN"));
+
+        // A duplicate VIN is a collision with existing state, not a malformed request (ADR-0017
+        // §2) — before issue #1694 this shared the blanket IllegalArgumentException handler and
+        // answered 400 VALIDATION_ERROR, a status the endpoint's own docs called out as
+        // deliberate; that was the defect the blanket handler's limited vocabulary forced.
+        mockMvc.perform(post(PATH)
+                        .header(AUTH, BEARER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("VEHICLE_VIN_CONFLICT"))
                 .andExpect(jsonPath("$.message").value("duplicate VIN"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
