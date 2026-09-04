@@ -3,6 +3,7 @@ package com.positivity.people.internal.controller;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.shared.error.ApiError;
@@ -91,6 +92,31 @@ public class PeopleExceptionHandler {
                         "VALIDATION_ERROR",
                         ex.getMessage(),
                         HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * Stateful collisions raised by this module's own controllers/services (see {@link
+     * ResourceStateConflictException}): the request is well-formed, but the resource's current
+     * status blocks the requested transition. This class deliberately does NOT route these
+     * guards through bare {@code IllegalStateException} (issue #1694 follow-up): that type is
+     * not exclusive to a lifecycle guard — {@code SecurityContextHelper} throws it for a missing
+     * security context (a server-side/auth defect), and the JDK/Spring throw it for unrelated
+     * misuse — so mapping it broadly would have only moved the #1694 bug class, not removed it.
+     * The pre-existing {@link #handleIllegalState} mapping is left untouched for whatever else
+     * still reaches it.
+     */
+    @ExceptionHandler(ResourceStateConflictException.class)
+    public ResponseEntity<ApiError> handleResourceStateConflict(
+            ResourceStateConflictException ex, HttpServletRequest request, HttpServletResponse response) {
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "RESOURCE_STATE_CONFLICT",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

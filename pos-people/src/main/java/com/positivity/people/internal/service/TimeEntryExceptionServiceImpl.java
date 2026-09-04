@@ -5,6 +5,7 @@ import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.enums.ExceptionStatus;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -84,13 +85,16 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
                 .findById(exceptionId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
 
-        // Validate transition is allowed. This is a stateful collision (ADR-0017: 409), not
+        // Validate transition is allowed. This is a stateful collision (ADR-0017 §2: 409), not
         // request-shape validation: the request is well-formed, but the exception's current
-        // status (a terminal state) blocks the requested transition.
+        // status (a terminal state) blocks the requested transition. Bare IllegalStateException
+        // is not used here (issue #1694 follow-up): it is also what the "No current user" guard
+        // above throws for a missing security context, which is a server-side defect, not a
+        // resource-state collision.
         if (ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.RESOLVED
                 || ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.WAIVED) {
             // Cannot transition from RESOLVED or WAIVED states
-            throw new IllegalStateException("Cannot modify exception in " + ex.getStatus() + " status");
+            throw new ResourceStateConflictException("Cannot modify exception in " + ex.getStatus() + " status");
         }
 
         // Apply action

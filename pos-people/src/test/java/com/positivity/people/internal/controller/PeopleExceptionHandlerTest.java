@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.shared.error.ApiError;
@@ -103,6 +104,29 @@ class PeopleExceptionHandlerTest {
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().correlationId()).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
         assertThat(response.getHeader("X-Correlation-Id")).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
+    }
+
+    /**
+     * Pins the wire response for the reclassified lifecycle guards (issue #1694 follow-up):
+     * status, code, envelope shape, and correlation id, so a future revert to 400 or to bare
+     * {@code IllegalStateException} fails this suite.
+     */
+    @Test
+    void mapsAResourceStateConflictToConflictWithCodeAndCorrelationId() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ResponseEntity<ApiError> result = handler.handleResourceStateConflict(
+                new ResourceStateConflictException("Employee is already DISABLED or TERMINATED"), request, response);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ApiError body = result.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("RESOURCE_STATE_CONFLICT");
+        assertThat(body.message()).isEqualTo("Employee is already DISABLED or TERMINATED");
+        assertThat(body.status()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(body.correlationId()).isNotBlank();
+        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
     }
 
     @Test

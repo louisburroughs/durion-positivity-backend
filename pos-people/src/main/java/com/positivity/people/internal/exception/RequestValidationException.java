@@ -20,7 +20,7 @@ package com.positivity.people.internal.exception;
  *
  * <p>A check that instead depends on the current state of an entity (a status that blocks the
  * requested transition) is a stateful collision, not a field-validation failure, and belongs
- * on {@link IllegalStateException} (mapped {@code 409}) — not this type.
+ * on {@link ResourceStateConflictException} (mapped {@code 409}) — not this type.
  */
 public class RequestValidationException extends RuntimeException {
 

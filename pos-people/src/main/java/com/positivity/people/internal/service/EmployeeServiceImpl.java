@@ -17,6 +17,7 @@ import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
@@ -201,14 +202,17 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .findByPersonId(employeeId)
                 .orElseThrow(() -> new PersonNotFoundException(employeeId));
 
-        // Both checks are stateful collisions (ADR-0017: 409), not request-shape validation: the
-        // request itself is well-formed, but the employee's current status blocks this transition.
+        // Both checks are stateful collisions (ADR-0017 §2: 409), not request-shape validation:
+        // the request itself is well-formed, but the employee's current status blocks this
+        // transition. Bare IllegalStateException is not used here (issue #1694 follow-up): it is
+        // also what SecurityContextHelper throws for a missing security context, which is a
+        // server-side defect, not a resource-state collision.
         EmployeeStatus currentStatus = employee.getStatus();
         if (currentStatus == EmployeeStatus.DISABLED || currentStatus == EmployeeStatus.TERMINATED) {
-            throw new IllegalStateException("Employee is already DISABLED or TERMINATED");
+            throw new ResourceStateConflictException("Employee is already DISABLED or TERMINATED");
         }
         if (currentStatus != EmployeeStatus.ACTIVE) {
-            throw new IllegalStateException("Only ACTIVE employees can be disabled");
+            throw new ResourceStateConflictException("Only ACTIVE employees can be disabled");
         }
 
         employee.setStatus(EmployeeStatus.DISABLED);
