@@ -13,6 +13,7 @@ import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -225,8 +226,8 @@ class PeopleReportsServiceTest {
         LocalDate endDate = LocalDate.parse("2026-02-10");
         List<UUID> locations = List.of(locationId);
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        RequestValidationException exception = assertThrows(
+                RequestValidationException.class,
                 () -> service.getApprovedTimeForExport(startDate, endDate, locations, "test-actor", "corr-1"));
 
         assertTrue(exception.getMessage().contains("endDate"));
@@ -240,8 +241,8 @@ class PeopleReportsServiceTest {
         List<UUID> locations = List.of(locationId);
         when(locationReferenceService.isLocationActive(locationId)).thenReturn(false);
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        RequestValidationException exception = assertThrows(
+                RequestValidationException.class,
                 () -> service.getApprovedTimeForExport(startDate, endDate, locations, "test-actor", "corr-1"));
 
         assertTrue(exception.getMessage().contains("Unknown locationId"));

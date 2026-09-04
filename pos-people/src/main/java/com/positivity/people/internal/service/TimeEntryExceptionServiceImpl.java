@@ -84,11 +84,13 @@ public class TimeEntryExceptionServiceImpl implements TimeEntryExceptionService 
                 .findById(exceptionId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("exception not found"));
 
-        // Validate transition is allowed
+        // Validate transition is allowed. This is a stateful collision (ADR-0017: 409), not
+        // request-shape validation: the request is well-formed, but the exception's current
+        // status (a terminal state) blocks the requested transition.
         if (ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.RESOLVED
                 || ex.getStatus() == com.positivity.people.internal.enums.ExceptionStatus.WAIVED) {
             // Cannot transition from RESOLVED or WAIVED states
-            throw new IllegalArgumentException("Cannot modify exception in " + ex.getStatus() + " status");
+            throw new IllegalStateException("Cannot modify exception in " + ex.getStatus() + " status");
         }
 
         // Apply action

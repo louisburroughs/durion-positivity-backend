@@ -291,7 +291,7 @@ class TimeEntryExceptionIntakeTest {
             when(exceptionRepository.findById(EXCEPTION_ID)).thenReturn(Optional.of(entity(ExceptionStatus.WAIVED)));
 
             assertThatThrownBy(() -> service.actionException(EXCEPTION_ID, ExceptionStatus.ACKNOWLEDGED, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("WAIVED");
         }
 

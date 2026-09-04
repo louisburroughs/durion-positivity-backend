@@ -4,6 +4,7 @@ import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.exception.NotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -43,11 +44,11 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
     @NonNull
     public TimeEntryAdjustmentResponse createAdjustment(@NonNull TimeEntryAdjustmentRequest request) {
         if (request.getReasonCode() == null || request.getReasonCode().isBlank()) {
-            throw new IllegalArgumentException("reasonCode is required");
+            throw new RequestValidationException("reasonCode is required");
         }
 
         if (request.getTimeEntryId() == null) {
-            throw new IllegalArgumentException("timeEntryId is required");
+            throw new RequestValidationException("timeEntryId is required");
         }
 
         Optional<com.positivity.people.internal.entity.TimeEntry> entryOptional =
@@ -63,12 +64,12 @@ public class TimeEntryAdjustmentServiceImpl implements TimeEntryAdjustmentServic
         boolean hasProposedTimes = request.getProposedStartAt() != null || request.getProposedEndAt() != null;
         boolean hasMinutesDelta = request.getMinutesDelta() != null;
         if (!(hasProposedTimes ^ hasMinutesDelta)) {
-            throw new IllegalArgumentException(
+            throw new RequestValidationException(
                     "Provide either both proposedStartAt and proposedEndAt, OR minutesDelta (exactly one)");
         }
 
         if (hasProposedTimes && (request.getProposedStartAt() == null || request.getProposedEndAt() == null)) {
-            throw new IllegalArgumentException("Both proposedStartAt and proposedEndAt must be provided together");
+            throw new RequestValidationException("Both proposedStartAt and proposedEndAt must be provided together");
         }
 
         com.positivity.people.internal.entity.TimeEntryAdjustment adjustment =

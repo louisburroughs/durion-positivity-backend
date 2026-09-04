@@ -201,12 +201,14 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .findByPersonId(employeeId)
                 .orElseThrow(() -> new PersonNotFoundException(employeeId));
 
+        // Both checks are stateful collisions (ADR-0017: 409), not request-shape validation: the
+        // request itself is well-formed, but the employee's current status blocks this transition.
         EmployeeStatus currentStatus = employee.getStatus();
         if (currentStatus == EmployeeStatus.DISABLED || currentStatus == EmployeeStatus.TERMINATED) {
-            throw new IllegalArgumentException("Employee is already DISABLED or TERMINATED");
+            throw new IllegalStateException("Employee is already DISABLED or TERMINATED");
         }
         if (currentStatus != EmployeeStatus.ACTIVE) {
-            throw new IllegalArgumentException("Only ACTIVE employees can be disabled");
+            throw new IllegalStateException("Only ACTIVE employees can be disabled");
         }
 
         employee.setStatus(EmployeeStatus.DISABLED);

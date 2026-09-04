@@ -146,7 +146,7 @@ class TimeEntryExceptionServiceTest {
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
 
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(IllegalStateException.class, () -> {
             service.actionException(id, com.positivity.people.internal.enums.ExceptionStatus.WAIVED, null, "cid-7");
         });
 

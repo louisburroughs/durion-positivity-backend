@@ -577,7 +577,7 @@ class EmployeeServiceImplTest {
             DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
 
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("already DISABLED or TERMINATED");
         }
 
@@ -588,7 +588,7 @@ class EmployeeServiceImplTest {
             DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
 
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalStateException.class);
         }
 
         @Test
@@ -598,7 +598,7 @@ class EmployeeServiceImplTest {
             DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
 
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Only ACTIVE employees can be disabled");
         }
     }

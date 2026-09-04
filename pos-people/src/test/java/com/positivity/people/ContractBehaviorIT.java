@@ -15,6 +15,7 @@ import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimekeepingPolicy;
 import com.positivity.people.internal.enums.TimekeepingPolicyScopeType;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -133,7 +134,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("endDate", "2026-02-17")
                         .param("timezone", "Not/AZone")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("timezone must be a valid IANA timezone"));
+                .andExpect(jsonPath("$.message").value("timezone must be a valid IANA timezone"));
     }
 
     @Test
@@ -188,7 +189,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .param("locationId", locationId.toString())
                         .header("X-Authorities", "accounting:time:export")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("endDate must be on or after startDate"));
+                .andExpect(jsonPath("$.message").value("endDate must be on or after startDate"));
     }
 
     @Test
@@ -287,13 +288,13 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 				""";
 
         when(timeEntryService.rejectEntries(anyList(), anyMap(), anyString()))
-                .thenThrow(new IllegalArgumentException("rejectionReason is required for all decisions"));
+                .thenThrow(new RequestValidationException("rejectionReason is required for all decisions"));
 
         mockMvc.perform(withAuth(post("/v1/people/timeEntries/reject")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("rejectionReason is required for all decisions"));
+                .andExpect(jsonPath("$.message").value("rejectionReason is required for all decisions"));
     }
 
     @Test

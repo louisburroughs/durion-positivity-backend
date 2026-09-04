@@ -13,6 +13,7 @@ import com.positivity.people.internal.dto.AttendanceReportKey;
 import com.positivity.people.internal.entity.ExtJobTimeReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -302,7 +303,7 @@ class AttendanceDiscrepancyReportTest {
     void rejectsAnInvertedDateRange() {
         assertThatThrownBy(() -> service.getAttendanceDiscrepancyReport(
                         DAY, DAY.minusDays(1), TIMEZONE, LOCATION_ID, List.of(), false, ACTOR, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RequestValidationException.class)
                 .hasMessageContaining("endDate must be on or after startDate");
     }
 
@@ -310,7 +311,7 @@ class AttendanceDiscrepancyReportTest {
     void rejectsATimezoneThatIsNotAnIanaZone() {
         assertThatThrownBy(() -> service.getAttendanceDiscrepancyReport(
                         DAY, DAY, "Mars/Olympus", LOCATION_ID, List.of(), false, ACTOR, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RequestValidationException.class)
                 .hasMessageContaining("timezone must be a valid IANA timezone");
     }
 
