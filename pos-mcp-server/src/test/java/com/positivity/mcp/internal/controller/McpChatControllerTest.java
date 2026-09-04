@@ -130,7 +130,14 @@ class McpChatControllerTest {
         when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
                 .thenThrow(new RuntimeException("boom"));
 
+        // The principal is what the other tests supply and this one did not: without it
+        // CurrentUserContextResolver.resolve(null) does not match the @BeforeEach stub, returns
+        // null, and the controller NPEs before orchestration is ever called (#1711).
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user", "n/a", List.of(new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
         mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"test\"}"))
@@ -142,6 +149,10 @@ class McpChatControllerTest {
                 .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+        // #1711: the 500 envelope is identical whether the failure came from orchestration or from
+        // an NPE earlier in the controller, so without this the test passes while covering neither.
+        verify(agentOrchestrationService).chat(any(CurrentUserContext.class), anyString());
     }
 
     @Test

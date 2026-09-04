@@ -72,7 +72,14 @@ public class OpenApiOperationExecutor {
                     operation.name(),
                     exception.getClass().getSimpleName(),
                     exception);
-            return "Error: tool execution failed (" + exception.getClass().getSimpleName() + ")";
+            // The string IS the tool result the model reads, so it must carry something the model
+            // can act on (#1711). The class name alone told it nothing: "IllegalArgumentException"
+            // is not a fact it can correct an argument from, while "Unsupported period 'Q2-2026':
+            // pass YYYY-MM or YYYY" is. Control flow is deliberately unchanged — this path renders
+            // rather than throws, and the message is the whole of what was missing.
+            String detail = rootMessage(exception);
+            return "Error: tool execution failed (" + exception.getClass().getSimpleName() + ")"
+                    + (detail.isBlank() ? "" : ": " + detail);
         }
     }
 
@@ -120,5 +127,21 @@ public class OpenApiOperationExecutor {
                         .map(c -> ((McpSchema.TextContent) c).text())
                         .collect(Collectors.joining("\n"));
         return Boolean.TRUE.equals(result.isError()) ? "Error: " + text : text;
+    }
+
+    /** The deepest non-blank message in the cause chain — the part a model can act on (#1711). */
+    private static String rootMessage(@NonNull Throwable thrown) {
+        String message = "";
+        Throwable current = thrown;
+        for (int depth = 0; current != null && depth < 20; depth++) {
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                message = current.getMessage();
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+            current = current.getCause();
+        }
+        return message;
     }
 }
