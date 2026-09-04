@@ -101,7 +101,7 @@ permission codes, named after that method (`getCustomer`, `calculateTax`, …). 
   still answer.
 - A method that requires no codes (e.g. `CustomerFacadeTool.getCustomerHistory`, which `.require()`s no leg)
   contributes **no group at all**. An empty group would make `bool_and` vacuously true and admit every caller.
-- This replaced a flat OR over the union of a tool's codes, under which a composition's *least*-privileged leg
+- This replaced a flat OR over the union of a tool's codes, under which a composition's _least_-privileged leg
   admitted the whole tool: a technician holding only `workorder:workorder:view` was offered `CustomerFacadeTool`,
   whose `getCustomer` needs `crm:party:view` and 403s downstream (#1606 finding 1).
 - Discovered (`source='openapi'`) operations deliberately keep **OR** semantics. That is enforced by the data, not a
@@ -144,16 +144,16 @@ sectioned JSON envelope: `{"composition":..,"status":..,"sections":{..},"sources
 tool, and a 401/403 leg renders as `not_authorized` without relaying the downstream response body. The current
 compositions and their legs:
 
-| Tool | Downstream legs |
-| --- | --- |
-| `getFinancialSummary` | accounting income-statement + balance-sheet + trial-balance |
-| `getRevenueReport` | accounting income-statement (revenue lines) + aged-receivables |
-| `getCustomerHistory` | CRM snapshot + interactions + invoice line-item search by `partyId` (de-duped by invoice) + workorder search by customer |
-| `getShopStatus` | location record + shop-manager schedule board + workorder workexec WIP |
-| `getShopQueue` | workorder workexec WIP + shop-manager schedule board |
-| `getPriceForSku` | catalog detailed product search (active MSRP); a supplied `locationId` adds a dependent effective-price leg fed by the first leg's product id |
-| `calculateTax` | gateway location lookup (destination address) + direct pos-tax `POST /v1/tax/calculate` |
-| `getTaxRate` | gateway location lookup (destination address) + direct pos-tax `GET /v1/tax/rates` |
+| Tool                  | Downstream legs                                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getFinancialSummary` | accounting income-statement + balance-sheet + trial-balance                                                                                   |
+| `getRevenueReport`    | accounting income-statement (revenue lines) + aged-receivables                                                                                |
+| `getCustomerHistory`  | CRM snapshot + interactions + invoice line-item search by `partyId` (de-duped by invoice) + workorder search by customer                      |
+| `getShopStatus`       | location record + shop-manager schedule board + workorder workexec WIP                                                                        |
+| `getShopQueue`        | workorder workexec WIP + shop-manager schedule board                                                                                          |
+| `getPriceForSku`      | catalog detailed product search (active MSRP); a supplied `locationId` adds a dependent effective-price leg fed by the first leg's product id |
+| `calculateTax`        | gateway location lookup (destination address) + direct pos-tax `POST /v1/tax/calculate`                                                       |
+| `getTaxRate`          | gateway location lookup (destination address) + direct pos-tax `GET /v1/tax/rates`                                                            |
 
 **Contract chain.** What keeps the facades honest: every `@Tool` method's verb + path lives in
 `src/test/resources/facade-contract.yaml` (compositions list every leg), and facade tests derive their
@@ -176,7 +176,7 @@ re-derivation migration (`V37`) re-derives the seeds against the restored target
 aging methods, and `V40` (#1606) repartitions all 16 facades into per-method AND-groups. `V40`'s header carries the
 full tool → group → codes derivation table; `FacadeToolPermissionSeedTest` replays the whole chain and asserts it.
 
-The seed mirrors each downstream controller's *declared* authorization, not the product intent of the facade: for
+The seed mirrors each downstream controller's _declared_ authorization, not the product intent of the facade: for
 every backend endpoint a `@Tool` method calls, the merged class + method `@PreAuthorize` is read and
 `hasAuthority('X')` / `hasAnyAuthority('X','Y')` contribute codes `X`, `Y`. Since `V40` those codes are grouped per
 `@Tool` method rather than unioned across the tool class, and only a composition's `.require()`d legs contribute.
@@ -214,7 +214,7 @@ self-heals without a restart — and does so shortly after the deploys that caus
 it off.
 
 **Spec-identity guard (#1632).** After a rolling deploy, a stale Eureka registration can route a domain's doc URL to a
-*different* service (on alpha, `/invoice/v3/api-docs` briefly served pos-price's spec — 200 OK and parseable, so no
+_different_ service (on alpha, `/invoice/v3/api-docs` briefly served pos-price's spec — 200 OK and parseable, so no
 transport or parse guard fires). Discovery therefore verifies each fetched per-service spec's `info.title` against its
 routing token and treats a mismatch as a **failed fetch**: the wrong domain's ops are not registered under the prefix,
 and the domain's previously-registered ops are kept, not pruned. Titles that are missing, blank, or springdoc's default
@@ -239,7 +239,18 @@ performance_score = (success_rate * 0.6) + ((1 - normalized_latency) * 0.3) + ..
 Tuning is enabled by default with a runtime kill switch (`mcp.tuning.enabled`). Owning classes: `ToolAuditService`,
 `ToolPriorityTuningService`.
 
-`mcp_tool_invocation_log` records *that* a tool ran, never its arguments — those carry customer identifiers. One
+## Offline Replay Eval (#1682)
+
+Alpha-only, property-gated (`mcp.eval.turn-trace.enabled`, default on for alpha) capture of one immutable
+JSON trace per completed/failed chat turn — assembled system prompt, offered tool definitions, ordered
+tool calls with arguments/results, and the final response or error — persisted with a configurable
+retention window and cleaned up on a schedule. Twelve committed fixtures replay the live analytics gate's
+`in_chat_path_gate` questions against a real model with canned tool responses, so a candidate fix is
+verifiable without an alpha deploy-and-run cycle. See `src/test/resources/eval/README.md` (§"Offline
+replay eval") for capture, fixture, replay and grading details, and `OfflineReplayEvalIT` /
+`scripts/analytics_gate_run.py --replay-report` to run it.
+
+`mcp_tool_invocation_log` records _that_ a tool ran, never its arguments — those carry customer identifiers. One
 exception is logged rather than stored, because its arguments carry none: `DateWindowFacadeTool` emits an INFO line
 per resolution (#1684),
 
@@ -289,31 +300,31 @@ or similarity floors.
 
 ## Configuration
 
-| Property                                   | Env / Default                               | Description                                                                               |
-| ------------------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `spring.ai.ollama.chat.options.model`      | `OLLAMA_CHAT_MODEL` `gpt-oss:120b`          | Deliberate default executor model (single default; tier routing may override per request) |
-| `spring.ai.ollama.chat.options.num-ctx`    | `OLLAMA_NUM_CTX` `32768`                    | Context window, sent to Ollama as `num_ctx`. Defaulted here for every profile so it is never inherited from the backend (#1683) — Ollama silently drops the front of the context, i.e. the system prompt, once the prompt exceeds the window. A request, not a guarantee: a backend may cap it (see the runbook's truncation check). Override per host; don't set it empty |
-| `spring.ai.ollama.chat.options.temperature` | `OLLAMA_CHAT_TEMPERATURE` `0.0`            | Executor sampling temperature. 0 by default: the analytics gate is graded at n=1, so sampling only adds run-to-run variance |
-| `mcp.model.fallback.secondary-model-name`  | `OLLAMA_FALLBACK_MODEL` `gpt-oss:20b`       | Secondary model used when `mcp.model.fallback.enabled=true` (inherits the primary's temperature and `num_ctx`) |
-| `OLLAMA_CHAT_THINK`                         | _(unset)_                                   | `false`/`true` to force Ollama thinking off/on; unset leaves the model default. Set `false` for reasoning models that would otherwise return the answer in the `thinking` channel (blank `content`) |
-| `spring.ai.ollama.embedding.options.model` | `OLLAMA_EMBEDDING_MODEL` `nomic-embed-text` | Embedding model for RAG                                                                   |
-| `mcp.agent.cache-ttl-minutes`              | `30`                                        | Agent cache TTL (role agents + sessions)                                                  |
-| `mcp.agent.candidate-tool-limit`           | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8`        | Max candidate tools per chat request                                                      |
-| `mcp.rag.chunking.enabled`                 | `MCP_RAG_CHUNKING_ENABLED` `true`           | Chunk documents before embedding                                                          |
-| `mcp.rag.chunking.max-segment-size`        | `MCP_RAG_MAX_SEGMENT_SIZE`                  | Max chunk size                                                                            |
-| `mcp.rag.chunking.max-overlap-size`        | `MCP_RAG_MAX_OVERLAP_SIZE`                  | Chunk overlap                                                                             |
-| `mcp.rag.hybrid.lexical-enabled`           | `MCP_RAG_LEXICAL_ENABLED` `true`            | Include scoped PostgreSQL full-text hits in RRF fusion; set `false` for immediate rollback |
-| `mcp.rag.preload.docs`                     | `[]`                                        | Static classpath documents to preload                                                     |
-| `mcp.tuning.enabled`                       | `MCP_TUNING_ENABLED` `false`                | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0)         |
-| `mcp.tuning.cron`                          | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                             |
-| `mcp.model.fallback.enabled`               | `MCP_MODEL_FALLBACK_ENABLED`                | Primary → secondary model fallback                                                        |
-| `mcp.model.tiering-enabled`                | `MCP_MODEL_TIERING_ENABLED` `false`         | Gate 4 tier routing. **Dormant** (#1683): with `mcp.model.simple`/`complex` blank both T2 tiers resolve to the same model, so enabling it only pays for a per-turn classification call whose outcome cannot change which model answers |
-| `mcp.model.simple`                         | `MCP_MODEL_SIMPLE` _(blank)_                | T2-simple executor. Blank = the default executor model. Setting it to a genuinely smaller pulled model is the precondition for turning tiering back on |
-| `mcp.discovery.aggregate-spec-url`         | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                             |
-| `pos.tools.http.connect-timeout`           | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)             |
-| `pos.tools.http.read-timeout`              | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660) |
-| Exa web search                             | `EXA_API_KEY`                               | External web-search API key                                                               |
-| DB connection                              | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD`       | PostgreSQL + pgvector                                                                     |
+| Property                                    | Env / Default                               | Description                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spring.ai.ollama.chat.options.model`       | `OLLAMA_CHAT_MODEL` `gpt-oss:120b`          | Deliberate default executor model (single default; tier routing may override per request)                                                                                                                                                                                                                                                                                  |
+| `spring.ai.ollama.chat.options.num-ctx`     | `OLLAMA_NUM_CTX` `32768`                    | Context window, sent to Ollama as `num_ctx`. Defaulted here for every profile so it is never inherited from the backend (#1683) — Ollama silently drops the front of the context, i.e. the system prompt, once the prompt exceeds the window. A request, not a guarantee: a backend may cap it (see the runbook's truncation check). Override per host; don't set it empty |
+| `spring.ai.ollama.chat.options.temperature` | `OLLAMA_CHAT_TEMPERATURE` `0.0`             | Executor sampling temperature. 0 by default: the analytics gate is graded at n=1, so sampling only adds run-to-run variance                                                                                                                                                                                                                                                |
+| `mcp.model.fallback.secondary-model-name`   | `OLLAMA_FALLBACK_MODEL` `gpt-oss:20b`       | Secondary model used when `mcp.model.fallback.enabled=true` (inherits the primary's temperature and `num_ctx`)                                                                                                                                                                                                                                                             |
+| `OLLAMA_CHAT_THINK`                         | _(unset)_                                   | `false`/`true` to force Ollama thinking off/on; unset leaves the model default. Set `false` for reasoning models that would otherwise return the answer in the `thinking` channel (blank `content`)                                                                                                                                                                        |
+| `spring.ai.ollama.embedding.options.model`  | `OLLAMA_EMBEDDING_MODEL` `nomic-embed-text` | Embedding model for RAG                                                                                                                                                                                                                                                                                                                                                    |
+| `mcp.agent.cache-ttl-minutes`               | `30`                                        | Agent cache TTL (role agents + sessions)                                                                                                                                                                                                                                                                                                                                   |
+| `mcp.agent.candidate-tool-limit`            | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8`        | Max candidate tools per chat request                                                                                                                                                                                                                                                                                                                                       |
+| `mcp.rag.chunking.enabled`                  | `MCP_RAG_CHUNKING_ENABLED` `true`           | Chunk documents before embedding                                                                                                                                                                                                                                                                                                                                           |
+| `mcp.rag.chunking.max-segment-size`         | `MCP_RAG_MAX_SEGMENT_SIZE`                  | Max chunk size                                                                                                                                                                                                                                                                                                                                                             |
+| `mcp.rag.chunking.max-overlap-size`         | `MCP_RAG_MAX_OVERLAP_SIZE`                  | Chunk overlap                                                                                                                                                                                                                                                                                                                                                              |
+| `mcp.rag.hybrid.lexical-enabled`            | `MCP_RAG_LEXICAL_ENABLED` `true`            | Include scoped PostgreSQL full-text hits in RRF fusion; set `false` for immediate rollback                                                                                                                                                                                                                                                                                 |
+| `mcp.rag.preload.docs`                      | `[]`                                        | Static classpath documents to preload                                                                                                                                                                                                                                                                                                                                      |
+| `mcp.tuning.enabled`                        | `MCP_TUNING_ENABLED` `false`                | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0)                                                                                                                                                                                                                                                                                          |
+| `mcp.tuning.cron`                           | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                                                                                                                                                                                                                                                                                                              |
+| `mcp.model.fallback.enabled`                | `MCP_MODEL_FALLBACK_ENABLED`                | Primary → secondary model fallback                                                                                                                                                                                                                                                                                                                                         |
+| `mcp.model.tiering-enabled`                 | `MCP_MODEL_TIERING_ENABLED` `false`         | Gate 4 tier routing. **Dormant** (#1683): with `mcp.model.simple`/`complex` blank both T2 tiers resolve to the same model, so enabling it only pays for a per-turn classification call whose outcome cannot change which model answers                                                                                                                                     |
+| `mcp.model.simple`                          | `MCP_MODEL_SIMPLE` _(blank)_                | T2-simple executor. Blank = the default executor model. Setting it to a genuinely smaller pulled model is the precondition for turning tiering back on                                                                                                                                                                                                                     |
+| `mcp.discovery.aggregate-spec-url`          | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                                                                                                                                                                                                                                                                                                              |
+| `pos.tools.http.connect-timeout`            | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)                                                                                                                                                                                                                                                                                              |
+| `pos.tools.http.read-timeout`               | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660)                                                                                                                                                                                                             |
+| Exa web search                              | `EXA_API_KEY`                               | External web-search API key                                                                                                                                                                                                                                                                                                                                                |
+| DB connection                               | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD`       | PostgreSQL + pgvector                                                                                                                                                                                                                                                                                                                                                      |
 
 ### Static RAG preload (`alpha` profile)
 

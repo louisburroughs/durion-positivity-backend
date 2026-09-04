@@ -1,6 +1,7 @@
-package com.positivity.mcp.internal.eval;
+package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;

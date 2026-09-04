@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
-import com.positivity.mcp.internal.eval.EvalTurnTrace.ToolDefinitionTrace;
+import com.positivity.mcp.internal.domain.EvalTurnTrace.ToolDefinitionTrace;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;

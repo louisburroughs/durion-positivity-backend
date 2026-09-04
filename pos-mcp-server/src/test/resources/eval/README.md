@@ -3,6 +3,7 @@
 Source of truth for formats: `../../../../docs/phase0-fixtures-and-telemetry.md`.
 
 ## Layout
+
 ```
 eval/
   schema/        JSON Schema for each suite (authoring reference)
@@ -14,10 +15,13 @@ eval/
   write-safety/*.json     write-gate invariant fixtures
   tool-response/*.json    coverage fixtures: realistic-response vs no-tool-available (#1164)
   gap-harness/            synthetic question set + calibration for scripts/gap_harness (#1125)
+  offline-replay/*.json   offline replay eval fixtures (#1682) — tool-use + answer replayed
+                          against a real model with canned tool responses, no deploy needed
   baseline.json           metric baseline snapshot
 ```
 
 ## Harness halves
+
 1. **Structural** — `EvalFixtureValidationTest` (CI-safe, no model backend). Validates shape, ids,
    enums, role names, uniqueness. Runs on every build.
 2. **Metric** — hit@5 / MRR / recall@k + write-safety assertions. Drives the live tool-selection
@@ -25,6 +29,7 @@ eval/
    part of the structural CI test. Results land in `baseline.json`.
 
 ## Gate 0 exit status
+
 - Structural harness: **active**.
 - Minimum counts (≥100 tool-selection / ≥50 rag-retrieval / ≥30 write-safety): **met** —
   110 / 60 / 38 (seed + `generated.json` + `analytics-gate.json`). The `minimumFixtureCountsMet` test is
@@ -39,17 +44,17 @@ eval/
 
 The two gates count different things, and both numbers are right:
 
-| Gate | Suite | Counts | tool-selection | rag-retrieval |
-|---|---|---|---|---|
-| `EvalFixtureValidationTest.minimumFixtureCountsMet` | structural | **corpus size** — every fixture file entry | 110 | 60 |
-| `BaselineCaptureIT` hit@5 / MRR / recall@k | metric | **fixtures with a positive expectation** | 80 | 51 |
+| Gate                                                | Suite      | Counts                                     | tool-selection | rag-retrieval |
+| --------------------------------------------------- | ---------- | ------------------------------------------ | -------------- | ------------- |
+| `EvalFixtureValidationTest.minimumFixtureCountsMet` | structural | **corpus size** — every fixture file entry | 110            | 60            |
+| `BaselineCaptureIT` hit@5 / MRR / recall@k          | metric     | **fixtures with a positive expectation**   | 80             | 51            |
 
 The difference is the deliberate **negative set**: 30 tool-selection fixtures and 9 rag-retrieval
 fixtures that carry no positive expectation by design.
 
 - tool-selection: 30 permission-negative fixtures declare `expected.none: true` with
   `expected.tool_ids: []` and a non-empty `expected.forbidden_tool_ids` (tagged `permission-negative`).
-  They assert that a tool the actor lacks the permission for is *never* selected.
+  They assert that a tool the actor lacks the permission for is _never_ selected.
 - rag-retrieval: 9 visibility-negative fixtures pair `expected.doc_ids: []` with a non-empty
   `expected.forbidden_doc_ids` (tagged `visibility-negative`). Same idea for document visibility.
 
@@ -67,14 +72,14 @@ MCP baseline rag recall@k=...          scored=51 negativeOnly=9  skipped=0 total
 ```
 
 - **scored** — positive expectation, contributed to the metric.
-- **negativeOnly** — *self-declared* negative (the explicit flags above). Forbidden assertions ran.
+- **negativeOnly** — _self-declared_ negative (the explicit flags above). Forbidden assertions ran.
 - **skipped** — anything else: a missing `expected` block, a non-array `tool_ids`/`doc_ids`, a blank
   `fixture_id`/`utterance`/`query`, a missing `actor`, or an empty expectation that forbids nothing and
   therefore asserts nothing. **Asserted to be zero**, with each offender named as
   `file[fixture_id]: reason`.
 
 The classification is driven by an explicit property of the fixture, never by a fallback `else`: a
-fixture that is malformed in a way that merely *happens* to leave `tool_ids` empty lands in **skipped**,
+fixture that is malformed in a way that merely _happens_ to leave `tool_ids` empty lands in **skipped**,
 not in **negativeOnly**. The three counts are also asserted to sum to the total loaded, so the split
 cannot drift away from the corpus. The same breakdown is written to
 `target/eval/baseline-tool-selection.json` and `target/eval/baseline-rag-recall.json`
@@ -171,10 +176,11 @@ database and no model-quality judgement.
   returns exactly one tool and it is not that one. It carries no `forbidden_tool_ids`. The first
   live run (2026-08-31) established why — with the actor permitted to see `AdminFacadeTool`, that
   tool reaches the top-5 by ordinary semantic rank, which is correct behaviour, not the defect.
-  An earlier version of this fixture granted `security:user:view` *and* forbade the tool that grant
+  An earlier version of this fixture granted `security:user:view` _and_ forbade the tool that grant
   admits, which was incoherent; the grant has been removed.
   `q14-ar-balance-and-dso-by-month` carries the exclusion assertion instead, where it holds by
   construction: that actor holds no admin permission, so `AdminFacadeTool` cannot be returned at all.
+
 - `tool-selection-pending/analytics-gate-pending.json` — the other sixteen questions (Wave 2/3).
   Same schema (`schema/tool-selection.schema.json`), structurally validated by
   `EvalFixtureValidationTest.toolSelectionPendingFixturesValid`, but **not scored**: both scorers
@@ -192,7 +198,7 @@ actor deliberately holds `security:user:view` — without it `AdminFacadeTool` i
 fast path cannot fire, so the fixture would not reproduce the incident. These fixtures fail against
 a selector that still carries the un-narrowed keyword list; that is the point.
 
-**These fixtures are not the answer-gate question list (#1671).** They score which *tools* get
+**These fixtures are not the answer-gate question list (#1671).** They score which _tools_ get
 selected; nothing in either file says what a correct answer contains, and `analytics-gate.json`
 also carries `q13-admin-user-account-active`, an identity question that is not an analytics
 question at all. The versioned questions the chat-path gate actually asks live in
@@ -203,9 +209,49 @@ interchangeable — reading one for the other cost a round of window-semantics d
 each analytics question names its selection counterpart in `tool_selection_fixture_id`, and both
 suites carry a `suite_notes` saying which half they are.
 
-The questions, ground-truth SQL and fixture dataset for the *answer* half of the gate live under
+The questions, ground-truth SQL and fixture dataset for the _answer_ half of the gate live under
 `analytics-gate/` (see its README) — plan §7 treats a fixture change without a matching
 ground-truth change as a review blocker. `AnalyticsGateQuestionsTest` validates the question set
 structurally in ordinary CI, the same way `EvalFixtureValidationTest` validates these suites; the
 gate runner is `scripts/analytics_gate_run.py`, which records the question file's git blob sha in
 every run record.
+
+## Offline replay eval (#1682)
+
+Complements the live analytics gate (above) as a development signal, not a replacement for it: the
+live gate stays the acceptance signal, and offline replay is what makes a candidate fix verifiable
+without an alpha deploy-and-run cycle.
+
+- **Capture.** `AlphaEvalTurnTraceRecorder` (alpha profile + `mcp.eval.turn-trace.enabled=true`,
+  default on for alpha) records one immutable JSON trace per completed/failed chat turn — the
+  assembled system prompt, offered tool definitions, ordered tool calls with arguments/results, and
+  the final response or error — persisted to `mcp_eval_turn_trace` (24h retention by default,
+  cleaned up hourly by `AlphaEvalTraceRetentionScheduler`). Recording is fail-soft: a persistence
+  failure never affects the chat turn itself.
+- **Fixtures.** `offline-replay/analytics-gate-replay.json` carries one fixture per
+  `in_chat_path_gate` analytics-gate question (twelve today), each with a representative system
+  prompt, the tool definitions offered, canned tool responses (clean synthetic data, not a live
+  alpha capture — see the file's `suite_notes`), and machine-checkable expectations: the required
+  tool-call sequence, argument-key presence, and answer expectations (numbers with tolerance, id
+  sets/order, required/forbidden labels, and one of the four outcomes
+  `answered-correctly` / `asked-appropriately` / `declined-appropriately` / `failed`).
+  `OfflineReplayFixtureValidationTest` validates the fixture file structurally in ordinary CI (real
+  tool names, a fixture per gated question, no more and no less).
+- **Replay.** `OfflineReplayEvalIT` drives each fixture through the same bounded
+  `ToolCallingAdvisor` path production uses (`OfflineReplayEvaluator` reuses
+  `SpringAiPosAssistant.buildToolCallingChatClient`), with tool execution replaced by the fixture's
+  canned responses — no backend service, alpha database, or Eureka involved, only a directly-built
+  `ChatModel`. Gated on `-Dmcp.eval.replay=true`:
+
+  ```
+  OLLAMA_CHAT_BASE_URL=... OLLAMA_CHAT_MODEL=... \
+  ./mvnw -pl pos-mcp-server -Dmcp.eval.replay=true -Dit.test=OfflineReplayEvalIT verify
+  ```
+
+  It grades the structural axes (tool selection, call sequence, argument-key presence) in Java and
+  writes `target/eval/offline-replay-report.json` (one `EvalTurnTrace`-shaped entry per fixture).
+
+- **Grading.** `scripts/analytics_gate_run.py --replay-report target/eval/offline-replay-report.json`
+  reads that report and grades the remaining axes deterministically — intent, tool selection,
+  argument accuracy, tool-call sequence, aggregation (numbers/ids), and final answer/outcome — with
+  no LLM-as-judge. Grading logic is unit-tested in `scripts/test_analytics_gate_run.py`.

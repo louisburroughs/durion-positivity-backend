@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.eval;
+package com.positivity.mcp.internal.service;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;

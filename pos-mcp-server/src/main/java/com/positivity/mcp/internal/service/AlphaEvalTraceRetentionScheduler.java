@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.eval;
+package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
 import java.time.Clock;

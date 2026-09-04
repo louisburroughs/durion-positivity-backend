@@ -1,0 +1,377 @@
+{
+  "schema_version": 1,
+  "suite": "offline-replay",
+  "suite_notes": "Offline replay fixtures for the twelve in_chat_path_gate analytics-gate questions (#1682). Each fixture drives the real Spring AI ChatClient/ToolCallingAdvisor loop (OfflineReplayEvaluator, reusing SpringAiPosAssistant.buildToolCallingChatClient) against a live model, with tool execution replaced by the fixture's canned tool_responses so no backend service or database is touched. system_prompt is a representative synthetic prompt, not a byte-identical capture of a live-assembled prompt; prompt-assembly fidelity is out of scope here (see analytics-gate/README.md non-goals). tool_responses use clean, designed-only synthetic data (the EXPECTED.md 'absolute'/'seed contribution' figures), not alpha's live co-tenant-polluted numbers, so a fixture's expected values are self-consistent regardless of alpha's current data. argument key checks (arguments_contains) assert presence only, not value equality, since not every @Tool method's exact parameter surface is re-verified here (facade-contract.yaml plus each controller's real @RequestParam names were checked once for real values (startDate/endDate/asOfDate/period/etc.), and unverifiable/uncertain surfaces are left unchecked rather than guessed). Run: ./mvnw -pl pos-mcp-server -Dmcp.eval.replay=true -Dit.test=OfflineReplayEvalIT verify",
+  "fixtures": [
+    {
+      "fixture_id": "q01",
+      "analytics_gate_fixture_id": "q01",
+      "utterance": "Who were our top technicians by labor revenue last month, and what was their average billed hours per completed work order?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. Call the analytics tools you are offered to compute the answer, then summarize.",
+      "offered_tools": [
+        {
+          "name": "getTechnicianLaborAnalytics",
+          "description": "Returns per-technician completed work order count, billed hours and labor revenue for a date range.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"startDate\":{\"type\":\"string\"},\"endDate\":{\"type\":\"string\"}},\"required\":[\"startDate\",\"endDate\"]}"
+        },
+        {
+          "name": "getRevenueByCustomer",
+          "description": "Returns per-customer revenue for a period (decoy: not a per-technician report).",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"period\":{\"type\":\"string\"}},\"required\":[\"period\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getTechnicianLaborAnalytics",
+          "arguments_contains": ["startDate", "endDate"],
+          "response": "{\"rows\":[{\"technician\":\"Nadia Torres\",\"completedWorkorders\":2,\"billedHours\":4.00,\"laborRevenue\":1500.00,\"avgHoursPerWorkorder\":2.00},{\"technician\":\"Alex Kim\",\"completedWorkorders\":3,\"billedHours\":5.00,\"laborRevenue\":950.00,\"avgHoursPerWorkorder\":1.67},{\"technician\":\"Sam Ellison\",\"completedWorkorders\":1,\"billedHours\":4.00,\"laborRevenue\":600.00,\"avgHoursPerWorkorder\":4.00}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getTechnicianLaborAnalytics"],
+        "numbers": [{"label": "top technician labor revenue", "value": 1500.00, "tolerance_pct": 0.5}],
+        "id_set": ["Nadia Torres"],
+        "forbidden_labels": ["Alex Kim"]
+      },
+      "notes": "Top by labor revenue is Nadia Torres (1500.00); Alex Kim has more completed work orders but less revenue and must not be named as top."
+    },
+    {
+      "fixture_id": "q03",
+      "analytics_gate_fixture_id": "q03",
+      "utterance": "Which technicians had the most work orders reopened within seven days of completion this quarter?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. Call the analytics tools you are offered to compute the answer, then summarize.",
+      "offered_tools": [
+        {
+          "name": "workorder_getReopenedWorkorderAnalytics",
+          "description": "Returns per-technician reopened-work-order counts within a reopen window for a date range.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"startDate\":{\"type\":\"string\"},\"endDate\":{\"type\":\"string\"},\"withinDays\":{\"type\":\"integer\"},\"limit\":{\"type\":\"integer\"}},\"required\":[\"startDate\",\"endDate\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "workorder_getReopenedWorkorderAnalytics",
+          "arguments_contains": ["startDate", "endDate"],
+          "response": "{\"rows\":[{\"technician\":\"Sam Ellison\",\"reopenedCount\":2},{\"technician\":\"Alex Kim\",\"reopenedCount\":1},{\"technician\":\"Nadia Torres\",\"reopenedCount\":0}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["workorder_getReopenedWorkorderAnalytics"],
+        "numbers": [{"label": "Sam Ellison reopen count", "value": 2, "tolerance_pct": 0}],
+        "id_set": ["Sam Ellison"]
+      }
+    },
+    {
+      "fixture_id": "q04",
+      "analytics_gate_fixture_id": "q04",
+      "utterance": "What was the average time from work order creation to invoice, by month, for the last six months?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. This question needs one getInvoicingLag call per month in the window; do not summarize a partial set of months as if it were the full answer.",
+      "offered_tools": [
+        {
+          "name": "getInvoicingLag",
+          "description": "Returns the average work-order-creation-to-invoice lag in days for one date range.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"startDate\":{\"type\":\"string\"},\"endDate\":{\"type\":\"string\"}},\"required\":[\"startDate\",\"endDate\"]}"
+        }
+      ],
+      "tool_responses": [
+        {"tool_name": "getInvoicingLag", "arguments_contains": ["startDate", "endDate"], "response": "{\"month\":\"2026-03\",\"avgLagDays\":2.00,\"pairCount\":6}"},
+        {"tool_name": "getInvoicingLag", "arguments_contains": ["startDate", "endDate"], "response": "{\"month\":\"2026-04\",\"avgLagDays\":3.00,\"pairCount\":7}"},
+        {"tool_name": "getInvoicingLag", "arguments_contains": ["startDate", "endDate"], "response": "{\"month\":\"2026-05\",\"avgLagDays\":4.00,\"pairCount\":7}"},
+        {"tool_name": "getInvoicingLag", "arguments_contains": ["startDate", "endDate"], "response": "{\"month\":\"2026-06\",\"avgLagDays\":5.00,\"pairCount\":5}"},
+        {"tool_name": "getInvoicingLag", "arguments_contains": ["startDate", "endDate"], "response": "{\"month\":\"2026-07\",\"avgLagDays\":6.00,\"pairCount\":5}"},
+        {"tool_name": "getInvoicingLag", "arguments_contains": ["startDate", "endDate"], "response": "{\"month\":\"2026-08\",\"avgLagDays\":7.00,\"pairCount\":5}"}
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getInvoicingLag", "getInvoicingLag", "getInvoicingLag", "getInvoicingLag", "getInvoicingLag", "getInvoicingLag"],
+        "numbers": [{"label": "August average lag", "value": 7.00, "tolerance_pct": 0.5}]
+      },
+      "notes": "Pins the #1676 declined-composition failure mode: a below-minimum call count (fewer than 6 getInvoicingLag calls) is the defect this fixture is built to catch, matching QUESTIONS.json q04.expected_plan."
+    },
+    {
+      "fixture_id": "q05",
+      "analytics_gate_fixture_id": "q05",
+      "utterance": "Which customers are more than 60 days past due, and what open work orders do we currently have for them?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. This question needs one aged-receivables call, then one searchWorkorders call per past-due customer; do not stop after the first call.",
+      "offered_tools": [
+        {
+          "name": "getAgedReceivables",
+          "description": "Returns per-customer A/R aging buckets as of a date.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"asOfDate\":{\"type\":\"string\"}},\"required\":[\"asOfDate\"]}"
+        },
+        {
+          "name": "searchWorkorders",
+          "description": "Searches work orders by a query string (e.g. customer id and status).",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getAgedReceivables",
+          "arguments_contains": ["asOfDate"],
+          "response": "{\"rows\":[{\"customerId\":\"C1\",\"total\":4500.00,\"bucket9099\":2000.00,\"pastDue\":true},{\"customerId\":\"C2\",\"total\":2000.00,\"bucket6190\":1500.00,\"pastDue\":true},{\"customerId\":\"C3\",\"total\":1200.00,\"pastDue\":false}]}"
+        },
+        {
+          "tool_name": "searchWorkorders",
+          "arguments_contains": ["query"],
+          "response": "{\"rows\":[{\"workorderId\":\"TRACKB-WO-OPEN-C1-ASSIGNED\",\"customerId\":\"C1\",\"status\":\"ASSIGNED\"},{\"workorderId\":\"TRACKB-WO-OPEN-C1-WIP\",\"customerId\":\"C1\",\"status\":\"WORK_IN_PROGRESS\"}]}"
+        },
+        {
+          "tool_name": "searchWorkorders",
+          "arguments_contains": ["query"],
+          "response": "{\"rows\":[{\"workorderId\":\"TRACKB-WO-OPEN-C2-PARTS\",\"customerId\":\"C2\",\"status\":\"AWAITING_PARTS\"}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getAgedReceivables", "searchWorkorders", "searchWorkorders"],
+        "id_set": ["TRACKB-WO-OPEN-C1-ASSIGNED", "TRACKB-WO-OPEN-C1-WIP", "TRACKB-WO-OPEN-C2-PARTS"],
+        "forbidden_labels": ["TRACKB-WO-OPEN-C3-APPROVED"]
+      },
+      "notes": "C3 is not past due and its open work order must not appear in the answer; a composition that stops after one searchWorkorders call is the #1676 declined-composition failure this fixture pins."
+    },
+    {
+      "fixture_id": "q07",
+      "analytics_gate_fixture_id": "q07",
+      "utterance": "Who were our top customers by revenue over the last twelve months compared with the twelve months before that?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. This comparison needs one getRevenueByCustomer call per period.",
+      "offered_tools": [
+        {
+          "name": "getRevenueByCustomer",
+          "description": "Returns per-customer revenue for a period.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"period\":{\"type\":\"string\"}},\"required\":[\"period\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getRevenueByCustomer",
+          "arguments_contains": ["period"],
+          "response": "{\"period\":\"current\",\"rows\":[{\"customerId\":\"C1\",\"revenue\":16500.00},{\"customerId\":\"C2\",\"revenue\":10300.00},{\"customerId\":\"C4\",\"revenue\":8100.00},{\"customerId\":\"C3\",\"revenue\":6000.00},{\"customerId\":\"C5\",\"revenue\":3900.00},{\"customerId\":\"C6\",\"revenue\":2300.00}]}"
+        },
+        {
+          "tool_name": "getRevenueByCustomer",
+          "arguments_contains": ["period"],
+          "response": "{\"period\":\"prior\",\"rows\":[{\"customerId\":\"C1\",\"revenue\":12000.00},{\"customerId\":\"C4\",\"revenue\":10800.00},{\"customerId\":\"C2\",\"revenue\":6000.00},{\"customerId\":\"C3\",\"revenue\":4800.00},{\"customerId\":\"C5\",\"revenue\":3600.00},{\"customerId\":\"C6\",\"revenue\":2400.00}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getRevenueByCustomer", "getRevenueByCustomer"],
+        "id_order": ["C1", "C2", "C4", "C3", "C5", "C6"],
+        "numbers": [{"label": "C1 last-12-months revenue", "value": 16500.00, "tolerance_pct": 0.5}]
+      }
+    },
+    {
+      "fixture_id": "q08",
+      "analytics_gate_fixture_id": "q08",
+      "utterance": "Which customers have not bought anything in the last 90 days but spent more than $10,000 with us in the prior year?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures.",
+      "offered_tools": [
+        {
+          "name": "getRevenueByCustomer",
+          "description": "Returns per-customer revenue for a period, usable to find prior-year high-value customers.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"period\":{\"type\":\"string\"}},\"required\":[\"period\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getRevenueByCustomer",
+          "arguments_contains": ["period"],
+          "response": "{\"period\":\"prior-year\",\"rows\":[{\"customerId\":\"C4\",\"revenue\":10800.00,\"lastInvoiceDaysAgo\":94},{\"customerId\":\"C1\",\"revenue\":12000.00,\"lastInvoiceDaysAgo\":5}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getRevenueByCustomer"],
+        "id_set": ["C4"],
+        "forbidden_labels": ["C1"]
+      },
+      "notes": "C1 spent more in the prior year but bought recently (5 days ago), so it must not appear as lapsed; C4 is the only qualifying customer."
+    },
+    {
+      "fixture_id": "q09",
+      "analytics_gate_fixture_id": "q09",
+      "utterance": "For our top 20 customers by revenue in the last twelve months, show revenue, invoice count, average invoice value, outstanding balance and average days to pay.",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. This needs one getRevenueByCustomer call for the ranking plus one getAgedReceivables call for outstanding balances.",
+      "offered_tools": [
+        {
+          "name": "getRevenueByCustomer",
+          "description": "Returns per-customer revenue, invoice count and average invoice value for a period.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"period\":{\"type\":\"string\"}},\"required\":[\"period\"]}"
+        },
+        {
+          "name": "getAgedReceivables",
+          "description": "Returns per-customer outstanding balance and average days to pay as of a date.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"asOfDate\":{\"type\":\"string\"}},\"required\":[\"asOfDate\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getRevenueByCustomer",
+          "arguments_contains": ["period"],
+          "response": "{\"rows\":[{\"customerId\":\"C1\",\"revenue\":16500.00,\"invoiceCount\":14,\"avgInvoiceValue\":1178.5714},{\"customerId\":\"C2\",\"revenue\":10300.00,\"invoiceCount\":13,\"avgInvoiceValue\":792.3077},{\"customerId\":\"C4\",\"revenue\":8100.00,\"invoiceCount\":9,\"avgInvoiceValue\":900.0000}]}"
+        },
+        {
+          "tool_name": "getAgedReceivables",
+          "arguments_contains": ["asOfDate"],
+          "response": "{\"rows\":[{\"customerId\":\"C1\",\"outstanding\":4500.00,\"avgDaysToPay\":20.02},{\"customerId\":\"C2\",\"outstanding\":2000.00,\"avgDaysToPay\":22.10},{\"customerId\":\"C4\",\"outstanding\":900.00,\"avgDaysToPay\":15.02}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getRevenueByCustomer", "getAgedReceivables"],
+        "id_order": ["C1", "C2", "C4"],
+        "numbers": [
+          {"label": "C1 revenue", "value": 16500.00, "tolerance_pct": 0.5},
+          {"label": "C1 outstanding balance", "value": 4500.00, "tolerance_pct": 0.5}
+        ]
+      },
+      "notes": "Pins QUESTIONS.json q09.expected_plan (getRevenueByCustomer x1 + getAgedReceivables x1, #1671)."
+    },
+    {
+      "fixture_id": "q12",
+      "analytics_gate_fixture_id": "q12",
+      "utterance": "Of the invoices we issued in the last six months, how many were paid within 30 days, 31 to 60 days, 61 to 90 days, or are still unpaid?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. 'in the last six months' is a whole-calendar-months window, not a rolling day count.",
+      "offered_tools": [
+        {
+          "name": "accounting_getPaymentLagCohorts",
+          "description": "Returns payment-lag cohort counts and amounts for invoices issued in a date window.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"issuedFrom\":{\"type\":\"string\"},\"issuedTo\":{\"type\":\"string\"},\"limit\":{\"type\":\"integer\"}},\"required\":[\"issuedFrom\",\"issuedTo\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "accounting_getPaymentLagCohorts",
+          "arguments_contains": ["issuedFrom", "issuedTo"],
+          "response": "{\"cohorts\":[{\"name\":\"le30\",\"invoices\":20,\"amount\":14000.00},{\"name\":\"31to60\",\"invoices\":5,\"amount\":1500.00},{\"name\":\"61to90\",\"invoices\":4,\"amount\":800.00},{\"name\":\"unpaid\",\"invoices\":8,\"amount\":11500.00}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["accounting_getPaymentLagCohorts"],
+        "numbers": [{"label": "31-60 day cohort amount", "value": 1500.00, "tolerance_pct": 0.5}]
+      }
+    },
+    {
+      "fixture_id": "q13",
+      "analytics_gate_fixture_id": "q13",
+      "utterance": "Which customers make up most of our accounts receivable balance, and how much of each is past due?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures.",
+      "offered_tools": [
+        {
+          "name": "getAgedReceivables",
+          "description": "Returns per-customer A/R aging buckets as of a date.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"asOfDate\":{\"type\":\"string\"}},\"required\":[\"asOfDate\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getAgedReceivables",
+          "arguments_contains": ["asOfDate"],
+          "response": "{\"rows\":[{\"customerId\":\"C1\",\"total\":4500.00,\"pastDue\":2000.00},{\"customerId\":\"C2\",\"total\":2000.00,\"pastDue\":1500.00},{\"customerId\":\"C3\",\"total\":1200.00,\"pastDue\":0},{\"customerId\":\"C4\",\"total\":900.00,\"pastDue\":900.00},{\"customerId\":\"C5\",\"total\":600.00,\"pastDue\":0},{\"customerId\":\"C6\",\"total\":300.00,\"pastDue\":0}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getAgedReceivables"],
+        "id_order": ["C1", "C2", "C3"],
+        "numbers": [{"label": "C1 total A/R balance", "value": 4500.00, "tolerance_pct": 0.5}]
+      },
+      "notes": "Canned data is the six-customer designed book only (9500.00 total), not alpha's live co-tenant-polluted book; the 80% cumulative cutoff on this clean set falls at C1+C2+C3 (81.05%)."
+    },
+    {
+      "fixture_id": "q15",
+      "analytics_gate_fixture_id": "q15",
+      "utterance": "Who were our largest vendors by spend over the last six months compared with the same six months last year?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. This needs one getVendorSpend call per period. Label bill counts/averages accurately; do not call them 'paid'.",
+      "offered_tools": [
+        {
+          "name": "getVendorSpend",
+          "description": "Returns per-vendor paid amount, bill count and average bill amount for a date range.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"startDate\":{\"type\":\"string\"},\"endDate\":{\"type\":\"string\"}},\"required\":[\"startDate\",\"endDate\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getVendorSpend",
+          "arguments_contains": ["startDate", "endDate"],
+          "response": "{\"period\":\"current\",\"rows\":[{\"vendorId\":\"V2\",\"paidAmount\":12000.00},{\"vendorId\":\"V1\",\"paidAmount\":6720.00},{\"vendorId\":\"V3\",\"paidAmount\":2400.00}]}"
+        },
+        {
+          "tool_name": "getVendorSpend",
+          "arguments_contains": ["startDate", "endDate"],
+          "response": "{\"period\":\"prior-year\",\"rows\":[{\"vendorId\":\"V2\",\"paidAmount\":12000.00},{\"vendorId\":\"V1\",\"paidAmount\":6000.00},{\"vendorId\":\"V3\",\"paidAmount\":2400.00}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getVendorSpend", "getVendorSpend"],
+        "id_order": ["V2", "V1", "V3"],
+        "numbers": [{"label": "V2 current-period spend", "value": 12000.00, "tolerance_pct": 0.5}],
+        "forbidden_labels": ["bills paid"]
+      },
+      "notes": "Grading note #1663: FAIL if the answer labels billsIssuedInWindow/avgIssuedBillAmount as paid."
+    },
+    {
+      "fixture_id": "q16",
+      "analytics_gate_fixture_id": "q16",
+      "utterance": "Which vendor bills are due in the next 14 days, and how much cash do we need each day to cover them?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures.",
+      "offered_tools": [
+        {
+          "name": "accounting_listVendorBills",
+          "description": "Lists vendor bills whose due date falls in a window, ordered by due date ascending.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"dueFrom\":{\"type\":\"string\"},\"dueTo\":{\"type\":\"string\"},\"status\":{\"type\":\"string\"}},\"required\":[\"dueFrom\",\"dueTo\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "accounting_listVendorBills",
+          "arguments_contains": ["dueFrom", "dueTo"],
+          "response": "{\"rows\":[{\"billId\":\"TRACKB-BILL-V1-DUE0904\",\"vendorId\":\"V1\",\"amount\":800.00,\"dueDate\":\"2026-09-04\"},{\"billId\":\"TRACKB-BILL-V2-DUE0908\",\"vendorId\":\"V2\",\"amount\":2000.00,\"dueDate\":\"2026-09-08\"},{\"billId\":\"TRACKB-BILL-V2-DUE0912\",\"vendorId\":\"V2\",\"amount\":600.00,\"dueDate\":\"2026-09-12\"},{\"billId\":\"TRACKB-BILL-V3-DUE0915\",\"vendorId\":\"V3\",\"amount\":400.00,\"dueDate\":\"2026-09-15\"}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["accounting_listVendorBills"],
+        "id_set": ["V1", "V2", "V3"],
+        "numbers": [{"label": "total cash needed over 14 days", "value": 3800.00, "tolerance_pct": 0.5}]
+      }
+    },
+    {
+      "fixture_id": "q17",
+      "analytics_gate_fixture_id": "q17",
+      "utterance": "Which vendors have increased their average bill amount by more than 10% year over year?",
+      "system_prompt": "You are the Durion Positivity shop assistant. Answer using only tool results; never fabricate figures. This needs one getVendorSpend call per period. Label average bill amounts accurately; do not call them 'paid'.",
+      "offered_tools": [
+        {
+          "name": "getVendorSpend",
+          "description": "Returns per-vendor bill count and average issued bill amount for a date range.",
+          "input_schema": "{\"type\":\"object\",\"properties\":{\"startDate\":{\"type\":\"string\"},\"endDate\":{\"type\":\"string\"}},\"required\":[\"startDate\",\"endDate\"]}"
+        }
+      ],
+      "tool_responses": [
+        {
+          "tool_name": "getVendorSpend",
+          "arguments_contains": ["startDate", "endDate"],
+          "response": "{\"period\":\"current\",\"rows\":[{\"vendorId\":\"V1\",\"avgIssuedBillAmount\":1120.00},{\"vendorId\":\"V2\",\"avgIssuedBillAmount\":2000.00},{\"vendorId\":\"V3\",\"avgIssuedBillAmount\":400.00}]}"
+        },
+        {
+          "tool_name": "getVendorSpend",
+          "arguments_contains": ["startDate", "endDate"],
+          "response": "{\"period\":\"prior-year\",\"rows\":[{\"vendorId\":\"V1\",\"avgIssuedBillAmount\":1000.00},{\"vendorId\":\"V2\",\"avgIssuedBillAmount\":2000.00},{\"vendorId\":\"V3\",\"avgIssuedBillAmount\":400.00}]}"
+        }
+      ],
+      "expected": {
+        "outcome": "answered-correctly",
+        "tool_call_sequence": ["getVendorSpend", "getVendorSpend"],
+        "id_set": ["V1"],
+        "numbers": [{"label": "V1 average bill increase percent", "value": 12.0, "tolerance_pct": 5}],
+        "forbidden_labels": ["bills paid", "V2", "V3"]
+      },
+      "notes": "Grading note #1663 applies here too; only V1 exceeds the 10% threshold, V2/V3 are flat decoys."
+    }
+  ]
+}

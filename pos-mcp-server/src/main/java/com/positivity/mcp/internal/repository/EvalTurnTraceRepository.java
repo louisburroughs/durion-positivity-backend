@@ -1,6 +1,6 @@
 package com.positivity.mcp.internal.repository;
 
-import com.positivity.mcp.internal.eval.EvalTurnTrace;
+import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
 

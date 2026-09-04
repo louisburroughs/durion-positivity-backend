@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.eval;
+package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
 import java.time.Clock;
 import java.time.Duration;

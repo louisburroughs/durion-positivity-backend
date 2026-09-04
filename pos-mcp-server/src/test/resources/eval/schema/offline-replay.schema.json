@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://durion/pos-mcp-server/eval/offline-replay.schema.json",
+  "title": "Offline replay eval fixture suite (#1682)",
+  "type": "object",
+  "required": ["schema_version", "suite", "fixtures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "suite": { "const": "offline-replay" },
+    "suite_notes": { "type": "string" },
+    "fixtures": { "type": "array", "items": { "$ref": "#/$defs/fixture" } }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "required": ["fixture_id", "analytics_gate_fixture_id", "utterance", "system_prompt", "offered_tools", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "fixture_id": { "type": "string", "pattern": "^q[0-9]{2}$" },
+        "analytics_gate_fixture_id": {
+          "type": "string",
+          "description": "Cross-link to analytics-gate/QUESTIONS.json fixture_id; must name a question with in_chat_path_gate=true."
+        },
+        "utterance": { "type": "string", "minLength": 1 },
+        "system_prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Representative synthetic system prompt. Not byte-identical to a live-captured trace; prompt-assembly fidelity is a documented non-goal of replay (see suite_notes)."
+        },
+        "offered_tools": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "input_schema"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "input_schema": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "tool_responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tool_name", "response"],
+            "additionalProperties": false,
+            "properties": {
+              "tool_name": { "type": "string", "minLength": 1 },
+              "arguments_contains": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Argument keys the model's call must include; presence-only, not value equality."
+              },
+              "response": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "required": ["outcome", "tool_call_sequence"],
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "enum": ["answered-correctly", "asked-appropriately", "declined-appropriately", "failed"]
+            },
+            "tool_call_sequence": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Real tool names, in the exact required order. Empty array means no tool call is expected."
+            },
+            "router_intent": { "type": "string" },
+            "model_tier": { "type": "string" },
+            "numbers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "value", "tolerance_pct"],
+                "additionalProperties": false,
+                "properties": {
+                  "label": { "type": "string" },
+                  "value": { "type": "number" },
+                  "tolerance_pct": { "type": "number", "minimum": 0 }
+                }
+              }
+            },
+            "id_set": { "type": "array", "items": { "type": "string" } },
+            "id_order": { "type": "array", "items": { "type": "string" } },
+            "required_labels": { "type": "array", "items": { "type": "string" } },
+            "forbidden_labels": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}
