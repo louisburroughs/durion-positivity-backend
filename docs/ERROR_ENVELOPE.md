@@ -2,6 +2,10 @@
 
 All Durion backend REST APIs return a consistent `ApiError` JSON object for non-2xx responses.
 
+**Scope.** This document describes the envelope *shape* (required by [ADR-0017 §3](https://github.com/louisburroughs/durion/blob/main/docs/adr/0017-api-controller-http-response-codes.adr.md))
+and the platform fallback codes emitted by the shared catch-all handler ([ADR-0056](adr-0056-global-exception-handling.md)).
+It does not catalogue the error codes of individual modules — see [Module Error Codes](#module-error-codes) for where those live.
+
 ## Schema
 
 ```json
@@ -146,7 +150,7 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 
 Emitted by the shared `GlobalApiExceptionHandler` (auto-configured from `pos-web-common`, see
 `docs/adr-0056-global-exception-handling.md`) when no service-specific advice mapped the exception.
-Any service may therefore return these in addition to its module codes below.
+Any service may therefore return these in addition to its own module codes.
 
 | Code | Status | Description |
 |------|--------|-------------|
@@ -163,66 +167,24 @@ Any service may therefore return these in addition to its module codes below.
 
 ---
 
-## Common Error Codes by Module
+## Module Error Codes
 
-### pos-order
-| Code | Status | Description |
-|------|--------|-------------|
-| `ORDER_NOT_FOUND` | 404 | Sales order does not exist |
-| `ORDER_INVALID_SKU` | 400 | SKU on the order line is not valid |
-| `ORDER_PRICE_OVERRIDE_NOT_FOUND` | 404 | Price override record not found |
-| `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
-| `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT` | 409 | Duplicate idempotency key for price override |
-| `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
-| `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions |
+Each module's error codes are defined by its own `@RestControllerAdvice` handlers (typically under
+`internal/exception`), and every code is a string literal there. Those handlers, and the module's
+generated OpenAPI spec, are the source of truth for what a client can receive. Look there, not here.
 
-### pos-invoice
-| Code | Status | Description |
-|------|--------|-------------|
-| `NOT_FOUND` | 404 | Invoice or receipt not found |
-| `INVALID_STATE` | 409 | Invoice state transition is not allowed |
-| `CONFLICT` | 409 | General state conflict (e.g. already finalized) |
-| `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |
-| `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
-| `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
+This document deliberately does not maintain per-module code tables. An earlier version did, and the
+tables were a hand-maintained snapshot that drifted from the code within weeks (see
+louisburroughs/durion-positivity-backend#1724). A stale table is worse than none because it reads as
+complete.
 
-### pos-inventory
-| Code | Status | Description |
-|------|--------|-------------|
-| `NOT_FOUND` | 404 | Inventory resource not found |
-| `VALIDATION_ERROR` | 400 | Request parameter validation failed |
-| `INSUFFICIENT_STOCK` | 422 | Not enough on-hand stock to fulfill |
-| `INSUFFICIENT_ATP` | 422 | Available-to-promise quantity is insufficient |
-| `RETURN_QUANTITY_EXCEEDED` | 422 | Return exceeds original purchase quantity |
-| `ADJUSTMENT_LEDGER_POST_FAILED` | 500 | Ledger post for adjustment failed |
+Conventions that every module code follows regardless of module:
 
-### pos-security-service
-| Code | Status | Description |
-|------|--------|-------------|
-| `ROLE_NOT_FOUND` | 404 | Role does not exist |
-| `USER_NOT_FOUND` | 404 | User does not exist |
-| `DUPLICATE_ROLE_NAME` | 409 | Role name is already taken |
-| `ACCOUNT_LOCKED` | 401 | Account is locked due to repeated failures |
-| `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
-| `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
-| `FORBIDDEN` | 403 | Caller lacks required permissions |
-
-### pos-accounting
-| Code | Status | Description |
-|------|--------|-------------|
-| `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
-| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance |
-| `GL_POSTING_FAILED` | 409 | General ledger posting failed |
-| `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
-
-### pos-catalog
-| Code | Status | Description |
-|------|--------|-------------|
-| `NOT_FOUND` | 404 | Catalog item not found |
-| `FORBIDDEN` | 403 | Operation not permitted on this catalog entry |
-| `VALIDATION_ERROR` | 400 | Catalog data validation failed |
-| `BUSINESS_RULE_VIOLATION` | 409 | Catalog business rule was violated |
-| `CONFLICT` | 409 | Concurrent update detected; retry required |
+- `code` is a stable, upper-snake-case identifier; clients branch on it, never on `message`.
+- The HTTP status follows the ADR-0017 matrix (`404` missing resource, `409` identity/version/lifecycle
+  conflict, `422` domain-policy refusal, `400` request-shape or field validation).
+- Codes are additive: a module may introduce new codes in a release, and clients should fall through to
+  a generic handler for any code they do not recognise (see below).
 
 ---
 
