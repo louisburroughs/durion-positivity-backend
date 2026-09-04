@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.image.internal.entity.ImageContentEntity;
 import com.positivity.image.internal.entity.ImageEntity;
+import com.positivity.image.internal.exception.ImageValidationException;
 import com.positivity.image.internal.repository.ImageContentRepository;
 import com.positivity.image.internal.repository.ImageRepository;
 import com.positivity.image.internal.service.model.StoredImage;
@@ -136,7 +137,7 @@ class ImageStorageServiceImplTest {
         // An empty body is what a failed download looks like. Stored, it would satisfy every later
         // "do we already have this?" check and the artwork would silently never arrive.
         assertThatThrownBy(() -> storage.store("tread.jpg", "image/jpeg", new byte[0], VENDOR_URI, List.of()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ImageValidationException.class)
                 .hasMessageContaining("retried");
 
         verify(imageRepository, never()).save(any());
@@ -146,7 +147,7 @@ class ImageStorageServiceImplTest {
     @DisplayName("a null body is refused the same way an empty one is")
     void nullContentIsRefused() {
         assertThatThrownBy(() -> storage.store("tread.jpg", "image/jpeg", null, VENDOR_URI, List.of()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ImageValidationException.class)
                 .hasMessageContaining("retried");
 
         verify(imageRepository, never()).save(any());

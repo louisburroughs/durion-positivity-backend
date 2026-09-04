@@ -2,6 +2,7 @@ package com.positivity.image.internal.service;
 
 import com.positivity.image.internal.entity.ImageContentEntity;
 import com.positivity.image.internal.entity.ImageEntity;
+import com.positivity.image.internal.exception.ImageValidationException;
 import com.positivity.image.internal.repository.ImageContentRepository;
 import com.positivity.image.internal.repository.ImageRepository;
 import com.positivity.image.internal.service.model.StoredImage;
@@ -57,7 +58,7 @@ public class ImageStorageServiceImpl implements ImageStorageService {
             @Nullable String sourceUri,
             @Nullable List<String> context) {
         if (content == null || content.length == 0) {
-            throw new IllegalArgumentException("refusing to store an empty image for '" + filename
+            throw new ImageValidationException("refusing to store an empty image for '" + filename
                     + "': an empty body is a failed download, and storing it would stop it ever being retried");
         }
 

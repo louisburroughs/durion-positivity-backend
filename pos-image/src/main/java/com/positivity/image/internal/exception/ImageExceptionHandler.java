@@ -26,6 +26,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * <p>A 500 for a malformed request is worse than untidy. It tells the caller to retry an identical
  * request that will fail identically, and it puts a client error into whatever alerts on server
  * errors.
+ *
+ * <h2>Why this maps {@link ImageValidationException}, not bare {@code IllegalArgumentException}
+ * (issue #1694)</h2>
+ *
+ * {@code IllegalArgumentException} is not exclusive to this module's own validation — Hibernate/
+ * JPA throw it for an invalid query, {@code UUID.fromString} throws it on malformed stored data,
+ * and a JPA attribute converter throws it on corrupt stored JSON. A handler that caught it
+ * directly would report any of those server-side defects back to the client as a 400, leaking
+ * internal class names and query text. {@link ImageValidationException} is thrown only where this
+ * module validates its own input (see {@link ImageValidationException}'s own javadoc); an
+ * unexpected bare {@code IllegalArgumentException} now falls through to {@code pos-web-common}'s
+ * platform-wide {@code GlobalApiExceptionHandler}, which answers a generic, correlated 500
+ * instead of echoing the exception's own text.
  */
 @Slf4j
 @RestControllerAdvice
@@ -43,8 +56,8 @@ public class ImageExceptionHandler {
      * that accepts uploads, and logging it at warn would turn routine misuse into noise that hides
      * real problems.
      */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest request) {
+    @ExceptionHandler(ImageValidationException.class)
+    public ResponseEntity<ApiError> handleBadRequest(ImageValidationException ex, HttpServletRequest request) {
         log.debug("Rejecting image request: {}", ex.getMessage());
         return build(HttpStatus.BAD_REQUEST, "IMAGE_REQUEST_INVALID", ex.getMessage(), request);
     }
