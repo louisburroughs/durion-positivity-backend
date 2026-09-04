@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +50,7 @@ class ReportingPeriodsTest {
     @DisplayName("names both resolver tools when neither date is supplied, so the model can self-correct")
     void resolve_rejectsMissingRange() {
         assertThatThrownBy(() -> ReportingPeriods.resolve(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("neither")
                 .hasMessageContaining("resolveDateWindow")
@@ -60,11 +61,11 @@ class ReportingPeriodsTest {
     @DisplayName("says which of the two dates was supplied when only one is")
     void resolve_rejectsUnpairedDate() {
         assertThatThrownBy(() -> ReportingPeriods.resolve("2026-03-01", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("only startDate");
 
         assertThatThrownBy(() -> ReportingPeriods.resolve(null, "2026-08-31"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("only endDate");
     }
 
@@ -72,7 +73,7 @@ class ReportingPeriodsTest {
     @DisplayName("treats a blank date as absent rather than parsing it")
     void resolve_rejectsBlankDate() {
         assertThatThrownBy(() -> ReportingPeriods.resolve("   ", "2026-08-31"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("only endDate");
     }
 
@@ -80,7 +81,7 @@ class ReportingPeriodsTest {
     @DisplayName("rejects a malformed date with the expected form in the message")
     void resolve_rejectsMalformedDate() {
         assertThatThrownBy(() -> ReportingPeriods.resolve("03/01/2026", "2026-08-31"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("YYYY-MM-DD");
     }
@@ -94,7 +95,7 @@ class ReportingPeriodsTest {
         for (String label : new String[] {"2025", "2026-07", "2026-Q3"}) {
             assertThatThrownBy(() -> ReportingPeriods.resolve(label, label))
                     .as("label '%s'", label)
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidToolArgumentException.class)
                     .hasMessageContaining("resolveNamedPeriod")
                     .hasMessageContaining("resolveDateWindow");
         }
@@ -104,7 +105,7 @@ class ReportingPeriodsTest {
     @DisplayName("rejects an inverted range")
     void resolve_rejectsInvertedRange() {
         assertThatThrownBy(() -> ReportingPeriods.resolve("2026-08-31", "2026-03-01"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("must not be after");
     }
 }

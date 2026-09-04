@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchFilters;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.InvoiceSearchService;
 import com.positivity.shared.error.ApiError;
@@ -126,7 +127,7 @@ public class InvoiceSearchController {
             @ParameterObject @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC)
                     Pageable pageable) {
         if (issuedFrom != null && issuedTo != null && issuedTo.isBefore(issuedFrom)) {
-            throw new IllegalArgumentException("issuedTo cannot be before issuedFrom");
+            throw new InvoiceRequestValidationException("issuedTo cannot be before issuedFrom");
         }
         InvoiceSearchFilters filters = new InvoiceSearchFilters(
                 status, issuedFrom, issuedTo, customerId == null ? null : customerId.toString());

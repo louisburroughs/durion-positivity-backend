@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -198,11 +199,11 @@ public class EstimateItem {
     public void validate() {
         if (itemType == EstimateItemType.PART) {
             if (productId == null && (description == null || description.isBlank())) {
-                throw new IllegalArgumentException("PART items must have either productId or description");
+                throw new WorkorderRequestValidationException("PART items must have either productId or description");
             }
         } else if (itemType == EstimateItemType.LABOR) {
             if (serviceId == null && (description == null || description.isBlank())) {
-                throw new IllegalArgumentException("LABOR items must have either serviceId or description");
+                throw new WorkorderRequestValidationException("LABOR items must have either serviceId or description");
             }
         }
     }

@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -337,7 +338,7 @@ class EstimateItemQuantityGateTest {
                     .build();
 
             assertThatThrownBy(() -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("LABOR");
 
             verify(estimateItemRepository, never()).save(any());
@@ -350,7 +351,7 @@ class EstimateItemQuantityGateTest {
 
             assertThatThrownBy(() -> service.updateEstimateItem(
                             ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest(null, null, null, null, "HR")))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("LABOR");
         }
     }

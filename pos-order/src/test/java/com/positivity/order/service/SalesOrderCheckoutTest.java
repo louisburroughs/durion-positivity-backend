@@ -25,6 +25,7 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
 import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -302,10 +303,10 @@ class SalesOrderCheckoutTest {
     }
 
     @Test
-    @DisplayName("CHK-008: blank Idempotency-Key → IllegalArgumentException (spec R9.3)")
+    @DisplayName("CHK-008: blank Idempotency-Key → SalesOrderRequestValidationException (spec R9.3)")
     void checkout_blankKey_rejected() {
         assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "  "))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SalesOrderRequestValidationException.class);
     }
 
     @Test

@@ -71,6 +71,11 @@ public class InventoryShrinkagePostingService {
 
         BigDecimal unitCost = fact.unitCost();
         if (unitCost == null || unitCost.signum() <= 0) {
+            // (d) Defensive/internal invariant: this is a Kafka-driven consumer (ScrapPostedV1),
+            // not reachable from a controller. The class javadoc documents that the caller must
+            // already have routed away unpostable facts, so this guard should never fire; if it
+            // does, it is a server-side routing defect, correctly answered as a correlated 500
+            // by the pos-web-common catch-all now that no blanket handler maps it to 400.
             throw new IllegalArgumentException(
                     "Unpostable scrap fact reached posting (unitCost=" + unitCost + "): " + fact.scrapId());
         }

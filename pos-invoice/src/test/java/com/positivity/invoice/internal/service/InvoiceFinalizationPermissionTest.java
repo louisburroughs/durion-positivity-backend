@@ -10,6 +10,7 @@ import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -170,7 +171,7 @@ class InvoiceFinalizationPermissionTest {
         FinalizationRequest request = buildRequest(null);
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ManagerApprovalRequiredException.class);
     }
 
     /**
@@ -242,7 +243,7 @@ class InvoiceFinalizationPermissionTest {
         FinalizationRequest request = buildRequest(null);
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ManagerApprovalRequiredException.class)
                 .hasMessageContaining("Manager approval code required");
     }
 

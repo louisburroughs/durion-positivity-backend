@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import java.time.LocalDate;
@@ -147,7 +148,7 @@ class AccountingConfigurationServiceTest {
     @DisplayName("setHardLockDate with a blank justification is rejected and nothing is stored")
     void setHardLockDate_blankJustification_rejected() {
         assertThatThrownBy(() -> configurationService.setHardLockDate(LocalDate.of(2018, 7, 1), "  "))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidRequestParameterException.class);
 
         assertThat(configurationService.getHardLockDate()).isEmpty();
         assertThat(hardLockAuditRows()).isEmpty();

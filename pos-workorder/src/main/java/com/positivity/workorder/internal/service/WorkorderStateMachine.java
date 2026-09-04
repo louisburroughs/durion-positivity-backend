@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -67,7 +68,6 @@ public class WorkorderStateMachine {
     private static final Set<WorkorderItemStatus> EXCLUDED_BILLABLE_TOTAL_STATUSES =
             Set.of(WorkorderItemStatus.CANCELLED);
 
-    private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
     private static final String STATUS_FIELD = "status";
 
     public record CompletionPreconditions(
@@ -85,7 +85,7 @@ public class WorkorderStateMachine {
     public void transitionWorkorder(UUID workorderId, WorkorderStatus toStatus, String actorId, String reason) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderStatus fromStatus = workorder.getStatus();
 
@@ -193,7 +193,7 @@ public class WorkorderStateMachine {
     public CompletionPreconditions evaluateCompletionPreconditions(UUID workorderId) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         List<ChangeRequest> unresolvedApprovalGated = changeRequestRepository
                 .findByWorkorder_IdAndStatus(workorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)
@@ -276,7 +276,7 @@ public class WorkorderStateMachine {
     public void startWorkorder(UUID workorderId, String actorId, String reason) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         if (!WorkorderStatus.getStartEligibleStatuses().contains(workorder.getStatus())) {
             throw new IllegalStateException(String.format(
@@ -308,7 +308,7 @@ public class WorkorderStateMachine {
     public void completeWorkorder(UUID workorderId, String actorId, String completionNotes) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderStatus currentStatus = workorder.getStatus();
 
@@ -367,7 +367,7 @@ public class WorkorderStateMachine {
     public Workorder reopenCompletedWorkorder(UUID workorderId, String actorId, String reopenReason) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         if (reopenReason == null || reopenReason.isBlank()) {
             throw new IllegalStateException("Reopen reason is required");

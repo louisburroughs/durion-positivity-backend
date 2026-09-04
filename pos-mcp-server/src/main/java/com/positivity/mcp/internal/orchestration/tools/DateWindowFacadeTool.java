@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration.tools;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Locale;
@@ -163,7 +164,7 @@ public class DateWindowFacadeTool {
         try {
             return DateWindowResolver.Shape.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException invalid) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Unsupported shape '" + raw
                             + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN",
                     invalid);
@@ -174,7 +175,7 @@ public class DateWindowFacadeTool {
         try {
             return DateWindowResolver.Unit.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException invalid) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Unsupported unit '" + raw + "': pass one of DAY, WEEK, MONTH, QUARTER, YEAR", invalid);
         }
     }
@@ -186,7 +187,7 @@ public class DateWindowFacadeTool {
         try {
             return DateWindowResolver.Comparison.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException invalid) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Unsupported comparison '" + raw + "': pass one of NONE, PRIOR_PERIOD, YEAR_EARLIER", invalid);
         }
     }

@@ -3,6 +3,7 @@ package com.positivity.customer.internal.service;
 import com.positivity.customer.internal.dto.CustomerDTO;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -133,7 +134,7 @@ public class PersonPartyServiceImpl implements CustomerService {
     public CustomerDTO createCustomer(@NonNull CustomerDTO dto) {
         log.debug("Creating new customer: {}", dto);
         if (isBlank(dto.getFirstName()) || isBlank(dto.getLastName())) {
-            throw new IllegalArgumentException("firstName and lastName are required to create a customer");
+            throw new CrmValidationException("firstName and lastName are required to create a customer");
         }
         PersonParty customer = toEntity(dto);
 

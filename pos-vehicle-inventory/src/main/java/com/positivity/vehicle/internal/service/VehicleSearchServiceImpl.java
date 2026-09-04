@@ -3,6 +3,7 @@ package com.positivity.vehicle.internal.service;
 import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.dto.VehicleSummary;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +46,7 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
         // Validate and normalize query
         String normalizedQuery = request.getQuery().trim().toUpperCase();
         if (normalizedQuery.isEmpty()) {
-            throw new IllegalArgumentException("Search query cannot be empty");
+            throw new VehicleValidationException("Search query cannot be empty");
         }
 
         // Determine search type by query length and format
@@ -102,19 +103,19 @@ public class VehicleSearchServiceImpl implements VehicleSearchService {
         switch (type) {
             case VIN_PREFIX, VIN_EXACT -> {
                 if (query.length() < MIN_VIN_QUERY_LENGTH) {
-                    throw new IllegalArgumentException(
+                    throw new VehicleValidationException(
                             "VIN query must be at least " + MIN_VIN_QUERY_LENGTH + " characters");
                 }
             }
             case PLATE -> {
                 if (query.length() < MIN_PLATE_QUERY_LENGTH) {
-                    throw new IllegalArgumentException(
+                    throw new VehicleValidationException(
                             "License plate query must be at least " + MIN_PLATE_QUERY_LENGTH + " characters");
                 }
             }
             case GENERAL -> {
                 if (query.length() < MIN_GENERAL_QUERY_LENGTH) {
-                    throw new IllegalArgumentException(
+                    throw new VehicleValidationException(
                             "Query must be at least " + MIN_GENERAL_QUERY_LENGTH + " characters");
                 }
             }

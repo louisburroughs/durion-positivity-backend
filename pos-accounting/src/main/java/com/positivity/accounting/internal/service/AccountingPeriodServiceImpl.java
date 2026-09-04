@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
@@ -163,7 +164,7 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
         String canonicalCode = yearMonth.toString();
 
         if (justification.isBlank()) {
-            throw new IllegalArgumentException("A non-blank justification is required to reopen a period");
+            throw new InvalidRequestParameterException("A non-blank justification is required to reopen a period");
         }
 
         AccountingPeriod period = periodRepository
@@ -272,7 +273,8 @@ public class AccountingPeriodServiceImpl implements AccountingPeriodService {
         try {
             return YearMonth.parse(periodCode);
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Invalid period code '" + periodCode + "': expected format YYYY-MM", e);
+            throw new InvalidRequestParameterException(
+                    "Invalid period code '" + periodCode + "': expected format YYYY-MM", e);
         }
     }
 

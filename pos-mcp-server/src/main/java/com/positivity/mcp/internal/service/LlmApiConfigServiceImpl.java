@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.entity.LlmApiConfig;
+import com.positivity.mcp.internal.exception.LlmApiIdAlreadyExistsException;
 import com.positivity.mcp.internal.repository.LlmApiConfigRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -39,7 +40,7 @@ public class LlmApiConfigServiceImpl implements LlmApiConfigService {
     @Transactional
     public @NonNull LlmApiConfigResponse create(@NonNull LlmApiConfigRequest request) {
         if (repository.existsByApiId(request.apiId())) {
-            throw new IllegalArgumentException("LLM API id already exists: " + request.apiId());
+            throw new LlmApiIdAlreadyExistsException("LLM API id already exists: " + request.apiId());
         }
         var entity = new LlmApiConfig();
         apply(entity, request);
@@ -53,7 +54,7 @@ public class LlmApiConfigServiceImpl implements LlmApiConfigService {
                 .findById(id)
                 .orElseThrow(() -> new NoSuchElementException("LLM API config not found: " + id));
         if (!entity.getApiId().equals(request.apiId()) && repository.existsByApiId(request.apiId())) {
-            throw new IllegalArgumentException("LLM API id already exists: " + request.apiId());
+            throw new LlmApiIdAlreadyExistsException("LLM API id already exists: " + request.apiId());
         }
         apply(entity, request);
         return LlmApiConfigResponse.from(repository.save(entity));

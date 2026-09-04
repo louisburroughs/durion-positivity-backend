@@ -177,7 +177,22 @@ public class BulkLoadJobFactory {
         return locationId == null ? null : new RestResolutionContext(restClientBuilder, headerRelay, locationId);
     }
 
-    /** Resolves an uploaded file inside the storage root, refusing anything that escapes it. */
+    /**
+     * Resolves an uploaded file inside the storage root, refusing anything that escapes it.
+     *
+     * <p>Called only from {@link #reader}, a {@code @StepScope} bean built when Spring Batch
+     * starts the step (issue #1694 audit), so a thrown exception here never reaches this module's
+     * {@code @RestControllerAdvice}: {@code AbstractStep.execute} catches everything raised during
+     * step execution and records it on the {@code JobExecution}, which {@code
+     * BulkLoadJobExecutionListener} then folds into the job's status. Note this holds regardless
+     * of which thread the job runs on — this module configures no {@code TaskExecutor}, so Spring
+     * Batch uses a {@code SyncTaskExecutor} and the job actually runs on the HTTP request thread
+     * that launched it. {@code storagePath} itself is a job parameter this module
+     * fills from {@code BulkLoadJob.getOriginalFilePath()}, a server-computed value (see {@link
+     * com.positivity.bulkloader.internal.service.LocalFileStorageServiceImpl#store}), never raw
+     * client input — so both throws below are defensive/internal invariants, deliberately left as
+     * bare {@code IllegalArgumentException} rather than a module-owned type.
+     */
     private Path resolveStoragePath(String storagePath) {
         if (storagePath == null || storagePath.isBlank()) {
             throw new IllegalArgumentException("storagePath job parameter must not be null or blank");

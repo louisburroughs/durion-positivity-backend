@@ -20,6 +20,8 @@ import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
@@ -180,7 +182,7 @@ class AccountingAnalyticsServiceImplTest {
         void rejectsInvalidRange() {
             assertThatThrownBy(
                             () -> service.getCollectionsAnalytics(LocalDate.of(2026, 6, 30), LocalDate.of(2026, 6, 1)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test
@@ -901,7 +903,7 @@ class AccountingAnalyticsServiceImplTest {
         @DisplayName("Rejects issuedTo before issuedFrom")
         void rejectsInvalidRange() {
             assertThatThrownBy(() -> service.getPaymentLagCohorts(issuedTo, issuedFrom, 4))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test
@@ -1090,14 +1092,14 @@ class AccountingAnalyticsServiceImplTest {
         @DisplayName("Rejects endDate before startDate")
         void rejectsInvalidRange() {
             assertThatThrownBy(() -> service.getVendorSpend(end, start, 20))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test
         @DisplayName("Rejects a non-positive limit")
         void rejectsNonPositiveLimit() {
             assertThatThrownBy(() -> service.getVendorSpend(start, end, 0))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidRequestParameterException.class);
         }
 
         @Test

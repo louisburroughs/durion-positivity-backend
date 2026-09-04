@@ -421,12 +421,16 @@ public class ClaimController {
                     Required inputs: id (UUID) as a path parameter; there is no request body — eligibility, policy \
                     selection, and per-line proration are computed server-side and persisted onto the claim.
                     Emits a WARRANTY_CLAIM_SUBMIT event and republishes the claim snapshot.
-                    Returns 400 when the claim has no lines or the selected policy requires missing photo \
-                    evidence, 404 when the claim does not exist, and 409 when the current status does not allow \
-                    submit (nextAction lists the legal moves).
+                    Returns 422 when the claim has no lines (WARRANTY_CLAIM_MISSING_LINES) or the selected policy \
+                    requires missing photo evidence (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED), 404 when the claim \
+                    does not exist, and 409 when the current status does not allow submit (nextAction lists the \
+                    legal moves).
                     """)
     @ApiResponse(responseCode = "200", description = "Claim submitted.")
-    @ApiResponse(responseCode = "400", description = "Intake incomplete (no lines, missing required photos).")
+    @ApiResponse(
+            responseCode = "422",
+            description = "Intake incomplete: no claim line (WARRANTY_CLAIM_MISSING_LINES) or the winning policy"
+                    + " requires photo evidence that is missing (WARRANTY_CLAIM_PHOTO_EVIDENCE_REQUIRED).")
     @ApiResponse(responseCode = "404", description = "Claim not found.")
     @ApiResponse(responseCode = "409", description = "Illegal transition; nextAction lists legal moves.")
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_SUBMIT + "')")

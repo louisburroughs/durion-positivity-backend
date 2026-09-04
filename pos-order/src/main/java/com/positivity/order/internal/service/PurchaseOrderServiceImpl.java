@@ -13,6 +13,7 @@ import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.entity.PurchaseOrderTransmissionEvent;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
+import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
@@ -322,7 +323,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     .orElse(null);
             BigDecimal baseQuantity = conversion != null ? conversion.baseQuantity() : lineRequest.getQuantity();
             if (baseQuantity == null) {
-                throw new IllegalArgumentException("quantity is required when documentUom/documentQuantity are absent");
+                throw new PurchaseOrderRequestValidationException(
+                        "quantity is required when documentUom/documentQuantity are absent");
             }
             BigDecimal costedQuantity = conversion != null ? conversion.documentQuantity() : baseQuantity;
             long lineTotalMinor = costedQuantity

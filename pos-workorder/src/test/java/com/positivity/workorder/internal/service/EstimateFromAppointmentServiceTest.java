@@ -15,6 +15,7 @@ import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentReques
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -189,7 +190,7 @@ class EstimateFromAppointmentServiceTest {
 
         // When & Then
         assertThatThrownBy(() -> estimateService.createEstimateFromAppointment(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessage("appointmentId is required");
     }
     // Issue CAP-140 end: AC4
@@ -208,7 +209,7 @@ class EstimateFromAppointmentServiceTest {
 
         // When & Then
         assertThatThrownBy(() -> estimateService.createEstimateFromAppointment(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessage("customerId is required");
     }
     // Issue CAP-140 end: AC5

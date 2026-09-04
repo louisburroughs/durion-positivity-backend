@@ -14,6 +14,7 @@ import com.positivity.accounting.internal.dto.PaymentLagCohortRow;
 import com.positivity.accounting.internal.dto.PaymentLagCohortsReport;
 import com.positivity.accounting.internal.dto.VendorSpendReport;
 import com.positivity.accounting.internal.dto.VendorSpendRow;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.service.AccountingAnalyticsService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -265,7 +266,7 @@ class AccountingAnalyticsControllerTest extends BaseIntegrationTest {
     @DisplayName("GET /vendor-spend rejects a non-positive limit with 400 VALIDATION_ERROR")
     void vendorSpendRejectsNonPositiveLimit() throws Exception {
         when(accountingAnalyticsService.getVendorSpend(any(), any(), eq(0)))
-                .thenThrow(new IllegalArgumentException("limit must be at least 1"));
+                .thenThrow(new InvalidRequestParameterException("limit must be at least 1"));
 
         mockMvc.perform(withAuth(get(VENDOR_SPEND_PATH)
                         .param("startDate", "2026-06-01")

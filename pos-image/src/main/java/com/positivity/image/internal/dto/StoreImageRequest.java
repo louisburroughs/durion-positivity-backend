@@ -1,5 +1,6 @@
 package com.positivity.image.internal.dto;
 
+import com.positivity.image.internal.exception.ImageValidationException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -38,7 +39,10 @@ public record StoreImageRequest(
         try {
             return Base64.getDecoder().decode(content);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("content is not valid base64: " + e.getMessage(), e);
+            // Catches the JDK's own IllegalArgumentException from Base64.getDecoder().decode and
+            // re-types it: a bare IllegalArgumentException reaching ImageExceptionHandler would no
+            // longer be treated as a client error (see ImageValidationException).
+            throw new ImageValidationException("content is not valid base64: " + e.getMessage(), e);
         }
     }
 }

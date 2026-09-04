@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.SubstitutionStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.WorkOrderPartSubstitutionRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -261,7 +262,7 @@ class WorkorderSubstitutionServiceImplTest {
 
         assertThatThrownBy(() -> service.substitutePartLine(
                         WORKORDER_ID, ORIGINAL_PART_ID, ORIGINAL_PART_ID, "OUT_OF_STOCK", null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(WorkorderRequestValidationException.class)
                 .hasMessageContaining("must be different");
     }
 

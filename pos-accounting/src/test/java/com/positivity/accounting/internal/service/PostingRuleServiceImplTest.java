@@ -14,6 +14,8 @@ import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
+import com.positivity.accounting.internal.exception.PostingRuleSetNotFoundException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
@@ -124,6 +126,7 @@ class PostingRuleServiceImplTest {
         void success() {
             testRuleSet.getVersions().add(testVersion);
 
+            when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                     .thenReturn(List.of(testVersion));
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
@@ -143,12 +146,23 @@ class PostingRuleServiceImplTest {
             testVersion.setState(PostingRuleSetState.PUBLISHED);
             testRuleSet.getVersions().add(testVersion);
 
+            when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                     .thenReturn(List.of(testVersion));
 
             assertThatThrownBy(() -> service.publishRuleSet(ruleSetId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("No DRAFT version");
+        }
+
+        @Test
+        @DisplayName("throws 404 PostingRuleSetNotFoundException when the rule set does not exist (issue #1694)")
+        void ruleSetNotFound() {
+            when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.publishRuleSet(ruleSetId))
+                    .isInstanceOf(PostingRuleSetNotFoundException.class)
+                    .hasMessageContaining("not found");
         }
     }
 
@@ -164,6 +178,7 @@ class PostingRuleServiceImplTest {
             testVersion.setState(PostingRuleSetState.PUBLISHED);
             testRuleSet.getVersions().add(testVersion);
 
+            when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                     .thenReturn(List.of(testVersion));
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
@@ -179,12 +194,23 @@ class PostingRuleServiceImplTest {
         void noPublishedVersion() {
             testRuleSet.getVersions().add(testVersion); // testVersion is DRAFT
 
+            when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
             when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId))
                     .thenReturn(List.of(testVersion));
 
             assertThatThrownBy(() -> service.archiveRuleSet(ruleSetId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("No PUBLISHED version");
+        }
+
+        @Test
+        @DisplayName("throws 404 PostingRuleSetNotFoundException when the rule set does not exist (issue #1694)")
+        void ruleSetNotFound() {
+            when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.archiveRuleSet(ruleSetId))
+                    .isInstanceOf(PostingRuleSetNotFoundException.class)
+                    .hasMessageContaining("not found");
         }
     }
 
@@ -273,6 +299,7 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("listVersionsAsResponse - returns versions with pagination")
     void listVersionsAsResponse_returnsPaginated() {
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
         when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(testVersion));
 
         List<PostingRuleVersionResponse> result = service.listVersionsAsResponse(ruleSetId, 0, 10);
@@ -283,11 +310,23 @@ class PostingRuleServiceImplTest {
     @Test
     @DisplayName("listVersionsAsResponse - returns empty when page is out of range")
     void listVersionsAsResponse_emptyWhenOutOfRange() {
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.of(testRuleSet));
         when(versionRepository.findByPostingRuleSet_PostingRuleSetId(ruleSetId)).thenReturn(List.of(testVersion));
 
         List<PostingRuleVersionResponse> result = service.listVersionsAsResponse(ruleSetId, 5, 10);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("listVersionsAsResponse - throws 404 PostingRuleSetNotFoundException when the rule set does not"
+            + " exist (issue #1694)")
+    void listVersionsAsResponse_ruleSetNotFound() {
+        when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.listVersionsAsResponse(ruleSetId, 0, 10))
+                .isInstanceOf(PostingRuleSetNotFoundException.class)
+                .hasMessageContaining("not found");
     }
 
     // ===== UPDATE RULE SET =====
@@ -426,7 +465,7 @@ class PostingRuleServiceImplTest {
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
 
             assertThatThrownBy(() -> service.publishVersion(versionId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("rules definition is empty");
         }
 
@@ -485,13 +524,13 @@ class PostingRuleServiceImplTest {
         }
 
         @Test
-        @DisplayName("rejects unparseable rules definition JSON as IllegalArgumentException")
+        @DisplayName("rejects unparseable rules definition JSON as PostingRulePublishValidationException")
         void malformedJsonRejected() {
             testVersion.setRulesDefinition("not json at all {{");
             when(versionRepository.findById(versionId)).thenReturn(Optional.of(testVersion));
 
             assertThatThrownBy(() -> service.publishVersion(versionId))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("not valid JSON");
         }
     }
@@ -565,7 +604,7 @@ class PostingRuleServiceImplTest {
         when(ruleSetRepository.findByIdWithVersions(ruleSetId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPostingRuleSet(ruleSetId))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(PostingRuleSetNotFoundException.class)
                 .hasMessageContaining("not found");
     }
 

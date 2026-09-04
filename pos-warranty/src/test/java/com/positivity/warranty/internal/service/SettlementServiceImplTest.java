@@ -29,6 +29,7 @@ import com.positivity.warranty.internal.exception.IllegalClaimStateException;
 import com.positivity.warranty.internal.exception.WarrantyIntegrationException;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
 import com.positivity.warranty.internal.exception.WarrantyUnprocessableException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
@@ -231,7 +232,7 @@ class SettlementServiceImplTest {
             SettlementCreateRequest request = new SettlementCreateRequest(
                     SettlementType.REPLACEMENT_WORKORDER, COVERED, CUSTOMER, null, null, null, null);
             assertThatThrownBy(() -> service.create(CLAIM_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("replacementWorkorderId");
             verifyNoInteractions(settlementRepository, extWorkorderReplicaRepository);
         }
@@ -297,7 +298,7 @@ class SettlementServiceImplTest {
             SettlementCreateRequest request = new SettlementCreateRequest(
                     SettlementType.INVOICE_CREDIT, COVERED, CUSTOMER, null, null, null, null);
             assertThatThrownBy(() -> service.create(CLAIM_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("invoiceId");
             verifyNoInteractions(settlementRepository, invoiceClient);
         }
@@ -346,7 +347,7 @@ class SettlementServiceImplTest {
             SettlementCreateRequest request =
                     new SettlementCreateRequest(SettlementType.REFUND, COVERED, CUSTOMER, null, INVOICE_ID, null, null);
             assertThatThrownBy(() -> service.create(CLAIM_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("paymentId");
             verifyNoInteractions(settlementRepository, invoiceClient);
         }

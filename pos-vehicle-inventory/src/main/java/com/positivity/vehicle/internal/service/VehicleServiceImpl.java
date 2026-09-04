@@ -5,6 +5,7 @@ import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.config.VehicleEventPublisher;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.exception.VehicleVinConflictException;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
 import jakarta.persistence.EntityNotFoundException;
@@ -39,9 +40,10 @@ public class VehicleServiceImpl implements VehicleService {
         // Validate and normalize VIN
         String vinNormalized = VinUtils.validateAndNormalize(request.getVin());
 
-        // Check global uniqueness
+        // Check global uniqueness. A well-formed request colliding with existing state is a
+        // stateful collision (ADR-0017 §2), not a malformed request — 409, not 400 (issue #1694).
         if (vehicleRepository.existsByVinNormalizedAndIsActiveTrue(vinNormalized)) {
-            throw new IllegalArgumentException("Vehicle with VIN " + request.getVin() + " already exists. "
+            throw new VehicleVinConflictException("Vehicle with VIN " + request.getVin() + " already exists. "
                     + "VINs must be globally unique across all active vehicles.");
         }
 

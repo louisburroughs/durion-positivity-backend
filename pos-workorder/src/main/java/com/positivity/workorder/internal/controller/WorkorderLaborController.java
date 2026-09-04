@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.AdjustLaborRequest;
 import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
@@ -278,7 +279,10 @@ public class WorkorderLaborController {
                         content = @Content(schema = @Schema(implementation = WorkorderLaborEntryResponse.class))),
                 @ApiResponse(responseCode = "400", description = "Invalid hours value"),
                 @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Labor entry not found")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Labor entry not found",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Corrected hours and the reason justifying the manual adjustment.",
@@ -313,25 +317,16 @@ public class WorkorderLaborController {
                     @RequestHeader(value = "Idempotency-Key", required = false)
                     String idempotencyKey) {
 
-        try {
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
-            WorkorderLaborEntryResponse response = laborService.adjustLaborHours(
-                    entryId, request.getHoursWorked(), request.getAdjustmentReason(), username, idempotencyKey);
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_USERNAME);
+        WorkorderLaborEntryResponse response = laborService.adjustLaborHours(
+                entryId, request.getHoursWorked(), request.getAdjustmentReason(), username, idempotencyKey);
 
-            log.info(
-                    "Adjusted labor entry {} to {} hours - reason: {}",
-                    entryId,
-                    request.getHoursWorked(),
-                    request.getAdjustmentReason());
+        log.info(
+                "Adjusted labor entry {} to {} hours - reason: {}",
+                entryId,
+                request.getHoursWorked(),
+                request.getAdjustmentReason());
 
-            return ResponseEntity.ok(response);
-
-        } catch (NoSuchElementException e) {
-            log.warn("Adjust labor failed - not found: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Adjust labor failed - invalid request: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.ok(response);
     }
 }

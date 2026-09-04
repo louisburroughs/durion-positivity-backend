@@ -25,6 +25,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 /**
  * Module-wide translation of exceptions into the standard {@code ApiError} envelope
  * ({@code docs/ERROR_ENVELOPE.md}) for every pos-warranty controller.
+ *
+ * <p>Deliberately does NOT map bare {@code IllegalArgumentException} or {@code Exception}: see
+ * {@link WarrantyValidationException} for why a blanket {@code IllegalArgumentException} handler
+ * misreports server defects as client errors, and ADR-0056 for why the unmapped tail must reach
+ * {@code pos-web-common}'s platform-wide {@code GlobalApiExceptionHandler} (registered at {@code
+ * Ordered.LOWEST_PRECEDENCE}, so this advice keeps precedence for every type it does map) rather
+ * than being swallowed by a module-local catch-all here.
  */
 @RestControllerAdvice(basePackages = "com.positivity.warranty.internal.controller")
 public class WarrantyExceptionHandler {
@@ -136,12 +143,23 @@ public class WarrantyExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "Request body could not be parsed", request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * Genuine client input-validation failures raised by this module's own services/controllers
+     * (see {@link WarrantyValidationException}). This class deliberately does NOT map bare {@code
+     * IllegalArgumentException}: that type is not exclusive to this module's validation —
+     * Hibernate/JPA throw it for an invalid query and {@code UUID.fromString} throws it on
+     * malformed stored data, and catching it here would turn a server-side defect into a
+     * client-facing 400 that also leaks internal class names and query text. An unexpected {@code
+     * IllegalArgumentException} now falls through to {@code pos-web-common}'s platform-wide
+     * {@code GlobalApiExceptionHandler} fallback, which answers a generic, correlated 500 instead
+     * of echoing the exception text.
+     */
+    @ExceptionHandler(WarrantyValidationException.class)
+    public ResponseEntity<ApiError> handleValidation(WarrantyValidationException ex, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
-    /** {@code @PreAuthorize} denials must not fall into the 500 catch-all below. */
+    /** {@code @PreAuthorize} denials must not fall into the platform 500 fallback. */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "You do not have permission to perform this action", request);
@@ -150,17 +168,11 @@ public class WarrantyExceptionHandler {
     /**
      * Concurrent writes to the same versioned aggregate (every mutating claim flow is
      * load-modify-save on an {@code @Version}-ed entity) are expected, retryable conflicts —
-     * 409, never the 500 catch-all (mirrors pos-catalog {@code CatalogExceptionHandler}).
+     * 409, never the platform 500 fallback (mirrors pos-catalog {@code CatalogExceptionHandler}).
      */
     @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
     public ResponseEntity<ApiError> handleOptimisticLockConflict(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "CONFLICT", "Resource was updated concurrently. Please retry.", request);
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleUnexpected(Exception ex, HttpServletRequest request) {
-        log.error("Unhandled exception in warranty controller", ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "An unexpected error occurred", request);
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message, HttpServletRequest request) {

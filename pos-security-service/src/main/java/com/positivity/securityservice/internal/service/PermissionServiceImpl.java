@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.entity.Permission;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +38,7 @@ public class PermissionServiceImpl implements PermissionService {
         for (PermissionRegistrationRequest.PermissionDefinition definition : request.getPermissions()) {
             String permissionKey = definition.getName();
             if (!isValidPermissionKey(permissionKey)) {
-                throw new IllegalArgumentException("Permission key must match domain:resource:action");
+                throw new SecurityValidationException("Permission key must match domain:resource:action");
             }
 
             Permission permission =

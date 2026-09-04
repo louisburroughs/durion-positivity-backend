@@ -63,6 +63,9 @@ final class ToolComposition {
     @NonNull
     ToolComposition call(@NonNull String legName, @NonNull Supplier<String> downstreamCall) {
         if (legs.containsKey(legName)) {
+            // legName is always a hardcoded literal at the facade tool's own call site (#1694: no
+            // caller passes a client- or LLM-supplied leg name), so a collision here is a coding
+            // defect in this module, not client input -- left as a bare IllegalArgumentException.
             throw new IllegalArgumentException("Duplicate composition leg: " + legName);
         }
         legs.put(legName, new Leg(downstreamCall));
@@ -73,6 +76,8 @@ final class ToolComposition {
     ToolComposition require(@NonNull String legName) {
         Leg leg = legs.get(legName);
         if (leg == null) {
+            // Same as above: legName is a hardcoded literal, so an undeclared leg is a coding
+            // defect (a facade referring to a leg it never declared), not client input.
             throw new IllegalArgumentException("Cannot require undeclared composition leg: " + legName);
         }
         leg.required = true;

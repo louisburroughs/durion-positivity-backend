@@ -161,12 +161,14 @@ public class JournalEntryController {
                     Preconditions: the journal entry must exist.
                     Required inputs: journalEntryId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id \
-                    (this module maps entry not-found to 400, not 404).
+                    Returns 404 JOURNAL_ENTRY_NOT_FOUND when no journal entry exists for the supplied id.
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entry returned")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<JournalEntryResponse> getJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
         log.debug("Getting journal entry: {}", journalEntryId);
@@ -191,11 +193,14 @@ public class JournalEntryController {
                     links while manual entries may not.
                     Required inputs: journalEntryId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id.
+                    Returns 404 JOURNAL_ENTRY_NOT_FOUND when no journal entry exists for the supplied id.
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal traceability returned")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<JournalEntryTraceabilityResponse> getJournalTraceability(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId) {
         log.debug("Getting journal traceability: {}", journalEntryId);
@@ -223,12 +228,22 @@ public class JournalEntryController {
                     debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and \
                     dimensions are optional.
                     Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
-                    Returns 400 when the entry is unbalanced or a GL account is missing or inactive on the \
-                    transaction date.
+                    Returns 400 for a malformed request, 404 GL_ACCOUNT_NOT_FOUND when a line's glAccountId \
+                    does not exist, and 422 UNBALANCED_ENTRY or GL_ACCOUNT_NOT_ACTIVE when the entry is \
+                    unbalanced or a GL account is not active on the transaction date.
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "201", description = "Journal entry created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "404",
+            description = "GL account not found (GL_ACCOUNT_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Entry is unbalanced (UNBALANCED_ENTRY), or a GL account is not active on the"
+                    + " transaction date (GL_ACCOUNT_NOT_ACTIVE)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_CREATE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> createJournalEntry(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -275,12 +290,23 @@ public class JournalEntryController {
                     (same shape as createJournalEntry); supplied lines replace the existing line set wholesale.
                     Emits an ACCOUNTING_JOURNAL_ENTRY_UPDATE event; GL balances are unchanged because drafts \
                     are not yet in the ledger.
-                    Returns 409 when the entry is no longer DRAFT, and 400 when the updated entry is \
-                    unbalanced or the entry id does not exist.
+                    Returns 404 JOURNAL_ENTRY_NOT_FOUND when the entry id does not exist, 409 when the entry \
+                    is no longer DRAFT, and 422 UNBALANCED_ENTRY when the updated entry is unbalanced.
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entry updated")
-    @ApiResponse(responseCode = "404", description = "Journal entry not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Entry is no longer DRAFT",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Updated entry is unbalanced (UNBALANCED_ENTRY)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_UPDATE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> updateJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
@@ -329,9 +355,10 @@ public class JournalEntryController {
                     accounting:period:override permission allows posting into a CLOSED period with the \
                     override audit-logged; a date before the org hard-lock date is never overridable.
                     Emits an ACCOUNTING_JOURNAL_ENTRY_POST event and returns the posted entry.
-                    Returns 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, 422 \
-                    UNBALANCED_ENTRY when debits do not equal credits, 422 PERIOD_CLOSED or \
-                    PERIOD_HARD_LOCKED for period-gate failures, and 400 when no entry exists for the id.
+                    Returns 400 ARGUMENT_NOT_VALID when overrideJustification exceeds 500 characters, 404 \
+                    JOURNAL_ENTRY_NOT_FOUND when no entry exists for the id, 409 ENTRY_ALREADY_POSTED when \
+                    the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY, GL_ACCOUNT_NOT_ACTIVE, \
+                    PERIOD_CLOSED or PERIOD_HARD_LOCKED for domain-policy or period-gate failures.
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(
@@ -340,12 +367,15 @@ public class JournalEntryController {
             content = @Content(schema = @Schema(implementation = JournalEntryResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "No journal entry exists for the identifier (VALIDATION_ERROR), or the"
-                    + " overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)",
+            description = "overrideJustification exceeds 500 characters (ARGUMENT_NOT_VALID)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks the accounting:je:post permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -356,7 +386,8 @@ public class JournalEntryController {
             description = "Transaction date is in a CLOSED period without a valid override (PERIOD_CLOSED —"
                     + " accounting:period:override plus a non-blank overrideJustification allows posting into"
                     + " closed periods), is strictly before the hard-lock date (PERIOD_HARD_LOCKED — never"
-                    + " overridable), or the entry is unbalanced (UNBALANCED_ENTRY)",
+                    + " overridable), the entry is unbalanced (UNBALANCED_ENTRY), or a line's GL account is"
+                    + " not active on the transaction date (GL_ACCOUNT_NOT_ACTIVE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_POST", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> postJournalEntry(
@@ -404,10 +435,10 @@ public class JournalEntryController {
                     OPEN, otherwise today; overrideJustification with the accounting:period:override \
                     permission allows reversing into a CLOSED period, but never before the hard-lock date.
                     Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
-                    Returns 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost \
-                    concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, 422 \
-                    PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures, and 400 when the reason is \
-                    blank or the entry does not exist.
+                    Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not \
+                    exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost \
+                    concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 \
+                    PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures.
                     """,
             tags = {"Journal Entries"})
     @ApiResponse(
@@ -416,12 +447,15 @@ public class JournalEntryController {
             content = @Content(schema = @Schema(implementation = JournalEntryResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "Reason is missing or blank (ARGUMENT_NOT_VALID), or no journal entry exists for the"
-                    + " identifier (VALIDATION_ERROR)",
+            description = "Reason is missing or blank (ARGUMENT_NOT_VALID)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Caller lacks the accounting:je:reverse permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Journal entry not found (JOURNAL_ENTRY_NOT_FOUND)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",

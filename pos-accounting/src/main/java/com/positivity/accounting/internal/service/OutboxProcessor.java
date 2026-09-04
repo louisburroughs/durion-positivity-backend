@@ -152,6 +152,11 @@ public class OutboxProcessor {
     private @NonNull Class<?> resolveEventClass(@NonNull String eventType) {
         Class<?> eventClass = EVENT_TYPE_REGISTRY.get(eventType);
         if (eventClass == null) {
+            // (d) Defensive/internal invariant: this runs inside the background outbox
+            // processing loop (not reachable from a controller). An unsupported event type
+            // here means our own code enqueued an event type it cannot deserialize — a
+            // server-side defect, correctly answered as a correlated 500 by the
+            // pos-web-common catch-all now that no blanket handler maps it to 400.
             throw new IllegalArgumentException("Unsupported event type: " + eventType);
         }
         return eventClass;

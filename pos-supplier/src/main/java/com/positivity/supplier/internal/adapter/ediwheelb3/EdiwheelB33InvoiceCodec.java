@@ -87,6 +87,13 @@ public class EdiwheelB33InvoiceCodec implements SupplierAdapterCodec {
         if (toDate.isBefore(fromDate)) {
             // IllegalArgumentException, not a decode failure: nothing has been decoded, and calling
             // it one sent a caller looking for a vendor problem when the fault was in the request.
+            //
+            // Left bare rather than retyped to a module exception (#1694): buildRequest's only
+            // caller, InvoiceFetchRunner.fetchInvoices, already performs this exact check first and
+            // throws InvoiceFetchException before ever calling buildRequest — see its "Checked here
+            // so every caller sees one exception type" comment — so this branch is unreachable from
+            // the HTTP path today. It stays as a defensive guard for any future direct caller of
+            // this codec.
             throw new IllegalArgumentException("Invoice window ends before it begins: " + fromDate + " to " + toDate);
         }
         Map<String, String> query = new LinkedHashMap<>();

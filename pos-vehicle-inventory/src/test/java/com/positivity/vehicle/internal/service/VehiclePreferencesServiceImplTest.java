@@ -13,6 +13,7 @@ import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import java.util.HashMap;
@@ -137,13 +138,13 @@ class VehiclePreferencesServiceImplTest {
 
         assertThatThrownBy(() -> service.upsertPreferences(
                         request(new HashMap<>(Map.of("serviceIntervalMonths", "soon")), null)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(VehicleValidationException.class);
         assertThatThrownBy(() ->
                         service.upsertPreferences(request(new HashMap<>(Map.of("serviceIntervalMonths", 0)), null)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(VehicleValidationException.class);
         assertThatThrownBy(() ->
                         service.upsertPreferences(request(new HashMap<>(Map.of("serviceIntervalMonths", 121)), null)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(VehicleValidationException.class);
         verify(publisher, never()).publishCarePreferenceUpserted(any());
     }
 

@@ -80,6 +80,9 @@ public class ScreenRegistryRepositoryImpl implements ScreenRegistryRepository {
         try {
             object.setValue(value.toString());
         } catch (java.sql.SQLException exception) {
+            // value is a numeric literal built from a locally computed embedding array, not raw
+            // client input -- a query embedding produced by the embedding model, never a value a
+            // caller supplies directly (#1694). Left as a bare IllegalArgumentException.
             throw new IllegalArgumentException("Failed to build vector PGobject", exception);
         }
         return object;

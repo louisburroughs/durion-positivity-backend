@@ -193,6 +193,10 @@ public class TransmissionStateWriter {
                 intent.setStatusPollingActive(true);
                 intent.setPollingStoppedReason(null);
             }
+            // Left as IllegalArgumentException (#1694): recordReconciliation is called only from
+            // the internal OrderTransmissionReconciler scheduler, never from a controller, and
+            // NOT_FOUND is filtered out by that caller before this method is invoked. Reaching
+            // this branch is a programming defect in the reconciler, not client-triggerable.
             case NOT_FOUND ->
                 throw new IllegalArgumentException(
                         "NOT_FOUND is the caller's decision to make, not a reconciliation outcome (ADR-0052 §3)");

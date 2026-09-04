@@ -13,6 +13,7 @@ import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
+import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.repository.CashMovementRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
@@ -121,13 +122,14 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     + session.getSessionId() + " is " + session.getStatus());
         }
         if (command.amount().signum() <= 0) {
-            throw new IllegalArgumentException("Cash movement amount must be positive");
+            throw new RegisterSessionRequestValidationException("Cash movement amount must be positive");
         }
         CashMovementType type;
         try {
             type = CashMovementType.valueOf(command.movementType().trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown cash movement type: " + command.movementType());
+            throw new RegisterSessionRequestValidationException(
+                    "Unknown cash movement type: " + command.movementType());
         }
         CashMovement movement = CashMovement.builder()
                 .sessionId(session.getSessionId())

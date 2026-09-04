@@ -10,8 +10,10 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.InvoiceAdjustment;
 import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.ExcessiveAdjustmentException;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
@@ -81,6 +83,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @NonNull
     public InvoiceGenerationResponse createInvoice(@NonNull InvoiceGenerationRequest request) {
+        // #1694 (d): defensive invariant — no controller calls this overload (InvoiceController
+        // calls the InvoiceCreationRequest overload below); left as a bare IllegalArgumentException
+        // for any future direct caller of the {@code InvoiceService} interface.
         if (request.getWorkorderId() == null) {
             throw new IllegalArgumentException("workorderId is required");
         }
@@ -97,7 +102,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     @NonNull
     public InvoiceGenerationResponse createInvoice(@NonNull InvoiceCreationRequest request) {
         if (request.getWorkorderId() == null) {
-            throw new IllegalArgumentException("workorderId is required");
+            throw new InvoiceRequestValidationException("workorderId is required");
         }
 
         return invoiceRepository
@@ -233,15 +238,24 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     private void validateAdjustmentRequest(@NonNull AdjustmentRequest request) {
+        // #1694 (d): defensive invariant — AdjustmentRequest.type carries @NotNull, so a null
+        // type is already rejected by bean validation (400) before this method runs; left as a
+        // bare IllegalArgumentException for any future direct caller.
         if (request.getType() == null) {
             throw new IllegalArgumentException("adjustment type is required");
         }
+        // #1694 (d): defensive invariant — AdjustmentRequest.amount carries @DecimalMin("0.0001")
+        // and InvoiceController applies @Valid, so bean validation rejects a null, zero or negative
+        // amount before this runs. Kept as the module's own type rather than a bare
+        // IllegalArgumentException for any future direct caller that bypasses the controller.
         if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("adjustment amount must be greater than zero");
+            throw new InvoiceRequestValidationException("adjustment amount must be greater than zero");
         }
+        // #1694 (d): defensive invariant — AdjustmentRequest.reason carries @NotBlank.
         if (request.getReason() == null || request.getReason().isBlank()) {
             throw new IllegalArgumentException("adjustment reason is required");
         }
+        // #1694 (d): defensive invariant — AdjustmentRequest.authorizedBy carries @NotBlank.
         if (request.getAuthorizedBy() == null || request.getAuthorizedBy().isBlank()) {
             throw new IllegalArgumentException("authorizedBy is required");
         }
@@ -269,8 +283,11 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         BigDecimal total = invoice.getSubtotal().add(tax).add(adjustmentTotal).setScale(4, RoundingMode.HALF_UP);
 
+        // (b): domain-policy violation on an otherwise valid adjustment — the request shape is
+        // fine, but the cumulative effect on this invoice's state (existing adjustments +
+        // subtotal + tax) is not, so this maps to 422 rather than 400 (ADR-0017 §2).
         if (total.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException(
+            throw new ExcessiveAdjustmentException(
                     "invoice total cannot be negative; adjustments would require a credit memo");
         }
         invoice.setTotal(total);

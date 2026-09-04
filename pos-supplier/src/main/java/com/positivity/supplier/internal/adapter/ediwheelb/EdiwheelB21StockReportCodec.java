@@ -189,6 +189,12 @@ public class EdiwheelB21StockReportCodec implements SupplierAdapterCodec {
         return new DecodedLines(lines, rejected);
     }
 
+    // The IllegalArgumentException thrown below (and in parseQuantity) is deliberately left as-is
+    // (#1694) rather than retyped to a module exception: it is a purely local control-flow signal
+    // — decodeLines's catch (IllegalArgumentException e) above always intercepts it and records
+    // the line as rejected — and it never escapes this class, let alone reaches a controller.
+    // Retyping it to a type that does not extend IllegalArgumentException would silently stop
+    // being caught there and fail the whole import instead of rejecting one line.
     private SupplierStockSnapshot.Line toLine(StockReportB21Wire.Line wireLine) {
         StockReportB21Wire.Article article = wireLine.article();
         StockReportB21Wire.ArticleIdentification identity = article == null ? null : article.articleIdentification();

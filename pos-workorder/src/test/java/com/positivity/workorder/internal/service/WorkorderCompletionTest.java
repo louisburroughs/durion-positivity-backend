@@ -21,6 +21,7 @@ import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.event.WorkCompletedEvent;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -330,7 +331,7 @@ class WorkorderCompletionTest {
         UUID nonExistentId = UUID.fromString("550e8400-e29b-41d4-a716-446655440999");
         when(workOrderRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+        WorkorderNotFoundException exception = assertThrows(WorkorderNotFoundException.class, () -> {
             stateMachine.completeWorkorder(nonExistentId, userId, "Work order not found");
         });
 

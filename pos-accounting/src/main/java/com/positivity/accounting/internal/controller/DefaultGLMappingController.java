@@ -6,10 +6,12 @@ import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.DefaultGLMappingService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -77,12 +79,22 @@ public class DefaultGLMappingController {
                     (UUID); organizationId is optional (null makes the default global) and active defaults to \
                     true.
                     Emits an ACCOUNTING_DEFAULT_MAPPING_CREATE event.
-                    Returns 400 when a referenced GL account cannot be resolved.
+                    Returns 400 for an invalid request, 404 GL_ACCOUNT_NOT_FOUND when a referenced GL \
+                    account does not exist, and 422 GL_ACCOUNT_NOT_ACTIVE when it exists but is not active \
+                    on the current date.
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "201", description = "Default mapping created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Referenced GL account not found (GL_ACCOUNT_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Referenced GL account is not active (GL_ACCOUNT_NOT_ACTIVE)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_CREATE", apiVersion = "1")
     public ResponseEntity<DefaultGLMappingResponse> createDefaultMapping(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -131,13 +143,22 @@ public class DefaultGLMappingController {
                     eventType, debitAccountId and creditAccountId; organizationId null means global scope.
                     Emits an ACCOUNTING_DEFAULT_MAPPING_UPDATE event; future postings resolve against the \
                     updated pair while already-posted entries are untouched.
-                    Returns 400 when no default mapping exists for the supplied id (mapped as \
-                    VALIDATION_ERROR, not 404).
+                    Returns 404 DEFAULT_GL_MAPPING_NOT_FOUND when no default mapping exists for the supplied \
+                    id, 404 GL_ACCOUNT_NOT_FOUND when a referenced GL account does not exist, and 422 \
+                    GL_ACCOUNT_NOT_ACTIVE when it exists but is not active on the current date.
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping updated")
-    @ApiResponse(responseCode = "404", description = "Default mapping not found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND), or a"
+                    + " referenced GL account not found (GL_ACCOUNT_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Referenced GL account is not active (GL_ACCOUNT_NOT_ACTIVE)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_UPDATE", apiVersion = "1")
     public ResponseEntity<DefaultGLMappingResponse> updateDefaultMapping(
             @Parameter(description = "Default mapping identifier") @PathVariable UUID id,
@@ -178,13 +199,16 @@ public class DefaultGLMappingController {
                     Preconditions: the default mapping must exist.
                     Required inputs: id (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_DEFAULT_MAPPING_DELETE event.
-                    Returns 400 when no default mapping exists for the supplied id (mapped as \
-                    VALIDATION_ERROR, not 404), and 204 with no body on success.
+                    Returns 204 with no body on success, and 404 DEFAULT_GL_MAPPING_NOT_FOUND when no default \
+                    mapping exists for the supplied id.
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "204", description = "Default mapping deactivated")
-    @ApiResponse(responseCode = "404", description = "Default mapping not found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deactivateDefaultMapping(
             @Parameter(description = "Default mapping identifier") @PathVariable UUID id) {
@@ -209,13 +233,16 @@ public class DefaultGLMappingController {
                     Preconditions: the default mapping must exist.
                     Required inputs: id (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 400 when no default mapping exists for the supplied id (mapped as \
-                    VALIDATION_ERROR, not 404).
+                    Returns 404 DEFAULT_GL_MAPPING_NOT_FOUND when no default mapping exists for the supplied \
+                    id.
                     """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping returned")
-    @ApiResponse(responseCode = "404", description = "Default mapping not found")
     @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No default mapping exists for the identifier (DEFAULT_GL_MAPPING_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<DefaultGLMappingResponse> getDefaultMapping(
             @Parameter(description = "Default mapping identifier") @PathVariable UUID id) {
         log.info("Get default GL mapping: id={}", id);

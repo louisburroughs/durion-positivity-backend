@@ -32,6 +32,20 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * The typed supplier exceptions map deterministically: not-found → 404, semantic validation →
  * 400, configuration-state collision (including YAML-managed mutation, ADR-0050 §6) → 409 —
  * each carrying its machine-readable domain code.
+ *
+ * <p><strong>Deliberately does not map bare {@code IllegalArgumentException} or catch-all
+ * {@code Exception}</strong> (#1694). {@code IllegalArgumentException} is not exclusive to this
+ * module's own validation — Hibernate/JPA throw it for an invalid query, {@code
+ * UUID.fromString} throws it on malformed stored data — so a blanket handler for it reported
+ * server-side defects as client 4xxs, leaking internal class names and query text into the
+ * response body. And {@code ExceptionHandlerExceptionResolver} picks the first advice bean with
+ * any matching handler method, so a blanket {@code Exception} handler here pre-empted {@code
+ * pos-web-common}'s {@code GlobalApiExceptionHandler} for every exception this advice did not
+ * name explicitly — including its ADR-0056 §2 {@code DataIntegrityViolationException} mapping
+ * (409 unique/FK, 422 client-supplied not-null/check). Everything this advice does not name
+ * explicitly now falls through to that platform fallback, which answers a generic correlated 500
+ * {@code INTERNAL_ERROR} and logs the stack trace at {@code ERROR} — see {@code
+ * SupplierExceptionHandlerErrorHandlingTest} for the regression proof.
  */
 @RestControllerAdvice(basePackages = "com.positivity.supplier.internal.controller")
 public class SupplierExceptionHandler {
@@ -281,27 +295,33 @@ public class SupplierExceptionHandler {
     }
 
     /**
-     * Unparseable bodies are 400. The contract records in {@code service.model} validate in
-     * their canonical constructors, so a well-formed JSON body carrying illegal values (blank
-     * {@code supplierRef}, DELIVERY account without a location, …) surfaces here wrapped by
-     * Jackson — unwrap it into a proper {@code VALIDATION_ERROR} with the constructor's
-     * message instead of a generic parse failure.
+     * Unparseable bodies are 400. The contract records in {@code service.model} and {@code
+     * internal.service.model}/{@code internal.domain.model} validate in their canonical
+     * constructors, so a well-formed JSON body carrying illegal values (blank {@code
+     * supplierRef}, DELIVERY account without a location, …) surfaces here wrapped by Jackson —
+     * unwrap it rather than answering a generic parse failure.
+     *
+     * <p>Two cases (#1694): a {@link SupplierValidationException} cause — thrown by the {@code
+     * internal.service.model}/{@code internal.domain.model} record constructors, which cannot
+     * throw a bare {@code IllegalArgumentException} now that the blanket handler for it is gone —
+     * delegates to {@link #handleValidation} so it keeps its own {@code code}, message and any
+     * field errors; a bare {@code IllegalArgumentException}/{@code NullPointerException} cause
+     * (the {@code service.model} grant-surface records, which cannot depend on this package)
+     * still answers the generic {@code VALIDATION_ERROR} it always has.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadableBody(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
         for (Throwable cause = ex.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof SupplierValidationException validationCause) {
+                return handleValidation(validationCause, request);
+            }
             if (cause instanceof IllegalArgumentException || cause instanceof NullPointerException) {
                 String message = cause.getMessage() == null ? "Request validation failed" : cause.getMessage();
                 return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, message, request);
             }
         }
         return build(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "Request body could not be parsed", request);
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
     /** {@code @PreAuthorize} denials must not fall into the 500 catch-all below. */
@@ -317,12 +337,6 @@ public class SupplierExceptionHandler {
     @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
     public ResponseEntity<ApiError> handleOptimisticLockConflict(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "CONFLICT", "Resource was updated concurrently. Please retry.", request);
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleUnexpected(Exception ex, HttpServletRequest request) {
-        log.error("Unhandled exception in supplier controller", ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "An unexpected error occurred", request);
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message, HttpServletRequest request) {

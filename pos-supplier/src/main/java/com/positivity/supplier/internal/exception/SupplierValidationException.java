@@ -11,6 +11,18 @@ import java.util.List;
  */
 public class SupplierValidationException extends RuntimeException {
 
+    /**
+     * Generic request-shape/field validation on a create/update payload record: a required field
+     * missing or blank, a numeric field out of its documented range, or a cross-field requirement
+     * within one payload (e.g. a role-conditional field). Deliberately the same wire value
+     * {@code MethodArgumentNotValidException}/{@code ConstraintViolationException} already answer
+     * with, and the value the removed blanket {@code IllegalArgumentException} handler used to
+     * produce for these same checks (#1694) — reusing it keeps the wire contract unchanged while
+     * retiring the blanket handler that let unrelated server-side {@code IllegalArgumentException}s
+     * (Hibernate, {@code UUID.fromString}, ...) escape as a client 400 too.
+     */
+    public static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+
     public static final String UNKNOWN_CAPABILITY = "SUPPLIER_UNKNOWN_CAPABILITY";
     public static final String UNKNOWN_PROTOCOL_FAMILY = "SUPPLIER_UNKNOWN_PROTOCOL_FAMILY";
     public static final String AUTH_REFS_INCOMPLETE = "SUPPLIER_AUTH_REFS_INCOMPLETE";

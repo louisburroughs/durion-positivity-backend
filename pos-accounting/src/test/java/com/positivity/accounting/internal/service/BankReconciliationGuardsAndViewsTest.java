@@ -26,6 +26,7 @@ import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.BankReconciliationLineStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
 import com.positivity.accounting.internal.exception.ReconciliationNotFoundException;
@@ -268,7 +269,7 @@ class BankReconciliationGuardsAndViewsTest {
             // The whole point of a reconciliation: only movements on the reconciled account may
             // explain the bank statement.
             assertThatThrownBy(() -> service.match(RECON_ID, matchRequest(List.of(s1), List.of(g1))))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidRequestParameterException.class);
         }
 
         @Test
@@ -345,7 +346,7 @@ class BankReconciliationGuardsAndViewsTest {
                             ReconciliationUnmatchRequest.builder()
                                     .statementLineIds(List.of(s1, s2))
                                     .build()))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("exactly one match group");
         }
 
@@ -361,7 +362,7 @@ class BankReconciliationGuardsAndViewsTest {
                             ReconciliationUnmatchRequest.builder()
                                     .statementLineIds(List.of(s1))
                                     .build()))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(InvalidRequestParameterException.class)
                     .hasMessageContaining("found 0");
         }
 
@@ -370,7 +371,7 @@ class BankReconciliationGuardsAndViewsTest {
         void emptyRequest() {
             assertThatThrownBy(() -> service.unmatch(
                             RECON_ID, ReconciliationUnmatchRequest.builder().build()))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidRequestParameterException.class);
         }
 
         @Test

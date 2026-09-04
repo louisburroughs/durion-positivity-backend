@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
@@ -98,7 +99,8 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     public BankReconciliationResponse importStatement(@NonNull BankReconciliationImportRequest request) {
         GLAccount account = glAccountRepository
                 .findById(request.getGlAccountId())
-                .orElseThrow(() -> new IllegalArgumentException("GL account not found: " + request.getGlAccountId()));
+                .orElseThrow(() ->
+                        new InvalidRequestParameterException("GL account not found: " + request.getGlAccountId()));
         if (!account.isReconcilable()) {
             throw new AccountNotReconcilableException(
                     "GL account " + account.getAccountCode() + " is not reconcilable");
@@ -265,7 +267,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         }
         for (JournalEntryLine glLine : glLines) {
             if (!recon.getGlAccountId().equals(glLine.getGlAccountId())) {
-                throw new IllegalArgumentException("GL line " + glLine.getLineId()
+                throw new InvalidRequestParameterException("GL line " + glLine.getLineId()
                         + " does not post to the reconciled account " + recon.getGlAccountId());
             }
             if (glLine.getJournalEntry() == null || glLine.getJournalEntry().getStatus() != JournalEntryStatus.POSTED) {
@@ -333,7 +335,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
      */
     private UUID resolveMatchId(UUID reconciliationId, @Nullable List<UUID> statementLineIds) {
         if (statementLineIds == null || statementLineIds.isEmpty()) {
-            throw new IllegalArgumentException("Provide either matchId or statementLineIds to unmatch");
+            throw new InvalidRequestParameterException("Provide either matchId or statementLineIds to unmatch");
         }
         List<BankReconciliationLine> requested = lineRepository.findAllById(statementLineIds);
         if (requested.size() != new HashSet<>(statementLineIds).size()) {
@@ -350,7 +352,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
             }
         }
         if (matchIds.size() != 1) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestParameterException(
                     "statementLineIds must resolve to exactly one match group; found " + matchIds.size());
         }
         return matchIds.iterator().next();
@@ -362,7 +364,7 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
         BankReconciliation recon = requireOpenReconciliation(reconciliationId);
         BigDecimal amount = request.getAmount();
         if (amount.signum() == 0) {
-            throw new IllegalArgumentException("Adjustment amount must be non-zero");
+            throw new InvalidRequestParameterException("Adjustment amount must be non-zero");
         }
         BankAdjustmentType type = request.getType();
         if (!type.permits(amount.signum())) {

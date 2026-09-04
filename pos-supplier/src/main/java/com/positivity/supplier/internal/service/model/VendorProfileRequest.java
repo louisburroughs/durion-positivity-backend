@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.service.model;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
@@ -94,23 +95,33 @@ public record VendorProfileRequest(
     public VendorProfileRequest {
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");
         Objects.requireNonNull(displayName, "displayName must not be null");
+        // Genuine client-input validation on an admin @RequestBody (#1694); typed rather than a
+        // bare IllegalArgumentException so it cannot be confused with a server-side defect once
+        // the blanket IllegalArgumentException handler is gone.
         if (supplierRef.isBlank()) {
-            throw new IllegalArgumentException("supplierRef must not be blank");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "supplierRef must not be blank");
         }
         if (displayName.isBlank()) {
-            throw new IllegalArgumentException("displayName must not be blank");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "displayName must not be blank");
         }
         if (connectTimeoutMillis != null && connectTimeoutMillis <= 0) {
-            throw new IllegalArgumentException("connectTimeoutMillis must be > 0");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "connectTimeoutMillis must be > 0");
         }
         if (readTimeoutMillis != null && readTimeoutMillis <= 0) {
-            throw new IllegalArgumentException("readTimeoutMillis must be > 0");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "readTimeoutMillis must be > 0");
         }
         if (maxRetries != null && maxRetries < 0) {
-            throw new IllegalArgumentException("maxRetries must be >= 0");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "maxRetries must be >= 0");
         }
         if (sandboxBaseUrlOverride != null && sandboxBaseUrlOverride.isBlank()) {
-            throw new IllegalArgumentException("sandboxBaseUrlOverride must not be blank when present");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR,
+                    "sandboxBaseUrlOverride must not be blank when present");
         }
     }
 }

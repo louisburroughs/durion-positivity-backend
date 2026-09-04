@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException.RuleViolation;
 import java.math.BigDecimal;
@@ -44,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
  * <p>All violations across all conditions are collected and reported in a
  * single {@link UnbalancedRulesException} (HTTP 422, {@code UNBALANCED_RULES}).
  * A rules definition that is not parseable as JSON is rejected with
- * {@link IllegalArgumentException} (HTTP 400, {@code VALIDATION_ERROR}),
+ * {@link PostingRulePublishValidationException} (HTTP 400, {@code VALIDATION_ERROR}),
  * matching the existing empty-definition publish guard.
  */
 public final class PostingRuleDefinitionValidator {
@@ -69,16 +70,16 @@ public final class PostingRuleDefinitionValidator {
      *
      * @param rulesDefinition the raw rules definition JSON (non-blank; the
      *                        caller enforces the non-empty guard)
-     * @throws IllegalArgumentException if the definition is not valid JSON
-     * @throws UnbalancedRulesException if any split-group or condition
-     *                                  predicate invariant is violated
+     * @throws PostingRulePublishValidationException if the definition is not valid JSON
+     * @throws UnbalancedRulesException               if any split-group or condition
+     *                                                 predicate invariant is violated
      */
     public static void validateForPublish(@NonNull String rulesDefinition) {
         JsonNode root;
         try {
             root = OBJECT_MAPPER.readTree(rulesDefinition);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Cannot publish: rules definition is not valid JSON", e);
+            throw new PostingRulePublishValidationException("Cannot publish: rules definition is not valid JSON", e);
         }
 
         JsonNode conditions = root.get("conditions");

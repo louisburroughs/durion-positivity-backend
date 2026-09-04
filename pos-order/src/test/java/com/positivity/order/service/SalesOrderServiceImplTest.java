@@ -23,6 +23,7 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -180,7 +181,7 @@ class SalesOrderServiceImplTest {
         // Copilot #1093: deposit provenance is all-or-nothing.
         assertThatThrownBy(() -> salesOrderService.createCart(new CreateCartCommand(
                         "clerk-001", "terminal-001", null, null, TEST_LOCATION, null, null, null, "WORKORDER", null)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SalesOrderRequestValidationException.class);
     }
 
     @Test

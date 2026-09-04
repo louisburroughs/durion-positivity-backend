@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.dto.GLMappingResolveResponse;
 import com.positivity.accounting.internal.dto.GLMappingResponse;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.GLMapping;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.GLMappingRepository;
 import java.util.Optional;
@@ -44,10 +45,11 @@ public class GLMappingServiceImpl implements GLMappingService {
         // Validate GL account exists and is active
         GLAccount glAccount = glAccountRepository
                 .findById(request.getGlAccountId())
-                .orElseThrow(() -> new IllegalArgumentException("GL account not found: " + request.getGlAccountId()));
+                .orElseThrow(() ->
+                        new InvalidRequestParameterException("GL account not found: " + request.getGlAccountId()));
 
         if (glAccount.getActivationDate() == null) {
-            throw new IllegalArgumentException("GL account " + glAccount.getAccountCode() + " is not active");
+            throw new InvalidRequestParameterException("GL account " + glAccount.getAccountCode() + " is not active");
         }
 
         // Non-blocking plausibility check (Story H1): warn when a
@@ -64,7 +66,7 @@ public class GLMappingServiceImpl implements GLMappingService {
                 excludeId);
 
         if (!overlaps.isEmpty()) {
-            throw new IllegalArgumentException(String.format(
+            throw new InvalidRequestParameterException(String.format(
                     "Mapping has overlapping effective dates with existing mapping(s) for %s:%s",
                     request.getSourceSystem(), request.getExternalCode()));
         }
@@ -120,7 +122,7 @@ public class GLMappingServiceImpl implements GLMappingService {
                 request.getSourceSystem(), request.getExternalCode(), request.getTransactionDate());
 
         if (mapping.isEmpty()) {
-            throw new IllegalArgumentException(String.format(
+            throw new InvalidRequestParameterException(String.format(
                     "No GL mapping found for %s:%s at %s",
                     request.getSourceSystem(), request.getExternalCode(), request.getTransactionDate()));
         }

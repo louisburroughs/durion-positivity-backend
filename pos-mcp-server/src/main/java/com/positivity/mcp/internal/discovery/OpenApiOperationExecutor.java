@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.discovery;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.time.Duration;
@@ -112,7 +113,7 @@ public class OpenApiOperationExecutor {
             // Do NOT execute with empty/implicit args on parse failure — that risks unintended
             // (esp. write) calls. Fail the tool call; execute() renders this as a controlled error.
             LOGGER.warn("MCP openapi tool args parse failed name={}; failing the call", operation.name());
-            throw new IllegalArgumentException("invalid tool arguments");
+            throw new InvalidToolArgumentException("invalid tool arguments");
         }
     }
 

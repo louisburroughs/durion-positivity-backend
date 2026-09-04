@@ -22,6 +22,7 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
@@ -711,7 +712,7 @@ class RoleManagementServiceTest {
                     USER_ID, ROLE_ID, ScopeType.GLOBAL, Set.of("loc-1"), LocalDateTime.now(TEST_CLOCK), null);
 
             assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SecurityValidationException.class)
                     .hasMessageContaining("GLOBAL scope cannot have location IDs");
         }
 

@@ -100,6 +100,9 @@ public record StockSnapshotSummary(
         @Schema(description = "Norm version the fetch used.", example = "EDIWHEEL_B-2.1") @NonNull
         String protocolVersion) {
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from a
+    // stock-report fetch's own counters, never from client input. A violation here is this
+    // module's own defect, so it belongs on the platform 500 fallback, not a client 4xx.
     public StockSnapshotSummary {
         Objects.requireNonNull(snapshotId, "snapshotId must not be null");
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");

@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import java.math.BigDecimal;
@@ -73,10 +74,10 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
     @Transactional(readOnly = true)
     public MappingResolutionTestResponse resolveTest(@NonNull MappingResolutionTestRequest request) {
         if (request.getEventType() == null || request.getEventType().isBlank()) {
-            throw new IllegalArgumentException("Event type is required");
+            throw new InvalidRequestParameterException("Event type is required");
         }
         if (request.getTransactionDate() == null) {
-            throw new IllegalArgumentException("Transaction date is required");
+            throw new InvalidRequestParameterException("Transaction date is required");
         }
 
         AccountingEvent event = buildTransientEvent(request);
@@ -119,7 +120,7 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
         try {
             return UUID.fromString(raw.toString());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestParameterException(
                     "Sample payload field 'organizationId' value '" + raw + "' is not a valid UUID", e);
         }
     }
@@ -434,7 +435,7 @@ public class MappingResolutionTestServiceImpl implements MappingResolutionTestSe
                 continue; // absent → engine uses zero, mirror it
             }
             if (!isNumeric(value)) {
-                throw new IllegalArgumentException("Sample payload field '" + field + "' value '" + value
+                throw new InvalidRequestParameterException("Sample payload field '" + field + "' value '" + value
                         + "' cannot be interpreted as a numeric amount");
             }
         }

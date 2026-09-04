@@ -61,6 +61,9 @@ public record SupplierInvoice(
             @Nullable BigDecimal lineAmount,
             @Nullable String vendorOrderReference) {
 
+        // Left as IllegalArgumentException (#1694): built server-side from decoded vendor B3.3
+        // invoice wire data, never from client input. A violation here is this module's own
+        // defect and belongs on the platform 500 fallback, not a client 4xx.
         public Line {
             if (lineNumber < 1) {
                 throw new IllegalArgumentException("lineNumber must be >= 1");
@@ -68,6 +71,7 @@ public record SupplierInvoice(
         }
     }
 
+    // See the Line compact constructor above: same reasoning applies here.
     public SupplierInvoice {
         Objects.requireNonNull(vendorInvoiceNumber, "vendorInvoiceNumber must not be null");
         Objects.requireNonNull(type, "type must not be null");

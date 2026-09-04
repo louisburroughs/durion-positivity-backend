@@ -71,9 +71,10 @@ public class SalesOrderController {
                     depositSourceType (ESTIMATE, WORKORDER or ORDER) and depositSourceId must be supplied together, \
                     and the optional Idempotency-Key header makes creation replay-safe.
                     Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
-                    Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 409 when \
-                    the key was previously used with a different payload, and 422 when the customer or vehicle \
-                    cannot be validated, the location cannot be resolved, or the terminal's session is being closed.
+                    Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 \
+                    when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, \
+                    409 when the key was previously used with a different payload, and 422 when the customer or \
+                    vehicle cannot be validated or the terminal's session is being closed.
                     """,
             tags = {"Sales Orders"})
     @PostMapping("/carts")
@@ -128,7 +129,7 @@ public class SalesOrderController {
                     Required inputs: none — clerkId, terminalId, and status (a status name such as DRAFT) are \
                     optional filters; page defaults to 0 and size defaults to 20, capped at 100.
                     Emits an ORDER_CART_LIST audit event; no order state changes.
-                    Returns 200 with a possibly empty page, and 422 when status is not a valid order status name.
+                    Returns 200 with a possibly empty page, and 400 when status is not a valid order status name.
                     """,
             tags = {"Sales Orders"})
     @GetMapping("/carts")
@@ -408,10 +409,11 @@ public class SalesOrderController {
                     order immediately.
                     Emits an ORDER_CHECKOUT event; an ON_ACCOUNT checkout also records a settled ON_ACCOUNT ledger \
                     entry and publishes an order-completed fact.
-                    Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order, 409 \
-                    when the key belongs to a different order or the status does not allow checkout, 422 when the \
-                    cart is empty, customer validation is pending, availability or serial capture is insufficient, \
-                    or on-account eligibility fails, and 503 when the tax or invoicing service is unreachable.
+                    Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order, 400 \
+                    when the Idempotency-Key header is blank or tenderType is unsupported, 409 when the key belongs \
+                    to a different order or the status does not allow checkout, 422 when the cart is empty, \
+                    customer validation is pending, availability or serial capture is insufficient, or on-account \
+                    eligibility fails, and 503 when the tax or invoicing service is unreachable.
                     """,
             tags = {"Sales Orders"})
     @PostMapping("/{orderId}/checkout")
@@ -493,8 +495,8 @@ public class SalesOrderController {
                     cart, and source lines already linked to the cart are skipped, making the call replay-safe.
                     Required inputs: sourceType (ESTIMATE or WORKORDER) and sourceId, both in the body.
                     Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
-                    Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 422 when the \
-                    sourceType is unknown or a WORKORDER link is attempted without a customer on the cart.
+                    Returns 404 when the order does not exist, 400 when sourceType is unknown, 409 when the order \
+                    is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart.
                     """,
             tags = {"Sales Orders"})
     @PatchMapping("/carts/{orderId}/source")

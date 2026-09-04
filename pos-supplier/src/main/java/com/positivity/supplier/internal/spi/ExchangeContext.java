@@ -75,6 +75,10 @@ public record ExchangeContext(
         @Nullable String responseBody,
         @Nullable String failureDetail) {
 
+    // Left as IllegalArgumentException (#1694): built exclusively by the outbound HTTP client
+    // machinery around every vendor call attempt, never from client-supplied HTTP input. A
+    // violation here is this module's own defect and belongs on the platform 500 fallback, not a
+    // client 4xx.
     public ExchangeContext {
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(supplierRef, "supplierRef must not be null");

@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.lang.reflect.Method;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -216,7 +217,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getFinancialSummary rejects a missing range and names the resolver tools to call")
     void getFinancialSummary_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getFinancialSummary(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -259,7 +260,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getFinancialSummary rejects an unpaired startDate without issuing a request")
     void getFinancialSummary_rejectsUnpairedStartDate() {
         assertThatThrownBy(() -> tool.getFinancialSummary("2026-03-01", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 
@@ -319,7 +320,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getAgedReceivables rejects a malformed asOfDate without issuing a request")
     void getAgedReceivables_rejectsMalformedDate() {
         assertThatThrownBy(() -> tool.getAgedReceivables("06/30/2026"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("YYYY-MM-DD")
                 .hasMessageContaining("06/30/2026");
 
@@ -330,7 +331,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getAgedPayables rejects a non-existent calendar date without issuing a request")
     void getAgedPayables_rejectsImpossibleDate() {
         assertThatThrownBy(() -> tool.getAgedPayables("2026-02-30"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("YYYY-MM-DD");
 
         mockServer.verify();
@@ -340,7 +341,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getVendorSpend rejects a missing range and names the resolver tools to call")
     void getVendorSpend_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getVendorSpend(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -387,7 +388,7 @@ class AccountingFacadeToolTest {
     @DisplayName("getVendorSpend rejects an unpaired startDate without issuing a request")
     void getVendorSpend_rejectsUnpairedStartDate() {
         assertThatThrownBy(() -> tool.getVendorSpend("2025-07-01", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 

@@ -221,6 +221,9 @@ public class PaymentEventsListener {
     private static BigDecimal money(JsonNode payload, String field) {
         JsonNode node = payload.path(field);
         if (node.isMissingNode() || node.isNull()) {
+            // Left as a bare IllegalArgumentException (issue #1694 audit, category d): this is an
+            // internal Kafka payload, never reachable from a controller, and both callers already
+            // catch Exception broadly and log+skip a malformed event.
             throw new IllegalArgumentException("Payment event is missing required amount field: " + field);
         }
         return node.decimalValue();

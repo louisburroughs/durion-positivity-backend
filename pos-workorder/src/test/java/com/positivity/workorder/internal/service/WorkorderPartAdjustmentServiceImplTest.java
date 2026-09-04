@@ -14,6 +14,8 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartAdjustmentEvent;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.WorkorderPartAdjustmentEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -300,7 +302,7 @@ class WorkorderPartAdjustmentServiceImplTest {
 
             assertThatThrownBy(() ->
                             service.substitutePartLine(WORKORDER_ID, PART_ID, PART_ID, "OUT_OF_STOCK", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Substitute part must be different from original part");
         }
 
@@ -369,7 +371,7 @@ class WorkorderPartAdjustmentServiceImplTest {
 
             assertThatThrownBy(() -> service.returnUnusedQuantity(
                             WORKORDER_ID, PART_ID, new BigDecimal("2.5"), "reason", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("exceeds available quantity");
             verify(adjustmentEventRepository, never()).save(any());
         }
@@ -379,7 +381,7 @@ class WorkorderPartAdjustmentServiceImplTest {
         void rejectsNonPositiveQuantity() {
             assertThatThrownBy(
                             () -> service.returnUnusedQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, "r", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Return quantity must be positive");
         }
 
@@ -503,11 +505,11 @@ class WorkorderPartAdjustmentServiceImplTest {
         void rejectsNonPositiveQuantity() {
             assertThatThrownBy(() ->
                             service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null, "r", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("New quantity must be positive");
             assertThatThrownBy(() -> service.correctPartQuantity(
                             WORKORDER_ID, PART_ID, new BigDecimal("-3"), null, "r", null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("New quantity must be positive");
         }
 

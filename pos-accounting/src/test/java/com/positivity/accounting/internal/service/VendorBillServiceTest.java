@@ -14,6 +14,9 @@ import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
+import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -122,7 +125,7 @@ class VendorBillServiceTest {
     class HandleVendorInvoiceTests {
 
         @Test
-        @DisplayName("NO_MATCH: should throw IllegalArgumentException when no pending bills found")
+        @DisplayName("NO_MATCH: should throw VendorBillMatchNotFoundException when no pending bills found")
         void noMatch_ThrowsException() {
             when(billRepository.findByVendorIdAndStatus(testVendorId, VendorBillStatus.PENDING_RECEIPT_MATCH))
                     .thenReturn(List.of());
@@ -130,7 +133,7 @@ class VendorBillServiceTest {
             VendorInvoiceReceivedEvent event = buildInvoiceEvent(testVendorId, new BigDecimal("1300.00"));
 
             assertThatThrownBy(() -> vendorBillService.handleVendorInvoiceReceivedEvent(event))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VendorBillMatchNotFoundException.class)
                     .hasMessageContaining("No pending receipt found");
         }
 
@@ -283,18 +286,18 @@ class VendorBillServiceTest {
     class ResolveMatchExceptionTests {
 
         @Test
-        @DisplayName("should throw IllegalArgumentException when bill not found")
+        @DisplayName("should throw VendorBillOperatorActionException when bill not found")
         void billNotFound_Throws() {
             when(billRepository.findById(testBillId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
                             vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Valid reason", "operator-1"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VendorBillOperatorActionException.class)
                     .hasMessageContaining("Vendor bill not found");
         }
 
         @Test
-        @DisplayName("should throw IllegalArgumentException when bill is not in MATCH_EXCEPTION status")
+        @DisplayName("should throw VendorBillOperatorActionException when bill is not in MATCH_EXCEPTION status")
         void billNotInMatchException_Throws() {
             VendorBill bill =
                     buildBill(testBillId, VendorBillStatus.APPROVED, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
@@ -302,7 +305,7 @@ class VendorBillServiceTest {
 
             assertThatThrownBy(() ->
                             vendorBillService.resolveMatchException(testBillId, "ACCEPT", "Valid reason", "operator-1"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VendorBillOperatorActionException.class)
                     .hasMessageContaining("not in MATCH_EXCEPTION status");
         }
 
@@ -350,7 +353,7 @@ class VendorBillServiceTest {
         }
 
         @Test
-        @DisplayName("invalid action should throw IllegalArgumentException")
+        @DisplayName("invalid action should throw VendorBillOperatorActionException")
         void invalidAction_Throws() {
             VendorBill bill =
                     buildBill(testBillId, VendorBillStatus.MATCH_EXCEPTION, new BigDecimal("1000.00"), BILL_DATE_CLOSE);
@@ -358,7 +361,7 @@ class VendorBillServiceTest {
 
             assertThatThrownBy(() -> vendorBillService.resolveMatchException(
                             testBillId, "UNKNOWN_ACTION", "Reason", "operator-1"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(VendorBillOperatorActionException.class)
                     .hasMessageContaining("Invalid resolution action");
         }
     }
@@ -428,7 +431,7 @@ class VendorBillServiceTest {
         void rejectsInvalidRange() {
             assertThatThrownBy(() -> vendorBillService.listByDueDateWindow(
                             dueTo, dueFrom, null, org.springframework.data.domain.PageRequest.of(0, 20)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test
@@ -438,7 +441,7 @@ class VendorBillServiceTest {
 
             assertThatThrownBy(() -> vendorBillService.listByDueDateWindow(
                             dueFrom, wideTo, null, org.springframework.data.domain.PageRequest.of(0, 20)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidDateRangeException.class);
         }
 
         @Test

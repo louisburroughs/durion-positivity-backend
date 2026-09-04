@@ -83,6 +83,13 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
     @Override
     @Transactional
     public void markUploadStored(@NonNull UUID jobId, @NonNull String operatorId, @NonNull String storagePath) {
+        // Defensive/internal invariant (issue #1694 audit), left as bare IllegalArgumentException:
+        // both call sites (FileUploadController's multipart upload and TusUploadServiceImpl's
+        // resumable-upload completion) pass a storagePath they just got back from
+        // FileStorageService.store(...)/relativize(...) — a server-computed value, never raw
+        // client input — so a blank value here means the storage layer is broken, not that the
+        // caller sent something bad. Reachable synchronously from the HTTP thread if it ever
+        // fires, which is correctly a 500, not a 400.
         if (storagePath.isBlank()) {
             throw new IllegalArgumentException("storagePath must not be blank");
         }

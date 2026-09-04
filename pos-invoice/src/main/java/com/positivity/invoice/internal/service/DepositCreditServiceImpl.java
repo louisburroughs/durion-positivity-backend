@@ -7,6 +7,7 @@ import com.positivity.invoice.internal.entity.DepositCreditApplication;
 import com.positivity.invoice.internal.enums.DepositCreditStatus;
 import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.internal.exception.DepositCreditNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.DepositCreditApplicationRepository;
 import com.positivity.invoice.internal.repository.DepositCreditRepository;
 import com.positivity.invoice.internal.service.model.CreateDepositCommand;
@@ -50,6 +51,12 @@ public class DepositCreditServiceImpl implements DepositCreditService {
         if (replayed != null) {
             return toSummary(replayed);
         }
+        // #1694 (d): defensive invariant, not reachable via HTTP — both callers already
+        // guarantee a positive amount before this method runs: CreateDepositRequest.amount
+        // carries @NotNull @Positive (DepositCreditController.createDeposit), and
+        // OrderInvoiceServiceImpl only calls createDeposit when isDepositTake() has already
+        // confirmed depositAmount.signum() > 0. Left as a bare IllegalArgumentException, not
+        // retyped, so it 500s (not a mis-mapped 4xx) if a future direct caller skips those guards.
         if (command.amount().signum() <= 0) {
             throw new IllegalArgumentException("Deposit amount must be positive");
         }
@@ -178,7 +185,7 @@ public class DepositCreditServiceImpl implements DepositCreditService {
         try {
             return DepositSourceType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown deposit source type: " + raw);
+            throw new InvoiceRequestValidationException("Unknown deposit source type: " + raw, ex);
         }
     }
 

@@ -15,6 +15,7 @@ import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimePeriodRolloverResult;
 import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.enums.TimePeriodStatus;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -122,10 +123,10 @@ class TimePeriodManagementServiceImplTest {
         }
 
         @Test
-        @DisplayName("rejects endDate before startDate with IllegalArgumentException (400)")
+        @DisplayName("rejects endDate before startDate with RequestValidationException (400)")
         void rejectsInvertedRange() {
             assertThatThrownBy(() -> service.createTimePeriod(request(LocalDate.of(2026, 6, 14), ANCHOR)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(RequestValidationException.class)
                     .hasMessageContaining("endDate");
             verify(timePeriodRepository, never()).saveAndFlush(any());
         }

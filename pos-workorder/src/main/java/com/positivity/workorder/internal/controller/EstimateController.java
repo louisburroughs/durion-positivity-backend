@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
@@ -267,7 +268,7 @@ public class EstimateController {
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
-        } catch (IllegalArgumentException e) {
+        } catch (WorkorderRequestValidationException e) {
             log.warn("Validation error creating estimate: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
 
@@ -311,12 +312,16 @@ public class EstimateController {
                     Required inputs: estimateId (UUID) as a path parameter and a JSON body whose status field is \
                     DECLINED or DRAFT.
                     Emits a WORKORDER_ESTIMATE_PATCH event.
-                    Returns 400 with VALIDATION_ERROR when status is missing or not a known value, and 409 with \
-                    CONFLICT when the target is unsupported or the transition is not allowed from the current \
-                    state.
+                    Returns 400 with VALIDATION_ERROR when status is missing or not a known value, 404 when the \
+                    estimate does not exist, and 409 with CONFLICT when the target is unsupported or the \
+                    transition is not allowed from the current state.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate status updated")
     @ApiResponse(responseCode = "400", description = "Estimate patch request is invalid")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "409", description = "Estimate transition is not allowed")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -353,8 +358,6 @@ public class EstimateController {
                 case DRAFT -> ResponseEntity.ok(estimateService.reopenEstimate(estimateId));
                 default -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
             };
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.badRequest().body(Map.of("code", VALIDATION_ERROR));
         } catch (IllegalStateException _) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", CONFLICT));
         }
@@ -370,8 +373,8 @@ public class EstimateController {
                     Required inputs: estimateId (UUID) as a path parameter; reason is an optional query \
                     parameter recorded as the decline reason.
                     Emits a WORKORDER_ESTIMATE_DECLINE event and marks the estimate fact changed.
-                    Returns 400 when the estimate is missing or cannot be declined from its current status — \
-                    both failures surface as 400 in this operation.
+                    Returns 400 when the estimate cannot be declined from its current status, and 404 when the \
+                    estimate does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate declined successfully.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be declined in current state.")
@@ -392,7 +395,7 @@ public class EstimateController {
         try {
             EstimateResponse declined = estimateService.declineEstimate(estimateId, reason);
             return ResponseEntity.ok(declined);
-        } catch (IllegalStateException | IllegalArgumentException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -406,8 +409,8 @@ public class EstimateController {
                     of its approval configuration — expired declines cannot be reopened.
                     Required inputs: estimateId (UUID) as a path parameter; there is no request body.
                     Emits a WORKORDER_ESTIMATE_REOPEN event and marks the estimate fact changed.
-                    Returns 400 when the estimate is missing, not declined, or past its expiry window — all \
-                    failures surface as 400 in this operation.
+                    Returns 400 when the estimate is not declined or is past its expiry window, and 404 when \
+                    the estimate does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate reopened successfully.")
     @ApiResponse(responseCode = "400", description = "Estimate cannot be reopened (not declined or expired).")
@@ -425,7 +428,7 @@ public class EstimateController {
         try {
             EstimateResponse reopened = estimateService.reopenEstimate(estimateId);
             return ResponseEntity.ok(reopened);
-        } catch (IllegalStateException | IllegalArgumentException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -444,15 +447,23 @@ public class EstimateController {
                     signatureData, signerName, notes, purchaseOrderNumber, and lineItemApprovals are optional, \
                     and signatureMimeType defaults to image/png.
                     Emits a WORKORDER_ESTIMATE_APPROVE event.
-                    Returns 404 when the estimate does not exist, and 400 when the customer does not match, the \
-                    status is not PENDING_APPROVAL, or a required purchase order is missing.
+                    Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL, \
+                    409 when the customer does not match the estimate's own customer, and 422 when a required \
+                    purchase order is missing.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
     @ApiResponse(
             responseCode = "400",
-            description =
-                    "Estimate cannot be approved in current state, customer ID mismatch, or PO required but not provided.")
+            description = "Estimate cannot be approved in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Customer ID mismatch: estimate belongs to a different customer.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity, signature artifacts, and optional line-item selections.",
             required = true,
@@ -494,7 +505,7 @@ public class EstimateController {
         } catch (EntityNotFoundException e) {
             log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (IllegalStateException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
@@ -726,7 +737,7 @@ public class EstimateController {
         } catch (EntityNotFoundException e) {
             log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (IllegalStateException e) {
             log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
@@ -831,9 +842,6 @@ public class EstimateController {
         } catch (jakarta.persistence.EntityNotFoundException e) {
             log.warn("Estimate {} not found when adding item: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.badRequest().build();
         } catch (IllegalStateException e) {
             log.warn("State error adding item to estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -901,9 +909,6 @@ public class EstimateController {
         } catch (EntityNotFoundException e) {
             log.warn("Estimate or item not found: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Validation error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.badRequest().build();
         } catch (IllegalStateException e) {
             log.warn("State error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -945,9 +950,6 @@ public class EstimateController {
         try {
             estimateService.deleteEstimateItem(estimateId, itemId);
             return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Item {} not found for estimate {}: {}", itemId, estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.warn("State error deleting item {} from estimate {}: {}", itemId, estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -998,9 +1000,6 @@ public class EstimateController {
             response.put("taxAmount", estimate.getTaxAmount());
             response.put("total", estimate.getTotal());
             return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Estimate {} not found for calculation: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.warn("State error calculating estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -1036,13 +1035,8 @@ public class EstimateController {
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID estimateId) {
-        try {
-            EstimateSummaryResponse summary = estimateService.getEstimateSummary(estimateId);
-            return ResponseEntity.ok(summary);
-        } catch (IllegalArgumentException e) {
-            log.warn("Estimate {} not found for summary: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+        EstimateSummaryResponse summary = estimateService.getEstimateSummary(estimateId);
+        return ResponseEntity.ok(summary);
     }
 
     @Operation(operationId = "generateEstimatePdf", summary = "Generate Estimate PDF Document", description = """
@@ -1089,7 +1083,7 @@ public class EstimateController {
                     .header("Content-Disposition", "attachment; filename=\"estimate-" + estimateId + ".pdf\"")
                     .header("Content-Type", "application/pdf")
                     .body(pdfBytes);
-        } catch (IllegalArgumentException e) {
+        } catch (EstimateNotFoundException e) {
             log.warn("Estimate {} not found for PDF generation: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
@@ -1140,9 +1134,6 @@ public class EstimateController {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);
             return ResponseEntity.ok(snapshot);
-        } catch (IllegalArgumentException e) {
-            log.warn("Estimate {} not found for snapshot: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.error("Failed to create snapshot for estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();

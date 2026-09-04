@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
@@ -145,6 +146,10 @@ public class ApprovalConfigurationController {
                     accepted values.
                     """)
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "approvalMethod is not one of the accepted values.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approval capture rule to create, scoped by optional location and customer ids.",
             required = true,
@@ -188,10 +193,14 @@ public class ApprovalConfigurationController {
                     SIGNATURE, ELECTRONIC_SIGNATURE, or VERBAL_CONFIRMATION) in the body; locationId, \
                     customerId, declineExpiryDays, requireSignature, and priority are optional.
                     Emits a WORKORDER_APPROVAL_CONFIG_UPDATE event.
-                    Returns 404 when the configuration does not exist and also when approvalMethod is not a \
-                    valid value, because both surface as the same IllegalArgumentException in this operation.
+                    Returns 404 when the configuration does not exist, and 400 when approvalMethod is not one \
+                    of the accepted values.
                     """)
     @ApiResponse(responseCode = "200", description = "Configuration updated successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "approvalMethod is not one of the accepted values.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Full replacement values for the approval configuration.",
@@ -223,13 +232,8 @@ public class ApprovalConfigurationController {
                     UUID approvalId,
             @Parameter(description = "Updated configuration object") @RequestBody
                     ApprovalConfigurationRequest request) {
-        try {
-            ApprovalConfigurationResponse updated =
-                    approvalConfigurationService.updateConfiguration(approvalId, request);
-            return ResponseEntity.ok(updated);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
-        }
+        ApprovalConfigurationResponse updated = approvalConfigurationService.updateConfiguration(approvalId, request);
+        return ResponseEntity.ok(updated);
     }
 
     @Operation(

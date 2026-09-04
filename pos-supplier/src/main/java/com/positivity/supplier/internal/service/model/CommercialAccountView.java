@@ -49,6 +49,10 @@ public record CommercialAccountView(
         @Nullable
         UUID deliveryLocationId) {
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from a
+    // persisted entity by the admin service, never from client input (the create/update payload
+    // is CommercialAccountRequest, validated separately). A violation here is this module's own
+    // defect, so it belongs on the platform 500 fallback, not a client 4xx.
     public CommercialAccountView {
         Objects.requireNonNull(accountId, "accountId must not be null");
         Objects.requireNonNull(role, "role must not be null");

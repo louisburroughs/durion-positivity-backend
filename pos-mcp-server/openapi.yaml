@@ -324,7 +324,7 @@ paths:
 
         Emits a MCP_DOCUMENT_INGEST event and creates a PENDING job that is processed in the background through RUNNING to SUCCEEDED or FAILED.
 
-        Returns 202 with the job and a Location header pointing at the job-status resource; embedding failures are reported on the job''s errorMessage, not on this call.
+        Returns 202 with the job and a Location header pointing at the job-status resource; 400 when the supplied metadata cannot be serialized back to JSON; embedding failures happening after the job is accepted are reported on the job''s errorMessage, not on this call.
 
         '
       operationId: ingestDocument
@@ -344,12 +344,18 @@ paths:
         description: Raw document text to embed, with optional identifying metadata.
         required: true
       responses:
-        '200':
+        '202':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocumentIngestionJobResponse'
-          description: OK
+          description: Ingestion job accepted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentIngestionJobResponse'
+          description: Document metadata is not JSON-serializable
       security:
       - bearerAuth:
         - mcp:document:ingest
@@ -715,7 +721,7 @@ paths:
 
         Emits a MCP_SYSTEM_PROMPT_CREATE event and invalidates any cached agents built from a prompt of that name so they rebuild with the new content.
 
-        Returns 201 with the stored prompt, and 400 when a prompt with the same name already exists.
+        Returns 201 with the stored prompt, and 409 when a prompt with the same name already exists.
 
         '
       operationId: createSystemPrompt
@@ -739,12 +745,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SystemPromptResponse'
           description: System prompt created
-        '400':
+        '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemPromptResponse'
-          description: System prompt request is invalid
+          description: A system prompt with the requested name already exists
       security:
       - bearerAuth:
         - mcp:system_prompt:create
@@ -843,7 +849,7 @@ paths:
 
         Emits a MCP_SYSTEM_PROMPT_UPDATE event and invalidates cached agents built from the prompt so subsequent chats use the new content.
 
-        Returns 200 with the updated prompt, 404 when no prompt exists for the id, and 400 when the new name is already used by another prompt.
+        Returns 200 with the updated prompt, 404 when no prompt exists for the id, and 409 when the new name is already used by another prompt.
 
         '
       operationId: updateSystemPrompt
@@ -880,6 +886,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SystemPromptResponse'
           description: System prompt not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemPromptResponse'
+          description: A system prompt with the requested name already exists
       security:
       - bearerAuth:
         - mcp:system_prompt:update

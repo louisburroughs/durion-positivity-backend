@@ -9,6 +9,7 @@ import com.positivity.people.internal.entity.TimeEntryAdjustment;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.NotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimeEntryAdjustmentRepository;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -70,8 +71,8 @@ class TimeEntryAdjustmentServiceTest {
         request.setReasonCode("RC1");
         request.setMinutesDelta(5);
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> service.createAdjustment(request));
+        RequestValidationException ex =
+                assertThrows(RequestValidationException.class, () -> service.createAdjustment(request));
         assertEquals("timeEntryId is required", ex.getMessage());
     }
 

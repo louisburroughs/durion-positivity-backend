@@ -40,6 +40,7 @@ import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -446,7 +447,7 @@ class SalesOrderCartLifecycleTest {
         void requiresLocationWithoutSession() {
             assertThatThrownBy(() -> service.createCart(
                             new CreateCartCommand(CLERK, TERMINAL, null, null, null, null, null, null, null, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("locationId is required");
         }
 
@@ -576,12 +577,12 @@ class SalesOrderCartLifecycleTest {
         void refusesHalfSpecifiedDepositSource() {
             assertThatThrownBy(() -> service.createCart(new CreateCartCommand(
                             CLERK, TERMINAL, null, null, LOCATION_ID, null, null, null, "ESTIMATE", null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("must be provided together");
 
             assertThatThrownBy(() -> service.createCart(new CreateCartCommand(
                             CLERK, TERMINAL, null, null, LOCATION_ID, null, null, null, null, WORKORDER_ID)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("must be provided together");
         }
     }
@@ -1053,7 +1054,7 @@ class SalesOrderCartLifecycleTest {
         void rejectsUnresolvableTargets() {
             givenOrder(order(SalesOrderStatus.DRAFT));
             assertThatThrownBy(() -> service.linkSource(ORDER_ID, "NOT_A_TYPE", "X-1"))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(SalesOrderRequestValidationException.class);
 
             when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.linkSource(ORDER_ID, "ESTIMATE", "EST-1"))
@@ -1320,7 +1321,7 @@ class SalesOrderCartLifecycleTest {
         @DisplayName("requires an idempotency key")
         void requiresIdempotencyKey() {
             assertThatThrownBy(() -> service.checkout(ORDER_ID, "  ", null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("Idempotency-Key is required");
         }
 
@@ -1328,7 +1329,7 @@ class SalesOrderCartLifecycleTest {
         @DisplayName("rejects an unsupported tender type")
         void rejectsUnsupportedTender() {
             assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", "CRYPTO"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("Unsupported tenderType");
         }
 

@@ -55,8 +55,7 @@ public class WorkorderDetailController {
                     Required inputs: workorderId (UUID) as a path parameter; authorities are read from the \
                     security context, not from parameters.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found \
-                    case surfaces as 400 rather than 404 in this operation.
+                    Returns 404 when no workorder exists for the id.
                     """,
             responses = {
                 @ApiResponse(

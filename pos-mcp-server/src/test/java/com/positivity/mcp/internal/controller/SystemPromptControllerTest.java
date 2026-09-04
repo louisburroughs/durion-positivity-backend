@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
+import com.positivity.mcp.internal.exception.SystemPromptNameConflictException;
 import com.positivity.mcp.internal.service.SystemPromptService;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -173,19 +174,22 @@ class SystemPromptControllerTest {
 
     @Test
     @WithMockUser(authorities = "mcp:system_prompt:create")
-    @DisplayName("POST /v1/prompts with duplicate name → 400 ApiError")
-    void create_withDuplicateName_returns400ApiError() throws Exception {
+    @DisplayName("POST /v1/prompts with duplicate name → 409 ApiError")
+    void create_withDuplicateName_returns409ApiError() throws Exception {
+        // #1694: a name collision is a stateful conflict (409), not a malformed request (400) --
+        // previously misrouted through a blanket @ExceptionHandler(IllegalArgumentException.class)
+        // that also caught unrelated IllegalArgumentExceptions from Hibernate/JPA and the JDK.
         when(systemPromptService.create(any()))
-                .thenThrow(new IllegalArgumentException("Prompt with name already exists: default"));
+                .thenThrow(new SystemPromptNameConflictException("Prompt with name already exists: default"));
 
         SystemPromptRequest request = new SystemPromptRequest("default", "You are a helpful assistant.");
 
         mockMvc.perform(post("/v1/prompts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(HttpStatus.BAD_REQUEST.value()))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(HttpStatus.CONFLICT.value()))
+                .andExpect(jsonPath("$.code").value("SYSTEM_PROMPT_NAME_CONFLICT"))
                 .andExpect(jsonPath("$.message").value("Prompt with name already exists: default"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }

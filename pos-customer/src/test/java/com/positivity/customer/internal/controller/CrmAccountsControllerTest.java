@@ -19,8 +19,10 @@ import com.positivity.customer.internal.dto.DuplicateCheckResponse;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.service.AccountTierService;
 import com.positivity.customer.internal.service.PartyService;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +44,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(CrmAccountsController.class)
-@Import({WebMvcTestSecurityConfig.class, CrmExceptionHandler.class})
+@Import({WebMvcTestSecurityConfig.class, CrmExceptionHandler.class, WebCommonErrorAutoConfiguration.class})
 @ActiveProfiles("test")
 @SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class CrmAccountsControllerTest {
@@ -111,7 +113,7 @@ class CrmAccountsControllerTest {
     @DisplayName("checkPartyDuplicates returns 400 when legalName trims to fewer than 2 characters")
     void checkPartyDuplicates_returns400_whenLegalNameTrimsToBelowMinLength() throws Exception {
         when(partyService.checkPartyDuplicates(eq(" A ")))
-                .thenThrow(new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters"));
+                .thenThrow(new CrmValidationException("legalName must contain at least 2 non-whitespace characters"));
 
         mockMvc.perform(get("/v1/crm/accounts/parties/duplicate-check")
                         .param("legalName", " A ")
@@ -297,24 +299,40 @@ class CrmAccountsControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * Regression guard for issue #1694: a bare {@code IllegalArgumentException} out of the
+     * service layer is an unexpected server-side failure (Hibernate/JPA, a JDK call, etc.),
+     * never this endpoint's own 400 — it must fall through to pos-web-common's generic,
+     * correlated 500 and never echo the exception's own message.
+     */
     @Test
-    @DisplayName("upsertBillingRules returns 400 when service throws IllegalArgumentException for invalid input")
-    void upsertBillingRules_returns400_whenServiceThrowsIllegalArgumentException() throws Exception {
+    @DisplayName(
+            "upsertBillingRules answers 500 INTERNAL_ERROR without leaking a bare IllegalArgumentException's message")
+    void upsertBillingRules_returns500_whenServiceThrowsBareIllegalArgumentException() throws Exception {
         UpsertBillingRulesRequest request = UpsertBillingRulesRequest.builder()
                 .taxExempt(false)
                 .poRequired(false)
                 .creditHold(false)
                 .autoPayEnabled(false)
                 .build();
+        String leakCanary = "Invalid billing rule: currency code required";
 
         when(partyService.upsertBillingRulesForParty(eq(PARTY_ID), any(UpsertBillingRulesRequest.class)))
-                .thenThrow(new IllegalArgumentException("Invalid billing rule: currency code required"));
+                .thenThrow(new IllegalArgumentException(leakCanary));
 
-        mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
+        String body = mockMvc.perform(put("/v1/crm/accounts/parties/{partyId}/billing-rules", PARTY_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
                         .header("X-Authorities", "crm:billing_rules:edit"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.message").value("Unexpected error occurred"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain(leakCanary);
     }
 
     // ─── POST /v1/crm/accounts/parties:resolve ──────────────────────────────

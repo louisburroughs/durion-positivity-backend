@@ -6,6 +6,7 @@ import com.positivity.warranty.internal.entity.WarrantyPolicy;
 import com.positivity.warranty.internal.enums.AppliesToType;
 import com.positivity.warranty.internal.enums.CoverageType;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
 import com.positivity.warranty.internal.repository.WarrantyProviderRepository;
 import java.time.LocalDate;
@@ -136,19 +137,19 @@ public class PolicyServiceImpl implements PolicyService {
             case PRODUCT_LIST -> {
                 if (request.appliesToProductEntityIds() == null
                         || request.appliesToProductEntityIds().isEmpty()) {
-                    throw new IllegalArgumentException(
+                    throw new WarrantyValidationException(
                             "appliesToProductEntityIds must be a non-empty list when appliesToType is PRODUCT_LIST");
                 }
             }
             case CATEGORY -> {
                 if (request.appliesToCategoryId() == null) {
-                    throw new IllegalArgumentException(
+                    throw new WarrantyValidationException(
                             "appliesToCategoryId is required when appliesToType is CATEGORY");
                 }
             }
             case MANUFACTURER -> {
                 if (request.appliesToManufacturerId() == null) {
-                    throw new IllegalArgumentException(
+                    throw new WarrantyValidationException(
                             "appliesToManufacturerId is required when appliesToType is MANUFACTURER");
                 }
             }
@@ -157,7 +158,7 @@ public class PolicyServiceImpl implements PolicyService {
             }
         }
         if (request.effectiveTo() != null && request.effectiveTo().isBefore(request.effectiveFrom())) {
-            throw new IllegalArgumentException("effectiveTo must not be before effectiveFrom");
+            throw new WarrantyValidationException("effectiveTo must not be before effectiveFrom");
         }
     }
 

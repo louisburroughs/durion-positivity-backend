@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -241,7 +242,7 @@ class InvoiceFacadeToolTest {
     @DisplayName("getRevenueByCustomer rejects a missing range and names the resolver tools to call")
     void getRevenueByCustomer_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getRevenueByCustomer(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -269,7 +270,7 @@ class InvoiceFacadeToolTest {
     @DisplayName("getRevenueByCustomer rejects an unpaired endDate without issuing a request")
     void getRevenueByCustomer_rejectsUnpairedEndDate() {
         assertThatThrownBy(() -> tool.getRevenueByCustomer(null, "2026-06-30"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 
@@ -298,7 +299,7 @@ class InvoiceFacadeToolTest {
     @DisplayName("getInvoicingLag rejects a malformed date without issuing a request")
     void getInvoicingLag_rejectsMalformedDate() {
         assertThatThrownBy(() -> tool.getInvoicingLag("2026-03-01", "not-a-date"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("endDate")
                 .hasMessageContaining("YYYY-MM-DD");
 

@@ -64,6 +64,10 @@ public record SupplierPurchaseOrder(
             int quantity,
             @Nullable LocalDate requestedDeliveryDate) {
 
+        // Left as IllegalArgumentException (#1694): built server-side from purchase-order data
+        // pulled from pos-order over an internal service call, never from a pos-supplier client
+        // request directly. A violation here is this module's own defect (or pos-order's), and
+        // belongs on the platform 500 fallback, not a client 4xx.
         public Line {
             if (lineNumber < 1) {
                 throw new IllegalArgumentException("lineNumber must be >= 1");
@@ -82,6 +86,7 @@ public record SupplierPurchaseOrder(
         }
     }
 
+    // See the Line compact constructor above: same reasoning applies here.
     public SupplierPurchaseOrder {
         Objects.requireNonNull(transmissionIntentId, "transmissionIntentId must not be null");
         Objects.requireNonNull(purchaseOrderId, "purchaseOrderId must not be null");

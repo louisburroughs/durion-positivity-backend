@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.entity;
 
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
@@ -117,8 +118,11 @@ public class Permission {
      * Also handles 2-segment domain:action format used by some domains.
      */
     public void parsePermissionName() {
+        // (a) reachable with unvalidated client input via RolePermissionServiceImpl#grantPermission
+        // (RoleController#grantPermissionToRole only checks blank/null, not format), in addition
+        // to the already-format-checked callers in PermissionServiceImpl/PermissionRegistryServiceImpl.
         if (name == null || name.isEmpty()) {
-            throw new IllegalArgumentException("Permission name cannot be null or empty");
+            throw new SecurityValidationException("Permission name cannot be null or empty");
         }
 
         String[] parts = name.split(":");
@@ -131,7 +135,7 @@ public class Permission {
             this.resource = "";
             this.action = parts[1].toLowerCase().trim();
         } else {
-            throw new IllegalArgumentException(
+            throw new SecurityValidationException(
                     "Permission name must follow format domain:resource:action or domain:action, got: " + name);
         }
     }

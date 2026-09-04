@@ -2,10 +2,15 @@ package com.positivity.people.internal.controller;
 
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
+import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,6 +41,8 @@ public class PeopleExceptionHandler {
 
     private static final String TIMESTAMP_PROPERTY = "timestamp";
 
+    private static final String X_CORRELATION_ID = "X-Correlation-Id";
+
     @ExceptionHandler(PersonNotFoundException.class)
     public ProblemDetail handlePersonNotFound(PersonNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
@@ -64,11 +71,54 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
+    /**
+     * Genuine client input-validation failures raised by this module's own controllers/services
+     * (see {@link RequestValidationException}). This class deliberately does NOT map bare {@code
+     * IllegalArgumentException} (issue #1694): that type is not exclusive to this module's own
+     * validation — Hibernate/JPA throw it for an invalid query and {@code UUID.fromString} throws
+     * it on malformed stored data, and catching it here previously turned a server-side defect
+     * into a client-facing 400 that also leaked internal class names and query text. An
+     * unexpected {@code IllegalArgumentException} now falls through to {@code pos-web-common}'s
+     * platform-wide {@code GlobalApiExceptionHandler} fallback, which answers a generic,
+     * correlated 500 instead of echoing the exception text.
+     */
+    @ExceptionHandler(RequestValidationException.class)
+    public ResponseEntity<ApiError> handleRequestValidation(
+            RequestValidationException ex, HttpServletRequest request, HttpServletResponse response) {
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.of(
+                        "VALIDATION_ERROR",
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * Stateful collisions raised by this module's own controllers/services (see {@link
+     * ResourceStateConflictException}): the request is well-formed, but the resource's current
+     * status blocks the requested transition. This class deliberately does NOT route these
+     * guards through bare {@code IllegalStateException} (issue #1694 follow-up): that type is
+     * not exclusive to a lifecycle guard — {@code SecurityContextHelper} throws it for a missing
+     * security context (a server-side/auth defect), and the JDK/Spring throw it for unrelated
+     * misuse — so mapping it broadly would have only moved the #1694 bug class, not removed it.
+     * The pre-existing {@link #handleIllegalState} mapping is left untouched for whatever else
+     * still reaches it.
+     */
+    @ExceptionHandler(ResourceStateConflictException.class)
+    public ResponseEntity<ApiError> handleResourceStateConflict(
+            ResourceStateConflictException ex, HttpServletRequest request, HttpServletResponse response) {
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "RESOURCE_STATE_CONFLICT",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -159,12 +209,20 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler(Exception.class)
-    public ProblemDetail handleUnexpectedException(Exception ex) {
-        log.error("Unhandled exception in People API", ex);
-        ProblemDetail problem =
-                ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
+    // No @ExceptionHandler(Exception.class) here (issue #1694): Spring's
+    // ExceptionHandlerExceptionResolver picks the first applicable advice bean that has ANY
+    // matching handler method, so a blanket catch-all in this module-local advice would swallow
+    // every unmapped exception and prevent pos-web-common's platform-wide
+    // GlobalApiExceptionHandler from ever running for this module. Anything not handled above now
+    // falls through to that shared advice, which answers a generic, correlated 500 INTERNAL_ERROR,
+    // logs the stack trace at ERROR, and maps DataIntegrityViolationException to 409/422 per
+    // ADR-0056 §2.
+
+    private String resolveCorrelationId(HttpServletRequest request) {
+        String rawCorrelationId = request.getHeader(X_CORRELATION_ID);
+        if (rawCorrelationId == null || rawCorrelationId.isBlank()) {
+            return UUIDv7Generator.generate().toString();
+        }
+        return rawCorrelationId.trim();
     }
 }

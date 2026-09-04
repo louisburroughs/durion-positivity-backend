@@ -19,6 +19,7 @@ import com.positivity.customer.internal.entity.PartyTagAssignment;
 import com.positivity.customer.internal.enums.TagAssignmentSource;
 import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
 import com.positivity.customer.internal.repository.PartyTagRepository;
 import java.time.Clock;
@@ -371,7 +372,7 @@ class PartyTagServiceImplTest {
 
             assertThatThrownBy(() ->
                             sut.assignTag(PARTY_ID, new AssignPartyTagRequest(TAG_ID, TagAssignmentSource.MANUAL)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(CrmUnprocessableEntityException.class)
                     .hasMessageContaining("inactive");
         }
 

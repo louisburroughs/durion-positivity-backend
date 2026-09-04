@@ -7,6 +7,7 @@ import com.positivity.people.internal.dto.TimeEntryDecisionResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.dto.TimeEntrySummary;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.security.PeoplePermissions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -140,7 +141,7 @@ public class TimeEntryApprovalController {
         try {
             return ZoneId.of(timeZone);
         } catch (DateTimeException ex) {
-            throw new IllegalArgumentException("Unknown timeZone: " + timeZone, ex);
+            throw new RequestValidationException("Unknown timeZone: " + timeZone, ex);
         }
     }
 

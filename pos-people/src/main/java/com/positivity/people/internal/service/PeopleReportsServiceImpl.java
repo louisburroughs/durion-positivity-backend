@@ -7,6 +7,7 @@ import com.positivity.people.internal.entity.ExtJobTimeReplica;
 import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
@@ -86,15 +87,15 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
         // Issue #79: enforce stable approved-only export read contract.
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate must be on or after startDate");
+            throw new RequestValidationException("endDate must be on or after startDate");
         }
         if (locationIds.isEmpty()) {
-            throw new IllegalArgumentException("At least one locationId is required");
+            throw new RequestValidationException("At least one locationId is required");
         }
 
         for (UUID locationId : locationIds) {
             if (!locationReferenceService.isLocationActive(locationId)) {
-                throw new IllegalArgumentException("Unknown locationId: " + locationId);
+                throw new RequestValidationException("Unknown locationId: " + locationId);
             }
         }
 
@@ -176,7 +177,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                 flaggedOnly);
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate must be on or after startDate");
+            throw new RequestValidationException("endDate must be on or after startDate");
         }
 
         ZoneId zoneId = parseZoneId(timezone);
@@ -238,7 +239,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         try {
             return ZoneId.of(timezone);
         } catch (ZoneRulesException ex) {
-            throw new IllegalArgumentException("timezone must be a valid IANA timezone");
+            throw new RequestValidationException("timezone must be a valid IANA timezone", ex);
         }
     }
 

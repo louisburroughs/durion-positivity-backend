@@ -1,9 +1,10 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.LocalDate;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -313,7 +314,7 @@ class DateWindowResolverTest {
     @Test
     @DisplayName("DAY is rejected for every shape but ROLLING, and the message names the fix")
     void resolve_rejectsDayWithNonRollingShape() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.CALENDAR_SPAN,
@@ -322,14 +323,14 @@ class DateWindowResolverTest {
                         DateWindowResolver.Comparison.NONE))
                 .withMessageContaining("DAY has no calendar form")
                 .withMessageContaining("ROLLING");
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.CURRENT_TO_DATE,
                         DateWindowResolver.Unit.DAY,
                         1,
                         DateWindowResolver.Comparison.NONE));
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.PRIOR_COMPLETE,
@@ -355,7 +356,7 @@ class DateWindowResolverTest {
     @Test
     @DisplayName("count <= 0 is rejected for every shape")
     void resolve_rejectsNonPositiveCount() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.ROLLING,
@@ -363,7 +364,7 @@ class DateWindowResolverTest {
                         0,
                         DateWindowResolver.Comparison.NONE))
                 .withMessageContaining("count must be positive");
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.CALENDAR_SPAN,
@@ -376,7 +377,7 @@ class DateWindowResolverTest {
     @Test
     @DisplayName("CURRENT_TO_DATE and PRIOR_COMPLETE reject a count other than 1, naming CALENDAR_SPAN instead")
     void resolve_rejectsMultiCountForSinglePeriodShapes() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.CURRENT_TO_DATE,
@@ -384,7 +385,7 @@ class DateWindowResolverTest {
                         2,
                         DateWindowResolver.Comparison.NONE))
                 .withMessageContaining("CALENDAR_SPAN");
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> DateWindowResolver.resolve(
                         GATE_TODAY,
                         DateWindowResolver.Shape.PRIOR_COMPLETE,
@@ -457,7 +458,7 @@ class DateWindowResolverTest {
     @ValueSource(strings = {"Q2-2026", "2026-13", "26", "last month", "2026/07", "2026-Q5", ""})
     void resolveNamed_rejectsUnsupportedForms(String period) {
         assertThatThrownBy(() -> DateWindowResolver.resolveNamed(period))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("YYYY");
     }
 
@@ -470,7 +471,7 @@ class DateWindowResolverTest {
                         DateWindowResolver.Unit.YEAR,
                         1,
                         DateWindowResolver.Comparison.NONE))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("resolveNamedPeriod");
     }
 

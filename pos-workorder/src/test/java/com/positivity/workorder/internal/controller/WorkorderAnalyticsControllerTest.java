@@ -13,6 +13,7 @@ import com.positivity.workorder.internal.dto.ReopenedWorkorderAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborAnalyticsResponse;
 import com.positivity.workorder.internal.dto.WorkorderStatusTransitionsResponse;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.service.WorkorderAnalyticsService;
 import java.time.LocalDate;
 import java.util.List;
@@ -63,7 +64,7 @@ class WorkorderAnalyticsControllerTest {
     @DisplayName("GET /status-transitions with neither woId nor range params surfaces the service's 400")
     void statusTransitions_emptyCombination_returns400() throws Exception {
         when(analyticsService.getStatusTransitions(isNull(), isNull(), isNull(), isNull(), isNull(), anyInt()))
-                .thenThrow(new IllegalArgumentException(
+                .thenThrow(new WorkorderRequestValidationException(
                         "Supply either woId alone, or startDate and endDate (optionally narrowed by from/to)"));
 
         mockMvc.perform(get("/v1/workorders/status-transitions"))

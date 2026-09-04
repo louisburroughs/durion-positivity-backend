@@ -318,8 +318,7 @@ public class AuditController {
                     Preconditions: the caller must hold security:audit:view and the snapshot must exist.
                     Required inputs: snapshotId (UUID) as a path parameter.
                     No events are emitted and no state changes; snapshots are read-only after creation.
-                    Returns 400 with INVALID_REQUEST, not 404, when no snapshot exists for the supplied id; callers \
-                    must treat that 400 as a miss.
+                    Returns 404 when no snapshot exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Pricing snapshot returned successfully")
     @ApiResponse(

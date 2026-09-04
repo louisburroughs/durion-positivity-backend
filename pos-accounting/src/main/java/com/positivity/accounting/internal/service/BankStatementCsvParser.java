@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.exception.BankStatementParseException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -14,7 +15,7 @@ import java.util.List;
  * surrounding whitespace, simple double-quoted fields, a leading {@code $},
  * thousands separators inside quoted amounts, and negative amounts expressed either
  * with a leading minus or wrapped in parentheses. Input may be raw text lines or
- * base64-encoded text. Malformed rows raise {@link IllegalArgumentException} (mapped
+ * base64-encoded text. Malformed rows raise {@link BankStatementParseException} (mapped
  * to 400) with the offending line number.
  */
 final class BankStatementCsvParser {
@@ -32,7 +33,7 @@ final class BankStatementCsvParser {
 
     static List<ParsedLine> parse(String input) {
         if (input == null || input.isBlank()) {
-            throw new IllegalArgumentException("CSV content is empty");
+            throw new BankStatementParseException("CSV content is empty");
         }
         String text = decodeIfBase64(input);
         String[] rawLines = text.split("\\r?\\n");
@@ -58,7 +59,7 @@ final class BankStatementCsvParser {
             result.add(parseLine(fields, i + 1));
         }
         if (result.isEmpty()) {
-            throw new IllegalArgumentException("CSV contained no statement lines");
+            throw new BankStatementParseException("CSV contained no statement lines");
         }
         return result;
     }
@@ -85,12 +86,12 @@ final class BankStatementCsvParser {
 
     private static ParsedLine parseLine(List<String> fields, int lineNumber) {
         if (fields.size() < 3) {
-            throw new IllegalArgumentException("CSV line " + lineNumber
+            throw new BankStatementParseException("CSV line " + lineNumber
                     + " must have at least 3 columns (date, description, amount); found " + fields.size());
         }
         LocalDate date = tryParseDate(fields.get(0).trim());
         if (date == null) {
-            throw new IllegalArgumentException("CSV line " + lineNumber + " has an unparseable date: '"
+            throw new BankStatementParseException("CSV line " + lineNumber + " has an unparseable date: '"
                     + fields.get(0).trim() + "'");
         }
         String description = fields.get(1).trim();
@@ -104,11 +105,12 @@ final class BankStatementCsvParser {
 
     private static BigDecimal parseAmount(String raw, int lineNumber) {
         if (raw.isEmpty()) {
-            throw new IllegalArgumentException("CSV line " + lineNumber + " has an empty amount");
+            throw new BankStatementParseException("CSV line " + lineNumber + " has an empty amount");
         }
         BigDecimal value = tryParseAmount(raw);
         if (value == null) {
-            throw new IllegalArgumentException("CSV line " + lineNumber + " has an unparseable amount: '" + raw + "'");
+            throw new BankStatementParseException(
+                    "CSV line " + lineNumber + " has an unparseable amount: '" + raw + "'");
         }
         return value;
     }

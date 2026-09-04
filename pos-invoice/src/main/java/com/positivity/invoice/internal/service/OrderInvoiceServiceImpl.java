@@ -9,6 +9,7 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.PaymentIntentRepository;
 import com.positivity.invoice.internal.service.model.CreateDepositCommand;
@@ -63,6 +64,9 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
     @Override
     @NonNull
     public OrderInvoiceResponse createInvoiceForOrder(@NonNull OrderInvoiceCreationRequest request) {
+        // #1694 (d): defensive invariant — OrderInvoiceCreationRequest.orderId carries @NotNull,
+        // so a null orderId is already rejected by bean validation (400) before this method
+        // runs; left as a bare IllegalArgumentException for any future direct caller.
         if (request.getOrderId() == null) {
             throw new IllegalArgumentException("orderId is required");
         }
@@ -153,7 +157,7 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         if (isDepositTake(request)
                 && request.getTaxAmount() != null
                 && request.getTaxAmount().signum() != 0) {
-            throw new IllegalArgumentException("deposit-take invoice requests must carry zero tax (#1629)");
+            throw new InvoiceRequestValidationException("deposit-take invoice requests must carry zero tax (#1629)");
         }
         invoice.setSubtotal(money(request.getSubtotal(), BigDecimal.ZERO));
         invoice.setTax(money(request.getTaxAmount(), BigDecimal.ZERO));
@@ -204,7 +208,7 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         try {
             return DepositSourceType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unknown deposit source type: " + raw);
+            throw new InvoiceRequestValidationException("Unknown deposit source type: " + raw, ex);
         }
     }
 
@@ -214,7 +218,7 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
             return;
         }
         if (request.getDepositSourceType() == null || request.getDepositSourceId() == null) {
-            throw new IllegalArgumentException(
+            throw new InvoiceRequestValidationException(
                     "depositSourceType and depositSourceId are required when depositAmount is set");
         }
         depositCreditService.createDeposit(new CreateDepositCommand(
@@ -261,15 +265,19 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
         BigDecimal subtotal = money(request.getSubtotal(), null);
         BigDecimal tax = money(request.getTaxAmount(), null);
         BigDecimal total = money(request.getTotalAmount(), null);
+        // #1694 (d): defensive invariant — subtotal, taxAmount and totalAmount all carry
+        // @NotNull on OrderInvoiceCreationRequest, so a missing one is already rejected by bean
+        // validation (400) before this method runs; left as a bare IllegalArgumentException for
+        // any future direct caller.
         if (subtotal == null || tax == null || total == null) {
             throw new IllegalArgumentException("subtotal, taxAmount, and totalAmount are required");
         }
         if (total.signum() < 0) {
-            throw new IllegalArgumentException("totalAmount cannot be negative");
+            throw new InvoiceRequestValidationException("totalAmount cannot be negative");
         }
         List<OrderInvoiceLineItem> lines = request.getLines();
         if (lines == null || lines.isEmpty()) {
-            throw new IllegalArgumentException("at least one line is required");
+            throw new InvoiceRequestValidationException("at least one line is required");
         }
         // Cent-exact invariants: pos-order sends line amounts net of all discounts, so the
         // figures must reconcile exactly before they become a financial document.
@@ -277,11 +285,11 @@ public class OrderInvoiceServiceImpl implements OrderInvoiceService {
                 .map(line -> money(line.getAmount(), BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (lineSum.compareTo(subtotal) != 0) {
-            throw new IllegalArgumentException(
+            throw new InvoiceRequestValidationException(
                     "line amounts (" + lineSum + ") do not sum to subtotal (" + subtotal + ")");
         }
         if (subtotal.add(tax).compareTo(total) != 0) {
-            throw new IllegalArgumentException(
+            throw new InvoiceRequestValidationException(
                     "subtotal (" + subtotal + ") + taxAmount (" + tax + ") does not equal totalAmount (" + total + ")");
         }
     }

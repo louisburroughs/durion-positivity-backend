@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
@@ -163,13 +164,13 @@ class PaymentApplicationGLPostingEventHandlerTest {
     void missingPostingConfiguration_failsRetryable() {
         when(glMappingResolver.resolveGLAccount(
                         eq("PAYMENT_APPLICATION"), eq("UNDEPOSITED_FUNDS"), any(LocalDateTime.class)))
-                .thenThrow(new IllegalArgumentException("Posting category not configured: PAYMENT_APPLICATION"));
+                .thenThrow(new GLMappingNotConfiguredException("Posting category not configured: PAYMENT_APPLICATION"));
 
         assertThatThrownBy(() -> handler.onPaymentApplicationGLPosting(testEvent))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(APPLICATION_REQUEST_ID)
                 .cause()
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(GLMappingNotConfiguredException.class);
 
         verifyNoInteractions(glPostingService);
         verify(idempotencyService, never()).registerKey(any(String.class), any(UUID.class));
@@ -183,13 +184,13 @@ class PaymentApplicationGLPostingEventHandlerTest {
                 .thenReturn(undepositedFundsAccountId);
         when(glMappingResolver.resolveGLAccount(
                         eq("PAYMENT_APPLICATION"), eq("ACCOUNTS_RECEIVABLE"), any(LocalDateTime.class)))
-                .thenThrow(new IllegalArgumentException("No GL mapping found"));
+                .thenThrow(new GLMappingNotConfiguredException("No GL mapping found"));
 
         assertThatThrownBy(() -> handler.onPaymentApplicationGLPosting(testEvent))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(APPLICATION_REQUEST_ID)
                 .cause()
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(GLMappingNotConfiguredException.class);
 
         verifyNoInteractions(glPostingService);
         verify(idempotencyService, never()).registerKey(any(String.class), any(UUID.class));

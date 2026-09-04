@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.dto.EstimateResponse;
 import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import java.time.Clock;
@@ -203,8 +204,9 @@ class EstimateServiceTest {
         String userId = testUserId.toString();
 
         // When & Then
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class, () -> estimateService.createEstimate(invalidRequest, userId));
+        WorkorderRequestValidationException exception = assertThrows(
+                WorkorderRequestValidationException.class,
+                () -> estimateService.createEstimate(invalidRequest, userId));
 
         assertEquals("customerId is required", exception.getMessage());
         verify(estimateRepository, never()).save(any(Estimate.class));
@@ -219,8 +221,9 @@ class EstimateServiceTest {
         String userId = testUserId.toString();
 
         // When & Then
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class, () -> estimateService.createEstimate(invalidRequest, userId));
+        WorkorderRequestValidationException exception = assertThrows(
+                WorkorderRequestValidationException.class,
+                () -> estimateService.createEstimate(invalidRequest, userId));
 
         assertEquals("vehicleId is required", exception.getMessage());
         verify(estimateRepository, never()).save(any(Estimate.class));

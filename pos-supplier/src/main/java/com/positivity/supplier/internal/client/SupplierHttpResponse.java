@@ -56,6 +56,9 @@ public record SupplierHttpResponse(
      */
     public static final Set<String> CARRIED_RESPONSE_HEADERS = Set.of("location", "api-version", "retry-after");
 
+    // Left as IllegalArgumentException (#1694): built exclusively by internal transport code
+    // after each outbound vendor call attempt, never from client-supplied HTTP input. A violation
+    // here is this module's own defect and belongs on the platform 500 fallback, not a client 4xx.
     public SupplierHttpResponse {
         Objects.requireNonNull(outcome, "outcome must not be null");
         Objects.requireNonNull(correlationId, "correlationId must not be null");

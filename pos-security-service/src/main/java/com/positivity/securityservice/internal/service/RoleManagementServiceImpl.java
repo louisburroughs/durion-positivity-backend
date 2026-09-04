@@ -19,6 +19,7 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
@@ -179,13 +180,13 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         if (request.getScopeType() == ScopeType.LOCATION
                 && (request.getScopeLocationIds() == null
                         || request.getScopeLocationIds().isEmpty())) {
-            throw new IllegalArgumentException("LOCATION scope requires at least one location ID");
+            throw new SecurityValidationException("LOCATION scope requires at least one location ID");
         }
 
         if (request.getScopeType() == ScopeType.GLOBAL
                 && request.getScopeLocationIds() != null
                 && !request.getScopeLocationIds().isEmpty()) {
-            throw new IllegalArgumentException("GLOBAL scope cannot have location IDs");
+            throw new SecurityValidationException("GLOBAL scope cannot have location IDs");
         }
 
         User user = userRepository

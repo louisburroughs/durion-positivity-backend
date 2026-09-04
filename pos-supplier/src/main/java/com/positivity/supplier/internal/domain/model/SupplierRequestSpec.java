@@ -39,6 +39,9 @@ public record SupplierRequestSpec(
         boolean idempotent,
         @NonNull Map<String, String> headers) {
 
+    // Left as IllegalArgumentException (#1694): built exclusively by codec.buildRequest(...) from
+    // the codec's own logic, never from client input. A violation here is this module's own
+    // defect and belongs on the platform 500 fallback, not a client 4xx.
     public SupplierRequestSpec {
         Objects.requireNonNull(method, "method must not be null");
         Objects.requireNonNull(queryParams, "queryParams must not be null");

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.positivity.people.internal.controller.TimeEntryApprovalController;
 import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.entity.TimeEntry;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.people.internal.service.TimeEntryService;
@@ -96,15 +97,15 @@ class TimeEntryBatchIntegrationTest {
         d1.setRejectionReason(null);
         request.setDecisions(Arrays.asList(d1));
 
-        // The validation logic moved to the service throwing IllegalArgumentException,
+        // The validation logic moved to the service throwing RequestValidationException,
         // OR
         // it will be caught by
         // PeopleExceptionHandler as @Valid handles MethodArgumentNotValidException.
         // For a unit test directly calling the controller without Spring Boot Web
         // resolving @Valid, it invokes the method.
-        // Therefore, it delegates to the service which will throw an
-        // IllegalArgumentException.
-        assertThrows(IllegalArgumentException.class, () -> {
+        // Therefore, it delegates to the service which will throw a
+        // RequestValidationException.
+        assertThrows(RequestValidationException.class, () -> {
             controller.rejectTimeEntries(request, "cid-002");
         });
     }

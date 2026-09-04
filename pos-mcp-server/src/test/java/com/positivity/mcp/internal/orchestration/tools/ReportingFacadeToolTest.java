@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,7 +61,7 @@ class ReportingFacadeToolTest {
     @DisplayName("getSalesReport rejects a missing range and names the resolver tools to call")
     void getSalesReport_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getSalesReport(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -88,7 +89,7 @@ class ReportingFacadeToolTest {
     @DisplayName("getSalesReport rejects an unpaired startDate without issuing a request")
     void getSalesReport_rejectsUnpairedStartDate() {
         assertThatThrownBy(() -> tool.getSalesReport("2026-03-01", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 
@@ -176,7 +177,7 @@ class ReportingFacadeToolTest {
     @DisplayName("getRevenueReport rejects a missing range and names the resolver tools to call")
     void getRevenueReport_rejectsMissingRange() {
         assertThatThrownBy(() -> tool.getRevenueReport(null, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate and endDate are both required")
                 .hasMessageContaining("resolveDateWindow")
                 .hasMessageContaining("resolveNamedPeriod");
@@ -214,7 +215,7 @@ class ReportingFacadeToolTest {
     @DisplayName("getRevenueReport rejects an unpaired startDate without issuing a request")
     void getRevenueReport_rejectsUnpairedStartDate() {
         assertThatThrownBy(() -> tool.getRevenueReport("2026-03-01", null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
 

@@ -89,6 +89,9 @@ public record OrderTransmissionStatus(
         CANCELLED
     }
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from a
+    // persisted transmission-intent row, never from client input. A violation here is this
+    // module's own defect, so it belongs on the platform 500 fallback, not a client 4xx.
     public OrderTransmissionStatus {
         Objects.requireNonNull(transmissionIntentId, "transmissionIntentId must not be null");
         Objects.requireNonNull(purchaseOrderId, "purchaseOrderId must not be null");

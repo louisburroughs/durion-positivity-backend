@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -83,10 +84,11 @@ class PostingRuleDefinitionValidatorTest {
         }
 
         @Test
-        @DisplayName("not-JSON definition is rejected as IllegalArgumentException (400), not UNBALANCED_RULES")
-        void malformedJsonIsIllegalArgument() {
+        @DisplayName(
+                "not-JSON definition is rejected as PostingRulePublishValidationException (400), not UNBALANCED_RULES")
+        void malformedJsonIsRejectedAs400() {
             assertThatThrownBy(() -> PostingRuleDefinitionValidator.validateForPublish("this is not json{{"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PostingRulePublishValidationException.class)
                     .hasMessageContaining("not valid JSON");
         }
     }

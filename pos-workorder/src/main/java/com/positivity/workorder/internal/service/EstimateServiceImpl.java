@@ -27,6 +27,11 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.event.EstimateCreatedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
+import com.positivity.workorder.internal.exception.EstimateNotFoundException;
+import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -248,7 +253,7 @@ public class EstimateServiceImpl implements EstimateService {
                 ? request.getLocationId()
                 : peopleAvailabilityLocalService
                         .resolveCurrentUserPrimaryLocation()
-                        .orElseThrow(() -> new IllegalArgumentException(
+                        .orElseThrow(() -> new WorkorderRequestValidationException(
                                 "locationId is required: none was provided and the current user has no primary "
                                         + "location assignment to derive one from"));
         String currencyUomId = request.getCurrencyUomId() != null ? request.getCurrencyUomId() : DEFAULT_CURRENCY;
@@ -307,21 +312,21 @@ public class EstimateServiceImpl implements EstimateService {
     private void validateCreateEstimateRequest(CreateEstimateRequest request) {
         if (request.getCustomerId() == null) {
             log.warn("Attempt to create estimate without customerId");
-            throw new IllegalArgumentException("customerId is required");
+            throw new WorkorderRequestValidationException("customerId is required");
         }
         if (request.getVehicleId() == null) {
             log.warn("Attempt to create estimate without vehicleId");
-            throw new IllegalArgumentException("vehicleId is required");
+            throw new WorkorderRequestValidationException("vehicleId is required");
         }
 
         if (request.getSubtotal() != null && request.getSubtotal().compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("subtotal must be non-negative");
+            throw new WorkorderRequestValidationException("subtotal must be non-negative");
         }
         if (request.getTaxAmount() != null && request.getTaxAmount().compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("taxAmount must be non-negative");
+            throw new WorkorderRequestValidationException("taxAmount must be non-negative");
         }
         if (request.getTotal() != null && request.getTotal().compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("total must be non-negative");
+            throw new WorkorderRequestValidationException("total must be non-negative");
         }
         if (request.getSubtotal() != null && request.getTaxAmount() != null && request.getTotal() != null) {
             BigDecimal calculatedTotal = request.getSubtotal().add(request.getTaxAmount());
@@ -478,7 +483,7 @@ public class EstimateServiceImpl implements EstimateService {
 
         // Validate customer matches estimate
         if (!estimate.getCustomerId().equals(customerId)) {
-            throw new IllegalArgumentException("Customer ID mismatch: estimate belongs to customer "
+            throw new WorkorderResourceConflictException("Customer ID mismatch: estimate belongs to customer "
                     + estimate.getCustomerId() + ", but approval attempted for customer "
                     + customerId);
         }
@@ -492,7 +497,7 @@ public class EstimateServiceImpl implements EstimateService {
         if (billingRulesClientService.isPurchaseOrderRequired(partyId)) {
             if (purchaseOrderNumber == null || purchaseOrderNumber.isBlank()) {
                 log.warn("Purchase order required but not provided for estimate {} (partyId={})", estimateId, partyId);
-                throw new IllegalArgumentException("Purchase order number is required for this customer account");
+                throw new PurchaseOrderRequiredException("Purchase order number is required for this customer account");
             }
             log.info(
                     "PO enforcement: validating PO {} for estimate {} (partyId={})",
@@ -587,9 +592,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @Transactional
     public EstimateResponse declineEstimate(UUID estimateId, String reason) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         if (!estimate.canDecline()) {
             throw new IllegalStateException("Estimate cannot be declined in current state: " + estimate.getStatus());
@@ -611,9 +615,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @Transactional
     public EstimateResponse reopenEstimate(UUID estimateId) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         ApprovalConfiguration config = getApprovalConfigurationById(estimate.getApprovalConfigurationId());
 
@@ -748,6 +751,11 @@ public class EstimateServiceImpl implements EstimateService {
                     .priority(0)
                     .build();
         }
+        // (issue #1694) configId here is always estimate.getApprovalConfigurationId(), an internal
+        // FK -- never a client-supplied value -- so a miss means the referenced configuration row
+        // was deleted out from under the estimate, a data-integrity defect, not a caller mistake.
+        // Left as a bare IllegalArgumentException; with the blanket 400 handler gone this now
+        // correctly falls through to the platform's generic 500 instead of masquerading as a 400.
         return approvalConfigurationRepository
                 .findById(configId)
                 .orElseThrow(() -> new IllegalArgumentException("Approval configuration not found: " + configId));
@@ -790,9 +798,8 @@ public class EstimateServiceImpl implements EstimateService {
             BigDecimal total,
             boolean taxPending,
             String username) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         // Capture old total for comparison
         BigDecimal oldTotal = estimate.getTotal();
@@ -878,9 +885,8 @@ public class EstimateServiceImpl implements EstimateService {
     @NonNull
     public EstimateItemResponse addEstimateItem(
             @NonNull UUID estimateId, @NonNull AddEstimateItemRequest request, @NonNull String username) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -901,7 +907,7 @@ public class EstimateServiceImpl implements EstimateService {
             partQuantityDivisibilityService.requirePermittedScale(
                     request.getProductId(), request.getDescription(), request.getQuantity(), normalizedUomCode);
         } else if (normalizedUomCode != null) {
-            throw new IllegalArgumentException("uomCode is not valid for LABOR items");
+            throw new WorkorderRequestValidationException("uomCode is not valid for LABOR items");
         }
 
         // Guide-time defaulting (#1569, sourcing plan §6.3 item 1): a LABOR line naming a
@@ -921,7 +927,7 @@ public class EstimateServiceImpl implements EstimateService {
         if (quantity == null) {
             // Bean validation lets quantity be omitted only for guide-eligible LABOR lines; a
             // guide miss must surface as a request problem, not a null-quantity row.
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "quantity is required: no labor guide time is available for this service and vehicle");
         }
 
@@ -1026,7 +1032,7 @@ public class EstimateServiceImpl implements EstimateService {
         // LABOR rows never carry a uomCode (ADR-0055 stage 3, #1415): revising one onto a LABOR
         // row has to be rejected the same way entering one would be.
         if (uomCodeProvided && item.getItemType() == EstimateItemType.LABOR) {
-            throw new IllegalArgumentException("uomCode is not valid for LABOR items");
+            throw new WorkorderRequestValidationException("uomCode is not valid for LABOR items");
         }
     }
 
@@ -1096,9 +1102,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @Transactional
     public void deleteEstimateItem(@NonNull UUID estimateId, @NonNull UUID itemId) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -1108,8 +1113,7 @@ public class EstimateServiceImpl implements EstimateService {
 
         EstimateItem item = estimateItemRepository
                 .findByIdAndEstimate_IdAndDeletedFalse(itemId, estimateId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Item not found: " + itemId + " for estimate: " + estimateId));
+                .orElseThrow(() -> new EstimateItemNotFoundException(itemId, estimateId));
 
         // Soft delete
         item.setDeleted(true);
@@ -1151,9 +1155,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Transactional
     @NonNull
     public EstimateResponse calculateEstimateTaxesAndTotals(@NonNull UUID estimateId, @NonNull String username) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         // Validate estimate is in DRAFT status
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -1323,9 +1326,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @NonNull
     public EstimateSummaryResponse getEstimateSummary(@NonNull UUID estimateId) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
@@ -1346,9 +1348,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @NonNull
     public byte[] generateEstimatePdf(@NonNull UUID estimateId) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
@@ -1479,9 +1480,8 @@ public class EstimateServiceImpl implements EstimateService {
      */
     private EstimateSnapshot createEstimateSnapshotInternal(
             @NonNull UUID estimateId, @NonNull String username, @Nullable String notes) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new IllegalArgumentException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimateId);
 
@@ -1567,10 +1567,10 @@ public class EstimateServiceImpl implements EstimateService {
     public CreateEstimateFromAppointmentResponse createEstimateFromAppointment(
             @NonNull CreateEstimateFromAppointmentRequest request) {
         if (request.getAppointmentId() == null) {
-            throw new IllegalArgumentException("appointmentId is required");
+            throw new WorkorderRequestValidationException("appointmentId is required");
         }
         if (request.getCustomerId() == null) {
-            throw new IllegalArgumentException("customerId is required");
+            throw new WorkorderRequestValidationException("customerId is required");
         }
 
         log.info(

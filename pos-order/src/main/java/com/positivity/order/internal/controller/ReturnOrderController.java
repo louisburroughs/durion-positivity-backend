@@ -69,11 +69,12 @@ public class ReturnOrderController {
                     Emits an ORDER_RETURN_CREATE event; a refund total above the approval threshold (default \
                     250.00, configurable via pos.order.return.approval-threshold) parks the return at \
                     PENDING_APPROVAL, otherwise it starts at RETURN_REQUESTED ready for processReturn.
-                    Returns 201 on creation (idempotent replays included), 404 when the original order does not \
-                    exist, 409 when the original order is not COMPLETED, and 422 when a line exceeds its \
-                    returnable remainder (each offending line's returnableQty is listed in fieldErrors), a \
-                    WARRANTY-condition line must route to pos-warranty, or the lines are duplicated, unknown, or \
-                    invalid.
+                    Returns 201 on creation (idempotent replays included), 400 when the request has no lines, a \
+                    line reference is duplicated or unknown, returnQty is not positive, or refundMethod/condition \
+                    is unrecognised, 404 when the original order does not exist, 409 when the original order is \
+                    not COMPLETED, and 422 when a line exceeds its returnable remainder (each offending line's \
+                    returnableQty is listed in fieldErrors), a line is not returnable, or a WARRANTY-condition \
+                    line must route to pos-warranty.
                     """,
             tags = {"Returns"})
     @PostMapping

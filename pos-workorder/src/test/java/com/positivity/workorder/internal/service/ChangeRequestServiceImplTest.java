@@ -18,6 +18,9 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.ChangeRequestNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ApprovalRecordRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -201,7 +204,7 @@ class ChangeRequestServiceImplTest {
             CreateChangeRequestDTO request = dto().description("  ").build();
 
             assertThatThrownBy(() -> service.createChangeRequest(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("Description is required");
         }
 
@@ -211,7 +214,7 @@ class ChangeRequestServiceImplTest {
                     dto().services(List.of()).parts(List.of()).build();
 
             assertThatThrownBy(() -> service.createChangeRequest(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("At least one service or part");
         }
 
@@ -221,8 +224,8 @@ class ChangeRequestServiceImplTest {
             CreateChangeRequestDTO request = dto().build();
 
             assertThatThrownBy(() -> service.createChangeRequest(request))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Work order not found");
+                    .isInstanceOf(WorkorderNotFoundException.class)
+                    .hasMessageContaining("Workorder not found");
         }
 
         @Test
@@ -248,7 +251,7 @@ class ChangeRequestServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.createChangeRequest(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("no items are marked as emergency/safety");
         }
 
@@ -263,7 +266,7 @@ class ChangeRequestServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.createChangeRequest(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("photo evidence");
         }
 
@@ -279,7 +282,7 @@ class ChangeRequestServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.createChangeRequest(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("notes explaining the situation");
         }
 
@@ -411,10 +414,10 @@ class ChangeRequestServiceImplTest {
                     .thenReturn(Optional.of(changeRequest(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)));
 
             assertThatThrownBy(() -> service.approveChangeRequest(CHANGE_REQUEST_ID, APPROVER_ID, "  "))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("Approval note is required");
             assertThatThrownBy(() -> service.declineChangeRequest(CHANGE_REQUEST_ID, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("Approval note is required");
         }
 
@@ -434,11 +437,11 @@ class ChangeRequestServiceImplTest {
             when(changeRequestRepository.findById(CHANGE_REQUEST_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.approveChangeRequest(CHANGE_REQUEST_ID, APPROVER_ID, "note"))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(ChangeRequestNotFoundException.class);
             assertThatThrownBy(() -> service.declineChangeRequest(CHANGE_REQUEST_ID, "note"))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(ChangeRequestNotFoundException.class);
             assertThatThrownBy(() -> service.applyEmergencyOverride(CHANGE_REQUEST_ID, "reason"))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(ChangeRequestNotFoundException.class);
         }
 
         @Test
@@ -464,7 +467,7 @@ class ChangeRequestServiceImplTest {
             when(changeRequestRepository.findById(CHANGE_REQUEST_ID))
                     .thenReturn(Optional.of(changeRequest(ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW)));
             assertThatThrownBy(() -> service.applyEmergencyOverride(CHANGE_REQUEST_ID, "  "))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("Exception reason is required");
 
             when(changeRequestRepository.findById(CHANGE_REQUEST_ID))
@@ -627,7 +630,7 @@ class ChangeRequestServiceImplTest {
             when(changeRequestRepository.findById(CHANGE_REQUEST_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getChangeRequestById(CHANGE_REQUEST_ID))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(ChangeRequestNotFoundException.class)
                     .hasMessageContaining("Change request not found");
         }
     }

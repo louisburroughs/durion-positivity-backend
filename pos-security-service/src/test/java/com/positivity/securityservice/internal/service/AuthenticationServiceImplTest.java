@@ -12,11 +12,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.LoginRequest;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.security.service.JwtService.TokenPair;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -34,6 +36,8 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -65,6 +69,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * <tr>
  * <td>T9</td>
  * <td>AUTH-001 AC3, AC6: calls jwtService.generateTokenPair on success</td>
+ * </tr>
+ * <tr>
+ * <td>T9b-T9d</td>
+ * <td>ADR-0017 §2 (#1725): no-roles login refused as 403; Spring Security 7 factor markers
+ * ({@code FACTOR_PASSWORD}) are not roles — never reach the token, never satisfy the guard</td>
  * </tr>
  * <tr>
  * <td>T10-T12</td>
@@ -120,6 +129,13 @@ class AuthenticationServiceImplTest {
     @InjectMocks
     private AuthenticationServiceImpl sut;
 
+    /**
+     * Any one authority: since #1725 (ADR-0017 §2 question 1) login() refuses an account with no
+     * roles as 403 {@code USER_HAS_NO_ROLES} before minting, so every success-path test must
+     * present at least one.
+     */
+    private static final org.springframework.security.core.GrantedAuthority ANY_ROLE = () -> "ROLE_USER";
+
     // =========================================================
     // T7 — login() must NOT use PasswordEncoder directly (AC2)
     // =========================================================
@@ -152,6 +168,7 @@ class AuthenticationServiceImplTest {
                     .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                             UUID.randomUUID(), null, new User("testuser", "password", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
@@ -180,6 +197,7 @@ class AuthenticationServiceImplTest {
                     .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                             UUID.randomUUID(), null, new User("alice", "secret", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(jwtService.generateTokenPair(any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
@@ -248,6 +266,7 @@ class AuthenticationServiceImplTest {
             when(successAuth.getPrincipal())
                     .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
                             UUID.randomUUID(), null, new User("bob", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
 
             String fakeAccess = "access.token.stub";
@@ -266,6 +285,94 @@ class AuthenticationServiceImplTest {
                     .isEqualTo(fakeRefresh);
 
             verify(jwtService).generateTokenPair(argThat("bob"::equals), any(UUID.class), isNull(), any());
+        }
+
+        /**
+         * ADR-0017 §2 question 1 (#1725): an authenticated account with no roles is refused as a
+         * caller-authorization failure — {@link NoRolesAssignedException}, 403 {@code
+         * USER_HAS_NO_ROLES} — before any token is minted, the same answer the refresh path gives
+         * for the same condition. Previously this fell through to generateTokenPair's empty-roles
+         * guard and answered 400.
+         */
+        @Test
+        @DisplayName("T9b: login() throws NoRolesAssignedException when the account has no roles, minting nothing")
+        void login_throwsNoRolesAssigned_whenAccountHasNoRoles() {
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("bob");
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("bob", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of());
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("bob", "pass")))
+                    .isInstanceOf(NoRolesAssignedException.class)
+                    .hasMessageContaining("no roles assigned");
+
+            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any());
+        }
+
+        /**
+         * The shape the real {@code DaoAuthenticationProvider} path produces for a role-less user.
+         * Spring Security 7 appends a {@link FactorGrantedAuthority} ({@code FACTOR_PASSWORD}) to every
+         * successful password authentication, so on the real path the authorities are never a plain
+         * empty list (which is what a mock gives — T9b). Without the type filter in {@code login()}
+         * this marker would be counted as a role, the #1725 no-roles guard would be unreachable, and
+         * the account would be minted a token carrying {@code ROLE_FACTOR_PASSWORD}.
+         */
+        @Test
+        @DisplayName(
+                "T9c: login() throws NoRolesAssignedException when the only authority is the FACTOR_PASSWORD marker")
+        void login_throwsNoRolesAssigned_whenOnlyAuthorityIsFactorMarker() {
+            GrantedAuthority passwordFactor = FactorGrantedAuthority.withAuthority(
+                            FactorGrantedAuthority.PASSWORD_AUTHORITY)
+                    .build();
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("bob");
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("bob", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(passwordFactor));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+
+            assertThatThrownBy(() -> sut.login(new LoginRequest("bob", "pass")))
+                    .isInstanceOf(NoRolesAssignedException.class)
+                    .hasMessageContaining("no roles assigned");
+
+            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any());
+        }
+
+        /**
+         * Companion to T9c on the success path: a real role plus the {@code FACTOR_PASSWORD} marker
+         * must reach {@code generateTokenPair} as exactly the real role. The marker is excluded by
+         * type, not by name, so neither {@code FACTOR_PASSWORD} nor a prefix-stripped variant can
+         * leak into the roles claim.
+         */
+        @Test
+        @DisplayName(
+                "T9d: login() passes only the real role to generateTokenPair; the FACTOR_PASSWORD marker is dropped")
+        void login_passesOnlyRealRoles_whenFactorMarkerIsAlsoPresent() {
+            GrantedAuthority shopManager = () -> "ROLE_SHOP_MANAGER";
+            GrantedAuthority passwordFactor = FactorGrantedAuthority.withAuthority(
+                            FactorGrantedAuthority.PASSWORD_AUTHORITY)
+                    .build();
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("bob");
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            UUID.randomUUID(), null, new User("bob", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(shopManager, passwordFactor));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("bob", "pass"));
+
+            verify(jwtService)
+                    .generateTokenPair(
+                            eq("bob"),
+                            any(UUID.class),
+                            isNull(),
+                            argThat(roles -> Set.of("SHOP_MANAGER").equals(roles)));
         }
     }
 
@@ -321,6 +428,7 @@ class AuthenticationServiceImplTest {
                             null,
                             new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
@@ -481,7 +589,7 @@ class AuthenticationServiceImplTest {
                             t18UserId,
                             t18PersonId,
                             new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
-            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of());
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
 

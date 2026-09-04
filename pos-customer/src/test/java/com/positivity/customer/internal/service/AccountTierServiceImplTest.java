@@ -1,7 +1,7 @@
 package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,6 +11,8 @@ import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.AccountTier;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -119,9 +121,9 @@ class AccountTierServiceImplTest {
         void get_whenAbsent_throws() {
             when(commercialPartyRepository.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
 
-            assertThatIllegalArgumentException()
+            assertThatExceptionOfType(CrmResourceNotFoundException.class)
                     .isThrownBy(() -> sut.getAccountTier(ACCOUNT_ID))
-                    .withMessageContaining("Account not found");
+                    .withMessageContaining("not found");
         }
     }
 
@@ -430,7 +432,7 @@ class AccountTierServiceImplTest {
         @Test
         @DisplayName("rejects an account id that is not a UUID, naming the offending value")
         void resolve_whenAccountIdMalformed_throws() {
-            assertThatIllegalArgumentException()
+            assertThatExceptionOfType(CrmValidationException.class)
                     .isThrownBy(() -> resolve(ResolveAccountTierRequest.builder()
                             .accountId("not-a-uuid")
                             .build()))
@@ -443,9 +445,9 @@ class AccountTierServiceImplTest {
         void resolve_whenAccountAbsent_throws() {
             when(commercialPartyRepository.findById(ACCOUNT_ID)).thenReturn(Optional.empty());
 
-            assertThatIllegalArgumentException()
+            assertThatExceptionOfType(CrmResourceNotFoundException.class)
                     .isThrownBy(() -> resolve(request().build()))
-                    .withMessageContaining("Account not found");
+                    .withMessageContaining("not found");
         }
     }
 }

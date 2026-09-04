@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.domain.model;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
@@ -17,8 +18,13 @@ public record SupplierRef(@NonNull String value) {
 
     public SupplierRef {
         Objects.requireNonNull(value, "value must not be null");
+        // Reachable from an HTTP path variable (several controllers construct this directly from
+        // {supplierRef}) as well as from internal server-derived values; typed rather than a bare
+        // IllegalArgumentException (#1694) so it cannot be confused with a server-side defect once
+        // the blanket handler is gone.
         if (value.isBlank()) {
-            throw new IllegalArgumentException("SupplierRef value must not be blank");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, "SupplierRef value must not be blank");
         }
     }
 }

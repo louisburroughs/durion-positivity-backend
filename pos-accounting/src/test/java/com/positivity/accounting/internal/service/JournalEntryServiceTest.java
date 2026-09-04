@@ -23,6 +23,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.event.JournalEntryReversed;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
+import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
@@ -192,7 +193,7 @@ class JournalEntryServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> service.createJournalEntry(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(UnbalancedEntryException.class)
                 .hasMessageContaining("must have at least one line");
     }
 
@@ -236,7 +237,7 @@ class JournalEntryServiceTest {
 
         // Act & Assert
         assertThatThrownBy(() -> service.getJournalEntry(testJournalEntryId))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(JournalEntryNotFoundException.class)
                 .hasMessageContaining("Journal entry not found");
     }
 

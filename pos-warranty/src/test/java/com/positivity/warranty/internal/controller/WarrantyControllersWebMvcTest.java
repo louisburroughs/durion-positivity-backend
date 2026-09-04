@@ -486,6 +486,29 @@ class WarrantyControllersWebMvcTest {
                     .andExpect(jsonPath("$.nextAction").value("Legal next statuses: SETTLED, CLOSED."));
         }
 
+        /**
+         * Pins the submit endpoint's wire contract for issue #1694: intake-incomplete failures
+         * answer 422 with their documented codes, not the 400 the blanket {@code
+         * IllegalArgumentException} handler used to produce before it was removed.
+         */
+        @Test
+        void submitWithoutLinesIs422WithTheDocumentedCode() throws Exception {
+            when(claimService.submit(CLAIM_ID))
+                    .thenThrow(new WarrantyUnprocessableException(
+                            "WARRANTY_CLAIM_MISSING_LINES",
+                            "A claim must have at least one claim line before it can be submitted"));
+
+            mockMvc.perform(authed(post("/v1/warranty/claims/{id}/submit", CLAIM_ID), WarrantyPermissions.CLAIM_SUBMIT)
+                            .header(CORRELATION_HEADER, "corr-43"))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(header().string(CORRELATION_HEADER, "corr-43"))
+                    .andExpect(jsonPath("$.code").value("WARRANTY_CLAIM_MISSING_LINES"))
+                    .andExpect(jsonPath("$.message")
+                            .value("A claim must have at least one claim line before it can be submitted"))
+                    .andExpect(jsonPath("$.status").value(422))
+                    .andExpect(jsonPath("$.correlationId").value("corr-43"));
+        }
+
         @Test
         void missingCorrelationHeaderGetsAGeneratedIdEchoedInHeaderAndBody() throws Exception {
             when(claimService.submit(CLAIM_ID))

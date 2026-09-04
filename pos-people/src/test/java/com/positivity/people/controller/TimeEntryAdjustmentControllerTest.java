@@ -8,6 +8,7 @@ import com.positivity.people.internal.dto.TimeEntryAdjustment;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.exception.NotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.service.TimeEntryAdjustmentService;
 import java.util.List;
 import java.util.UUID;
@@ -71,10 +72,10 @@ class TimeEntryAdjustmentControllerTest {
         req.setTimeEntryId(timeEntryId);
         req.setReasonCode(" ");
 
-        when(service.createAdjustment(req)).thenThrow(new IllegalArgumentException("reasonCode is required"));
+        when(service.createAdjustment(req)).thenThrow(new RequestValidationException("reasonCode is required"));
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> controller.createAdjustment(req));
+        RequestValidationException ex =
+                assertThrows(RequestValidationException.class, () -> controller.createAdjustment(req));
         assertEquals("reasonCode is required", ex.getMessage());
     }
 

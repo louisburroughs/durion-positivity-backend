@@ -13,6 +13,7 @@ import com.positivity.invoice.internal.config.InvoiceEventPublisher;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.service.model.CreateDepositCommand;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
@@ -186,7 +187,7 @@ class OrderInvoiceServiceImplTest {
         depositTake.setDepositSourceId(UUID.randomUUID());
 
         assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("depositSourceType");
     }
 
@@ -198,7 +199,7 @@ class OrderInvoiceServiceImplTest {
         depositTake.setDepositSourceType("WORKORDER");
 
         assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("depositSourceId");
     }
 
@@ -263,7 +264,7 @@ class OrderInvoiceServiceImplTest {
         assertThat(depositTake.getTaxAmount()).isEqualByComparingTo("8.00");
 
         assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("deposit-take invoice requests must carry zero tax");
         verify(invoiceRepository, never()).save(any());
     }
@@ -328,7 +329,7 @@ class OrderInvoiceServiceImplTest {
         depositTake.setDepositAmount(new BigDecimal("50.00"));
 
         assertThatThrownBy(() -> service.createInvoiceForOrder(depositTake))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("Unknown deposit source type");
         verify(invoiceRepository, never()).save(any());
     }
@@ -501,11 +502,13 @@ class OrderInvoiceServiceImplTest {
 
         OrderInvoiceCreationRequest noLines = request(null);
         noLines.setLines(List.of());
-        assertThatThrownBy(() -> service.createInvoiceForOrder(noLines)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createInvoiceForOrder(noLines))
+                .isInstanceOf(InvoiceRequestValidationException.class);
 
         OrderInvoiceCreationRequest negative = request(null);
         negative.setTotalAmount(new BigDecimal("-1.00"));
-        assertThatThrownBy(() -> service.createInvoiceForOrder(negative)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createInvoiceForOrder(negative))
+                .isInstanceOf(InvoiceRequestValidationException.class);
     }
 
     @Test
@@ -618,13 +621,13 @@ class OrderInvoiceServiceImplTest {
         badLineSum.setSubtotal(new BigDecimal("101.00"));
         badLineSum.setTotalAmount(new BigDecimal("109.00"));
         assertThatThrownBy(() -> service.createInvoiceForOrder(badLineSum))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("subtotal");
 
         OrderInvoiceCreationRequest badTotal = request(null);
         badTotal.setTotalAmount(new BigDecimal("108.01"));
         assertThatThrownBy(() -> service.createInvoiceForOrder(badTotal))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("totalAmount");
     }
 
@@ -656,7 +659,7 @@ class OrderInvoiceServiceImplTest {
         OrderInvoiceCreationRequest noLines = request(null);
         noLines.setLines(null);
         assertThatThrownBy(() -> service.createInvoiceForOrder(noLines))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvoiceRequestValidationException.class)
                 .hasMessageContaining("at least one line");
     }
 }

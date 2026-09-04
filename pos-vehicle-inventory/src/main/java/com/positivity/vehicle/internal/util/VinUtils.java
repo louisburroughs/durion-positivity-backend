@@ -1,5 +1,6 @@
 package com.positivity.vehicle.internal.util;
 
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 
@@ -20,6 +21,13 @@ public final class VinUtils {
      * uppercase.
      */
     public static String normalize(@NonNull String vin) {
+        // Defensive/(d): both current call sites (createVehicle via validateAndNormalize, and
+        // getVehicleByVin) only reach this method after the caller's own bean validation
+        // (@NotBlank on CreateVehicleRequest.vin, @NotBlank/@Size on the getVehicleByVin path
+        // variable) has already rejected a null/blank VIN, so a client request cannot trigger
+        // this branch today. Left as a bare IllegalArgumentException (not retyped, not mapped by
+        // the advice) rather than silently dropped, so a future caller that skips validation
+        // fails loudly instead of NPEing further down (issue #1694).
         if (vin == null || vin.isBlank()) {
             throw new IllegalArgumentException("VIN cannot be null or blank");
         }
@@ -55,7 +63,7 @@ public final class VinUtils {
     public static String validateAndNormalize(@NonNull String vin) {
         String normalized = normalize(vin);
         if (!isValid(normalized)) {
-            throw new IllegalArgumentException(
+            throw new VehicleValidationException(
                     "Invalid VIN format. VIN must be 17 characters and cannot contain I, O, or Q. Provided: " + vin);
         }
         return normalized;

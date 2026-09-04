@@ -12,6 +12,7 @@ import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -140,7 +141,7 @@ class UserServiceTest {
         when(roleRepository.findByName("UNKNOWN")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.createUser("bob", "pass", Set.of("UNKNOWN")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Role not found");
     }
 
@@ -262,7 +263,7 @@ class UserServiceTest {
 
         UserUpdateRequest req = new UserUpdateRequest();
         assertThatThrownBy(() -> userService.updateUser(id, req))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("User not found");
     }
 
@@ -278,7 +279,7 @@ class UserServiceTest {
         req.setRoles(Set.of("GHOST"));
 
         assertThatThrownBy(() -> userService.updateUser(id, req))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Role not found");
     }
 
@@ -287,7 +288,7 @@ class UserServiceTest {
         when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.assignRoles("ghost", Set.of("ADMIN")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("User not found");
     }
 
@@ -299,7 +300,7 @@ class UserServiceTest {
         when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.assignRoles("alice", Set.of("GHOST")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("Role not found");
     }
 }

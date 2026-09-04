@@ -11,6 +11,7 @@ import com.positivity.order.internal.event.OrderPriceOverrideApplied;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
 import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
+import com.positivity.order.internal.exception.PriceOverrideRequestValidationException;
 import com.positivity.order.internal.repository.ApprovalRecordRepository;
 import com.positivity.order.internal.repository.PriceOverrideRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
@@ -100,8 +101,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         boolean requiresApproval = requiresApproval(discountAmount, discountPercentage);
         OverrideStatus initialStatus = requiresApproval ? OverrideStatus.PENDING_APPROVAL : OverrideStatus.APPROVED;
 
-        UUID orderId = UUID.fromString(request.getOrderId());
-        UUID orderLineId = UUID.fromString(request.getOrderLineId());
+        UUID orderId = parseUuid(request.getOrderId(), "orderId");
+        UUID orderLineId = parseUuid(request.getOrderLineId(), "orderLineId");
         SalesOrder order = salesOrderRepository
                 .findById(orderId)
                 .orElseThrow(() -> new InvalidPriceOverrideException("Order not found: " + orderId));
@@ -119,10 +120,10 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         PriceOverride override = PriceOverride.builder()
                 .order(order)
                 .orderLine(orderLine)
-                .productId(UUID.fromString(request.getProductId()))
+                .productId(parseUuid(request.getProductId(), "productId"))
                 .originalPrice(request.getOriginalPrice())
                 .overridePrice(request.getOverridePrice())
-                .reasonCode(PriceOverrideReasonCode.valueOf(request.getReasonCode()))
+                .reasonCode(parseReasonCode(request.getReasonCode()))
                 .justification(request.getJustification())
                 .status(initialStatus)
                 .requiresApproval(requiresApproval)
@@ -318,6 +319,28 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         return priceOverrideRepository
                 .findById(overrideId)
                 .orElseThrow(() -> new PriceOverrideNotFoundException(overrideId));
+    }
+
+    /**
+     * {@code value} is a client-supplied identifier string (issue #1694): a malformed one is a
+     * request-shape error, not a bare {@code IllegalArgumentException} that would otherwise fall
+     * through to this advice's now-narrower handler set.
+     */
+    private static UUID parseUuid(String value, String field) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            throw new PriceOverrideRequestValidationException(field + " must be a UUID: " + value);
+        }
+    }
+
+    /** Same reasoning as {@link #parseUuid}: {@code reasonCode} is client-supplied. */
+    private static PriceOverrideReasonCode parseReasonCode(String reasonCode) {
+        try {
+            return PriceOverrideReasonCode.valueOf(reasonCode);
+        } catch (IllegalArgumentException e) {
+            throw new PriceOverrideRequestValidationException("Unknown reasonCode: " + reasonCode);
+        }
     }
 
     private PriceOverrideResult toResponse(PriceOverride override) {

@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
@@ -268,7 +269,7 @@ class AccountingPeriodLifecycleTest {
         periodService.closePeriod(pastMonth.toString());
 
         assertThatThrownBy(() -> periodService.reopenPeriod(pastMonth.toString(), " "))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidRequestParameterException.class);
 
         assertThat(periodService.isPeriodOpen(pastMonth.toString())).isFalse();
     }

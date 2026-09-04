@@ -145,6 +145,9 @@ public record PriceCatalogImportSummary(
         @Nullable
         String errorCode) {
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from an
+    // import run's own counters, never from client input. A violation here is this module's own
+    // defect, so it belongs on the platform 500 fallback, not a client 4xx.
     public PriceCatalogImportSummary {
         Objects.requireNonNull(importManifestId, "importManifestId must not be null");
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");

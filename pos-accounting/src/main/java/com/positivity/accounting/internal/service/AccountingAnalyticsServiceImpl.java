@@ -12,6 +12,8 @@ import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
@@ -134,7 +136,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             @NonNull LocalDate startDate, @NonNull LocalDate endDate) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
 
         log.info("Generating collections analytics for window {} to {}", startDate, endDate);
@@ -235,7 +237,7 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             @NonNull LocalDate issuedFrom, @NonNull LocalDate issuedTo, int limit) {
 
         if (issuedTo.isBefore(issuedFrom)) {
-            throw new IllegalArgumentException("issuedTo cannot be before issuedFrom");
+            throw new InvalidDateRangeException("issuedTo cannot be before issuedFrom");
         }
 
         log.info("Generating payment-lag cohorts for invoices issued {} to {}", issuedFrom, issuedTo);
@@ -292,10 +294,10 @@ public class AccountingAnalyticsServiceImpl implements AccountingAnalyticsServic
             @NonNull LocalDate startDate, @NonNull LocalDate endDate, int limit) {
 
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvalidDateRangeException("End date cannot be before start date");
         }
         if (limit <= 0) {
-            throw new IllegalArgumentException("limit must be at least 1");
+            throw new InvalidRequestParameterException("limit must be at least 1");
         }
         int effectiveLimit = Math.min(limit, MAX_VENDOR_SPEND_LIMIT);
 

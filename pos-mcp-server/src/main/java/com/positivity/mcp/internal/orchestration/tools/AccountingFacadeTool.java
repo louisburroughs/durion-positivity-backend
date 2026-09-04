@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
@@ -235,7 +236,7 @@ public class AccountingFacadeTool {
         try {
             LocalDate.parse(trimmed);
         } catch (DateTimeParseException exception) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Invalid asOfDate '" + asOfDate + "': pass an ISO date in YYYY-MM-DD form (e.g. 2026-06-30)",
                     exception);
         }

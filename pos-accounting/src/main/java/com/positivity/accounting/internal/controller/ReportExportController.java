@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.ReportExportService;
 import com.positivity.events.EmitEvent;
@@ -244,7 +245,7 @@ public class ReportExportController {
         if (request.getStartDate() != null
                 && request.getEndDate() != null
                 && request.getEndDate().isBefore(request.getStartDate())) {
-            throw new IllegalArgumentException("endDate must be on or after startDate");
+            throw new InvalidDateRangeException("endDate must be on or after startDate");
         }
     }
 }

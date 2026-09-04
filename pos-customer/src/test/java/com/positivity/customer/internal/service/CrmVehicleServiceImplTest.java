@@ -9,6 +9,7 @@ import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -115,8 +116,9 @@ class CrmVehicleServiceImplTest {
         when(commercialPartyRepository.findById(CUSTOMER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getVehicleForCustomer(CUSTOMER_ID, VEHICLE_ID))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Customer not found");
+                .isInstanceOf(CrmResourceNotFoundException.class)
+                .hasMessageContaining("Customer")
+                .hasMessageContaining("not found");
     }
 
     @Test

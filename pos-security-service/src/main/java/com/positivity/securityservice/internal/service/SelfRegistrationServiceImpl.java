@@ -10,6 +10,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -335,7 +336,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
 
     private String normalizeRequired(String value, String fieldName) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " is required");
+            throw new SecurityValidationException(fieldName + " is required");
         }
         return value.trim();
     }
@@ -350,7 +351,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private String deriveUsernameFromEmail(String email) {
         int atIndex = email.indexOf('@');
         if (atIndex <= 0) {
-            throw new IllegalArgumentException("email must contain a local part");
+            throw new SecurityValidationException("email must contain a local part");
         }
         return email.substring(0, atIndex).toLowerCase(Locale.ROOT);
     }

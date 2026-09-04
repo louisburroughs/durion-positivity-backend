@@ -12,6 +12,7 @@ import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.people.internal.security.PeoplePermissions;
@@ -291,7 +292,7 @@ class TimeEntryExceptionIntakeTest {
             when(exceptionRepository.findById(EXCEPTION_ID)).thenReturn(Optional.of(entity(ExceptionStatus.WAIVED)));
 
             assertThatThrownBy(() -> service.actionException(EXCEPTION_ID, ExceptionStatus.ACKNOWLEDGED, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(ResourceStateConflictException.class)
                     .hasMessageContaining("WAIVED");
         }
 

@@ -501,7 +501,7 @@ paths:
 
         Emits a PEOPLE_EMPLOYEE_DISABLE event and publishes a people.employee.updated fact; when the downstream assignment action fails, a retry is queued with a five-minute delay instead of failing the request.
 
-        Returns 404 when the employee does not exist, and 400 when the employee is not currently ACTIVE.
+        Returns 404 when the employee does not exist, and 409 when the employee is not currently ACTIVE (an already DISABLED, TERMINATED, ON_LEAVE, or SUSPENDED employee cannot be disabled again).
 
         '
       operationId: disableEmployee
@@ -532,18 +532,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/EmployeeProfileDto'
           description: Employee disabled
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EmployeeProfileDto'
-          description: Employee cannot be disabled
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmployeeProfileDto'
           description: Employee not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeProfileDto'
+          description: Employee is not currently ACTIVE
       security:
       - bearerAuth:
         - people:employee:deactivate
@@ -656,7 +656,7 @@ paths:
 
         Emits a PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE event and writes an EXCEPTION_ACKNOWLEDGED audit row.
 
-        Returns 404 when the exception does not exist, and 400 when it is already RESOLVED or WAIVED.
+        Returns 404 when the exception does not exist, and 409 when it is already RESOLVED or WAIVED.
 
         '
       operationId: acknowledgeTimeEntryException
@@ -685,6 +685,12 @@ paths:
               schema:
                 type: object
           description: Exception not found
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: Exception is already RESOLVED or WAIVED
       security:
       - bearerAuth:
         - people:timeException:acknowledge
@@ -705,7 +711,7 @@ paths:
 
         Emits a PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE event and writes an EXCEPTION_RESOLVED audit row.
 
-        Returns 404 when the exception does not exist, and 400 when it is already RESOLVED or WAIVED.
+        Returns 404 when the exception does not exist, and 409 when it is already RESOLVED or WAIVED.
 
         '
       operationId: resolveTimeEntryException
@@ -745,6 +751,12 @@ paths:
               schema:
                 type: object
           description: Exception not found
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: Exception is already RESOLVED or WAIVED
       security:
       - bearerAuth:
         - people:timeException:resolve
@@ -765,7 +777,7 @@ paths:
 
         Emits a PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE event and writes an EXCEPTION_WAIVED audit row.
 
-        Returns 404 when the exception does not exist, and 400 when waiveReason is blank or the exception is already RESOLVED or WAIVED.
+        Returns 404 when the exception does not exist, 400 when waiveReason is blank, and 409 when the exception is already RESOLVED or WAIVED.
 
         '
       operationId: waiveTimeEntryException
@@ -812,6 +824,12 @@ paths:
               schema:
                 type: object
           description: Exception not found
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: Exception is already RESOLVED or WAIVED
       security:
       - bearerAuth:
         - people:timeException:resolve

@@ -18,6 +18,7 @@ import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -116,7 +117,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         // (Copilot #1093 review) so an order never carries incomplete deposit provenance.
         String depositSourceType = normalizeBlank(command.depositSourceType());
         if ((depositSourceType == null) != (command.depositSourceId() == null)) {
-            throw new IllegalArgumentException(
+            throw new SalesOrderRequestValidationException(
                     "depositSourceType and depositSourceId must be provided together for a deposit take");
         }
 
@@ -137,7 +138,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 ? command.locationId()
                 : (openSession != null ? openSession.getLocationId() : null);
         if (locationId == null) {
-            throw new IllegalArgumentException(
+            throw new SalesOrderRequestValidationException(
                     "locationId is required when no register session is open on the terminal");
         }
 
@@ -283,7 +284,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     @Override
     public List<SalesOrderSummary> listCarts(String clerkId, String terminalId, String status, int page, int size) {
-        SalesOrderStatus statusFilter = normalizeBlank(status) == null ? null : SalesOrderStatus.valueOf(status.trim());
+        SalesOrderStatus statusFilter = normalizeBlank(status) == null ? null : parseSalesOrderStatus(status.trim());
         int pageSize = Math.min(Math.max(size, 1), 100);
         return salesOrderRepository
                 .search(
@@ -298,7 +299,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @Override
     @Transactional
     public SalesOrderSummary linkSource(UUID orderId, String sourceType, String sourceId) {
-        SourceType type = SourceType.valueOf(sourceType);
+        SourceType type = parseSourceType(sourceType);
 
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
@@ -465,13 +466,13 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     public CheckoutResult checkout(UUID orderId, String idempotencyKey, String tenderType) {
         String key = normalizeBlank(idempotencyKey);
         if (key == null) {
-            throw new IllegalArgumentException("Idempotency-Key is required for checkout");
+            throw new SalesOrderRequestValidationException("Idempotency-Key is required for checkout");
         }
         String tender =
                 normalizeBlank(tenderType) == null ? null : tenderType.trim().toUpperCase(java.util.Locale.ROOT);
         boolean onAccount = ON_ACCOUNT.equals(tender);
         if (!onAccount && tender != null && !"DEFAULT".equals(tender)) {
-            throw new IllegalArgumentException("Unsupported tenderType: " + tenderType);
+            throw new SalesOrderRequestValidationException("Unsupported tenderType: " + tenderType);
         }
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
@@ -810,6 +811,28 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             return UUID.fromString(value);
         } catch (IllegalArgumentException e) {
             throw new InvalidCustomerException(field + " must be a UUID: " + value);
+        }
+    }
+
+    /**
+     * {@code status} is a request filter (issue #1694): an unrecognised value is a malformed
+     * request, not a bare {@code IllegalArgumentException} that would otherwise fall through to
+     * this advice's now-removed blanket handler.
+     */
+    private static SalesOrderStatus parseSalesOrderStatus(String status) {
+        try {
+            return SalesOrderStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new SalesOrderRequestValidationException("Unknown status: " + status);
+        }
+    }
+
+    /** Same reasoning as {@link #parseSalesOrderStatus}: {@code sourceType} is client-supplied. */
+    private static SourceType parseSourceType(String sourceType) {
+        try {
+            return SourceType.valueOf(sourceType);
+        } catch (IllegalArgumentException e) {
+            throw new SalesOrderRequestValidationException("Unknown sourceType: " + sourceType);
         }
     }
 

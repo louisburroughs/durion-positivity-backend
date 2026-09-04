@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -51,7 +52,8 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     @Transactional
     public LocalDate setHardLockDate(@NonNull LocalDate hardLockDate, @NonNull String justification) {
         if (justification.isBlank()) {
-            throw new IllegalArgumentException("A non-blank justification is required to set the hard-lock date");
+            throw new InvalidRequestParameterException(
+                    "A non-blank justification is required to set the hard-lock date");
         }
 
         // Locked read (FOR UPDATE): concurrent setters serialize on the row so

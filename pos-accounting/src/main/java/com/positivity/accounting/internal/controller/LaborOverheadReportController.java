@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.LaborOverheadCostReport;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.LaborOverheadReportService;
 import com.positivity.events.EmitEvent;
@@ -95,13 +96,13 @@ public class LaborOverheadReportController {
                     @Nullable
                     Integer asOfMonth) {
 
-        // Validation errors use IllegalArgumentException to leverage the module's @RestControllerAdvice,
-        // which maps them to 400 Bad Request with the accounting domain's standard ApiError contract.
+        // InvalidRequestParameterException maps to 400 Bad Request via the module's
+        // @RestControllerAdvice, matching the accounting domain's standard ApiError contract.
         if (fiscalYear < MIN_FISCAL_YEAR || fiscalYear > MAX_FISCAL_YEAR) {
-            throw new IllegalArgumentException("fiscalYear must be a four-digit year");
+            throw new InvalidRequestParameterException("fiscalYear must be a four-digit year");
         }
         if (asOfMonth != null && (asOfMonth < MIN_MONTH || asOfMonth > MAX_MONTH)) {
-            throw new IllegalArgumentException("asOfMonth must be between 1 and 12");
+            throw new InvalidRequestParameterException("asOfMonth must be between 1 and 12");
         }
 
         LaborOverheadCostReport report = laborOverheadReportService.generate(locationId, fiscalYear, asOfMonth);

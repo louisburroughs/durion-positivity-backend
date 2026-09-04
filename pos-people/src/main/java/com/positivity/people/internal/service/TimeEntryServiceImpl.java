@@ -7,6 +7,7 @@ import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.NotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -290,7 +291,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
         for (String id : timeEntryIds) {
             String reason = rejectionReasons.get(id);
             if (reason == null || reason.isBlank()) {
-                throw new IllegalArgumentException("rejectionReason is required for all decisions");
+                throw new RequestValidationException("rejectionReason is required for all decisions");
             }
         }
 

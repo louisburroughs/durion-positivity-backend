@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -146,7 +147,7 @@ final class SpringAiToolCallbackResolver {
             try {
                 return OBJECT_MAPPER.readValue(toolInput, MAP_TYPE);
             } catch (JsonProcessingException e) {
-                throw new IllegalArgumentException("Invalid tool input JSON", e);
+                throw new InvalidToolArgumentException("Invalid tool input JSON", e);
             }
         }
 

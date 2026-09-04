@@ -15,6 +15,8 @@ import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.enums.InvoiceAdjustmentType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
+import com.positivity.invoice.internal.exception.InvalidManagerApprovalException;
+import com.positivity.invoice.internal.exception.ManagerApprovalRequiredException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -288,7 +290,7 @@ class InvoiceFinalizationServiceTest {
         FinalizationRequest request = serviceAdvisorRequest(null);
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ManagerApprovalRequiredException.class)
                 .hasMessageMatching("(?i).*approval.*");
     }
 
@@ -349,7 +351,7 @@ class InvoiceFinalizationServiceTest {
         FinalizationRequest request = serviceAdvisorRequest("not-a-valid-token");
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidManagerApprovalException.class)
                 .hasMessageMatching("(?i).*approval code.*");
     }
 
@@ -454,7 +456,7 @@ class InvoiceFinalizationServiceTest {
         when(elevationTokenService.verify(any(), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.revert(invoiceId, "not-a-valid-token", "Customer dispute"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidManagerApprovalException.class)
                 .hasMessageMatching("(?i).*approval code.*");
     }
 
@@ -620,7 +622,7 @@ class InvoiceFinalizationServiceTest {
         // SERVICE_ADVISOR context (default), > $500, no approval code → rejected.
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, serviceAdvisorRequest(null)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ManagerApprovalRequiredException.class)
                 .hasMessageMatching("(?i).*approval.*");
 
         assertThat(draft.getStatus()).isEqualTo(InvoiceStatus.DRAFT);

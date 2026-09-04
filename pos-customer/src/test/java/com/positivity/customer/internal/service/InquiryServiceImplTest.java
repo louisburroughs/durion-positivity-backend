@@ -17,6 +17,7 @@ import com.positivity.customer.internal.enums.InquiryChannel;
 import com.positivity.customer.internal.enums.InquiryStatus;
 import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.InquiryRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -106,7 +107,7 @@ class InquiryServiceImplTest {
     @DisplayName("an inquiry with no email and no phone is rejected rather than reaching the database")
     void requiresAContactChannel() {
         assertThatThrownBy(() -> service().capture(request(AudienceType.INDIVIDUAL, null, null)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(CrmValidationException.class)
                 .hasMessageContaining("email address or a phone number");
         verify(inquiryRepository, never()).save(any());
     }

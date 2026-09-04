@@ -248,11 +248,12 @@ public class EmployeeController {
                     Emits a PEOPLE_EMPLOYEE_DISABLE event and publishes a people.employee.updated fact; when the \
                     downstream assignment action fails, a retry is queued with a five-minute delay instead of \
                     failing the request.
-                    Returns 404 when the employee does not exist, and 400 when the employee is not currently ACTIVE.
+                    Returns 404 when the employee does not exist, and 409 when the employee is not currently ACTIVE \
+                    (an already DISABLED, TERMINATED, ON_LEAVE, or SUSPENDED employee cannot be disabled again).
                     """)
     @ApiResponse(responseCode = "200", description = "Employee disabled")
-    @ApiResponse(responseCode = "400", description = "Employee cannot be disabled")
     @ApiResponse(responseCode = "404", description = "Employee not found")
+    @ApiResponse(responseCode = "409", description = "Employee is not currently ACTIVE")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:deactivate"})

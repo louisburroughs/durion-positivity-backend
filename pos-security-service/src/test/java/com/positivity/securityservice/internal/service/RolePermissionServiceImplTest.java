@@ -99,7 +99,7 @@ class RolePermissionServiceImplTest {
             when(roleRepository.existsByName("MANAGER")).thenReturn(true);
 
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.createRole("MANAGER", "Manager role"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(com.positivity.securityservice.internal.exception.DuplicateRoleNameException.class)
                     .hasMessageContaining("Role already exists");
         }
     }

@@ -128,6 +128,9 @@ public class DocumentEmbeddingIngestor {
 
     public void ingestDocuments(@NonNull List<String> contents, @NonNull List<Map<String, Object>> metadataList) {
         if (contents.size() != metadataList.size()) {
+            // No controller calls this batch entry point (DocumentIngestionController only queues
+            // a single document, processed later on the ingestion executor) (#1694) -- left as a
+            // bare IllegalArgumentException.
             throw new IllegalArgumentException(
                     "contents and metadataList must have equal size: contents=%d, metadataList=%d"
                             .formatted(contents.size(), metadataList.size()));
@@ -192,6 +195,9 @@ public class DocumentEmbeddingIngestor {
                 segments.addAll(slidingWindowSplit(section));
             }
             if (segments.size() > maxChunksPerDocument) {
+                // Runs only on the async ingestion executor (DocumentIngestionServiceImpl#processJob),
+                // never on a controller thread; caught there and recorded as job.errorMessage, never
+                // reaching an @ExceptionHandler (#1694) -- left as a bare IllegalArgumentException.
                 throw new IllegalArgumentException(
                         "Document exceeds configured chunk limit: maxChunks=%d, segmentSize=%d, overlap=%d, contentLength=%d"
                                 .formatted(maxChunksPerDocument, maxSegmentSize, maxOverlapSize, content.length()));
@@ -237,6 +243,8 @@ public class DocumentEmbeddingIngestor {
         int length = content.length();
         while (start < length) {
             if (segments.size() >= maxChunksPerDocument) {
+                // Same as the split() chunk-limit check above: async-only, never a controller
+                // thread (#1694) -- left as a bare IllegalArgumentException.
                 throw new IllegalArgumentException(
                         "Document exceeds configured chunk limit: maxChunks=%d, segmentSize=%d, overlap=%d, contentLength=%d"
                                 .formatted(maxChunksPerDocument, maxSegmentSize, maxOverlapSize, length));

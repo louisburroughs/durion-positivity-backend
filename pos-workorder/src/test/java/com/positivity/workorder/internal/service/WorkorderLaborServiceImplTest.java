@@ -13,6 +13,8 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.LaborEntryNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -397,7 +399,7 @@ class WorkorderLaborServiceImplTest {
 
             assertThatThrownBy(
                             () -> service.adjustLaborHours(ENTRY_ID, new BigDecimal("-1"), "typo", "jane.smith", null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Hours worked cannot be negative");
         }
 
@@ -407,7 +409,7 @@ class WorkorderLaborServiceImplTest {
             when(laborRepository.findById(ENTRY_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.adjustLaborHours(ENTRY_ID, BigDecimal.ONE, "reason", "jane.smith", null))
-                    .isInstanceOf(NoSuchElementException.class)
+                    .isInstanceOf(LaborEntryNotFoundException.class)
                     .hasMessageContaining("Labor entry not found");
         }
 
@@ -444,7 +446,7 @@ class WorkorderLaborServiceImplTest {
 
             assertThatThrownBy(() ->
                             service.adjustLaborHours(ENTRY_ID, BigDecimal.ONE, "reason", "jane.smith", "adjust-key"))
-                    .isInstanceOf(NoSuchElementException.class)
+                    .isInstanceOf(LaborEntryNotFoundException.class)
                     .hasMessageContaining("Labor entry not found");
         }
     }

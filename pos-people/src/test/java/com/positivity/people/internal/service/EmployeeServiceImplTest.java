@@ -25,6 +25,7 @@ import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.people.internal.enums.DuplicatePolicy;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.repository.EmployeeOffboardingRetryRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
@@ -577,7 +578,7 @@ class EmployeeServiceImplTest {
             DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
 
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(ResourceStateConflictException.class)
                     .hasMessageContaining("already DISABLED or TERMINATED");
         }
 
@@ -588,7 +589,7 @@ class EmployeeServiceImplTest {
             DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
 
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(ResourceStateConflictException.class);
         }
 
         @Test
@@ -598,7 +599,7 @@ class EmployeeServiceImplTest {
             DisableEmployeeRequestDto request = disableRequest(AssignmentTerminationPolicy.IMMEDIATE);
 
             assertThatThrownBy(() -> service.disableEmployee(PERSON_ID, request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(ResourceStateConflictException.class)
                     .hasMessageContaining("Only ACTIVE employees can be disabled");
         }
     }

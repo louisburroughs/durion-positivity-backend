@@ -21,6 +21,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
 import com.positivity.accounting.internal.exception.AccountingPeriodStateException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.PeriodCloseBlockedException;
 import com.positivity.accounting.internal.service.AccountingConfigurationService;
 import com.positivity.accounting.internal.service.AccountingPeriodService;
@@ -167,7 +168,7 @@ class AccountingPeriodControllerTest extends BaseIntegrationTest {
         @DisplayName("Should return 400 for an invalid period code")
         void shouldReturn400ForInvalidPeriodCode() throws Exception {
             when(accountingPeriodService.closePeriod("not-a-period"))
-                    .thenThrow(new IllegalArgumentException("Invalid period code: not-a-period"));
+                    .thenThrow(new InvalidRequestParameterException("Invalid period code: not-a-period"));
 
             mockMvc.perform(withAuth(post("/v1/accounting/periods/{periodCode}/close", "not-a-period")))
                     .andExpect(status().isBadRequest())

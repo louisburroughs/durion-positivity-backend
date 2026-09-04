@@ -30,7 +30,10 @@ import com.positivity.workorder.internal.event.WorkCompletedEvent;
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
+import com.positivity.workorder.internal.exception.PartLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -547,11 +550,11 @@ public class WorkorderServiceImpl implements WorkorderService {
             String notes) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         // Validate customer matches workorder
         if (!workorder.getCustomerId().equals(customerId)) {
-            throw new IllegalArgumentException("Customer ID mismatch: workorder belongs to customer "
+            throw new WorkorderResourceConflictException("Customer ID mismatch: workorder belongs to customer "
                     + workorder.getCustomerId() + ", but approval attempted for customer " + customerId);
         }
 
@@ -613,7 +616,7 @@ public class WorkorderServiceImpl implements WorkorderService {
         return workorderRepository
                 .findById(workorderId)
                 .map(workorder -> workorder.getStatus().name())
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
     }
 
     @Override
@@ -629,11 +632,10 @@ public class WorkorderServiceImpl implements WorkorderService {
     public WorkorderItemCompletionResponse completeServiceItem(UUID workorderId, UUID serviceLineId, String actorId) {
         WorkorderServiceLine line = workorderServiceRepository
                 .findById(serviceLineId)
-                .orElseThrow(() -> new IllegalArgumentException("Service line not found: " + serviceLineId));
+                .orElseThrow(() -> ServiceLineNotFoundException.forId(serviceLineId));
         if (line.getWorkOrder() == null
                 || !workorderId.equals(line.getWorkOrder().getId())) {
-            throw new IllegalArgumentException(
-                    "Service line " + serviceLineId + " does not belong to workorder " + workorderId);
+            throw ServiceLineNotFoundException.notOnWorkorder(serviceLineId, workorderId);
         }
         WorkorderItemStatus status = completeItemStatus(line.getStatus(), "service line", serviceLineId);
         if (status != line.getStatus()) {
@@ -652,11 +654,10 @@ public class WorkorderServiceImpl implements WorkorderService {
     @Override
     @Transactional
     public WorkorderItemCompletionResponse completePartItem(UUID workorderId, UUID partId, String actorId) {
-        WorkorderPart part = workorderPartRepository
-                .findById(partId)
-                .orElseThrow(() -> new IllegalArgumentException("Part not found: " + partId));
+        WorkorderPart part =
+                workorderPartRepository.findById(partId).orElseThrow(() -> PartLineNotFoundException.forId(partId));
         if (!partBelongsToWorkorder(part, workorderId)) {
-            throw new IllegalArgumentException("Part " + partId + " does not belong to workorder " + workorderId);
+            throw PartLineNotFoundException.notOnWorkorder(partId, workorderId);
         }
         WorkorderItemStatus status = completeItemStatus(part.getStatus(), "part", partId);
         if (status != part.getStatus()) {
@@ -712,6 +713,11 @@ public class WorkorderServiceImpl implements WorkorderService {
         stateMachine.completeWorkorder(workorderId, actorId, completionNotes);
 
         // Retrieve the updated work order
+        // (issue #1694) stateMachine.completeWorkorder(...) above already loaded and saved this
+        // same row inside this same transaction, so this re-fetch failing indicates a genuine
+        // server-side anomaly (e.g. a concurrent delete), never a client input problem. Left as a
+        // bare IllegalArgumentException so it now falls through to the platform's generic 500
+        // instead of the module's former blanket 400.
         Workorder workorder = workorderRepository
                 .findById(workorderId)
                 .orElseThrow(
@@ -887,6 +893,8 @@ public class WorkorderServiceImpl implements WorkorderService {
     @Override
     @Transactional
     public void handleAssignmentUpdated(@NonNull AssignmentUpdatedEvent event) {
+        // (issue #1694) @EventListener callback — invoked by the Spring application-event bus, never
+        // reachable from a controller/HTTP request. Left as a bare IllegalArgumentException.
         if (event == null) {
             throw new IllegalArgumentException("event must not be null");
         }

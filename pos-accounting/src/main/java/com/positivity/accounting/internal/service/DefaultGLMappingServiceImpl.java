@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
 import com.positivity.accounting.internal.entity.DefaultGLMapping;
 import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.time.Clock;
@@ -75,7 +76,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         DefaultGLMapping existing = repository
                 .findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
+                .orElseThrow(() -> new DefaultGLMappingNotFoundException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
 
         // Validate GL accounts
         validateGLAccounts(request.getDebitAccountId(), request.getCreditAccountId());
@@ -101,7 +102,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
 
         DefaultGLMapping mapping = repository
                 .findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
+                .orElseThrow(() -> new DefaultGLMappingNotFoundException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
 
         mapping.setActive(false);
         repository.save(mapping);
@@ -115,7 +116,7 @@ public class DefaultGLMappingServiceImpl implements DefaultGLMappingService {
     public DefaultGLMappingResponse getDefaultMapping(@NonNull UUID mappingId) {
         DefaultGLMapping mapping = repository
                 .findById(mappingId)
-                .orElseThrow(() -> new IllegalArgumentException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
+                .orElseThrow(() -> new DefaultGLMappingNotFoundException(MAPPING_NOT_FOUND_MESSAGE + mappingId));
         return toResponse(mapping);
     }
 

@@ -47,6 +47,11 @@ public record SupplierPriceCatalogEntry(
         @Nullable LocalDate sourceDocumentDate,
         @Nullable Integer positionNumber) {
 
+    // Left as IllegalArgumentException (#1694): constructed only from decoded vendor PRICAT wire
+    // data (codec.toEntry, whose caller already catches IllegalArgumentException and rejects the
+    // line — see EdiwheelB40PricatCodec) or from an already-valid quarantine row being replayed,
+    // never from client input. A violation here is this module's own defect and belongs on the
+    // platform 500 fallback, not a client 4xx.
     public SupplierPriceCatalogEntry {
         Objects.requireNonNull(effectiveFrom, "effectiveFrom must not be null");
         Objects.requireNonNull(countryCode, "countryCode must not be null");

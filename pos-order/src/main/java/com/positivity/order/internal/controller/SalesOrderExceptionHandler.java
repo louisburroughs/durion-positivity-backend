@@ -2,6 +2,7 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -119,18 +120,28 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * A malformed cart/sales-order request (half-specified deposit-source pair, missing
+     * locationId with no session fallback, blank checkout Idempotency-Key, an unsupported
+     * tenderType, or an unrecognised status/sourceType filter). Maps to 400 per ADR-0017 —
+     * request-shape validation, not a domain-policy refusal — replacing the former blanket
+     * {@code IllegalArgumentException} handler that answered 422 for this same case (a status the
+     * issue #1694 audit found was never deliberate). The {@code ORDER_INVALID_ARGUMENT} code is
+     * unchanged so the wire contract's error code does not drift; only the status moved.
+     */
+    @ExceptionHandler(SalesOrderRequestValidationException.class)
+    public ResponseEntity<ApiError> handleInvalidRequest(
+            SalesOrderRequestValidationException ex, HttpServletRequest request) {
         String correlationId = Optional.ofNullable(request.getHeader(X_CORRELATION_ID))
                 .filter(header -> !header.isBlank())
                 .orElse(UUIDv7Generator.generate().toString());
-        log.warn("Invalid argument: correlationId={}", correlationId, ex);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        log.warn("Invalid request: correlationId={}", correlationId, ex);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
                         "ORDER_INVALID_ARGUMENT",
                         ex.getMessage(),
-                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

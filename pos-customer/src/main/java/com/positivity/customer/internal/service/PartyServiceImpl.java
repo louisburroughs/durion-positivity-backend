@@ -31,6 +31,7 @@ import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
@@ -855,7 +856,7 @@ public class PartyServiceImpl implements PartyService {
                     .build();
         }
         if (requestedLegalName.length() < 2) {
-            throw new IllegalArgumentException("legalName must contain at least 2 non-whitespace characters");
+            throw new CrmValidationException("legalName must contain at least 2 non-whitespace characters");
         }
 
         List<CommercialParty> matches = partyRepository.findByLegalNameContaining(requestedLegalName);

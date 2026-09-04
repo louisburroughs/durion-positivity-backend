@@ -15,6 +15,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "pos.security.lockout")
 public record LockoutPolicy(int maxAttempts, Duration window, int backoffMultiplier, Duration maxBackoffWindow) {
 
+    // (d) defensive/internal: these guard `pos.security.lockout.*` property binding at Spring
+    // context startup (@ConfigurationProperties), never a value supplied on an HTTP request, so
+    // there is no controller path to reach them. Left as IllegalArgumentException — Spring's own
+    // property-binding failure reporting expects it, and GlobalExceptionHandler never sees it.
     public LockoutPolicy {
         if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be >= 1");
         if (window == null || window.isNegative() || window.isZero())

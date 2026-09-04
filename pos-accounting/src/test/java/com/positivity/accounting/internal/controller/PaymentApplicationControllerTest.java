@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.PaymentApplicationListRow;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.service.PaymentApplicationQueryService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -87,7 +88,7 @@ class PaymentApplicationControllerTest extends BaseIntegrationTest {
     void listRejectsInvalidRange() throws Exception {
         when(paymentApplicationQueryService.listByAppliedDateWindow(
                         any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
-                .thenThrow(new IllegalArgumentException("appliedTo cannot be before appliedFrom"));
+                .thenThrow(new InvalidDateRangeException("appliedTo cannot be before appliedFrom"));
 
         mockMvc.perform(withAuth(
                         get(LIST_PATH).param("appliedFrom", "2026-06-30").param("appliedTo", "2026-06-01")))
@@ -100,7 +101,7 @@ class PaymentApplicationControllerTest extends BaseIntegrationTest {
     void listRejectsWindowTooWide() throws Exception {
         when(paymentApplicationQueryService.listByAppliedDateWindow(
                         any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
-                .thenThrow(new IllegalArgumentException("Applied-date window cannot exceed 366 days"));
+                .thenThrow(new InvalidDateRangeException("Applied-date window cannot exceed 366 days"));
 
         mockMvc.perform(withAuth(
                         get(LIST_PATH).param("appliedFrom", "2025-01-01").param("appliedTo", "2026-06-30")))

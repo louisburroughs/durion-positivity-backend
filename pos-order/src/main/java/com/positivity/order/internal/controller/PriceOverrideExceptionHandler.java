@@ -3,6 +3,7 @@ package com.positivity.order.internal.controller;
 import com.positivity.order.internal.exception.InvalidPriceOverrideException;
 import com.positivity.order.internal.exception.PriceOverrideIdempotencyConflictException;
 import com.positivity.order.internal.exception.PriceOverrideNotFoundException;
+import com.positivity.order.internal.exception.PriceOverrideRequestValidationException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -69,12 +70,19 @@ public class PriceOverrideExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * A malformed price-override request: no search filter, a non-UUID orderId/orderLineId/
+     * productId, or an unrecognised reasonCode. Same code and status the blanket
+     * {@code IllegalArgumentException} handler this replaces already used (issue #1694) — no
+     * status change here, since 400 was already correct for this case.
+     */
+    @ExceptionHandler(PriceOverrideRequestValidationException.class)
+    public ResponseEntity<ApiError> handleInvalidRequest(
+            PriceOverrideRequestValidationException ex, HttpServletRequest request) {
         String correlationId = Optional.ofNullable(request.getHeader(X_CORRELATION_ID))
                 .filter(header -> !header.isBlank())
                 .orElse(UUIDv7Generator.generate().toString());
-        log.warn("Invalid argument: correlationId={}", correlationId, ex);
+        log.warn("Invalid request: correlationId={}", correlationId, ex);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(

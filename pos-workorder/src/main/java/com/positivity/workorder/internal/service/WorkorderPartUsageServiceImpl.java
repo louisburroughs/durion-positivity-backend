@@ -9,7 +9,10 @@ import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
+import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -46,7 +49,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
     private final Clock clock;
 
-    private static final String PART_NOT_FOUND = "Part not found: ";
     private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT =
             "Idempotency key already processed, returning existing event {}";
     private static final String EVENT_NOT_FOUND = "Event not found: ";
@@ -105,8 +107,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      *                       product's base unit
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
-     * @throws IllegalArgumentException if quantity is not positive
+     * @throws WorkorderNotFoundException if the workorder does not exist
+     * @throws PartLineNotFoundException if the part is not found
+     * @throws WorkorderRequestValidationException if quantity is not positive
      * @throws IllegalStateException    if part line does not belong to workorder
      */
     @Transactional
@@ -134,7 +137,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Validate quantity
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive");
+            throw new WorkorderRequestValidationException("Quantity must be positive");
         }
 
         // Validate workorder and part exist
@@ -144,7 +147,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
-                .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
+                .orElseThrow(() -> PartLineNotFoundException.forId(partLineId));
 
         // Verify part belongs to workorder
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
@@ -301,8 +304,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      *                       product's base unit
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
-     * @throws IllegalArgumentException if quantity exceeds issued quantity
+     * @throws WorkorderNotFoundException if the workorder does not exist
+     * @throws PartLineNotFoundException if the part is not found
+     * @throws WorkorderResourceConflictException if quantity exceeds issued quantity
      */
     @Transactional
     @NonNull
@@ -329,7 +333,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Validate quantity
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive");
+            throw new WorkorderRequestValidationException("Quantity must be positive");
         }
 
         // Validate workorder and part exist
@@ -339,7 +343,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
-                .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
+                .orElseThrow(() -> PartLineNotFoundException.forId(partLineId));
 
         // Verify part belongs to workorder
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
@@ -351,7 +355,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Validate consumption does not exceed issued
         BigDecimal newConsumed = part.getQuantityConsumed().add(quantity);
         if (newConsumed.compareTo(part.getQuantityIssued()) > 0) {
-            throw new IllegalArgumentException(String.format(
+            throw new WorkorderResourceConflictException(String.format(
                     "Consumption exceeds issued quantity. Issued: %s, Already consumed: %s, Attempting to consume: %s",
                     part.getQuantityIssued(), part.getQuantityConsumed(), quantity));
         }
@@ -399,8 +403,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      *                       product's base unit
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
-     * @throws IllegalArgumentException if quantity exceeds available (issued -
+     * @throws WorkorderNotFoundException if the workorder does not exist
+     * @throws PartLineNotFoundException if the part is not found
+     * @throws WorkorderResourceConflictException if quantity exceeds available (issued -
      *                                  consumed)
      */
     @Transactional
@@ -428,7 +433,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         // Validate quantity
         if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive");
+            throw new WorkorderRequestValidationException("Quantity must be positive");
         }
 
         // Validate workorder and part exist
@@ -438,7 +443,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
-                .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
+                .orElseThrow(() -> PartLineNotFoundException.forId(partLineId));
 
         // Verify part belongs to workorder
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
@@ -453,7 +458,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                 part.getQuantityIssued().subtract(part.getQuantityConsumed()).subtract(part.getQuantityReturned());
 
         if (quantity.compareTo(available) > 0) {
-            throw new IllegalArgumentException(String.format(
+            throw new WorkorderResourceConflictException(String.format(
                     "Return quantity exceeds available. Issued: %s, Consumed: %s, Already returned: %s, Available: %s, Attempting to return: %s",
                     part.getQuantityIssued(),
                     part.getQuantityConsumed(),
@@ -507,7 +512,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         // Validate part exists
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
-                .orElseThrow(() -> new IllegalArgumentException(PART_NOT_FOUND + partLineId));
+                .orElseThrow(() -> PartLineNotFoundException.forId(partLineId));
 
         // Verify part belongs to workorder
         if (!workorderId.equals(getWorkorderIdForPart(part))) {

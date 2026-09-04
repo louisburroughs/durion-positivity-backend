@@ -15,6 +15,7 @@ import com.positivity.warranty.internal.enums.AppliesToType;
 import com.positivity.warranty.internal.enums.CoverageType;
 import com.positivity.warranty.internal.enums.ProrationMethod;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
 import com.positivity.warranty.internal.repository.WarrantyProviderRepository;
 import java.math.BigDecimal;
@@ -206,7 +207,7 @@ class PolicyServiceImplTest {
             stubProviderExists();
 
             assertThatThrownBy(() -> service.create(request(AppliesToType.PRODUCT_LIST, null, null, null, FROM, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("appliesToProductEntityIds");
             verify(policyRepository, never()).save(any());
         }
@@ -217,7 +218,7 @@ class PolicyServiceImplTest {
 
             assertThatThrownBy(() ->
                             service.create(request(AppliesToType.PRODUCT_LIST, List.of(), null, null, FROM, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("appliesToProductEntityIds");
         }
 
@@ -226,7 +227,7 @@ class PolicyServiceImplTest {
             stubProviderExists();
 
             assertThatThrownBy(() -> service.create(request(AppliesToType.CATEGORY, null, null, null, FROM, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("appliesToCategoryId");
         }
 
@@ -235,7 +236,7 @@ class PolicyServiceImplTest {
             stubProviderExists();
 
             assertThatThrownBy(() -> service.create(request(AppliesToType.MANUFACTURER, null, null, null, FROM, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("appliesToManufacturerId");
         }
 
@@ -253,7 +254,7 @@ class PolicyServiceImplTest {
 
             assertThatThrownBy(
                             () -> service.create(request(AppliesToType.ALL, null, null, null, FROM, FROM.minusDays(1))))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WarrantyValidationException.class)
                     .hasMessageContaining("effectiveTo");
         }
 
@@ -315,7 +316,7 @@ class PolicyServiceImplTest {
 
             assertThatThrownBy(() -> service.update(
                             POLICY_ID, request(AppliesToType.PRODUCT_LIST, List.of(), null, null, FROM, null)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(WarrantyValidationException.class);
             verify(policyRepository, never()).save(any());
         }
     }

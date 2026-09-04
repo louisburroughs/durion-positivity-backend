@@ -6,6 +6,7 @@ import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceMapper;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import com.positivity.vehicle.internal.repository.VehicleCarePreferenceRepository;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -68,6 +69,11 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
         }
 
         // Validate preferences map is not null (can be empty)
+        // Defensive/(d): PreferencesUpsertDto.preferences carries @NotNull and the controller
+        // validates with @Valid, so a null map is already rejected as a MethodArgumentNotValid
+        // 400 before this service method is invoked. Left as a bare IllegalArgumentException
+        // (not retyped, not mapped) rather than removed, in case this service is ever called
+        // from somewhere that skips bean validation (issue #1694).
         if (request.getPreferences() == null) {
             throw new IllegalArgumentException("Preferences map cannot be null (use empty map instead)");
         }
@@ -189,13 +195,13 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
             double asDouble = number.doubleValue();
             value = number.intValue();
             if (asDouble != value) {
-                throw new IllegalArgumentException(LEGACY_INTERVAL_KEY + " must be a whole number but was: " + raw);
+                throw new VehicleValidationException(LEGACY_INTERVAL_KEY + " must be a whole number but was: " + raw);
             }
         } else {
             try {
                 value = Integer.parseInt(raw.toString().trim());
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(LEGACY_INTERVAL_KEY + " must be a whole number but was: " + raw);
+                throw new VehicleValidationException(LEGACY_INTERVAL_KEY + " must be a whole number but was: " + raw);
             }
         }
         return validateInterval(value);
@@ -203,8 +209,8 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
 
     private static int validateInterval(int serviceIntervalMonths) {
         if (serviceIntervalMonths < MIN_INTERVAL_MONTHS || serviceIntervalMonths > MAX_INTERVAL_MONTHS) {
-            throw new IllegalArgumentException("serviceIntervalMonths must be between " + MIN_INTERVAL_MONTHS + " and "
-                    + MAX_INTERVAL_MONTHS + " but was: " + serviceIntervalMonths);
+            throw new VehicleValidationException("serviceIntervalMonths must be between " + MIN_INTERVAL_MONTHS
+                    + " and " + MAX_INTERVAL_MONTHS + " but was: " + serviceIntervalMonths);
         }
         return serviceIntervalMonths;
     }

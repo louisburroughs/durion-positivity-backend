@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimePeriodRolloverResult;
 import com.positivity.people.internal.entity.TimePeriod;
 import com.positivity.people.internal.enums.TimePeriodStatus;
+import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimePeriodRepository;
 import com.positivity.people.internal.repository.TimekeepingEntryRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -44,7 +45,7 @@ public class TimePeriodManagementServiceImpl implements TimePeriodManagementServ
     @Transactional
     public @NonNull TimePeriodDto createTimePeriod(@NonNull CreateTimePeriodRequest request) {
         if (request.getEndDate().isBefore(request.getStartDate())) {
-            throw new IllegalArgumentException("endDate must not be before startDate");
+            throw new RequestValidationException("endDate must not be before startDate");
         }
         if (timePeriodRepository.existsByTenantIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                 request.getTenantId(), request.getEndDate(), request.getStartDate())) {

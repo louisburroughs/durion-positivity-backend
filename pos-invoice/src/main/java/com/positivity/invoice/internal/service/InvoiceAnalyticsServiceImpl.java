@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.dto.InvoicingLagRow;
 import com.positivity.invoice.internal.dto.RevenueByCustomerReport;
 import com.positivity.invoice.internal.dto.RevenueByCustomerRow;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository.InvoicingLagPairProjection;
 import com.positivity.invoice.internal.repository.InvoiceRepository.RevenueByCustomerProjection;
@@ -122,9 +123,14 @@ public class InvoiceAnalyticsServiceImpl implements InvoiceAnalyticsService {
         return revenue.divide(BigDecimal.valueOf(invoiceCount), MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Defense-in-depth duplicate of {@code InvoiceAnalyticsController}'s own check: the
+     * controller rejects a bad range before this method runs, so from the HTTP surface this is
+     * unreachable, but it still guards any caller of the service interface directly (#1694).
+     */
     private static void validateRange(@NonNull LocalDate startDate, @NonNull LocalDate endDate) {
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
+            throw new InvoiceRequestValidationException("End date cannot be before start date");
         }
     }
 

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.dto.VendorBillGLPostingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.service.EventIngestionServiceImpl;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -232,7 +233,7 @@ class VendorBillGLPostingEventHandlerTest {
     void shouldThrowExceptionWhenEventIngestionFails() {
         // Given: Event ingestion service throws exception
         when(eventIngestionService.submitEvent(any(Map.class)))
-                .thenThrow(new IllegalArgumentException("Event validation failed"));
+                .thenThrow(new EventValidationException("Event validation failed"));
 
         // When/Then: Should propagate exception
         assertThatThrownBy(() -> handler.onVendorBillGLPosting(testEvent))

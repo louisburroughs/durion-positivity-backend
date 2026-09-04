@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.invoice.internal.dto.InvoicingLagReport;
 import com.positivity.invoice.internal.dto.InvoicingLagRow;
 import com.positivity.invoice.internal.dto.RevenueByCustomerReport;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
 import com.positivity.invoice.internal.repository.InvoiceRepository.InvoicingLagPairProjection;
 import com.positivity.invoice.internal.repository.InvoiceRepository.RevenueByCustomerProjection;
@@ -162,7 +163,7 @@ class InvoiceAnalyticsServiceImplTest {
     void rejectsEndDateBeforeStartDate() {
         service = service();
         assertThatThrownBy(() -> service.revenueByCustomer(endDate, startDate, 20))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvoiceRequestValidationException.class);
     }
 
     // ==================== invoicingLag ====================
@@ -228,7 +229,8 @@ class InvoiceAnalyticsServiceImplTest {
     @Test
     void invoicingLag_rejectsEndDateBeforeStartDate() {
         service = service();
-        assertThatThrownBy(() -> service.invoicingLag(endDate, startDate)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.invoicingLag(endDate, startDate))
+                .isInstanceOf(InvoiceRequestValidationException.class);
     }
 
     @Test

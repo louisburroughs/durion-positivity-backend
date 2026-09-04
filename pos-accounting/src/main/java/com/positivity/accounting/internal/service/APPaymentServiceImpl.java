@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
+import com.positivity.accounting.internal.exception.InvalidBillAllocationException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
 import com.positivity.accounting.internal.payment.GatewayPaymentRequest;
 import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
@@ -195,8 +196,10 @@ public class APPaymentServiceImpl implements APPaymentService {
 
             return toResponse(payment);
 
-        } catch (IllegalArgumentException e) {
-            // Validation errors should not mark payment as GATEWAY_FAILED
+        } catch (InvalidBillAllocationException e) {
+            // Bill-allocation validation errors should not mark payment as GATEWAY_FAILED —
+            // the gateway call already succeeded by the time applyAllocations() runs, so this
+            // is a post-authorization allocation failure, not a gateway error.
             // Rollback the payment (transaction will roll back automatically)
             throw e;
         } catch (Exception e) {
@@ -335,14 +338,14 @@ public class APPaymentServiceImpl implements APPaymentService {
     private @NonNull VendorBill validateBillForAllocation(@NonNull UUID vendorBillId, @NonNull UUID expectedVendorId) {
         VendorBill bill = billRepository
                 .findById(vendorBillId)
-                .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
+                .orElseThrow(() -> new InvalidBillAllocationException("Bill not found: " + vendorBillId));
 
         if (bill.getStatus() != VendorBillStatus.APPROVED) {
-            throw new IllegalArgumentException("Bill " + vendorBillId + " is not approved for payment");
+            throw new InvalidBillAllocationException("Bill " + vendorBillId + " is not approved for payment");
         }
 
         if (!bill.getVendorId().equals(expectedVendorId)) {
-            throw new IllegalArgumentException(
+            throw new InvalidBillAllocationException(
                     "Bill " + vendorBillId + " does not belong to vendor " + expectedVendorId);
         }
 
@@ -359,7 +362,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
     private void validateTotalAllocations(@NonNull BigDecimal totalAllocated, @NonNull BigDecimal grossAmount) {
         if (totalAllocated.compareTo(grossAmount) > 0) {
-            throw new IllegalArgumentException("Total allocations exceed gross payment amount");
+            throw new InvalidBillAllocationException("Total allocations exceed gross payment amount");
         }
     }
 
@@ -395,6 +398,11 @@ public class APPaymentServiceImpl implements APPaymentService {
     @Override
     @Transactional
     public void acknowledgeGLPosted(@NonNull UUID paymentId, @NonNull UUID journalEntryId) {
+        // (d) Defensive/internal invariant: this service method is not currently called from
+        // any controller (no HTTP path invokes it today — it exists for a future GL-posting
+        // acknowledgement callback). Left as IllegalArgumentException; falls through to the
+        // pos-web-common catch-all (correlated 500) if that ever changes without this being
+        // revisited.
         APPayment payment = paymentRepository
                 .findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
@@ -413,6 +421,8 @@ public class APPaymentServiceImpl implements APPaymentService {
     @Override
     @Transactional
     public void recordGLPostFailure(@NonNull UUID paymentId, @NonNull String errorMessage) {
+        // (d) Defensive/internal invariant: not currently called from any controller (same
+        // reasoning as acknowledgeGLPosted above).
         APPayment payment = paymentRepository
                 .findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
@@ -486,6 +496,9 @@ public class APPaymentServiceImpl implements APPaymentService {
      * @return open amount = totalAmount - sum of all allocations
      */
     private @NonNull BigDecimal calculateOpenAmount(@NonNull UUID vendorBillId) {
+        // (d) Defensive/internal invariant: both call sites pass a vendorBillId taken from a
+        // VendorBill entity already loaded in the same transaction, so this re-fetch cannot
+        // genuinely miss under normal operation.
         VendorBill bill = billRepository
                 .findById(vendorBillId)
                 .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));

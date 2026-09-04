@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
@@ -78,11 +79,11 @@ public class WorkorderAnalyticsServiceImpl implements WorkorderAnalyticsService 
         boolean hasRangeParams = from != null || to != null || startDate != null || endDate != null;
 
         if (hasWoId && hasRangeParams) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "woId is mutually exclusive with from/to/startDate/endDate; supply one mode, not both");
         }
         if (!hasWoId && !hasRangeParams) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "Supply either woId alone, or startDate and endDate (optionally narrowed by from/to)");
         }
 
@@ -92,12 +93,12 @@ public class WorkorderAnalyticsServiceImpl implements WorkorderAnalyticsService 
         }
 
         if (startDate == null || endDate == null) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "startDate and endDate are both required in range mode (from/to alone is not enough — an "
                             + "unbounded date scan is never allowed)");
         }
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate cannot be before startDate");
+            throw new WorkorderRequestValidationException("endDate cannot be before startDate");
         }
 
         List<WorkorderStateTransition> page = transitionRepository.findByTransitionedAtRangeAndStatuses(
@@ -357,7 +358,7 @@ public class WorkorderAnalyticsServiceImpl implements WorkorderAnalyticsService 
 
     private static void validateRange(LocalDate startDate, LocalDate endDate) {
         if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate cannot be before startDate");
+            throw new WorkorderRequestValidationException("endDate cannot be before startDate");
         }
     }
 

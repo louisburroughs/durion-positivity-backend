@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -57,10 +58,13 @@ public class DocumentIngestionController {
                     document_id entry names the document — when absent a random identifier is generated.
                     Emits a MCP_DOCUMENT_INGEST event and creates a PENDING job that is processed in the \
                     background through RUNNING to SUCCEEDED or FAILED.
-                    Returns 202 with the job and a Location header pointing at the job-status resource; embedding \
-                    failures are reported on the job's errorMessage, not on this call.
+                    Returns 202 with the job and a Location header pointing at the job-status resource; 400 when \
+                    the supplied metadata cannot be serialized back to JSON; embedding failures happening after \
+                    the job is accepted are reported on the job's errorMessage, not on this call.
                     """,
             tags = {"Document Ingestion"})
+    @ApiResponse(responseCode = "202", description = "Ingestion job accepted")
+    @ApiResponse(responseCode = "400", description = "Document metadata is not JSON-serializable")
     public ResponseEntity<DocumentIngestionJobResponse> ingestDocument(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Raw document text to embed, with optional identifying metadata.",

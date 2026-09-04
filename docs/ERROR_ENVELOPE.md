@@ -34,7 +34,7 @@ All Durion backend REST APIs return a consistent `ApiError` JSON object for non-
 | `correlationId` | `string`       | ✅ Yes          | UUID identifying this specific request across all services. Include this in bug reports and support tickets. Also present in the `X-Correlation-Id` response header. |
 | `fieldErrors` | `array\|null`    | ❌ Conditional  | Present (non-null) when the response contains field-level validation details; typically accompanies validation-related codes such as `VALIDATION_ERROR` or `VALIDATION_FAILED`. Each entry names the offending field and why it failed. Omitted entirely for all other error types. |
 | `referenceId` | `string\|null`   | ❌ Conditional  | Reference to a workflow case, review request, or external audit record. Present for guided error flows such as self-registration review. |
-| `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended action for the caller to resolve the error (e.g. "Sign in with the existing account"). Present alongside `referenceId`. |
+| `nextAction`  | `string\|null`   | ❌ Conditional  | Recommended next step for the caller to resolve the error (e.g. "Sign in with the existing account"). May appear with or without `referenceId` — guided flows such as self-registration review pair it with a `referenceId`, while authorization refusals such as `USER_HAS_NO_ROLES` and `MANAGER_APPROVAL_REQUIRED` carry it alone. |
 | `supportAction` | `string\|null` | ❌ Conditional  | Investigation guidance for operations or support staff. Not intended for end-user display. |
 
 > **Note:** Fields that are `null` or absent are omitted from the JSON payload entirely (Jackson `@JsonInclude(NON_NULL)`). Clients should treat a missing field as `null`, not as an error.
@@ -175,6 +175,7 @@ Any service may therefore return these in addition to its module codes below.
 | `ORDER_PRICE_OVERRIDE_IDEMPOTENCY_CONFLICT` | 409 | Duplicate idempotency key for price override |
 | `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions |
+| `RETURN_LINE_NOT_RETURNABLE` | 422 | Requested return line is not returnable per policy (issue #1694; split out of the former blanket `RETURN_INVALID_ARGUMENT` 422 catch-all) |
 
 ### pos-invoice
 | Code | Status | Description |
@@ -185,6 +186,9 @@ Any service may therefore return these in addition to its module codes below.
 | `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |
 | `PAYMENT_WINDOW_EXPIRED` | 422 | Refund window for the payment has closed |
 | `INSUFFICIENT_REFUNDABLE_AMOUNT` | 422 | Refund amount exceeds what was originally paid |
+| `MANAGER_APPROVAL_REQUIRED` | 403 | Finalizing this invoice exceeds the amount cap and no manager-approval elevation token was supplied — a step-up credential the caller lacks (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `MANAGER_APPROVAL_INVALID` | 403 | Supplied manager-approval elevation token does not verify (wrong scope, tampered, or expired) — a step-up credential the server considers insufficient (ADR-0017 §2 question 1, #1725; introduced by #1694 as a 422). `nextAction` points at `elevateManagerApproval` |
+| `EXCESSIVE_ADJUSTMENT` | 422 | Adjustment would drive the invoice total negative; a credit memo is required instead (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all) |
 
 ### pos-inventory
 | Code | Status | Description |
@@ -206,14 +210,24 @@ Any service may therefore return these in addition to its module codes below.
 | `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
 | `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
+| `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
 
 ### pos-accounting
 | Code | Status | Description |
 |------|--------|-------------|
 | `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
-| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance |
+| `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
 | `GL_POSTING_FAILED` | 409 | General ledger posting failed |
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
+| `GL_ACCOUNT_NOT_FOUND` | 404 | Referenced GL account does not exist |
+| `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request |
+| `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
+| `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
+| `NO_MATCHING_VENDOR_BILL` | 400 | An inbound vendor invoice matched no pending receipt/bill for the vendor (a failed match, not a missing addressed resource) |
+| `JOURNAL_ENTRY_NOT_FOUND` | 404 | Referenced journal entry does not exist |
+| `DEFAULT_GL_MAPPING_NOT_FOUND` | 404 | Referenced default GL mapping does not exist |
+| `POSTING_RULE_SET_NOT_FOUND` | 404 | Referenced posting rule set does not exist |
 
 ### pos-catalog
 | Code | Status | Description |
@@ -223,6 +237,44 @@ Any service may therefore return these in addition to its module codes below.
 | `VALIDATION_ERROR` | 400 | Catalog data validation failed |
 | `BUSINESS_RULE_VIOLATION` | 409 | Catalog business rule was violated |
 | `CONFLICT` | 409 | Concurrent update detected; retry required |
+
+### pos-workorder
+| Code | Status | Description |
+|------|--------|-------------|
+| `NOT_FOUND` | 404 | Workorder does not exist (also used generically by a few older endpoints) |
+| `ESTIMATE_NOT_FOUND` | 404 | Estimate does not exist |
+| `ESTIMATE_ITEM_NOT_FOUND` | 404 | Line item does not exist on the named estimate |
+| `CHANGE_REQUEST_NOT_FOUND` | 404 | Change request does not exist |
+| `SERVICE_LINE_NOT_FOUND` | 404 | Workorder service line does not exist, or does not belong to the named workorder |
+| `PART_NOT_FOUND` | 404 | Workorder part line does not exist, or does not belong to the named workorder |
+| `APPROVAL_CONFIGURATION_NOT_FOUND` | 404 | Approval configuration does not exist |
+| `WORK_SESSION_NOT_FOUND` | 404 | Work session does not exist |
+| `BREAK_SEGMENT_NOT_FOUND` | 404 | Break segment does not exist |
+| `TRAVEL_SEGMENT_NOT_FOUND` | 404 | Travel segment does not exist |
+| `SUBSTITUTE_LINK_NOT_FOUND` | 404 | Part-substitution link does not exist |
+| `INVALID_ARGUMENT` | 400 | Field-level or request-shape validation failure (`WorkorderRequestValidationException`) |
+| `VALIDATION_FAILED` | 400 | Bean-validation failure, with `fieldErrors` |
+| `CONFLICT` | 409 | Generic stateful collision: invalid lifecycle transition, or a caller-supplied id that does not match the resource it targets, or an operation that would exceed a quantity the resource's current state actually has available (`WorkorderResourceConflictException`, `IllegalStateException`) |
+| `TRAVEL_SEGMENT_CONFLICT` | 409 | An active travel segment already exists for the assignment |
+| `DUPLICATE_SUBSTITUTE_LINK` | 409 | A substitute-part link already exists for this pair |
+| `STALE_SUBSTITUTE_LINK_VERSION` | 409 | Optimistic-lock version mismatch on a substitute link |
+| `CUSTOMER_APPROVAL_INVALID` | 409 | Workorder claims an approval its own state does not back |
+| `INSUFFICIENT_PART_AVAILABILITY` | 409 | Requested part quantity exceeds current owned stock (guided, with `nextAction`) |
+| `PURCHASE_ORDER_REQUIRED` | 422 | Commercial customer's billing rules require a purchase order that was not supplied |
+| `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | Quantity is not a whole number for a product the catalog declares indivisible |
+| `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
+| `PROMOTION_IDEMPOTENCY_INCONSISTENT` | 500 | A recorded promotion idempotency key resolves to no workorder (server defect, correlated) |
+| Dynamic `PromotionErrorCode` values | 404/409 | Estimate-to-workorder promotion precondition failures; see `PromotionValidationException` |
+| Dynamic `CustomerRequirementsNotMetException` codes | 409/503 | Customer-requirements verdict blocked workorder creation; see that exception |
+| `FORBIDDEN` | 403 | Caller lacks required workorder permissions |
+
+### pos-vehicle-inventory
+| Code | Status | Description |
+|------|--------|-------------|
+| `VALIDATION_FAILED` | 400 | Bean-validation failure (with `fieldErrors`), or Jakarta constraint violation on a path/query parameter |
+| `VALIDATION_ERROR` | 400 | Field-level or request-shape validation failure (`VehicleValidationException`) (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, code unchanged) |
+| `RESOURCE_NOT_FOUND` | 404 | Vehicle or care-preference document not found |
+| `VEHICLE_VIN_CONFLICT` | 409 | An active vehicle already holds the requested VIN — a stateful collision (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, which had reported this same case as 400) |
 
 ---
 

@@ -10,6 +10,8 @@ import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -78,7 +80,7 @@ public class WipServiceImpl implements WipService {
             workorders = workorderRepository.findByShopIdAndStatusIn(shopUuid, ACTIVE_WIP_STATUSES, pageable);
             return enrichStatusPage(workorders, pageable);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("locationId is not a valid UUID: " + locationId, e);
+            throw new WorkorderRequestValidationException("locationId is not a valid UUID: " + locationId);
         }
     }
 
@@ -88,7 +90,7 @@ public class WipServiceImpl implements WipService {
         log.debug("Fetching WIP detail: workorderId(mask)={}", maskForLog(workorderId));
         Workorder wo = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new IllegalArgumentException("Workorder not found: " + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         List<WorkorderStateTransition> transitions =
                 stateTransitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);

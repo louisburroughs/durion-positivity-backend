@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.event.JournalEntryReversed;
+import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
@@ -81,8 +82,9 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      *
      * @param entry journal entry with lines to create
      * @return created entry in DRAFT status
-     * @throws IllegalArgumentException if entry is unbalanced or GL accounts
-     *                                  invalid
+     * @throws UnbalancedEntryException     if entry is unbalanced
+     * @throws GLAccountNotActiveException if a line's GL account is not active on
+     *                                     the transaction date
      */
     @Override
     public JournalEntryResponse createJournalEntry(JournalEntryCreateRequest request) {
@@ -184,7 +186,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private JournalEntry findById(UUID journalEntryId) {
         return journalEntryRepository
                 .findById(journalEntryId)
-                .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
+                .orElseThrow(() -> new JournalEntryNotFoundException("Journal entry not found: " + journalEntryId));
     }
 
     private JournalEntryResponse toResponseOrNull(UUID journalEntryId) {
@@ -611,11 +613,11 @@ public class JournalEntryServiceImpl implements JournalEntryService {
      * Sum of debits must equal sum of credits within ±0.0001 tolerance.
      *
      * @param entry entry to validate
-     * @throws IllegalArgumentException if entry is unbalanced
+     * @throws UnbalancedEntryException if entry is unbalanced
      */
     private void validateBalance(JournalEntry entry) {
         if (entry.getLines() == null || entry.getLines().isEmpty()) {
-            throw new IllegalArgumentException("Journal entry must have at least one line");
+            throw new UnbalancedEntryException("Journal entry must have at least one line");
         }
 
         BigDecimal totalDebits = BigDecimal.ZERO;

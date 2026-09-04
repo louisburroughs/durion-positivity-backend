@@ -33,8 +33,8 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
     }
 
     @Test
-    @DisplayName("VE-117-010: Disable already-disabled employee -> 400")
-    void ve117010_disableAlreadyDisabledEmployee_returns400() throws Exception {
+    @DisplayName("VE-117-010: Disable already-disabled employee -> 409 (stateful collision, ADR-0017 §2)")
+    void ve117010_disableAlreadyDisabledEmployee_returns409() throws Exception {
         UUID employeeId = createEmployee("EMP-117-011", "employee.117.011@example.com");
 
         String payload = """
@@ -52,7 +52,10 @@ class EmployeeOffboardingContractBehaviorIT extends BaseContractIntegrationTest 
         mockMvc.perform(withAuth(post("/v1/people/employees/{employeeId}/disable", employeeId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESOURCE_STATE_CONFLICT"))
+                .andExpect(jsonPath("$.message").value("Employee is already DISABLED or TERMINATED"))
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test

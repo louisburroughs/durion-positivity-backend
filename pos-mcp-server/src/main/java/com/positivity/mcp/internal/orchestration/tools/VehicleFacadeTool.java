@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.tool.annotation.Tool;
@@ -49,7 +50,7 @@ public class VehicleFacadeTool {
                     String query) {
         String trimmed = query.trim();
         if (trimmed.length() < 3) {
-            throw new IllegalArgumentException(
+            throw new InvalidToolArgumentException(
                     "Search query '" + trimmed + "' is too short: at least 3 characters required"
                             + " (VIN-shaped fragments need 6, enforced by the vehicle service)");
         }

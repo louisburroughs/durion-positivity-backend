@@ -51,9 +51,9 @@ public class ChangeRequestController {
                     key returns the originally created request instead of a duplicate.
                     Emits a WORKORDER_CHANGE_REQUEST_CREATE event and renders a supplemental estimate PDF via \
                     the documents service when items are present.
-                    Returns 400 when the description or items are missing, the workorder is absent or not \
-                    WORK_IN_PROGRESS, or emergency documentation is incomplete — all failures surface as 400 in \
-                    this operation.
+                    Returns 400 when the description or items are missing, the workorder status is not \
+                    WORK_IN_PROGRESS, or emergency documentation is incomplete, and 404 when the workorder does \
+                    not exist.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -95,7 +95,7 @@ public class ChangeRequestController {
             dto.setWorkorderId(workorderId);
             var created = changeRequestService.createChangeRequestWithIdempotency(dto, idempotencyKey);
             return ResponseEntity.ok(created);
-        } catch (IllegalArgumentException | IllegalStateException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -110,8 +110,8 @@ public class ChangeRequestController {
                     Required inputs: changeId (UUID) as a path parameter and a non-blank approvalNote as the \
                     approval artifact; the approvedBy body field is ignored in favor of the security context.
                     Emits a WORKORDER_CHANGE_REQUEST_APPROVE event and persists an ApprovalRecord audit row.
-                    Returns 400 when the change request cannot be found, is not awaiting review, or the note is \
-                    missing — all failures surface as 400 in this operation.
+                    Returns 400 when the change request is not awaiting review or the note is missing, and 404 \
+                    when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request approved successfully")
     @ApiResponse(responseCode = "400", description = "Cannot approve - invalid state or missing approval note")
@@ -143,7 +143,7 @@ public class ChangeRequestController {
             var approved =
                     changeRequestService.approveChangeRequest(changeId, dto.getApprovedBy(), dto.getApprovalNote());
             return ResponseEntity.ok(approved);
-        } catch (IllegalArgumentException | IllegalStateException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -160,8 +160,8 @@ public class ChangeRequestController {
                     the decline decision.
                     Emits a WORKORDER_CHANGE_REQUEST_DECLINE event; declined emergency items later require \
                     acknowledgeChangeRequestDenial before the workorder can close.
-                    Returns 400 when the change request cannot be found, is not awaiting review, or the note is \
-                    missing — all failures surface as 400 in this operation.
+                    Returns 400 when the change request is not awaiting review or the note is missing, and 404 \
+                    when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Change request declined successfully")
     @ApiResponse(responseCode = "400", description = "Cannot decline - invalid state or missing note")
@@ -190,7 +190,7 @@ public class ChangeRequestController {
         try {
             var declined = changeRequestService.declineChangeRequest(changeId, dto.getApprovalNote());
             return ResponseEntity.ok(declined);
-        } catch (IllegalArgumentException | IllegalStateException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -207,8 +207,8 @@ public class ChangeRequestController {
                     exception, and be in DECLINED status.
                     Required inputs: changeId (UUID) as a path parameter; there is no request body.
                     Emits a WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE event.
-                    Returns 204 on success, and 400 when the change request cannot be found, is not an \
-                    emergency exception, or is not declined — all failures surface as 400 in this operation.
+                    Returns 204 on success, 400 when the change request is not an emergency exception or is \
+                    not declined, and 404 when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Acknowledgment recorded successfully")
     @ApiResponse(responseCode = "400", description = "Not an emergency request or invalid state")
@@ -224,7 +224,7 @@ public class ChangeRequestController {
         try {
             changeRequestService.recordCustomerDenialAcknowledgment(changeId);
             return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException | IllegalStateException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -245,8 +245,8 @@ public class ChangeRequestController {
                     managerId body field is ignored in favor of the security context.
                     Emits a WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE event and persists an ApprovalRecord \
                     with the APPROVED_WITH_EXCEPTION resolution.
-                    Returns 400 when the change request cannot be found, is not awaiting review, or the reason \
-                    is missing — all failures surface as 400 in this operation.
+                    Returns 400 when the change request is not awaiting review or the reason is missing, and \
+                    404 when the change request does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Emergency override applied successfully")
     @ApiResponse(responseCode = "400", description = "Cannot apply override - invalid state or missing reason")
@@ -278,7 +278,7 @@ public class ChangeRequestController {
         try {
             var overridden = changeRequestService.applyEmergencyOverride(changeId, dto.getExceptionReason());
             return ResponseEntity.ok(overridden);
-        } catch (IllegalArgumentException | IllegalStateException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -304,12 +304,8 @@ public class ChangeRequestController {
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID changeId) {
-        try {
-            var changeRequest = changeRequestService.getChangeRequestById(changeId);
-            return ResponseEntity.ok(changeRequest);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
-        }
+        var changeRequest = changeRequestService.getChangeRequestById(changeId);
+        return ResponseEntity.ok(changeRequest);
     }
 
     @Operation(operationId = "listChangeRequests", summary = "List Change Requests for Workorder", description = """

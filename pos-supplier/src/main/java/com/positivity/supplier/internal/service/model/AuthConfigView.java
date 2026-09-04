@@ -48,6 +48,10 @@ public record AuthConfigView(
         @Nullable
         String apiKeyHeader) {
 
+    // Left as IllegalArgumentException (#1694): this is a response view built server-side from a
+    // persisted entity by the admin service, never from client input (the create/update payload
+    // is AuthConfigRequest, validated separately). A violation here is this module's own defect,
+    // so it belongs on the platform 500 fallback, not a client 4xx.
     public AuthConfigView {
         Objects.requireNonNull(authConfigId, "authConfigId must not be null");
         Objects.requireNonNull(name, "name must not be null");

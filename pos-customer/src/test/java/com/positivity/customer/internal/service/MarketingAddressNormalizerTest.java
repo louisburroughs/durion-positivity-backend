@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.customer.internal.enums.MarketingChannel;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -59,8 +60,8 @@ class MarketingAddressNormalizerTest {
     @DisplayName("blank and digitless input is rejected rather than hashed to a shared key")
     void rejectsUnusableInput() {
         assertThatThrownBy(() -> MarketingAddressNormalizer.hash(MarketingChannel.EMAIL, "   "))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CrmValidationException.class);
         assertThatThrownBy(() -> MarketingAddressNormalizer.hash(MarketingChannel.SMS, "no-digits"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CrmValidationException.class);
     }
 }

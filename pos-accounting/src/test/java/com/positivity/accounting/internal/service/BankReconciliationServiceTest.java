@@ -27,6 +27,8 @@ import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
 import com.positivity.accounting.internal.exception.AdjustmentSignInvalidException;
+import com.positivity.accounting.internal.exception.BankStatementParseException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
 import com.positivity.accounting.internal.exception.ReconciliationAlreadyFinalizedException;
 import com.positivity.accounting.internal.exception.ReconciliationLineIneligibleException;
@@ -194,7 +196,7 @@ class BankReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("import rejects a malformed CSV amount with IllegalArgumentException (400)")
+    @DisplayName("import rejects a malformed CSV amount with BankStatementParseException (400)")
     void importRejectsMalformedCsv() {
         when(glAccountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(reconcilableAccount()));
 
@@ -208,7 +210,7 @@ class BankReconciliationServiceTest {
                 .csv("2026-06-15,ACH DEPOSIT,NOT_A_NUMBER,REF-1")
                 .build();
 
-        assertThatThrownBy(() -> service.importStatement(request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.importStatement(request)).isInstanceOf(BankStatementParseException.class);
     }
 
     @Test
@@ -228,7 +230,7 @@ class BankReconciliationServiceTest {
                 .csv("2026-13-45,BAD DATE,100.00,REF-1")
                 .build();
 
-        assertThatThrownBy(() -> service.importStatement(request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.importStatement(request)).isInstanceOf(BankStatementParseException.class);
     }
 
     @Test
@@ -487,7 +489,8 @@ class BankReconciliationServiceTest {
                 .amount(new BigDecimal("0.0000"))
                 .build();
 
-        assertThatThrownBy(() -> service.addAdjustment(RECON_ID, request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.addAdjustment(RECON_ID, request))
+                .isInstanceOf(InvalidRequestParameterException.class);
         verify(journalEntryService, never()).createJournalEntry(any());
     }
 

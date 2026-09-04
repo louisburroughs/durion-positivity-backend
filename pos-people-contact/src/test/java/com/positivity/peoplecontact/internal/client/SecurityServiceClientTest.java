@@ -13,6 +13,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.positivity.peoplecontact.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
+import com.positivity.peoplecontact.internal.exception.SecurityServiceContractException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,10 +48,15 @@ import org.springframework.web.client.RestClient;
  * assignment must not be picked, or the revoke would target the wrong row and
  * silently leave the live one in place.</li>
  * <li><b>Failures are classified, not flattened.</b> A 404 is an
- * {@link EntityNotFoundException}, a 400 an {@link IllegalArgumentException},
- * and anything 5xx a {@link SecurityServiceException} carrying the status — so a
- * caller can tell "you asked for something that does not exist" from "security
- * service is down", and only retry the second.</li>
+ * {@link EntityNotFoundException}, a 400 a {@link PeopleContactValidationException} only when
+ * the argument that provoked it is genuinely caller-supplied — a downstream 400 on a call whose
+ * every value is fixed or module-internal (the username-less {@code GET /v1/users}, the
+ * hardcoded LOCATION/GLOBAL {@code scopeType}) is a {@link SecurityServiceContractException}
+ * instead, because no caller action could explain it (never a bare {@link
+ * IllegalArgumentException} either way — see {@link PeopleContactValidationException}'s javadoc
+ * for why) — and anything 5xx a {@link SecurityServiceException} carrying the status — so a
+ * caller can tell "you asked for something that does not exist" from "security service is
+ * down", and only retry the second.</li>
  * </ul>
  *
  * <p>
@@ -113,12 +120,22 @@ class SecurityServiceClientTest {
         }
 
         @Test
-        @DisplayName("classifies 400, 401/403, and 5xx differently so callers can react correctly")
-        void failureClassification() {
+        @DisplayName("a downstream 400 is a contract violation, not a caller error — username is never sent")
+        void a400IsAContractViolationNotCallerError() {
+            // GET /v1/users carries no query parameter (filtering happens client-side below), so
+            // no value this caller supplied could have provoked a 400: it must mean this call's
+            // shape has drifted from what pos-security-service expects.
             server.expect(requestTo("http://security/v1/users")).andRespond(withBadRequest());
-            assertThatThrownBy(() -> client.getUserByUsername("bad")).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> client.getUserByUsername("bad"))
+                    .isInstanceOf(SecurityServiceContractException.class)
+                    .isNotInstanceOf(PeopleContactValidationException.class)
+                    .isNotInstanceOf(SecurityServiceException.class);
+            server.verify();
+        }
 
-            setUp();
+        @Test
+        @DisplayName("classifies 401/403 and 5xx so callers can react correctly")
+        void failureClassification() {
             server.expect(requestTo("http://security/v1/users")).andRespond(withStatus(HttpStatus.FORBIDDEN));
             // Not authorized is a security-service condition, not a bad request from the caller.
             assertThatThrownBy(() -> client.getUserByUsername("ada")).isInstanceOf(SecurityServiceException.class);
@@ -161,15 +178,26 @@ class SecurityServiceClientTest {
         }
 
         @Test
-        @DisplayName("maps a missing roles endpoint to not-found and a bad scope to illegal argument")
+        @DisplayName("maps a missing roles endpoint to not-found")
         void rolesFailureClassification() {
-            server.expect(requestTo("http://security/v1/roles?scopeType=NOPE")).andRespond(withBadRequest());
-            assertThatThrownBy(() -> client.getAvailableRoles("NOPE")).isInstanceOf(IllegalArgumentException.class);
-
-            setUp();
             server.expect(requestTo("http://security/v1/roles?scopeType=LOCATION"))
                     .andRespond(withResourceNotFound());
             assertThatThrownBy(() -> client.getAvailableRoles("LOCATION")).isInstanceOf(EntityNotFoundException.class);
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("a downstream 400 is a contract violation, not a caller error — scope is a fixed constant")
+        void rolesA400IsAContractViolationNotCallerError() {
+            // The only two callers (PeopleAccessControlServiceImpl) pass the hardcoded constants
+            // "LOCATION"/"GLOBAL" — never end-user input — so a 400 here can only mean this
+            // module's own contract with pos-security-service has drifted.
+            server.expect(requestTo("http://security/v1/roles?scopeType=LOCATION"))
+                    .andRespond(withBadRequest());
+            assertThatThrownBy(() -> client.getAvailableRoles("LOCATION"))
+                    .isInstanceOf(SecurityServiceContractException.class)
+                    .isNotInstanceOf(PeopleContactValidationException.class)
+                    .isNotInstanceOf(SecurityServiceException.class);
             server.verify();
         }
 

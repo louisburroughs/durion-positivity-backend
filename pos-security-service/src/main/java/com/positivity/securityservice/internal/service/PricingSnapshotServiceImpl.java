@@ -8,8 +8,10 @@ import com.positivity.securityservice.internal.dto.PricingSnapshotDto;
 import com.positivity.securityservice.internal.dto.PricingSnapshotRequest;
 import com.positivity.securityservice.internal.entity.PricingRuleTraceEntry;
 import com.positivity.securityservice.internal.entity.PricingSnapshot;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PricingRuleTraceEntryRepository;
 import com.positivity.securityservice.internal.repository.PricingSnapshotRepository;
+import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -67,9 +69,14 @@ public class PricingSnapshotServiceImpl implements PricingSnapshotService {
     @Override
     @Transactional(readOnly = true)
     public PricingSnapshotDto getSnapshot(@NonNull UUID snapshotId) {
+        // Fixed as part of issue #1694: AuditController's @Operation prose for this endpoint
+        // claimed "400 INVALID_REQUEST, not 404", contradicting its own @ApiResponse(404) and
+        // the already-published openapi.yaml, because the blanket IllegalArgumentException
+        // handler intercepted this before the 404 could ever be returned. EntityNotFoundException
+        // mirrors AuditEventServiceImpl#getEvent's existing not-found pattern in this same file.
         PricingSnapshot snapshot = pricingSnapshotRepository
                 .findById(snapshotId)
-                .orElseThrow(() -> new IllegalArgumentException("Pricing snapshot not found: " + snapshotId));
+                .orElseThrow(() -> new EntityNotFoundException("Pricing snapshot not found: " + snapshotId));
 
         List<PricingRuleTraceEntryDto> steps =
                 pricingRuleTraceEntryRepository.findBySnapshot_SnapshotIdOrderByRuleIdAsc(snapshotId).stream()
@@ -87,26 +94,26 @@ public class PricingSnapshotServiceImpl implements PricingSnapshotService {
 
     private void validateRequest(@NonNull PricingSnapshotRequest request) {
         if (request.getQuoteContext() == null) {
-            throw new IllegalArgumentException("quoteContext is required");
+            throw new SecurityValidationException("quoteContext is required");
         }
         if (request.getFinalPrice() == null) {
-            throw new IllegalArgumentException("finalPrice is required");
+            throw new SecurityValidationException("finalPrice is required");
         }
         if (request.getEvaluationSteps() == null) {
-            throw new IllegalArgumentException("evaluationSteps is required");
+            throw new SecurityValidationException("evaluationSteps is required");
         }
         for (PricingRuleTraceEntryRequest step : request.getEvaluationSteps()) {
             if (step == null || step.getRuleId() == null || step.getRuleId().isBlank()) {
-                throw new IllegalArgumentException("evaluation step ruleId is required");
+                throw new SecurityValidationException("evaluation step ruleId is required");
             }
             if (step.getStatus() == null || step.getStatus().isBlank()) {
-                throw new IllegalArgumentException("evaluation step status is required");
+                throw new SecurityValidationException("evaluation step status is required");
             }
             if (step.getInputs() == null) {
-                throw new IllegalArgumentException("evaluation step inputs are required");
+                throw new SecurityValidationException("evaluation step inputs are required");
             }
             if (step.getOutputs() == null) {
-                throw new IllegalArgumentException("evaluation step outputs are required");
+                throw new SecurityValidationException("evaluation step outputs are required");
             }
         }
     }
@@ -115,6 +122,11 @@ public class PricingSnapshotServiceImpl implements PricingSnapshotService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException exception) {
+            // (d) defensive/internal: quoteContext/inputs/outputs were already deserialized from
+            // the client's own JSON body by Jackson, so re-serializing them should not fail in
+            // practice; a failure here indicates an internal defect, not a client validation
+            // error. Left as IllegalArgumentException so it now surfaces as pos-web-common's
+            // generic correlated 500, not a misleading 400.
             throw new IllegalArgumentException("Failed to serialize JSON field", exception);
         }
     }

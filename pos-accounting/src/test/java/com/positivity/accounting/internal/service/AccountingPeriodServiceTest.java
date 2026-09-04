@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodNotFoundException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingPeriodRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
@@ -292,7 +293,7 @@ class AccountingPeriodServiceTest {
     @DisplayName("isPeriodOpen - rejects malformed period code")
     void isPeriodOpen_invalidCode_throwsIllegalArgument() {
         assertThatThrownBy(() -> service.isPeriodOpen("December-2023"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidRequestParameterException.class)
                 .hasMessageContaining("YYYY-MM");
     }
 
@@ -355,7 +356,7 @@ class AccountingPeriodServiceTest {
     @DisplayName("closePeriod - rejects malformed period code")
     void closePeriod_invalidCode_throwsIllegalArgument() {
         assertThatThrownBy(() -> service.closePeriod("2024/01"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidRequestParameterException.class)
                 .hasMessageContaining("YYYY-MM");
     }
 
@@ -363,7 +364,7 @@ class AccountingPeriodServiceTest {
     @DisplayName("reopenPeriod - blank justification is rejected before any lookup")
     void reopenPeriod_blankJustification_throwsIllegalArgument() {
         assertThatThrownBy(() -> service.reopenPeriod("2024-01", "   "))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidRequestParameterException.class)
                 .hasMessageContaining("justification");
         verify(periodRepository, never()).save(any());
     }

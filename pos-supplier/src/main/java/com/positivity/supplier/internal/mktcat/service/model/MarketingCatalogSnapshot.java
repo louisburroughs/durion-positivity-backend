@@ -16,6 +16,9 @@ import org.jspecify.annotations.NonNull;
 public record MarketingCatalogSnapshot(
         @NonNull UUID vendorProfileId, @NonNull Instant fetchedAt, int articleCount) {
 
+    // Left as IllegalArgumentException (#1694): built server-side from an internal fetch outcome,
+    // never from client input. A violation here is this module's own defect, so it belongs on the
+    // platform 500 fallback, not a client 4xx.
     public MarketingCatalogSnapshot {
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");
         Objects.requireNonNull(fetchedAt, "fetchedAt must not be null");

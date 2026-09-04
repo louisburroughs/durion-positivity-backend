@@ -5,6 +5,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.LaborEntryNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -218,7 +219,7 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
      * @param reason         the reason for adjustment
      * @param idempotencyKey optional idempotency key
      * @return the updated labor entry
-     * @throws NoSuchElementException if entry not found
+     * @throws LaborEntryNotFoundException if entry not found
      */
     @Transactional
     @NonNull
@@ -240,13 +241,12 @@ public class WorkorderLaborServiceImpl implements WorkorderLaborService {
                         existingId.get());
                 return WorkorderLaborEntryResponse.fromEntity(laborRepository
                         .findById(existingId.get())
-                        .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + existingId.get())));
+                        .orElseThrow(() -> new LaborEntryNotFoundException(existingId.get())));
             }
         }
 
-        WorkorderLaborEntry entry = laborRepository
-                .findById(entryId)
-                .orElseThrow(() -> new NoSuchElementException(LABOR_ENTRY_NOT_FOUND + entryId));
+        WorkorderLaborEntry entry =
+                laborRepository.findById(entryId).orElseThrow(() -> new LaborEntryNotFoundException(entryId));
 
         entry.adjustHours(hours, reason);
         WorkorderLaborEntry saved = laborRepository.save(entry);

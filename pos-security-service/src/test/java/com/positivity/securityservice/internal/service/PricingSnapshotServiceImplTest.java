@@ -11,8 +11,10 @@ import com.positivity.securityservice.internal.dto.PricingRuleTraceEntryRequest;
 import com.positivity.securityservice.internal.dto.PricingSnapshotRequest;
 import com.positivity.securityservice.internal.entity.PricingRuleTraceEntry;
 import com.positivity.securityservice.internal.entity.PricingSnapshot;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PricingRuleTraceEntryRepository;
 import com.positivity.securityservice.internal.repository.PricingSnapshotRepository;
+import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -103,7 +105,7 @@ class PricingSnapshotServiceImplTest {
                 List.of(new PricingRuleTraceEntryRequest("RULE-1", "APPLIED", Map.of(), Map.of())));
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("quoteContext is required");
     }
 
@@ -116,7 +118,7 @@ class PricingSnapshotServiceImplTest {
                 List.of(new PricingRuleTraceEntryRequest("", "", null, null)));
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("evaluation step ruleId is required");
     }
 
@@ -172,7 +174,7 @@ class PricingSnapshotServiceImplTest {
         when(pricingSnapshotRepository.findById(snapshotId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> pricingSnapshotService.getSnapshot(snapshotId))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining("Pricing snapshot not found");
     }
 
@@ -182,7 +184,7 @@ class PricingSnapshotServiceImplTest {
         PricingSnapshotRequest request = new PricingSnapshotRequest(Map.of("sku", "SKU-1"), null, List.of());
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("finalPrice is required");
     }
 
@@ -193,7 +195,7 @@ class PricingSnapshotServiceImplTest {
                 new PricingSnapshotRequest(Map.of("sku", "SKU-1"), new BigDecimal("10.00"), null);
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("evaluationSteps is required");
     }
 
@@ -206,7 +208,7 @@ class PricingSnapshotServiceImplTest {
                 List.of(new PricingRuleTraceEntryRequest("RULE-1", "", Map.of(), Map.of())));
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("evaluation step status is required");
     }
 
@@ -219,7 +221,7 @@ class PricingSnapshotServiceImplTest {
                 List.of(new PricingRuleTraceEntryRequest("RULE-1", "APPLIED", null, Map.of())));
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("evaluation step inputs are required");
     }
 
@@ -232,7 +234,7 @@ class PricingSnapshotServiceImplTest {
                 List.of(new PricingRuleTraceEntryRequest("RULE-1", "APPLIED", Map.of(), null)));
 
         assertThatThrownBy(() -> pricingSnapshotService.createSnapshot(request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining("evaluation step outputs are required");
     }
 }

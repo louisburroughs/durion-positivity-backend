@@ -16,7 +16,10 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
+import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -261,10 +264,10 @@ class WorkorderPartUsageServiceImplTest {
         @DisplayName("rejects a zero or negative quantity")
         void rejectsNonPositiveQuantity() {
             assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Quantity must be positive");
             assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-1"), null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Quantity must be positive");
         }
 
@@ -283,7 +286,7 @@ class WorkorderPartUsageServiceImplTest {
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PartLineNotFoundException.class)
                     .hasMessageContaining("Part not found");
         }
 
@@ -359,7 +362,7 @@ class WorkorderPartUsageServiceImplTest {
 
             assertThatThrownBy(
                             () -> service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3.5"), null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("Consumption exceeds issued quantity");
             verify(usageEventRepository, never()).save(any());
         }
@@ -368,7 +371,7 @@ class WorkorderPartUsageServiceImplTest {
         @DisplayName("rejects a non-positive quantity")
         void rejectsNonPositiveQuantity() {
             assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Quantity must be positive");
         }
 
@@ -425,7 +428,7 @@ class WorkorderPartUsageServiceImplTest {
 
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PartLineNotFoundException.class)
                     .hasMessageContaining("Part not found");
 
             WorkorderPart foreign = part("4", "0", "0");
@@ -472,7 +475,7 @@ class WorkorderPartUsageServiceImplTest {
 
             assertThatThrownBy(
                             () -> service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2.5"), null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("Return quantity exceeds available");
             verify(usageEventRepository, never()).save(any());
         }
@@ -482,7 +485,7 @@ class WorkorderPartUsageServiceImplTest {
         void rejectsNonPositiveQuantity() {
             assertThatThrownBy(
                             () -> service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-2"), null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessage("Quantity must be positive");
         }
 
@@ -539,7 +542,7 @@ class WorkorderPartUsageServiceImplTest {
 
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PartLineNotFoundException.class)
                     .hasMessageContaining("Part not found");
 
             WorkorderPart foreign = part("5", "0", "0");
@@ -624,7 +627,7 @@ class WorkorderPartUsageServiceImplTest {
 
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.getUsageHistory(WORKORDER_ID, PART_ID))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PartLineNotFoundException.class)
                     .hasMessageContaining("Part not found");
 
             WorkorderPart foreign = part("5", "0", "0");

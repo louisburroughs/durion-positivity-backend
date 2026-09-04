@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.CountResponse;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApproveWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderRequest;
 import com.positivity.workorder.internal.dto.CompleteWorkorderResponse;
@@ -282,14 +283,19 @@ public class WorkorderController {
                     defaults to image/png.
                     Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream \
                     replication.
-                    Returns 400 when the workorder is missing, the customer does not match, or the status is not \
-                    DRAFT — all failures surface as 400 in this operation.
+                    Returns 404 when the workorder does not exist, 400 when the status is not DRAFT, and 409 \
+                    when the customer does not match the workorder's own customer.
                     """)
     @ApiResponse(responseCode = "200", description = "Work order approved successfully with signature captured.")
     @ApiResponse(
             responseCode = "400",
-            description = "Work order cannot be approved in current state or customer ID mismatch.")
+            description = "Work order cannot be approved in current state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Customer ID mismatch: workorder belongs to a different customer.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity and captured signature artifacts.",
             required = true,
@@ -324,7 +330,7 @@ public class WorkorderController {
                     request.getSignerName(),
                     request.getNotes());
             return ResponseEntity.ok(approved);
-        } catch (IllegalStateException | IllegalArgumentException _) {
+        } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
     }
@@ -392,8 +398,6 @@ public class WorkorderController {
                             .workorderId(workorderId)
                             .message(e.getMessage())
                             .build());
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         }
     }
 
@@ -473,27 +477,23 @@ public class WorkorderController {
                             example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID workorderId) {
-        try {
-            WorkorderStateMachine.CompletionPreconditions preconditions =
-                    workorderService.getCompletionPreconditions(workorderId);
+        WorkorderStateMachine.CompletionPreconditions preconditions =
+                workorderService.getCompletionPreconditions(workorderId);
 
-            CompletionPreconditionsResponse response = CompletionPreconditionsResponse.builder()
-                    .workorderId(preconditions.workorderId())
-                    .canComplete(preconditions.canComplete())
-                    .currentStatus(preconditions.currentStatus())
-                    .checklistItems(preconditions.checklistItems())
-                    .blockingReasons(preconditions.blockingReasons())
-                    .unresolvedApprovalGatedChangeRequests(preconditions.unresolvedApprovalGatedChangeRequests())
-                    .nonTerminalServiceItems(preconditions.nonTerminalServiceItems())
-                    .nonTerminalPartItems(preconditions.nonTerminalPartItems())
-                    .emergencyDenialAcknowledged(preconditions.emergencyDenialAcknowledged())
-                    .hasBillableItems(preconditions.hasBillableItems())
-                    .build();
+        CompletionPreconditionsResponse response = CompletionPreconditionsResponse.builder()
+                .workorderId(preconditions.workorderId())
+                .canComplete(preconditions.canComplete())
+                .currentStatus(preconditions.currentStatus())
+                .checklistItems(preconditions.checklistItems())
+                .blockingReasons(preconditions.blockingReasons())
+                .unresolvedApprovalGatedChangeRequests(preconditions.unresolvedApprovalGatedChangeRequests())
+                .nonTerminalServiceItems(preconditions.nonTerminalServiceItems())
+                .nonTerminalPartItems(preconditions.nonTerminalPartItems())
+                .emergencyDenialAcknowledged(preconditions.emergencyDenialAcknowledged())
+                .hasBillableItems(preconditions.hasBillableItems())
+                .build();
 
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(response);
     }
 
     @Operation(operationId = "reopenWorkorder", summary = "Reopen a Completed Workorder", description = """
@@ -551,8 +551,6 @@ public class WorkorderController {
                     .build();
 
             return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest()
                     .body(ReopenWorkorderResponse.builder()
@@ -591,8 +589,6 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completeServiceItem(workorderId, serviceLineId, resolveCurrentActorUserId()));
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }
@@ -627,8 +623,6 @@ public class WorkorderController {
         try {
             return ResponseEntity.ok(
                     workorderService.completePartItem(workorderId, partId, resolveCurrentActorUserId()));
-        } catch (IllegalArgumentException _) {
-            return ResponseEntity.notFound().build();
         } catch (IllegalStateException _) {
             return ResponseEntity.badRequest().build();
         }

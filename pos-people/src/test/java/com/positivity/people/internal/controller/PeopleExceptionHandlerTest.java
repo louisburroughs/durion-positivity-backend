@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.PersonNotFoundException;
+import com.positivity.people.internal.exception.RequestValidationException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
+import com.positivity.shared.error.ApiError;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
@@ -20,6 +23,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -71,11 +75,58 @@ class PeopleExceptionHandlerTest {
     }
 
     @Test
-    void mapsAnIllegalArgumentToBadRequest() {
-        ProblemDetail problem = handler.handleIllegalArgument(new IllegalArgumentException("bad input"));
+    void mapsARequestValidationFailureToBadRequestWithCodeAndCorrelationId() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
 
-        assertStatusAndTimestamp(problem, HttpStatus.BAD_REQUEST);
-        assertThat(problem.getDetail()).isEqualTo("bad input");
+        ResponseEntity<ApiError> result =
+                handler.handleRequestValidation(new RequestValidationException("bad input"), request, response);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        ApiError body = result.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(body.message()).isEqualTo("bad input");
+        assertThat(body.status()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(body.correlationId()).isNotBlank();
+        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
+    }
+
+    @Test
+    void echoesAnInboundCorrelationIdOnARequestValidationFailure() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Correlation-Id", "019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ResponseEntity<ApiError> result =
+                handler.handleRequestValidation(new RequestValidationException("bad input"), request, response);
+
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().correlationId()).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
+        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
+    }
+
+    /**
+     * Pins the wire response for the reclassified lifecycle guards (issue #1694 follow-up):
+     * status, code, envelope shape, and correlation id, so a future revert to 400 or to bare
+     * {@code IllegalStateException} fails this suite.
+     */
+    @Test
+    void mapsAResourceStateConflictToConflictWithCodeAndCorrelationId() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ResponseEntity<ApiError> result = handler.handleResourceStateConflict(
+                new ResourceStateConflictException("Employee is already DISABLED or TERMINATED"), request, response);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ApiError body = result.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo("RESOURCE_STATE_CONFLICT");
+        assertThat(body.message()).isEqualTo("Employee is already DISABLED or TERMINATED");
+        assertThat(body.status()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(body.correlationId()).isNotBlank();
+        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
     }
 
     @Test
@@ -168,14 +219,6 @@ class PeopleExceptionHandlerTest {
 
         assertStatusAndTimestamp(problem, HttpStatus.BAD_GATEWAY);
         assertThat(problem.getDetail()).isNotBlank();
-    }
-
-    @Test
-    void hidesTheDetailOfAnUnexpectedFailure() {
-        ProblemDetail problem = handler.handleUnexpectedException(new RuntimeException("connection string leaked"));
-
-        assertStatusAndTimestamp(problem, HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(problem.getDetail()).isEqualTo("Internal server error");
     }
 
     /** Any real method parameter works: the handlers only read the exception's own fields. */

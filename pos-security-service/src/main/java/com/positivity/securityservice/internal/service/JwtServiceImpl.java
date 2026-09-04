@@ -5,6 +5,8 @@ import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -236,6 +238,9 @@ public class JwtServiceImpl implements JwtService {
         return true;
     }
 
+    // (d) defensive/internal: revokeTokenByJti is declared on the JwtService interface but has
+    // no caller in this module today (no controller or other service invokes it), so these
+    // guards are not reachable from an HTTP request. Left as IllegalArgumentException.
     @Override
     public void revokeTokenByJti(@NonNull String jti, long expirationSeconds) {
         if (jti == null || jti.isBlank()) {
@@ -288,13 +293,19 @@ public class JwtServiceImpl implements JwtService {
     public TokenPair generateTokenPair(
             @NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles) {
         if (username == null || username.isBlank()) {
-            throw new IllegalArgumentException("Username cannot be blank");
+            throw new SecurityValidationException("Username cannot be blank");
         }
         if (userId == null) {
-            throw new IllegalArgumentException("UserId cannot be null");
+            throw new SecurityValidationException("UserId cannot be null");
         }
         if (roles == null || roles.isEmpty()) {
-            throw new IllegalArgumentException("Roles cannot be empty");
+            // (a) request-shape validation: JwtController's issueInternalToken and
+            // generateTokenPair pass a client-supplied `roles` set straight through, and both
+            // document "Returns 400 ... or the role set is empty". The login flow
+            // (AuthenticationServiceImpl) rejects an account with no roles before calling this
+            // method (403 USER_HAS_NO_ROLES, ADR-0017 §2 / #1725), so this guard only ever sees
+            // a caller-supplied empty set.
+            throw new SecurityValidationException("Roles cannot be empty");
         }
 
         Instant now = Instant.now(clock);
@@ -316,7 +327,7 @@ public class JwtServiceImpl implements JwtService {
                 .sorted()
                 .toList();
         if (roleClaims.isEmpty()) {
-            throw new IllegalArgumentException("Roles cannot be blank");
+            throw new SecurityValidationException("Roles cannot be blank");
         }
 
         var accessBuilder = Jwts.builder()
@@ -413,12 +424,12 @@ public class JwtServiceImpl implements JwtService {
     @Override
     public TokenPair refreshAccessToken(@NonNull String refreshToken) {
         if (!validateRefreshToken(refreshToken)) {
-            throw new IllegalArgumentException("Invalid refresh token");
+            throw new SecurityValidationException("Invalid refresh token");
         }
 
         Optional<JwtToken> stored = jwtTokenRepository.findByRefreshToken(refreshToken);
         if (stored.isEmpty()) {
-            throw new IllegalArgumentException("Refresh token not found in database");
+            throw new SecurityValidationException("Refresh token not found in database");
         }
 
         JwtToken jwtToken = stored.get();
@@ -430,7 +441,13 @@ public class JwtServiceImpl implements JwtService {
         UserDto user = userOpt.get();
         Set<String> roles = user.getRoles() == null ? Collections.<String>emptySet() : user.getRoles();
         if (roles.isEmpty()) {
-            throw new IllegalArgumentException("User has no roles assigned");
+            // ADR-0017 §2 (question 1): the refresh token is well-formed, unexpired, unrevoked,
+            // and present in the token store — the refusal is about the caller's authorization
+            // (an account with no roles holds no effective permissions), so it answers 403
+            // USER_HAS_NO_ROLES, the same status the login path gives for the same condition
+            // (#1725). Distinct from generateTokenPair's "Roles cannot be empty" above, which is
+            // request-shape validation of a client-supplied set.
+            throw new NoRolesAssignedException("User has no roles assigned");
         }
         String username = jwtToken.getSubject();
 

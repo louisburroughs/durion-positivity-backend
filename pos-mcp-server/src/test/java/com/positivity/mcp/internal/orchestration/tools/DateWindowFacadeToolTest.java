@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Level;
@@ -10,6 +10,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -100,7 +101,7 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow rejects an unrecognized shape with a self-correcting message")
     void resolveDateWindow_rejectsUnrecognizedShape() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> tool.resolveDateWindow("SOMETIME_SOON", "MONTH", 1, null))
                 .withMessageContaining("ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN");
     }
@@ -108,7 +109,7 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow rejects an unrecognized unit with a self-correcting message")
     void resolveDateWindow_rejectsUnrecognizedUnit() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> tool.resolveDateWindow("ROLLING", "FORTNIGHT", 1, null))
                 .withMessageContaining("DAY, WEEK, MONTH, QUARTER, YEAR");
     }
@@ -116,7 +117,7 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow rejects an unrecognized comparison with a self-correcting message")
     void resolveDateWindow_rejectsUnrecognizedComparison() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> tool.resolveDateWindow("ROLLING", "MONTH", 1, "LAST_QUARTER"))
                 .withMessageContaining("NONE, PRIOR_PERIOD, YEAR_EARLIER");
     }
@@ -124,7 +125,7 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow propagates the resolver's DAY-with-a-calendar-shape rejection")
     void resolveDateWindow_propagatesDayCalendarShapeRejection() {
-        assertThatIllegalArgumentException()
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null))
                 .withMessageContaining("DAY has no calendar form");
     }
@@ -195,7 +196,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow logs nothing when the classification is rejected")
     void resolveDateWindow_logsNothingWhenRejected() {
         try (LogCapture captured = new LogCapture()) {
-            assertThatIllegalArgumentException()
+            assertThatExceptionOfType(InvalidToolArgumentException.class)
                     .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null));
 
             assertThat(captured.events()).isEmpty();
@@ -312,7 +313,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveNamedPeriod rejects a relative phrase and points at resolveDateWindow")
     void resolveNamedPeriod_rejectsRelativePhrase() {
         assertThatThrownBy(() -> tool.resolveNamedPeriod("last month"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("resolveDateWindow");
     }
 }

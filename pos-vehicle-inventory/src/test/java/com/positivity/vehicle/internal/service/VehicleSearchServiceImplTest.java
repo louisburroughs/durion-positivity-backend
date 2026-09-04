@@ -10,6 +10,7 @@ import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.dto.VehicleSummary;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import java.util.List;
 import java.util.UUID;
@@ -179,9 +180,9 @@ class VehicleSearchServiceImplTest {
         @DisplayName("rejects an empty or too-short query instead of scanning the fleet")
         void shortQueriesRejected() {
             assertThatThrownBy(() -> service().search(request("   ", 25, false)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(VehicleValidationException.class);
             assertThatThrownBy(() -> service().search(request("AB", 25, false)))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(VehicleValidationException.class);
 
             verifyNoInteractions(vehicleRepository);
         }

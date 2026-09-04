@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -151,12 +152,12 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
         }
 
         if (!"HOURS".equalsIgnoreCase(request.labor().unit())) {
-            throw new IllegalArgumentException("labor.unit must be HOURS");
+            throw new WorkorderRequestValidationException("labor.unit must be HOURS");
         }
 
         BigDecimal quantity = request.labor().quantity();
         if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("labor.quantity must be greater than 0");
+            throw new WorkorderRequestValidationException("labor.quantity must be greater than 0");
         }
 
         LocalDateTime endTime = LocalDateTime.ofInstant(request.performedAt(), ZoneOffset.UTC);
@@ -312,7 +313,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
                     "Starting a timer for another technician requires '" + PERMISSION_LABOR_ADD_ON_BEHALF + "'");
         }
         if (request.reason() == null || request.reason().isBlank()) {
-            throw new IllegalArgumentException(
+            throw new WorkorderRequestValidationException(
                     "reason is required when starting a timer on behalf of another technician");
         }
         return true;

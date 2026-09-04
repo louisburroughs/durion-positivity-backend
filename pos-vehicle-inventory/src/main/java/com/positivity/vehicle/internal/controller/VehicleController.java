@@ -28,10 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
  * Legacy vehicle CRUD surface.
  *
  * <p>
- * Domain rejections propagate to {@code VehicleExceptionHandler}, which returns
- * 400 with the {@code ApiError} envelope (ADR-0017). Absence is still reported
- * here, because these service methods signal it with an empty {@link java.util.Optional}
- * or a {@code false} return rather than an exception.
+ * Domain rejections propagate as {@code VehicleValidationException}, which
+ * {@code VehicleExceptionHandler} maps to 400 with the {@code ApiError} envelope
+ * (ADR-0017). Absence is still reported here, because these service methods
+ * signal it with an empty {@link java.util.Optional} or a {@code false} return
+ * rather than an exception.
  */
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor

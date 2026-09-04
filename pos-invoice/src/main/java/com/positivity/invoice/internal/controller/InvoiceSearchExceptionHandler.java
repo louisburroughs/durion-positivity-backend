@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.controller;
 
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,9 +24,14 @@ public class InvoiceSearchExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private final Clock clock;
 
-    /** Bad issued-date window (issuedTo before issuedFrom). */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+    /**
+     * Bad issued-date window (issuedTo before issuedFrom) (#1694: was a blanket {@code
+     * IllegalArgumentException} handler; narrowed to this module-owned type so a server-side
+     * defect no longer reports as a client 400. Status/code unchanged.)
+     */
+    @ExceptionHandler(InvoiceRequestValidationException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(
+            InvoiceRequestValidationException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)

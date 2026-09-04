@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -60,7 +61,7 @@ public class UserServiceImpl implements UserService {
         for (String roleName : roleNames) {
             Role role = roleRepository
                     .findByName(roleName)
-                    .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + roleName));
+                    .orElseThrow(() -> new SecurityValidationException(ROLE_NOT_FOUND_PREFIX + roleName));
             roles.add(role);
         }
         User user = new User();
@@ -119,12 +120,12 @@ public class UserServiceImpl implements UserService {
     public UserDto assignRoles(String username, Set<String> roleNames) {
         User user = userRepository
                 .findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new SecurityValidationException("User not found"));
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {
             Role role = roleRepository
                     .findByName(roleName)
-                    .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + roleName));
+                    .orElseThrow(() -> new SecurityValidationException(ROLE_NOT_FOUND_PREFIX + roleName));
             roles.add(role);
         }
         user.setRoles(roles);
@@ -135,7 +136,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserDto updateUser(UUID id, UserUpdateRequest request) {
         User existingUser =
-                userRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("User not found"));
+                userRepository.findById(id).orElseThrow(() -> new SecurityValidationException("User not found"));
 
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             existingUser.setUsername(request.getUsername());
@@ -148,7 +149,7 @@ public class UserServiceImpl implements UserService {
             for (String roleName : request.getRoles()) {
                 Role role = roleRepository
                         .findByName(roleName)
-                        .orElseThrow(() -> new IllegalArgumentException(ROLE_NOT_FOUND_PREFIX + roleName));
+                        .orElseThrow(() -> new SecurityValidationException(ROLE_NOT_FOUND_PREFIX + roleName));
                 roles.add(role);
             }
             existingUser.setRoles(roles);

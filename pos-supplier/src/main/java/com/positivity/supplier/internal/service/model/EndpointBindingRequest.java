@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.service.model;
 
+import com.positivity.supplier.internal.exception.SupplierValidationException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import java.util.Objects;
@@ -131,8 +132,12 @@ public record EndpointBindingRequest(
 
     private static void requireNonBlank(@NonNull String value, @NonNull String field) {
         Objects.requireNonNull(value, field + " must not be null");
+        // Genuine client-input validation on an admin @RequestBody (#1694); typed rather than a
+        // bare IllegalArgumentException so it cannot be confused with a server-side defect once
+        // the blanket IllegalArgumentException handler is gone.
         if (value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR, field + " must not be blank");
         }
     }
 }

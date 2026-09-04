@@ -250,6 +250,11 @@ public class JournalEntry {
      */
     public void addLine(JournalEntryLine line) {
         if (line == null) {
+            // (d) Defensive/internal invariant: no caller in main passes a null line (JE
+            // construction always builds a non-null JournalEntryLine before calling this), so
+            // this is not reachable from a controller. Left as IllegalArgumentException — the
+            // pos-web-common catch-all now maps any unmapped IllegalArgumentException to a
+            // correlated 500, which is the correct outcome if this defensive guard is ever hit.
             throw new IllegalArgumentException("Cannot add null line");
         }
         if (this.lines == null) {

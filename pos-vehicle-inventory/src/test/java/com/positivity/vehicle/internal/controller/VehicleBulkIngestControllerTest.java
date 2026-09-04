@@ -10,6 +10,7 @@ import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.internal.dto.VehicleBulkIngestRecord;
+import com.positivity.vehicle.internal.exception.VehicleVinConflictException;
 import com.positivity.vehicle.internal.service.VehicleService;
 import java.util.List;
 import java.util.UUID;
@@ -85,7 +86,7 @@ class VehicleBulkIngestControllerTest {
         request.setLocationId(LOCATION_ID);
         request.setRecords(List.of(ingestRecord));
 
-        when(vehicleService.createVehicle(any())).thenThrow(new IllegalArgumentException("Duplicate VIN"));
+        when(vehicleService.createVehicle(any())).thenThrow(new VehicleVinConflictException("Duplicate VIN"));
 
         mockMvc.perform(post("/v1/vehicles/bulk-ingest")
                         .header("Authorization", "Bearer test")

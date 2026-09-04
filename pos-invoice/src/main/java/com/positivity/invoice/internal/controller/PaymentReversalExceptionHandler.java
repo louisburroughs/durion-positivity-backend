@@ -92,18 +92,16 @@ public class PaymentReversalExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex, HttpServletRequest request) {
-        String correlationId = correlationId(request);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
-                        "BAD_REQUEST",
-                        ex.getMessage(),
-                        HttpStatus.BAD_REQUEST.value(),
-                        Instant.now(clock).toString(),
-                        correlationId));
-    }
+    // #1694: the blanket `@ExceptionHandler(IllegalArgumentException.class)` (400 BAD_REQUEST)
+    // that lived here is deleted, not replaced. The one remaining IllegalArgumentException throw
+    // reachable through this advice's controllers — PaymentReversalServiceImpl.
+    // refundPartyStandalone's "partyId must not be blank" — is dead code from HTTP: partyId
+    // already carries @NotBlank on PartyStandaloneRefundRequest, so bean validation rejects a
+    // blank value with a 400 (via pos-web-common's GlobalApiExceptionHandler) before this
+    // method ever runs; see the comment at that throw site. With nothing genuine left to map,
+    // deleting the blanket handler simply lets a true server-side IllegalArgumentException
+    // (Hibernate/JPA, UUID.fromString, ...) fall through to the platform's correlated 500
+    // fallback instead of being mis-reported as a client 400.
 
     @ExceptionHandler(PaymentGatewayException.class)
     public ResponseEntity<ApiError> handlePaymentGatewayException(

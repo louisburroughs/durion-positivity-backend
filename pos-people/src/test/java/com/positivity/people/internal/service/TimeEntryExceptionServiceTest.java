@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.people.internal.entity.TimeEntryAudit;
 import com.positivity.people.internal.entity.TimeEntryException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryExceptionRepository;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -146,7 +147,7 @@ class TimeEntryExceptionServiceTest {
 
         when(exceptionRepository.findById(id)).thenReturn(Optional.of(ex));
 
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceStateConflictException.class, () -> {
             service.actionException(id, com.positivity.people.internal.enums.ExceptionStatus.WAIVED, null, "cid-7");
         });
 

@@ -34,7 +34,7 @@ class ImageExceptionHandlerTest {
                 new StoreImageRequest("tread.jpg", "image/jpeg", "not base64 at all!!", null, List.of());
 
         ResponseEntity<ApiError> response =
-                handler.handleBadRequest(catchIllegalArgument(request::decodedContent), servletRequest());
+                handler.handleBadRequest(catchImageValidation(request::decodedContent), servletRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
@@ -48,7 +48,7 @@ class ImageExceptionHandlerTest {
     @DisplayName("an empty body answers 400, since refusing it is the point")
     void emptyContentIsABadRequest() {
         ResponseEntity<ApiError> response = handler.handleBadRequest(
-                new IllegalArgumentException("refusing to store an empty image; it would never be retried"),
+                new ImageValidationException("refusing to store an empty image; it would never be retried"),
                 servletRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -61,7 +61,7 @@ class ImageExceptionHandlerTest {
         MockHttpServletRequest request = servletRequest();
         request.addHeader("X-Correlation-Id", "corr-from-caller");
 
-        ResponseEntity<ApiError> response = handler.handleBadRequest(new IllegalArgumentException("bad"), request);
+        ResponseEntity<ApiError> response = handler.handleBadRequest(new ImageValidationException("bad"), request);
 
         // Replacing it would break the one thread a caller has for following its own request
         // through the platform.
@@ -86,11 +86,11 @@ class ImageExceptionHandlerTest {
         return new MockHttpServletRequest("POST", "/v1/images");
     }
 
-    private static IllegalArgumentException catchIllegalArgument(Runnable action) {
+    private static ImageValidationException catchImageValidation(Runnable action) {
         try {
             action.run();
-            throw new AssertionError("expected an IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
+            throw new AssertionError("expected an ImageValidationException");
+        } catch (ImageValidationException e) {
             return e;
         }
     }

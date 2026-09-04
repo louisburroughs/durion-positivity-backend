@@ -15,6 +15,7 @@ import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.enums.InvoiceDeliveryMethod;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
@@ -316,7 +317,7 @@ class PartyServiceImplBillingAndDuplicatesTest {
         @DisplayName("rejects a one-character name, which would match most of the table")
         void singleCharacterNameIsRejected(String legalName) {
             assertThatThrownBy(() -> service.checkPartyDuplicates(legalName))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(CrmValidationException.class)
                     .hasMessageContaining("at least 2");
 
             verify(partyRepository, never()).findByLegalNameContaining(anyString());

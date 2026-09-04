@@ -43,6 +43,15 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
 
     @Override
     public void launch(@NonNull BulkLoadJob job, @Nullable String authorizationHeader) {
+        // Defensive/internal invariants on this interface's contract (issue #1694 audit),
+        // deliberately left as bare IllegalArgumentException rather than a module-owned type:
+        // this method DOES run synchronously on the calling HTTP thread (unlike the @StepScope
+        // guards further down the pipeline), but its only caller today —
+        // BulkLoadJobServiceImpl.startProcessing — already rejects a missing storage path or
+        // locationId with its own 409 IllegalStateException, and operatorId is populated at job
+        // creation and never blank, before this method is ever reached. None of the three is
+        // reachable from a client request; if one ever fires it means a future caller broke this
+        // precondition, which is correctly a 500 (a server-side bug), not a 400.
         if (!StringUtils.hasText(job.getOriginalFilePath())) {
             throw new IllegalArgumentException("Bulk load job must include a persisted storage path before launch");
         }

@@ -149,8 +149,8 @@ public class RegisterSessionController {
                     begun.
                     Required inputs: movementType (PAID_IN or PAID_OUT), a positive amount, reason, and clerkId.
                     Emits an ORDER_SESSION_CASH_MOVEMENT event.
-                    Returns 201 with the recorded movement, 404 when the session does not exist, 409 when the \
-                    session is not OPEN, and 422 when the amount is not positive or the movement type is unknown.
+                    Returns 201 with the recorded movement, 400 when the amount is not positive or the movement \
+                    type is unknown, 404 when the session does not exist, and 409 when the session is not OPEN.
                     """,
             tags = {"Register Sessions"})
     @PostMapping("/{sessionId}/cash-movements")

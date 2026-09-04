@@ -19,9 +19,11 @@ import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
 import com.positivity.workorder.internal.service.WorkorderService;
@@ -227,9 +229,9 @@ class EstimateControllerTest {
         }
 
         @Test
-        void reportsAValidationErrorForAnIllegalArgument() {
+        void reportsAValidationErrorForAWorkorderRequestValidationException() {
             when(estimateService.createEstimate(any(), anyString()))
-                    .thenThrow(new IllegalArgumentException("customerId is required"));
+                    .thenThrow(new WorkorderRequestValidationException("customerId is required"));
 
             ResponseEntity<Object> response = controller.createEstimate(createRequest(), null);
 
@@ -318,13 +320,11 @@ class EstimateControllerTest {
 
         @Test
         void mapsADelegatedFailureOntoTheRightStatus() {
-            doThrow(new IllegalArgumentException("no such estimate"))
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .declineEstimate(ESTIMATE_ID, null);
-            assertThat(controller
-                            .patchEstimateStatus(ESTIMATE_ID, Map.of("status", "DECLINED"))
-                            .getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.patchEstimateStatus(ESTIMATE_ID, Map.of("status", "DECLINED")))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new IllegalStateException("expired")).when(estimateService).reopenEstimate(ESTIMATE_ID);
             assertThat(controller
@@ -641,11 +641,11 @@ class EstimateControllerTest {
             assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
                     .isEqualTo(HttpStatus.NOT_FOUND);
 
-            doThrow(new IllegalArgumentException("bad quantity"))
+            doThrow(new WorkorderRequestValidationException("bad quantity"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isInstanceOf(WorkorderRequestValidationException.class);
 
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
@@ -669,11 +669,11 @@ class EstimateControllerTest {
             assertThat(controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null).getStatusCode())
                     .isEqualTo(HttpStatus.NOT_FOUND);
 
-            doThrow(new IllegalArgumentException("bad quantity"))
+            doThrow(new WorkorderRequestValidationException("bad quantity"))
                     .when(estimateService)
                     .updateEstimateItem(any(), any(), any());
-            assertThat(controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null))
+                    .isInstanceOf(WorkorderRequestValidationException.class);
 
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
@@ -691,11 +691,11 @@ class EstimateControllerTest {
 
         @Test
         void mapsItemDeleteFailuresOntoNotFoundAndConflict() {
-            doThrow(new IllegalArgumentException("no item"))
+            doThrow(new EstimateItemNotFoundException(ITEM_ID, ESTIMATE_ID))
                     .when(estimateService)
                     .deleteEstimateItem(ESTIMATE_ID, ITEM_ID);
-            assertThat(controller.deleteEstimateItem(ESTIMATE_ID, ITEM_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.deleteEstimateItem(ESTIMATE_ID, ITEM_ID))
+                    .isInstanceOf(EstimateItemNotFoundException.class);
 
             doThrow(new IllegalStateException("estimate is locked"))
                     .when(estimateService)
@@ -721,11 +721,11 @@ class EstimateControllerTest {
 
         @Test
         void mapsCalculationFailuresOntoNotFoundAndConflict() {
-            doThrow(new IllegalArgumentException("no estimate"))
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .calculateEstimateTaxesAndTotals(any(), anyString());
-            assertThat(controller.calculateEstimateTotals(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.calculateEstimateTotals(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new IllegalStateException("no items"))
                     .when(estimateService)
@@ -745,10 +745,10 @@ class EstimateControllerTest {
 
         @Test
         void reportsNotFoundWhenTheSummaryHasNoEstimate() {
-            when(estimateService.getEstimateSummary(ESTIMATE_ID)).thenThrow(new IllegalArgumentException("gone"));
+            when(estimateService.getEstimateSummary(ESTIMATE_ID)).thenThrow(new EstimateNotFoundException(ESTIMATE_ID));
 
-            assertThat(controller.getEstimateSummary(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.getEstimateSummary(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
         }
 
         @Test
@@ -765,7 +765,9 @@ class EstimateControllerTest {
 
         @Test
         void reportsNotFoundForAPdfOfAnUnknownEstimateAndBadGatewayOnRenderFailure() {
-            doThrow(new IllegalArgumentException("gone")).when(estimateService).generateEstimatePdf(ESTIMATE_ID);
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
+                    .when(estimateService)
+                    .generateEstimatePdf(ESTIMATE_ID);
             assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
                     .isEqualTo(HttpStatus.NOT_FOUND);
 
@@ -787,11 +789,11 @@ class EstimateControllerTest {
 
         @Test
         void mapsSnapshotFailuresOntoNotFoundAndConflict() {
-            doThrow(new IllegalArgumentException("gone"))
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .createEstimateSnapshot(any(), anyString(), any());
-            assertThat(controller.createEstimateSnapshot(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.createEstimateSnapshot(ESTIMATE_ID, null))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new IllegalStateException("snapshot exists"))
                     .when(estimateService)

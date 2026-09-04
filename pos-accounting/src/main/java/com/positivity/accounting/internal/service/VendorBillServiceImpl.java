@@ -12,6 +12,9 @@ import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
+import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
+import com.positivity.accounting.internal.exception.VendorBillOperatorActionException;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -227,7 +230,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                     event.getInvoiceReference(),
                     calculateInvoiceTotal(event),
                     matchResult.getMatchingDetails());
-            throw new IllegalArgumentException("No pending receipt found for vendor invoice: "
+            throw new VendorBillMatchNotFoundException("No pending receipt found for vendor invoice: "
                     + event.getInvoiceReference() + ". " + matchResult.getMatchingDetails());
         }
 
@@ -320,10 +323,10 @@ public class VendorBillServiceImpl implements VendorBillService {
 
         VendorBill bill = billRepository
                 .findById(billId)
-                .orElseThrow(() -> new IllegalArgumentException("Vendor bill not found: " + billId));
+                .orElseThrow(() -> new VendorBillOperatorActionException("Vendor bill not found: " + billId));
 
         if (bill.getStatus() != VendorBillStatus.MATCH_EXCEPTION) {
-            throw new IllegalArgumentException("Bill is not in MATCH_EXCEPTION status: " + bill.getStatus());
+            throw new VendorBillOperatorActionException("Bill is not in MATCH_EXCEPTION status: " + bill.getStatus());
         }
 
         switch (resolutionAction.toUpperCase()) {
@@ -353,7 +356,7 @@ public class VendorBillServiceImpl implements VendorBillService {
                 break;
 
             default:
-                throw new IllegalArgumentException("Invalid resolution action: " + resolutionAction);
+                throw new VendorBillOperatorActionException("Invalid resolution action: " + resolutionAction);
         }
 
         VendorBill savedBill = billRepository.save(bill);
@@ -691,10 +694,10 @@ public class VendorBillServiceImpl implements VendorBillService {
         // Step 1: Load and validate the selected candidate
         VendorBillMatchCandidate selected = matchCandidateRepository
                 .findById(candidateId)
-                .orElseThrow(() -> new IllegalArgumentException("Match candidate not found: " + candidateId));
+                .orElseThrow(() -> new VendorBillOperatorActionException("Match candidate not found: " + candidateId));
 
         if (selected.isResolved()) {
-            throw new IllegalArgumentException("Match candidate already resolved: " + candidateId);
+            throw new VendorBillOperatorActionException("Match candidate already resolved: " + candidateId);
         }
 
         // Step 2: Mark all candidates for this invoice event as resolved
@@ -712,6 +715,9 @@ public class VendorBillServiceImpl implements VendorBillService {
         }
 
         // Step 3: Transition the selected bill from MATCH_EXCEPTION to APPROVED
+        // (d) Defensive/internal invariant: selected.getVendorBillId() is a foreign key to an
+        // existing VendorBill row, so this lookup cannot genuinely miss under normal
+        // operation — data corruption, not a client error, if it ever does.
         VendorBill bill = billRepository
                 .findById(selected.getVendorBillId())
                 .orElseThrow(
@@ -746,11 +752,11 @@ public class VendorBillServiceImpl implements VendorBillService {
             @NonNull Pageable pageable) {
 
         if (dueTo.isBefore(dueFrom)) {
-            throw new IllegalArgumentException("dueTo cannot be before dueFrom");
+            throw new InvalidDateRangeException("dueTo cannot be before dueFrom");
         }
         long windowDays = ChronoUnit.DAYS.between(dueFrom, dueTo);
         if (windowDays > MAX_DUE_DATE_WINDOW_DAYS) {
-            throw new IllegalArgumentException("Due-date window cannot exceed " + MAX_DUE_DATE_WINDOW_DAYS + " days");
+            throw new InvalidDateRangeException("Due-date window cannot exceed " + MAX_DUE_DATE_WINDOW_DAYS + " days");
         }
 
         int pageSize = pageable.getPageSize() > 0 && pageable.getPageSize() <= MAX_LIST_PAGE_SIZE

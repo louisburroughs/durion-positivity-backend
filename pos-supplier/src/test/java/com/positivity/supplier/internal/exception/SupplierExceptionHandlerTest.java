@@ -281,6 +281,22 @@ class SupplierExceptionHandlerTest {
         }
 
         @Test
+        @DisplayName("a SupplierValidationException cause keeps its own typed code, message and field errors (#1694)")
+        void supplierValidationExceptionCauseIsUnwrapped() {
+            org.springframework.http.converter.HttpMessageNotReadableException ex =
+                    new org.springframework.http.converter.HttpMessageNotReadableException(
+                            "JSON parse error",
+                            new SupplierValidationException(
+                                    SupplierValidationException.VALIDATION_ERROR, "supplierRef must not be blank"),
+                            null);
+
+            ResponseEntity<ApiError> response = handler.handleUnreadableBody(ex, null);
+
+            assertEnvelope(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+            assertThat(response.getBody().message()).isEqualTo("supplierRef must not be blank");
+        }
+
+        @Test
         @DisplayName(
                 "a cause chain with no IllegalArgumentException or NullPointerException falls back to a generic parse failure")
         void unrelatedCauseFallsBackToGenericMessage() {
@@ -307,15 +323,12 @@ class SupplierExceptionHandlerTest {
         }
     }
 
-    @Test
-    @DisplayName("an illegal argument outside a controller-body context still maps to 400 VALIDATION_ERROR")
-    void illegalArgumentMapsTo400() {
-        ResponseEntity<ApiError> response =
-                handler.handleIllegalArgument(new IllegalArgumentException("bad price"), null);
-
-        assertEnvelope(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
-        assertThat(response.getBody().message()).isEqualTo("bad price");
-    }
+    // The blanket IllegalArgumentException and Exception handlers are gone (#1694) — see the
+    // class javadoc. There is no longer a handleIllegalArgument/handleUnexpected method to unit
+    // test; the resulting behavior (a bare IllegalArgumentException or any other unmapped
+    // RuntimeException now falls through to pos-web-common's GlobalApiExceptionHandler for a
+    // generic 500 INTERNAL_ERROR) is proven end-to-end by
+    // SupplierExceptionHandlerErrorHandlingTest, which exercises the real advice chain.
 
     @Test
     @DisplayName("a permission denial maps to 403, never the 500 catch-all")
@@ -343,16 +356,6 @@ class SupplierExceptionHandlerTest {
                 handler.handleOptimisticLockConflict(new OptimisticLockException("stale"), null),
                 HttpStatus.CONFLICT,
                 "CONFLICT");
-    }
-
-    @Test
-    @DisplayName("an unanticipated exception falls through to 500 INTERNAL_ERROR, never leaking its message")
-    void unexpectedExceptionMapsTo500() {
-        ResponseEntity<ApiError> response =
-                handler.handleUnexpected(new IllegalStateException("stack trace detail nobody should see"), null);
-
-        assertEnvelope(response, HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
-        assertThat(response.getBody().message()).isEqualTo("An unexpected error occurred");
     }
 
     @Nested

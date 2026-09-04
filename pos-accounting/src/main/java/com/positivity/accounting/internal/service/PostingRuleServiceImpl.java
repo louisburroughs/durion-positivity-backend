@@ -8,6 +8,8 @@ import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
 import com.positivity.accounting.internal.entity.PostingRuleSet;
 import com.positivity.accounting.internal.entity.PostingRuleVersion;
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
+import com.positivity.accounting.internal.exception.PostingRulePublishValidationException;
+import com.positivity.accounting.internal.exception.PostingRuleSetNotFoundException;
 import com.positivity.accounting.internal.repository.PostingRuleSetRepository;
 import com.positivity.accounting.internal.repository.PostingRuleVersionRepository;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -97,11 +99,16 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersionResponse publishRuleSet(UUID ruleSetId) {
+        // Existence is checked separately from version-state (issue #1694 review finding): a
+        // ruleSetId that names no posting rule set at all must answer 404
+        // POSTING_RULE_SET_NOT_FOUND, not the misleading 400 "No DRAFT version found to publish"
+        // that findVersionsByRuleSetId's empty list would otherwise produce for either cause.
+        findRuleSetById(ruleSetId);
         List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         PostingRuleVersion draftVersion = versions.stream()
                 .filter(v -> v.getState() == PostingRuleSetState.DRAFT)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No DRAFT version found to publish"));
+                .orElseThrow(() -> new PostingRulePublishValidationException("No DRAFT version found to publish"));
 
         PostingRuleVersion published = publishVersion(draftVersion.getVersionId());
         return PostingRuleMapper.toVersionResponse(published);
@@ -109,11 +116,15 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersionResponse archiveRuleSet(UUID ruleSetId) {
+        // See publishRuleSet above: existence is checked first so a missing rule set answers 404
+        // POSTING_RULE_SET_NOT_FOUND rather than the misleading 400 "No PUBLISHED version found
+        // to archive".
+        findRuleSetById(ruleSetId);
         List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         PostingRuleVersion publishedVersion = versions.stream()
                 .filter(v -> v.getState() == PostingRuleSetState.PUBLISHED)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No PUBLISHED version found to archive"));
+                .orElseThrow(() -> new PostingRulePublishValidationException("No PUBLISHED version found to archive"));
 
         PostingRuleVersion archived = archiveVersion(publishedVersion.getVersionId());
         return PostingRuleMapper.toVersionResponse(archived);
@@ -138,6 +149,12 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     @Override
     @Transactional(readOnly = true)
     public List<PostingRuleVersionResponse> listVersionsAsResponse(UUID ruleSetId, int page, int size) {
+        // Existence is checked separately from the (possibly legitimately empty, for an
+        // out-of-range page) version list (issue #1694 review finding): a ruleSetId that names
+        // no posting rule set at all must answer 404 POSTING_RULE_SET_NOT_FOUND rather than
+        // silently returning 200 with an empty list indistinguishable from a real rule set whose
+        // requested page is past its version history.
+        findRuleSetById(ruleSetId);
         List<PostingRuleVersion> versions = findVersionsByRuleSetId(ruleSetId);
         // Apply pagination
         int fromIndex = page * size;
@@ -180,7 +197,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
     private PostingRuleSet findRuleSetById(UUID ruleSetId) {
         return ruleSetRepository
                 .findByIdWithVersions(ruleSetId)
-                .orElseThrow(() -> new IllegalArgumentException("Posting rule set not found: " + ruleSetId));
+                .orElseThrow(() -> new PostingRuleSetNotFoundException("Posting rule set not found: " + ruleSetId));
     }
 
     @Override
@@ -228,6 +245,8 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersion updateVersion(UUID versionId, PostingRuleVersion updates) {
+        // (d) Defensive/internal invariant: not called from any controller (dead on this
+        // interface today).
         PostingRuleVersion version = versionRepository
                 .findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
@@ -245,6 +264,9 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersion publishVersion(UUID versionId) {
+        // (d) Defensive/internal invariant: only called from publishRuleSet(), which just
+        // fetched this exact versionId's PostingRuleVersion from the DB, so this re-lookup
+        // cannot genuinely miss under normal operation.
         PostingRuleVersion version = versionRepository
                 .findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));
@@ -254,7 +276,7 @@ public class PostingRuleServiceImpl implements PostingRuleService {
         }
 
         if (version.getRulesDefinition() == null || version.getRulesDefinition().isBlank()) {
-            throw new IllegalArgumentException("Cannot publish: rules definition is empty");
+            throw new PostingRulePublishValidationException("Cannot publish: rules definition is empty");
         }
 
         // E1 (issue #945) split-group invariants and E2 (issue #946)
@@ -288,6 +310,9 @@ public class PostingRuleServiceImpl implements PostingRuleService {
 
     @Override
     public PostingRuleVersion archiveVersion(UUID versionId) {
+        // (d) Defensive/internal invariant: only called from archiveRuleSet(), which just
+        // fetched this exact versionId's PostingRuleVersion from the DB (same reasoning as
+        // publishVersion above).
         PostingRuleVersion version = versionRepository
                 .findById(versionId)
                 .orElseThrow(() -> new IllegalArgumentException(VERSION_NOT_FOUND + versionId));

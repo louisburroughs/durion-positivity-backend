@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
@@ -245,7 +246,7 @@ class FinancialReportingTaxLiabilityServiceTest {
     @DisplayName("Rejects an inverted date range")
     void rejectsInvertedRange() {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.generateTaxLiability(END, START))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidDateRangeException.class);
     }
 
     @Test

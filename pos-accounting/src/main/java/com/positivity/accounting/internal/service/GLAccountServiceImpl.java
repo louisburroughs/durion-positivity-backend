@@ -10,7 +10,9 @@ import com.positivity.accounting.internal.enums.GLAccountStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
+import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -391,27 +393,27 @@ public class GLAccountServiceImpl implements GLAccountService {
      * Checks account code format, type validity, and parent account existence.
      *
      * @param request account creation request
-     * @throws IllegalArgumentException if validation fails
+     * @throws InvalidRequestParameterException if validation fails
      */
     @Override
     public void validateGLAccount(@NonNull GLAccountCreateRequest request) {
         log.debug("Validating GL account request");
 
         if (request.getAccountCode() == null || request.getAccountCode().isBlank()) {
-            throw new IllegalArgumentException("Account code is required");
+            throw new InvalidRequestParameterException("Account code is required");
         }
 
         if (request.getAccountName() == null || request.getAccountName().isBlank()) {
-            throw new IllegalArgumentException("Account name is required");
+            throw new InvalidRequestParameterException("Account name is required");
         }
 
         if (request.getAccountType() == null) {
-            throw new IllegalArgumentException("Account type is required");
+            throw new InvalidRequestParameterException("Account type is required");
         }
 
         // Validate parent account exists if specified
         if (request.getParentAccountId() != null && !glAccountRepository.existsById(request.getParentAccountId())) {
-            throw new IllegalArgumentException("Parent account not found: " + request.getParentAccountId());
+            throw new InvalidRequestParameterException("Parent account not found: " + request.getParentAccountId());
         }
     }
 
@@ -420,9 +422,9 @@ public class GLAccountServiceImpl implements GLAccountService {
      *
      * @param glAccountId     account identifier
      * @param transactionDate date of the transaction
-     * @throws GLAccountNotFoundException if account not found
-     * @throws IllegalArgumentException   if account is not active on transaction
-     *                                    date
+     * @throws GLAccountNotFoundException  if account not found
+     * @throws GLAccountNotActiveException if account is not active on transaction
+     *                                     date
      */
     @Override
     public void validateAccountForPosting(@NonNull UUID glAccountId, @NonNull LocalDateTime transactionDate) {
@@ -434,13 +436,13 @@ public class GLAccountServiceImpl implements GLAccountService {
 
         // Check if account is active on transaction date
         if (account.getActivationDate() != null && account.getActivationDate().isAfter(transactionDate)) {
-            throw new IllegalArgumentException(
+            throw new GLAccountNotActiveException(
                     "Account " + account.getAccountCode() + " is not yet active on " + transactionDate);
         }
 
         if (account.getDeactivationDate() != null
                 && !account.getDeactivationDate().isAfter(transactionDate)) {
-            throw new IllegalArgumentException(
+            throw new GLAccountNotActiveException(
                     "Account " + account.getAccountCode() + " is inactive as of " + transactionDate);
         }
     }

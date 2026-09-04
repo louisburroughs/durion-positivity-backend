@@ -193,6 +193,13 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
         return new DecodedArticles(entries, rejected);
     }
 
+    // The IllegalArgumentExceptions thrown below (and in parseAmount/parseVendorDate) are
+    // deliberately left as-is (#1694) rather than retyped to a module exception: they are purely
+    // local control-flow signals — decodeArticles's catch (IllegalArgumentException e) above
+    // always intercepts them and records the line as rejected — and none of them ever escapes
+    // this class, let alone reaches a controller. Retyping to a type that does not extend
+    // IllegalArgumentException would silently stop being caught there and fail the whole import
+    // instead of rejecting one line.
     private SupplierPriceCatalogEntry toEntry(
             PricatB40Wire.Article article,
             String documentId,

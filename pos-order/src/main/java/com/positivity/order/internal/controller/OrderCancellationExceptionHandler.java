@@ -64,19 +64,13 @@ public class OrderCancellationExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
-        String correlationId = correlationId(request);
-        log.warn("Invalid argument: correlationId={}", correlationId, ex);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
-                        "ORDER_CANCELLATION_BAD_REQUEST",
-                        ex.getMessage(),
-                        HttpStatus.BAD_REQUEST.value(),
-                        Instant.now(clock).toString(),
-                        correlationId));
-    }
+    // No @ExceptionHandler(IllegalArgumentException.class) here (issue #1694): nothing reachable
+    // through OrderCancellationController ever throws one — OrderCancellationServiceImpl only
+    // raises SalesOrderNotFoundException and IllegalStateException, both mapped above. The blanket
+    // handler this replaced would have silently turned a genuine server-side defect (a raw
+    // IllegalArgumentException from Hibernate/JPA or a UUID parse) into a client 400 that echoed
+    // internal detail; removing it lets such a case fall through to pos-web-common's
+    // GlobalApiExceptionHandler, which answers a correlated 500 without leaking the message.
 
     private static String correlationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);

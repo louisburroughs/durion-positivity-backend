@@ -2,6 +2,7 @@ package com.positivity.vehicle.internal.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -31,15 +32,18 @@ class VinUtilsTest {
         String result = VinUtils.validateAndNormalize("1hgcm82633a004352");
         assertEquals("1HGCM82633A004352", result);
 
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(VehicleValidationException.class, () -> {
             VinUtils.validateAndNormalize("INVALID");
         });
 
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(VehicleValidationException.class, () -> {
             VinUtils.validateAndNormalize("1HGCM82633I004352");
         });
     }
 
+    // normalize()'s own null/blank check is defensive (issue #1694): both current call sites
+    // already reject a null/blank VIN via bean validation before calling normalize(), so it stays
+    // a bare IllegalArgumentException rather than a retyped, advice-mapped exception.
     @Test
     void testNormalizeNull() {
         assertThrows(IllegalArgumentException.class, () -> {

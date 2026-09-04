@@ -4,16 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -291,37 +295,68 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
-    // handleIllegalArgumentException
+    // handleSecurityValidationException
     // ---------------------------------------------------------------
 
     @Nested
-    @DisplayName("handleIllegalArgumentException")
-    class HandleIllegalArgumentException {
+    @DisplayName("handleSecurityValidationException")
+    class HandleSecurityValidationException {
 
         @Test
-        @DisplayName("returns 400 INVALID_REQUEST with message when present")
+        @DisplayName("returns 400 INVALID_REQUEST with message when present, and echoes correlation id in header")
         void returns400WithMessage() {
-            IllegalArgumentException ex = new IllegalArgumentException("bad param");
+            SecurityValidationException ex = new SecurityValidationException("bad param");
+            HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
-            ResponseEntity<ApiError> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response =
+                    sut.handleSecurityValidationException(ex, requestWithHeader(), httpResponse);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
             assertThat(response.getBody().message()).isEqualTo("bad param");
+            verify(httpResponse).setHeader("X-Correlation-Id", CORRELATION_ID);
         }
 
         @Test
         @DisplayName("returns 400 INVALID_REQUEST with default message when null")
         void returns400WithDefaultMessageWhenNull() {
-            IllegalArgumentException ex = new IllegalArgumentException((String) null);
+            SecurityValidationException ex = new SecurityValidationException(null);
+            HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
-            ResponseEntity<ApiError> response = sut.handleIllegalArgumentException(ex, requestWithHeader());
+            ResponseEntity<ApiError> response =
+                    sut.handleSecurityValidationException(ex, requestWithHeader(), httpResponse);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
             assertThat(response.getBody().message()).isEqualTo("Invalid request parameters");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleNoRolesAssignedException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleNoRolesAssignedException")
+    class HandleNoRolesAssignedException {
+
+        @Test
+        @DisplayName("returns 403 USER_HAS_NO_ROLES with message and nextAction, and echoes correlation id in header")
+        void returns403WithMessageAndNextAction() {
+            NoRolesAssignedException ex = new NoRolesAssignedException("User has no roles assigned");
+            HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+
+            ResponseEntity<ApiError> response =
+                    sut.handleNoRolesAssignedException(ex, requestWithHeader(), httpResponse);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("USER_HAS_NO_ROLES");
+            assertThat(response.getBody().message()).isEqualTo("User has no roles assigned");
+            assertThat(response.getBody().nextAction()).contains("assign at least one role");
+            verify(httpResponse).setHeader("X-Correlation-Id", CORRELATION_ID);
         }
     }
 
@@ -540,40 +575,6 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("DUPLICATE_ROLE_NAME");
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // handleGenericException
-    // ---------------------------------------------------------------
-
-    @Nested
-    @DisplayName("handleGenericException")
-    class HandleGenericException {
-
-        @Test
-        @DisplayName("returns 500 INTERNAL_SERVER_ERROR for unhandled exceptions")
-        void returns500InternalServerError() {
-            Exception ex = new RuntimeException("unexpected failure");
-
-            ResponseEntity<ApiError> response = sut.handleGenericException(ex, requestWithHeader());
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-            assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().code()).isEqualTo("INTERNAL_SERVER_ERROR");
-            assertThat(response.getBody().correlationId()).isEqualTo(CORRELATION_ID);
-        }
-
-        @Test
-        @DisplayName("returns 500 and generates correlation ID when header is absent")
-        void returns500WithGeneratedCorrelationId() {
-            Exception ex = new RuntimeException("unexpected");
-
-            ResponseEntity<ApiError> response = sut.handleGenericException(ex, requestWithoutHeader());
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-            assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().correlationId()).isNotBlank();
         }
     }
 
