@@ -127,15 +127,35 @@ final class BusinessGlossary {
 
     private BusinessGlossary() {}
 
+    /**
+     * Builds the lookup index, failing fast if two entries normalize to the same key.
+     *
+     * <p>Silently keeping the first entry on a collision would make lookups depend on declaration
+     * order under the real normalization rules — punctuation stripping and whitespace collapse mean
+     * two visibly different aliases can share a key — and that is precisely the "the answer came
+     * from whichever definition happened to be declared first" failure this class exists to prevent.
+     * A collision is an authoring mistake in {@link #DEFINITIONS}, so it fails at class
+     * initialization with both terms named, rather than at some later lookup with neither.
+     */
     private static Map<String, Definition> index() {
         Map<String, Definition> index = new LinkedHashMap<>();
         for (Definition definition : DEFINITIONS) {
-            index.put(normalize(definition.term()), definition);
+            put(index, normalize(definition.term()), definition);
             for (String alias : definition.aliases()) {
-                index.putIfAbsent(normalize(alias), definition);
+                put(index, normalize(alias), definition);
             }
         }
         return Map.copyOf(index);
+    }
+
+    private static void put(
+            @NonNull Map<String, Definition> index, @NonNull String key, @NonNull Definition definition) {
+        Definition existing = index.putIfAbsent(key, definition);
+        // Same definition twice is harmless: an alias may normalize onto its own canonical term.
+        if (existing != null && !existing.term().equals(definition.term())) {
+            throw new IllegalStateException("Glossary key '" + key + "' is claimed by both '" + existing.term()
+                    + "' and '" + definition.term() + "'; a normalized key must name exactly one definition");
+        }
     }
 
     /** Every decided term, in declaration order. */
@@ -145,9 +165,15 @@ final class BusinessGlossary {
 
     /**
      * Looks up {@code phrase}. Matches an exact canonical term or alias first, then falls back to
-     * the longest key the phrase contains — so "who are our best customers this year" resolves,
-     * and a phrase containing both "best customers" and "largest customers" resolves to the longer
-     * of the two rather than to whichever was declared first.
+     * the longest key the phrase contains — so "who are our best customers this year" resolves, and
+     * a phrase containing both "best customers" and "largest customers" resolves to the longer of
+     * the two rather than to whichever was declared first.
+     *
+     * <p>When two keys of the SAME length both match and they name different definitions, the
+     * phrase is genuinely ambiguous and this returns empty. Empty means "ask the user", so an
+     * ambiguous phrase produces a clarifying question rather than a coin flip decided by
+     * declaration order. That is the same judgement the class makes everywhere else: a silently
+     * chosen metric reads as confident and cannot be checked, which is worse than a question.
      */
     static @NonNull Optional<Definition> lookup(@NonNull String phrase) {
         String normalized = normalize(phrase);
@@ -157,18 +183,33 @@ final class BusinessGlossary {
         }
         Definition best = null;
         int bestLength = 0;
+        boolean ambiguous = false;
         for (Map.Entry<String, Definition> entry : BY_KEY.entrySet()) {
             String key = entry.getKey();
-            if (key.length() > bestLength && normalized.contains(key)) {
+            if (!normalized.contains(key)) {
+                continue;
+            }
+            if (key.length() > bestLength) {
                 best = entry.getValue();
                 bestLength = key.length();
+                ambiguous = false;
+            } else if (key.length() == bestLength
+                    && best != null
+                    && !best.term().equals(entry.getValue().term())) {
+                ambiguous = true;
             }
         }
-        return Optional.ofNullable(best);
+        return ambiguous ? Optional.empty() : Optional.ofNullable(best);
     }
 
-    /** Lowercases, collapses whitespace, and drops punctuation that does not separate words. */
-    private static @NonNull String normalize(@NonNull String raw) {
+    /**
+     * Lowercases, collapses whitespace, and drops punctuation that does not separate words.
+     *
+     * <p>Package-private so the uniqueness test can key on the SAME transform the index uses. A
+     * test that checked raw lowercase instead would assert a different invariant from the one the
+     * index actually holds, and would pass over exactly the collisions that matter.
+     */
+    static @NonNull String normalize(@NonNull String raw) {
         return raw.toLowerCase(Locale.ROOT)
                 .replaceAll("[?.,!:;\"]", "")
                 .replaceAll("\\s+", " ")

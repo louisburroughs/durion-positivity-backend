@@ -25,8 +25,15 @@ import org.springframework.stereotype.Component;
  * its own — the glossary is a set of definitions, not data, so any authenticated caller who can
  * ask the question may resolve the term in it. The resolved term and glossary version are logged
  * at INFO for the same reason the date window's shape is: it is the value a per-stage grader
- * (#1682) has to assert on, and a definition applied silently cannot be checked. The line carries
- * a phrase and a version, never a customer identifier.
+ * (#1682) has to assert on, and a definition applied silently cannot be checked.
+ *
+ * <p><strong>The log line never carries the caller's text.</strong> The {@code term} argument is
+ * whatever the user wrote — the tool accepts whole questions, so it routinely contains customer and
+ * vendor names — and the grader needs none of it: whether a definition was found, which canonical
+ * term it was, and the glossary version are the whole trace signal. Logging the query would put
+ * caller content in application logs for no gain, which is the same reason {@code
+ * ToolInvocationRecorder} declines to log tool arguments at all. The query is still echoed in the
+ * JSON returned to the model, which already has it.
  */
 @Component
 public class GlossaryFacadeTool {
@@ -50,9 +57,9 @@ public class GlossaryFacadeTool {
                     @NonNull
                     String term) {
         Optional<BusinessGlossary.Definition> found = BusinessGlossary.lookup(term);
+        // Deliberately omits the caller's text: see the class javadoc.
         LOGGER.info(
-                "MCP glossary lookup term=\"{}\" defined={} resolvedTerm={} glossaryVersion={}",
-                term,
+                "MCP glossary lookup defined={} resolvedTerm={} glossaryVersion={}",
                 found.isPresent(),
                 found.map(BusinessGlossary.Definition::term).orElse(null),
                 BusinessGlossary.VERSION);
