@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.positivity.mcp.internal.eval.EvalTurnTrace;
+import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

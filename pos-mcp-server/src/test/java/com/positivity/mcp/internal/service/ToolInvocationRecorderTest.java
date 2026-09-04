@@ -15,7 +15,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
-import com.positivity.mcp.internal.eval.AlphaEvalTurnTraceRecorder;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.Optional;
 import java.util.Set;

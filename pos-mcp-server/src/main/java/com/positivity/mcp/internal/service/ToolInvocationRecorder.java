@@ -1,8 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
-import com.positivity.mcp.internal.eval.AlphaEvalTurnTraceRecorder;
-import com.positivity.mcp.internal.eval.EvalTurnTrace.ToolDefinitionTrace;
+import com.positivity.mcp.internal.domain.EvalTurnTrace.ToolDefinitionTrace;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.List;
 import java.util.Map;

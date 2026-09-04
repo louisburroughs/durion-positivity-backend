@@ -3,16 +3,23 @@
 Serves `pos-mcp-server/docs/analytics-capability-plan.md` §2 (test-gate methodology), §2.3
 (fixture dataset) and §6 (the twenty-question gate matrix).
 
+This directory holds the live, deploy-and-run acceptance gate — the one document that says what
+the twenty questions are and what a correct answer contains. For a candidate fix, re-running this
+whole gate live is the expensive step; `../offline-replay/` (see `../README.md`) is the
+development-time counterpart, replaying the twelve `in_chat_path_gate` questions here against a
+real model with canned tool responses, no alpha deploy required — see its own `suite_notes` for
+how each fixture's canned data maps back to this file's designed/absolute figures.
+
 The tool-selection half of the gate lives in `../tool-selection/analytics-gate.json` and
 `../tool-selection-pending/analytics-gate-pending.json` and needs no database. **This**
-directory is the *answer* half: the questions themselves, the seeded business dataset they are
+directory is the _answer_ half: the questions themselves, the seeded business dataset they are
 asked against, and one ground-truth SQL script per question that computes the expected answer
-directly against the seeded Postgres. Per plan §2.1 criterion 1, the script *is* the
+directly against the seeded Postgres. Per plan §2.1 criterion 1, the script _is_ the
 specification of the expected answer — a chat response passes only when its figures match the
 script's output (exact for counts and currency, ±0.5 % for derived ratios).
 
 **Q15/Q17 labeling rule (#1663).** `getVendorSpend`'s `billsIssuedInWindow` and
-`avgIssuedBillAmount` count/average bills *issued* in the window regardless of payment status —
+`avgIssuedBillAmount` count/average bills _issued_ in the window regardless of payment status —
 a different population from `paidAmount` (settled A/P cash). Q15 and Q17 score FAIL if the
 rendered answer labels either bill-side figure as paid — e.g. a column heading "bills paid" —
 even when the underlying numbers are correct, since that mislabels the population.
@@ -23,15 +30,15 @@ even when the underlying numbers are correct, since that mislabels the populatio
 `## QN` section of `ground-truth/EXPECTED.md`, in bijection with it, so a question and the ground
 truth that scores it are diffable together. Each entry carries:
 
-| Field | What it pins |
-|---|---|
-| `fixture_id` / `expected_section` | the `qNN` ↔ `## QN` pairing |
-| `utterance` | the verbatim text sent to `POST /v1/mcp/chat` |
-| `ground_truth_sql` | the script that is the answer specification |
-| `in_chat_path_gate` / `excluded_reason` | which twelve of the twenty run, and why the other eight do not |
-| `window` | the shape (`calendar` / `rolling` / `point-in-time` / `mixed`), the range the ground truth measures, and whether the question's own text resolves to it |
-| `tool_selection_fixture_id` | the counterpart in the tool-selection corpus |
-| `expected_plan` (optional) | for a composition question, the minimum tool calls the correct answer needs — see below |
+| Field                                   | What it pins                                                                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fixture_id` / `expected_section`       | the `qNN` ↔ `## QN` pairing                                                                                                                             |
+| `utterance`                             | the verbatim text sent to `POST /v1/mcp/chat`                                                                                                           |
+| `ground_truth_sql`                      | the script that is the answer specification                                                                                                             |
+| `in_chat_path_gate` / `excluded_reason` | which twelve of the twenty run, and why the other eight do not                                                                                          |
+| `window`                                | the shape (`calendar` / `rolling` / `point-in-time` / `mixed`), the range the ground truth measures, and whether the question's own text resolves to it |
+| `tool_selection_fixture_id`             | the counterpart in the tool-selection corpus                                                                                                            |
+| `expected_plan` (optional)              | for a composition question, the minimum tool calls the correct answer needs — see below                                                                 |
 
 ### `expected_plan` and the "declined composition" verdict (#1676)
 
@@ -96,7 +103,7 @@ bijection with `EXPECTED.md`, an existing ground-truth script per entry, a resol
 every question, a stated reason on every exclusion, and a `tool_selection_fixture_id` that names a
 fixture that exists.
 
-**`../tool-selection/analytics-gate.json` is not this file.** It scores which *tools* are selected,
+**`../tool-selection/analytics-gate.json` is not this file.** It scores which _tools_ are selected,
 carries an actor with `permission_codes`, and includes control fixtures that are not analytics
 questions at all (`q13-admin-user-account-active` — "Is this user account still active?"). Its ids
 share the `qNN` numbering, which reads like the question list and is not; that overlap caused a
@@ -134,14 +141,14 @@ question out of `tool-selection-pending/` in the same PR.
 Deterministic seed spanning **25 months** — 24 for the year-over-year questions, +1 for
 month-boundary safety — sized so every ground truth is hand-checkable.
 
-| Dimension | Count | Why |
-|---|---|---|
-| Locations | 1 | keeps every aggregate single-location; no cross-location roll-up in the gate |
-| Technicians | 3 | Q1/Q2/Q3/Q19 rank and compare technicians; 3 is the smallest set with an unambiguous ranking |
-| Customers | 6 (2 commercial, 4 individual) | Q13's Pareto needs a skewed but hand-checkable distribution |
-| Vendors | 3 | Q15/Q17 rank vendors and compare year over year |
-| Work orders | ~120 | known creation / completion / reopen timestamps |
-| Invoices | ~150 | line-level labor/parts split, payment applications at controlled lags |
+| Dimension   | Count                          | Why                                                                                          |
+| ----------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
+| Locations   | 1                              | keeps every aggregate single-location; no cross-location roll-up in the gate                 |
+| Technicians | 3                              | Q1/Q2/Q3/Q19 rank and compare technicians; 3 is the smallest set with an unambiguous ranking |
+| Customers   | 6 (2 commercial, 4 individual) | Q13's Pareto needs a skewed but hand-checkable distribution                                  |
+| Vendors     | 3                              | Q15/Q17 rank vendors and compare year over year                                              |
+| Work orders | ~120                           | known creation / completion / reopen timestamps                                              |
+| Invoices    | ~150                           | line-level labor/parts split, payment applications at controlled lags                        |
 
 Designed-in facts the questions depend on:
 
@@ -158,7 +165,7 @@ Designed-in facts the questions depend on:
   "as-of" date, spread over several distinct days so the daily cash-need buckets are non-trivial.
 - **Vendor inflation (Q17).** One vendor whose average bill amount is **+12 % year over year** —
   above the question's 10 % threshold, below a level that makes the comparison trivial.
-- **Revenue trend (Q10).** At least one customer with rising invoiced revenue *and* a rising
+- **Revenue trend (Q10).** At least one customer with rising invoiced revenue _and_ a rising
   past-due balance across the last three months, and at least one decoy with only one of the two.
 
 ## Table ownership
@@ -168,17 +175,17 @@ Each service owns its own schema; there are no cross-service foreign keys, and a
 must therefore run against **one** module's schema, or be split into per-module scripts whose
 results are combined by the script's author — never a cross-schema join.
 
-| Table | Owning module | Notes |
-|---|---|---|
-| `workorder`, `workorder_service`, `work_order_state_transitions` | pos-workorder | WO lifecycle; the transition table backs Q3's reopen detection (plan D4) |
-| `invoices`, `invoice_items`, `invoice_adjustments`, `receipts` | pos-invoice | authoritative invoice + line-level labor/parts split |
-| `ext_invoice` | pos-accounting | event-fed replica of `invoices`; the **A/R aging reads this**, not pos-invoice |
-| `payment_application`, `payment_application_reversal` | pos-accounting | cash applied to an invoice, and reversals |
-| `credit_memo`, `customer_credit_transaction` | pos-accounting | the other two balance reducers (`InvoiceBalanceCalculator`) |
-| `vendor_bill` | pos-accounting | A/P aging and Q15/Q16/Q17 vendor spend |
-| `person_party`, `commercial_party`, `party_alias` | pos-customer | customer identity and display names |
-| pos-people employee tables (`work_session`, time-entry tables) | pos-people | technician identity and clocked hours |
-| `ext_vehicle`, `ext_location`, `ext_workorder`, `ext_people_employee`, … | consuming module | replicas; useful for a *display name*, never as the source of a monetary fact |
+| Table                                                                    | Owning module    | Notes                                                                          |
+| ------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------ |
+| `workorder`, `workorder_service`, `work_order_state_transitions`         | pos-workorder    | WO lifecycle; the transition table backs Q3's reopen detection (plan D4)       |
+| `invoices`, `invoice_items`, `invoice_adjustments`, `receipts`           | pos-invoice      | authoritative invoice + line-level labor/parts split                           |
+| `ext_invoice`                                                            | pos-accounting   | event-fed replica of `invoices`; the **A/R aging reads this**, not pos-invoice |
+| `payment_application`, `payment_application_reversal`                    | pos-accounting   | cash applied to an invoice, and reversals                                      |
+| `credit_memo`, `customer_credit_transaction`                             | pos-accounting   | the other two balance reducers (`InvoiceBalanceCalculator`)                    |
+| `vendor_bill`                                                            | pos-accounting   | A/P aging and Q15/Q16/Q17 vendor spend                                         |
+| `person_party`, `commercial_party`, `party_alias`                        | pos-customer     | customer identity and display names                                            |
+| pos-people employee tables (`work_session`, time-entry tables)           | pos-people       | technician identity and clocked hours                                          |
+| `ext_vehicle`, `ext_location`, `ext_workorder`, `ext_people_employee`, … | consuming module | replicas; useful for a _display name_, never as the source of a monetary fact  |
 
 Ownership consequence for seeding: an invoice must be seeded into **both** pos-invoice
 (`invoices`) and pos-accounting (`ext_invoice`) — either by letting the event flow do it, or by
@@ -195,7 +202,7 @@ an empty A/R aging report and a silently wrong Q13.
    require the model to produce names until the lookup ships.
 2. **Historical as-of dates are not point-in-time balances.** The same method uses each invoice's
    **current** balance (all payment applications / reversals / credit memos to date) against a
-   *historical* aging date. Plan §3 W1.2 and the tool description both claim a past `asOfDate`
+   _historical_ aging date. Plan §3 W1.2 and the tool description both claim a past `asOfDate`
    "reconstructs the point-in-time A/R balance"; it does not. Q10's and Q14's trend halves will
    therefore be arithmetically wrong on any dataset where payments land after the earlier as-of
    dates — which is exactly what the controlled payment lags create. Either the seed keeps
