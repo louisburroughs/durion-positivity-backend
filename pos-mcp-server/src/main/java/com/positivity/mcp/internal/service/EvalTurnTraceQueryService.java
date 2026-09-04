@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,10 +22,19 @@ import org.springframework.stereotype.Service;
  * migration.
  */
 @Service
+@Profile("alpha")
 @ConditionalOnProperty(name = "mcp.eval.turn-trace.enabled", havingValue = "true")
 public class EvalTurnTraceQueryService {
 
-    /** Read ceiling before the caller filter, so one busy actor cannot crowd out another. */
+    /**
+     * Cost bound on the pre-filter read — NOT a fairness guarantee.
+     *
+     * <p>Because the filter runs after the scan, a high-volume actor dominating the newest
+     * {@code SCAN_LIMIT} rows can still push a quieter caller's traces out of the slice entirely,
+     * returning zero while matching traces exist. Acceptable for an eval read whose caller is
+     * asking about turns it just produced; it would not be acceptable as a general query, and the
+     * fix if it ever bites is a username column and a WHERE clause, not a larger ceiling.
+     */
     static final int SCAN_LIMIT = 500;
 
     static final int MAX_RESULTS = 200;

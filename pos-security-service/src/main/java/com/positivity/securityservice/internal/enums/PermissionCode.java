@@ -938,13 +938,15 @@ public enum PermissionCode {
     CATALOG__LABOR_STANDARD__IMPORT(504, "catalog:labor_standard:import"),
     CATALOG__LABOR_TIME__RESOLVE(505, "catalog:labor_time:resolve"),
     // ── Shop (new) ─────────────────────────────────────────────────────────────
-    SHOP__DASHBOARD__VIEW(506, "shop:dashboard:view");
+    SHOP__DASHBOARD__VIEW(506, "shop:dashboard:view"),
+    // ── Mcp (new) ──────────────────────────────────────────────────────────────
+    MCP__EVAL_TRACE__VIEW(507, "mcp:eval_trace:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 73;
+    public static final int CATALOG_VERSION = 74;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

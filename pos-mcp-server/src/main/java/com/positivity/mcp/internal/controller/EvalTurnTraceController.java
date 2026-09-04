@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -43,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"mcp:eval_trace:view"})
 @RequestMapping("/v1/eval/turn-traces")
 @Tag(name = "Eval Turn Traces", description = "Recorded per-turn evaluation traces")
+@Profile("alpha")
 @ConditionalOnProperty(name = "mcp.eval.turn-trace.enabled", havingValue = "true")
 class EvalTurnTraceController {
 
