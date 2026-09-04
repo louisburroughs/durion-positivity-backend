@@ -1,9 +1,9 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
