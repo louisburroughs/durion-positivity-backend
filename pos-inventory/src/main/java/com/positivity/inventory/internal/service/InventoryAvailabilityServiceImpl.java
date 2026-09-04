@@ -3,19 +3,23 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
+import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidInventoryAvailabilityRequestException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -47,6 +51,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private final AsOfQueryGuard asOfQueryGuard;
     private final ForecastSiteResolver forecastSiteResolver;
     private final QuantityScaleGuard quantityScaleGuard;
+    private final LocationRefRepository locationRefRepository;
     private final Clock clock;
 
     public InventoryAvailabilityServiceImpl(
@@ -56,6 +61,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             AsOfQueryGuard asOfQueryGuard,
             ForecastSiteResolver forecastSiteResolver,
             QuantityScaleGuard quantityScaleGuard,
+            LocationRefRepository locationRefRepository,
             Clock clock) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
@@ -63,6 +69,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         this.asOfQueryGuard = asOfQueryGuard;
         this.forecastSiteResolver = forecastSiteResolver;
         this.quantityScaleGuard = quantityScaleGuard;
+        this.locationRefRepository = locationRefRepository;
         this.clock = clock;
     }
 
@@ -117,10 +124,15 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             throw new IllegalStateException("Unable to retrieve inventory availability at this time", ex);
         }
 
-        return summaryRows.stream()
-                .filter(row -> row.getLocationId() != null)
+        List<InventoryStockSummary> rowsWithLocation =
+                summaryRows.stream().filter(row -> row.getLocationId() != null).toList();
+        Map<UUID, String> locationNames = locationNamesFor(rowsWithLocation.stream()
+                .map(InventoryStockSummary::getLocationId)
+                .toList());
+
+        return rowsWithLocation.stream()
                 .sorted(Comparator.comparing(InventoryStockSummary::getLocationId))
-                .map(row -> toLocationAvailability(row, horizon))
+                .map(row -> toLocationAvailability(row, horizon, locationNames))
                 .toList();
     }
 
@@ -132,18 +144,38 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         // Odoo-parity A3 (#1029): direct ledger aggregation with a timestamp bound; the
         // stock summary is not consulted. On-hand only — allocation-derived and forecast
         // fields stay null (historical allocation state is not reliably reconstructable).
-        return inventoryLedgerEntryRepository
+        List<InventoryLedgerEntryRepository.LocationQuantity> rowsWithLocation = inventoryLedgerEntryRepository
                 .sumQuantityByLocationForStockItemAsOf(
                         productId.toString(), InventoryLedgerEventType.onHandAffectingTypes(), asOf)
                 .stream()
                 .filter(row -> row.getLocationId() != null)
+                .toList();
+        Map<UUID, String> locationNames = locationNamesFor(rowsWithLocation.stream()
+                .map(InventoryLedgerEntryRepository.LocationQuantity::getLocationId)
+                .toList());
+
+        return rowsWithLocation.stream()
                 .sorted(Comparator.comparing(InventoryLedgerEntryRepository.LocationQuantity::getLocationId))
                 .map(row -> LocationAvailabilityDto.builder()
                         .locationId(row.getLocationId())
-                        .locationName(row.getLocationId().toString())
+                        .locationName(locationNames.get(row.getLocationId()))
                         .onHandQuantity(reportable(productId.toString(), ON_HAND_QUANTITY, row.getQuantity()))
                         .build())
                 .toList();
+    }
+
+    /**
+     * Batch name resolution against the {@code location_ref} replica (issue #1680): one query
+     * per call site regardless of row count. Locations absent from the replica (lag / unknown
+     * location) are simply absent from the returned map — never resolved to the raw UUID.
+     */
+    private Map<UUID, String> locationNamesFor(List<UUID> locationIds) {
+        List<UUID> distinctIds = locationIds.stream().distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return Map.of();
+        }
+        return locationRefRepository.findByLocationIdIn(distinctIds).stream()
+                .collect(Collectors.toMap(LocationRefEntity::getLocationId, LocationRefEntity::getName));
     }
 
     @Override
@@ -229,7 +261,8 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         return units.isEmpty() ? DEFAULT_UOM : units.getFirst();
     }
 
-    private LocationAvailabilityDto toLocationAvailability(InventoryStockSummary row, @Nullable Instant horizon) {
+    private LocationAvailabilityDto toLocationAvailability(
+            InventoryStockSummary row, @Nullable Instant horizon, Map<UUID, String> locationNames) {
         // Pre-#1024 behavior: this per-location list subtracts BOTH hard
         // allocations and soft reservations from ATP (unlike queryAvailability,
         // which per ADR-0001 subtracts allocations only). odoo-parity E3 (#1047,
@@ -246,7 +279,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 Quantities.nz(row.getOnHand()));
         return LocationAvailabilityDto.builder()
                 .locationId(row.getLocationId())
-                .locationName(row.getLocationId().toString())
+                .locationName(locationNames.get(row.getLocationId()))
                 .onHandQuantity(reportable(row.getStockItemId(), ON_HAND_QUANTITY, row.getOnHand()))
                 .availableToPromiseQuantity(
                         reportable(row.getStockItemId(), "availableToPromiseQuantity", atpWithReservations))

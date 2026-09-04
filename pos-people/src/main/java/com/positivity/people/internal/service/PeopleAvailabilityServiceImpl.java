@@ -37,6 +37,8 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
 
+    private final LocationReferenceService locationReferenceService;
+
     @Override
     @NonNull
     public List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date) {
@@ -82,11 +84,18 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
         Optional<UUID> primaryLocationId =
                 tryResolvePersonId(username).flatMap(personId -> findPrimaryLocationId(personId, targetDate));
         if (primaryLocationId.isPresent()) {
-            return new PrimaryLocationResolution(primaryLocationId.get(), false);
+            UUID locationId = primaryLocationId.get();
+            return new PrimaryLocationResolution(
+                    locationId,
+                    locationReferenceService.findLocationName(locationId).orElse(null),
+                    false);
         }
 
         return resolveTopLevelLocationId()
-                .map(topLevelId -> new PrimaryLocationResolution(topLevelId, true))
+                .map(topLevelId -> new PrimaryLocationResolution(
+                        topLevelId,
+                        locationReferenceService.findLocationName(topLevelId).orElse(null),
+                        true))
                 .orElseThrow(() -> new EntityNotFoundException("No primary location assignment exists for requester on "
                         + targetDate + " and no top-level default location is available"));
     }
@@ -120,11 +129,15 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
 
     @Override
     @NonNull
-    public UUID resolvePrimaryLocationId(@NonNull UUID personId) {
+    public PrimaryLocationResolution resolvePrimaryLocationId(@NonNull UUID personId) {
         LocalDate targetDate = LocalDate.now(clock);
-        return findPrimaryLocationId(personId, targetDate)
+        UUID locationId = findPrimaryLocationId(personId, targetDate)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "No primary location assignment exists for person " + personId + " on " + targetDate));
+        return new PrimaryLocationResolution(
+                locationId,
+                locationReferenceService.findLocationName(locationId).orElse(null),
+                false);
     }
 
     @NonNull

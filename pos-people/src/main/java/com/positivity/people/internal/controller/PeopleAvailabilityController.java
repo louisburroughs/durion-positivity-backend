@@ -114,6 +114,7 @@ public class PeopleAvailabilityController {
                 resolution.defaulted());
         return ResponseEntity.ok(PrimaryLocationResponse.builder()
                 .locationId(resolution.locationId())
+                .locationName(resolution.locationName())
                 .defaulted(resolution.defaulted())
                 .build());
     }
@@ -208,9 +209,11 @@ public class PeopleAvailabilityController {
     @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public ResponseEntity<PrimaryLocationResponse> getPersonPrimaryLocation(
             @Parameter(description = "Person id") @PathVariable UUID personId) {
-        UUID locationId = peopleAvailabilityService.resolvePrimaryLocationId(personId);
-        return ResponseEntity.ok(
-                PrimaryLocationResponse.builder().locationId(locationId).build());
+        PrimaryLocationResolution resolution = peopleAvailabilityService.resolvePrimaryLocationId(personId);
+        return ResponseEntity.ok(PrimaryLocationResponse.builder()
+                .locationId(resolution.locationId())
+                .locationName(resolution.locationName())
+                .build());
     }
 
     private String maskForLog(Object value) {

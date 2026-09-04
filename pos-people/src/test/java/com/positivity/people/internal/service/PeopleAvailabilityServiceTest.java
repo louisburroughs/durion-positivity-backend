@@ -61,6 +61,9 @@ class PeopleAvailabilityServiceTest {
 
     private PeopleAvailabilityServiceImpl service;
 
+    @Mock
+    private LocationReferenceService locationReferenceService;
+
     @BeforeEach
     void setUp() {
         service = new PeopleAvailabilityServiceImpl(
@@ -68,7 +71,8 @@ class PeopleAvailabilityServiceTest {
                 extPersonReplicaRepository,
                 userPersonTranslationService,
                 FIXED_CLOCK,
-                extLocationReplicaRepository);
+                extLocationReplicaRepository,
+                locationReferenceService);
     }
 
     private ExtLocationReplica topLevelReplica() {
@@ -97,12 +101,32 @@ class PeopleAvailabilityServiceTest {
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(
                             List.of(assignment(PRIMARY_LOCATION_ID, true), assignment(SECONDARY_LOCATION_ID, false)));
+            when(locationReferenceService.findLocationName(PRIMARY_LOCATION_ID))
+                    .thenReturn(Optional.of("Downtown Store"));
 
             PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
 
             assertThat(resolution.locationId()).isEqualTo(PRIMARY_LOCATION_ID);
+            assertThat(resolution.locationName()).isEqualTo("Downtown Store");
             assertThat(resolution.defaulted()).isFalse();
             verifyNoInteractions(extLocationReplicaRepository);
+        }
+    }
+
+    @Test
+    void resolveCurrentUserPrimaryLocation_returnsNullNameWhenReplicaHasNoMatchingRow() {
+        try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
+            helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
+            when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
+            when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
+                    .thenReturn(List.of(assignment(PRIMARY_LOCATION_ID, true)));
+            when(locationReferenceService.findLocationName(PRIMARY_LOCATION_ID)).thenReturn(Optional.empty());
+
+            PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
+
+            assertThat(resolution.locationId()).isEqualTo(PRIMARY_LOCATION_ID);
+            assertThat(resolution.locationName()).isNull();
+            assertThat(resolution.locationName()).isNotEqualTo(PRIMARY_LOCATION_ID.toString());
         }
     }
 
@@ -114,10 +138,13 @@ class PeopleAvailabilityServiceTest {
             when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
                     .thenReturn(List.of(assignment(SECONDARY_LOCATION_ID, false)));
             when(extLocationReplicaRepository.findActiveHierarchyRoots()).thenReturn(List.of(topLevelReplica()));
+            when(locationReferenceService.findLocationName(TOP_LEVEL_LOCATION_ID))
+                    .thenReturn(Optional.of("HQ"));
 
             PrimaryLocationResolution resolution = service.resolveCurrentUserPrimaryLocation();
 
             assertThat(resolution.locationId()).isEqualTo(TOP_LEVEL_LOCATION_ID);
+            assertThat(resolution.locationName()).isEqualTo("HQ");
             assertThat(resolution.defaulted()).isTrue();
         }
     }
@@ -180,6 +207,43 @@ class PeopleAvailabilityServiceTest {
                     .hasMessageContaining("user context is missing");
             verifyNoInteractions(extLocationReplicaRepository);
         }
+    }
+
+    @Test
+    void resolvePrimaryLocationId_returnsPersonsPrimaryLocationWithName() {
+        when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
+                .thenReturn(List.of(assignment(PRIMARY_LOCATION_ID, true), assignment(SECONDARY_LOCATION_ID, false)));
+        when(locationReferenceService.findLocationName(PRIMARY_LOCATION_ID)).thenReturn(Optional.of("Downtown Store"));
+
+        PrimaryLocationResolution resolution = service.resolvePrimaryLocationId(PERSON_ID);
+
+        assertThat(resolution.locationId()).isEqualTo(PRIMARY_LOCATION_ID);
+        assertThat(resolution.locationName()).isEqualTo("Downtown Store");
+        assertThat(resolution.defaulted()).isFalse();
+    }
+
+    @Test
+    void resolvePrimaryLocationId_returnsNullNameWhenReplicaHasNoMatchingRow() {
+        when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
+                .thenReturn(List.of(assignment(PRIMARY_LOCATION_ID, true)));
+        when(locationReferenceService.findLocationName(PRIMARY_LOCATION_ID)).thenReturn(Optional.empty());
+
+        PrimaryLocationResolution resolution = service.resolvePrimaryLocationId(PERSON_ID);
+
+        assertThat(resolution.locationId()).isEqualTo(PRIMARY_LOCATION_ID);
+        assertThat(resolution.locationName()).isNull();
+        assertThat(resolution.locationName()).isNotEqualTo(PRIMARY_LOCATION_ID.toString());
+    }
+
+    @Test
+    void resolvePrimaryLocationId_throwsWhenNoActiveAssignmentIsPrimary() {
+        when(assignmentRepository.findActiveByPersonIdAndDate(PERSON_ID, TODAY))
+                .thenReturn(List.of(assignment(SECONDARY_LOCATION_ID, false)));
+
+        assertThatThrownBy(() -> service.resolvePrimaryLocationId(PERSON_ID))
+                .isInstanceOf(EntityNotFoundException.class)
+                .hasMessageContaining("No primary location assignment");
+        verifyNoInteractions(locationReferenceService);
     }
 
     @Test

@@ -10506,6 +10506,12 @@ components:
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
+        locationName:
+          description: Human-readable name of the location the plan applies to; null when the location replica has no matching row (e.g. replica lag or unknown location)
+          example: Main Warehouse
+          type:
+          - string
+          - 'null'
         planId:
           description: Unique identifier of the cycle count plan
           example: 01960003-0000-7000-8000-000000000001
@@ -11324,9 +11330,11 @@ components:
           format: uuid
           type: string
         locationName:
-          description: Human-readable name of the location
+          description: Human-readable name of the location; null when the location replica has no matching row (e.g. replica lag or unknown location)
           example: Main Warehouse
-          type: string
+          type:
+          - string
+          - 'null'
         onHandQuantity:
           description: On-hand quantity at the location
           example: 120
@@ -11341,7 +11349,6 @@ components:
           type: number
       required:
       - locationId
-      - locationName
       - onHandQuantity
       type: object
     LocationInventoryInquiryResponse:

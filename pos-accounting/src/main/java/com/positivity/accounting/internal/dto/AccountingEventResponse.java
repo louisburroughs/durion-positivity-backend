@@ -95,6 +95,13 @@ public class AccountingEventResponse {
             requiredMode = NOT_REQUIRED)
     private Long sequenceNumber;
 
+    @Schema(
+            description = "Short human-readable reference for display in place of the raw event UUID",
+            example = "AE-202609-42",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String eventReference;
+
     // ========== Suspense Queue Fields (CAP:055) ==========
     @Schema(
             description = "Code categorizing the failure reason",

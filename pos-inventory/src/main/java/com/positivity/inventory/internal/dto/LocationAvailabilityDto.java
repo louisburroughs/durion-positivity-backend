@@ -31,8 +31,12 @@ public class LocationAvailabilityDto {
     @NotNull
     private UUID locationId;
 
-    @Schema(description = "Human-readable name of the location", example = "Main Warehouse", requiredMode = REQUIRED)
-    @NotNull
+    @Schema(
+            description = "Human-readable name of the location; null when the location replica has no "
+                    + "matching row (e.g. replica lag or unknown location)",
+            example = "Main Warehouse",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String locationName;
 
     @Schema(description = "On-hand quantity at the location", example = "120", requiredMode = REQUIRED)

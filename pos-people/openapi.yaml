@@ -3506,6 +3506,12 @@ components:
           example: 22222222-2222-2222-2222-222222222222
           format: uuid
           type: string
+        locationName:
+          description: Denormalized display name of locationId, resolved from the location replica. Null when the replica has no matching row yet or the name is blank; never falls back to the raw id.
+          example: Downtown Store
+          type:
+          - string
+          - 'null'
       required:
       - locationId
       type: object

@@ -4,16 +4,19 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
+import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -38,6 +41,7 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
 
     private final CycleCountPlanRepository cycleCountPlanRepository;
     private final CycleCountScheduleRepository cycleCountScheduleRepository;
+    private final LocationRefRepository locationRefRepository;
     private final Clock clock;
 
     @Override
@@ -150,8 +154,12 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     public @NonNull List<CycleCountPlanResponse> listPlans(
             UUID locationId, CycleCountPlanStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return cycleCountPlanRepository.findByOptionalFilters(locationId, status, pageable).getContent().stream()
-                .map(this::toResponse)
+        List<CycleCountPlan> plans = cycleCountPlanRepository
+                .findByOptionalFilters(locationId, status, pageable)
+                .getContent();
+        Map<UUID, String> locationNames = batchLocationNames(plans);
+        return plans.stream()
+                .map(plan -> toResponse(plan, locationNames.get(plan.getLocationId())))
                 .toList();
     }
 
@@ -168,9 +176,14 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     }
 
     private CycleCountPlanResponse toResponse(CycleCountPlan plan) {
+        return toResponse(plan, resolveLocationName(plan.getLocationId()));
+    }
+
+    private CycleCountPlanResponse toResponse(CycleCountPlan plan, String locationName) {
         return CycleCountPlanResponse.builder()
                 .planId(plan.getPlanId())
                 .locationId(plan.getLocationId())
+                .locationName(locationName)
                 .zoneIds(plan.getZoneIds())
                 .planName(plan.getPlanName())
                 .scheduledDate(plan.getScheduledDate())
@@ -181,5 +194,28 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
                 .createdAt(plan.getCreatedAt())
                 .updatedAt(plan.getUpdatedAt())
                 .build();
+    }
+
+    /** Single-plan path (issue #1680): one lookup against the location_ref replica. */
+    private String resolveLocationName(UUID locationId) {
+        return locationRefRepository
+                .findByLocationId(locationId)
+                .map(LocationRefEntity::getName)
+                .orElse(null);
+    }
+
+    /**
+     * List path (issue #1680): one batch lookup for every distinct locationId in the page,
+     * never a per-row query. Missing replica rows (lag / unknown location) are simply absent
+     * from the map, so callers fall back to null rather than the raw UUID.
+     */
+    private Map<UUID, String> batchLocationNames(List<CycleCountPlan> plans) {
+        List<UUID> locationIds =
+                plans.stream().map(CycleCountPlan::getLocationId).distinct().toList();
+        if (locationIds.isEmpty()) {
+            return Map.of();
+        }
+        return locationRefRepository.findByLocationIdIn(locationIds).stream()
+                .collect(Collectors.toMap(LocationRefEntity::getLocationId, LocationRefEntity::getName));
     }
 }

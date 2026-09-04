@@ -19,11 +19,13 @@ import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -80,6 +82,12 @@ class EventIngestionServiceAdditionalTest {
     @Mock
     private PostingEngineOrchestrator postingEngineOrchestrator;
 
+    @Mock
+    private AccountingSequenceRepository sequenceRepository;
+
+    @Mock
+    private AccountingSequenceProvisioner sequenceProvisioner;
+
     @InjectMocks
     private EventIngestionServiceImpl service;
 
@@ -90,6 +98,14 @@ class EventIngestionServiceAdditionalTest {
     void setUp() {
         testEventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testOrganizationId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        // Default event-reference counter row for submitEvent tests below (LENIENT
+        // strictness: unused by tests that don't reach persistence, e.g. validation
+        // failures and the duplicate-event test).
+        AccountingSequence defaultSequence = new AccountingSequence();
+        defaultSequence.setScopeKey("AE-202401");
+        defaultSequence.setNextValue(1L);
+        when(sequenceRepository.findByScopeKey("AE-202401")).thenReturn(Optional.of(defaultSequence));
     }
 
     // ========================================
@@ -567,6 +583,12 @@ class EventIngestionServiceAdditionalTest {
         assertThatThrownBy(() -> service.submitEvent(eventMap))
                 .isInstanceOf(DuplicateEventException.class)
                 .hasMessageContaining("Duplicate event detected");
+
+        // A rejected duplicate must never touch the accounting_sequence counter — no
+        // reference number is consumed for a submission that never persists.
+        verify(accountingEventRepository, never()).save(any());
+        verify(sequenceRepository, never()).findByScopeKey(any());
+        verify(sequenceProvisioner, never()).provision(any());
     }
 
     @Test
@@ -596,6 +618,7 @@ class EventIngestionServiceAdditionalTest {
                 .hasMessageContaining("Event validation failed");
 
         verify(accountingEventRepository, never()).save(any());
+        verify(sequenceRepository, never()).findByScopeKey(any());
     }
 
     // ========================================

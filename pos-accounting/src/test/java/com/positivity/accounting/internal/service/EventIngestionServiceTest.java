@@ -11,9 +11,11 @@ import com.positivity.accounting.internal.audit.repository.AuditTrailEntryReposi
 import com.positivity.accounting.internal.dto.AccountingEventFilter;
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
 import com.positivity.accounting.internal.entity.AccountingEvent;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -64,6 +66,12 @@ class EventIngestionServiceTest {
 
     @Mock
     private PostingEngineOrchestrator postingEngineOrchestrator;
+
+    @Mock
+    private AccountingSequenceRepository sequenceRepository;
+
+    @Mock
+    private AccountingSequenceProvisioner sequenceProvisioner;
 
     @InjectMocks
     private EventIngestionServiceImpl service;
@@ -284,6 +292,11 @@ class EventIngestionServiceTest {
         when(idempotencyService.isKeyProcessed(any(String.class))).thenReturn(false); // Not a duplicate
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
 
+        AccountingSequence sequence = new AccountingSequence();
+        sequence.setScopeKey("AE-202401");
+        sequence.setNextValue(1L);
+        when(sequenceRepository.findByScopeKey("AE-202401")).thenReturn(Optional.of(sequence));
+
         // Act
         AccountingEventResponse result = service.submitEvent(testEventMap);
 
@@ -291,6 +304,7 @@ class EventIngestionServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getEventId()).isEqualTo(testEventId);
         assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
+        assertThat(result.getEventReference()).isEqualTo("AE-202401-1");
 
         verify(idempotencyService).isKeyProcessed(any(String.class));
         verify(accountingEventRepository).save(any(AccountingEvent.class));

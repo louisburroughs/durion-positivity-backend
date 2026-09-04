@@ -13,10 +13,12 @@ import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPla
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.entity.CycleCountPlan;
 import com.positivity.inventory.internal.entity.CycleCountSchedule;
+import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -55,13 +57,17 @@ class CycleCountPlanServiceTest {
     @Mock
     private CycleCountScheduleRepository cycleCountScheduleRepository;
 
+    @Mock
+    private LocationRefRepository locationRefRepository;
+
     private CycleCountPlanServiceImpl service;
 
     private static final String ACTOR_USER_ID = "test-user-001";
 
     @BeforeEach
     void setUp() {
-        service = new CycleCountPlanServiceImpl(cycleCountPlanRepository, cycleCountScheduleRepository, FIXED_CLOCK);
+        service = new CycleCountPlanServiceImpl(
+                cycleCountPlanRepository, cycleCountScheduleRepository, locationRefRepository, FIXED_CLOCK);
     }
 
     // ─── createPlan ────────────────────────────────────────────────────────────
@@ -252,6 +258,65 @@ class CycleCountPlanServiceTest {
     }
 
     /**
+     * Verifies that the plan's location name is resolved from the location_ref
+     * replica on the single-plan getPlan path (issue #1680).
+     */
+    @Test
+    void getPlan_existingId_resolvesLocationNameFromReplica() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        CycleCountPlan entity = CycleCountPlan.builder()
+                .planId(planId)
+                .locationId(locationId)
+                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                .planName("Test Plan")
+                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(5))
+                .status(CycleCountPlanStatus.PLANNED)
+                .createdBy(ACTOR_USER_ID)
+                .build();
+
+        when(cycleCountPlanRepository.findById(planId)).thenReturn(Optional.of(entity));
+        when(locationRefRepository.findByLocationId(locationId))
+                .thenReturn(Optional.of(LocationRefEntity.builder()
+                        .locationId(locationId)
+                        .name("Main Warehouse")
+                        .build()));
+
+        CycleCountPlanResponse response = service.getPlan(planId);
+
+        assertThat(response.getLocationName()).isEqualTo("Main Warehouse");
+        assertThat(response.getLocationName()).isNotEqualTo(locationId.toString());
+    }
+
+    /**
+     * Verifies that locationName is left null (never the raw UUID) when the
+     * location_ref replica has no matching row (replica lag / unknown location).
+     */
+    @Test
+    void getPlan_existingId_leavesLocationNameNullWhenReplicaHasNoRow() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        CycleCountPlan entity = CycleCountPlan.builder()
+                .planId(planId)
+                .locationId(locationId)
+                .zoneIds(List.of(UUID.fromString("00000000-0000-0000-0000-000000000001")))
+                .planName("Test Plan")
+                .scheduledDate(LocalDate.now(FIXED_CLOCK).plusDays(5))
+                .status(CycleCountPlanStatus.PLANNED)
+                .createdBy(ACTOR_USER_ID)
+                .build();
+
+        when(cycleCountPlanRepository.findById(planId)).thenReturn(Optional.of(entity));
+        when(locationRefRepository.findByLocationId(locationId)).thenReturn(Optional.empty());
+
+        CycleCountPlanResponse response = service.getPlan(planId);
+
+        assertThat(response.getLocationName()).isNull();
+    }
+
+    /**
      * Verifies that a non-existent planId causes an exception that will
      * propagate to a 404 response.
      */
@@ -313,6 +378,49 @@ class CycleCountPlanServiceTest {
                 .thenReturn(Page.empty());
 
         assertThat(service.listPlans(null, null, 0, 50)).isEmpty();
+    }
+
+    /**
+     * Verifies that listPlans resolves location names for every plan in the page
+     * with a SINGLE batch lookup, never a per-row lookup (issue #1680).
+     */
+    @Test
+    void listPlans_resolvesLocationNamesWithOneBatchLookup_neverPerRow() {
+        UUID planId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID planId2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        when(cycleCountPlanRepository.findByOptionalFilters(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(planEntity(planId1), planEntity(planId2))));
+        when(locationRefRepository.findByLocationIdIn(List.of(locationId)))
+                .thenReturn(List.of(LocationRefEntity.builder()
+                        .locationId(locationId)
+                        .name("Main Warehouse")
+                        .build()));
+
+        List<CycleCountPlanResponse> response = service.listPlans(null, null, 0, 50);
+
+        assertThat(response).hasSize(2);
+        assertThat(response)
+                .allSatisfy(plan -> assertThat(plan.getLocationName()).isEqualTo("Main Warehouse"));
+        verify(locationRefRepository, org.mockito.Mockito.times(1)).findByLocationIdIn(any());
+        verify(locationRefRepository, never()).findByLocationId(any());
+    }
+
+    /**
+     * Verifies that plans whose location is absent from the location_ref
+     * replica get a null locationName, never the raw UUID string.
+     */
+    @Test
+    void listPlans_leavesLocationNameNullWhenReplicaHasNoRow() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(cycleCountPlanRepository.findByOptionalFilters(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(planEntity(planId))));
+        when(locationRefRepository.findByLocationIdIn(any())).thenReturn(List.of());
+
+        List<CycleCountPlanResponse> response = service.listPlans(null, null, 0, 50);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().getLocationName()).isNull();
     }
 
     // ─── updateStatus (odoo-parity I1, #1031) ─────────────────────────────────

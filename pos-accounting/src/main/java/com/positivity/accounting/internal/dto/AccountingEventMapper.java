@@ -31,6 +31,7 @@ public final class AccountingEventMapper {
                 .receivedAt(entity.getReceivedAt())
                 .processedAt(entity.getProcessedAt())
                 .sequenceNumber(entity.getSequenceNumber())
+                .eventReference(entity.getEventReference())
                 // Suspense queue fields (CAP:055)
                 .failureReasonCode(entity.getFailureReasonCode())
                 .failureDetails(entity.getFailureDetails())
