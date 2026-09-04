@@ -1,11 +1,15 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 
 /**
@@ -138,13 +142,22 @@ final class BusinessGlossary {
      * initialization with both terms named, rather than at some later lookup with neither.
      */
     private static Map<String, Definition> index() {
+        return index(DEFINITIONS);
+    }
+
+    /** Package-private so a test can exercise the collision path on a hand-built catalog. */
+    static @NonNull Map<String, Definition> index(@NonNull List<Definition> definitions) {
         Map<String, Definition> index = new LinkedHashMap<>();
-        for (Definition definition : DEFINITIONS) {
+        for (Definition definition : definitions) {
             put(index, normalize(definition.term()), definition);
             for (String alias : definition.aliases()) {
                 put(index, normalize(alias), definition);
             }
         }
+        // Map.copyOf does not preserve insertion order, and nothing here needs it to: lookup()
+        // treats two different matched terms as ambiguous rather than ranking them, so its result
+        // does not depend on iteration order. The LinkedHashMap is for deterministic construction
+        // and readable collision messages, not for ordering the lookup.
         return Map.copyOf(index);
     }
 
@@ -169,11 +182,17 @@ final class BusinessGlossary {
      * a phrase containing both "best customers" and "largest customers" resolves to the longer of
      * the two rather than to whichever was declared first.
      *
-     * <p>When two keys of the SAME length both match and they name different definitions, the
-     * phrase is genuinely ambiguous and this returns empty. Empty means "ask the user", so an
-     * ambiguous phrase produces a clarifying question rather than a coin flip decided by
-     * declaration order. That is the same judgement the class makes everywhere else: a silently
-     * chosen metric reads as confident and cannot be checked, which is worse than a question.
+     * <p>When the phrase names TWO DIFFERENT metrics, it is ambiguous and this returns empty —
+     * empty means "ask the user", so the model raises a clarifying question rather than answering
+     * half the question on the wrong definition. An earlier fix here only caught an exact tie in key
+     * length, which is close to a no-op on the real catalog: "which customers have payment problems
+     * and who owes us money" matches {@code payment problems} (16) and {@code who owes us money}
+     * (17), so one character of spelling silently decided which business metric answered a question
+     * that asked for both. Length is not evidence about intent, so it no longer breaks that tie.
+     *
+     * <p>A key contained inside a longer matched key is the same phrase seen twice, not a rival, and
+     * is discarded before the count — otherwise every term with an alias would look ambiguous with
+     * itself.
      */
     static @NonNull Optional<Definition> lookup(@NonNull String phrase) {
         String normalized = normalize(phrase);
@@ -181,25 +200,31 @@ final class BusinessGlossary {
         if (exact != null) {
             return Optional.of(exact);
         }
-        Definition best = null;
-        int bestLength = 0;
-        boolean ambiguous = false;
-        for (Map.Entry<String, Definition> entry : BY_KEY.entrySet()) {
-            String key = entry.getKey();
-            if (!normalized.contains(key)) {
-                continue;
-            }
-            if (key.length() > bestLength) {
-                best = entry.getValue();
-                bestLength = key.length();
-                ambiguous = false;
-            } else if (key.length() == bestLength
-                    && best != null
-                    && !best.term().equals(entry.getValue().term())) {
-                ambiguous = true;
+
+        List<String> matched = new ArrayList<>();
+        for (String key : BY_KEY.keySet()) {
+            if (normalized.contains(key)) {
+                matched.add(key);
             }
         }
-        return ambiguous ? Optional.empty() : Optional.ofNullable(best);
+        // Drop any key that is contained in a longer matched key: "best month" inside "our best
+        // month" is the same phrase seen twice, not a second candidate, and treating it as one would
+        // make every aliased term look ambiguous with itself.
+        List<String> distinct = matched.stream()
+                .filter(key ->
+                        matched.stream().noneMatch(other -> other.length() > key.length() && other.contains(key)))
+                .toList();
+
+        Set<String> terms = distinct.stream()
+                .map(key -> BY_KEY.get(key).term())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (terms.size() > 1) {
+            // Two independently-named metrics in one question. Length does not break this tie in any
+            // meaningful way — in the shipped catalog the competing keys usually differ by a
+            // character or two, so "longest wins" would decide a business question on spelling.
+            return Optional.empty();
+        }
+        return distinct.stream().max(Comparator.comparingInt(String::length)).map(BY_KEY::get);
     }
 
     /**
@@ -211,6 +236,11 @@ final class BusinessGlossary {
      */
     static @NonNull String normalize(@NonNull String raw) {
         return raw.toLowerCase(Locale.ROOT)
+                // Fold the typographic apostrophe onto the ASCII one before anything else: chat
+                // surfaces and model paraphrases produce U+2019 routinely, and "who isn\u2019t paying on
+                // time" must not miss a term the business has already defined — asking about a
+                // decided metric is the failure this class exists to prevent, in the other direction.
+                .replace('\u2019', '\'')
                 .replaceAll("[?.,!:;\"]", "")
                 .replaceAll("\\s+", " ")
                 .trim();

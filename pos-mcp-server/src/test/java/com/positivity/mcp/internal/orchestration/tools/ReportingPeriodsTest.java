@@ -86,6 +86,21 @@ class ReportingPeriodsTest {
     }
 
     @Test
+    @DisplayName("a period label passed as a date names resolveNamedPeriod, not just the ISO format")
+    void resolve_periodLabelInDateSlotPointsAtTheResolver() {
+        // The likeliest way a model still carrying the removed `period` contract reaches this class:
+        // it reuses the label it used to pass as `period`. "Pass YYYY-MM-DD" is true but not
+        // actionable for someone who wants a whole named period.
+        for (String label : new String[] {"2025", "2026-07", "2026-Q3"}) {
+            assertThatThrownBy(() -> ReportingPeriods.resolve(label, label))
+                    .as("label '%s'", label)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("resolveNamedPeriod")
+                    .hasMessageContaining("resolveDateWindow");
+        }
+    }
+
+    @Test
     @DisplayName("rejects an inverted range")
     void resolve_rejectsInvertedRange() {
         assertThatThrownBy(() -> ReportingPeriods.resolve("2026-08-31", "2026-03-01"))

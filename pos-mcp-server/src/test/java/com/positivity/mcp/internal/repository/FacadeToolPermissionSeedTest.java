@@ -110,6 +110,10 @@ class FacadeToolPermissionSeedTest {
             // #1675 (V43): resolveDateWindow makes no downstream call and enforces no permission of
             // its own — every authenticated caller may resolve a date, the same R4 shape as Events.
             Map.entry("DateWindowFacadeTool", Map.of(AUTHENTICATED, Set.of(AUTHENTICATED))),
+            // #1688 (V46): lookupBusinessTerm returns definitions, not data — it reads no row and
+            // calls no endpoint, so it carries the same R4 AUTHENTICATED shape as Events and
+            // DateWindow.
+            Map.entry("GlossaryFacadeTool", Map.of(AUTHENTICATED, Set.of(AUTHENTICATED))),
             Map.entry(
                     "ReportingFacadeTool",
                     Map.of(
@@ -286,15 +290,20 @@ class FacadeToolPermissionSeedTest {
     }
 
     @Test
-    @DisplayName("assistant entrypoints alone qualify only the deliberately open Events and DateWindow facades")
+    @DisplayName(
+            "assistant entrypoints alone qualify only the deliberately open Events, DateWindow and Glossary facades")
     void assistantOnlyCallerQualifiesOnlyEventsFacade() throws IOException {
-        Set<String> authenticatedOnlyFacades = Set.of("EventsFacadeTool", "DateWindowFacadeTool");
+        // Coupled to the replay list above: a migration seeding a new tool that is left out of that
+        // list makes this set look wrong, and a name added here without the migration makes the
+        // replay look wrong. Both omissions together cancel and the test passes while covering
+        // nothing, which is the failure this class exists to prevent — so change them together.
+        Set<String> authenticatedOnlyFacades = Set.of("EventsFacadeTool", "DateWindowFacadeTool", "GlossaryFacadeTool");
         netGroupGrants()
                 .forEach((tool, groups) -> assertThat(qualifies(groups, ASSISTANT_ENTRYPOINTS))
                         .as(
                                 "%s must not be reachable on the assistant-entrypoint baseline alone "
-                                        + "(only EventsFacadeTool and DateWindowFacadeTool are AUTHENTICATED-gated "
-                                        + "by design)",
+                                        + "(only EventsFacadeTool, DateWindowFacadeTool and GlossaryFacadeTool are "
+                                        + "AUTHENTICATED-gated by design)",
                                 tool)
                         .isEqualTo(authenticatedOnlyFacades.contains(tool)));
     }
@@ -454,7 +463,8 @@ class FacadeToolPermissionSeedTest {
                 "V41__facade_permission_rederivation_1612.sql",
                 "V42__wave2_facade_promotion.sql",
                 "V43__date_window_facade_tool.sql",
-                "V44__invoicing_lag_facade_tool.sql")) {
+                "V44__invoicing_lag_facade_tool.sql",
+                "V46__glossary_facade_tool.sql")) {
             String sql = read(migration);
             parseFullDeletes(sql).forEach(groups::remove);
             parseGroupSeed(sql).forEach((tool, seeded) -> {

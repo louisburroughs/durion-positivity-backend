@@ -58,8 +58,15 @@ final class ReportingPeriods {
         try {
             return LocalDate.parse(value.trim());
         } catch (DateTimeParseException exception) {
+            // Names the resolvers, not just the format. The likeliest way to reach this branch is a
+            // model still carrying the removed `period` contract and putting its label ("2025",
+            // "2026-07") into startDate — for which "pass YYYY-MM-DD" is true but not actionable,
+            // since the caller wants a whole named period and needs to be told where to get one.
             throw new IllegalArgumentException(
-                    "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form (e.g. 2026-06-30)",
+                    "Invalid " + paramName + " '" + value + "': pass an ISO date in YYYY-MM-DD form "
+                            + "(e.g. 2026-06-30). For a whole named period such as '2025', '2026-07' or "
+                            + "'2026-Q3', call resolveNamedPeriod and copy its startDate/endDate; for a range "
+                            + "relative to today, call resolveDateWindow.",
                     exception);
         }
     }

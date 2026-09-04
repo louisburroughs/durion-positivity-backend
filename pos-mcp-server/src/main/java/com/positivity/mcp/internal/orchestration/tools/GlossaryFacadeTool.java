@@ -88,7 +88,9 @@ public class GlossaryFacadeTool {
         root.put(
                 "guidance",
                 "Apply this metric and default window, then answer. State the definition you used in the "
-                        + "answer. Do not ask the user to define this term.");
+                        + "answer. Do not ask the user to define this term. If the question already named a "
+                        + "measure outright, use the one the user named and say so — this definition fills a "
+                        + "gap, it does not override a choice the question already made.");
         return serialize(root);
     }
 

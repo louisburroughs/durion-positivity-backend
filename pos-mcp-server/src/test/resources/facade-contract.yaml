@@ -98,8 +98,9 @@ AccountingFacadeTool.getVendorSpend:
   template: "/accounting/v1/accounting/analytics/vendor-spend?startDate={startDate}&endDate={endDate}"
   route: accounting
   downstreamPath: "/v1/accounting/analytics/vendor-spend?startDate={}&endDate={}"
-  # W2.3 facade promotion (#1601, E8). The tool maps its period argument (YYYY-MM or YYYY) onto
-  # the date range via ReportingPeriods.
+  # W2.3 facade promotion (#1601, E8). The tool takes startDate/endDate directly, validated by
+  # ReportingPeriods; the period argument was removed in #1684, because a label expanded inside
+  # the tool let a window reach this endpoint with no shape ever classified.
 
 AdminFacadeTool.getSystemStatus:
   verb: NONE
@@ -341,8 +342,9 @@ InvoiceFacadeTool.getRevenueByCustomer:
   template: "/invoice/v1/invoices/analytics/revenue-by-customer?startDate={startDate}&endDate={endDate}"
   route: invoice
   downstreamPath: "/v1/invoices/analytics/revenue-by-customer?startDate={}&endDate={}"
-  # W2.3 facade promotion (#1601, E1). The tool maps its period argument (YYYY-MM or YYYY) onto
-  # the date range via ReportingPeriods.
+  # W2.3 facade promotion (#1601, E1). The tool takes startDate/endDate directly, validated by
+  # ReportingPeriods; the period argument was removed in #1684, because a label expanded inside
+  # the tool let a window reach this endpoint with no shape ever classified.
 
 InvoiceFacadeTool.getInvoicingLag:
   verb: GET
@@ -450,7 +452,7 @@ ReportingFacadeTool.getSalesReport:
   template: "/accounting/v1/accounting/reports/financial/income-statement?startDate={startDate}&endDate={endDate}"
   route: accounting
   downstreamPath: "/v1/accounting/reports/financial/income-statement?startDate={}&endDate={}"
-  # The tool maps its period argument (YYYY-MM or YYYY) onto the date range.
+  # The tool takes startDate/endDate directly; the period argument was removed in #1684.
 
 ReportingFacadeTool.getInventoryReport:
   verb: GET
@@ -652,5 +654,6 @@ WorkorderFacadeTool.getTechnicianLaborAnalytics:
   template: "/workorder/v1/workorders/analytics/technician-labor?startDate={startDate}&endDate={endDate}"
   route: workorder
   downstreamPath: "/v1/workorders/analytics/technician-labor?startDate={}&endDate={}"
-  # W2.3 facade promotion (#1601, E5). The tool maps its period argument (YYYY-MM or YYYY) onto
-  # the date range via ReportingPeriods.
+  # W2.3 facade promotion (#1601, E5). The tool takes startDate/endDate directly, validated by
+  # ReportingPeriods; the period argument was removed in #1684, because a label expanded inside
+  # the tool let a window reach this endpoint with no shape ever classified.

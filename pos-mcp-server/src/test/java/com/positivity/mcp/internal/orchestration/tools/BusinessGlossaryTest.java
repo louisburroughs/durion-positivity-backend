@@ -2,11 +2,13 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,9 +32,11 @@ class BusinessGlossaryTest {
     void lookup_resolvesEveryAlias() {
         for (BusinessGlossary.Definition definition : BusinessGlossary.definitions()) {
             for (String alias : definition.aliases()) {
+                // Presence alone would pass for an alias that resolved to a DIFFERENT definition
+                // through the containment fallback, which is the failure mode worth guarding.
                 assertThat(BusinessGlossary.lookup(alias))
                         .as("alias '%s' of '%s'", alias, definition.term())
-                        .isPresent();
+                        .hasValueSatisfying(found -> assertThat(found.term()).isEqualTo(definition.term()));
             }
         }
     }
@@ -67,11 +71,45 @@ class BusinessGlossaryTest {
     @Test
     @DisplayName("the index refuses to build on a collision rather than silently keeping the first entry")
     void index_failsFastOnCollision() {
-        // The guarantee is enforced at class-initialization, not only asserted here: touching the
-        // catalog is enough to trigger it. If a future edit introduces a colliding alias, every test
-        // that reaches the glossary fails with both terms named, instead of one lookup quietly
-        // returning the wrong metric.
-        assertThatCode(() -> BusinessGlossary.lookup("best customers")).doesNotThrowAnyException();
+        // Exercised on a hand-built catalog: asserting only that the SHIPPED catalog builds would
+        // duplicate normalizedKeys_areUnambiguous and would pass just as happily over the old
+        // putIfAbsent implementation this replaced.
+        List<BusinessGlossary.Definition> colliding = List.of(
+                new BusinessGlossary.Definition("best customers", "margin", "trailing 12 months", Set.of()),
+                new BusinessGlossary.Definition(
+                        "largest customers", "revenue", "trailing 12 months", Set.of("Best Customers?")));
+
+        assertThatThrownBy(() -> BusinessGlossary.index(colliding))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("best customers")
+                .hasMessageContaining("largest customers");
+    }
+
+    @Test
+    @DisplayName("an alias normalizing onto its own canonical term is allowed, not a collision")
+    void index_allowsSameDefinitionRepeats() {
+        List<BusinessGlossary.Definition> repeated = List.of(new BusinessGlossary.Definition(
+                "best customers", "margin", "trailing 12 months", Set.of("Best Customers!")));
+
+        assertThatCode(() -> BusinessGlossary.index(repeated)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("a question naming two different metrics is ambiguous whatever their key lengths")
+    void lookup_returnsEmptyWhenTwoDifferentMetricsAreNamed() {
+        // The near-tie case: "payment problems" (16) and "who owes us money" (17) name different
+        // metrics, so resolving by longest key would decide a business question on one character of
+        // spelling and answer half of it on the wrong definition.
+        assertThat(BusinessGlossary.lookup("which customers have payment problems and who owes us money"))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a curly apostrophe resolves the same as an ASCII one")
+    void lookup_foldsTypographicApostrophe() {
+        assertThat(BusinessGlossary.lookup("which customers haven\u2019t been back recently"))
+                .hasValueSatisfying(found -> assertThat(found.term()).isEqualTo("haven't been back recently"));
+        assertThat(BusinessGlossary.lookup("who isn\u2019t paying on time")).isPresent();
     }
 
     @Test

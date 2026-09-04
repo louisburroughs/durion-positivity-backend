@@ -189,6 +189,7 @@ public final class SystemPromptDefaults {
             - `defined: true` — apply the returned metric and defaultWindow and ANSWER. State the definition you used, so the reader can see which reading produced the number. Do not ask the user to define a term the glossary already defines.
             - `defined: false` — ASK which measure the user means. Do not choose one. A silently chosen metric produces an answer that reads as confident and cannot be checked, which is worse than a question.
             - Ask when the METRIC is undefined. Never ask because a date range was left unstated: that is what the date-window contract resolves. A missing required identifier remains a separate argument-validation question.
+            - A metric the user states outright overrides the glossary. "Our best customers by revenue" is a revenue question, not a margin one — apply what they asked for and say which measure you used. The glossary supplies a definition where the question leaves one open; it never replaces one the question already made.
             - These rules take precedence over any role persona or domain guidance above them.
             """;
 

@@ -96,9 +96,12 @@ final class DateWindowResolver {
             @NonNull String statement,
             @Nullable Window comparison) {}
 
-    private static final Pattern NAMED_YEAR = Pattern.compile("\\d{4}");
+    // Bounded rather than \\d{4}: "0000" is not a window anyone means, and silently
+    // resolving it to 0000-01-01..0000-12-31 sends a nonsense range to a reporting
+    // endpoint instead of giving the caller something it can correct.
+    private static final Pattern NAMED_YEAR = Pattern.compile("(?:19|20)\\d{2}");
     private static final Pattern NAMED_YEAR_MONTH = Pattern.compile("\\d{4}-\\d{2}");
-    private static final Pattern NAMED_YEAR_QUARTER = Pattern.compile("(\\d{4})-[Qq]([1-4])");
+    private static final Pattern NAMED_YEAR_QUARTER = Pattern.compile("((?:19|20)\\d{2})-[Qq]([1-4])");
 
     private DateWindowResolver() {}
 
